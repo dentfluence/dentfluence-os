@@ -360,7 +360,7 @@
         }
 
         /* ════════════════════════════════════════════
-           /* PAGE HEADER */
+           PAGE HEADER (standardised, used in yield)
         ════════════════════════════════════════════ */
         .df-page-header {
             display: flex;
