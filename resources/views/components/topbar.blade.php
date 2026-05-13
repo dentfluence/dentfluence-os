@@ -71,67 +71,12 @@
     {{-- ────────────────────────────────────────────────
          CENTER ZONE — Global Search
     ──────────────────────────────────────────────── --}}
-    <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:0 20px; max-width:520px; margin:0 auto;">
-
-        <div
-            id="df-search-wrap"
-            role="search"
-            style="position:relative; width:100%;"
-        >
-            {{-- Search icon --}}
-            <span
-                style="
-                    position:absolute; left:13px; top:50%; transform:translateY(-50%);
-                    color:#c0b0cc; pointer-events:none; display:flex; align-items:center;
-                "
-                aria-hidden="true"
-            >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
-            </span>
-
-            {{-- Input --}}
-            <input
-                type="search"
-                id="df-global-search"
-                name="q"
-                placeholder="Search patients, appointments, treatments... (⌘K)"
-                autocomplete="off"
-                aria-label="Global search"
-                style="
-                    width:100%; height:38px;
-                    padding:0 38px 0 38px;
-                    font-family:'DM Sans',sans-serif;
-                    font-size:13px; font-weight:300;
-                    color:#1a0a24;
-                    background:#f9f4fc;
-                    border:1px solid rgba(185,92,183,0.14);
-                    border-radius:3px;
-                    outline:none;
-                    transition:border-color 140ms, box-shadow 140ms, background 140ms;
-                "
-                onfocus="this.style.borderColor='#6a0f70';this.style.boxShadow='0 0 0 3px rgba(106,15,112,0.10)';this.style.background='#fff';"
-                onblur="this.style.borderColor='rgba(185,92,183,0.14)';this.style.boxShadow='none';this.style.background='#f9f4fc';"
-            >
-
-            {{-- Keyboard hint --}}
-            <span
-                id="df-search-kbd"
-                style="
-                    position:absolute; right:10px; top:50%; transform:translateY(-50%);
-                    display:flex; align-items:center; gap:3px;
-                    pointer-events:none;
-                "
-                aria-hidden="true"
-            >
-                <kbd style="font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;color:#c0b0cc;background:#f3edf7;border:1px solid rgba(185,92,183,0.15);padding:1px 5px;border-radius:2px;">⌘K</kbd>
-            </span>
-
-        </div>
-
-    </div>
-
+    {{-- ────────────────────────────────────────────────
+     CENTER ZONE — Global Search
+──────────────────────────────────────────────── --}}
+<div style="flex:1; display:flex; align-items:center; justify-content:center; padding:0 20px; max-width:520px; margin:0 auto;">
+    @include('patients._search')
+</div>
     {{-- ────────────────────────────────────────────────
          RIGHT ZONE — Actions + Profile
     ──────────────────────────────────────────────── --}}
