@@ -59,6 +59,12 @@ return [
             'throw' => false,
             'report' => false,
         ],
+            'consultation-photos' => [
+            'driver'     => 'local',
+            'root'       => storage_path('app/public/consultations'),
+            'url'        => env('APP_URL').'/storage/consultations',
+            'visibility' => 'public',
+        ],
 
     ],
 
