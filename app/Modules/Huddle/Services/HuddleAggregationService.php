@@ -4,188 +4,320 @@ declare(strict_types=1);
 
 namespace App\Modules\Huddle\Services;
 
-use App\Models\User;
+use App\Modules\Huddle\Repositories\HuddleBoardRepository;
+use App\Modules\Huddle\Repositories\HuddleCardRepository;
+use App\Modules\Huddle\Models\HuddleBoard;
+use App\Modules\Huddle\Transformers\AppointmentToCardTransformer;
+use App\Modules\Huddle\Transformers\TaskToCardTransformer;
 use App\Modules\Huddle\DTOs\HuddleBoardDTO;
 use App\Modules\Huddle\DTOs\HuddleCardDTO;
 use App\Modules\Huddle\DTOs\HuddleStatsDTO;
-use App\Modules\Huddle\Repositories\HuddleBoardRepository;
-use App\Modules\Huddle\Transformers\AppointmentToCardTransformer;
-use App\Modules\Huddle\Transformers\TaskToCardTransformer;
-use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class HuddleAggregationService
 {
-    /**
-     * Columns visible per role.
-     * Keys must match what the frontend KanbanBoard expects.
-     */
-    private const ROLE_COLUMNS = [
-        'admin'      => ['today_flow', 'yesterday_flow', 'tasks', 'comments'],
-        'doctor'     => ['today_flow', 'yesterday_flow', 'tasks', 'comments'],
-        'front_desk' => ['today_flow', 'tasks', 'comments'],
-        'assistant'  => ['today_flow', 'tasks', 'comments'],
-    ];
-
     public function __construct(
-        private readonly HuddleBoardRepository       $boardRepo,
+        private readonly HuddleBoardRepository        $boardRepo,
+        private readonly HuddleCardRepository         $cardRepo,
         private readonly AppointmentToCardTransformer $appointmentTransformer,
-        private readonly TaskToCardTransformer         $taskTransformer,
+        private readonly TaskToCardTransformer        $taskTransformer,
     ) {}
 
-    /**
-     * Build the full board payload for a given user and date.
-     */
-    public function buildBoardForUser(User $user, Carbon $date): HuddleBoardDTO
+    public function buildBoardForUser(int $branchId, string $role): HuddleBoardDTO
     {
-        $branchId  = $user->branch_id;
-        $role      = $user->role ?? 'front_desk';
-        $dateStr   = $date->toDateString();
-        $yesterStr = $date->copy()->subDay()->toDateString();
+        $board = $this->boardRepo->findOrCreateForToday($branchId, $role);
 
-        // 1. Find or create today's board
-        $board = $this->boardRepo->findOrCreateForDate($branchId, $dateStr);
+        $this->syncTodayAppointments($board, $branchId);
+        $this->syncTodayTasks($board, $branchId, $role);
 
-        // 2. Fetch raw data
-        $todayAppointments     = $this->fetchAppointments($branchId, $dateStr);
-        $yesterdayAppointments = $this->fetchAppointments($branchId, $yesterStr);
-        $tasks                 = $this->fetchTasks($branchId, $dateStr);
+        $cards   = $this->cardRepo->getByBoard($board->id);
+        $stats   = $this->computeStats($board->id, $branchId);
+        $columns = $this->groupCardsByColumn($cards);
 
-        // 3. Transform to DTOs
-        $todayCards     = $todayAppointments->map(fn ($r) => $this->appointmentTransformer->transform($r));
-        $yesterdayCards = $yesterdayAppointments->map(fn ($r) => $this->appointmentTransformer->transform($r));
-        $taskCards      = $tasks->map(fn ($r) => $this->taskTransformer->transform($r));
-
-        // 4. Build stats from today's appointments + tasks
-        $stats = $this->buildStats($todayAppointments, $tasks);
-
-        // 5. Build role-filtered columns
-        $allColumns = [
-            'today_flow'     => $todayCards->all(),
-            'yesterday_flow' => $yesterdayCards->all(),
-            'tasks'          => $taskCards->all(),
-            'comments'       => [],   // populated in Phase 2
-        ];
-
-        $visibleSlugs = self::ROLE_COLUMNS[$role] ?? self::ROLE_COLUMNS['front_desk'];
-        $columns = array_intersect_key($allColumns, array_flip($visibleSlugs));
+        $statsDTO = new HuddleStatsDTO(
+            totalAppointments: $stats['appointments']['total'],
+            confirmed:         $stats['appointments']['confirmed'],
+            checkedIn:         $stats['appointments']['arrived'],
+            inChair:           $stats['appointments']['in_chair'],  // FIX #4
+            done:              $stats['appointments']['done'],       // FIX #4
+            cancelled:         $stats['appointments']['cancelled'],
+            noShow:            0,
+            pendingTasks:      $stats['tasks']['open'],
+            overdueTasks:      $stats['tasks']['overdue'],
+            escalatedTasks:    $stats['tasks']['high_priority'],
+        );
 
         return new HuddleBoardDTO(
             board:   $board,
-            stats:   $stats,
+            stats:   $statsDTO,
             columns: $columns,
             role:    $role,
-            date:    $dateStr,
+            date:    now()->toDateString(),
         );
     }
 
-    // -------------------------------------------------------------------------
-    // Private helpers
-    // -------------------------------------------------------------------------
-
-    /**
-     * Fetch appointments for a branch + date, joined with patient/doctor/treatment.
-     */
-    private function fetchAppointments(int $branchId, string $date)
+    private function syncTodayAppointments(HuddleBoard $board, int $branchId): void
     {
-        return DB::table('appointments as a')
-            ->join('patients as p', 'p.id', '=', 'a.patient_id')
-            ->join('users as u', 'u.id', '=', 'a.doctor_id')
-            ->leftJoin('treatments as t', 't.id', '=', 'a.treatment_id')
-            ->leftJoin('treatment_categories as tc', 'tc.id', '=', 'a.treatment_category_id')
-            ->leftJoin(
-                DB::raw('(SELECT patient_id, MIN(alert) as patient_alert FROM patient_alerts GROUP BY patient_id) pa'),
-                'pa.patient_id',
-                '=',
-                'a.patient_id'
-            )
-            ->where('a.branch_id', $branchId)
-            ->whereDate('a.appointment_date', $date)
-            ->whereNull('a.deleted_at')
-            ->select([
-                'a.id as appointment_id',
-                'a.patient_id',
-                'a.doctor_id',
-                'a.branch_id',
-                'a.appointment_date',
-                'a.appointment_time',
-                'a.duration_minutes',
-                'a.type',
-                'a.treatment_category_id',
-                'a.treatment_id',
-                'a.status',
-                'a.chief_complaint',
-                'a.notes',
-                'p.name as patient_name',
-                'u.name as doctor_name',
-                't.name as treatment_name',
-                'tc.name as category_name',
-                'pa.patient_alert',
-            ])
-            ->orderBy('a.appointment_time')
-            ->get();
+        $appointments = $this->fetchTodayAppointments($branchId);
+
+        foreach ($appointments as $appointment) {
+            $dto      = $this->appointmentTransformer->transform($appointment);
+            $snapshot = $dto->toArray(); // FIX #2: snapshot was never saved before
+
+            $this->cardRepo->firstOrCreateFromSource(
+                boardId:    $board->id,
+                sourceType: 'appointment',
+                sourceId:   $appointment->appointment_id,
+                defaults:   [
+                    'huddle_board_id' => $board->id,
+                    'column_key'      => 'today_flow',
+                    'card_type'       => 'patient_flow',
+                    'position'        => 0,
+                    'status'          => $dto->status,
+                    'snapshot'        => $snapshot, // FIX #2
+                ]
+            );
+        }
     }
 
-    /**
-     * Fetch today's pending/escalated tasks for the branch,
-     * including tasks due today or overdue.
-     */
-    private function fetchTasks(int $branchId, string $date)
+    private function fetchTodayAppointments(int $branchId): Collection
     {
-        return DB::table('tasks as t')
-            ->leftJoin('users as u', 'u.id', '=', 't.assigned_to')
-            ->leftJoin('patients as p', 'p.id', '=', 't.patient_id')
-            ->where('t.branch_id', $branchId)
-            ->where(function ($q) use ($date) {
-                $q->whereDate('t.due_date', '<=', $date)
-                  ->where('t.status', '!=', 'done');
+        return collect(
+            DB::table('appointments')
+                ->join('patients', 'patients.id', '=', 'appointments.patient_id')
+                ->leftJoin('users as doctors', 'doctors.id', '=', 'appointments.doctor_id')
+                ->leftJoin('treatment_types', 'treatment_types.id', '=', 'appointments.treatment_id')
+                ->leftJoin('patient_alerts', function ($join) {
+                    $join->on('patient_alerts.patient_id', '=', 'patients.id')
+                         ->where('patient_alerts.is_active', '=', true);
+                })
+                ->where('appointments.branch_id', $branchId)
+                ->whereDate('appointments.appointment_date', now()->toDateString())
+                ->select([
+                    'appointments.id as appointment_id',
+                    'appointments.appointment_date',
+                    'appointments.appointment_time',
+                    'appointments.duration_minutes',
+                    'appointments.type',
+                    'appointments.status',
+                    'appointments.chief_complaint',
+                    'appointments.notes',
+                    'appointments.treatment_id',
+                    'patients.id as patient_id',
+                    'patients.name as patient_name',
+                    'patients.phone as patient_phone',
+                    'doctors.name as doctor_name',
+                    'treatment_types.name as treatment_name',
+                    'patient_alerts.alert as patient_alert',
+                ])
+                ->orderBy('appointments.appointment_date')
+                ->orderBy('appointments.appointment_time')
+                ->get()
+        );
+    }
+
+    private function syncTodayTasks(HuddleBoard $board, int $branchId, string $role): void
+    {
+        $tasks = $this->fetchTodayTasks($branchId, $role);
+
+        foreach ($tasks as $task) {
+            $dto      = $this->taskTransformer->transform($task);
+            $snapshot = $dto->toArray(); // FIX #2
+
+            $this->cardRepo->firstOrCreateFromSource(
+                boardId:    $board->id,
+                sourceType: 'task',
+                sourceId:   $task->id,
+                defaults:   [
+                    'huddle_board_id' => $board->id,
+                    'column_key'      => 'tasks',
+                    'card_type'       => 'task',
+                    'position'        => 0,
+                    'status'          => $dto->status,
+                    'snapshot'        => $snapshot, // FIX #2
+                ]
+            );
+        }
+    }
+
+    private function fetchTodayTasks(int $branchId, string $role): Collection
+    {
+        $query = DB::table('tasks')
+            ->leftJoin('users as assignees', 'assignees.id', '=', 'tasks.assigned_to')
+            ->leftJoin('users as creators', 'creators.id', '=', 'tasks.created_by')
+            ->where('tasks.branch_id', $branchId)
+            ->whereIn('tasks.status', ['pending', 'in_progress', 'overdue', 'blocked'])
+            ->select([
+                'tasks.id',
+                'tasks.title',
+                'tasks.description',
+                'tasks.category',
+                'tasks.status',
+                'tasks.priority',
+                'tasks.due_date',
+                'tasks.due_time',
+                'tasks.assigned_to',
+                'tasks.created_by',
+                'tasks.patient_id',
+                'assignees.name as assignee_name',
+                'creators.name as creator_name',
+            ])
+            ->orderBy('tasks.priority', 'desc')
+            ->orderBy('tasks.due_date');
+
+        if ($role === 'assistant') {
+            $query->where('tasks.assigned_to', auth()->id());
+        }
+
+        return collect($query->get());
+    }
+
+    public function computeStats(int $boardId, int $branchId): array
+    {
+        $today = now()->toDateString();
+
+        $appointmentStats = DB::table('appointments')
+            ->where('branch_id', $branchId)
+            ->whereDate('appointment_date', $today)
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END) as confirmed,
+                SUM(CASE WHEN status = 'checkin'   THEN 1 ELSE 0 END) as arrived,
+                SUM(CASE WHEN status = 'in_chair'  THEN 1 ELSE 0 END) as in_chair,
+                SUM(CASE WHEN status = 'done'      THEN 1 ELSE 0 END) as done,
+                SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled
+            ")
+            ->first();
+
+        $taskStats = DB::table('tasks')
+            ->where('branch_id', $branchId)
+            ->whereIn('status', ['pending', 'in_progress', 'overdue', 'blocked'])
+            ->selectRaw("
+                COUNT(*) as open_tasks,
+                SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) as overdue_tasks,
+                SUM(CASE WHEN priority = 'high'  THEN 1 ELSE 0 END) as high_tasks
+            ")
+            ->first();
+
+        $alertCount = DB::table('patient_alerts')
+            ->join('appointments', 'appointments.patient_id', '=', 'patient_alerts.patient_id')
+            ->where('appointments.branch_id', $branchId)
+            ->whereDate('appointments.appointment_date', $today)
+            ->where('patient_alerts.is_active', true)
+            ->count();
+
+        return [
+            'appointments' => [
+                'total'     => (int) ($appointmentStats->total     ?? 0),
+                'confirmed' => (int) ($appointmentStats->confirmed ?? 0),
+                'pending'   => 0,
+                'arrived'   => (int) ($appointmentStats->arrived   ?? 0),
+                'in_chair'  => (int) ($appointmentStats->in_chair  ?? 0),
+                'done'      => (int) ($appointmentStats->done      ?? 0),
+                'cancelled' => (int) ($appointmentStats->cancelled ?? 0),
+            ],
+            'tasks' => [
+                'open'          => (int) ($taskStats->open_tasks    ?? 0),
+                'overdue'       => (int) ($taskStats->overdue_tasks ?? 0),
+                'high_priority' => (int) ($taskStats->high_tasks    ?? 0),
+            ],
+            'alerts' => $alertCount,
+        ];
+    }
+
+    // FIX #1: was reading $card->payload — actual DB column is 'snapshot'
+    private function groupCardsByColumn(Collection $cards): array
+    {
+        return $cards
+            ->groupBy('column_key')
+            ->map(function (Collection $group) {
+                return $group->map(function ($card) {
+                    $snapshot = is_string($card->snapshot)
+                        ? json_decode($card->snapshot, true) ?? []
+                        : (array) ($card->snapshot ?? []);
+
+                    return new HuddleCardDTO(
+                        sourceType:      $card->source_type,
+                        sourceId:        (int) $card->source_id,
+                        patientId:       isset($snapshot['patient_id']) ? (int) $snapshot['patient_id'] : null,
+                        patientName:     $snapshot['patient_name']     ?? null,
+                        doctorName:      $snapshot['doctor_name']      ?? null,
+                        time:            $snapshot['time']             ?? null,
+                        date:            $snapshot['date']             ?? now()->toDateString(),
+                        duration:        isset($snapshot['duration']) ? (int) $snapshot['duration'] : null,
+                        appointmentType: $snapshot['appointment_type'] ?? null,
+                        treatmentName:   $snapshot['treatment_name']   ?? null,
+                        categoryName:    $snapshot['category_name']    ?? null,
+                        status:          $snapshot['status']           ?? $card->status ?? 'pending',
+                        chiefComplaint:  $snapshot['chief_complaint']  ?? null,
+                        notes:           $snapshot['notes']            ?? null,
+                        patientAlert:    $snapshot['patient_alert']    ?? null,
+                        meta:            $snapshot['meta']             ?? [],
+                    );
+                })->values();
             })
-            ->whereNull('t.deleted_at')
-            ->select([
-                't.id',
-                't.title',
-                't.description',
-                't.assigned_to',
-                't.created_by',
-                't.branch_id',
-                't.patient_id',
-                't.due_date',
-                't.due_time',
-                't.priority',
-                't.category',
-                't.status',
-                't.done_at',
-                't.escalated_at',
-                't.escalation_note',
-                'u.name as assignee_name',
-                'p.name as patient_name',
-            ])
-            ->orderByRaw("FIELD(t.priority, 'urgent', 'high', 'medium', 'low')")
-            ->orderBy('t.due_date')
-            ->get();
+            ->toArray();
     }
 
-    /**
-     * Compute top-strip stats from raw appointment + task rows.
-     */
-    private function buildStats($appointments, $tasks): HuddleStatsDTO
+    // FIX #3: refreshCard was passing DTO object to updatePayload — must call toArray()
+    public function refreshCard(int $cardId): void
     {
-        $statusCounts = $appointments->groupBy('status')->map->count();
+        $card = $this->cardRepo->findById($cardId);
+        if ($card === null) return;
 
-        $today    = Carbon::today()->toDateString();
-        $overdue  = $tasks->filter(fn ($t) => $t->due_date < $today && $t->status === 'pending')->count();
+        if ($card->source_type === 'appointment') {
+            $raw = DB::table('appointments')
+                ->join('patients', 'patients.id', '=', 'appointments.patient_id')
+                ->leftJoin('users as doctors', 'doctors.id', '=', 'appointments.doctor_id')
+                ->leftJoin('treatment_types', 'treatment_types.id', '=', 'appointments.treatment_id')
+                ->leftJoin('patient_alerts', function ($join) {
+                    $join->on('patient_alerts.patient_id', '=', 'patients.id')
+                         ->where('patient_alerts.is_active', '=', true);
+                })
+                ->where('appointments.id', $card->source_id)
+                ->select([
+                    'appointments.id as appointment_id',
+                    'appointments.appointment_date',
+                    'appointments.appointment_time',
+                    'appointments.duration_minutes',
+                    'appointments.type',
+                    'appointments.status',
+                    'appointments.chief_complaint',
+                    'appointments.notes',
+                    'appointments.treatment_id',
+                    'patients.id as patient_id',
+                    'patients.name as patient_name',
+                    'patients.phone as patient_phone',
+                    'doctors.name as doctor_name',
+                    'treatment_types.name as treatment_name',
+                    'patient_alerts.alert as patient_alert',
+                ])
+                ->first();
 
-        return new HuddleStatsDTO(
-            totalAppointments: $appointments->count(),
-            confirmed:         $statusCounts->get('scheduled', 0),
-            checkedIn:         $statusCounts->get('checkin', 0),
-            inChair:           $statusCounts->get('in_chair', 0),
-            done:              $statusCounts->get('done', 0),
-            cancelled:         $statusCounts->get('cancelled', 0),
-            noShow:            $statusCounts->get('no_show', 0),
-            pendingTasks:      $tasks->where('status', 'pending')->count(),
-            overdueTasks:      $overdue,
-            escalatedTasks:    $tasks->where('status', 'escalated')->count(),
-        );
+            if ($raw) {
+                $snapshot = $this->appointmentTransformer->transform($raw)->toArray(); // FIX #3
+                $this->cardRepo->updateSnapshot($cardId, $snapshot);
+            }
+        }
+
+        if ($card->source_type === 'task') {
+            $raw = DB::table('tasks')
+                ->leftJoin('users as assignees', 'assignees.id', '=', 'tasks.assigned_to')
+                ->leftJoin('users as creators', 'creators.id', '=', 'tasks.created_by')
+                ->where('tasks.id', $card->source_id)
+                ->select([
+                    'tasks.id', 'tasks.title', 'tasks.description', 'tasks.category',
+                    'tasks.status', 'tasks.priority', 'tasks.due_date', 'tasks.due_time',
+                    'tasks.assigned_to', 'tasks.created_by', 'tasks.patient_id',
+                    'assignees.name as assignee_name', 'creators.name as creator_name',
+                ])
+                ->first();
+
+            if ($raw) {
+                $snapshot = $this->taskTransformer->transform($raw)->toArray(); // FIX #3
+                $this->cardRepo->updateSnapshot($cardId, $snapshot);
+            }
+        }
     }
 }

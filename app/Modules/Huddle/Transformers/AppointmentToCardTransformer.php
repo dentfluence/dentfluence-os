@@ -37,11 +37,24 @@ class AppointmentToCardTransformer
             appointmentType: $row->type,
             treatmentName: $row->treatment_name  ?? null,
             categoryName:  $row->category_name   ?? null,
-            status:        $row->status,
+            status:        $this->mapStatus($row->status),
             chiefComplaint: $row->chief_complaint ?? null,
             notes:         $row->notes            ?? null,
             patientAlert:  $row->patient_alert    ?? null,
             meta:          [],
         );
+    }
+    private function mapStatus(string $appointmentStatus): string
+    {
+        return match($appointmentStatus) {
+            'scheduled'         => 'pending',
+            'checkin'           => 'pending',
+            'in_chair'          => 'in_progress',
+            'checkout'          => 'in_progress',
+            'done'              => 'done',
+            'cancelled'         => 'done',
+            'no_show'           => 'done',
+            default             => 'pending',
+        };
     }
 }

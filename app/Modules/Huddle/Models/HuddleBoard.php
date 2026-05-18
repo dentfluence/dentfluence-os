@@ -27,10 +27,6 @@ class HuddleBoard extends Model
         'locked_at' => 'datetime',
     ];
 
-    // -------------------------------------------------------------------------
-    // Relationships
-    // -------------------------------------------------------------------------
-
     public function cards(): HasMany
     {
         return $this->hasMany(HuddleCard::class)->orderBy('position');
@@ -41,9 +37,10 @@ class HuddleBoard extends Model
         return $this->hasMany(HuddleComment::class);
     }
 
-    // -------------------------------------------------------------------------
-    // Scopes
-    // -------------------------------------------------------------------------
+    public function taskLogs(): HasMany
+    {
+        return $this->hasMany(HuddleTaskLog::class, 'huddle_board_id');
+    }
 
     public function scopeForBranch(Builder $query, int $branchId): Builder
     {
@@ -64,10 +61,6 @@ class HuddleBoard extends Model
     {
         return $query->whereDate('date', Carbon::today());
     }
-
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
 
     public function isToday(): bool
     {

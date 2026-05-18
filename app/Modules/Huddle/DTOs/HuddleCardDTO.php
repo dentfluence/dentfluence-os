@@ -44,4 +44,25 @@ final class HuddleCardDTO
         /** Arbitrary extra data (task title, priority, etc.) */
         public readonly array   $meta,
     ) {}
+    public function toArray(): array
+    {
+        return [
+            'source_type'      => $this->sourceType,
+            'source_id'        => $this->sourceId,
+            'patient_id'       => $this->patientId,
+            'patient_name'     => $this->patientName,
+            'doctor_name'      => $this->doctorName,
+            'time'             => $this->time,
+            'date'             => $this->date,
+            'duration'         => $this->duration,
+            'appointment_type' => $this->appointmentType,
+            'treatment_name'   => $this->treatmentName,
+            'category_name'    => $this->categoryName,
+            'status'           => $this->status,
+            'chief_complaint'  => $this->chiefComplaint,
+            'notes'            => $this->notes,
+            'patient_alert'    => $this->patientAlert,
+            'meta'             => $this->meta,
+        ];
+    }
 }

@@ -15,7 +15,7 @@ class HuddleBoardRepository
 
     /**
      * Find or create today's board for the given branch and role.
-     * "Today" is scoped to date only — one board per branch/role per day.
+     * One board per branch/role per day.
      */
     public function findOrCreateForToday(int $branchId, string $role): HuddleBoard
     {
@@ -27,22 +27,15 @@ class HuddleBoardRepository
             ],
             [
                 'is_locked' => false,
-                'meta'      => null,
             ]
         );
     }
 
-    /**
-     * Find a specific board by its primary key.
-     */
     public function findById(int $id): ?HuddleBoard
     {
         return $this->model->find($id);
     }
 
-    /**
-     * Find a board scoped to a branch, role, and specific date.
-     */
     public function findByDateAndRole(int $branchId, string $role, string $date): ?HuddleBoard
     {
         return $this->model
@@ -52,10 +45,6 @@ class HuddleBoardRepository
             ->first();
     }
 
-    /**
-     * Return all boards for a branch within a date range.
-     * Used by the report generator in Phase 4.
-     */
     public function getByDateRange(int $branchId, string $from, string $to): Collection
     {
         return $this->model
@@ -65,9 +54,6 @@ class HuddleBoardRepository
             ->get();
     }
 
-    /**
-     * Lock a board so no further edits are allowed (end-of-day action).
-     */
     public function lock(int $boardId): bool
     {
         return (bool) $this->model
@@ -75,9 +61,6 @@ class HuddleBoardRepository
             ->update(['is_locked' => true]);
     }
 
-    /**
-     * Persist arbitrary meta JSON onto the board (e.g. summary stats snapshot).
-     */
     public function updateMeta(int $boardId, array $meta): bool
     {
         return (bool) $this->model

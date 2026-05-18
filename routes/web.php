@@ -1,18 +1,15 @@
 <?php
-
+use App\Http\Controllers\TagController;
+use App\Http\Controllers\ConsultationController;
+use App\Http\Controllers\TreatmentPlanController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PatientNoteController;
 use App\Http\Controllers\AppointmentController;
-use App\Http\Controllers\HuddleController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TreatmentCategoryController;
-use App\Http\Controllers\TagController;
-use App\Http\Controllers\ConsultationController;
-use App\Http\Controllers\TreatmentPlanController;
-
 
 /* ────────────────────────────────────────────────────────────────
    ROOT
@@ -121,14 +118,7 @@ Route::delete(
     ->middleware('auth');
 
 
-    /* ── Huddle ── */
-    Route::prefix('huddle')->name('huddle.')->group(function () {
-        Route::get('/',                                         [HuddleController::class, 'index'])->name('index');
-        Route::post('/notes',                                   [HuddleController::class, 'storeNote'])->name('storeNote');
-        Route::patch('/appointments/{appointment}/instruction', [HuddleController::class, 'updateInstruction'])->name('updateInstruction');
-        Route::get('/accountability',                           [HuddleController::class, 'accountability'])->name('accountability');
-    });
-
+   
     /* ── Treatment Categories ── */
     Route::get('/treatment-categories',                       [TreatmentCategoryController::class, 'index']);
     Route::get('/treatment-categories/{category}/treatments', [TreatmentCategoryController::class, 'treatments']);

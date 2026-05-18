@@ -9,11 +9,6 @@ use Illuminate\Support\Collection;
 
 class HuddleCommentRepository
 {
-    // ── Reads ────────────────────────────────────────────────────────────────
-
-    /**
-     * All comments for a board, newest first, with author.
-     */
     public function forBoard(int $boardId): Collection
     {
         return HuddleComment::with('user')
@@ -22,14 +17,12 @@ class HuddleCommentRepository
             ->get();
     }
 
-    /**
-     * Unresolved comments only — used for the Comments column card list.
-     */
+    // FIX #13: was filtering whereNull('resolved_at') — model uses boolean 'is_resolved'
     public function unresolvedForBoard(int $boardId): Collection
     {
         return HuddleComment::with('user')
             ->where('huddle_board_id', $boardId)
-            ->whereNull('resolved_at')
+            ->where('is_resolved', false) // FIX #13
             ->orderBy('created_at', 'asc')
             ->get();
     }
@@ -39,8 +32,6 @@ class HuddleCommentRepository
         return HuddleComment::find($commentId);
     }
 
-    // ── Writes ───────────────────────────────────────────────────────────────
-
     public function create(int $boardId, int $userId, string $body, ?int $cardId = null): HuddleComment
     {
         return HuddleComment::create([
@@ -48,14 +39,21 @@ class HuddleCommentRepository
             'user_id'         => $userId,
             'huddle_card_id'  => $cardId,
             'body'            => $body,
-            'resolved_at'     => null,
+            'type'            => 'comment',
+            'is_resolved'     => false,
         ]);
     }
 
-    public function resolve(int $commentId): bool
+    // FIX #14: was only setting resolved_at — model primary field is boolean 'is_resolved'
+    // Now sets all three fields for proper audit trail
+    public function resolve(int $commentId, int $resolvedBy): bool
     {
         return (bool) HuddleComment::where('id', $commentId)
-            ->update(['resolved_at' => now()]);
+            ->update([
+                'is_resolved' => true,       // FIX #14
+                'resolved_by' => $resolvedBy,
+                'resolved_at' => now(),
+            ]);
     }
 
     public function delete(int $commentId): bool

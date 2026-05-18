@@ -14,7 +14,6 @@ class HuddleSettingsController extends Controller
 {
     /**
      * GET /huddle/settings
-     * Returns all settings for the authenticated user's branch.
      */
     public function index(Request $request): JsonResponse
     {
@@ -29,8 +28,7 @@ class HuddleSettingsController extends Controller
 
     /**
      * PATCH /huddle/settings
-     * Upserts key-value pairs for the branch.
-     * Admin only — enforced in UpdateHuddleSettingsRequest::authorize().
+     * Admin only — enforced in UpdateHuddleSettingsRequest::authorize()
      */
     public function update(UpdateHuddleSettingsRequest $request): JsonResponse
     {
