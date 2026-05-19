@@ -1,847 +1,1934 @@
+{{-- resources/views/appointments/index.blade.php --}}
 @extends('layouts.app')
 
+@push('styles')
+<link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css' rel='stylesheet' />
+<style>
+/* ─── CSS Variables ─────────────────────────────────────────── */
+:root {
+    --sidebar-w: 320px;
+    --header-h: 56px;
+    --topbar-h: 52px;
+
+    /* Status colours */
+    --c-scheduled: #3b82f6;
+    --c-checkin:   #f59e0b;
+    --c-in-chair:  #8b5cf6;
+    --c-done:      #10b981;
+    --c-cancelled: #ef4444;
+    --c-no-show:   #6b7280;
+    --c-walkin:    #14b8a6;
+
+    /* Treatment category fills (pastel) */
+    --t-consultation: #eff6ff;
+    --t-implant:      #f5f3ff;
+    --t-rct:          #fff7ed;
+    --t-surgery:      #fef2f2;
+    --t-cleaning:     #f0fdf4;
+    --t-followup:     #f8fafc;
+    --t-crown:        #fdf4ff;
+    --t-orthodontic:  #ecfdf5;
+    --t-default:      #f8fafc;
+
+    /* Doctor colours */
+    --doc-0: #2563eb;
+    --doc-1: #059669;
+    --doc-2: #d97706;
+    --doc-3: #dc2626;
+    --doc-4: #7c3aed;
+    --doc-5: #0891b2;
+}
+
+/* ─── Layout Shell ──────────────────────────────────────────── */
+.appt-shell {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - var(--header-h));
+    overflow: hidden;
+    background: #f1f5f9;
+}
+
+/* ─── STICKY Top Bar ────────────────────────────────────────── */
+.appt-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 16px;
+    height: var(--topbar-h);
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    flex-shrink: 0;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+
+.appt-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* ─── Calendar area ─────────────────────────────────────────── */
+.appt-calendar-area {
+    flex: 1;
+    overflow: auto;
+    padding: 12px;
+    min-width: 0;
+}
+
+/* ─── Right Sidebar ─────────────────────────────────────────── */
+.appt-sidebar {
+    width: var(--sidebar-w);
+    flex-shrink: 0;
+    background: #fff;
+    border-left: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: width .25s ease;
+}
+
+.appt-sidebar.collapsed {
+    width: 0;
+    border-left: none;
+}
+
+/* ─── Sidebar Header (no clock — just TODAY label + date) ───── */
+.sb-header {
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid #f1f5f9;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.sb-header-left {}
+
+.sb-today-label {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+
+.sb-date {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-top: 1px;
+    line-height: 1.2;
+}
+
+.sb-total-pill {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    background: #f1f5f9;
+    color: #475569;
+    border-radius: 20px;
+    white-space: nowrap;
+}
+
+/* ─── Status Counter Grid ───────────────────────────────────── */
+.sb-counters {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+    padding: 8px 10px;
+    border-bottom: 1px solid #f1f5f9;
+    flex-shrink: 0;
+}
+
+.sb-counter-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 5px 3px;
+    border-radius: 8px;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    transition: all .15s;
+    background: #f8fafc;
+}
+
+.sb-counter-btn:hover { background: #f1f5f9; transform: translateY(-1px); }
+.sb-counter-btn.active { border-color: currentColor; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+
+.sb-counter-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    margin-bottom: 2px;
+}
+
+.sb-counter-num {
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.sb-counter-lbl {
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-top: 2px;
+    text-align: center;
+}
+
+/* Status-specific colours */
+.cnt-total     { color: #1e293b; }  .cnt-total     .sb-counter-dot { background: #1e293b; }
+.cnt-scheduled { color: var(--c-scheduled); } .cnt-scheduled .sb-counter-dot { background: var(--c-scheduled); }
+.cnt-checkin   { color: var(--c-checkin); }   .cnt-checkin   .sb-counter-dot { background: var(--c-checkin); }
+.cnt-in_chair  { color: var(--c-in-chair); }  .cnt-in_chair  .sb-counter-dot { background: var(--c-in-chair); }
+.cnt-done      { color: var(--c-done); }      .cnt-done      .sb-counter-dot { background: var(--c-done); }
+.cnt-cancelled { color: var(--c-cancelled); } .cnt-cancelled .sb-counter-dot { background: var(--c-cancelled); }
+.cnt-no_show   { color: var(--c-no-show); }   .cnt-no_show   .sb-counter-dot { background: var(--c-no-show); }
+.cnt-walkin    { color: var(--c-walkin); }    .cnt-walkin    .sb-counter-dot { background: var(--c-walkin); }
+
+/* ─── Doctor Filter Chips ───────────────────────────────────── */
+.sb-doctor-filter {
+    padding: 6px 10px;
+    border-bottom: 1px solid #f1f5f9;
+    flex-shrink: 0;
+}
+
+.sb-doctor-chips {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.doc-chip {
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    background: #f1f5f9;
+    color: #475569;
+    transition: all .15s;
+}
+
+.doc-chip:hover { background: #e2e8f0; }
+.doc-chip.active { color: #fff; border-color: transparent; }
+
+/* ─── Queue header ──────────────────────────────────────────── */
+.sb-queue-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 12px 3px;
+    flex-shrink: 0;
+}
+
+.sb-queue-title {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+/* ─── Queue + Reminders side-by-side layout ─────────────────── */
+.sb-lower {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* Queue column: takes remaining width minus reminders */
+.sb-queue-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.sb-queue-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 6px 10px 10px;
+}
+
+.sb-queue-scroll::-webkit-scrollbar { width: 3px; }
+.sb-queue-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+/* Reminders column: fixed narrow width */
+.sb-reminders-col {
+    width: 106px;
+    flex-shrink: 0;
+    border-left: 1px solid #f1f5f9;
+    background: #fafbfc;
+    display: flex;
+    flex-direction: column;
+    padding: 8px 8px 8px 7px;
+    overflow: hidden;
+}
+
+.sb-reminders-title {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-bottom: 6px;
+    white-space: nowrap;
+}
+
+.reminder-list {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 6px;
+}
+
+.reminder-list::-webkit-scrollbar { width: 2px; }
+.reminder-list::-webkit-scrollbar-thumb { background: #cbd5e1; }
+
+.reminder-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    margin-bottom: 5px;
+}
+
+.reminder-item input[type=checkbox] {
+    accent-color: #3b82f6;
+    cursor: pointer;
+    margin-top: 2px;
+    flex-shrink: 0;
+    width: 11px;
+    height: 11px;
+}
+
+.reminder-item label {
+    font-size: 10px;
+    color: #475569;
+    cursor: pointer;
+    flex: 1;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.reminder-item.done label {
+    text-decoration: line-through;
+    color: #94a3b8;
+}
+
+.reminder-del {
+    border: none;
+    background: none;
+    color: #cbd5e1;
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.reminder-del:hover { color: #ef4444; }
+
+.reminder-add-area {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 6px;
+}
+
+.reminder-add-input {
+    width: 100%;
+    font-size: 10px;
+    padding: 4px 6px;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    outline: none;
+    background: #fff;
+    color: #1e293b;
+    box-sizing: border-box;
+}
+
+.reminder-add-input:focus { border-color: #3b82f6; }
+
+.reminder-add-btn {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 6px;
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    width: 100%;
+}
+
+.reminder-add-btn:hover { background: #2563eb; }
+
+/* ─── Queue Card ────────────────────────────────────────────── */
+.q-card {
+    border-radius: 9px;
+    border: 1px solid #e2e8f0;
+    margin-bottom: 6px;
+    overflow: hidden;
+    position: relative;
+    transition: box-shadow .15s, transform .15s;
+    cursor: pointer;
+}
+
+.q-card:hover { box-shadow: 0 3px 12px rgba(0,0,0,.09); transform: translateY(-1px); }
+
+.q-card-body { padding: 7px 8px 5px 13px; }
+
+.q-card-left-bar {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    border-radius: 9px 0 0 9px;
+}
+
+.q-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.q-card-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.2;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.q-card-time {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #475569;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.q-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+    flex-wrap: wrap;
+}
+
+.q-card-treatment { font-size: 10px; color: #64748b; font-weight: 500; }
+.q-card-doctor    { font-size: 9.5px; color: #94a3b8; }
+
+.q-card-walkin-badge {
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    background: #ccfbf1;
+    color: #0f766e;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+.q-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 20px;
+    margin-top: 3px;
+}
+
+/* Action buttons row */
+.q-card-actions {
+    display: flex;
+    gap: 3px;
+    padding: 4px 8px 6px 13px;
+    flex-wrap: wrap;
+    border-top: 1px solid rgba(0,0,0,.04);
+}
+
+.q-action-btn {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: none;
+    transition: all .12s;
+    letter-spacing: .02em;
+}
+
+.q-action-btn:hover { opacity: .85; transform: scale(1.03); }
+
+.q-btn-checkin { background: #fef3c7; color: #92400e; }
+.q-btn-inchair { background: #ede9fe; color: #5b21b6; }
+.q-btn-done    { background: #dcfce7; color: #14532d; }
+.q-btn-cancel  { background: #fee2e2; color: #991b1b; }
+.q-btn-noshow  { background: #f1f5f9; color: #475569; }
+.q-btn-edit    { background: #e0f2fe; color: #075985; }
+.q-btn-wa      { background: #dcfce7; color: #15803d; }
+
+/* ─── FullCalendar overrides ────────────────────────────────── */
+.fc {
+    font-family: inherit;
+    height: 100%;
+    min-height: 600px;
+}
+
+.fc-toolbar { margin-bottom: 10px !important; }
+
+.fc-toolbar-title {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    color: #1e293b !important;
+}
+
+.fc-button-primary {
+    background: #fff !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #475569 !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    box-shadow: none !important;
+    padding: 4px 10px !important;
+}
+
+.fc-button-primary:hover { background: #f8fafc !important; }
+.fc-button-primary.fc-button-active { background: #eff6ff !important; color: #2563eb !important; border-color: #bfdbfe !important; }
+
+.fc-timegrid-slot { height: 28px !important; }
+
+.fc-event {
+    border-radius: 6px !important;
+    border-width: 0 0 0 3px !important;
+    border-left-style: solid !important;
+    cursor: pointer !important;
+    font-size: 11px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08) !important;
+    padding: 2px 5px !important;
+}
+
+.fc-event-title { font-weight: 600 !important; }
+.fc-event-time  { font-size: 10px !important; opacity: .8; }
+
+.fc-event.status-done      { opacity: .55; }
+.fc-event.status-cancelled { opacity: .35; text-decoration: line-through; }
+.fc-event.status-no_show   { opacity: .35; border-style: dashed !important; }
+.fc-event.status-in_chair  { box-shadow: 0 0 0 2px rgba(139,92,246,.25), 0 1px 4px rgba(0,0,0,.1) !important; }
+
+/* ─── Quick Hover Card ──────────────────────────────────────── */
+#quick-view-card {
+    position: fixed;
+    z-index: 1050;
+    width: 280px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.14);
+    pointer-events: auto;
+    display: none;
+    font-size: 12.5px;
+    overflow: hidden;
+    animation: qvcFadeIn .12s ease;
+}
+
+@keyframes qvcFadeIn {
+    from { opacity:0; transform: translateY(4px) scale(.98); }
+    to   { opacity:1; transform: translateY(0) scale(1); }
+}
+
+.qvc-header {
+    padding: 12px 14px 8px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.qvc-name { font-size: 14px; font-weight: 800; color: #1e293b; }
+.qvc-sub  { font-size: 11px; color: #64748b; margin-top: 1px; }
+
+.qvc-body { padding: 10px 14px; }
+
+.qvc-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    border-bottom: 1px solid #f8fafc;
+    font-size: 11.5px;
+}
+
+.qvc-row:last-child { border-bottom: none; }
+.qvc-row-key { color: #94a3b8; font-weight: 500; }
+.qvc-row-val { color: #1e293b; font-weight: 600; text-align: right; }
+
+.qvc-actions {
+    padding: 8px 12px 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.qvc-btn {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: none;
+    transition: all .12s;
+    letter-spacing: .02em;
+}
+
+/* ─── Modal backdrop + shell ────────────────────────────────── */
+.modal-backdrop-custom {
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,.4);
+    z-index: 1040;
+    display: none;
+    backdrop-filter: blur(2px);
+}
+
+.modal-custom {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1050;
+    width: 460px;
+    max-width: 95vw;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.18);
+    display: none;
+    animation: modalIn .2s ease;
+}
+
+@keyframes modalIn {
+    from { opacity:0; transform: translate(-50%, calc(-50% + 12px)); }
+    to   { opacity:1; transform: translate(-50%, -50%); }
+}
+
+.modal-custom-header {
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-custom-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: #1e293b;
+}
+
+/* Tab strip inside modal */
+.modal-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.modal-tab-btn {
+    flex: 1;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #94a3b8;
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+    letter-spacing: .01em;
+}
+
+.modal-tab-btn:hover { color: #475569; background: #fafafa; }
+.modal-tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; background: none; }
+
+.modal-tab-panel { display: none; }
+.modal-tab-panel.active { display: block; }
+
+.modal-custom-body { padding: 16px 20px; }
+.modal-custom-footer {
+    padding: 12px 20px 16px;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* ─── Form elements ─────────────────────────────────────────── */
+.form-label-sm {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.form-control-sm {
+    width: 100%;
+    padding: 7px 10px;
+    font-size: 13px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color .15s;
+    background: #fff;
+    color: #1e293b;
+}
+
+.form-control-sm:focus { border-color: #3b82f6; }
+
+.btn-primary-sm {
+    padding: 8px 20px;
+    background: #2563eb;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .15s;
+}
+
+.btn-primary-sm:hover { background: #1d4ed8; }
+
+.btn-secondary-sm {
+    padding: 8px 20px;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 700;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* ─── Top bar elements ──────────────────────────────────────── */
+.topbar-search {
+    flex: 1;
+    max-width: 240px;
+    position: relative;
+}
+
+.topbar-search input {
+    width: 100%;
+    padding: 6px 10px 6px 30px;
+    font-size: 12.5px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    outline: none;
+    background: #f8fafc;
+}
+
+.topbar-search input:focus { border-color: #3b82f6; background: #fff; }
+
+.topbar-search svg {
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+}
+
+/* Single compact clock (no date) */
+.topbar-clock {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    letter-spacing: -.2px;
+}
+
+.topbar-date-label {
+    font-size: 11px;
+    color: #94a3b8;
+    white-space: nowrap;
+}
+
+.topbar-divider {
+    width: 1px;
+    height: 22px;
+    background: #e2e8f0;
+    flex-shrink: 0;
+}
+
+/* Add Appointment button */
+.btn-add-appt {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    background: #2563eb;
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 700;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background .15s;
+}
+
+.btn-add-appt:hover { background: #1d4ed8; color: #fff; }
+
+/* Walk-In button — subtle, beside Add Appointment */
+.btn-walkin {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    background: #f0fdf4;
+    color: #15803d;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1.5px solid #bbf7d0;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .15s;
+}
+
+.btn-walkin:hover { background: #dcfce7; border-color: #86efac; }
+
+.sidebar-toggle-btn {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 5px 9px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #475569;
+    line-height: 1;
+    transition: background .15s;
+}
+
+.sidebar-toggle-btn:hover { background: #e2e8f0; }
+
+/* Conflict warning banner */
+.conflict-warning {
+    display: none;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    border-radius: 7px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #92400e;
+    margin-top: 4px;
+}
+
+/* Walkin tab success notice */
+#wi-success {
+    display:none;
+    margin-top:8px;
+    padding:8px 12px;
+    background:#dcfce7;
+    border-radius:8px;
+    font-size:12px;
+    color:#15803d;
+    font-weight:600;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .appt-sidebar { display: none; }
+}
+</style>
+@endpush
+
 @section('content')
-<div class="min-h-screen bg-[#f5eef9]" x-data="appointmentCalendar">
+{{-- ════════════════════════════════════════════════════════════
+     DATA ENCODING FOR JS
+══════════════════════════════════════════════════════════════ --}}
+<script>
+window.__APPT_DATA = {
+    appointments:  @json($appointments),
+    todayQueue:    @json($todayAppointments),
+    doctors:       @json($doctors),
+    statusCounts:  @json($statusCounts),
+    categories:    @json($treatmentCategories),
+    today:         "{{ today()->toDateString() }}",
+    csrfToken:     "{{ csrf_token() }}",
+    routes: {
+        store:        "{{ route('appointments.store') }}",
+        todayQueue:   "{{ route('appointments.queue.today') }}",
+        statusCounts: "{{ route('appointments.status.counts') }}",
+        statusUpdate: "{{ url('/appointments') }}/{{'{id}'}}/status",
+        checkConflict:"{{ route('appointments.check.conflict') }}",
+        quickView:    "{{ url('/appointments') }}/{{'{id}'}}/quick",
+    }
+};
+</script>
 
-    {{-- TOP BAR --}}
-    <div class="flex items-center justify-between px-6 py-4 bg-white border-b border-[#6a0f70]/10">
-        <div class="flex items-center gap-3">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-[#6a0f70]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-            <h1 class="font-['Cormorant_Garamond'] text-2xl font-semibold text-[#380740] tracking-wide">Appointments</h1>
+{{-- ════════════════════════════════════════════════════════════
+     SHELL
+══════════════════════════════════════════════════════════════ --}}
+<div class="appt-shell" x-data="appointmentApp()" x-init="init()">
+
+    {{-- ── STICKY TOP BAR ──────────────────────────────────── --}}
+    <div class="appt-topbar">
+
+        {{-- Sidebar toggle --}}
+        <button class="sidebar-toggle-btn" @click="sidebarOpen = !sidebarOpen" title="Toggle Sidebar">☰</button>
+
+        {{-- Title --}}
+        <span style="font-size:13px;font-weight:800;color:#1e293b;white-space:nowrap;">📅 Appointments</span>
+
+        <div class="topbar-divider"></div>
+
+        {{-- Search --}}
+        <div class="topbar-search">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input type="text"
+                   placeholder="Search patient, phone, treatment…"
+                   x-model="searchQuery"
+                   @input.debounce.200ms="applyFilters()">
         </div>
 
-        {{-- VIEW TOGGLE --}}
-        <div class="flex items-center gap-1 bg-[#f5eef9] border border-[#6a0f70]/20 p-0.5">
-            <button @click="view='day'; fetchAppointments()"
-                :class="view==='day' ? 'bg-[#6a0f70] text-white' : 'text-[#6a0f70] hover:bg-[#6a0f70]/10'"
-                class="px-4 py-1.5 text-xs font-['DM_Sans'] font-medium transition-all">Day</button>
-            <button @click="view='week'; fetchAppointments()"
-                :class="view==='week' ? 'bg-[#6a0f70] text-white' : 'text-[#6a0f70] hover:bg-[#6a0f70]/10'"
-                class="px-4 py-1.5 text-xs font-['DM_Sans'] font-medium transition-all">Week</button>
-            <button @click="view='month'; fetchAppointments()"
-                :class="view==='month' ? 'bg-[#6a0f70] text-white' : 'text-[#6a0f70] hover:bg-[#6a0f70]/10'"
-                class="px-4 py-1.5 text-xs font-['DM_Sans'] font-medium transition-all">Month</button>
+        {{-- Doctor filter --}}
+        <select class="form-control-sm" style="width:150px;padding:5px 8px;font-size:12px;"
+                x-model="filterDoctorId"
+                @change="applyFilters(); refreshQueue()">
+            <option value="">All Doctors</option>
+            @foreach($doctors as $doc)
+            <option value="{{ $doc->id }}">{{ $doc->name }}</option>
+            @endforeach
+        </select>
+
+        <div class="topbar-divider"></div>
+
+        {{-- Single clock (time only — compact) --}}
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0;">
+            <div class="topbar-clock" x-text="clockTime"></div>
+            <div class="topbar-date-label" x-text="clockDateShort"></div>
         </div>
 
-        {{-- NAV + DATE --}}
-        <div class="flex items-center gap-3">
-            <button @click="prev()" class="p-1.5 border border-[#6a0f70]/20 text-[#6a0f70] hover:bg-[#6a0f70] hover:text-white transition-all">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-            </button>
-            <span x-text="headerLabel()" class="font-['Cormorant_Garamond'] text-lg font-semibold text-[#380740] min-w-[180px] text-center"></span>
-            <button @click="next()" class="p-1.5 border border-[#6a0f70]/20 text-[#6a0f70] hover:bg-[#6a0f70] hover:text-white transition-all">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-            </button>
-            <button @click="goToday()" class="px-3 py-1.5 text-xs font-['DM_Sans'] border border-[#6a0f70]/30 text-[#6a0f70] hover:bg-[#6a0f70] hover:text-white transition-all">Today</button>
-        </div>
+        <div class="topbar-divider"></div>
 
-        <button @click="openNewAt(currentDate, new Date().getHours() < 9 ? 9 : (new Date().getHours() > 20 ? 20 : new Date().getHours()))"
-           class="flex items-center gap-2 bg-[#6a0f70] text-white px-4 py-2 text-sm font-['DM_Sans'] hover:bg-[#380740] transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-            New Appointment
+        {{-- Walk-In button (subtle, beside Add Appointment) --}}
+        <button class="btn-walkin" onclick="openCombinedModal('walkin')">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+            </svg>
+            Walk-In
         </button>
-    </div>
 
-    {{-- STATUS LEGEND --}}
-    <div class="flex items-center gap-4 px-6 py-2.5 bg-white border-b border-[#6a0f70]/10">
-        <span class="text-[10px] font-['DM_Sans'] text-[#380740]/40 uppercase tracking-widest">Status</span>
-        <template x-for="(cfg, key) in statusConfig" :key="key">
-            <div class="flex items-center gap-1.5">
-                <span :class="cfg.dot" class="w-2 h-2 rounded-full"></span>
-                <span x-text="cfg.label" class="text-[11px] font-['DM_Sans'] text-[#380740]/60"></span>
-            </div>
-        </template>
-    </div>
-
-    {{-- FLASH --}}
-    @if(session('success'))
-    <div class="mx-6 mt-4 flex items-center gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-['DM_Sans']"
-         x-data="{show:true}" x-show="show">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        {{ session('success') }}
-        <button @click="show=false" class="ml-auto text-emerald-400 hover:text-emerald-700">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+        {{-- Add Appointment --}}
+        <button class="btn-add-appt" onclick="openCombinedModal('appointment')">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14"/>
+            </svg>
+            Add Appointment
         </button>
+
     </div>
-    @endif
 
-    {{-- CALENDAR BODY --}}
-    <div class="p-6">
+    {{-- ── BODY ─────────────────────────────────────────────── --}}
+    <div class="appt-body">
 
-        {{-- ===== DAY VIEW ===== --}}
-        <div x-show="view==='day'" class="bg-white border border-[#6a0f70]/10">
-            <div class="grid" style="grid-template-columns: 56px 1fr;">
-                <div class="border-r border-[#6a0f70]/10">
-                    <div class="h-10 border-b border-[#6a0f70]/10"></div>
-                    <template x-for="hour in hours" :key="hour">
-                        <div class="h-16 border-b border-[#6a0f70]/5 flex items-start justify-end pr-2 pt-1">
-                            <span x-text="formatHour(hour)" class="text-[10px] font-['DM_Sans'] text-[#380740]/30"></span>
-                        </div>
-                    </template>
+        {{-- ── CALENDAR ─────────────────────────────────────── --}}
+        <div class="appt-calendar-area">
+            <div id="dentfluence-calendar"></div>
+        </div>
+
+        {{-- ── RIGHT SIDEBAR ────────────────────────────────── --}}
+        <div class="appt-sidebar" :class="{ collapsed: !sidebarOpen }">
+
+            {{-- Sidebar Header: TODAY label + date only (clock is in topbar) --}}
+            <div class="sb-header">
+                <div class="sb-header-left">
+                    <div class="sb-today-label">Today</div>
+                    <div class="sb-date" x-text="fullDate"></div>
                 </div>
-                <div class="relative">
-                    <div class="h-10 border-b border-[#6a0f70]/10 flex items-center justify-center">
-                        <span x-text="dayViewHeader()" class="text-xs font-['DM_Sans'] font-medium text-[#380740]"></span>
-                    </div>
-                    <div class="relative">
-                        <template x-for="hour in hours" :key="hour">
-                            <div class="h-16 border-b border-[#6a0f70]/5 hover:bg-[#f5eef9]/40 transition-colors cursor-pointer"
-                                 @click="openNewAt(currentDate, hour)"></div>
-                        </template>
-                        <div x-show="isToday(currentDate)" :style="'top:' + nowLineTop() + 'px'" class="absolute left-0 right-0 flex items-center pointer-events-none z-20">
-                            <div class="w-2 h-2 rounded-full bg-rose-500 -ml-1 flex-shrink-0"></div>
-                            <div class="flex-1 h-px bg-rose-500"></div>
-                        </div>
-                        <template x-for="appt in dayAppointments()" :key="appt.id">
-                            <div :style="apptStyle(appt)"
-                                 :class="statusConfig[appt.status]?.card ?? 'border-[#6a0f70]/30 bg-[#f5eef9]'"
-                                 class="absolute left-1 right-1 border-l-4 px-2 py-1 cursor-pointer z-10 overflow-hidden transition-all hover:brightness-95 shadow-sm"
-                                 @click.stop="openAppt(appt)">
-                                <div class="flex items-center justify-between">
-                                    <span x-text="appt.patient_name" class="text-[11px] font-['DM_Sans'] font-semibold text-[#380740] truncate"></span>
-                                    <span x-text="appt.appointment_time.slice(0,5)" class="text-[10px] font-['DM_Sans'] text-[#380740]/50 flex-shrink-0 ml-1"></span>
-                                </div>
-                                <span x-text="appt.doctor_name" class="text-[10px] font-['DM_Sans'] text-[#380740]/60 truncate block"></span>
+                <div class="sb-total-pill" x-text="(counts.total ?? 0) + ' patients'"></div>
+            </div>
+
+            {{-- Status Counters --}}
+            <div class="sb-counters">
+                <template x-for="c in counterDefs" :key="c.key">
+                    <button class="sb-counter-btn"
+                            :class="[`cnt-${c.key}`, activeStatusFilter === c.key ? 'active' : '']"
+                            @click="toggleStatusFilter(c.key)">
+                        <div class="sb-counter-dot"></div>
+                        <div class="sb-counter-num" x-text="counts[c.key] ?? 0"></div>
+                        <div class="sb-counter-lbl" x-text="c.label"></div>
+                    </button>
+                </template>
+            </div>
+
+            {{-- Doctor Chips --}}
+            <div class="sb-doctor-filter">
+                <div class="sb-doctor-chips">
+                    <button class="doc-chip"
+                            :class="{ active: queueDoctorId === '' }"
+                            :style="queueDoctorId === '' ? 'background:#1e293b;color:#fff;' : ''"
+                            @click="queueDoctorId = ''; refreshQueue()">
+                        All
+                    </button>
+                    @foreach($doctors as $i => $doc)
+                    <button class="doc-chip"
+                            :class="{ active: queueDoctorId === '{{ $doc->id }}' }"
+                            :style="queueDoctorId === '{{ $doc->id }}' ? `background: var(--doc-{{ $i % 6 }});color:#fff;` : ''"
+                            @click="queueDoctorId = '{{ $doc->id }}'; refreshQueue()">
+                        {{ Str::limit($doc->name, 11) }}
+                    </button>
+                    @endforeach
+                </div>
+            </div>
+
+            {{-- Queue label row --}}
+            <div class="sb-queue-header">
+                <span class="sb-queue-title">
+                    Patient Queue
+                    <span x-show="activeStatusFilter"
+                          style="font-size:8.5px;background:#eff6ff;color:#2563eb;padding:1px 5px;border-radius:4px;margin-left:4px;"
+                          x-text="activeStatusFilter"></span>
+                </span>
+                <span style="font-size:10.5px;color:#94a3b8;font-weight:600;" x-text="queueList.length + ' in queue'"></span>
+            </div>
+
+            {{-- ── LOWER: Queue + Reminders side-by-side ────── --}}
+            <div class="sb-lower">
+
+                {{-- Queue column --}}
+                <div class="sb-queue-col">
+                    <div class="sb-queue-scroll">
+
+                        <template x-if="queueList.length === 0">
+                            <div style="text-align:center;padding:30px 0;color:#94a3b8;font-size:11.5px;">
+                                No patients in queue
                             </div>
                         </template>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        {{-- ===== WEEK VIEW ===== --}}
-        <div x-show="view==='week'" class="bg-white border border-[#6a0f70]/10 overflow-auto">
-            <div class="min-w-[700px]">
-                <div class="grid border-b border-[#6a0f70]/10" style="grid-template-columns: 56px repeat(7, 1fr);">
-                    <div class="border-r border-[#6a0f70]/10 h-10"></div>
-                    <template x-for="d in weekDays()" :key="d.iso">
-                        <div :class="isToday(d.date) ? 'bg-[#6a0f70]/5' : ''"
-                             class="h-10 border-r border-[#6a0f70]/10 flex flex-col items-center justify-center last:border-r-0">
-                            <span x-text="d.dayName" class="text-[10px] font-['DM_Sans'] text-[#380740]/50 uppercase tracking-widest"></span>
-                            <span x-text="d.dayNum"
-                                  :class="isToday(d.date) ? 'bg-[#6a0f70] text-white w-5 h-5 flex items-center justify-center text-[11px]' : 'text-[13px] text-[#380740] font-semibold'"
-                                  class="font-['DM_Sans'] mt-0.5 inline-flex items-center justify-center"></span>
-                        </div>
-                    </template>
-                </div>
-                <template x-for="hour in hours" :key="hour">
-                    <div class="grid border-b border-[#6a0f70]/5" style="grid-template-columns: 56px repeat(7, 1fr);">
-                        <div class="h-16 border-r border-[#6a0f70]/10 flex items-start justify-end pr-2 pt-1">
-                            <span x-text="formatHour(hour)" class="text-[10px] font-['DM_Sans'] text-[#380740]/30"></span>
-                        </div>
-                        <template x-for="d in weekDays()" :key="d.iso + '-' + hour">
-                            <div :class="isToday(d.date) ? 'bg-[#6a0f70]/5' : ''"
-                                 class="h-16 border-r border-[#6a0f70]/5 relative hover:bg-[#f5eef9]/50 cursor-pointer transition-colors last:border-r-0"
-                                 @click="openNewAt(d.date, hour)">
-                                <template x-for="(appt, apptIdx) in weekCellAppts(d.date, hour)" :key="appt.id">
-                                    <div :class="statusConfig[appt.status]?.card ?? 'border-[#6a0f70]/30 bg-[#f5eef9]'"
-                                         :style="'top:' + (2 + apptIdx * 20) + 'px; left:4px; right:4px;'"
-                                         class="absolute border-l-2 px-1 py-0.5 text-[10px] font-['DM_Sans'] truncate cursor-pointer hover:brightness-95 z-10"
-                                         @click.stop="openAppt(appt)">
-                                        <span x-text="appt.patient_name" class="font-semibold text-[#380740]"></span>
+                        <template x-for="apt in queueList" :key="apt.id">
+                            <div class="q-card"
+                                 :style="`background: ${getTreatmentFill(apt.treatment_category)}; border-color: rgba(0,0,0,.06);`"
+                                 @click="showQuickView(apt, $event)">
+
+                                <div class="q-card-left-bar"
+                                     :style="`background: ${getDoctorColor(apt.doctor_id)};`"></div>
+
+                                <div class="q-card-body">
+                                    <div class="q-card-top">
+                                        <div class="q-card-name" x-text="apt.patient_name"></div>
+                                        <div class="q-card-time" x-text="apt.appointment_time"></div>
                                     </div>
-                                </template>
+
+                                    <div class="q-card-meta">
+                                        <span class="q-card-treatment"
+                                              x-text="apt.treatment_category || apt.treatment || apt.type"></span>
+                                        <span style="color:#cbd5e1">·</span>
+                                        <span class="q-card-doctor" x-text="apt.doctor_name"></span>
+                                        <span x-show="apt.is_walkin" class="q-card-walkin-badge">Walk-in</span>
+                                    </div>
+
+                                    <div>
+                                        <span class="q-status-badge"
+                                              :style="`background: ${getStatusBg(apt.status)}; color: ${getStatusColor(apt.status)};`"
+                                              x-text="getStatusLabel(apt.status)"></span>
+                                        <span style="font-size:9.5px;color:#94a3b8;margin-left:4px;"
+                                              x-text="apt.duration_minutes + 'min'"></span>
+                                        <span x-show="apt.chair_number"
+                                              style="font-size:9.5px;color:#94a3b8;margin-left:4px;"
+                                              x-text="'Ch.' + apt.chair_number"></span>
+                                    </div>
+                                </div>
+
+                                {{-- Inline action buttons --}}
+                                <div class="q-card-actions" @click.stop="">
+                                    <template x-if="apt.status === 'scheduled'">
+                                        <button class="q-action-btn q-btn-checkin"
+                                                @click.stop="updateStatus(apt.id, 'checkin')">✓ In</button>
+                                    </template>
+                                    <template x-if="apt.status === 'checkin'">
+                                        <button class="q-action-btn q-btn-inchair"
+                                                @click.stop="updateStatus(apt.id, 'in_chair')">🦷 Chair</button>
+                                    </template>
+                                    <template x-if="apt.status === 'in_chair'">
+                                        <button class="q-action-btn q-btn-done"
+                                                @click.stop="updateStatus(apt.id, 'done')">✓ Done</button>
+                                    </template>
+                                    <template x-if="['scheduled','checkin'].includes(apt.status)">
+                                        <button class="q-action-btn q-btn-noshow"
+                                                @click.stop="updateStatus(apt.id, 'no_show')">N/S</button>
+                                    </template>
+                                    <template x-if="!['done','cancelled'].includes(apt.status)">
+                                        <button class="q-action-btn q-btn-cancel"
+                                                @click.stop="confirmCancel(apt.id)">✕</button>
+                                    </template>
+                                    <button class="q-action-btn q-btn-wa"
+                                            @click.stop="waContact(apt.patient_phone)"
+                                            x-show="apt.patient_phone">
+                                        WA
+                                    </button>
+                                </div>
                             </div>
                         </template>
                     </div>
-                </template>
-            </div>
-        </div>
-
-        {{-- ===== MONTH VIEW ===== --}}
-        <div x-show="view==='month'" class="bg-white border border-[#6a0f70]/10">
-            <div class="grid grid-cols-7 border-b border-[#6a0f70]/10">
-                <template x-for="name in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']" :key="name">
-                    <div class="py-2 text-center text-[10px] font-['DM_Sans'] font-medium text-[#380740]/50 uppercase tracking-widest border-r border-[#6a0f70]/10 last:border-r-0">
-                        <span x-text="name"></span>
-                    </div>
-                </template>
-            </div>
-            <div class="grid grid-cols-7">
-                <template x-for="cell in monthCells()" :key="cell.iso">
-                    <div :class="[
-                            cell.currentMonth ? 'bg-white' : 'bg-[#f5eef9]/30',
-                            isToday(cell.date) ? 'ring-1 ring-inset ring-[#6a0f70]/30' : '',
-                            'border-r border-b border-[#6a0f70]/10 min-h-[100px] p-1.5 relative last:border-r-0 hover:bg-[#f5eef9]/60 cursor-pointer transition-colors'
-                         ]"
-                         @click="openNewAt(cell.date, 9)">
-                        <span x-text="cell.day"
-                              :class="isToday(cell.date) ? 'bg-[#6a0f70] text-white w-5 h-5 flex items-center justify-center' : 'text-[#380740]/60'"
-                              class="text-[11px] font-['DM_Sans'] font-semibold mb-1 inline-flex"></span>
-                        <div class="space-y-0.5">
-                            <template x-for="appt in monthCellAppts(cell.date).slice(0,3)" :key="appt.id">
-                                <div :class="statusConfig[appt.status]?.pill ?? 'bg-[#6a0f70]/10 text-[#6a0f70]'"
-                                     class="text-[10px] font-['DM_Sans'] px-1 py-0.5 truncate cursor-pointer hover:opacity-80"
-                                     @click.stop="openAppt(appt)">
-                                    <span x-text="appt.appointment_time.slice(0,5) + ' ' + appt.patient_name"></span>
-                                </div>
-                            </template>
-                            <template x-if="monthCellAppts(cell.date).length > 3">
-                                <div class="text-[10px] font-['DM_Sans'] text-[#6a0f70]/70 px-1">
-                                    +<span x-text="monthCellAppts(cell.date).length - 3"></span> more
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </div>
-
-    </div>
-
-    {{-- ===== NEW APPOINTMENT MODAL ===== --}}
-    <div x-show="newAppt.open"
-         x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
-         class="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4"
-         @click.self="newAppt.open=false"
-         style="display:none;">
-
-        <div class="bg-white w-full max-w-lg shadow-2xl border border-[#6a0f70]/20 max-h-[90vh] flex flex-col" @click.stop>
-
-            {{-- Modal Header --}}
-            <div class="flex items-center justify-between px-6 py-4 bg-[#380740] flex-shrink-0">
-                <div class="flex items-center gap-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                    <h2 class="font-['Cormorant_Garamond'] text-xl text-white font-semibold">Book Appointment</h2>
                 </div>
-                <button @click="newAppt.open=false" class="text-white/60 hover:text-white transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                </button>
-            </div>
 
-            {{-- Error display --}}
-            <div x-show="newAppt.errors && newAppt.errors.length" class="mx-6 mt-4 px-3 py-2 bg-red-50 border border-red-200 text-red-600 text-xs font-['DM_Sans'] flex-shrink-0">
-                <template x-for="err in newAppt.errors" :key="err"><div x-text="err"></div></template>
-            </div>
+                {{-- Reminders column --}}
+                <div class="sb-reminders-col">
+                    <div class="sb-reminders-title">🗒 Notes</div>
 
-            {{-- Scrollable form body --}}
-            <div class="overflow-y-auto flex-1 px-6 py-5 space-y-4">
-
-                {{-- ── PATIENT SECTION ── --}}
-                {{-- Search field --}}
-                <div>
-                    <label class="text-[10px] font-['DM_Sans'] text-[#380740]/50 uppercase tracking-widest block mb-1">
-                        Patient Name <span class="text-red-400">*</span>
-                    </label>
-                    <div class="relative">
-                        <input type="text"
-                               x-model="newAppt.patientSearch"
-                               @input.debounce.300ms="searchPatients()"
-                               @focus="newAppt.showPatientDropdown = true"
-                               placeholder="Search by name…"
-                               class="w-full border border-[#6a0f70]/20 px-3 py-2 text-sm font-['DM_Sans'] text-[#380740] focus:outline-none focus:border-[#6a0f70] bg-white pr-8">
-                        <template x-if="newAppt.patientId">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-emerald-500 absolute right-2 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <div class="reminder-list">
+                        <template x-for="(r, i) in reminders" :key="i">
+                            <div class="reminder-item" :class="{ done: r.done }">
+                                <input type="checkbox" :id="`rem-${i}`" x-model="r.done">
+                                <label :for="`rem-${i}`" x-text="r.text"></label>
+                                <button class="reminder-del" @click="reminders.splice(i,1)">✕</button>
+                            </div>
                         </template>
-                        {{-- Patient search dropdown --}}
-                        <div x-show="newAppt.showPatientDropdown && newAppt.patientResults.length > 0"
-                             @click.outside="newAppt.showPatientDropdown = false"
-                             class="absolute top-full left-0 right-0 bg-white border border-[#6a0f70]/20 shadow-lg z-50 max-h-40 overflow-y-auto">
-                            <template x-for="p in newAppt.patientResults" :key="p.id">
-                                <div @click="selectPatient(p)"
-                                     class="px-3 py-2 text-sm font-['DM_Sans'] text-[#380740] hover:bg-[#f5eef9] cursor-pointer flex items-center justify-between">
-                                    <span x-text="p.name"></span>
-                                    <span x-text="p.phone" class="text-xs text-[#380740]/40"></span>
-                                </div>
-                            </template>
-                        </div>
+                    </div>
+
+                    <div class="reminder-add-area">
+                        <input class="reminder-add-input"
+                               type="text"
+                               placeholder="Add note…"
+                               x-model="newReminder"
+                               @keydown.enter="addReminder()">
+                        <button class="reminder-add-btn" @click="addReminder()">+ Add</button>
                     </div>
                 </div>
 
-                {{-- Mobile No. — auto-filled on patient select, editable --}}
-                <div>
-                    <label class="text-[10px] font-['DM_Sans'] text-[#380740]/50 uppercase tracking-widest block mb-1">
-                        Mobile No.
-                        <span x-show="newAppt.patientId" class="normal-case tracking-normal text-emerald-500 ml-1">auto-filled</span>
-                    </label>
-                    <input type="tel"
-                           x-model="newAppt.patientPhone"
-                           placeholder="Patient mobile number"
-                           class="w-full border border-[#6a0f70]/20 px-3 py-2 text-sm font-['DM_Sans'] text-[#380740] focus:outline-none focus:border-[#6a0f70] bg-white"
-                           :class="newAppt.patientId ? 'bg-[#f5eef9]/60' : 'bg-white'">
-                </div>
+            </div>{{-- /sb-lower --}}
 
-                {{-- Date + Time row --}}
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-[10px] font-['DM_Sans'] text-[#380740]/50 uppercase tracking-widest block mb-1">Date <span class="text-red-400">*</span></label>
-                        <input type="date" x-model="newAppt.date"
-                               class="w-full border border-[#6a0f70]/20 px-3 py-2 text-sm font-['DM_Sans'] text-[#380740] focus:outline-none focus:border-[#6a0f70] bg-white">
-                    </div>
-                    <div>
-                        <label class="text-[10px] font-['DM_Sans'] text-[#380740]/50 uppercase tracking-widest block mb-1">Time <span class="text-red-400">*</span></label>
-                        <select x-model="newAppt.time"
-                                class="w-full border border-[#6a0f70]/20 px-3 py-2 text-sm font-['DM_Sans'] text-[#380740] focus:outline-none focus:border-[#6a0f70] bg-white">
-                            <template x-for="slot in timeSlots" :key="slot">
-                                <option :value="slot" x-text="slot"></option>
-                            </template>
-                        </select>
-                    </div>
-                </div>
+        </div>{{-- /sidebar --}}
 
-                {{-- Doctor + Duration row --}}
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-[10px] font-['DM_Sans'] text-[#380740]/50 uppercase tracking-widest block mb-1">Doctor <span class="text-red-400">*</span></label>
-                        <select x-model="newAppt.doctorId"
-                                class="w-full border border-[#6a0f70]/20 px-3 py-2 text-sm font-['DM_Sans'] text-[#380740] focus:outline-none focus:border-[#6a0f70] bg-white">
-                            <option value="">— Select —</option>
-                            @foreach($doctors as $doc)
-                            <option value="{{ $doc->id }}">{{ $doc->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="text-[10px] font-['DM_Sans'] text-[#380740]/50 uppercase tracking-widest block mb-1">Duration</label>
-                        <select x-model="newAppt.duration"
-                                class="w-full border border-[#6a0f70]/20 px-3 py-2 text-sm font-['DM_Sans'] text-[#380740] focus:outline-none focus:border-[#6a0f70] bg-white">
-                            <option value="15">15 min</option>
-                            <option value="30" selected>30 min</option>
-                            <option value="45">45 min</option>
-                            <option value="60">60 min</option>
-                            <option value="90">90 min</option>
-                            <option value="120">120 min</option>
-                        </select>
-                    </div>
-                </div>
+    </div>{{-- /body --}}
 
-                {{-- Type toggle --}}
-                <div>
-                    <label class="text-[10px] font-['DM_Sans'] text-[#380740]/50 uppercase tracking-widest block mb-1">Type <span class="text-red-400">*</span></label>
-                    <div class="flex border border-[#6a0f70]/20">
-                        <button type="button" @click="newAppt.type='consultation'; newAppt.treatmentCategoryId=''; newAppt.treatmentId='';"
-                                :class="newAppt.type==='consultation' ? 'bg-[#6a0f70] text-white' : 'text-[#6a0f70] hover:bg-[#6a0f70]/5'"
-                                class="flex-1 py-2 text-xs font-['DM_Sans'] font-medium transition-all">Consultation</button>
-                        <button type="button" @click="newAppt.type='treatment'"
-                                :class="newAppt.type==='treatment' ? 'bg-[#6a0f70] text-white' : 'text-[#6a0f70] hover:bg-[#6a0f70]/5'"
-                                class="flex-1 py-2 text-xs font-['DM_Sans'] font-medium transition-all border-l border-[#6a0f70]/20">Treatment</button>
-                    </div>
-                </div>
+</div>{{-- /shell --}}
 
-                {{-- ── TREATMENT SECTION (only when type = treatment) ── --}}
-                <div x-show="newAppt.type === 'treatment'"
-                     x-transition:enter="transition ease-out duration-150"
-                     x-transition:enter-start="opacity-0 -translate-y-1"
-                     x-transition:enter-end="opacity-100 translate-y-0"
-                     class="border border-[#6a0f70]/15 bg-[#f5eef9]/40 p-4 space-y-3">
 
-                    <p class="text-[10px] font-['DM_Sans'] text-[#380740]/40 uppercase tracking-widest">Treatment Details</p>
-
-                    {{-- Treatment Category --}}
-                    <div>
-                        <label class="text-[10px] font-['DM_Sans'] text-[#380740]/50 uppercase tracking-widest block mb-1">
-                            Treatment Category <span class="text-red-400">*</span>
-                        </label>
-                        <select x-model="newAppt.treatmentCategoryId"
-                                @change="newAppt.treatmentId = ''"
-                                class="w-full border border-[#6a0f70]/20 px-3 py-2 text-sm font-['DM_Sans'] text-[#380740] focus:outline-none focus:border-[#6a0f70] bg-white">
-                            <option value="">— Select Category —</option>
-                            <template x-for="cat in treatmentCategories" :key="cat.id">
-                                <option :value="cat.id" x-text="cat.name"></option>
-                            </template>
-                        </select>
-                    </div>
-
-                    {{-- Treatment — filtered by selected category --}}
-                    <div>
-                        <label class="text-[10px] font-['DM_Sans'] text-[#380740]/50 uppercase tracking-widest block mb-1">
-                            Treatment <span class="text-red-400">*</span>
-                        </label>
-                        <select x-model="newAppt.treatmentId"
-                                @change="applyTreatmentDefaults()"
-                                :disabled="!newAppt.treatmentCategoryId"
-                                class="w-full border border-[#6a0f70]/20 px-3 py-2 text-sm font-['DM_Sans'] text-[#380740] focus:outline-none focus:border-[#6a0f70] bg-white disabled:opacity-40 disabled:cursor-not-allowed">
-                            <option value="">— Select Treatment —</option>
-                            <template x-for="t in filteredTreatments()" :key="t.id">
-                                <option :value="t.id" x-text="t.name"></option>
-                            </template>
-                        </select>
-                        <p x-show="!newAppt.treatmentCategoryId" class="text-[10px] font-['DM_Sans'] text-[#380740]/30 mt-1">
-                            Select a category first
-                        </p>
-                    </div>
-                </div>
-
-                {{-- ── NOTES (mandatory) ── --}}
-                <div>
-                    <label class="text-[10px] font-['DM_Sans'] text-[#380740]/50 uppercase tracking-widest block mb-1">
-                        Notes <span class="text-red-400">*</span>
-                    </label>
-                    <textarea x-model="newAppt.notes" rows="3"
-                              placeholder="Reason for visit, patient concerns, instructions…"
-                              class="w-full border border-[#6a0f70]/20 px-3 py-2 text-sm font-['DM_Sans'] text-[#380740] focus:outline-none focus:border-[#6a0f70] bg-white resize-none"
-                              :class="newAppt.notes.trim() === '' && newAppt.errors.length ? 'border-red-300' : ''"></textarea>
-                </div>
-
-            </div>
-
-            {{-- Footer actions --}}
-            <div class="px-6 py-4 border-t border-[#6a0f70]/10 flex gap-2 flex-shrink-0">
-                <button type="button" @click="newAppt.open=false"
-                        class="flex-1 py-2.5 text-xs font-['DM_Sans'] font-medium border border-[#6a0f70]/30 text-[#6a0f70] hover:bg-[#6a0f70]/5 transition-all">
-                    Cancel
-                </button>
-                <button type="button"
-                        @click="submitAppointment()"
-                        :disabled="newAppt.submitting"
-                        class="flex-1 py-2.5 text-xs font-['DM_Sans'] font-medium bg-[#6a0f70] text-white hover:bg-[#380740] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                    <svg x-show="newAppt.submitting" class="w-3.5 h-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
-                    <span x-text="newAppt.submitting ? 'Saving…' : 'Book Appointment'"></span>
-                </button>
-            </div>
+{{-- ════════════════════════════════════════════════════════════
+     QUICK VIEW FLOATING CARD
+══════════════════════════════════════════════════════════════ --}}
+<div id="quick-view-card">
+    <div class="qvc-header" id="qvc-header">
+        <div class="qvc-name" id="qvc-name">—</div>
+        <div class="qvc-sub" id="qvc-sub">—</div>
+    </div>
+    <div class="qvc-body">
+        <div class="qvc-row"><span class="qvc-row-key">Doctor</span><span class="qvc-row-val" id="qvc-doctor">—</span></div>
+        <div class="qvc-row"><span class="qvc-row-key">Treatment</span><span class="qvc-row-val" id="qvc-treatment">—</span></div>
+        <div class="qvc-row"><span class="qvc-row-key">Duration</span><span class="qvc-row-val" id="qvc-duration">—</span></div>
+        <div class="qvc-row"><span class="qvc-row-key">Status</span><span class="qvc-row-val" id="qvc-status">—</span></div>
+        <div class="qvc-row"><span class="qvc-row-key">Chair</span><span class="qvc-row-val" id="qvc-chair">—</span></div>
+        <div class="qvc-row"><span class="qvc-row-key">Phone</span><span class="qvc-row-val" id="qvc-phone">—</span></div>
+        <div class="qvc-row" id="qvc-notes-row" style="display:none;">
+            <span class="qvc-row-key">Notes</span><span class="qvc-row-val" id="qvc-notes">—</span>
         </div>
     </div>
-
-    {{-- ===== APPOINTMENT DETAIL DRAWER ===== --}}
-    <div x-show="drawer.open"
-         x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
-         class="fixed inset-0 bg-black/20 z-40" @click="drawer.open=false" style="display:none;"></div>
-
-    <div x-show="drawer.open"
-         x-transition:enter="transition ease-out duration-200" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0"
-         x-transition:leave="transition ease-in duration-150" x-transition:leave-start="translate-x-0" x-transition:leave-end="translate-x-full"
-         class="fixed top-0 right-0 h-full w-80 bg-white border-l border-[#6a0f70]/20 z-50 flex flex-col shadow-xl" style="display:none;">
-
-        <div class="flex items-center justify-between px-5 py-4 border-b border-[#6a0f70]/10 bg-[#380740]">
-            <h2 class="font-['Cormorant_Garamond'] text-lg text-white font-semibold">Appointment</h2>
-            <button @click="drawer.open=false" class="text-white/60 hover:text-white">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
-            </button>
-        </div>
-
-        <div class="flex-1 overflow-y-auto p-5 space-y-4" x-show="drawer.appt">
-            <div class="flex items-center justify-between">
-                <span :class="statusConfig[drawer.appt?.status]?.pill ?? 'bg-[#6a0f70]/10 text-[#6a0f70]'"
-                      x-text="statusConfig[drawer.appt?.status]?.label"
-                      class="text-xs font-['DM_Sans'] font-semibold px-2 py-1 uppercase tracking-widest"></span>
-                <span x-text="drawer.appt?.appointment_time?.slice(0,5)" class="text-sm font-['DM_Sans'] text-[#380740]/60"></span>
-            </div>
-
-            <div class="border-t border-[#6a0f70]/10 pt-4">
-                <p class="text-[10px] font-['DM_Sans'] text-[#380740]/40 uppercase tracking-widest mb-1">Patient</p>
-                <p x-text="drawer.appt?.patient_name" class="text-base font-['Cormorant_Garamond'] font-semibold text-[#380740]"></p>
-                <p x-text="drawer.appt?.patient_phone" class="text-sm font-['DM_Sans'] text-[#380740]/60"></p>
-            </div>
-
-            <div class="border-t border-[#6a0f70]/10 pt-4">
-                <p class="text-[10px] font-['DM_Sans'] text-[#380740]/40 uppercase tracking-widest mb-1">Doctor</p>
-                <p x-text="drawer.appt?.doctor_name" class="text-sm font-['DM_Sans'] text-[#380740]"></p>
-            </div>
-
-            <div class="border-t border-[#6a0f70]/10 pt-4 grid grid-cols-2 gap-3">
-                <div>
-                    <p class="text-[10px] font-['DM_Sans'] text-[#380740]/40 uppercase tracking-widest mb-1">Type</p>
-                    <p x-text="drawer.appt?.type" class="text-sm font-['DM_Sans'] text-[#380740] capitalize"></p>
-                </div>
-                <div>
-                    <p class="text-[10px] font-['DM_Sans'] text-[#380740]/40 uppercase tracking-widest mb-1">Duration</p>
-                    <p class="text-sm font-['DM_Sans'] text-[#380740]"><span x-text="drawer.appt?.duration_minutes"></span> min</p>
-                </div>
-            </div>
-
-            {{-- Treatment info (shown only if treatment type) --}}
-            <template x-if="drawer.appt?.treatment_category || drawer.appt?.treatment">
-                <div class="border-t border-[#6a0f70]/10 pt-4 space-y-2">
-                    <template x-if="drawer.appt?.treatment_category">
-                        <div>
-                            <p class="text-[10px] font-['DM_Sans'] text-[#380740]/40 uppercase tracking-widest mb-1">Category</p>
-                            <p x-text="drawer.appt?.treatment_category" class="text-sm font-['DM_Sans'] text-[#380740]"></p>
-                        </div>
-                    </template>
-                    <template x-if="drawer.appt?.treatment">
-                        <div>
-                            <p class="text-[10px] font-['DM_Sans'] text-[#380740]/40 uppercase tracking-widest mb-1">Treatment</p>
-                            <p x-text="drawer.appt?.treatment" class="text-sm font-['DM_Sans'] text-[#380740]"></p>
-                        </div>
-                    </template>
-                </div>
-            </template>
-
-            {{-- Notes (or legacy chief_complaint fallback) --}}
-            <div x-show="drawer.appt?.notes || drawer.appt?.chief_complaint" class="border-t border-[#6a0f70]/10 pt-4">
-                <p class="text-[10px] font-['DM_Sans'] text-[#380740]/40 uppercase tracking-widest mb-1">Notes</p>
-                <p x-text="drawer.appt?.notes || drawer.appt?.chief_complaint" class="text-sm font-['DM_Sans'] text-[#380740]/80"></p>
-            </div>
-
-            <div class="border-t border-[#6a0f70]/10 pt-4">
-                <p class="text-[10px] font-['DM_Sans'] text-[#380740]/40 uppercase tracking-widest mb-2">Update Status</p>
-                <div class="grid grid-cols-2 gap-1.5">
-                    <template x-for="(cfg, key) in statusConfig" :key="key">
-                        <button @click="updateStatus(drawer.appt, key)"
-                                :class="drawer.appt?.status === key ? 'ring-2 ring-[#6a0f70] opacity-100' : 'opacity-60 hover:opacity-100'"
-                                :style="'background:' + cfg.hex + '15; border-color:' + cfg.hex + '40; color:' + cfg.hex"
-                                class="text-[10px] font-['DM_Sans'] font-semibold px-2 py-1.5 border uppercase tracking-widest transition-all">
-                            <span x-text="cfg.label"></span>
-                        </button>
-                    </template>
-                </div>
-            </div>
-        </div>
-
-        <div class="p-4 border-t border-[#6a0f70]/10 flex gap-2">
-            <a :href="drawer.appt ? '/appointments/' + drawer.appt.id + '/edit' : '#'"
-               class="flex-1 text-center py-2 text-xs font-['DM_Sans'] font-medium border border-[#6a0f70]/30 text-[#6a0f70] hover:bg-[#6a0f70] hover:text-white transition-all">Edit</a>
-            <a :href="drawer.appt?.patient_id ? '/patients/' + drawer.appt.patient_id : '#'"
-               class="flex-1 text-center py-2 text-xs font-['DM_Sans'] font-medium bg-[#380740] text-white hover:bg-[#6a0f70] transition-all">Patient</a>
-        </div>
-    </div>
-
+    <div class="qvc-actions" id="qvc-actions"></div>
 </div>
 
+
+{{-- ════════════════════════════════════════════════════════════
+     COMBINED APPOINTMENT + WALK-IN MODAL (tabbed)
+══════════════════════════════════════════════════════════════ --}}
+<div id="combined-modal-backdrop" class="modal-backdrop-custom" onclick="closeCombinedModal()"></div>
+<div id="combined-modal" class="modal-custom">
+
+    {{-- Header --}}
+    <div class="modal-custom-header">
+        <div class="modal-custom-title" id="combined-modal-title">New Appointment</div>
+        <button onclick="closeCombinedModal()"
+                style="border:none;background:none;font-size:18px;color:#94a3b8;cursor:pointer;">✕</button>
+    </div>
+
+    {{-- Tabs --}}
+    <div class="modal-tabs">
+        <button class="modal-tab-btn active" id="tab-btn-appointment" onclick="switchModalTab('appointment')">
+            📅 Appointment
+        </button>
+        <button class="modal-tab-btn" id="tab-btn-walkin" onclick="switchModalTab('walkin')">
+            🚶 Walk-In
+        </button>
+    </div>
+
+    {{-- ── TAB: Appointment ─────────────────────────────────── --}}
+    <div id="tab-appointment" class="modal-tab-panel active">
+        <div class="modal-custom-body">
+            <div style="margin-bottom:10px;">
+                <label class="form-label-sm">Patient *</label>
+                <select class="form-control-sm" id="am-patient">
+                    <option value="">— Search Patient —</option>
+                    @foreach(\App\Models\Patient::where('branch_id', Auth::user()->branch_id)->orderBy('name')->get(['id','name','phone']) as $p)
+                    <option value="{{ $p->id }}">{{ $p->name }} ({{ $p->phone }})</option>
+                    @endforeach
+                </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+                <div>
+                    <label class="form-label-sm">Doctor *</label>
+                    <select class="form-control-sm" id="am-doctor">
+                        @foreach($doctors as $doc)
+                        <option value="{{ $doc->id }}">{{ $doc->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label-sm">Type *</label>
+                    <select class="form-control-sm" id="am-type">
+                        <option value="consultation">Consultation</option>
+                        <option value="treatment">Treatment</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+                <div>
+                    <label class="form-label-sm">Date *</label>
+                    <input class="form-control-sm" id="am-date" type="date">
+                </div>
+                <div>
+                    <label class="form-label-sm">Time *</label>
+                    <input class="form-control-sm" id="am-time" type="time">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+                <div>
+                    <label class="form-label-sm">Treatment Category</label>
+                    <select class="form-control-sm" id="am-category" onchange="amAutoFill()">
+                        <option value="">— Select —</option>
+                        @foreach($treatmentCategories as $cat)
+                        <option value="{{ $cat->id }}" data-duration="{{ $cat->default_duration ?? '' }}">{{ $cat->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label-sm">Duration (min)</label>
+                    <input class="form-control-sm" id="am-duration" type="number" value="30" min="10" max="240">
+                </div>
+            </div>
+            <div style="margin-bottom:6px;">
+                <label class="form-label-sm">Notes</label>
+                <textarea class="form-control-sm" id="am-notes" rows="2" placeholder="Notes / chief complaint"></textarea>
+            </div>
+            <div id="am-conflict-warn" class="conflict-warning">
+                <span>⚠️</span>
+                <span id="am-conflict-text">Potential scheduling conflict detected.</span>
+            </div>
+        </div>
+        <div class="modal-custom-footer">
+            <button class="btn-secondary-sm" onclick="closeCombinedModal()">Cancel</button>
+            <button class="btn-primary-sm" onclick="submitApptModal()" id="am-submit-btn">
+                Book Appointment
+            </button>
+        </div>
+    </div>
+
+    {{-- ── TAB: Walk-In ─────────────────────────────────────── --}}
+    <div id="tab-walkin" class="modal-tab-panel">
+        <div class="modal-custom-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+                <div>
+                    <label class="form-label-sm">First Name *</label>
+                    <input class="form-control-sm" id="wi-first" type="text" placeholder="Rahul">
+                </div>
+                <div>
+                    <label class="form-label-sm">Last Name *</label>
+                    <input class="form-control-sm" id="wi-last" type="text" placeholder="Sharma">
+                </div>
+            </div>
+            <div style="margin-bottom:10px;">
+                <label class="form-label-sm">Mobile *</label>
+                <input class="form-control-sm" id="wi-mobile" type="tel" placeholder="9876543210">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+                <div>
+                    <label class="form-label-sm">Doctor</label>
+                    <select class="form-control-sm" id="wi-doctor">
+                        @foreach($doctors as $doc)
+                        <option value="{{ $doc->id }}">{{ $doc->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label-sm">Time</label>
+                    <input class="form-control-sm" id="wi-time" type="time"
+                           value="{{ now()->format('H:i') }}">
+                </div>
+            </div>
+            <div style="margin-bottom:10px;">
+                <label class="form-label-sm">Treatment Category</label>
+                <select class="form-control-sm" id="wi-category">
+                    <option value="">— Select —</option>
+                    @foreach($treatmentCategories as $cat)
+                    <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div style="margin-bottom:6px;">
+                <label class="form-label-sm">Notes</label>
+                <input class="form-control-sm" id="wi-notes" type="text" placeholder="Chief complaint or note">
+            </div>
+            <div id="wi-success">✓ Walk-in added successfully!</div>
+        </div>
+        <div class="modal-custom-footer">
+            <button class="btn-secondary-sm" onclick="closeCombinedModal()">Cancel</button>
+            <button class="btn-primary-sm" onclick="submitWalkin()" id="wi-submit-btn">
+                Add Walk-In
+            </button>
+        </div>
+    </div>
+
+</div>{{-- /combined-modal --}}
+
+
+{{-- ════════════════════════════════════════════════════════════
+     SCRIPTS
+══════════════════════════════════════════════════════════════ --}}
 @push('scripts')
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+
 <script>
-document.addEventListener('alpine:init', () => {
-    Alpine.data('appointmentCalendar', () => ({
-        view: 'week',
-        currentDate: new Date(),
-        hours: Array.from({length: 14}, (_, i) => i + 8), // 8am–9pm
-        drawer: { open: false, appt: null },
+// ─── Doctor color palette ──────────────────────────────────────
+const DOC_COLORS = ['#2563eb','#059669','#d97706','#dc2626','#7c3aed','#0891b2','#be185d','#0284c7'];
 
-        // Treatment data passed from Blade
-        treatmentCategories: @json($treatmentCategories ?? []),
+// Treatment category → pastel fill
+const TREAT_FILLS = {
+    consultation: '#eff6ff',
+    implant:      '#f5f3ff',
+    rct:          '#fff7ed',
+    'root canal': '#fff7ed',
+    surgery:      '#fef2f2',
+    cleaning:     '#f0fdf4',
+    scaling:      '#f0fdf4',
+    follow:       '#f8fafc',
+    crown:        '#fdf4ff',
+    orthodontic:  '#ecfdf5',
+    braces:       '#ecfdf5',
+    filling:      '#fffbeb',
+    extraction:   '#fff1f2',
+    whitening:    '#fefce8',
+    default:      '#f8fafc',
+};
 
-        newAppt: {
-            open: false,
-            date: '', hour: 9, time: '09:00',
-            // Patient fields
-            patientId: null,
-            patientSearch: '',
-            patientPhone: '',
-            patientResults: [],
-            showPatientDropdown: false,
-            // Appointment fields
-            doctorId: '',
-            duration: '30',
-            type: 'consultation',
-            // Treatment fields
-            treatmentCategoryId: '',
-            treatmentId: '',
-            // Notes (mandatory)
-            notes: '',
-            // State
-            submitting: false,
-            errors: [],
+const STATUS_META = {
+    scheduled: { label: 'Scheduled',   color: '#2563eb', bg: '#eff6ff' },
+    checkin:   { label: 'Checked In',  color: '#92400e', bg: '#fef3c7' },
+    in_chair:  { label: 'In Chair',    color: '#5b21b6', bg: '#ede9fe' },
+    done:      { label: 'Completed',   color: '#14532d', bg: '#dcfce7' },
+    cancelled: { label: 'Cancelled',   color: '#991b1b', bg: '#fee2e2' },
+    no_show:   { label: 'No Show',     color: '#374151', bg: '#f1f5f9' },
+    checkout:  { label: 'Checked Out', color: '#14532d', bg: '#dcfce7' },
+};
+
+// Map doctor id → color index
+const doctorColorMap = {};
+window.__APPT_DATA.doctors.forEach((d, i) => {
+    doctorColorMap[d.id] = DOC_COLORS[i % DOC_COLORS.length];
+});
+
+function getDoctorColor(docId) {
+    return doctorColorMap[docId] || '#94a3b8';
+}
+
+function getTreatmentFill(catName) {
+    if (!catName) return TREAT_FILLS.default;
+    const k = Object.keys(TREAT_FILLS).find(k => catName.toLowerCase().includes(k));
+    return k ? TREAT_FILLS[k] : TREAT_FILLS.default;
+}
+
+// ─── AutoDuration map ─────────────────────────────────────────
+const AUTO_DURATION = {
+    consultation: 30, rct: 60, 'root canal': 60,
+    implant: 90, surgery: 90, cleaning: 45, scaling: 45,
+    follow: 30, crown: 60, extraction: 30, filling: 45,
+    orthodontic: 30, braces: 30, xray: 15, whitening: 60,
+};
+
+function autoDuration(catName) {
+    if (!catName) return 30;
+    const lower = catName.toLowerCase();
+    for (const [k, v] of Object.entries(AUTO_DURATION)) {
+        if (lower.includes(k)) return v;
+    }
+    return 30;
+}
+
+// ─── FullCalendar ─────────────────────────────────────────────
+let calendar;
+
+function buildCalendarEvents(appointments) {
+    return appointments.map(apt => {
+        const [h, m] = apt.appointment_time.split(':').map(Number);
+        const start  = `${apt.appointment_date}T${apt.appointment_time}`;
+        const endMin = h * 60 + m + (apt.duration_minutes || 30);
+        const endH   = Math.floor(endMin / 60).toString().padStart(2,'0');
+        const endM   = (endMin % 60).toString().padStart(2,'0');
+        const end    = `${apt.appointment_date}T${endH}:${endM}`;
+
+        const docColor  = getDoctorColor(apt.doctor_id);
+        const treatFill = getTreatmentFill(apt.treatment_category);
+
+        return {
+            id:              apt.id,
+            title:           apt.patient_name,
+            start, end,
+            backgroundColor: treatFill,
+            borderColor:     docColor,
+            textColor:       '#1e293b',
+            classNames:      [`status-${apt.status}`],
+            extendedProps:   apt,
+        };
+    });
+}
+
+function initCalendar(appointments) {
+    const el = document.getElementById('dentfluence-calendar');
+
+    calendar = new FullCalendar.Calendar(el, {
+        initialView:  'timeGridWeek',
+        headerToolbar: {
+            left:   'prev,next today',
+            center: 'title',
+            right:  'dayGridMonth,timeGridWeek,timeGridDay',
         },
+        slotMinTime:    '08:00:00',
+        slotMaxTime:    '22:00:00',
+        slotDuration:   '00:30:00',
+        allDaySlot:     false,
+        nowIndicator:   true,
+        height:         '100%',
+        events:         buildCalendarEvents(appointments),
+        eventContent:   renderEvent,
+        eventClick:     onEventClick,
+        dateClick:      onDateClick,
+        eventMouseEnter: onEventHover,
+        eventMouseLeave: hideQuickView,
+    });
 
-        timeSlots: @json($timeSlots ?? []),
+    calendar.render();
+}
 
-        statusConfig: {
-            scheduled:  { label: 'Scheduled',  dot: 'bg-blue-400',    card: 'border-blue-400 bg-blue-50',      pill: 'bg-blue-100 text-blue-700',      hex: '#3b82f6' },
-            checkin:    { label: 'Checked In',  dot: 'bg-amber-400',   card: 'border-amber-400 bg-amber-50',    pill: 'bg-amber-100 text-amber-700',    hex: '#f59e0b' },
-            in_chair:   { label: 'In Chair',    dot: 'bg-violet-500',  card: 'border-violet-500 bg-violet-50',  pill: 'bg-violet-100 text-violet-700',  hex: '#8b5cf6' },
-            checkout:   { label: 'Checkout',    dot: 'bg-cyan-500',    card: 'border-cyan-500 bg-cyan-50',      pill: 'bg-cyan-100 text-cyan-700',      hex: '#06b6d4' },
-            done:       { label: 'Done',        dot: 'bg-emerald-500', card: 'border-emerald-500 bg-emerald-50',pill: 'bg-emerald-100 text-emerald-700', hex: '#10b981' },
-            cancelled:  { label: 'Cancelled',   dot: 'bg-red-400',     card: 'border-red-400 bg-red-50',        pill: 'bg-red-100 text-red-600',        hex: '#ef4444' },
-            no_show:    { label: 'No Show',     dot: 'bg-slate-400',   card: 'border-slate-400 bg-slate-50',    pill: 'bg-slate-100 text-slate-600',    hex: '#94a3b8' },
-        },
+function renderEvent(info) {
+    const apt    = info.event.extendedProps;
+    const status = apt.status;
+    const sm     = STATUS_META[status] || STATUS_META.scheduled;
+    const mins   = apt.duration_minutes || 30;
 
-        appointments: @json($appointments ?? []),
+    let statusStripe = '';
+    if (status === 'checkin') {
+        statusStripe = `<div style="height:3px;background:${sm.bg};border-radius:2px 2px 0 0;margin:-2px -5px 3px;"></div>`;
+    }
+
+    return { html: `
+        <div style="padding:1px 0; line-height:1.25; overflow:hidden; height:100%;">
+            ${statusStripe}
+            <div style="font-size:11px;font-weight:700;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                ${apt.patient_name}
+            </div>
+            <div style="font-size:10px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                ${apt.treatment_category || apt.type}
+            </div>
+            <div style="font-size:9.5px;color:#94a3b8;">${mins}min · ${apt.doctor_name?.split(' ').slice(-1)[0] || ''}</div>
+        </div>
+    `};
+}
+
+// ─── Quick View Card ──────────────────────────────────────────
+let qvcHideTimeout;
+const qvc = document.getElementById('quick-view-card');
+
+function showQuickView(apt, event) {
+    clearTimeout(qvcHideTimeout);
+
+    document.getElementById('qvc-name').textContent      = apt.patient_name;
+    document.getElementById('qvc-sub').textContent       = `${apt.appointment_time} · ${apt.appointment_date}`;
+    document.getElementById('qvc-doctor').textContent    = apt.doctor_name;
+    document.getElementById('qvc-treatment').textContent = apt.treatment_category || apt.treatment || apt.type;
+    document.getElementById('qvc-duration').textContent  = apt.duration_minutes + ' min';
+    document.getElementById('qvc-status').textContent    = STATUS_META[apt.status]?.label || apt.status;
+    document.getElementById('qvc-chair').textContent     = apt.chair_number ? 'Chair ' + apt.chair_number : '—';
+    document.getElementById('qvc-phone').textContent     = apt.patient_phone || '—';
+
+    if (apt.notes) {
+        document.getElementById('qvc-notes').textContent       = apt.notes;
+        document.getElementById('qvc-notes-row').style.display = 'flex';
+    } else {
+        document.getElementById('qvc-notes-row').style.display = 'none';
+    }
+
+    // Actions
+    const actions = document.getElementById('qvc-actions');
+    actions.innerHTML = '';
+    const makeBtn = (label, color, bg, fn) => {
+        const b = document.createElement('button');
+        b.className = 'qvc-btn';
+        b.style.cssText = `background:${bg};color:${color};`;
+        b.textContent = label;
+        b.onclick = fn;
+        actions.appendChild(b);
+    };
+
+    if (apt.status === 'scheduled') makeBtn('Check In','#92400e','#fef3c7',() => { window._apptApp.updateStatus(apt.id,'checkin'); hideQuickView(); });
+    if (apt.status === 'checkin')   makeBtn('In Chair','#5b21b6','#ede9fe',() => { window._apptApp.updateStatus(apt.id,'in_chair'); hideQuickView(); });
+    if (apt.status === 'in_chair')  makeBtn('Done','#14532d','#dcfce7',() => { window._apptApp.updateStatus(apt.id,'done'); hideQuickView(); });
+    if (apt.patient_phone) makeBtn('WhatsApp','#15803d','#dcfce7',() => window._apptApp.waContact(apt.patient_phone));
+
+    // Position
+    qvc.style.display = 'block';
+    let x, y;
+    if (event instanceof MouseEvent) {
+        x = event.clientX + 12;
+        y = event.clientY - 20;
+    } else if (event && event.target) {
+        const rect = event.target.getBoundingClientRect();
+        x = rect.right + 8;
+        y = rect.top;
+    } else {
+        x = window.innerWidth / 2 - 140;
+        y = window.innerHeight / 2 - 150;
+    }
+
+    if (x + 290 > window.innerWidth)  x = x - 300;
+    if (y + 350 > window.innerHeight) y = window.innerHeight - 360;
+    if (x < 8) x = 8;
+    if (y < 8) y = 8;
+
+    qvc.style.left = x + 'px';
+    qvc.style.top  = y + 'px';
+}
+
+function hideQuickView() {
+    qvcHideTimeout = setTimeout(() => { qvc.style.display = 'none'; }, 120);
+}
+
+qvc.addEventListener('mouseenter', () => clearTimeout(qvcHideTimeout));
+qvc.addEventListener('mouseleave', hideQuickView);
+document.addEventListener('click', e => {
+    if (!qvc.contains(e.target)) hideQuickView();
+});
+
+function onEventHover(info) {
+    const apt = info.event.extendedProps;
+    showQuickView(apt, info.jsEvent);
+}
+
+function onEventClick(info) {
+    const apt = info.event.extendedProps;
+    showQuickView(apt, info.jsEvent);
+}
+
+function onDateClick(info) {
+    openCombinedModal('appointment', info.dateStr, info.date);
+}
+
+
+// ─── Combined Modal (tabbed) ──────────────────────────────────
+let activeModalTab = 'appointment';
+
+function openCombinedModal(tab = 'appointment', dateStr = null, dateObj = null) {
+    switchModalTab(tab);
+
+    if (tab === 'appointment') {
+        const apptDate = dateStr
+            ? dateStr.split('T')[0]
+            : new Date().toISOString().split('T')[0];
+        const timeStr = dateObj
+            ? dateObj.getHours().toString().padStart(2,'0') + ':' + dateObj.getMinutes().toString().padStart(2,'0')
+            : new Date().toTimeString().slice(0,5);
+        document.getElementById('am-date').value = apptDate;
+        document.getElementById('am-time').value = timeStr;
+        document.getElementById('am-conflict-warn').style.display = 'none';
+    }
+
+    document.getElementById('combined-modal-backdrop').style.display = 'block';
+    document.getElementById('combined-modal').style.display = 'block';
+}
+
+function closeCombinedModal() {
+    document.getElementById('combined-modal-backdrop').style.display = 'none';
+    document.getElementById('combined-modal').style.display = 'none';
+}
+
+function switchModalTab(tab) {
+    activeModalTab = tab;
+    ['appointment', 'walkin'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
+        document.getElementById(`tab-btn-${t}`).classList.toggle('active', t === tab);
+    });
+}
+
+async function amAutoFill() {
+    const sel = document.getElementById('am-category');
+    const opt = sel.options[sel.selectedIndex];
+    const catName = opt.text;
+    const dur = autoDuration(catName);
+    document.getElementById('am-duration').value = dur;
+
+    const doctorId = document.getElementById('am-doctor').value;
+    const date     = document.getElementById('am-date').value;
+    const time     = document.getElementById('am-time').value;
+    if (doctorId && date && time) checkConflict(doctorId, date, time, dur);
+}
+
+async function checkConflict(doctorId, date, time, duration) {
+    try {
+        const url = new URL(window.__APPT_DATA.routes.checkConflict);
+        url.searchParams.set('doctor_id', doctorId);
+        url.searchParams.set('appointment_date', date);
+        url.searchParams.set('appointment_time', time);
+        url.searchParams.set('duration_minutes', duration);
+
+        const res  = await fetch(url, { headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken } });
+        const data = await res.json();
+
+        const warn = document.getElementById('am-conflict-warn');
+        if (data.has_conflict) {
+            const c = data.conflicts[0];
+            document.getElementById('am-conflict-text').textContent =
+                `Conflict: ${c.patient_name} at ${c.time} (${c.duration} min)`;
+            warn.style.display = 'flex';
+        } else {
+            warn.style.display = 'none';
+        }
+    } catch {}
+}
+
+async function submitApptModal() {
+    const patient = document.getElementById('am-patient').value;
+    const doctor  = document.getElementById('am-doctor').value;
+    const date    = document.getElementById('am-date').value;
+    const time    = document.getElementById('am-time').value;
+    const type    = document.getElementById('am-type').value;
+
+    if (!patient || !doctor || !date || !time) {
+        alert('Please fill in all required fields.');
+        return;
+    }
+
+    const btn = document.getElementById('am-submit-btn');
+    btn.textContent = 'Booking…';
+    btn.disabled    = true;
+
+    try {
+        const res = await fetch(window.__APPT_DATA.routes.store, {
+            method:  'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken,
+                'Accept':       'application/json',
+            },
+            body: JSON.stringify({
+                patient_id:            patient,
+                doctor_id:             doctor,
+                appointment_date:      date,
+                appointment_time:      time,
+                type,
+                duration_minutes:      parseInt(document.getElementById('am-duration').value) || 30,
+                treatment_category_id: document.getElementById('am-category').value || null,
+                notes:                 document.getElementById('am-notes').value || ' ',
+            }),
+        });
+
+        const data = await res.json();
+        if (data.ok || data.success) {
+            closeCombinedModal();
+            if (data.appointment) {
+                window._apptApp.addAppointmentToCalendar(data.appointment);
+            }
+            window._apptApp.refreshQueue();
+        } else {
+            alert(data.message || 'Failed to book appointment.');
+        }
+    } catch (e) {
+        alert('Network error.');
+    } finally {
+        btn.textContent = 'Book Appointment';
+        btn.disabled    = false;
+    }
+}
+
+async function submitWalkin() {
+    const first  = document.getElementById('wi-first').value.trim();
+    const last   = document.getElementById('wi-last').value.trim();
+    const mobile = document.getElementById('wi-mobile').value.trim();
+    const time   = document.getElementById('wi-time').value;
+
+    if (!first || !last || !mobile) {
+        alert('Please fill in First Name, Last Name, and Mobile.');
+        return;
+    }
+
+    const btn = document.getElementById('wi-submit-btn');
+    btn.textContent = 'Adding…';
+    btn.disabled = true;
+
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const res = await fetch(window.__APPT_DATA.routes.store, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken,
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+                first_name:            first,
+                last_name:             last,
+                mobile,
+                doctor_id:             document.getElementById('wi-doctor').value,
+                appointment_date:      today,
+                appointment_time:      time,
+                treatment_category_id: document.getElementById('wi-category').value || null,
+                notes:                 document.getElementById('wi-notes').value || '',
+                is_walkin:             true,
+            }),
+        });
+
+        const data = await res.json();
+        if (data.ok || data.success) {
+            document.getElementById('wi-success').style.display = 'block';
+            if (data.appointment) {
+                window._apptApp.addAppointmentToCalendar(data.appointment);
+            }
+            setTimeout(() => {
+                closeCombinedModal();
+                window._apptApp.refreshQueue();
+                ['wi-first','wi-last','wi-mobile','wi-notes'].forEach(id => document.getElementById(id).value = '');
+                document.getElementById('wi-category').value = '';
+                document.getElementById('wi-success').style.display = 'none';
+            }, 1200);
+        } else {
+            alert('Error: ' + (data.message || 'Failed to add walk-in'));
+        }
+    } catch (e) {
+        alert('Network error. Please try again.');
+    } finally {
+        btn.textContent = 'Add Walk-In';
+        btn.disabled = false;
+    }
+}
+
+
+// ─── AlpineJS App ─────────────────────────────────────────────
+function appointmentApp() {
+    return {
+        // State
+        sidebarOpen:        true,
+        clockTime:          '',
+        clockDateShort:     '',
+        fullDate:           '',
+        filterDoctorId:     '',
+        queueDoctorId:      '',
+        searchQuery:        '',
+        activeStatusFilter: '',
+        queueList:          [],
+        counts:             {},
+        newReminder:        '',
+        reminders: [
+            { text: 'Call lab for implant kit', done: false },
+            { text: 'Patient payment follow-up', done: false },
+        ],
+
+        counterDefs: [
+            { key: 'total',     label: 'Total'     },
+            { key: 'scheduled', label: 'Scheduled' },
+            { key: 'checkin',   label: 'Checked In'},
+            { key: 'in_chair',  label: 'In Chair'  },
+            { key: 'done',      label: 'Done'      },
+            { key: 'cancelled', label: 'Cancelled' },
+            { key: 'no_show',   label: 'No Show'   },
+            { key: 'walkin',    label: 'Walk-In'   },
+        ],
 
         init() {
-            setInterval(() => this.fetchAppointments(), 60000);
+            window._apptApp = this;
+
+            this.counts    = window.__APPT_DATA.statusCounts;
+            this.queueList = this.sortQueue([...window.__APPT_DATA.todayQueue]);
+
+            initCalendar(window.__APPT_DATA.appointments);
+
+            // Clock tick — only update what we need
+            this.tickClock();
+            setInterval(() => this.tickClock(), 1000);
+
+            // Auto-refresh queue every 60s
+            setInterval(() => this.refreshQueue(), 60000);
         },
 
-        // ── Treatment helpers ──────────────────────────────────────────
-
-        filteredTreatments() {
-            if (!this.newAppt.treatmentCategoryId) return [];
-            const cat = this.treatmentCategories.find(
-                c => String(c.id) === String(this.newAppt.treatmentCategoryId)
-            );
-            return cat ? (cat.treatments ?? []) : [];
-        },
-
-        // Auto-fill duration when a treatment is selected
-        applyTreatmentDefaults() {
-            const treatments = this.filteredTreatments();
-            const t = treatments.find(
-                t => String(t.id) === String(this.newAppt.treatmentId)
-            );
-            if (t && t.default_duration_minutes) {
-                // Round to nearest available slot option
-                const durations = [15, 30, 45, 60, 90, 120];
-                const closest = durations.reduce((prev, curr) =>
-                    Math.abs(curr - t.default_duration_minutes) < Math.abs(prev - t.default_duration_minutes) ? curr : prev
-                );
-                this.newAppt.duration = String(closest);
-            }
-        },
-
-        // ── Patient helpers ────────────────────────────────────────────
-
-        async fetchAppointments() {
-            try {
-                const dateStr = this.isoDate(this.currentDate);
-                const res = await fetch(`/appointments?json=1&date=${dateStr}&view=${this.view}`);
-                if (res.ok) this.appointments = await res.json();
-            } catch(e) {}
-        },
-
-        async searchPatients() {
-            const q = this.newAppt.patientSearch.trim();
-            if (q.length < 2) { this.newAppt.patientResults = []; return; }
-            try {
-                const res = await fetch(`/patients/search?q=${encodeURIComponent(q)}&json=1`);
-                if (res.ok) this.newAppt.patientResults = await res.json();
-            } catch(e) {}
-        },
-
-        selectPatient(p) {
-            this.newAppt.patientId     = p.id;
-            this.newAppt.patientSearch = p.name;       // name field only
-            this.newAppt.patientPhone  = p.phone ?? ''; // phone fills separately
-            this.newAppt.patientResults = [];
-            this.newAppt.showPatientDropdown = false;
-        },
-
-        // ── Modal open ────────────────────────────────────────────────
-
-        openNewAt(date, hour) {
-            const h = Math.min(Math.max(hour, 9), 20);
-            const slot = String(h).padStart(2, '0') + ':00';
-            this.newAppt = {
-                open: true,
-                date: this.isoDate(date),
-                hour: h,
-                time: slot,
-                patientId: null,
-                patientSearch: '',
-                patientPhone: '',
-                patientResults: [],
-                showPatientDropdown: false,
-                doctorId: '',
-                duration: '30',
-                type: 'consultation',
-                treatmentCategoryId: '',
-                treatmentId: '',
-                notes: '',
-                submitting: false,
-                errors: [],
-            };
-        },
-
-        openAppt(appt) {
-            this.drawer.appt = appt;
-            this.drawer.open = true;
-        },
-
-        // ── Submit ────────────────────────────────────────────────────
-
-        async submitAppointment() {
-            this.newAppt.errors = [];
-
-            if (!this.newAppt.patientId)        this.newAppt.errors.push('Please select a patient.');
-            if (!this.newAppt.doctorId)          this.newAppt.errors.push('Please select a doctor.');
-            if (!this.newAppt.date)              this.newAppt.errors.push('Date is required.');
-            if (!this.newAppt.time)              this.newAppt.errors.push('Time is required.');
-            if (!this.newAppt.notes.trim())      this.newAppt.errors.push('Notes are required.');
-            if (this.newAppt.type === 'treatment') {
-                if (!this.newAppt.treatmentCategoryId) this.newAppt.errors.push('Please select a treatment category.');
-                if (!this.newAppt.treatmentId)         this.newAppt.errors.push('Please select a treatment.');
-            }
-            if (this.newAppt.errors.length) return;
-
-            this.newAppt.submitting = true;
-            try {
-                const res = await fetch('/appointments', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    },
-                    body: JSON.stringify({
-                        patient_id:             this.newAppt.patientId,
-                        doctor_id:              this.newAppt.doctorId,
-                        appointment_date:       this.newAppt.date,
-                        appointment_time:       this.newAppt.time,
-                        duration_minutes:       this.newAppt.duration,
-                        type:                   this.newAppt.type,
-                        notes:                  this.newAppt.notes,
-                        treatment_category_id:  this.newAppt.treatmentCategoryId || null,
-                        treatment_id:           this.newAppt.treatmentId || null,
-                    }),
-                });
-                const data = await res.json();
-                if (res.ok) {
-                    this.newAppt.open = false;
-                    await this.fetchAppointments();
-                } else {
-                    if (data.errors) {
-                        this.newAppt.errors = Object.values(data.errors).flat();
-                    } else {
-                        this.newAppt.errors = [data.message ?? 'Something went wrong.'];
-                    }
-                }
-            } catch(e) {
-                this.newAppt.errors = ['Network error. Please try again.'];
-            } finally {
-                this.newAppt.submitting = false;
-            }
-        },
-
-        // ── Status update ─────────────────────────────────────────────
-
-        async updateStatus(appt, status) {
-            if (!appt) return;
-            try {
-                const res = await fetch(`/appointments/${appt.id}/status`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    },
-                    body: JSON.stringify({ status }),
-                });
-                if (res.ok) {
-                    const idx = this.appointments.findIndex(a => a.id === appt.id);
-                    if (idx !== -1) this.appointments[idx].status = status;
-                    this.drawer.appt = { ...appt, status };
-                }
-            } catch(e) { alert('Status update failed.'); }
-        },
-
-        // ── Calendar helpers ──────────────────────────────────────────
-
-        isoDate(d) {
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${y}-${m}-${day}`;
-        },
-
-        isToday(d) {
-            const t = new Date();
-            return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
-        },
-
-        formatHour(h) {
-            if (h === 12) return '12 PM';
-            if (h === 0)  return '12 AM';
-            return h > 12 ? (h - 12) + ' PM' : h + ' AM';
-        },
-
-        nowLineTop() {
+        tickClock() {
             const now = new Date();
-            const startHour = 8;
-            const offset = (now.getHours() - startHour) * 64 + (now.getMinutes() / 60) * 64;
-            return 40 + Math.max(0, offset);
+            // Time only for topbar (compact)
+            this.clockTime      = now.toLocaleTimeString('en-IN', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            // Short date for under topbar clock
+            this.clockDateShort = now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+            // Full date for sidebar header
+            this.fullDate       = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
         },
 
-        headerLabel() {
-            if (this.view === 'day') return this.currentDate.toLocaleDateString('en-IN', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
-            if (this.view === 'week') {
-                const wd = this.weekDays();
-                const first = wd[0].date.toLocaleDateString('en-IN', {day:'numeric', month:'short'});
-                const last  = wd[6].date.toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'});
-                return `${first} – ${last}`;
-            }
-            return this.currentDate.toLocaleDateString('en-IN', {month:'long', year:'numeric'});
-        },
-
-        dayViewHeader() {
-            return this.currentDate.toLocaleDateString('en-IN', {weekday:'long', day:'numeric', month:'short'});
-        },
-
-        prev() {
-            const d = new Date(this.currentDate);
-            if (this.view === 'day')   d.setDate(d.getDate() - 1);
-            if (this.view === 'week')  d.setDate(d.getDate() - 7);
-            if (this.view === 'month') d.setMonth(d.getMonth() - 1);
-            this.currentDate = d;
-            this.fetchAppointments();
-        },
-
-        next() {
-            const d = new Date(this.currentDate);
-            if (this.view === 'day')   d.setDate(d.getDate() + 1);
-            if (this.view === 'week')  d.setDate(d.getDate() + 7);
-            if (this.view === 'month') d.setMonth(d.getMonth() + 1);
-            this.currentDate = d;
-            this.fetchAppointments();
-        },
-
-        goToday() {
-            this.currentDate = new Date();
-            this.fetchAppointments();
-        },
-
-        goDay(d) { this.currentDate = d; this.view = 'day'; },
-
-        weekDays() {
-            const days = [];
-            const d = new Date(this.currentDate);
-            const dow = d.getDay();
-            d.setDate(d.getDate() - dow);
-            for (let i = 0; i < 7; i++) {
-                const day = new Date(d);
-                days.push({
-                    date: day,
-                    iso: this.isoDate(day),
-                    dayName: day.toLocaleDateString('en-IN', {weekday:'short'}),
-                    dayNum: day.getDate(),
-                });
-                d.setDate(d.getDate() + 1);
-            }
-            return days;
-        },
-
-        monthCells() {
-            const cells = [];
-            const y = this.currentDate.getFullYear();
-            const m = this.currentDate.getMonth();
-            const first = new Date(y, m, 1);
-            const last  = new Date(y, m + 1, 0);
-            for (let i = 0; i < first.getDay(); i++) {
-                const d = new Date(y, m, -first.getDay() + i + 1);
-                cells.push({ date: d, iso: this.isoDate(d), day: d.getDate(), currentMonth: false });
-            }
-            for (let i = 1; i <= last.getDate(); i++) {
-                const d = new Date(y, m, i);
-                cells.push({ date: d, iso: this.isoDate(d), day: i, currentMonth: true });
-            }
-            const rem = 7 - (cells.length % 7);
-            if (rem < 7) {
-                for (let i = 1; i <= rem; i++) {
-                    const d = new Date(y, m + 1, i);
-                    cells.push({ date: d, iso: this.isoDate(d), day: i, currentMonth: false });
-                }
-            }
-            return cells;
-        },
-
-        dayAppointments() {
-            const iso = this.isoDate(this.currentDate);
-            return this.appointments.filter(a => a.appointment_date === iso)
-                .sort((a, b) => a.appointment_time.localeCompare(b.appointment_time));
-        },
-
-        weekCellAppts(date, hour) {
-            const iso = this.isoDate(date);
-            return this.appointments.filter(a => {
-                if (a.appointment_date !== iso) return false;
-                const h = parseInt(a.appointment_time.split(':')[0]);
-                return h === hour;
+        sortQueue(list) {
+            const order = { checkin: 0, in_chair: 1, scheduled: 2, done: 3, cancelled: 4, no_show: 4 };
+            return list.sort((a, b) => {
+                const oa = order[a.status] ?? 5;
+                const ob = order[b.status] ?? 5;
+                if (oa !== ob) return oa - ob;
+                return a.appointment_time.localeCompare(b.appointment_time);
             });
         },
 
-        monthCellAppts(date) {
-            const iso = this.isoDate(date);
-            return this.appointments.filter(a => a.appointment_date === iso)
-                .sort((a, b) => a.appointment_time.localeCompare(b.appointment_time));
+        async refreshQueue() {
+            try {
+                const url = new URL(window.__APPT_DATA.routes.todayQueue);
+                if (this.queueDoctorId) url.searchParams.set('doctor_id', this.queueDoctorId);
+                if (this.activeStatusFilter && this.activeStatusFilter !== 'total' && this.activeStatusFilter !== 'walkin') {
+                    url.searchParams.set('status', this.activeStatusFilter);
+                }
+
+                const res  = await fetch(url, { headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken } });
+                const data = await res.json();
+
+                let list = data.appointments || data;
+                if (this.activeStatusFilter === 'walkin') {
+                    list = list.filter(a => a.is_walkin);
+                }
+                this.queueList = this.sortQueue(list);
+                this.counts    = data.counts || this.counts;
+            } catch (e) {
+                console.error('Queue refresh failed', e);
+            }
         },
 
-        apptStyle(appt) {
-            const [hh, mm] = appt.appointment_time.split(':').map(Number);
-            const startHour = 8;
-            const top = 40 + (hh - startHour) * 64 + (mm / 60) * 64;
-            const height = Math.max(28, ((appt.duration_minutes || 30) / 60) * 64 - 2);
-            return `top:${top}px; height:${height}px;`;
+        toggleStatusFilter(key) {
+            this.activeStatusFilter = this.activeStatusFilter === key ? '' : key;
+            this.refreshQueue();
+            this.applyCalendarFilter();
         },
-    }));
-});
+
+        applyFilters() {
+            this.applyCalendarFilter();
+        },
+
+        applyCalendarFilter() {
+            if (!calendar) return;
+            const events = buildCalendarEvents(
+                window.__APPT_DATA.appointments.filter(apt => {
+                    if (this.filterDoctorId && apt.doctor_id != this.filterDoctorId) return false;
+                    if (this.activeStatusFilter && this.activeStatusFilter !== 'total') {
+                        if (this.activeStatusFilter === 'walkin') {
+                            if (!apt.is_walkin) return false;
+                        } else if (apt.status !== this.activeStatusFilter) return false;
+                    }
+                    if (this.searchQuery) {
+                        const q = this.searchQuery.toLowerCase();
+                        const match = [apt.patient_name, apt.patient_phone, apt.treatment_category, apt.treatment, apt.doctor_name]
+                            .some(v => v && v.toLowerCase().includes(q));
+                        if (!match) return false;
+                    }
+                    return true;
+                })
+            );
+            calendar.removeAllEvents();
+            calendar.addEventSource(events);
+        },
+
+        async updateStatus(id, status) {
+            try {
+                const url = window.__APPT_DATA.routes.statusUpdate.replace('{id}', id);
+                const res = await fetch(url, {
+                    method:  'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken, 'Accept': 'application/json' },
+                    body: JSON.stringify({ status }),
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    const idx = this.queueList.findIndex(a => a.id == id);
+                    if (idx !== -1 && data.appointment) {
+                        this.queueList[idx] = data.appointment;
+                        this.queueList = this.sortQueue([...this.queueList]);
+                    }
+                    if (data.appointment) this.updateCalendarEvent(data.appointment);
+                    if (data.counts) this.counts = data.counts;
+                    const mi = window.__APPT_DATA.appointments.findIndex(a => a.id == id);
+                    if (mi !== -1 && data.appointment) window.__APPT_DATA.appointments[mi] = data.appointment;
+                }
+            } catch (e) {
+                console.error('Status update failed', e);
+            }
+        },
+
+        updateCalendarEvent(apt) {
+            if (!calendar) return;
+            const ev = calendar.getEventById(apt.id);
+            if (!ev) return;
+            ev.setExtendedProp('status', apt.status);
+            ev.setProp('classNames', [`status-${apt.status}`]);
+            ev.setProp('backgroundColor', getTreatmentFill(apt.treatment_category));
+        },
+
+        addAppointmentToCalendar(apt) {
+            if (!calendar) return;
+            window.__APPT_DATA.appointments.push(apt);
+            const events = buildCalendarEvents([apt]);
+            if (events.length) calendar.addEvent(events[0]);
+        },
+
+        confirmCancel(id) {
+            if (confirm('Cancel this appointment?')) {
+                this.updateStatus(id, 'cancelled');
+            }
+        },
+
+        waContact(phone) {
+            if (!phone) return;
+            const clean = phone.replace(/\D/g, '');
+            const num   = clean.startsWith('91') ? clean : '91' + clean;
+            window.open(`https://wa.me/${num}`, '_blank');
+        },
+
+        showQuickView(apt, event) {
+            showQuickView(apt, event);
+        },
+
+        addReminder() {
+            if (this.newReminder.trim()) {
+                this.reminders.push({ text: this.newReminder.trim(), done: false });
+                this.newReminder = '';
+            }
+        },
+
+        // Helpers exposed to templates
+        getStatusLabel(s) { return STATUS_META[s]?.label || s; },
+        getStatusColor(s) { return STATUS_META[s]?.color || '#64748b'; },
+        getStatusBg(s)    { return STATUS_META[s]?.bg    || '#f1f5f9'; },
+        getDoctorColor,
+        getTreatmentFill,
+    };
+}
 </script>
 @endpush
 @endsection

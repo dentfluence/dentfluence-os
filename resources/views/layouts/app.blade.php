@@ -467,6 +467,7 @@
     {{-- ── Page-specific head injection ── --}}
     @yield('head-extra')
     @stack('styles')
+    <link rel="stylesheet" href="{{ asset('css/communication/manager.css') }}">
 </head>
 
 <body class="h-full antialiased">
@@ -826,4 +827,6 @@
 @stack('scripts')
 
 </body>
+<script src="{{ asset('js/communication/manager.js') }}"></script>
+<script src="{{ asset('js/communication/queue.js') }}"></script>
 </html>

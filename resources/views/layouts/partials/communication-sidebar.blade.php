@@ -1,0 +1,181 @@
+{{--
+    Communication OS — Sidebar Navigation
+    Dentfluence · Tulip Dental
+--}}
+<aside class="comm-sidebar" id="comm-sidebar" role="navigation" aria-label="Communication OS navigation">
+
+    {{-- ── Module Brand ────────────────────────────────────────────── --}}
+    <div class="comm-sidebar__brand">
+        <div class="comm-sidebar__brand-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+        </div>
+        <div class="comm-sidebar__brand-text">
+            <span class="comm-sidebar__brand-name">Communication OS</span>
+            <span class="comm-sidebar__brand-sub">Dentfluence · Tulip Dental</span>
+        </div>
+        <button class="comm-sidebar__collapse-btn" id="sidebar-collapse-btn"
+                aria-label="Collapse sidebar" title="Collapse sidebar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>
+        </button>
+    </div>
+
+    {{-- ── Nav Items ───────────────────────────────────────────────── --}}
+    <nav class="comm-sidebar__nav">
+        <ul class="comm-sidebar__nav-list" role="list">
+
+            {{-- Dashboard --}}
+            <li class="comm-sidebar__nav-item">
+                <a href="{{ route('communication.index') }}"
+                   class="comm-sidebar__nav-link {{ $activeNav === 'dashboard' ? 'is-active' : '' }}"
+                   aria-current="{{ $activeNav === 'dashboard' ? 'page' : 'false' }}">
+                    <span class="comm-sidebar__nav-icon" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                        </svg>
+                    </span>
+                    <span class="comm-sidebar__nav-label">Dashboard</span>
+                </a>
+            </li>
+
+            <li class="comm-sidebar__nav-divider" role="separator">
+                <span>Execution</span>
+            </li>
+
+            {{-- Communication Manager --}}
+            <li class="comm-sidebar__nav-item">
+                <a href="{{ route('communication.manager.index') }}"
+                   class="comm-sidebar__nav-link {{ $activeNav === 'manager' ? 'is-active' : '' }}"
+                   aria-current="{{ $activeNav === 'manager' ? 'page' : 'false' }}">
+                    <span class="comm-sidebar__nav-icon" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                    </span>
+                    <span class="comm-sidebar__nav-label">Communication Manager</span>
+                    @if(($navBadges['overdue_count'] ?? 0) > 0)
+                        <span class="comm-sidebar__nav-badge comm-sidebar__nav-badge--urgent"
+                              aria-label="{{ $navBadges['overdue_count'] }} overdue">
+                            {{ $navBadges['overdue_count'] }}
+                        </span>
+                    @endif
+                </a>
+            </li>
+
+            {{-- PRM Pipeline --}}
+            <li class="comm-sidebar__nav-item">
+                <a href="{{ route('communication.prm.index') }}"
+                   class="comm-sidebar__nav-link {{ $activeNav === 'prm' ? 'is-active' : '' }}"
+                   aria-current="{{ $activeNav === 'prm' ? 'page' : 'false' }}">
+                    <span class="comm-sidebar__nav-icon" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="12"/><rect x="17" y="3" width="5" height="8"/>
+                        </svg>
+                    </span>
+                    <span class="comm-sidebar__nav-label">PRM Pipeline</span>
+                </a>
+            </li>
+
+            {{-- Follow-up Engine --}}
+            <li class="comm-sidebar__nav-item">
+                <a href="{{ route('communication.followup.index') }}"
+                   class="comm-sidebar__nav-link {{ $activeNav === 'followup' ? 'is-active' : '' }}"
+                   aria-current="{{ $activeNav === 'followup' ? 'page' : 'false' }}">
+                    <span class="comm-sidebar__nav-icon" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                    </span>
+                    <span class="comm-sidebar__nav-label">Follow-up Engine</span>
+                    @if(($navBadges['followup_overdue_count'] ?? 0) > 0)
+                        <span class="comm-sidebar__nav-badge comm-sidebar__nav-badge--urgent"
+                              aria-label="{{ $navBadges['followup_overdue_count'] }} overdue">
+                            {{ $navBadges['followup_overdue_count'] }}
+                        </span>
+                    @endif
+                </a>
+            </li>
+
+            <li class="comm-sidebar__nav-divider" role="separator">
+                <span>Intelligence</span>
+            </li>
+
+            {{-- Opportunity Engine --}}
+            <li class="comm-sidebar__nav-item">
+                <a href="{{ route('communication.opportunities.index') }}"
+                   class="comm-sidebar__nav-link {{ $activeNav === 'opportunities' ? 'is-active' : '' }}"
+                   aria-current="{{ $activeNav === 'opportunities' ? 'page' : 'false' }}">
+                    <span class="comm-sidebar__nav-icon" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                    </span>
+                    <span class="comm-sidebar__nav-label">Opportunity Engine</span>
+                </a>
+            </li>
+
+            {{-- Tasks & Assignments --}}
+            <li class="comm-sidebar__nav-item">
+                <a href="{{ route('communication.tasks.index') }}"
+                   class="comm-sidebar__nav-link {{ $activeNav === 'tasks' ? 'is-active' : '' }}"
+                   aria-current="{{ $activeNav === 'tasks' ? 'page' : 'false' }}">
+                    <span class="comm-sidebar__nav-icon" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="9" y1="11" x2="9" y2="17"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="15" y1="11" x2="15" y2="17"/><path d="M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="9 4 9 2 15 2 15 4"/>
+                        </svg>
+                    </span>
+                    <span class="comm-sidebar__nav-label">Tasks & Assignments</span>
+                    @if(($navBadges['pending_tasks_count'] ?? 0) > 0)
+                        <span class="comm-sidebar__nav-badge"
+                              aria-label="{{ $navBadges['pending_tasks_count'] }} pending">
+                            {{ $navBadges['pending_tasks_count'] }}
+                        </span>
+                    @endif
+                </a>
+            </li>
+
+            <li class="comm-sidebar__nav-divider" role="separator">
+                <span>History</span>
+            </li>
+
+            {{-- Communication Timeline --}}
+            <li class="comm-sidebar__nav-item">
+                <a href="{{ route('communication.timeline.index') }}"
+                   class="comm-sidebar__nav-link {{ $activeNav === 'timeline' ? 'is-active' : '' }}"
+                   aria-current="{{ $activeNav === 'timeline' ? 'page' : 'false' }}">
+                    <span class="comm-sidebar__nav-icon" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><circle cx="12" cy="12" r="4"/>
+                        </svg>
+                    </span>
+                    <span class="comm-sidebar__nav-label">Communication Timeline</span>
+                </a>
+            </li>
+
+            {{-- Templates --}}
+            <li class="comm-sidebar__nav-item">
+                <a href="{{ route('communication.templates.index') }}"
+                   class="comm-sidebar__nav-link {{ $activeNav === 'templates' ? 'is-active' : '' }}"
+                   aria-current="{{ $activeNav === 'templates' ? 'page' : 'false' }}">
+                    <span class="comm-sidebar__nav-icon" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                    </span>
+                    <span class="comm-sidebar__nav-label">Templates</span>
+                </a>
+            </li>
+
+        </ul>
+    </nav>
+
+    {{-- ── Back to Dentfluence ─────────────────────────────────────── --}}
+    <div class="comm-sidebar__footer">
+        <a href="{{ route('dashboard') }}" class="comm-sidebar__back-link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            <span>Back to Dentfluence</span>
+        </a>
+    </div>
+
+</aside>

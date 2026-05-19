@@ -84,6 +84,53 @@ class HuddleController extends Controller
             'lab_received'     => 0,
         ];
 
+        // ── Yesterday appointments + visit log (consultation) status ──────────
+        // LEFT JOIN consultations on patient_id + doctor_id + date
+        // Flags "Visit Not Logged" when doctor had appointment but no consultation
+        $yesterdaysAppointments = DB::table('appointments')
+            ->join('patients', 'patients.id', '=', 'appointments.patient_id')
+            ->leftJoin('users as doctors', 'doctors.id', '=', 'appointments.doctor_id')
+            ->leftJoin('treatment_types', 'treatment_types.id', '=', 'appointments.treatment_id')
+            ->leftJoin('consultations', function ($join) use ($yesterday) {
+                $join->on('consultations.patient_id', '=', 'appointments.patient_id')
+                     ->on('consultations.doctor_id',  '=', 'appointments.doctor_id')
+                     ->whereDate('consultations.consultation_date', $yesterday->toDateString())
+                     ->whereNull('consultations.deleted_at');
+            })
+            ->where('appointments.branch_id', $branchId)
+            ->whereDate('appointments.appointment_date', $yesterday->toDateString())
+            ->select([
+                'appointments.id',
+                'appointments.patient_id',
+                'appointments.doctor_id',
+                'appointments.appointment_time',
+                'appointments.status as appointment_status',
+                'appointments.type',
+                'patients.name as patient_name',
+                'patients.medical_alert',
+                'doctors.name as doctor_name',
+                'treatment_types.name as treatment_name',
+                'consultations.id as consultation_id',
+                'consultations.status as consultation_status',
+                'consultations.chief_complaint',
+                'consultations.visit_type',
+                'consultations.primary_diagnosis',
+                'consultations.finishing_notes',
+            ])
+            ->orderBy('appointments.appointment_time')
+            ->get()
+            ->map(function ($row) {
+                $skippedStatuses    = ['cancelled', 'no_show'];
+                $visitLogged        = $row->consultation_id !== null;
+                $shouldHaveVisit    = !in_array($row->appointment_status, $skippedStatuses);
+                $row->visit_logged  = $visitLogged;
+                $row->visit_flag    = $shouldHaveVisit && !$visitLogged;
+                $row->patient       = (object) ['name' => $row->patient_name, 'medical_alert' => $row->medical_alert];
+                $row->doctor        = (object) ['name' => $row->doctor_name];
+                $row->treatment     = $row->treatment_name ? (object) ['name' => $row->treatment_name] : null;
+                return $row;
+            });
+
         // ── Labs due today (stub) ─────────────────────────────────────────────
         $labsDueToday = collect();
 
@@ -146,7 +193,7 @@ class HuddleController extends Controller
 
         return view('huddle.index', compact(
             'today', 'yesterday',
-            'todaysAppointments', 'yesterdaySummary',
+            'todaysAppointments', 'yesterdaySummary', 'yesterdaysAppointments',
             'labsDueToday', 'criticalAlerts',
             'huddleNotes', 'myTasks', 'commList',
             'doctors', 'treatmentCategories', 'timeSlots',

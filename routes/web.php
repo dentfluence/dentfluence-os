@@ -11,6 +11,7 @@ use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TreatmentCategoryController;
 
+
 /* ────────────────────────────────────────────────────────────────
    ROOT
 ──────────────────────────────────────────────────────────────── */
@@ -94,12 +95,34 @@ Route::delete(
         Route::get('/',                       [AppointmentController::class, 'index'])->name('index');
         Route::get('/create',                 [AppointmentController::class, 'create'])->name('create');
         Route::post('/',                      [AppointmentController::class, 'store'])->name('store');
+        Route::get('/queue/today',            [AppointmentController::class, 'todayQueue'])->name('appointments.queue.today');
         Route::get('/{appointment}',          [AppointmentController::class, 'show'])->name('show');
         Route::get('/{appointment}/edit',     [AppointmentController::class, 'edit'])->name('edit');
         Route::patch('/{appointment}',        [AppointmentController::class, 'update'])->name('update');
         Route::delete('/{appointment}',       [AppointmentController::class, 'destroy'])->name('destroy');
         Route::patch('/{appointment}/status', [AppointmentController::class, 'updateStatus'])->name('updateStatus');
     });
+
+
+Route::prefix('appointments')->name('appointments.')->middleware('auth')->group(function () {
+
+    // Core CRUD
+    Route::get('/',             [AppointmentController::class, 'index'])->name('index');
+    Route::get('/create',       [AppointmentController::class, 'create'])->name('create');
+    Route::post('/',            [AppointmentController::class, 'store'])->name('store');
+    Route::get('/today',        [AppointmentController::class, 'today'])->name('today');
+
+    // Phase 2 — operational endpoints
+    Route::get('/queue/today',      [AppointmentController::class, 'todayQueue'])->name('queue.today');
+    Route::get('/status-counts',    [AppointmentController::class, 'statusCounts'])->name('status.counts');
+    Route::get('/check-conflict',   [AppointmentController::class, 'checkConflict'])->name('check.conflict');
+
+    // Per-appointment
+    Route::get('/{appointment}',            [AppointmentController::class, 'show'])->name('show');
+    Route::get('/{appointment}/quick',      [AppointmentController::class, 'quickView'])->name('quick');
+    Route::patch('/{appointment}/status',   [AppointmentController::class, 'updateStatus'])->name('status.update');
+
+});
 
     /* ── Tasks ── */
     Route::prefix('tasks')->name('tasks.')->group(function () {
@@ -144,11 +167,25 @@ Route::delete(
     Route::get('/lab',            fn() => 'Coming soon')->name('lab.index');
     Route::get('/lab/create',     fn() => 'Coming soon')->name('lab.create');
     Route::get('/crm',            fn() => 'Coming soon')->name('crm.index');
-    Route::get('/communication',  fn() => 'Coming soon')->name('communication.index');
     Route::get('/reports',        fn() => 'Coming soon')->name('reports.index');
     Route::get('/analytics',      fn() => 'Coming soon')->name('analytics.index');
     Route::get('/notifications',  fn() => 'Coming soon')->name('notifications.index');
     Route::get('/profile/edit',   fn() => 'Coming soon')->name('profile.edit');
     Route::get('/help',           fn() => 'Coming soon')->name('help.index');
+    /* ── Coming soon stubs ── */
+    Route::get('/treatments',     fn() => 'Coming soon')->name('treatments.index');
+    Route::get('/billing',        fn() => 'Coming soon')->name('billing.index');
+    Route::get('/billing/create', fn() => 'Coming soon')->name('billing.create');
+    Route::get('/inventory',      fn() => 'Coming soon')->name('inventory.index');
+    Route::get('/lab',            fn() => 'Coming soon')->name('lab.index');
+    Route::get('/lab/create',     fn() => 'Coming soon')->name('lab.create');
+    Route::get('/crm',            fn() => 'Coming soon')->name('crm.index');
+    Route::get('/reports',        fn() => 'Coming soon')->name('reports.index');
+    Route::get('/analytics',      fn() => 'Coming soon')->name('analytics.index');
+    Route::get('/notifications',  fn() => 'Coming soon')->name('notifications.index');
+    Route::get('/profile/edit',   fn() => 'Coming soon')->name('profile.edit');
+    Route::get('/help',           fn() => 'Coming soon')->name('help.index');
+
+    require __DIR__.'/communication.php';
 
 });

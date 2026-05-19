@@ -175,8 +175,8 @@
         ])
 
         @include('components.sidebar-item', [
-            'href'  => route('communication.index'),
-            'label' => 'Comm. Log',
+            'href'  => route('communication.manager.index'),
+            'label' => 'Comm. Manager',
             'icon'  => '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
         ])
 
