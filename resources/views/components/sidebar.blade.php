@@ -2,21 +2,11 @@
 |==========================================================================
 | Dentfluence OS — Sidebar Navigation Component
 | File: resources/views/components/sidebar.blade.php
-|
-| Injected into: layouts/app.blade.php via @include('components.sidebar')
-|
-| Structure:
-|   #df-sidebar                    ← outer column (shell owns dimensions)
-|     .df-sidebar-brand            ← brand mark + wordmark
-|     #df-sidebar-nav              ← scrollable nav region
-|       nav sections × N           ← grouped navigation items
-|     .df-sidebar-footer           ← collapse toggle always at bottom
 |==========================================================================
 --}}
-{{-- ── SIDEBAR WRAPPER ── --}}
 <aside id="df-sidebar" aria-label="Main navigation">
 
-{{-- ── BRAND HEADER ───────────────────────────────────────────────────── --}}
+{{-- ── BRAND HEADER ── --}}
 <div
     class="df-sidebar-brand"
     style="
@@ -32,7 +22,6 @@
     "
     aria-label="Dentfluence OS — Home"
 >
-    {{-- Brand icon mark --}}
     <div
         style="
             width: 32px;
@@ -46,7 +35,6 @@
         "
         aria-hidden="true"
     >
-        {{-- Minimal tooth glyph --}}
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(215,185,235,0.85)" stroke-width="1.50" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 22 C12 22 5 17 5 11 C5 7 7.5 4 12 4 C16.5 4 19 7 19 11 C19 17 12 22 12 22Z"/>
             <path d="M9 4.5 C9 4.5 7 2 5 3.5" stroke="rgba(185,92,183,0.55)" stroke-width="1.2"/>
@@ -54,7 +42,6 @@
         </svg>
     </div>
 
-    {{-- Wordmark — hidden when collapsed --}}
     <div class="df-nav-label df-sidebar-brand-sub" style="overflow:hidden;min-width:0;transition:opacity 200ms,width 200ms;">
         <div style="font-family:'Cormorant Garamond',serif; font-size:17px; font-weight:700; letter-spacing:0.08em; color:rgba(240,225,250,0.92); white-space:nowrap; line-height:1.15;">
             DENTFLUENCE
@@ -65,119 +52,19 @@
     </div>
 </div>
 
-{{-- ── NAV SCROLLABLE REGION ──────────────────────────────────────────── --}}
+{{-- ── NAV SCROLLABLE REGION ── --}}
 <nav id="df-sidebar-nav" aria-label="Main navigation">
 
-    {{-- ────────────────────────────────────
-         SECTION: Overview
-    ──────────────────────────────────── --}}
+    {{-- ── SECTION: Overview ── --}}
     <div style="padding: 16px 0 4px;">
-        <div
-            class="df-nav-section-label"
-            style="
-                font-family:'DM Sans',sans-serif;
-                font-size:9.5px; font-weight:600;
-                letter-spacing:0.20em; text-transform:uppercase;
-                color:rgba(185,130,210,0.38);
-                padding:0 16px 5px;
-                white-space:nowrap; overflow:hidden;
-                transition:opacity 200ms, width 200ms;
-            "
-        >Overview</div>
+        <div class="df-nav-section-label" style="font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.20em;text-transform:uppercase;color:rgba(185,130,210,0.38);padding:0 16px 5px;white-space:nowrap;overflow:hidden;transition:opacity 200ms,width 200ms;">
+            Overview
+        </div>
 
         @include('components.sidebar-item', [
             'href'  => route('dashboard'),
             'label' => 'Dashboard',
             'icon'  => '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
-        ])
-    </div>
-
-    {{-- ────────────────────────────────────
-         SECTION: Clinical
-    ──────────────────────────────────── --}}
-    <div style="padding: 12px 0 4px;">
-        <div class="df-nav-section-label" style="font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.20em;text-transform:uppercase;color:rgba(185,130,210,0.38);padding:0 16px 5px;white-space:nowrap;overflow:hidden;transition:opacity 200ms,width 200ms;">
-            Clinical
-        </div>
-
-        @include('components.sidebar-item', [
-            'href'   => route('patients.index'),
-            'label'  => 'Patients',
-            'icon'   => '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-            'badgeCount' => 0,
-        ])
-
-        @include('components.sidebar-item', [
-            'href'   => route('appointments.index'),
-            'label'  => 'Appointments',
-            'icon'   => '<rect x="3" y="4" width="18" height="18" rx="0"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
-            'badgeCount' => 0,
-            'badgeType'  => 'brand',
-        ])
-
-        @include('components.sidebar-item', [
-            'href'  => route('treatments.index'),
-            'label' => 'Treatments',
-            'icon'  => '<path d="M12 22 C12 22 5 17 5 11 C5 7 7.5 4 12 4 C16.5 4 19 7 19 11 C19 17 12 22 12 22Z"/><line x1="12" y1="8" x2="12" y2="14" stroke-dasharray="2 2"/>',
-        ])
-    </div>
-
-    {{-- ────────────────────────────────────
-         SECTION: Operations
-    ──────────────────────────────────── --}}
-    <div style="padding: 12px 0 4px;">
-        <div class="df-nav-section-label" style="font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.20em;text-transform:uppercase;color:rgba(185,130,210,0.38);padding:0 16px 5px;white-space:nowrap;overflow:hidden;transition:opacity 200ms,width 200ms;">
-            Operations
-        </div>
-
-        @include('components.sidebar-item', [
-            'href'  => route('billing.index'),
-            'label' => 'Billing',
-            'icon'  => '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
-        ])
-
-        @include('components.sidebar-item', [
-            'href'   => route('inventory.index'),
-            'label'  => 'Inventory',
-            'icon'   => '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
-            'badgeCount' => 0,
-            'badgeType'  => 'warning',
-        ])
-
-        @include('components.sidebar-item', [
-            'href'  => route('lab.index'),
-            'label' => 'Lab',
-            'icon'  => '<path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/>',
-            'badgeCount' => 0,
-        ])
-
-        @include('components.sidebar-item', [
-            'href'  => route('tasks.index'),
-            'label' => 'Tasks',
-            'icon'  => '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
-            'badgeCount' => 0,
-            'badgeType'  => 'danger',
-        ])
-    </div>
-
-    {{-- ────────────────────────────────────
-         SECTION: Communication
-    ──────────────────────────────────── --}}
-    <div style="padding: 12px 0 4px;">
-        <div class="df-nav-section-label" style="font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.20em;text-transform:uppercase;color:rgba(185,130,210,0.38);padding:0 16px 5px;white-space:nowrap;overflow:hidden;transition:opacity 200ms,width 200ms;">
-            CRM
-        </div>
-
-        @include('components.sidebar-item', [
-            'href'  => route('crm.index'),
-            'label' => 'CRM',
-            'icon'  => '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-        ])
-
-        @include('components.sidebar-item', [
-            'href'  => route('communication.manager.index'),
-            'label' => 'Comm. Manager',
-            'icon'  => '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
         ])
 
         @include('components.sidebar-item', [
@@ -187,9 +74,94 @@
         ])
     </div>
 
-    {{-- ────────────────────────────────────
-         SECTION: Insights
-    ──────────────────────────────────── --}}
+    {{-- ── SECTION: Clinical ── --}}
+    <div style="padding: 12px 0 4px;">
+        <div class="df-nav-section-label" style="font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.20em;text-transform:uppercase;color:rgba(185,130,210,0.38);padding:0 16px 5px;white-space:nowrap;overflow:hidden;transition:opacity 200ms,width 200ms;">
+            Clinical
+        </div>
+
+        @include('components.sidebar-item', [
+            'href'  => route('patients.index'),
+            'label' => 'Patients',
+            'icon'  => '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+        ])
+
+        @include('components.sidebar-item', [
+            'href'  => route('appointments.index'),
+            'label' => 'Appointments',
+            'icon'  => '<rect x="3" y="4" width="18" height="18" rx="0"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+            'badgeCount' => 0,
+            'badgeType'  => 'brand',
+        ])
+
+        @include('components.sidebar-item', [
+            'href'  => route('treatments.index'),
+            'label' => 'Treatments',
+            'icon'  => '<path d="M12 22 C12 22 5 17 5 11 C5 7 7.5 4 12 4 C16.5 4 19 7 19 11 C19 17 12 22 12 22Z"/><line x1="12" y1="8" x2="12" y2="14" stroke-dasharray="2 2"/>',
+        ])
+
+        @include('components.sidebar-item', [
+            'href'  => route('cms.index'),
+            'label' => 'CMS',
+            'icon'  => '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+        ])
+    </div>
+
+    {{-- ── SECTION: Operations ── --}}
+    <div style="padding: 12px 0 4px;">
+        <div class="df-nav-section-label" style="font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.20em;text-transform:uppercase;color:rgba(185,130,210,0.38);padding:0 16px 5px;white-space:nowrap;overflow:hidden;transition:opacity 200ms,width 200ms;">
+            Operations
+        </div>
+
+        @include('components.sidebar-item', [
+            'href'  => route('billing.index'),
+            'label' => 'Finance',
+            'icon'  => '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+        ])
+
+        @include('components.sidebar-item', [
+            'href'  => route('inventory.index'),
+            'label' => 'Inventory',
+            'icon'  => '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+            'badgeCount' => 0,
+            'badgeType'  => 'warning',
+        ])
+
+        @include('components.sidebar-item', [
+            'href'  => route('lab.index'),
+            'label' => 'Lab',
+            'icon'  => '<path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/>',
+        ])
+
+        @include('components.sidebar-item', [
+            'href'  => route('tasks.index'),
+            'label' => 'Tasks',
+            'icon'  => '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+            'badgeCount' => 0,
+            'badgeType'  => 'danger',
+        ])
+
+        @include('components.sidebar-item', [
+            'href'  => route('marketing.index'),
+            'label' => 'Marketing',
+            'icon'  => '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+        ])
+    </div>
+
+    {{-- ── SECTION: Communication ── --}}
+    <div style="padding: 12px 0 4px;">
+        <div class="df-nav-section-label" style="font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.20em;text-transform:uppercase;color:rgba(185,130,210,0.38);padding:0 16px 5px;white-space:nowrap;overflow:hidden;transition:opacity 200ms,width 200ms;">
+            Communication
+        </div>
+
+        @include('components.sidebar-item', [
+            'href'  => route('communication.index'),
+            'label' => 'PRM',
+            'icon'  => '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+        ])
+    </div>
+
+    {{-- ── SECTION: Insights ── --}}
     <div style="padding: 12px 0 4px;">
         <div class="df-nav-section-label" style="font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.20em;text-transform:uppercase;color:rgba(185,130,210,0.38);padding:0 16px 5px;white-space:nowrap;overflow:hidden;transition:opacity 200ms,width 200ms;">
             Insights
@@ -208,9 +180,7 @@
         ])
     </div>
 
-    {{-- ────────────────────────────────────
-         SECTION: System
-    ──────────────────────────────────── --}}
+    {{-- ── SECTION: System ── --}}
     <div style="padding: 12px 0 8px;">
         <div class="df-nav-section-label" style="font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.20em;text-transform:uppercase;color:rgba(185,130,210,0.38);padding:0 16px 5px;white-space:nowrap;overflow:hidden;transition:opacity 200ms,width 200ms;">
             System
@@ -225,8 +195,7 @@
 
 </nav>{{-- /#df-sidebar-nav --}}
 
-
-{{-- ── SIDEBAR FOOTER — collapse toggle ───────────────────────────────── --}}
+{{-- ── SIDEBAR FOOTER ── --}}
 <div
     style="
         flex-shrink: 0;
@@ -259,7 +228,6 @@
         onmouseover="this.style.color='rgba(215,175,235,0.80)';this.style.background='rgba(255,255,255,0.04)';"
         onmouseout="this.style.color='rgba(185,140,210,0.45)';this.style.background='none';"
     >
-        {{-- Chevrons-left icon — rotates via CSS data-sidebar state --}}
         <svg
             id="df-collapse-icon"
             width="15" height="15"
@@ -278,10 +246,7 @@
     </button>
 </div>
 
-
-{{-- ── Sidebar icon rotation when collapsed ───────────────────────────── --}}
 <style>
-    /* Nav item base */
     .df-nav-item {
         display: flex;
         align-items: center;
@@ -299,10 +264,7 @@
         cursor: pointer;
         white-space: nowrap;
         overflow: hidden;
-        transition:
-            background-color 120ms linear,
-            color 120ms linear,
-            border-color 120ms linear;
+        transition: background-color 120ms linear, color 120ms linear, border-color 120ms linear;
         position: relative;
     }
     .df-nav-item:hover {
@@ -315,8 +277,6 @@
         border-left-color: #6a0f70;
         font-weight: 500;
     }
-
-    /* Nav icon */
     .df-nav-icon {
         flex-shrink: 0;
         width: 16px;
@@ -330,8 +290,6 @@
     }
     .df-nav-item:hover .df-nav-icon,
     .df-nav-item.df-nav-active .df-nav-icon { opacity: 1; }
-
-    /* Nav badge */
     .df-nav-badge {
         margin-left: auto;
         flex-shrink: 0;
@@ -348,13 +306,9 @@
     .df-nav-badge.badge-brand   { background: #6a0f70; color: #fff; }
     .df-nav-badge.badge-danger  { background: #b52020; color: #fff; }
     .df-nav-badge.badge-warning { background: #a05c00; color: #fff; }
-
-    /* Collapse icon flip when sidebar is collapsed */
     #df-shell[data-sidebar="collapsed"] #df-collapse-icon {
         transform: rotate(180deg);
     }
-
-    /* Tooltip on collapsed hover */
     #df-shell[data-sidebar="collapsed"] .df-nav-item {
         position: relative;
     }

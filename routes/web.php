@@ -185,6 +185,8 @@ Route::prefix('appointments')->name('appointments.')->middleware('auth')->group(
     Route::get('/notifications',  fn() => 'Coming soon')->name('notifications.index');
     Route::get('/profile/edit',   fn() => 'Coming soon')->name('profile.edit');
     Route::get('/help',           fn() => 'Coming soon')->name('help.index');
+    Route::get('/cms', fn() => view('coming-soon'))->name('cms.index');
+Route::get('/marketing', fn() => view('coming-soon'))->name('marketing.index');
 
     require __DIR__.'/communication.php';
 
