@@ -1,4 +1,4 @@
-{{-- Component: pipeline-column  Usage: <x-prm.pipeline-column :stage="$stage" :leads="$leads" /> --}}
+{{-- Component: pipeline-column --}}
 @props([
     'stageKey'   => 'new_lead',
     'stageLabel' => 'New Lead',
@@ -8,8 +8,8 @@
 ])
 
 @php
-$showCount = $totalCount ?: $leads->count();
-$colorMap  = [
+$showCount  = $totalCount ?: $leads->count();
+$colorMap   = [
     'new_lead'     => 'cc-blue',
     'contacted'    => 'cc-teal',
     'appointment'  => 'cc-amber',
@@ -30,14 +30,14 @@ $remaining  = max(0, $showCount - $maxVisible);
      ondragleave="this.classList.remove('drag-over')"
      ondrop="onDropLead(event, '{{ $stageKey }}')">
 
-    <div class="col-accent" style="background: {{ $color }}"></div>
+    <div class="col-accent" style="background:{{ $color }}"></div>
 
     <div class="col-head">
         <span class="col-name">{{ $stageLabel }}</span>
         <span class="col-count {{ $countClass }}">{{ $showCount }}</span>
     </div>
 
-    <div class="col-cards" id="col-cards-{{ $stageKey }}">
+    <div class="col-cards" data-stage="{{ $stageKey }}" id="col-cards-{{ $stageKey }}">
         @forelse($visible as $lead)
             <x-prm.lead-card :lead="$lead" />
         @empty
@@ -49,21 +49,18 @@ $remaining  = max(0, $showCount - $maxVisible);
     </div>
 
     @if($remaining > 0)
-        <a href="/communication/prm?stage={{ $stageKey }}"
-           class="col-view-all">
+        <a href="/communication/prm?stage={{ $stageKey }}" class="col-view-all">
             View all {{ $showCount }} <i class="ti ti-arrow-right" aria-hidden="true"></i>
         </a>
     @endif
 
-    <div class="col-add-btn"
-         onclick="window.location='/communication/prm/add-lead?stage={{ $stageKey }}'">
+    <button class="col-add-btn"
+            onclick="{{ $stageKey === 'converted' ? "window.location='/communication/prm?stage=converted'" : 'openAddLeadModal()' }}">
         @if($stageKey === 'converted')
-            <i class="ti ti-eye" aria-hidden="true"></i>
-            View All ({{ $showCount }})
+            <i class="ti ti-eye" aria-hidden="true"></i> View All ({{ $showCount }})
         @else
-            <i class="ti ti-plus" aria-hidden="true"></i>
-            Add Lead
+            <i class="ti ti-plus" aria-hidden="true"></i> Add Lead
         @endif
-    </div>
+    </button>
 
 </div>

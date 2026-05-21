@@ -1,11 +1,40 @@
 {{-- Component: lead-card  Usage: <x-prm.lead-card :lead="$lead" /> --}}
 @props(['lead'])
 
+@php
+$leadJson = json_encode([
+    'id'                => $lead['id'],
+    'name'              => $lead['name'],
+    'phone'             => $lead['phone'],
+    'stage'             => $lead['stage'],
+    'email'             => $lead['email'] ?? '',
+    'dob'               => $lead['dob'] ?? '',
+    'gender'            => $lead['gender'] ?? '',
+    'treatment'         => $lead['treatment'] ?? '',
+    'secondary_treatment'=> $lead['secondary_treatment'] ?? '',
+    'source'            => $lead['source'] ?? '',
+    'referred_by'       => $lead['referred_by'] ?? '',
+    'urgency'           => $lead['urgency'] ?? 'medium',
+    'preferred_time'    => $lead['preferred_time'] ?? '',
+    'contact_method'    => $lead['contact_method'] ?? '',
+    'preferred_contact' => $lead['preferred_contact'] ?? 'call',
+    'lead_type'         => $lead['lead_type'] ?? 'new_patient',
+    'assigned_to_id'    => $lead['assigned_to_id'] ?? '',
+    'followup_date'     => $lead['followup_date'] ?? '',
+    'followup_time'     => $lead['followup_time'] ?? '',
+    'notes'             => $lead['notes'] ?? '',
+    'tags'              => $lead['tags'] ?? [],
+    'occupation'        => $lead['occupation'] ?? '',
+    'location'          => $lead['location'] ?? '',
+    'language'          => $lead['language'] ?? '',
+]);
+@endphp
+
 <div class="lead-card"
      draggable="true"
      data-lead-id="{{ $lead['id'] }}"
      data-stage="{{ $lead['stage'] }}"
-     onclick="window.location='/communication/prm/lead/{{ $lead['id'] }}'">
+     onclick="window.location='/communication/prm/leads/{{ $lead['id'] }}'">
 
     <div class="lc-top">
         <div>
@@ -18,7 +47,7 @@
                 <i class="ti ti-phone" aria-hidden="true"></i>
             </a>
             <button class="lc-icon-btn" title="More actions"
-                    onclick="toggleLeadMenu({{ $lead['id'] }})">
+                    onclick="openContextMenu(this, {{ $leadJson }})">
                 <i class="ti ti-dots-vertical" aria-hidden="true"></i>
             </button>
         </div>
@@ -34,22 +63,12 @@
     @elseif(!empty($lead['followup_date']))
         <div class="lc-followup">
             <i class="ti ti-clock" aria-hidden="true"></i>
-            @if(in_array($lead['stage'], ['appointment', 'consultation']))
+            @if(in_array($lead['stage'], ['appointment','consultation']))
                 {{ \Carbon\Carbon::parse($lead['followup_date'])->format('d M Y') }}, {{ $lead['followup_time'] }}
             @else
                 Follow-up: {{ \Carbon\Carbon::parse($lead['followup_date'])->isToday() ? 'Today' : \Carbon\Carbon::parse($lead['followup_date'])->format('d M') }}, {{ $lead['followup_time'] }}
             @endif
         </div>
     @endif
-
-    {{-- Hidden context menu --}}
-    <div class="lead-context-menu" id="menu-{{ $lead['id'] }}" style="display:none">
-        <a href="/communication/prm/lead/{{ $lead['id'] }}"><i class="ti ti-eye" aria-hidden="true"></i> View Details</a>
-        <a href="/communication/prm/lead/{{ $lead['id'] }}/edit"><i class="ti ti-edit" aria-hidden="true"></i> Edit Lead</a>
-        <button onclick="openChangeStage({{ $lead['id'] }}, '{{ $lead['stage'] }}')"><i class="ti ti-arrows-exchange" aria-hidden="true"></i> Change Stage</button>
-        <button onclick="openAddNote({{ $lead['id'] }})"><i class="ti ti-notes" aria-hidden="true"></i> Add Note</button>
-        <button onclick="openScheduleFollowup({{ $lead['id'] }})"><i class="ti ti-calendar-plus" aria-hidden="true"></i> Schedule Follow-up</button>
-        <a href="https://wa.me/91{{ preg_replace('/\s+/', '', $lead['phone']) }}" target="_blank"><i class="ti ti-brand-whatsapp" aria-hidden="true"></i> WhatsApp</a>
-    </div>
 
 </div>
