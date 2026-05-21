@@ -1,59 +1,67 @@
-{{--
-    Kanban board partial.
-    Variables: $stages (array), $leads (array grouped by stage id)
---}}
-@php
-    // Safety: ensure every stage has bg/color keys to prevent undefined key errors
-    $stages = array_map(function($stage) {
-        return array_merge([
-            'id'    => '',
-            'label' => '',
-            'color' => '#6366f1',
-            'bg'    => '#eef2ff',
-        ], $stage);
-    }, $stages ?? []);
-@endphp
-<div class="prm-board" id="prmBoard">
-    @foreach($stages as $stage)
-    <div class="prm-column"
-         data-stage="{{ $stage['id'] }}"
-         id="column-{{ $stage['id'] }}"
-         ondragover="event.preventDefault(); PrmBoard.onDragOver(this)"
-         ondrop="PrmBoard.onDrop(event, '{{ $stage['id'] }}')"
-         ondragleave="PrmBoard.onDragLeave(this)">
-
-        {{-- Column Header --}}
-        <div class="prm-column__header">
-            <div class="prm-column__header-left">
-                <span class="prm-column__dot" style="background:{{ $stage['color'] }}"></span>
-                <span class="prm-column__label">{{ $stage['label'] }}</span>
-            </div>
-            <span class="prm-column__count" style="background:{{ $stage['bg'] }};color:{{ $stage['color'] }}">
-                {{ count($leads[$stage['id']] ?? []) }}
-            </span>
-        </div>
-
-        {{-- Lead Cards --}}
-        <div class="prm-column__cards" id="cards-{{ $stage['id'] }}">
-            @forelse($leads[$stage['id']] ?? [] as $lead)
-                @include('components.prm.lead-card', ['lead' => $lead, 'stage' => $stage])
-            @empty
-                <div class="prm-column__empty">No leads in this stage</div>
-            @endforelse
-        </div>
-
-        {{-- Add Lead / View All footer --}}
-        @if($stage['id'] === 'converted')
-        <a href="{{ route('communication.prm.index') }}?stage=converted" class="prm-column__view-all">
-            View All ({{ count($leads[$stage['id']] ?? []) }}) →
-        </a>
-        @else
-        <button class="prm-column__add-btn" data-stage="{{ $stage['id'] }}" data-action="open-add-lead"
-            style="color:{{ $stage['color'] }};border-color:{{ $stage['color'] }}22">
-            <i class="ti ti-plus"></i> Add Lead
-        </button>
-        @endif
-
-    </div>
-    @endforeach
+{{-- List view table — included inside index.blade.php --}}
+<div class="list-table-wrap">
+    <table class="leads-table">
+        <thead>
+            <tr>
+                <th onclick="sortTable('name')">Name <i class="ti ti-arrows-sort" aria-hidden="true"></i></th>
+                <th>Phone</th>
+                <th>Stage</th>
+                <th>Source</th>
+                <th>Treatment</th>
+                <th onclick="sortTable('assigned_to')">Assigned To</th>
+                <th onclick="sortTable('followup_date')">Follow-up Date</th>
+                <th>Urgency</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($leads as $lead)
+            <tr class="lead-row {{ $lead['is_overdue'] ? 'row-overdue' : '' }}"
+                data-stage="{{ $lead['stage'] }}"
+                onclick="window.location='/communication/prm/lead/{{ $lead['id'] }}'">
+                <td>
+                    <div class="td-name-wrap">
+                        <div class="td-avatar">{{ strtoupper(substr($lead['name'], 0, 1)) }}{{ strtoupper(substr(explode(' ', $lead['name'])[1] ?? '', 0, 1)) }}</div>
+                        <div>
+                            <div class="td-name">{{ $lead['name'] }}</div>
+                            @if(!empty($lead['email']))
+                                <div class="td-email">{{ $lead['email'] }}</div>
+                            @endif
+                        </div>
+                    </div>
+                </td>
+                <td><span class="td-phone">{{ $lead['phone'] }}</span></td>
+                <td><x-prm.stage-badge :stage="$lead['stage']" /></td>
+                <td><x-prm.source-tag :source="$lead['source']" /></td>
+                <td class="td-treatment">{{ $lead['treatment'] }}</td>
+                <td class="td-assigned">{{ $lead['assigned_to'] }}</td>
+                <td class="td-date">
+                    @if($lead['is_overdue'])
+                        <span class="td-overdue"><i class="ti ti-alert-circle" aria-hidden="true"></i> Overdue {{ $lead['overdue_days'] }}d</span>
+                    @elseif(!empty($lead['followup_date']))
+                        {{ \Carbon\Carbon::parse($lead['followup_date'])->format('d M Y') }}
+                        <span class="td-time">{{ $lead['followup_time'] }}</span>
+                    @else
+                        <span class="td-none">—</span>
+                    @endif
+                </td>
+                <td>
+                    <span class="urgency-dot urgency-{{ $lead['urgency'] }}"></span>
+                    {{ ucfirst($lead['urgency']) }}
+                </td>
+                <td class="td-actions" onclick="event.stopPropagation()">
+                    <a href="tel:{{ preg_replace('/\s+/', '', $lead['phone']) }}" class="tbl-btn" title="Call">
+                        <i class="ti ti-phone" aria-hidden="true"></i>
+                    </a>
+                    <a href="https://wa.me/91{{ preg_replace('/\s+/', '', $lead['phone']) }}" target="_blank" class="tbl-btn" title="WhatsApp">
+                        <i class="ti ti-brand-whatsapp" aria-hidden="true"></i>
+                    </a>
+                    <a href="/communication/prm/lead/{{ $lead['id'] }}/edit" class="tbl-btn" title="Edit">
+                        <i class="ti ti-edit" aria-hidden="true"></i>
+                    </a>
+                </td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
 </div>

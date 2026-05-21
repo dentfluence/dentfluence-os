@@ -1,7 +1,9 @@
 @extends('layouts.app')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/communication/module.css') }}">
+    @vite('resources/css/communication/module.css')
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+
     @stack('communication-styles')
 @endpush
 
@@ -10,6 +12,7 @@
 @endsection
 
 @push('scripts')
-    <script src="{{ asset('js/communication/navigation.js') }}" defer></script>
+    @vite('resources/js/communication/navigation.js')
     @stack('communication-scripts')
 @endpush
+EOF

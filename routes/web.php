@@ -1,4 +1,5 @@
 <?php
+
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\TreatmentPlanController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\TreatmentCategoryController;
 /* ────────────────────────────────────────────────────────────────
    ROOT
 ──────────────────────────────────────────────────────────────── */
+
 Route::get('/', fn() => redirect()->route('login'));
 
 /* ────────────────────────────────────────────────────────────────
@@ -80,14 +82,14 @@ Route::middleware('auth')->group(function () {
         Route::delete('/{consultation}',   [ConsultationController::class, 'destroy'])->name('destroy');
     });
     Route::post(
-    '/consultations/{consultation}/plans',
-    [TreatmentPlanController::class, 'store']
-)->name('treatment-plans.store');
+        '/consultations/{consultation}/plans',
+        [TreatmentPlanController::class, 'store']
+    )->name('treatment-plans.store');
 
-Route::delete(
-    '/plans/{plan}',
-    [TreatmentPlanController::class, 'destroy']
-)->name('treatment-plans.destroy');
+    Route::delete(
+        '/plans/{plan}',
+        [TreatmentPlanController::class, 'destroy']
+    )->name('treatment-plans.destroy');
 
     /* ── Appointments ── */
     Route::prefix('appointments')->name('appointments.')->group(function () {
@@ -104,25 +106,24 @@ Route::delete(
     });
 
 
-Route::prefix('appointments')->name('appointments.')->middleware('auth')->group(function () {
+    Route::prefix('appointments')->name('appointments.')->middleware('auth')->group(function () {
 
-    // Core CRUD
-    Route::get('/',             [AppointmentController::class, 'index'])->name('index');
-    Route::get('/create',       [AppointmentController::class, 'create'])->name('create');
-    Route::post('/',            [AppointmentController::class, 'store'])->name('store');
-    Route::get('/today',        [AppointmentController::class, 'today'])->name('today');
+        // Core CRUD
+        Route::get('/',             [AppointmentController::class, 'index'])->name('index');
+        Route::get('/create',       [AppointmentController::class, 'create'])->name('create');
+        Route::post('/',            [AppointmentController::class, 'store'])->name('store');
+        Route::get('/today',        [AppointmentController::class, 'today'])->name('today');
 
-    // Phase 2 — operational endpoints
-    Route::get('/queue/today',      [AppointmentController::class, 'todayQueue'])->name('queue.today');
-    Route::get('/status-counts',    [AppointmentController::class, 'statusCounts'])->name('status.counts');
-    Route::get('/check-conflict',   [AppointmentController::class, 'checkConflict'])->name('check.conflict');
+        // Phase 2 — operational endpoints
+        Route::get('/queue/today',      [AppointmentController::class, 'todayQueue'])->name('queue.today');
+        Route::get('/status-counts',    [AppointmentController::class, 'statusCounts'])->name('status.counts');
+        Route::get('/check-conflict',   [AppointmentController::class, 'checkConflict'])->name('check.conflict');
 
-    // Per-appointment
-    Route::get('/{appointment}',            [AppointmentController::class, 'show'])->name('show');
-    Route::get('/{appointment}/quick',      [AppointmentController::class, 'quickView'])->name('quick');
-    Route::patch('/{appointment}/status',   [AppointmentController::class, 'updateStatus'])->name('status.update');
-
-});
+        // Per-appointment
+        Route::get('/{appointment}',            [AppointmentController::class, 'show'])->name('show');
+        Route::get('/{appointment}/quick',      [AppointmentController::class, 'quickView'])->name('quick');
+        Route::patch('/{appointment}/status',   [AppointmentController::class, 'updateStatus'])->name('status.update');
+    });
 
     /* ── Tasks ── */
     Route::prefix('tasks')->name('tasks.')->group(function () {
@@ -135,13 +136,13 @@ Route::prefix('appointments')->name('appointments.')->middleware('auth')->group(
         Route::post('/{task}/escalate',  [TaskController::class, 'escalate'])->name('escalate');
     });
 
-    
+
     Route::resource('patients.consultations', ConsultationController::class)
-    ->only(['create', 'store', 'show', 'edit', 'update', 'destroy'])
-    ->middleware('auth');
+        ->only(['create', 'store', 'show', 'edit', 'update', 'destroy'])
+        ->middleware('auth');
 
 
-   
+
     /* ── Treatment Categories ── */
     Route::get('/treatment-categories',                       [TreatmentCategoryController::class, 'index']);
     Route::get('/treatment-categories/{category}/treatments', [TreatmentCategoryController::class, 'treatments']);
@@ -186,8 +187,8 @@ Route::prefix('appointments')->name('appointments.')->middleware('auth')->group(
     Route::get('/profile/edit',   fn() => 'Coming soon')->name('profile.edit');
     Route::get('/help',           fn() => 'Coming soon')->name('help.index');
     Route::get('/cms', fn() => view('coming-soon'))->name('cms.index');
-Route::get('/marketing', fn() => view('coming-soon'))->name('marketing.index');
+    Route::get('/marketing', fn() => view('coming-soon'))->name('marketing.index');
 
-    require __DIR__.'/communication.php';
-
+    require __DIR__ . '/communication.php';
+    require __DIR__ . '/prm.php';
 });
