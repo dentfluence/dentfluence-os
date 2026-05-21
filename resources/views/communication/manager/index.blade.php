@@ -1,6 +1,15 @@
 @extends('layouts.communication')
+@push('communication-styles')
+    @vite('resources/css/communication/manager.css')
+@endpush
 
-@section('content')
+@section('communication-content')
+<div style="padding:10px 20px;border-bottom:1px solid rgba(0,0,0,0.06);background:#fff;">
+    <a href="/communication" style="font-size:12px;color:#5A5A56;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to Communication
+    </a>
+</div>
 
 <div class="prm-comm">
 
@@ -54,11 +63,7 @@
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
                 Filters
             </button>
-            <a href="{{ route('communication.manager.log.form') }}" class="prm-comm__add-btn">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add Lead
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-            </a>
+            
         </div>
     </div>
 

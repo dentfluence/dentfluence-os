@@ -11,6 +11,7 @@ export default defineConfig({
                 'resources/js/app.js',
                 'resources/css/communication/module.css',
                 'resources/css/communication/prm.css',
+                'resources/css/communication/manager.css',
                 'resources/js/communication/navigation.js',
             ],
             refresh: true,
