@@ -2,6 +2,10 @@
 
 @push('styles')
 <style>
+    /* Patient profile — edge-to-edge content, no inner padding */
+    #df-content-inner { padding: 0 !important; max-width: 100% !important; }
+    #df-content-area  { background: #f3f4f8 !important; }
+
     .stat-card { transition: box-shadow 0.15s, transform 0.15s; }
     .stat-card:hover { box-shadow: 0 4px 16px rgba(106,15,112,0.10); transform: translateY(-1px); }
     .opp-dot { width:10px;height:10px;border-radius:50%;border:2px solid #e5e7eb;background:white;flex-shrink:0; }
@@ -37,7 +41,7 @@
 @endpush
 
 @section('content')
-<div x-data="patientProfile()" x-init="init()" class="bg-[#f3f4f8] min-h-screen">
+<div x-data="patientProfile()" x-init="init()">
 
 {{-- ══════════════════════════════════════════════════════════
      HEADER
@@ -59,6 +63,16 @@
             <span class="text-gray-700 font-medium">Patient Profile</span>
         </div>
         <div class="flex gap-2">
+            {{-- Print patient profile --}}
+            <a href="{{ route('patients.print', $patient) }}" target="_blank"
+               class="inline-flex items-center gap-1.5 px-4 py-2 text-sm border border-gray-300 text-gray-700 hover:border-[#6a0f70] hover:text-[#6a0f70] transition-colors bg-white font-medium">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="6 9 6 2 18 2 18 9"/>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                    <rect x="6" y="14" width="12" height="8"/>
+                </svg>
+                Print
+            </a>
             <button x-on:click="editDrawerOpen = true"
                     class="px-4 py-2 text-sm border border-gray-300 text-gray-700 hover:border-[#6a0f70] hover:text-[#6a0f70] transition-colors bg-white font-medium">
                 Edit Patient
@@ -109,10 +123,24 @@
                 </span>
             </div>
 
-            <div class="flex items-center gap-4 mt-1 flex-wrap">
-                <span class="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500 tracking-wider">
-                    PNT-{{ str_pad($patient->id, 7, '0', STR_PAD_LEFT) }}
+            <div class="flex items-center gap-3 mt-1 flex-wrap">
+                {{-- Patient ID --}}
+                <span class="font-mono text-xs bg-[#f5eef9] px-2.5 py-0.5 text-[#6a0f70] font-semibold tracking-wider border border-[#6a0f70]/20">
+                    {{ $patient->patient_id ?? 'DF-'.str_pad($patient->id, 5, '0', STR_PAD_LEFT) }}
                 </span>
+
+                {{-- AOCP Membership badge --}}
+                @if($patient->is_aocp_active)
+                    <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#fdf3ff] text-[#6a0f70] border border-[#d8b4fe]">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        AOCP Active
+                    </span>
+                @elseif($patient->effective_membership_status === 'expired')
+                    <span class="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
+                        AOCP Expired
+                    </span>
+                @endif
+
                 @if($patient->age ?? false)
                 <span class="flex items-center gap-1 text-sm text-gray-500">
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -129,13 +157,13 @@
                     </svg>
                     {{ $patient->phone }}
                 </span>
-                @if($patient->city)
+                @if($patient->area || $patient->city)
                 <span class="flex items-center gap-1 text-sm text-gray-500">
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
                     </svg>
-                    {{ collect([$patient->city,$patient->state])->filter()->implode(', ') }}
+                    {{ collect([$patient->area, $patient->city])->filter()->implode(', ') }}
                 </span>
                 @endif
             </div>
@@ -226,13 +254,17 @@
     @endif
 
     {{-- Tabs --}}
-    <div class="flex gap-0 -mb-px border-b border-gray-200 mt-1">
-        @foreach([
-            'profile'       => 'Profile',
-            'consultation'  => 'Consultation',
-            'followup'      => 'Follow-up',
-            'visits'        => 'Treatment Visits',
-        ] as $tab => $label)
+    <div class="flex gap-0 -mb-px border-b border-gray-200 mt-1 overflow-x-auto" style="scrollbar-width:none;">
+       @foreach([
+    'profile'           => 'Profile',
+    'consultation'      => 'Consultation',
+    'treatment-plan'    => 'Treatment Plan',
+    'visits'            => 'Treatment Visits',
+    'lab'               => 'Lab Cases',
+    'billing'           => 'Billing',
+    'documents'         => 'Documents',
+    'notes'             => 'Notes & Logs',
+] as $tab => $label)
         <button
             x-on:click="activeTab = '{{ $tab }}'"
             :class="activeTab === '{{ $tab }}'
@@ -253,7 +285,7 @@
 {{-- ══════════════════════════════════════════════════════════
      PROFILE TAB — 50/50 layout: Patient Details left | Visit Log right
 ══════════════════════════════════════════════════════════ --}}
-<div x-show="activeTab === 'profile'" class="max-w-[1440px] mx-auto px-6 py-5">
+<div x-show="activeTab === 'profile'" class="w-full px-6 py-5">
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
 
         {{-- ══ LEFT COLUMN ══ --}}
@@ -275,14 +307,21 @@
                         <div class="space-y-2.5">
                             @php
                                 $rows = [
-                                    'Date of Birth'   => $patient->date_of_birth ? \Carbon\Carbon::parse($patient->date_of_birth)->format('d M Y') : null,
-                                    'Occupation'      => $patient->occupation,
-                                    'Address'         => collect([$patient->address,$patient->city,$patient->state])->filter()->implode(', ') ?: null,
-                                    'Medical Alerts'  => $patient->medical_alert ?: 'No Known Allergies',
-                                    'Habits'          => $patient->habits ? (is_array($patient->habits) ? implode(', ', $patient->habits) : $patient->habits) : null,
-                                    'Allergies'       => $patient->allergies ? (is_array($patient->allergies) ? implode(', ', $patient->allergies) : $patient->allergies) : null,
-                                    'Chief Complaint' => $patient->chief_complaint,
-                                    'Referred By'     => $patient->referred_by,
+                                    'Date of Birth'     => $patient->dob_unknown
+                                        ? ($patient->age_years ? $patient->age_years.' yrs (approx)' : null)
+                                        : ($patient->date_of_birth ? \Carbon\Carbon::parse($patient->date_of_birth)->format('d M Y') : null),
+                                    'Occupation'        => $patient->occupation,
+                                    'Area'              => $patient->area,
+                                    'Address'           => collect([$patient->address,$patient->city,$patient->state])->filter()->implode(', ') ?: null,
+                                    'Alt. Phone'        => $patient->alternate_phone,
+                                    'Medical Conditions'=> $patient->medical_conditions ? implode(', ', $patient->medical_conditions) : null,
+                                    'Medications'       => $patient->current_medications,
+                                    'Dental Conditions' => $patient->dental_conditions ? implode(', ', $patient->dental_conditions) : null,
+                                    'Medical Alerts'    => $patient->medical_alert ?: 'No Known Allergies',
+                                    'Habits'            => $patient->habits ? (is_array($patient->habits) ? implode(', ', (array)$patient->habits) : $patient->habits) : null,
+                                    'Chief Complaint'   => $patient->chief_complaint,
+                                    'Source'            => $patient->source ? $patient->source.($patient->source_referral_name ? ' — '.$patient->source_referral_name : ($patient->source_campaign ? ' — '.$patient->source_campaign : '')) : null,
+                                    'Referred By'       => $patient->referred_by,
                                 ];
                             @endphp
                             @foreach($rows as $lbl => $val)
@@ -502,75 +541,158 @@
         {{-- ══ RIGHT COLUMN ══ --}}
         <div class="space-y-4">
 
-            {{-- Visit Log --}}
+            {{-- Visit Log / Combined Timeline --}}
+            @php
+                // Build a unified timeline from consultations + treatment visits
+                $tlConsults = ($consultations ?? collect())->map(function($c) use ($patient) {
+                    return [
+                        'kind'        => 'consultation',
+                        'id'          => $c->id,
+                        'date'        => $c->consultation_date ?? $c->created_at,
+                        'title'       => $c->visit_type ? ucwords(str_replace('_',' ',$c->visit_type)).' Consultation' : 'Consultation',
+                        'subtitle'    => $c->chief_complaint,
+                        'doctor'      => null,          // consultations don't carry doctor_name here
+                        'status'      => $c->status ?? 'completed',
+                        'amount'      => null,
+                        'edit_url'    => route('patients.consultations.edit', [$patient, $c]),
+                        'delete_url'  => route('patients.consultations.destroy', [$patient, $c]),
+                        'delete_method' => 'DELETE',
+                    ];
+                });
+                $tlVisits = ($treatmentVisits ?? collect())->map(function($v) use ($patient) {
+                    return [
+                        'kind'        => 'treatment',
+                        'id'          => $v->id,
+                        'date'        => $v->visit_date ?? $v->created_at,
+                        'title'       => $v->treatment_name ?? ucfirst($v->visit_type ?? 'Treatment').' Visit',
+                        'subtitle'    => $v->chief_complaint ?? $v->notes,
+                        'doctor'      => $v->doctor?->name,
+                        'status'      => $v->status ?? 'completed',
+                        'amount'      => $v->cost > 0 ? $v->cost : null,
+                        'edit_url'    => null,          // handled by JS openEditForm inside visits tab
+                        'delete_url'  => route('visits.destroy', $v),
+                        'delete_method' => 'DELETE',
+                    ];
+                });
+                $combinedTimeline = $tlConsults->concat($tlVisits)
+                    ->sortByDesc(fn($e) => \Carbon\Carbon::parse($e['date'])->timestamp)
+                    ->values()
+                    ->take(8);
+                $totalTimelineCount = $tlConsults->count() + $tlVisits->count();
+            @endphp
             <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
                 <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
                     <span class="section-title">Visit Log / Timeline</span>
-                    <button x-on:click="activeTab='visits'" class="text-xs text-[#6a0f70] hover:underline font-medium">View All Visits</button>
+                    <div class="flex items-center gap-3">
+                        <span class="text-[10px] text-gray-400">Consultations &amp; Visits</span>
+                        <button x-on:click="activeTab='visits'" class="text-xs text-[#6a0f70] hover:underline font-medium">View All</button>
+                    </div>
                 </div>
-                @if($recentVisits->isEmpty())
-                    <div class="py-12 text-center text-sm text-gray-400">No visits yet.</div>
+                @if($combinedTimeline->isEmpty())
+                    <div class="py-12 text-center text-sm text-gray-400">No visits or consultations yet.</div>
                 @else
                 <div class="divide-y divide-gray-100">
-                    @foreach($recentVisits->take(6) as $visit)
+                    @foreach($combinedTimeline as $entry)
                     @php
-                        $vt = $visit->type ?? 'treatment';
-                        $configs = [
-                            'consultation' => ['border'=>'#7c3aed','bg'=>'bg-purple-100','color'=>'#7c3aed','typebadge'=>'bg-purple-50 text-purple-700'],
-                            'emergency'    => ['border'=>'#dc2626','bg'=>'bg-red-100',   'color'=>'#dc2626','typebadge'=>'bg-red-50 text-red-600'],
-                            'followup'     => ['border'=>'#ea580c','bg'=>'bg-orange-100','color'=>'#ea580c','typebadge'=>'bg-orange-50 text-orange-600'],
-                            'treatment'    => ['border'=>'#16a34a','bg'=>'bg-green-100', 'color'=>'#16a34a','typebadge'=>'bg-green-50 text-green-700'],
-                        ];
-                        $vc = $configs[$vt] ?? $configs['treatment'];
+                        $isConsult  = $entry['kind'] === 'consultation';
+                        $entryDate  = \Carbon\Carbon::parse($entry['date']);
+                        $borderCol  = $isConsult ? '#7c3aed' : '#16a34a';
+                        $iconBg     = $isConsult ? 'bg-purple-100' : 'bg-green-100';
+                        $iconColor  = $isConsult ? '#7c3aed'       : '#16a34a';
+                        $badgeCls   = $isConsult ? 'bg-purple-50 text-purple-700' : 'bg-green-50 text-green-700';
+                        $statusCls  = match($entry['status']) {
+                            'completed'  => 'bg-green-50 text-green-700',
+                            'in_chair'   => 'bg-blue-50 text-blue-600',
+                            'draft'      => 'bg-amber-50 text-amber-600',
+                            default      => 'bg-gray-100 text-gray-500',
+                        };
                     @endphp
-                    <div class="visit-row flex cursor-pointer group" style="border-left:3px solid {{ $vc['border'] }}">
+                    <div class="visit-row flex group" style="border-left:3px solid {{ $borderCol }}">
+                        {{-- Date column --}}
                         <div class="w-14 flex-shrink-0 flex flex-col items-center justify-center py-4 px-2 bg-gray-50/70 border-r border-gray-100">
-                            <div class="text-lg font-bold text-gray-800 leading-none">{{ $visit->appointment_date?->format('d') ?? '—' }}</div>
-                            <div class="text-[10px] text-gray-400 uppercase tracking-wide">{{ $visit->appointment_date?->format('M') ?? '' }}</div>
-                            <div class="text-[10px] text-gray-400">{{ $visit->appointment_date?->format('Y') ?? '' }}</div>
+                            <div class="text-lg font-bold text-gray-800 leading-none">{{ $entryDate->format('d') }}</div>
+                            <div class="text-[10px] text-gray-400 uppercase tracking-wide">{{ $entryDate->format('M') }}</div>
+                            <div class="text-[10px] text-gray-400">{{ $entryDate->format('Y') }}</div>
                         </div>
+                        {{-- Icon --}}
                         <div class="flex-shrink-0 flex items-center px-3">
-                            <div class="timeline-icon {{ $vc['bg'] }}" style="color:{{ $vc['color'] }}">
+                            <div class="timeline-icon {{ $iconBg }}" style="color:{{ $iconColor }}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    @if($vt==='emergency') <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>
-                                    @elseif($vt==='consultation') <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                                    @elseif($vt==='followup') <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
-                                    @else <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                    @if($isConsult)
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                                    @else
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                                     @endif
                                 </svg>
                             </div>
                         </div>
-                        <div class="flex-1 min-w-0 py-3 pr-4">
+                        {{-- Content --}}
+                        <div class="flex-1 min-w-0 py-3 pr-3">
                             <div class="flex items-start justify-between gap-2">
-                                <div class="min-w-0">
-                                    <div class="font-semibold text-gray-800 text-sm leading-tight truncate">
-                                        {{ $visit->treatment?->name ?? ucfirst($vt).' Visit' }}
-                                    </div>
-                                    @if($visit->chief_complaint ?? false)
-                                        <div class="text-xs text-gray-500 mt-0.5 truncate">{{ $visit->chief_complaint }}</div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="font-semibold text-gray-800 text-sm leading-tight truncate">{{ $entry['title'] }}</div>
+                                    @if($entry['subtitle'])
+                                        <div class="text-xs text-gray-500 mt-0.5 truncate">{{ $entry['subtitle'] }}</div>
                                     @endif
-                                    @if($visit->doctor?->name ?? false)
-                                        <div class="text-xs text-gray-400 mt-1">{{ $visit->doctor->name }}</div>
+                                    @if($entry['doctor'])
+                                        <div class="text-xs text-gray-400 mt-0.5">{{ $entry['doctor'] }}</div>
                                     @endif
                                 </div>
                                 <div class="flex-shrink-0 text-right space-y-1">
-                                    <span class="inline-block px-2 py-0.5 text-[10px] rounded-full font-medium {{ $vc['typebadge'] }}">{{ ucfirst($vt) }}</span>
-                                    @if($visit->amount ?? false)
-                                        <div class="text-sm font-bold text-gray-800">₹ {{ number_format($visit->amount,0) }}</div>
+                                    <span class="inline-block px-2 py-0.5 text-[10px] rounded-full font-medium {{ $badgeCls }}">
+                                        {{ $isConsult ? 'Consultation' : 'Treatment' }}
+                                    </span>
+                                    @if($entry['amount'])
+                                        <div class="text-xs font-bold text-gray-700">₹ {{ number_format($entry['amount'],0) }}</div>
                                     @endif
-                                    <span class="inline-block px-2 py-0.5 text-[10px] rounded-full font-medium
-                                        {{ $visit->status==='completed' ? 'bg-green-50 text-green-700' : ($visit->status==='in_chair' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500') }}">
-                                        {{ ucfirst(str_replace('_',' ',$visit->status ?? 'Scheduled')) }}
+                                    <span class="inline-block px-2 py-0.5 text-[10px] rounded-full font-medium {{ $statusCls }}">
+                                        {{ ucfirst(str_replace('_',' ',$entry['status'])) }}
                                     </span>
                                 </div>
                             </div>
+                        </div>
+                        {{-- Edit / Delete actions (visible on hover) --}}
+                        <div class="flex flex-col items-center justify-center gap-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                            @if($entry['edit_url'])
+                            <a href="{{ $entry['edit_url'] }}"
+                               class="w-7 h-7 flex items-center justify-center rounded hover:bg-purple-50 text-gray-300 hover:text-[#7c3aed] transition-colors"
+                               title="Edit">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </a>
+                            @else
+                            {{-- Treatment visits: scroll to visits tab + open edit form --}}
+                            <button x-on:click="activeTab='visits'"
+                                    title="Edit in Visits tab"
+                                    class="w-7 h-7 flex items-center justify-center rounded hover:bg-green-50 text-gray-300 hover:text-[#16a34a] transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                            @endif
+                            <button
+                                x-data
+                                x-on:click="
+                                    if (!confirm('Delete this {{ $isConsult ? 'consultation' : 'treatment visit' }}?')) return;
+                                    fetch('{{ $entry['delete_url'] }}', {
+                                        method: 'DELETE',
+                                        headers: {
+                                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                                            'Accept': 'application/json'
+                                        }
+                                    }).then(r => r.json()).then(d => {
+                                        if (d.success) $el.closest('.visit-row').remove();
+                                        else alert(d.message || 'Delete failed.');
+                                    });
+                                "
+                                class="w-7 h-7 flex items-center justify-center rounded hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors"
+                                title="Delete">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                            </button>
                         </div>
                     </div>
                     @endforeach
                 </div>
                 <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
-                    <span class="text-xs text-gray-400">Showing {{ min($recentVisits->count(),6) }} of {{ $recentVisits->count() }} visits</span>
-                    <button x-on:click="activeTab='visits'" class="text-xs text-[#6a0f70] hover:underline font-medium">View Full Timeline</button>
+                    <span class="text-xs text-gray-400">Showing {{ $combinedTimeline->count() }} of {{ $totalTimelineCount }} entries</span>
+                    <button x-on:click="activeTab='visits'" class="text-xs text-[#6a0f70] hover:underline font-medium">View Full Timeline →</button>
                 </div>
                 @endif
             </div>
@@ -581,44 +703,97 @@
                     <span class="section-title">Quick Actions</span>
                 </div>
                 <div class="p-3 space-y-2">
-                    <div class="grid grid-cols-3 gap-2">
-                        @foreach([
-                            ['Add Consultation',    '#7c3aed','#f5f3ff','<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>'],
-                            ['Add Follow-up',       '#ea580c','#fff7ed','<rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/>'],
-                            ['Add Treatment Visit', '#16a34a','#f0fdf4','<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'],
-                        ] as [$label,$color,$bg,$path])
-                        <button class="flex flex-col items-center justify-center gap-2 py-4 px-2 border border-gray-200 rounded-lg transition-all"
-                                onmouseover="this.style.borderColor='{{ $color }}';this.style.background='{{ $bg }}'"
-                                onmouseout="this.style.borderColor='#e5e7eb';this.style.background='white'">
-                            <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:{{ $bg }}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-                                     fill="none" stroke="{{ $color }}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{!! $path !!}</svg>
-                            </div>
-                            <span class="text-[11px] font-medium text-gray-600 text-center leading-tight">{{ $label }}</span>
-                        </button>
-                        @endforeach
-                    </div>
                     @php
-                        $sec = [
-                            ['Upload X-ray / Scan',   '#2563eb','#eff6ff','<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'],
-                            ['Create Treatment Plan', '#4f46e5','#eef2ff','<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'],
-                            ['Send Recall / Message', '#16a34a','#f0fdf4','<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.1 12 19.79 19.79 0 0 1 1.03 3.33 2 2 0 0 1 3 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 21 16.92z"/>'],
-                            ['Add Task',              '#0d9488','#f0fdfa','<path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/>'],
-                            ['Print Consultation',    '#475569','#f8fafc','<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/>'],
-                            ['Print Treatment Plan',  '#475569','#f8fafc','<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'],
-                        ];
+                    /**
+                     * Each action: [label, color, bg, action_type, action_value, svg_path]
+                     * action_type:
+                     *   'tab'     → switch to tab (action_value = tab key)
+                     *   'url'     → navigate to URL  (action_value = route string)
+                     *   'blank'   → open URL in new tab
+                     *   'js'      → run JS expression (action_value = JS string)
+                     *   'alpine'  → set alpine expression (action_value = expression)
+                     */
+                    $quickActions = [
+                        // ── Primary row ──────────────────────────────────────────────────
+                        ['Add Consultation',    '#7c3aed','#f5f3ff', 'url',
+                            route('patients.consultations.create', $patient),
+                            '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>'],
+
+                        ['Add Follow-up',       '#ea580c','#fff7ed', 'js', "activeTab='visits'; setTimeout(() => window.dispatchEvent(new CustomEvent('open-visit-form')), 50)",
+                            '<rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/>'],
+
+                        ['Add Treatment Visit', '#16a34a','#f0fdf4', 'js', "activeTab='visits'; setTimeout(() => window.dispatchEvent(new CustomEvent('open-visit-form')), 50)",
+                            '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'],
+
+                        // ── Secondary row ────────────────────────────────────────────────
+                        ['Upload X-ray / Scan', '#2563eb','#eff6ff', 'tab', 'documents',
+                            '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'],
+
+                        ['Create Treatment Plan','#4f46e5','#eef2ff', 'tab', 'treatment-plan',
+                            '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'],
+
+                        ['Send Recall / Message','#16a34a','#f0fdf4', 'tab', 'notes',
+                            '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.1 12 19.79 19.79 0 0 1 1.03 3.33 2 2 0 0 1 3 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 21 16.92z"/>'],
+
+                        ['Add Task',            '#0d9488','#f0fdfa', 'tab', 'notes',
+                            '<path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/>'],
+
+                        ['Print Consultation',  '#475569','#f8fafc', 'blank',
+                            route('patients.print', $patient),
+                            '<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/>'],
+
+                        ['Print Treatment Plan','#475569','#f8fafc', 'tab', 'treatment-plan',
+                            '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'],
+
+                        // ── Billing row ──────────────────────────────────────────────────
+                        ['Book Appointment',    '#6a0f70','#f5eef9', 'url',
+                            route('appointments.index').'?patient_id='.$patient->id,
+                            '<rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'],
+
+                        ['Create Invoice',      '#b45309','#fef3c7', 'tab', 'billing',
+                            '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="12" y1="17" x2="8" y2="17"/>'],
+
+                        ['Receive Payment',     '#15803d','#dcfce7', 'tab', 'billing',
+                            '<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'],
+
+                        ['Generate Receipt',    '#1d4ed8','#dbeafe', 'tab', 'billing',
+                            '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z"/><line x1="16" y1="8" x2="8" y2="8"/><line x1="16" y1="12" x2="8" y2="12"/>'],
+
+                        ['View Ledger',         '#0891b2','#e0f2fe', 'tab', 'billing',
+                            '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>'],
+
+                        ['Purchase AOCP',       '#6a0f70','#f5eef9', 'alpine',
+                            "aocpModalOpen = true",
+                            '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>'],
+                    ];
                     @endphp
-                    @foreach(array_chunk($sec,3) as $row)
+
+                    @foreach(array_chunk($quickActions, 3) as $row)
                     <div class="grid grid-cols-3 gap-2">
-                        @foreach($row as [$label,$color,$bg,$path])
-                        <button class="flex flex-col items-center justify-center gap-1.5 py-3 px-2 border border-gray-200 rounded-lg transition-all"
-                                onmouseover="this.style.borderColor='{{ $color }}';this.style.background='{{ $bg }}'"
-                                onmouseout="this.style.borderColor='#e5e7eb';this.style.background='white'">
-                            <div class="w-7 h-7 rounded-md flex items-center justify-center" style="background:{{ $bg }}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                        @foreach($row as [$label, $color, $bg, $actionType, $actionValue, $path])
+                        @php
+                            $clickHandler = match($actionType) {
+                                'tab'    => "activeTab='{$actionValue}'",
+                                'url'    => "window.location.href='{$actionValue}'",
+                                'blank'  => "window.open('{$actionValue}','_blank')",
+                                'alpine' => $actionValue,
+                                'js'     => $actionValue,
+                                default  => '',
+                            };
+                            $isPrimary = $actionType === 'url' || in_array($label, ['Add Consultation','Add Follow-up','Add Treatment Visit']);
+                        @endphp
+                        <button
+                            class="flex flex-col items-center justify-center gap-{{ $isPrimary ? '2 py-4' : '1.5 py-3' }} px-2 border border-gray-200 rounded-lg transition-all cursor-pointer"
+                            x-on:click="{{ $clickHandler }}"
+                            onmouseover="this.style.borderColor='{{ $color }}';this.style.background='{{ $bg }}'"
+                            onmouseout="this.style.borderColor='#e5e7eb';this.style.background='white'"
+                            title="{{ $label }}"
+                        >
+                            <div class="w-{{ $isPrimary ? '9 h-9' : '7 h-7' }} rounded-{{ $isPrimary ? 'lg' : 'md' }} flex items-center justify-center flex-shrink-0" style="background:{{ $bg }}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="{{ $isPrimary ? 18 : 14 }}" height="{{ $isPrimary ? 18 : 14 }}" viewBox="0 0 24 24"
                                      fill="none" stroke="{{ $color }}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{!! $path !!}</svg>
                             </div>
-                            <span class="text-[10px] font-medium text-gray-500 text-center leading-tight">{{ $label }}</span>
+                            <span class="text-[{{ $isPrimary ? '11' : '10' }}px] font-medium text-gray-{{ $isPrimary ? '600' : '500' }} text-center leading-tight">{{ $label }}</span>
                         </button>
                         @endforeach
                     </div>
@@ -635,7 +810,7 @@
 {{-- ══════════════════════════════════════════════════════════
      CONSULTATION TAB
 ══════════════════════════════════════════════════════════ --}}
-<div x-show="activeTab === 'consultation'" class="max-w-[1440px] mx-auto px-6 py-5">
+<div x-show="activeTab === 'consultation'" style="display:none" class="w-full px-6 py-5">
     <div class="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5">
 
         {{-- LEFT: consultation list / new form --}}
@@ -658,11 +833,11 @@
             </div>
 
             {{-- Past consultations list --}}
-            @php
-                $consultations = $recentVisits->where('type', 'consultation');
-            @endphp
+           @php
+    $consultationRecords = $consultations ?? collect();
+@endphp
 
-            @if($consultations->isEmpty())
+            @if($consultationRecords->isEmpty())
             <div class="bg-white border border-gray-200 rounded-lg py-16 text-center">
                 <div class="w-14 h-14 rounded-full bg-purple-50 flex items-center justify-center mx-auto mb-4">
                     <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none"
@@ -684,8 +859,8 @@
             </div>
             @else
             <div class="space-y-3">
-                @foreach($consultations as $consult)
-                <div class="bg-white border border-gray-200 rounded-lg p-5 hover:border-[#6a0f70]/30 transition-colors cursor-pointer">
+                @foreach($consultationRecords as $consult)
+                <div class="bg-white border border-gray-200 rounded-lg p-5 hover:border-[#6a0f70]/30 transition-colors">
                     <div class="flex items-start justify-between mb-3">
                         <div class="flex items-center gap-3">
                             <div class="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
@@ -695,40 +870,49 @@
                                 </svg>
                             </div>
                             <div>
-                                <div class="font-semibold text-gray-800 text-sm">
-                                    Consultation Visit
-                                </div>
+                                <div class="font-semibold text-gray-800 text-sm">Consultation Visit</div>
                                 <div class="text-xs text-gray-400">
-                                    {{ $consult->appointment_date?->format('d M Y') ?? '—' }}
+                                    {{ $consult->consultation_date?->format('d M Y') ?? $consult->created_at->format('d M Y') }}
+                                    @if($consult->visit_type)
+                                        &middot; {{ ucfirst($consult->visit_type) }}
+                                    @endif
                                     @if($consult->doctor?->name)
-                                        &middot; {{ $consult->doctor->name }}
+                                        &middot; Dr. {{ $consult->doctor->name }}
                                     @endif
                                 </div>
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
-                            @if($consult->amount ?? false)
-                                <span class="text-sm font-bold text-gray-700">₹ {{ number_format($consult->amount,0) }}</span>
-                            @endif
                             <span class="px-2 py-0.5 text-[10px] rounded-full font-medium
                                 {{ $consult->status === 'completed' ? 'bg-green-50 text-green-700' : 'bg-purple-50 text-purple-700' }}">
-                                {{ ucfirst($consult->status ?? 'Scheduled') }}
+                                {{ ucfirst($consult->status ?? 'Draft') }}
                             </span>
+                            <a href="{{ route('patients.consultations.edit', [$patient, $consult]) }}"
+                               class="p-1.5 rounded text-gray-400 hover:text-[#6a0f70] hover:bg-purple-50 transition-colors">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </a>
+                            <form method="POST" action="{{ route('patients.consultations.destroy', [$patient, $consult]) }}"
+                                  onsubmit="return confirm('Delete this consultation?')" style="display:inline;">
+                                @csrf @method('DELETE')
+                                <button type="submit" class="p-1.5 rounded text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                                </button>
+                            </form>
                         </div>
                     </div>
-                    @if($consult->chief_complaint ?? false)
+                    @if($consult->chief_complaint)
                     <div class="consult-entry mb-2">
                         <div class="consult-section-label">Chief Complaint</div>
                         <p class="text-sm text-gray-700">{{ $consult->chief_complaint }}</p>
                     </div>
                     @endif
-                    @if($consult->diagnosis ?? false)
+                    @if($consult->primary_diagnosis)
                     <div class="consult-entry">
                         <div class="consult-section-label">Diagnosis</div>
-                        <p class="text-sm text-gray-700">{{ $consult->diagnosis }}</p>
+                        <p class="text-sm text-gray-700">{{ $consult->primary_diagnosis }}</p>
                     </div>
                     @endif
-                </div>
+                </div>                
                 @endforeach
             </div>
             @endif
@@ -833,42 +1017,179 @@
 {{-- /consultation tab --}}
 
 
-{{-- ══════════════════════════════════════════════════════════
-     FOLLOW-UP TAB
-══════════════════════════════════════════════════════════ --}}
-<div x-show="activeTab === 'followup'" class="max-w-[1440px] mx-auto px-6 py-16 text-center text-gray-400">
-    <div class="w-14 h-14 rounded-full bg-orange-50 flex items-center justify-center mx-auto mb-4">
-        <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none"
-             stroke="#ea580c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-            <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-            <path d="m9 16 2 2 4-4"/>
-        </svg>
-    </div>
-    <p class="text-sm font-semibold text-gray-600 mb-1">Follow-up module</p>
-    <p class="text-xs text-gray-400">Coming soon — building next.</p>
+
+
+
+@include('patients.partials.treatment-plan-tab')
+@include('patients.partials.treatment-visits-tab')
+
+{{-- Lab Cases Tab --}}
+<div x-show="activeTab === 'lab'" style="display:none" class="w-full px-6 py-5">
+    @php $labCases = $patient->labCases()->with('doctor')->get(); @endphp
+    @php $labDoctors = \App\Models\User::orderBy('name')->get(); @endphp
+    @include('patients.partials.lab-tab', ['cases' => $labCases, 'doctors' => $labDoctors])
 </div>
 
-
-{{-- ══════════════════════════════════════════════════════════
-     TREATMENT VISITS TAB
-══════════════════════════════════════════════════════════ --}}
-<div x-show="activeTab === 'visits'" class="max-w-[1440px] mx-auto px-6 py-16 text-center text-gray-400">
-    <div class="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
-        <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none"
-             stroke="#16a34a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
+{{-- ═══════════════════════════════════════════════════════════
+     BILLING TAB
+════════════════════════════════════ --}}
+<div x-show="activeTab === 'billing'" style="display:none" class="w-full px-6 py-5">
+    <div class="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-5">
+        <div class="space-y-4">
+            @php
+                $tb = $patient->total_billed ?? (($patient->lifetime_value ?? 0) + ($patient->outstanding_balance ?? 0));
+                $tr = $patient->total_received ?? $patient->lifetime_value ?? 0;
+                $os = $patient->outstanding_balance ?? 0;
+            @endphp
+            <div class="grid grid-cols-3 gap-3">
+                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                    <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Total Billed</div>
+                    <div class="text-xl font-bold text-gray-800">₹ {{ number_format($tb, 0) }}</div>
+                </div>
+                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                    <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Total Received</div>
+                    <div class="text-xl font-bold text-green-700">₹ {{ number_format($tr, 0) }}</div>
+                </div>
+                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                    <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Outstanding</div>
+                    <div class="text-xl font-bold {{ $os > 0 ? 'text-red-600' : 'text-gray-800' }}">₹ {{ number_format($os, 0) }}</div>
+                </div>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+                    <span class="section-title">Ledger</span>
+                    <div class="flex gap-2">
+                        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[#6a0f70] text-white hover:bg-[#380740] transition">+ Create Invoice</button>
+                        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[#6a0f70] text-[#6a0f70] hover:bg-[#f5eef9] transition">Receive Payment</button>
+                    </div>
+                </div>
+                <table class="w-full text-sm">
+                    <thead><tr class="bg-[#f5eef9] text-xs uppercase tracking-wide text-[#6a0f70]">
+                        <th class="px-4 py-2.5 text-left font-semibold">Date</th>
+                        <th class="px-4 py-2.5 text-left font-semibold">Type</th>
+                        <th class="px-4 py-2.5 text-left font-semibold">Particulars</th>
+                        <th class="px-4 py-2.5 text-right font-semibold">Debit (₹)</th>
+                        <th class="px-4 py-2.5 text-right font-semibold">Credit (₹)</th>
+                        <th class="px-4 py-2.5 text-right font-semibold">Balance (₹)</th>
+                    </tr></thead>
+                    <tbody><tr><td colspan="6" class="px-4 py-12 text-center text-gray-400 text-sm">No billing records yet. Create the first invoice to start tracking.</td></tr></tbody>
+                    <tfoot><tr class="bg-gray-50 border-t-2 border-gray-200 font-semibold text-sm">
+                        <td colspan="3" class="px-4 py-2.5 text-right text-gray-500">Closing Balance</td>
+                        <td class="px-4 py-2.5 text-right text-gray-800">₹ 0</td>
+                        <td class="px-4 py-2.5 text-right text-gray-800">₹ 0</td>
+                        <td class="px-4 py-2.5 text-right {{ $os > 0 ? 'text-red-600' : 'text-gray-800' }}">₹ {{ number_format($os, 0) }}</td>
+                    </tr></tfoot>
+                </table>
+            </div>
+        </div>
+        <div class="space-y-3">
+            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                <div class="section-title mb-3">Payment Summary</div>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between"><span class="text-gray-500">Invoiced</span><span class="font-semibold">₹ {{ number_format($tb,0) }}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Paid</span><span class="font-semibold text-green-700">₹ {{ number_format($tr,0) }}</span></div>
+                    <div class="border-t pt-2 flex justify-between"><span class="text-gray-500">Due</span><span class="font-bold {{ $os>0?'text-red-600':'text-gray-800' }}">₹ {{ number_format($os,0) }}</span></div>
+                </div>
+            </div>
+        </div>
     </div>
-    <p class="text-sm font-semibold text-gray-600 mb-1">Treatment Visits module</p>
-    <p class="text-xs text-gray-400">Coming soon — building next.</p>
 </div>
 
+{{-- ════════════════════════════════════
+     DOCUMENTS TAB
+════════════════════════════════════ --}}
+<div x-show="activeTab === 'documents'" style="display:none" class="w-full px-6 py-5">
+    <div class="flex items-center justify-between mb-4">
+        <div><h2 class="text-base font-bold text-gray-800">Documents</h2><p class="text-xs text-gray-400 mt-0.5">X-rays, scans, consent forms, prescriptions, invoices</p></div>
+        <button class="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-[#6a0f70] text-white hover:bg-[#380740] transition">+ Upload Document</button>
+    </div>
+    <div class="flex gap-2 mb-4 flex-wrap">
+        @foreach(['All','X-rays','CBCT','IOPA','Photos','Lab Reports','Consent Forms','Prescriptions','Invoices'] as $cat)
+        <button class="px-3 py-1.5 text-xs border text-gray-600 hover:border-[#6a0f70] hover:text-[#6a0f70] transition bg-white border-gray-200 {{ $cat==='All'?'bg-[#f5eef9] !border-[#6a0f70] !text-[#6a0f70]':'' }}">{{ $cat }}</button>
+        @endforeach
+    </div>
+    <div class="bg-white border border-gray-200 rounded-lg py-20 text-center text-gray-400 text-sm">No documents uploaded yet.</div>
+</div>
+
+{{-- ════════════════════════════════════
+     NOTES & LOGS TAB
+════════════════════════════════════ --}}
+<div x-show="activeTab === 'notes'" style="display:none" class="w-full px-6 py-5">
+    <div x-data="{ noteText: '', noteType: 'internal' }">
+        <div class="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-5">
+            <div class="space-y-3">
+                <div class="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+                    <div class="flex gap-2 flex-wrap">
+                        @foreach(['internal'=>'Internal Note','staff'=>'Staff Note','call'=>'Call Log','whatsapp'=>'WhatsApp Log'] as $type => $label)
+                        <button type="button" x-on:click="noteType='{{ $type }}'"
+                            :class="noteType==='{{ $type }}' ? 'bg-[#6a0f70] text-white border-[#6a0f70]' : 'bg-white text-gray-500 border-gray-200'"
+                            class="px-3 py-1 text-xs font-medium border transition-colors">{{ $label }}</button>
+                        @endforeach
+                    </div>
+                    <textarea x-model="noteText" rows="3" placeholder="Add a note, log a call, or record a message…"
+                        class="w-full text-sm border border-gray-200 px-3 py-2 resize-none focus:outline-none focus:border-[#6a0f70]"></textarea>
+                    <div class="flex justify-end">
+                        <button type="button" class="px-4 py-2 text-xs bg-[#6a0f70] text-white hover:bg-[#380740] transition font-semibold">Save Note</button>
+                    </div>
+                </div>
+                <template x-if="relationshipNotes.length === 0">
+                    <div class="bg-white border border-gray-200 rounded-lg py-14 text-center text-gray-400 text-sm">No notes or logs yet.</div>
+                </template>
+                <template x-for="note in relationshipNotes" :key="'nl-'+note.id">
+                    <div class="bg-white border border-gray-200 rounded-lg p-4">
+                        <div class="flex items-start justify-between gap-2">
+                            <span class="text-xs text-gray-400 font-medium">Internal Note</span>
+                            <span class="text-[10px] text-gray-300" x-text="note.created_at ? new Date(note.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : ''"></span>
+                        </div>
+                        <p class="text-sm text-gray-700 mt-2 leading-relaxed" x-text="note.note"></p>
+                    </div>
+                </template>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                <div class="section-title mb-3">Audit Trail</div>
+                <div class="space-y-2 text-xs text-gray-500">
+                    <div class="flex items-start gap-2 py-1.5 border-b border-gray-50">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0 mt-1.5"></span>
+                        <div><span class="font-medium text-gray-700">Patient registered</span><span class="block text-gray-400">{{ $patient->created_at->format('d M Y, h:i A') }}</span></div>
+                    </div>
+                    @if($patient->last_visit_date)
+                    <div class="flex items-start gap-2 py-1.5 border-b border-gray-50">
+                        <span class="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0 mt-1.5"></span>
+                        <div><span class="font-medium text-gray-700">Last visit</span><span class="block text-gray-400">{{ \Carbon\Carbon::parse($patient->last_visit_date)->format('d M Y') }}</span></div>
+                    </div>
+                    @endif
+                    <div class="flex items-start gap-2 py-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0 mt-1.5"></span>
+                        <div><span class="font-medium text-gray-700">Profile last updated</span><span class="block text-gray-400">{{ $patient->updated_at->format('d M Y, h:i A') }}</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 {{-- Edit drawer --}}
 @include('patients.partials.edit-patient-drawer')
 
+{{-- AOCP Modal --}}
+<div x-show="aocpModalOpen" style="display:none"
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4" x-on:click.stop>
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-[#380740]" style="font-family:'Cormorant Garamond',serif;">Purchase AOCP Membership</h3>
+            <button x-on:click="aocpModalOpen=false" class="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <p class="text-sm text-gray-500 mb-4">AOCP (Annual Oral Care Plan) membership billing will be wired to the Accounts module. For now, mark this patient as an AOCP member:</p>
+        <div class="flex gap-2">
+            <button x-on:click="aocpModalOpen=false"
+                class="flex-1 px-4 py-2 text-xs border border-gray-300 text-gray-600 hover:border-[#6a0f70] transition">Cancel</button>
+            <a href="{{ route('patients.edit', $patient) }}"
+                class="flex-1 px-4 py-2 text-xs bg-[#6a0f70] text-white text-center hover:bg-[#380740] transition">Go to Edit Patient</a>
+        </div>
+    </div>
 </div>
+
+</div>{{-- /x-data patientProfile() --}}
 
 @push('scripts')
 <script>
@@ -876,32 +1197,43 @@ function patientProfile() {
     return {
         activeTab: 'profile',
         editDrawerOpen: false,
+        aocpModalOpen: false,
         showNoteForm: false,
         showOppForm: false,
-        showConsultForm: false,
 
-        relationshipNotes: @json($relationshipNotes),
+        relationshipNotes: @json($relationshipNotes ?? []),
         newNote: '',
         newNoteTags: [],
 
-        opportunities: @json($opportunities),
+        opportunities: @json($opportunities ?? []),
         newOpp: { type:'', status:'prospect', priority:'medium', estimated_value:'', follow_up_date:'' },
 
-   
-       oppTypeColors: {
-    implant:         { color:'#6a0f70', bg:'#f5f3ff' },
-    aligner:         { color:'#2563eb', bg:'#dbeafe' },
-    veneers:         { color:'#0891b2', bg:'#e0f2fe' },
-    full_mouth_rehab:{ color:'#7c3aed', bg:'#ede9fe' },
-    whitening:       { color:'#ca8a04', bg:'#fef9c3' },
-    crown:           { color:'#b45309', bg:'#fef3c7' },
-    bridge:          { color:'#0d9488', bg:'#ccfbf1' },
-    rct:             { color:'#dc2626', bg:'#fee2e2' },
-    smile_design:    { color:'#db2777', bg:'#fce7f3' },
-    gum_treatment:   { color:'#16a34a', bg:'#dcfce7' },
-},
+        oppTypeColors: {
+            implant:          { color:'#6a0f70', bg:'#f5f3ff' },
+            aligner:          { color:'#2563eb', bg:'#dbeafe' },
+            veneers:          { color:'#0891b2', bg:'#e0f2fe' },
+            full_mouth_rehab: { color:'#7c3aed', bg:'#ede9fe' },
+            whitening:        { color:'#ca8a04', bg:'#fef9c3' },
+            crown:            { color:'#b45309', bg:'#fef3c7' },
+            bridge:           { color:'#0d9488', bg:'#ccfbf1' },
+            rct:              { color:'#dc2626', bg:'#fee2e2' },
+            smile_design:     { color:'#db2777', bg:'#fce7f3' },
+            gum_treatment:    { color:'#16a34a', bg:'#dcfce7' },
+        },
 
-        init() {},
+        oppIcons: {
+            implant:'🦷', aligner:'😁', veneers:'✨', full_mouth_rehab:'🏥',
+            whitening:'⚪', crown:'👑', bridge:'🌉', rct:'🔧',
+            smile_design:'😊', gum_treatment:'🩺',
+        },
+
+        init() {
+            // Handle tab from URL hash
+            const hash = window.location.hash.replace('#','');
+            if (['profile','consultation','treatment-plan','visits','lab','billing','documents','notes'].includes(hash)) {
+                this.activeTab = hash;
+            }
+        },
 
         oppStageLabel(s) {
             return {prospect:'Identified',discussed:'Discussed',quoted:'Financial Discussion',accepted:'Planned',completed:'Completed'}[s] || s;
@@ -916,21 +1248,22 @@ function patientProfile() {
             const r = await fetch(`/patients/{{ $patient->id }}/relationship-notes`, {
                 method:'POST',
                 headers:{'Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content,'Accept':'application/json'},
-                body:JSON.stringify({note:this.newNote,tags:this.newNoteTags}),
+                body:JSON.stringify({note:this.newNote, tags:this.newNoteTags}),
             });
             const d = await r.json();
             if (d.success) { this.relationshipNotes.unshift(d.note); this.newNote=''; this.newNoteTags=[]; this.showNoteForm=false; }
         },
         async deleteNote(id) {
-            if (!confirm('Delete?')) return;
-            const r = await fetch(`/patients/{{ $patient->id }}/relationship-notes/${id}`,{
-                method:'DELETE',headers:{'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content,'Accept':'application/json'},
+            if (!confirm('Delete this note?')) return;
+            const r = await fetch(`/patients/{{ $patient->id }}/relationship-notes/${id}`, {
+                method:'DELETE',
+                headers:{'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content,'Accept':'application/json'},
             });
             if ((await r.json()).success) this.relationshipNotes = this.relationshipNotes.filter(n=>n.id!==id);
         },
         async saveOpportunity() {
             if (!this.newOpp.type) return;
-            const r = await fetch(`/patients/{{ $patient->id }}/opportunities`,{
+            const r = await fetch(`/patients/{{ $patient->id }}/opportunities`, {
                 method:'POST',
                 headers:{'Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content,'Accept':'application/json'},
                 body:JSON.stringify(this.newOpp),
@@ -939,9 +1272,10 @@ function patientProfile() {
             if (d.success) { this.opportunities.unshift(d.opportunity); this.newOpp={type:'',status:'prospect',priority:'medium',estimated_value:'',follow_up_date:''}; this.showOppForm=false; }
         },
         async deleteOpportunity(id) {
-            if (!confirm('Remove?')) return;
-            const r = await fetch(`/patients/{{ $patient->id }}/opportunities/${id}`,{
-                method:'DELETE',headers:{'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content,'Accept':'application/json'},
+            if (!confirm('Remove this opportunity?')) return;
+            const r = await fetch(`/patients/{{ $patient->id }}/opportunities/${id}`, {
+                method:'DELETE',
+                headers:{'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content,'Accept':'application/json'},
             });
             if ((await r.json()).success) this.opportunities = this.opportunities.filter(o=>o.id!==id);
         },
@@ -951,21 +1285,19 @@ function patientProfile() {
             const at = fd.get('allergies_text')||''; fd.delete('allergies_text');
             at.split(',').map(s=>s.trim()).filter(Boolean).forEach(a=>fd.append('allergies[]',a));
             try {
-                const r = await fetch(`/patients/{{ $patient->id }}`,{
+                const r = await fetch(`/patients/{{ $patient->id }}`, {
                     method:'POST',
                     headers:{'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content,'Accept':'application/json'},
                     body:fd,
                 });
                 const d = await r.json();
-                if (d.success) { this.editDrawerOpen=false; window.location.reload(); }
+                if (d.success) { this.editDrawerOpen = false; window.location.reload(); }
             } catch(e) { console.error(e); }
         },
-        formatDate(s) {
-            if (!s) return '';
-            return new Date(s).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
-        },
-    }
+
+    };
 }
 </script>
 @endpush
+
 @endsection

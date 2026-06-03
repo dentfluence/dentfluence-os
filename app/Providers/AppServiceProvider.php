@@ -18,6 +18,12 @@ use App\Modules\Huddle\Services\RoleBasedHuddleService;
 use App\Modules\Huddle\Transformers\AppointmentToCardTransformer;
 use App\Modules\Huddle\Transformers\TaskToCardTransformer;
 
+// CMS Services
+use App\Services\Cms\WatermarkService;
+use App\Services\Cms\ClinicalMediaService;
+use App\Services\Cms\CmsSearchService;
+use App\Services\Cms\TimelineService;
+
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -36,6 +42,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(HuddleTaskRepository::class);
         $this->app->singleton(HuddleCommentRepository::class);
         $this->app->singleton(RoleBasedHuddleService::class);
+
+        // CMS Module bindings
+        $this->app->singleton(WatermarkService::class);
+        $this->app->singleton(ClinicalMediaService::class);
+        $this->app->singleton(TimelineService::class);
+        $this->app->singleton(CmsSearchService::class);
     }
 
     /**

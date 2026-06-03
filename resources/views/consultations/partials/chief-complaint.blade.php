@@ -32,8 +32,7 @@
         </div>
 
         {{-- Duration · Severity · Location · Tooth/Area --}}
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;">
-
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
             <div>
                 <label class="df-label">Duration</label>
                 <select name="complaint_duration" x-model="form.complaint_duration" class="df-input">
@@ -57,15 +56,7 @@
                 </div>
             </div>
 
-            <div>
-                <label class="df-label">Location</label>
-                <select name="location" x-model="form.location" class="df-input">
-                    <option value="">Select</option>
-                    @foreach(['Upper Left','Upper Right','Lower Left','Lower Right','Upper & Lower Left','Upper & Lower Right','Full Mouth','Anterior','Posterior'] as $loc)
-                        <option {{ old('location', $consultation?->location) === $loc ? 'selected' : '' }}>{{ $loc }}</option>
-                    @endforeach
-                </select>
-            </div>
+            
 
             <div>
                 <label class="df-label">Tooth / Area</label>

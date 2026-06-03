@@ -100,7 +100,7 @@ class AppointmentController extends Controller
     {
         $branchId = Auth::user()->branch_id;
 
-        // Walk-in / modal path
+        // ── Walk-in with NEW patient (first_name present, no patient_id) ──
         if ($request->filled('first_name') && ! $request->filled('patient_id')) {
             $request->validate([
                 'first_name'           => 'required|string|max:100',
@@ -137,28 +137,68 @@ class AppointmentController extends Controller
                 'appointment_time'     => $request->appointment_time,
                 'duration_minutes'     => $duration,
                 'type'                 => 'consultation',
-                'status'               => $request->boolean('is_walkin') ? 'checkin' : 'scheduled',
+                'status'               => 'checkin',
                 'notes'                => $request->notes ?? 'Walk-in',
                 'treatment_category_id'=> $request->treatment_category_id,
                 'treatment_id'         => $request->treatment_id,
-                'is_walkin'            => $request->boolean('is_walkin'),
-                'checked_in_at'        => $request->boolean('is_walkin') ? now() : null,
+                'is_walkin'            => true,
+                'checked_in_at'        => now(),
             ]);
 
             if ($request->expectsJson()) {
                 return response()->json([
                     'success'      => true,
                     'ok'           => true,
-                    'id'           => $appointment->id,
-                    'patient_id'   => $patient->id,
-                    'patient_name' => $patient->name,
                     'appointment'  => $this->formatAppointment($appointment->load(['patient', 'doctor', 'treatmentCategory', 'treatment'])),
                 ]);
             }
 
             return redirect()
                 ->route('appointments.index', ['date' => $request->appointment_date])
-                ->with('success', 'Appointment booked successfully.');
+                ->with('success', 'Walk-in booked successfully.');
+        }
+
+        // ── Walk-in with EXISTING patient (patient_id + is_walkin) ──
+        if ($request->filled('patient_id') && $request->boolean('is_walkin')) {
+            $request->validate([
+                'patient_id'           => 'required|exists:patients,id',
+                'appointment_date'     => 'required|date',
+                'appointment_time'     => 'required',
+                'notes'                => 'nullable|string|max:1000',
+                'treatment_category_id'=> 'nullable|exists:treatment_categories,id',
+            ]);
+
+            $doctorId = $request->filled('doctor_id')
+                ? $request->doctor_id
+                : User::where('branch_id', $branchId)->where('is_active', true)->value('id');
+
+            $appointment = Appointment::create([
+                'patient_id'           => $request->patient_id,
+                'doctor_id'            => $doctorId,
+                'branch_id'            => $branchId,
+                'created_by'           => Auth::id(),
+                'appointment_date'     => $request->appointment_date,
+                'appointment_time'     => $request->appointment_time,
+                'duration_minutes'     => $this->autoDuration($request->treatment_category_id),
+                'type'                 => $request->type ?? 'consultation',
+                'status'               => 'checkin',
+                'notes'                => $request->notes ?? 'Walk-in',
+                'treatment_category_id'=> $request->treatment_category_id,
+                'is_walkin'            => true,
+                'checked_in_at'        => now(),
+            ]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success'     => true,
+                    'ok'          => true,
+                    'appointment' => $this->formatAppointment($appointment->load(['patient', 'doctor', 'treatmentCategory', 'treatment'])),
+                ]);
+            }
+
+            return redirect()
+                ->route('appointments.index', ['date' => $request->appointment_date])
+                ->with('success', 'Walk-in booked successfully.');
         }
 
         // Full form path
@@ -312,6 +352,34 @@ class AppointmentController extends Controller
         return view('appointments.create', compact(
             'patients', 'doctors', 'date', 'hour', 'timeSlots', 'treatmentCategories'
         ));
+    }
+
+    // ── Edit ─────────────────────────────────────────────────────
+    public function edit(Appointment $appointment)
+    {
+        $branchId = Auth::user()->branch_id;
+
+        $patients = Patient::where('branch_id', $branchId)->orderBy('name')->get(['id', 'name', 'phone']);
+        $doctors  = User::where('branch_id', $branchId)->where('is_active', true)->get(['id', 'name']);
+        $treatmentCategories = TreatmentCategory::active()
+            ->orderBy('name')
+            ->with(['treatments' => fn($q) => $q->orderBy('name')])
+            ->get(['id', 'name']);
+
+        $timeSlots = [];
+        for ($h = 8; $h <= 21; $h++) {
+            $timeSlots[] = sprintf('%02d:00', $h);
+            $timeSlots[] = sprintf('%02d:30', $h);
+        }
+
+        return view('appointments.edit', compact('appointment', 'patients', 'doctors', 'timeSlots', 'treatmentCategories'));
+    }
+
+    // ── Destroy ──────────────────────────────────────────────────
+    public function destroy(Appointment $appointment)
+    {
+        $appointment->delete();
+        return redirect()->route('appointments.index')->with('success', 'Appointment deleted.');
     }
 
     // ── Conflict Check (GET /appointments/check-conflict) ────────

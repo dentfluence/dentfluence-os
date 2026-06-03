@@ -20,6 +20,10 @@ class PatientProfileService
             'relationshipNotes.author',
             'opportunities.author',
             'alerts',
+            'treatmentVisits.doctor',
+            'treatmentPlans.items',
+            'treatmentPlans.creator',
+            'consultations',
         ]);
 
         return [
@@ -27,13 +31,16 @@ class PatientProfileService
             'recentVisits'      => $patient->appointments->take(10),
             'relationshipNotes' => $patient->relationshipNotes,
             'opportunities'     => $patient->opportunities,
+            'doctors'           => \App\Models\User::where('role', 'doctor')->orderBy('name')->get(),
+            'treatmentVisits'   => $patient->treatmentVisits,
+            'treatments' => \App\Models\Treatment::select('id', 'name', 'default_price')->where('is_active', 1)->orderBy('name')->get(),
+            'consultations'     => $patient->consultations,
         ];
     }
 
     /**
      * Add a relationship note.
-     */
-    public function addRelationshipNote(Patient $patient, array $data): PatientRelationshipNote
+     * public function addRelationshipNote(Patient $patient, array $data): PatientRelationshipNote
     {
         return $patient->relationshipNotes()->create([
             'note'       => $data['note'],

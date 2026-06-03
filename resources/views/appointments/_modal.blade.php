@@ -237,6 +237,135 @@
 
 {{-- ── Shared Modal JS (included once per page) ─────────────── --}}
 <style>
+/* Modal overlay + shell */
+.modal-backdrop-custom {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 9998;
+}
+.modal-custom {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 480px;
+    max-width: calc(100vw - 32px);
+    max-height: 90vh;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 8px 40px rgba(0,0,0,.18);
+    z-index: 9999;
+    overflow: hidden;
+    display: none;
+    flex-direction: column;
+}
+.modal-custom-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    flex-shrink: 0;
+}
+.modal-custom-title { font-size: 15px; font-weight: 700; color: #1e293b; }
+.modal-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 10px 20px 0;
+    border-bottom: 1px solid #f1f5f9;
+    flex-shrink: 0;
+}
+.modal-tab-btn {
+    padding: 7px 16px;
+    font-size: 12.5px;
+    font-weight: 600;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all .15s;
+}
+.modal-tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+.modal-tab-panel { display: none; flex-direction: column; overflow: hidden; }
+.modal-tab-panel.active { display: flex; }
+.modal-custom-body {
+    padding: 16px 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+.modal-custom-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid #f1f5f9;
+    flex-shrink: 0;
+}
+.form-label-sm {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-bottom: 4px;
+}
+.form-control-sm {
+    width: 100%;
+    padding: 7px 10px;
+    font-size: 13px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 7px;
+    outline: none;
+    transition: border-color .15s;
+    box-sizing: border-box;
+    font-family: inherit;
+    background: #fff;
+}
+.form-control-sm:focus { border-color: #6366f1; }
+.btn-primary-sm {
+    padding: 8px 18px;
+    background: #6366f1;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+}
+.btn-primary-sm:hover { background: #4f46e5; }
+.btn-primary-sm:disabled { opacity: .6; cursor: not-allowed; }
+.btn-secondary-sm {
+    padding: 8px 18px;
+    background: #f1f5f9;
+    color: #475569;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+}
+.btn-secondary-sm:hover { background: #e2e8f0; }
+.conflict-warning {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #fef9c3;
+    border: 1px solid #fde047;
+    border-radius: 7px;
+    font-size: 12px;
+    color: #854d0e;
+    margin-top: 8px;
+}
+
 /* Type toggle buttons */
 .type-toggle-btn {
     padding: 6px 12px;
@@ -273,7 +402,7 @@
 
 <script>
 // ── Patient search ─────────────────────────────────────────────
-const __ALL_PATIENTS = @json(\App\Models\Patient::where('branch_id', Auth::user()->branch_id)->orderBy('name')->get(['id','name','phone']));
+const __ALL_PATIENTS = {!! json_encode(auth()->check() ? \App\Models\Patient::where('branch_id', auth()->user()->branch_id)->orderBy('name')->get(['id','name','phone']) : []) !!};
 
 function filterPatientDropdown(q) {
     const dd = document.getElementById('am-patient-dropdown');

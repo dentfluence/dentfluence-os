@@ -1,0 +1,537 @@
+/* ============================================================
+   resources/css/communication/huddle.css
+   Communication widgets embedded in Daily Huddle
+   ============================================================ */
+
+/* ── Root Variables ─────────────────────────────────────────── */
+:root {
+    --comm-primary: #5B4FE9;
+    --comm-primary-lt: #EEF0FD;
+    --comm-red: #E74C3C;
+    --comm-red-lt: #FDEEEC;
+    --comm-green: #27AE60;
+    --comm-green-lt: #E8F8EF;
+    --comm-blue: #2980B9;
+    --comm-blue-lt: #EAF4FB;
+    --comm-orange: #E67E22;
+    --comm-orange-lt: #FEF3EA;
+    --comm-purple: #8E44AD;
+    --comm-purple-lt: #F5EEF8;
+    --comm-yellow: #F39C12;
+    --comm-yellow-lt: #FEF9E7;
+
+    --comm-border: #E8E8EE;
+    --comm-bg: #F7F7FB;
+    --comm-card-bg: #FFFFFF;
+    --comm-text: #1A1A2E;
+    --comm-text-muted: #7B7B9A;
+    --comm-radius: 12px;
+    --comm-shadow: 0 2px 8px rgba(91, 79, 233, 0.08);
+    --comm-shadow-hover: 0 4px 16px rgba(91, 79, 233, 0.14);
+}
+
+/* ── Standalone Page ─────────────────────────────────────────── */
+.comm-huddle-page {
+    padding: 24px;
+}
+
+.comm-huddle-page__title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--comm-text);
+    margin: 0 0 4px;
+}
+
+.comm-huddle-page__sub {
+    font-size: 13px;
+    color: var(--comm-text-muted);
+    margin: 0 0 24px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   COMMUNICATION ALERTS WIDGET
+   ══════════════════════════════════════════════════════════════ */
+.comm-huddle-alerts {
+    background: var(--comm-card-bg);
+    border: 1px solid var(--comm-border);
+    border-radius: var(--comm-radius);
+    padding: 20px;
+    margin-bottom: 4px;
+    box-shadow: var(--comm-shadow);
+}
+
+.comm-huddle-alerts__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.comm-huddle-alerts__title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.comm-huddle-alerts__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--comm-primary-lt);
+    color: var(--comm-primary);
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.comm-huddle-alerts__title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--comm-text);
+    margin: 0;
+}
+
+.comm-huddle-alerts__view-all {
+    font-size: 13px;
+    color: var(--comm-primary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: opacity 0.15s;
+}
+
+.comm-huddle-alerts__view-all:hover {
+    opacity: 0.7;
+}
+
+/* Alert Cards Grid */
+.comm-huddle-alerts__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.comm-alert-card {
+    background: var(--comm-bg);
+    border: 1px solid var(--comm-border);
+    border-radius: 10px;
+    padding: 14px;
+    transition: box-shadow 0.2s, transform 0.2s;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.comm-alert-card:hover {
+    box-shadow: var(--comm-shadow-hover);
+    transform: translateY(-1px);
+}
+
+.comm-alert-card--urgent {
+    border-color: var(--comm-red);
+    background: var(--comm-red-lt);
+}
+
+.comm-alert-card--urgent::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--comm-red);
+    border-radius: 10px 10px 0 0;
+}
+
+.comm-alert-card__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.comm-alert-card__emoji {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.comm-alert-card__count {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.comm-alert-card__title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--comm-text);
+    margin-bottom: 6px;
+    line-height: 1.3;
+}
+
+.comm-alert-card__names {
+    font-size: 11px;
+    color: var(--comm-text-muted);
+    margin-bottom: 10px;
+    line-height: 1.4;
+    min-height: 30px;
+    flex: 1;
+}
+
+.comm-alert-card__more {
+    color: var(--comm-primary);
+    font-weight: 500;
+}
+
+.comm-alert-card__action {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    background: white;
+    border: 1px solid var(--alert-color, var(--comm-primary));
+    border-radius: 6px;
+    color: var(--alert-color, var(--comm-primary));
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s, color 0.15s;
+    margin-top: auto;
+}
+
+.comm-alert-card__action:hover {
+    background: var(--alert-color, var(--comm-primary));
+    color: white;
+}
+
+/* Summary Bar */
+.comm-huddle-alerts__summary-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--comm-bg);
+    border: 1px solid var(--comm-border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    flex-wrap: wrap;
+}
+
+.comm-summary-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+    min-width: 60px;
+}
+
+.comm-summary-stat__num {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.comm-summary-stat__num--red {
+    color: var(--comm-red);
+}
+
+.comm-summary-stat__num--blue {
+    color: var(--comm-blue);
+}
+
+.comm-summary-stat__num--purple {
+    color: var(--comm-purple);
+}
+
+.comm-summary-stat__num--green {
+    color: var(--comm-green);
+}
+
+.comm-summary-stat__num--orange {
+    color: var(--comm-orange);
+}
+
+.comm-summary-stat__label {
+    font-size: 10px;
+    color: var(--comm-text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.comm-summary-divider {
+    width: 1px;
+    height: 28px;
+    background: var(--comm-border);
+    flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   OVERDUE SUMMARY WIDGET
+   ══════════════════════════════════════════════════════════════ */
+.comm-overdue-summary {
+    background: var(--comm-card-bg);
+    border: 1px solid var(--comm-border);
+    border-left: 4px solid var(--comm-red);
+    border-radius: var(--comm-radius);
+    padding: 20px;
+    box-shadow: var(--comm-shadow);
+}
+
+.comm-overdue-summary__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.comm-overdue-summary__title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.comm-overdue-summary__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--comm-red);
+    animation: commPulse 1.8s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+@keyframes commPulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.5;
+        transform: scale(1.3);
+    }
+}
+
+.comm-overdue-summary__title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--comm-text);
+    margin: 0;
+}
+
+.comm-overdue-summary__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    background: var(--comm-red);
+    color: white;
+    border-radius: 11px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.comm-overdue-summary__view-all {
+    font-size: 13px;
+    color: var(--comm-primary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: opacity 0.15s;
+}
+
+.comm-overdue-summary__view-all:hover {
+    opacity: 0.7;
+}
+
+/* Overdue Cards */
+.comm-overdue-summary__cards {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.comm-overdue-card {
+    flex: 0 0 auto;
+    width: 220px;
+}
+
+.comm-overdue-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--comm-bg);
+    border: 1px solid var(--comm-border);
+    border-radius: 8px;
+    transition: box-shadow 0.15s;
+}
+
+.comm-overdue-card:hover {
+    box-shadow: 0 2px 8px rgba(231, 76, 60, 0.12);
+}
+
+.comm-overdue-card__avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.comm-overdue-card__info {
+    flex: 1;
+    min-width: 0;
+}
+
+.comm-overdue-card__name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--comm-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.comm-overdue-card__meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--comm-text-muted);
+    margin-bottom: 2px;
+}
+
+.comm-overdue-card__date {
+    font-size: 11px;
+    color: var(--comm-text-muted);
+}
+
+.comm-overdue-card__right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.comm-overdue-card__overdue-tag {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--comm-red);
+    background: var(--comm-red-lt);
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+.comm-overdue-card__call-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    background: white;
+    border: 1px solid var(--comm-border);
+    border-radius: 50%;
+    color: var(--comm-primary);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.comm-overdue-card__call-btn:hover {
+    background: var(--comm-primary);
+    color: white;
+    border-color: var(--comm-primary);
+}
+
+/* Empty state */
+.comm-overdue-summary__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 24px;
+    color: var(--comm-text-muted);
+    text-align: center;
+}
+
+.comm-overdue-summary__empty p {
+    font-size: 13px;
+    margin: 0;
+}
+
+/* Escalation Alert Banner */
+.comm-overdue-summary__escalation-alert {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #FFF5F5;
+    border: 1px solid #FCCACA;
+    border-radius: 8px;
+}
+
+.comm-escalation-alert__icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.comm-escalation-alert__text {
+    flex: 1;
+    font-size: 13px;
+    color: var(--comm-text);
+}
+
+.comm-escalation-alert__btn {
+    padding: 5px 14px;
+    background: var(--comm-red);
+    color: white;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
+}
+
+.comm-escalation-alert__btn:hover {
+    opacity: 0.85;
+}
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .comm-huddle-alerts__grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .comm-huddle-alerts__summary-bar {
+        gap: 8px;
+    }
+
+    .comm-summary-divider {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .comm-huddle-alerts__grid {
+        grid-template-columns: 1fr;
+    }
+
+    .comm-huddle-alerts,
+    .comm-overdue-summary {
+        padding: 14px;
+    }
+}

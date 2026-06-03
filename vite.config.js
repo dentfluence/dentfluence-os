@@ -12,7 +12,13 @@ export default defineConfig({
                 'resources/css/communication/module.css',
                 'resources/css/communication/prm.css',
                 'resources/css/communication/manager.css',
+                'resources/css/communication/followup.css',
+                'resources/css/communication/huddle.css',
                 'resources/js/communication/navigation.js',
+                'resources/js/communication/followup-calendar.js',
+                'resources/js/communication/followup-modals.js',
+                'resources/js/communication/opportunities.js',
+                'resources/js/communication/huddle.js',
             ],
             refresh: true,
             fonts: [

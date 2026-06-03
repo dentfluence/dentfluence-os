@@ -25,6 +25,16 @@
                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                 Edit
             </a>
+            {{-- Print button --}}
+            <a href="{{ route('consultations.print', [$consultation->patient_id, $consultation]) }}" target="_blank"
+               class="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-400 text-sm font-medium px-4 py-2 rounded-lg transition-colors bg-white">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="6 9 6 2 18 2 18 9"/>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                    <rect x="6" y="14" width="12" height="8"/>
+                </svg>
+                Print
+            </a>
         </div>
     </div>
 

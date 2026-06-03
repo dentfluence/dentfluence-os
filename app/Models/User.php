@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -17,7 +18,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',
+        'role',      // legacy string kept for backward compat during transition
+        'role_id',   // FK to roles table (new system)
         'branch_id',
         'is_active',
         'last_login_at',
@@ -42,6 +44,52 @@ class User extends Authenticatable
             'is_active'         => 'boolean',
             'last_login_at'     => 'datetime',
         ];
+    }
+
+    /* =========================================================
+       RELATIONSHIPS
+    ========================================================= */
+
+    /**
+     * The role this user belongs to (new system).
+     */
+    public function roleModel(): BelongsTo
+    {
+        return $this->belongsTo(Role::class, 'role_id');
+    }
+
+    /* =========================================================
+       PERMISSION HELPERS
+       Check module access via the roles system.
+    ========================================================= */
+
+    /**
+     * Check if user can perform action on a module.
+     * Action: 'view' | 'edit' | 'delete'
+     */
+    public function canAccess(string $module, string $action = 'view'): bool
+    {
+        // Admin (by old role string) always gets full access during transition
+        if ($this->role === 'admin' && ! $this->role_id) {
+            return true;
+        }
+
+        $role = $this->relationLoaded('roleModel')
+            ? $this->roleModel
+            : $this->roleModel()->with('permissions.module')->first();
+
+        if (! $role) return false;
+
+        return $role->can($module, $action);
+    }
+
+    /**
+     * Check if user's role is admin (either system).
+     */
+    public function isAdminRole(): bool
+    {
+        return ($this->role === 'admin')
+            || ($this->roleModel && $this->roleModel->slug === Role::ADMIN);
     }
 
     /* =========================================================

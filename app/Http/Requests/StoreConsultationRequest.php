@@ -13,16 +13,18 @@ class StoreConsultationRequest extends FormRequest
 
     public function rules(): array
     {
+        $isRoutine = $this->input('visit_type') === 'routine';
+
         return [
             // Core
-            'patient_id'                  => ['required', 'exists:patients,id'],
-            'doctor_id'                   => ['required', 'exists:users,id'],
-            'branch_id'                   => ['required', 'integer'],
-            'status'                      => ['required', 'in:draft,completed'],
-            'consultation_date'           => ['required', 'date'],
+            'patient_id'                  => ['nullable', 'exists:patients,id'],
+            'doctor_id'                   => ['nullable', 'exists:users,id'],
+            'branch_id'                   => ['nullable', 'integer'],
+            'status'                      => ['nullable', 'in:draft,completed'],
+            'consultation_date'           => ['nullable', 'date'],
 
             // Section 1 — Chief Complaint
-            'chief_complaint'             => ['nullable', 'string'],
+            'chief_complaint'             => [$isRoutine ? 'required' : 'nullable', 'string'],
             'complaint_duration'          => ['nullable', 'string'],
             'severity'                    => ['nullable', 'string'],
             'tooth_area'                  => ['nullable', 'string'],
@@ -44,14 +46,14 @@ class StoreConsultationRequest extends FormRequest
             'investigation_details'       => ['nullable', 'array'],
 
             // Clinical
-            'clinical_data'               => ['nullable', 'array'],
-            'chart_data'                  => ['nullable', 'array'],
+            'clinical_data'               => ['nullable', 'string'],
+            'chart_data'                  => ['nullable', 'string'],
 
             // Radiographic
-            'radio_data'                  => ['nullable', 'array'],
+            'radio_data'                  => ['nullable', 'string'],
 
             // DBM
-            'dbm_checklist'               => ['nullable', 'array'],
+            'dbm_checklist'               => ['nullable', 'string'],
             'dbm_score'                   => ['nullable', 'integer', 'min:0', 'max:100'],
             'dbm_tooth_shade'             => ['nullable', 'string'],
             'dbm_whitening'               => ['nullable', 'string'],
@@ -68,9 +70,9 @@ class StoreConsultationRequest extends FormRequest
             'diagnosis_notes'             => ['nullable', 'string'],
 
             // Treatment Options
-            'tx_emergency'                => ['nullable', 'array'],
-            'tx_protective'               => ['nullable', 'array'],
-            'tx_transformative'           => ['nullable', 'array'],
+            'tx_emergency'                => ['nullable', 'string'],
+            'tx_protective'               => ['nullable', 'string'],
+            'tx_transformative'           => ['nullable', 'string'],
             'tx_teeth'                    => ['nullable', 'array'],
 
             // Treatment Plans
@@ -84,6 +86,20 @@ class StoreConsultationRequest extends FormRequest
             'aocp_best_plan'              => ['nullable', 'string'],
             'aocp_acceptable'             => ['nullable', 'boolean'],
             'aocp_acceptable_plan'        => ['nullable', 'string'],
+
+            // ── Brain / AI-first fields ──────────────────────────────────────
+            'raw_note'                    => ['nullable', 'string'],
+            'tooth_numbers'               => ['nullable', 'array'],
+            'tooth_numbers.*'             => ['string'],
+            'treatment_done'              => ['nullable', 'string'],
+            'treatment_plan_note'         => ['nullable', 'string'],
+            'follow_up_note'              => ['nullable', 'string'],
+            'follow_up_date'              => ['nullable', 'date'],
+            'follow_up_days'              => ['nullable', 'integer'],
+            'risks_discussed'             => ['nullable', 'string'],
+            'treatment_acceptance'        => ['nullable', 'in:accepted,pending,refused,deferred'],
+            'prescription_notes'          => ['nullable', 'string'],
+            'examination_notes'           => ['nullable', 'string'],
 
             // Finishing
             'finishing_notes'             => ['nullable', 'string'],

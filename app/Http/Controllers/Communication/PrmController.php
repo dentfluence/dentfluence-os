@@ -124,4 +124,15 @@ class PrmController extends Controller
             ['id' => 4, 'name' => 'Dr. Mehta (Dentist)'],
         ];
     }
+
+    public function board()
+    {
+        $leads  = $this->getDummyLeads();
+        $stages = ['new_lead'=>['label'=>'New Lead'],'contacted'=>['label'=>'Contacted'],'interested'=>['label'=>'Interested'],'consultation'=>['label'=>'Consultation'],'converted'=>['label'=>'Converted'],'lost'=>['label'=>'Lost']];
+        return view('communication.prm.board', compact('leads', 'stages'));
+    }
+    public function moveStage(\Illuminate\Http\Request $request, $id)
+    {
+        return response()->json(['success' => true, 'id' => $id, 'stage' => $request->stage]);
+    }
 }

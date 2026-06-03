@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Huddle\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Task;
+use App\Modules\Huddle\Models\HuddleTaskLog;
 use App\Modules\Huddle\Repositories\HuddleBoardRepository;
 use App\Modules\Huddle\Repositories\HuddleTaskRepository;
 use App\Modules\Huddle\Requests\StoreHuddleTaskRequest;
@@ -80,14 +82,38 @@ class HuddleTaskController extends Controller
      */
     public function updateStatus(UpdateTaskStatusRequest $request, int $taskId): JsonResponse
     {
+        $newStatus = $request->validated('status');
+
         $updated = $this->taskRepository->updateStatus(
             logId:  $taskId,
-            status: $request->validated('status'),
+            status: $newStatus,
         );
 
         if (! $updated) {
             return response()->json(['message' => 'Task log not found.'], 404);
         }
+
+        // ── Sync back to the main tasks table ──────────────────────────────
+        // Map huddle statuses → task statuses
+        $taskStatus = match ($newStatus) {
+            'done'    => 'done',
+            'overdue' => 'pending',
+            'pending' => 'pending',
+            default   => null,
+        };
+
+        if ($taskStatus) {
+            $log = HuddleTaskLog::find($taskId);
+            if ($log?->task_id) {
+                Task::where('id', $log->task_id)->update(
+                    array_filter([
+                        'status'  => $taskStatus,
+                        'done_at' => $newStatus === 'done' ? now() : null,
+                    ])
+                );
+            }
+        }
+        // ───────────────────────────────────────────────────────────────────
 
         return response()->json(['message' => 'Status updated.']);
     }
@@ -144,6 +170,15 @@ class HuddleTaskController extends Controller
         }
 
         $this->taskRepository->updateStatus($taskId, 'done');
+
+        // Sync done status back to tasks table
+        $log = HuddleTaskLog::find($taskId);
+        if ($log?->task_id) {
+            Task::where('id', $log->task_id)->update([
+                'status'  => 'done',
+                'done_at' => now(),
+            ]);
+        }
 
         return response()->json([
             'message'    => 'Proof uploaded.',

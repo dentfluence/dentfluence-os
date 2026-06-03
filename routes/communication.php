@@ -50,11 +50,18 @@ Route::prefix('communication')
 
         // ── Follow-up Engine (Session 4) ─────────────────────────────────
         Route::prefix('followup')->name('followup.')->group(function () {
-            Route::get('/',          [\App\Http\Controllers\Communication\FollowUpController::class, 'index'])->name('index');
-            Route::get('/queue',     [\App\Http\Controllers\Communication\FollowUpController::class, 'queue'])->name('queue');
-            Route::get('/overdue',   [\App\Http\Controllers\Communication\FollowUpController::class, 'overdue'])->name('overdue');
-            Route::get('/calendar',  [\App\Http\Controllers\Communication\FollowUpController::class, 'calendar'])->name('calendar');
-            Route::get('/recalls',   [\App\Http\Controllers\Communication\FollowUpController::class, 'recalls'])->name('recalls');
+            Route::get('/',                          [\App\Http\Controllers\Communication\FollowUpController::class, 'index'])->name('index');
+            Route::get('/queue',                     [\App\Http\Controllers\Communication\FollowUpController::class, 'queue'])->name('queue');
+            Route::get('/overdue',                   [\App\Http\Controllers\Communication\FollowUpController::class, 'overdue'])->name('overdue');
+            Route::get('/calendar',                  [\App\Http\Controllers\Communication\FollowUpController::class, 'calendar'])->name('calendar');
+            Route::get('/recalls',                   [\App\Http\Controllers\Communication\FollowUpController::class, 'recalls'])->name('recalls');
+            Route::post('/schedule',                 [\App\Http\Controllers\Communication\FollowUpController::class, 'schedule'])->name('schedule');
+            Route::post('/{id}/complete',            [\App\Http\Controllers\Communication\FollowUpController::class, 'complete'])->name('complete');
+            Route::post('/{id}/reschedule',          [\App\Http\Controllers\Communication\FollowUpController::class, 'reschedule'])->name('reschedule');
+            Route::post('/{id}/note',                [\App\Http\Controllers\Communication\FollowUpController::class, 'addNote'])->name('note');
+            Route::post('/{id}/change-status',       [\App\Http\Controllers\Communication\FollowUpController::class, 'changeStatus'])->name('change-status');
+            Route::post('/{id}/convert',             [\App\Http\Controllers\Communication\FollowUpController::class, 'convertToPatient'])->name('convert');
+            Route::post('/{id}/create-case',         [\App\Http\Controllers\Communication\FollowUpController::class, 'createCase'])->name('create-case');
         });
 
         // ── Communication Timeline (Session 5) ───────────────────────────
@@ -63,13 +70,7 @@ Route::prefix('communication')
             Route::get('/patient/{id}',   [\App\Http\Controllers\Communication\TimelineController::class, 'patient'])->name('patient');
         });
 
-        // ── Tasks & Assignments (Session 6) ──────────────────────────────
-        Route::prefix('tasks')->name('tasks.')->group(function () {
-            Route::get('/',           [\App\Http\Controllers\Communication\TaskController::class, 'index'])->name('index');
-            Route::get('/queue',      [\App\Http\Controllers\Communication\TaskController::class, 'queue'])->name('queue');
-            Route::get('/my-tasks',   [\App\Http\Controllers\Communication\TaskController::class, 'myTasks'])->name('my_tasks');
-            Route::get('/escalated',  [\App\Http\Controllers\Communication\TaskController::class, 'escalated'])->name('escalated');
-        });
+        
 
         // ── Opportunity Engine (Session 7) ───────────────────────────────
         Route::prefix('opportunities')->name('opportunities.')->group(function () {

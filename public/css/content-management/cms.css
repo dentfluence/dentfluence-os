@@ -1,0 +1,155 @@
+/**
+ * cms.css
+ * Content Management System — all styles
+ * Follows Dentfluence design tokens from layouts/app.blade.php
+ */
+
+/* ── Tab buttons ──────────────────────────────────────────── */
+.cms-tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 13px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: #6b7280;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all .15s;
+    font-family: 'DM Sans', sans-serif;
+    white-space: nowrap;
+}
+.cms-tab-btn:hover {
+    color: #6a0f70;
+}
+.cms-tab-active {
+    color: #6a0f70 !important;
+    border-bottom-color: #6a0f70 !important;
+}
+
+/* ── Result rows ──────────────────────────────────────────── */
+.cms-result-row {
+    border-bottom: 1px solid #f3f4f6;
+    cursor: pointer;
+    transition: background .1s;
+}
+.cms-result-row:hover {
+    background: #faf5fb !important;
+}
+.cms-result-row:last-child {
+    border-bottom: none;
+}
+
+/* ── Pagination ───────────────────────────────────────────── */
+.cms-page-btn {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    background: white;
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    cursor: pointer;
+    transition: all .12s;
+    font-family: 'DM Sans', sans-serif;
+}
+.cms-page-btn:hover {
+    border-color: #6a0f70;
+    color: #6a0f70;
+}
+.cms-page-active {
+    background: #6a0f70 !important;
+    border-color: #380740 !important;
+    color: white !important;
+}
+
+/* ── Spin animation ──────────────────────────────────────── */
+@keyframes cms-spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ── Case viewer slide panel ─────────────────────────────── */
+#cms-case-panel {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(185,92,183,0.3) transparent;
+}
+#cms-case-panel::-webkit-scrollbar         { width: 4px; }
+#cms-case-panel::-webkit-scrollbar-track   { background: transparent; }
+#cms-case-panel::-webkit-scrollbar-thumb   { background: rgba(185,92,183,0.3); border-radius: 99px; }
+
+/* ── Filters bar inputs ───────────────────────────────────── */
+#cms-filters input:focus,
+#cms-filters select:focus {
+    outline: none;
+    border-color: #6a0f70 !important;
+    box-shadow: 0 0 0 3px rgba(106,15,112,.09);
+}
+
+/* ── Gallery items ────────────────────────────────────────── */
+.gal-item {
+    transition: transform .15s, border-color .15s;
+}
+.gal-item:hover {
+    transform: scale(1.03);
+}
+
+/* ── Lightbox ─────────────────────────────────────────────── */
+#cms-lightbox {
+    animation: cms-fade-in .15s ease both;
+}
+@keyframes cms-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* ── Stats cards ──────────────────────────────────────────── */
+.cms-stat-card {
+    background: white;
+    border: 1px solid rgba(185,92,183,0.12);
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: box-shadow .15s;
+}
+.cms-stat-card:hover {
+    box-shadow: 0 2px 12px rgba(106,15,112,.08);
+}
+
+/* ── Tag pills (active filter bar) ───────────────────────── */
+#cms-active-filters span {
+    transition: all .12s;
+}
+#cms-active-filters span:hover {
+    background: #ede9fe !important;
+}
+
+/* ── Empty state ─────────────────────────────────────────── */
+.cms-empty {
+    text-align: center;
+    padding: 60px 20px;
+}
+.cms-empty-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #f3f4f6;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ── Print ───────────────────────────────────────────────── */
+@media print {
+    #cms-case-panel,
+    #cms-case-overlay,
+    #cms-filters { display: none !important; }
+}

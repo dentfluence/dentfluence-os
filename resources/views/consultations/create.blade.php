@@ -1,33 +1,26 @@
 @extends('layouts.app')
 
-@section('page-title', 'New Consultation — '.$patient->name)
+@section('page-title', isset($consultation) ? 'Edit Consultation — '.$patient->name : 'New Consultation — '.$patient->name)
 
 @section('head-extra')
 <style>
     #df-topbar        { display: none !important; }
     #df-content-inner { padding: 0 !important; max-width: 100% !important; }
     #df-content-area  { background: #f3f4f8 !important; }
-
     * { box-sizing: border-box; }
     [x-cloak] { display: none !important; }
 
     /* ── Sticky topbar ── */
-    #consult-topbar {
-        position: sticky; top: 0; z-index: 50;
-        background: white; border-bottom: 1px solid #e5e7eb;
-        padding: 0 24px; height: 52px;
-        display: flex; align-items: center; justify-content: space-between;
-        box-shadow: 0 1px 4px rgba(106,15,112,0.07);
-    }
-    .ctb-left  { display: flex; align-items: center; gap: 12px; }
-    .ctb-tabs  { display: flex; gap: 4px; margin-left: 16px; }
-    .ctb-tab   { padding: 5px 14px; font-size: 12px; font-weight: 600; border-radius: 3px; cursor: pointer; border: 1px solid #e5e7eb; color: #6b7280; background: white; transition: all .15s; }
-    .ctb-tab.active { background: #6a0f70; color: white; border-color: #6a0f70; }
-    .ctb-right { display: flex; align-items: center; gap: 10px; }
-    .btn-draft { padding: 6px 14px; font-size: 12px; font-weight: 600; border: 1px solid #d1d5db; background: white; color: #374151; border-radius: 3px; cursor: pointer; transition: all .15s; }
-    .btn-draft:hover { border-color: #6a0f70; color: #6a0f70; }
-    .btn-save  { padding: 6px 16px; font-size: 12px; font-weight: 600; background: #6a0f70; color: white; border: none; border-radius: 3px; cursor: pointer; transition: background .15s; display: flex; align-items: center; gap: 6px; }
-    .btn-save:hover { background: #380740; }
+    #consult-topbar { position:sticky;top:0;z-index:50;background:white;border-bottom:1px solid #e5e7eb;padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 4px rgba(106,15,112,0.07); }
+    .ctb-left  { display:flex;align-items:center;gap:12px; }
+    .ctb-tabs  { display:flex;gap:4px;margin-left:16px; }
+    .ctb-tab   { padding:5px 14px;font-size:12px;font-weight:600;border-radius:3px;cursor:pointer;border:1px solid #e5e7eb;color:#6b7280;background:white;transition:all .15s; }
+    .ctb-tab.active { background:#6a0f70;color:white;border-color:#6a0f70; }
+    .ctb-right { display:flex;align-items:center;gap:10px; }
+    .btn-draft { padding:6px 14px;font-size:12px;font-weight:600;border:1px solid #d1d5db;background:white;color:#374151;border-radius:3px;cursor:pointer;transition:all .15s; }
+    .btn-draft:hover { border-color:#6a0f70;color:#6a0f70; }
+    .btn-save  { padding:6px 16px;font-size:12px;font-weight:600;background:#6a0f70;color:white;border:none;border-radius:3px;cursor:pointer;transition:background .15s;display:flex;align-items:center;gap:6px; }
+    .btn-save:hover { background:#380740; }
 
     /* ── Progress ── */
     #prog-wrap { display:flex;align-items:center;gap:8px;font-size:11px;color:#9ca3af; }
@@ -37,7 +30,6 @@
     /* ── Patient strip ── */
     #patient-strip { background:white;border-bottom:1px solid #e5e7eb;padding:14px 24px;display:flex;align-items:center;gap:20px;flex-wrap:wrap; }
     .ps-avatar { width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#6a0f70,#380740);display:flex;align-items:center;justify-content:center;color:white;font-size:18px;font-weight:600;flex-shrink:0;font-family:'Cormorant Garamond',serif; }
-    .ps-info   { flex:1;min-width:200px; }
     .ps-name   { font-size:16px;font-weight:700;color:#111827;display:flex;align-items:center;gap:8px;font-family:'Cormorant Garamond',serif; }
     .ps-badge  { font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:#dcfce7;color:#16a34a; }
     .ps-meta   { display:flex;gap:16px;flex-wrap:wrap;margin-top:4px; }
@@ -58,9 +50,6 @@
     .c-card-head { padding:12px 18px;border-bottom:1px solid #f3f4f6;background:#faf5fb;display:flex;align-items:center;justify-content:space-between;cursor:pointer; }
     .sec-label { font-size:11px;font-weight:700;color:#6a0f70;letter-spacing:.07em;text-transform:uppercase;display:flex;align-items:center;gap:6px; }
     .sec-num   { width:20px;height:20px;border-radius:50%;background:#6a0f70;color:white;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0; }
-
-    /* ── Section collapse ── */
-    .sec-collapse-btn { width:100%;display:flex;align-items:center;justify-content:space-between;background:none;border:none;cursor:pointer;padding:0;font-family:inherit;text-align:left; }
     .sec-chevron { transition:transform .2s;color:#9ca3af;flex-shrink:0; }
     .sec-chevron.open { transform:rotate(180deg); }
     .sec-summary { font-size:10px;color:#9ca3af;font-weight:400;margin-left:auto;margin-right:10px; }
@@ -81,12 +70,10 @@
     .vt-card:hover { border-color:#b95cb7;background:#faf5fb; }
     .vt-card.sel-emergency { border-color:#dc2626;background:#fef2f2; }
     .vt-card.sel-routine   { border-color:#6a0f70;background:#faf5fb; }
-    .vt-card.sel-followup  { border-color:#2563eb;background:#eff6ff; }
     .vt-icon  { width:38px;height:38px;border-radius:50%;margin:0 auto 6px;display:flex;align-items:center;justify-content:center; }
     .vt-check { width:18px;height:18px;border:2px solid #e5e7eb;border-radius:50%;margin:8px auto 0;display:flex;align-items:center;justify-content:center;transition:all .15s; }
     .sel-emergency .vt-check { border-color:#dc2626;background:#dc2626; }
     .sel-routine   .vt-check { border-color:#6a0f70;background:#6a0f70; }
-    .sel-followup  .vt-check { border-color:#2563eb;background:#2563eb; }
 
     /* ── Severity pills ── */
     .sev-btn { padding:5px 12px;border-radius:99px;font-size:12px;font-weight:600;border:1.5px solid #e5e7eb;background:white;cursor:pointer;transition:all .12s;color:#6b7280; }
@@ -116,18 +103,11 @@
     .tx-add-select { width:100%;border:1.5px dashed #d1d5db;border-radius:5px;padding:6px 8px;font-size:12px;color:#6b7280;cursor:pointer;background:white;outline:none;transition:border-color .15s; }
     .tx-add-select:focus { border-color:#6a0f70;border-style:solid; }
 
-    /* ── Treatment plan table ── */
-    .tp-table { width:100%;border-collapse:collapse;font-size:12px; }
-    .tp-table th { text-align:left;padding:7px 10px;font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #e5e7eb;background:#f9fafb; }
-    .tp-table td { padding:6px 8px;border-bottom:1px solid #f3f4f6;vertical-align:middle; }
-    .tp-table tbody tr:hover td { background:#faf5fb; }
-    .tp-table tfoot td { padding:8px 10px;font-weight:700;font-size:12px;background:#f9fafb;border-top:1px solid #e5e7eb; }
-
     /* ── DBM ── */
-    .dbm-sec-head { font-size:10px;font-weight:700;color:#6a0f70;border-bottom:1.5px solid #e9d5ff;padding-bottom:3px;margin-bottom:4px;margin-top:2px; }
-    .dbm-hdr { display:grid;grid-template-columns:1fr 42px 42px 42px;gap:0;font-size:9px;color:#9ca3af;font-weight:600;text-align:center;padding:2px 4px;margin-bottom:2px; }
+    .dbm-sec-head { font-size:10px;font-weight:700;color:#6a0f70;border-bottom:1.5px solid #e9d5ff;padding-bottom:3px;margin-bottom:6px;margin-top:2px; }
+    .dbm-hdr { display:grid;grid-template-columns:1fr 38px 38px 38px;gap:0;font-size:9px;color:#9ca3af;font-weight:600;text-align:center;padding:2px 4px;margin-bottom:2px; }
     .dbm-hdr span:first-child { text-align:left; }
-    .dbm-row { display:grid;grid-template-columns:1fr 42px 42px 42px;align-items:center;padding:3px 4px;border-radius:4px;transition:background .1s; }
+    .dbm-row { display:grid;grid-template-columns:1fr 38px 38px 38px;align-items:center;padding:3px 4px;border-radius:4px;transition:background .1s; }
     .dbm-row:hover { background:#f9fafb; }
     .dbm-row span { font-size:10px;color:#374151; }
     .dbm-dot-wrap { display:flex;align-items:center;justify-content:center; }
@@ -143,13 +123,9 @@
     .rx-section-head { display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:#6a0f70;text-transform:uppercase;letter-spacing:.06em; }
     .rx-input { border:1px solid #e5e7eb;border-radius:5px;padding:5px 8px;font-size:12px;font-family:'DM Sans',sans-serif;color:#374151;background:white;outline:none;transition:border-color .15s;width:100%; }
     .rx-input:focus { border-color:#6a0f70; }
-    .rx-pill { display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:600;border:1.5px solid #e5e7eb;background:white;cursor:pointer;color:#6b7280;transition:all .12px;white-space:nowrap; }
+    .rx-pill { display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:600;border:1.5px solid #e5e7eb;background:white;cursor:pointer;color:#6b7280;transition:all .12s;white-space:nowrap; }
     .rx-pill:hover { border-color:#6a0f70;color:#6a0f70; }
     .rx-pill.on { background:#6a0f70;border-color:#380740;color:white; }
-
-    /* ── AOCP cards ── */
-    .aocp-card { border:1.5px solid #e5e7eb;border-radius:6px;padding:10px 12px;cursor:pointer;transition:all .15s; }
-    .aocp-card.active { border-color:#6a0f70;background:#faf5fb; }
 
     /* ── Recall pills ── */
     .recall-pill { padding:5px 12px;border-radius:99px;font-size:11px;font-weight:600;border:1.5px solid #e5e7eb;background:white;cursor:pointer;transition:all .12s;color:#6b7280;white-space:nowrap; }
@@ -174,6 +150,9 @@
 <form id="cForm" @submit.prevent="submitConsultation()">
 <input type="hidden" name="_token" value="{{ csrf_token() }}">
 <input type="hidden" name="patient_id" value="{{ $patient->id }}">
+<input type="hidden" name="doctor_id" x-model="form.doctor_id">
+<input type="hidden" name="branch_id" value="{{ auth()->user()->branch_id }}">
+<input type="hidden" name="consultation_date" value="{{ isset($consultation) ? $consultation->consultation_date : now() }}">
 <input type="hidden" name="status" x-model="status">
 
 {{-- ══ STICKY TOPBAR ══ --}}
@@ -187,8 +166,6 @@
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;margin-right:4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 Consultation
             </button>
-            <button type="button" class="ctb-tab">Follow-up</button>
-            <button type="button" class="ctb-tab">Treatment Visit</button>
         </div>
     </div>
     <div class="ctb-right">
@@ -202,16 +179,13 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             Save &amp; Continue
         </button>
-        <button type="button" style="background:none;border:1px solid #e5e7eb;border-radius:4px;padding:5px 8px;color:#6b7280;cursor:pointer;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-        </button>
     </div>
 </div>
 
 {{-- ══ PATIENT STRIP ══ --}}
 <div id="patient-strip">
     <div class="ps-avatar">{{ $patient->initials }}</div>
-    <div class="ps-info">
+    <div style="flex:1;min-width:200px;">
         <div class="ps-name">
             {{ $patient->name }}
             <span class="ps-badge">{{ ucfirst($patient->recall_status ?? 'Active') }}</span>
@@ -219,15 +193,7 @@
         <div class="ps-meta">
             <span><b>PID:</b> PNT-{{ str_pad($patient->id,7,'0',STR_PAD_LEFT) }}</span>
             @if($patient->age ?? false)<span><b>{{ $patient->age }}Y</b> / {{ ucfirst($patient->gender ?? '') }}</span>@endif
-            @if($patient->phone)<span>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.1 12 19.79 19.79 0 0 1 1.03 3.33 2 2 0 0 1 3 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 21 16.92z"/></svg>
-                {{ $patient->phone }}
-            </span>@endif
-            @if($patient->city)<span>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                {{ $patient->city }}
-            </span>@endif
-            @if($patient->source)<span>Source: <b style="color:#6a0f70;">{{ $patient->source }}</b></span>@endif
+            @if($patient->phone)<span>{{ $patient->phone }}</span>@endif
             <span>Since: {{ $patient->created_at->format('d M Y') }}</span>
         </div>
     </div>
@@ -244,35 +210,26 @@
                 {{ $a ? (is_array($a) ? implode(', ',$a) : $a) : 'None reported' }}
             </span>
         </div>
-        <div class="ps-alert-row">
-            <span class="ps-alert-label">Habits</span>
-            <span class="ps-alert-val">
-                @php $h = $patient->habits; @endphp
-                {{ $h ? (is_array($h) ? implode(', ',$h) : $h) : '—' }}
-            </span>
-        </div>
     </div>
 </div>
 
-{{-- ══ FORM BODY — single column ══ --}}
+{{-- ══ FORM BODY ══ --}}
 <div class="consult-body">
 
     {{-- Expand / Collapse All --}}
     <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:-4px;">
         <button type="button" onclick="toggleAllSections(true)"
-                style="font-size:11px;font-weight:600;color:#6a0f70;background:none;border:1px solid rgba(106,15,112,.25);padding:4px 12px;border-radius:4px;cursor:pointer;"
-                onmouseover="this.style.background='#faf5fb'" onmouseout="this.style.background='none'">
+                style="font-size:11px;font-weight:600;color:#6a0f70;background:none;border:1px solid rgba(106,15,112,.25);padding:4px 12px;border-radius:4px;cursor:pointer;">
             ↕ Expand All
         </button>
         <button type="button" onclick="toggleAllSections(false)"
-                style="font-size:11px;font-weight:600;color:#6b7280;background:none;border:1px solid #e5e7eb;padding:4px 12px;border-radius:4px;cursor:pointer;"
-                onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='none'">
+                style="font-size:11px;font-weight:600;color:#6b7280;background:none;border:1px solid #e5e7eb;padding:4px 12px;border-radius:4px;cursor:pointer;">
             ↕ Collapse All
         </button>
     </div>
 
     {{-- ─── 1. Chief Complaint ─── --}}
-    <div class="c-card" x-data="{open:false}">
+    <div class="c-card" x-data="{open:true}">
         <div class="c-card-head" @click="open=!open">
             <span class="sec-label"><span class="sec-num">1</span>Chief Complaint</span>
             <div style="display:flex;align-items:center;gap:8px;">
@@ -287,7 +244,7 @@
                 <textarea name="chief_complaint" x-model="form.chief_complaint" class="df-input" rows="2"
                           placeholder="e.g. Sensitivity in upper and lower right back teeth since 3 days."></textarea>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
                 <div>
                     <label class="df-label">Duration</label>
                     <select name="complaint_duration" x-model="form.complaint_duration" class="df-input">
@@ -308,24 +265,13 @@
                     </div>
                 </div>
                 <div>
-                    <label class="df-label">Location</label>
-                    <select name="location" x-model="form.location" class="df-input">
-                        <option value="">Select</option>
-                        @foreach(['Upper Left','Upper Right','Lower Left','Lower Right','Upper & Lower Left','Upper & Lower Right','Full Mouth','Anterior','Posterior'] as $loc)
-                        <option>{{ $loc }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                {{-- FIX 1: Tooth/Area — dispatch window event so parent Alpine scope handles showToothPicker --}}
-                <div>
                     <label class="df-label">Tooth / Area</label>
                     <div style="display:flex;gap:4px;">
                         <input type="text" name="tooth_area" x-model="form.tooth_area"
                                class="df-input" placeholder="#14, 15, 46" style="flex:1;" readonly
                                @click="$dispatch('open-tooth-picker')">
                         <button type="button" @click="$dispatch('open-tooth-picker')"
-                                style="border:1px solid #e5e7eb;border-radius:5px;padding:0 10px;background:white;cursor:pointer;color:#6a0f70;font-size:11px;font-weight:600;white-space:nowrap;transition:all .15s;"
-                                onmouseover="this.style.background='#faf5fb'" onmouseout="this.style.background='white'">
+                                style="border:1px solid #e5e7eb;border-radius:5px;padding:0 10px;background:white;cursor:pointer;color:#6a0f70;">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
                         </button>
                     </div>
@@ -340,7 +286,7 @@
     </div>
 
     {{-- ─── 2. Visit Type ─── --}}
-    <div class="c-card" x-data="{open:false}">
+    <div class="c-card" x-data="{open:true}">
         <div class="c-card-head" @click="open=!open">
             <span class="sec-label"><span class="sec-num">2</span>Visit Type</span>
             <div style="display:flex;align-items:center;gap:8px;">
@@ -350,20 +296,17 @@
             </div>
         </div>
         <div x-show="open" x-collapse style="padding:18px;">
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:560px;">
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;max-width:380px;">
                 @foreach([
                     ['emergency','#dc2626','#fef2f2','Pain / Swelling / Trauma','M21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3ZM12 9v4M12 17h.01'],
                     ['routine','#6a0f70','#f5f3ff','Full Mouth Evaluation','M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
-                    ['followup','#2563eb','#eff6ff','Review / Re-evaluation','M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10'],
                 ] as [$vt,$col,$bg,$sub,$path])
                 <div class="vt-card" :class="form.visit_type==='{{ $vt }}' ? 'sel-{{ $vt }}' : ''"
                      @click="form.visit_type='{{ $vt }}'">
                     <div class="vt-icon" :style="form.visit_type==='{{ $vt }}' ? 'background:{{ $bg }}' : 'background:#f3f4f6'">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                              :stroke="form.visit_type==='{{ $vt }}' ? '{{ $col }}' : '#9ca3af'"
-                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="{{ $path }}"/>
-                        </svg>
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ $path }}"/></svg>
                     </div>
                     <div style="font-size:11px;font-weight:700;" :style="form.visit_type==='{{ $vt }}' ? 'color:{{ $col }}' : 'color:#6b7280'">
                         {{ ucfirst($vt === 'routine' ? 'Routine / Comprehensive' : $vt) }}
@@ -378,8 +321,7 @@
             <input type="hidden" name="visit_type" x-model="form.visit_type">
             @if($patient->medical_alert)
             <div style="margin-top:12px;display:flex;align-items:flex-start;gap:6px;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:5px;font-size:11px;color:#dc2626;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-                <span><strong>Alert:</strong> {{ $patient->medical_alert }}</span>
+                <strong>Alert:</strong>&nbsp;{{ $patient->medical_alert }}
             </div>
             @endif
         </div>
@@ -442,21 +384,6 @@
                 <div style="font-size:11px;color:#9ca3af;">STL · DICOM · JPG · PNG — Multiple files allowed</div>
                 <input type="file" id="scan-upload" name="scan_files[]" multiple accept=".stl,.dcm,.jpg,.jpeg,.png,.pdf" style="display:none;" @change="handleScanUpload($event)">
             </div>
-            <template x-if="scanFiles.length>0">
-                <div style="margin-top:12px;">
-                    <div style="font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Uploaded Files</div>
-                    <template x-for="(f,i) in scanFiles" :key="i">
-                        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f9fafb;border-radius:6px;margin-bottom:4px;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                            <div style="flex:1;overflow:hidden;">
-                                <div x-text="f.name" style="font-size:12px;color:#374151;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
-                                <div x-text="(f.size/1024/1024).toFixed(2)+' MB'" style="font-size:10px;color:#9ca3af;"></div>
-                            </div>
-                            <button type="button" @click="scanFiles.splice(i,1)" style="background:none;border:1px solid #fecaca;border-radius:4px;color:#dc2626;cursor:pointer;padding:2px 6px;font-size:10px;font-weight:600;">✕</button>
-                        </div>
-                    </template>
-                </div>
-            </template>
             <div style="margin-top:14px;">
                 <label class="df-label">Scan Date</label>
                 <input type="date" name="scan_date" x-model="form.scan_date" class="df-input" style="max-width:220px;">
@@ -495,9 +422,6 @@
                             <input type="file" name="inv_file_{{$key}}[]" multiple accept="image/*,.pdf,.dcm" style="display:none;" @change="handleInvUpload($event,'{{$key}}')">
                         </label>
                         @endif
-                        <span x-show="(invFiles['{{$key}}']||[]).length>0"
-                              style="font-size:10px;color:#16a34a;font-weight:600;white-space:nowrap;"
-                              x-text="(invFiles['{{$key}}']||[]).length+' file(s)'"></span>
                     </div>
                 </template>
             </div>
@@ -505,113 +429,107 @@
         </div>
     </div>
 
-    {{-- ─── 6. Clinical Findings ─── --}}
+    {{-- ─── 6. Radiographic Findings ─── --}}
     <div class="c-card" x-data="{open:false}">
         <div class="c-card-head" @click="open=!open">
-            <span class="sec-label"><span class="sec-num">6</span>Clinical Findings</span>
-            <div style="display:flex;align-items:center;gap:8px;">
+            <span class="sec-label"><span class="sec-num">6</span>Radiographic Findings</span>
+            <svg class="sec-chevron" :class="open?'open':''" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+        <div x-show="open" x-collapse style="padding:14px 18px;display:flex;flex-direction:column;gap:12px;">
+            <div>
+                <label class="df-label">Type of Radiograph</label>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+                    @foreach(['OPG','IOPA','CBCT','RVG','Lateral Ceph','None'] as $rtype)
+                    <button type="button"
+                            @click="form.radio.type='{{ $rtype }}'"
+                            :style="form.radio.type==='{{ $rtype }}'
+                                ? 'border-color:#6a0f70;background:#f5eef9;color:#6a0f70;font-weight:700;'
+                                : 'border-color:#e5e7eb;background:white;color:#6b7280;'"
+                            style="padding:5px 14px;border-radius:99px;border:1.5px solid #e5e7eb;font-size:12px;cursor:pointer;transition:all .15s;">
+                        {{ $rtype }}
+                    </button>
+                    @endforeach
+                </div>
+                <input type="hidden" name="radio_type" x-model="form.radio.type">
+            </div>
+            <div>
+                <label class="df-label">Findings</label>
+                <textarea name="radio_findings" x-model="form.radio.findings" class="df-input" rows="3"
+                          style="resize:vertical;"
+                          placeholder="e.g. Periapical infection present on 36, cavity reaching pulp, bone loss on 46…"></textarea>
+            </div>
+        </div>
+    </div>
+
+    {{-- ─── 7. Clinical Findings & Assessment ─── --}}
+    <div class="c-card" x-data="{open:false}">
+        <div class="c-card-head" @click="open=!open">
+            <span class="sec-label">
+                <span class="sec-num">7</span>Clinical Findings &amp; Assessment
                 <button type="button" @click.stop="document.getElementById('tooth-chart-modal').style.display='flex'"
-                        style="font-size:10px;color:#6a0f70;border:1px solid rgba(106,15,112,.25);padding:3px 9px;border-radius:3px;background:white;cursor:pointer;display:flex;align-items:center;gap:4px;">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                        style="font-size:10px;color:#6a0f70;border:1px solid rgba(106,15,112,.25);padding:2px 8px;border-radius:3px;background:white;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:600;margin-left:6px;">
                     Chart Teeth
                 </button>
+            </span>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span id="dbm-score-badge-hdr" style="font-size:10px;font-weight:700;color:#6a0f70;">0/33</span>
                 <svg class="sec-chevron" :class="open?'open':''" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
             </div>
         </div>
         <div x-show="open" x-collapse style="padding:14px 18px;">
+
+            {{-- Clinical dropdowns — 3 column grid --}}
             @php
             $clinFields = [
-                'soft_tissue'         => ['Soft Tissue', ['Normal','Mild Gingival Inflammation','Moderate Gingival Inflammation','Severe Gingival Inflammation','Ulceration','Swelling','Stomatitis','Other']],
-                'caries'              => ['Caries', ['None','Caries #14,15,46','Multiple Caries','Deep Caries (Pulp)','Secondary Caries','Caries All Quads','Other']],
-                'periodontal'         => ['Periodontal', ['Normal','Mild Gingivitis','Moderate Gingivitis','Severe Gingivitis','Mild Periodontitis','Moderate Periodontitis','Severe Periodontitis']],
+                'soft_tissue'         => ['Soft Tissue',         ['Normal','Mild Gingival Inflammation','Moderate Gingival Inflammation','Severe Gingival Inflammation','Ulceration','Swelling','Stomatitis','Other']],
+                'caries'              => ['Caries',              ['None','Caries #14,15,46','Multiple Caries','Deep Caries (Pulp)','Secondary Caries','Caries All Quads','Other']],
+                'periodontal'         => ['Periodontal',         ['Normal','Mild Gingivitis','Moderate Gingivitis','Severe Gingivitis','Mild Periodontitis','Moderate Periodontitis','Severe Periodontitis']],
                 'bleeding_on_probing' => ['Bleeding on Probing', ['Absent','Present','Generalised']],
-                'plaque_index'        => ['Plaque Index', ['Good','Fair','Moderate','Poor']],
-                'occlusion'           => ['Occlusion', ['Class I','Class II Div 1','Class II Div 2','Class III','Edge to Edge','Cross Bite']],
-                'tmj'                 => ['TMJ', ['Normal','No Clicking / No Pain','Clicking','Pain on Opening','Restricted Opening','TMD']],
-                'existing_condition'  => ['Existing Condition', ['None','Composite Filling','Amalgam Filling','PFM Crown','Zirconia Crown','Bridge (PFM)','Bridge (Zirconia)','Implant','Implant + Crown','RCT Done','Stainless Steel Crown','Denture','Orthodontic Brackets','Other']],
-                'oral_hygiene'        => ['Oral Hygiene', ['Excellent','Good','Fair','Poor']],
+                'plaque_index'        => ['Plaque Index',        ['Good','Fair','Moderate','Poor']],
+                'occlusion'           => ['Occlusion',           ['Class I','Class II Div 1','Class II Div 2','Class III','Edge to Edge','Cross Bite']],
+                'tmj'                 => ['TMJ',                 ['Normal','No Clicking / No Pain','Clicking','Pain on Opening','Restricted Opening','TMD']],
+                'existing_condition'  => ['Existing Condition',  ['None','Composite Filling','Amalgam Filling','PFM Crown','Zirconia Crown','Bridge (PFM)','Bridge (Zirconia)','Implant','Implant + Crown','RCT Done','Stainless Steel Crown','Denture','Orthodontic Brackets','Other']],
+                'oral_hygiene'        => ['Oral Hygiene',        ['Excellent','Good','Fair','Poor']],
             ];
             @endphp
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-                {{-- FIX 4: Clinical selects — handle __add__ custom option with @change --}}
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #f3f4f6;">
                 @foreach($clinFields as $fld=>[$lbl,$opts])
                 <div>
                     <label class="df-label" style="margin-bottom:2px;">{{ $lbl }}</label>
-                    <select name="clinical_{{$fld}}" x-model="form.clinical.{{$fld}}" class="df-input" style="padding:6px 8px;font-size:13px;"
-                            @change="if($event.target.value==='__add__'){var v=prompt('Enter custom {{ $lbl }}:');if(v&&v.trim()){form.clinical.{{$fld}}=v.trim();}else{form.clinical.{{$fld}}='';}}">
+                    <select name="clinical_{{$fld}}" x-model="form.clinical.{{$fld}}" class="df-input" style="padding:6px 8px;font-size:12px;">
                         <option value="">Select</option>
                         @foreach($opts as $o)<option>{{$o}}</option>@endforeach
-                        <option value="__add__">+ Add custom</option>
                     </select>
                 </div>
                 @endforeach
             </div>
-            <div style="margin-top:12px;">
-                <label class="df-label">Additional Notes</label>
-                <textarea name="clinical_notes" x-model="form.clinical.notes" class="df-input" rows="2"
-                          placeholder="e.g. Generalised sensitivity, tartar deposits in lower anteriors."></textarea>
-            </div>
-            <div id="clinical-chart-summary-wrap" style="margin-top:12px;display:none;">
-                <div style="padding:8px 12px;background:#faf5fb;border:1px solid rgba(106,15,112,.15);border-radius:6px;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                        <span style="font-size:10px;font-weight:700;color:#6a0f70;text-transform:uppercase;letter-spacing:.05em;">Tooth Charting</span>
-                        <button type="button" onclick="document.getElementById('tooth-chart-modal').style.display='flex'"
-                                style="font-size:10px;color:#6a0f70;background:none;border:none;cursor:pointer;font-weight:600;">Edit Chart →</button>
-                    </div>
-                    <div id="clinical-chart-summary" style="font-size:11px;color:#374151;line-height:1.8;"></div>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    {{-- ─── 7. Radiographic Findings ─── --}}
-    <div class="c-card" x-data="{open:false}">
-        <div class="c-card-head" @click="open=!open">
-            <span class="sec-label"><span class="sec-num">7</span>Radiographic Findings</span>
-            <svg class="sec-chevron" :class="open?'open':''" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-        </div>
-        <div x-show="open" x-collapse style="padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            @foreach(['opg'=>'OPG Findings','iopa'=>'IOPA Findings','cbct'=>'CBCT Findings','notes'=>'Interpretation'] as $k=>$lbl)
-            <div>
-                <label class="df-label" style="margin-bottom:2px;">{{ $lbl }}</label>
-                <textarea name="radio_{{$k}}" x-model="form.radio.{{$k}}" class="df-input" rows="3"
-                          style="resize:vertical;"
-                          placeholder="{{ $k==='cbct' ? 'N/A' : 'Enter findings…' }}"></textarea>
-            </div>
-            @endforeach
-        </div>
-    </div>
-
-    {{-- ─── 8. DBM 35-Point Checklist ─── FIX 2: Added proper open/close with chevron --}}
-    <div class="c-card" x-data="{open:false}">
-        <div class="c-card-head" @click="open=!open">
-            <span class="sec-label"><span class="sec-num">8</span>DBM 35-Point Checklist</span>
-            <div style="display:flex;align-items:center;gap:10px;">
-                <div style="display:flex;align-items:center;gap:6px;">
+            {{-- DBM 35-Point Checklist --}}
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <span style="font-size:10px;font-weight:700;color:#6a0f70;text-transform:uppercase;letter-spacing:.07em;">DBM 35-Point Checklist</span>
+                <div style="display:flex;align-items:center;gap:8px;">
                     <div style="width:80px;height:3px;background:#f3f4f6;border-radius:99px;overflow:hidden;">
                         <div id="dbm-prog-fill" style="height:100%;width:0%;background:#6a0f70;border-radius:99px;transition:width .3s;"></div>
                     </div>
                     <span id="dbm-score-badge" style="font-size:11px;font-weight:700;color:#6a0f70;">0/33</span>
+                    <div style="display:flex;align-items:center;gap:6px;padding:3px 8px;background:#f9fafb;border-radius:5px;" @click.stop>
+                        <span style="font-size:10px;color:#9ca3af;font-weight:600;">Shade</span>
+                        <input type="text" name="dbm_tooth_shade" placeholder="A2" style="width:38px;border:1px solid #e5e7eb;border-radius:4px;padding:2px 5px;font-size:11px;outline:none;">
+                        <span style="font-size:10px;color:#9ca3af;font-weight:600;margin-left:4px;">Whitening</span>
+                        <button type="button" onclick="dbmYN(this,'whitening','Y')" style="padding:1px 6px;border:1.5px solid #e5e7eb;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;background:white;">Y</button>
+                        <button type="button" onclick="dbmYN(this,'whitening','N')" style="padding:1px 6px;border:1.5px solid #e5e7eb;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;background:white;">N</button>
+                    </div>
                 </div>
-                <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:#f9fafb;border-radius:5px;" @click.stop>
-                    <span style="font-size:10px;color:#9ca3af;font-weight:600;">Shade</span>
-                    <input type="text" name="dbm_tooth_shade" placeholder="A2" style="width:40px;border:1px solid #e5e7eb;border-radius:4px;padding:2px 5px;font-size:11px;outline:none;">
-                    <span style="font-size:10px;color:#9ca3af;font-weight:600;margin-left:4px;">Whitening</span>
-                    <button type="button" onclick="event.stopPropagation();dbmYN(this,'whitening','Y')" style="padding:1px 7px;border:1.5px solid #e5e7eb;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;background:white;">Y</button>
-                    <button type="button" onclick="event.stopPropagation();dbmYN(this,'whitening','N')" style="padding:1px 7px;border:1.5px solid #e5e7eb;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;background:white;">N</button>
-                </div>
-                <svg class="sec-chevron" :class="open?'open':''" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
             </div>
-        </div>
-        <div x-show="open" x-collapse style="padding:14px 18px;">
+
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:16px;">
 
                 {{-- Col 1: Hard / Soft Tissue --}}
                 <div>
                     <div class="dbm-sec-head">Hard / Soft Tissue</div>
-                    <div style="display:grid;grid-template-columns:1fr 38px 38px;font-size:9px;color:#9ca3af;font-weight:600;text-align:center;padding:2px 4px;margin-bottom:2px;"><span></span><span>Healthy</span><span>Observe</span></div>
+                    <div style="display:grid;grid-template-columns:1fr 34px 34px;font-size:9px;color:#9ca3af;font-weight:600;text-align:center;padding:2px 4px;margin-bottom:2px;"><span></span><span>Healthy</span><span>Observe</span></div>
                     @foreach([[0,'Jaw joints'],[1,'Glands'],[2,'Muscles'],[3,'Cheek tissue'],[4,'Tongue'],[5,'Floor of mouth'],[6,'Roof of mouth'],[7,'Oral cancer'],[8,'Lip muscle']] as [$i,$l])
-                    <div class="dbm-row" style="grid-template-columns:1fr 30px 30px;" id="dbmr-{{$i}}">
+                    <div class="dbm-row" style="grid-template-columns:1fr 34px 34px;" id="dbmr-{{$i}}">
                         <span>{{$l}}</span>
                         <div class="dbm-dot-wrap"><div class="dbm-dot" onclick="dbmSet({{$i}},'healthy',this)"></div></div>
                         <div class="dbm-dot-wrap"><div class="dbm-dot" onclick="dbmSet({{$i}},'observe',this)"></div></div>
@@ -659,7 +577,7 @@
                         <div class="dbm-dot-wrap"><div class="dbm-dot" onclick="dbmSet({{$i}},'na',this)"></div></div>
                     </div>
                     @endforeach
-                    <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 4px;margin-top:2px;background:#f9fafb;border-radius:4px;font-size:10px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 4px;margin-top:4px;background:#f9fafb;border-radius:4px;font-size:10px;">
                         <span style="color:#374151;">Tooth monitored</span>
                         <div style="display:flex;gap:3px;">
                             <button type="button" onclick="dbmYN(this,'tooth_monitored','Y')" style="padding:1px 6px;border:1.5px solid #e5e7eb;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;background:white;">Y</button>
@@ -683,10 +601,18 @@
                 </div>
 
             </div>
+
+            {{-- Additional Notes --}}
+            <div style="margin-top:14px;">
+                <label class="df-label">Additional Clinical Notes</label>
+                <textarea name="clinical_notes" x-model="form.clinical.notes" class="df-input" rows="2"
+                          placeholder="e.g. Generalised sensitivity, tartar deposits in lower anteriors."></textarea>
+            </div>
+
         </div>
     </div>
 
-    {{-- ─── Rx: Prescriptions & Instructions ─── FIX 5: Standardised header with chevron like all other cards --}}
+    {{-- ─── Rx: Prescriptions & Instructions ─── --}}
     <div class="c-card" x-data="rxForm()">
         <div class="c-card-head" @click="rxOpen=!rxOpen">
             <span class="sec-label">
@@ -694,19 +620,16 @@
                 Prescriptions &amp; Instructions
                 <span x-show="drugs.length>0" style="font-size:10px;color:#6a0f70;font-weight:700;text-transform:none;letter-spacing:0;margin-left:4px;" x-text="'('+drugs.length+' drug(s))'"></span>
             </span>
-            <div style="display:flex;align-items:center;gap:8px;">
-                <svg class="sec-chevron" :class="rxOpen?'open':''" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-            </div>
+            <svg class="sec-chevron" :class="rxOpen?'open':''" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
         </div>
         <div x-show="rxOpen" x-collapse>
-            {{-- Prescriptions sub-section --}}
+            {{-- Drugs --}}
             <button type="button" class="rx-collapse-btn" :class="showRxDrugs?'open':''" @click="showRxDrugs=!showRxDrugs">
                 <div class="rx-section-head">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 2-5 5"/><path d="m2 19 5-5"/><rect x="5" y="2" width="5" height="20" rx="1" transform="rotate(-45 5 2)"/></svg>
                     Prescriptions
                 </div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                     :style="showRxDrugs?'transform:rotate(180deg)':''" style="transition:transform .2s;color:#9ca3af;"><path d="m6 9 6 6 6-6"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" :style="showRxDrugs?'transform:rotate(180deg)':''" style="transition:transform .2s;color:#9ca3af;"><path d="m6 9 6 6 6-6"/></svg>
             </button>
             <div x-show="showRxDrugs" x-collapse>
                 <div style="padding:14px 18px;">
@@ -739,10 +662,10 @@
                                     </div>
                                     <span style="font-size:9px;font-weight:600;color:#9ca3af;">SOS</span>
                                 </div>
-                                <input type="number" x-model="drug.morning" class="rx-input" placeholder="Morning" min="0" step="0.5" style="text-align:center;" @input="calcTotal(i)">
-                                <input type="number" x-model="drug.noon" class="rx-input" placeholder="Noon" min="0" step="0.5" style="text-align:center;" @input="calcTotal(i)">
-                                <input type="number" x-model="drug.night" class="rx-input" placeholder="Night" min="0" step="0.5" style="text-align:center;" @input="calcTotal(i)">
-                                <input type="number" x-model="drug.duration" class="rx-input" placeholder="Duration" min="1" @input="calcTotal(i)">
+                                <input type="number" x-model="drug.morning" class="rx-input" placeholder="0" min="0" step="0.5" style="text-align:center;" @input="calcTotal(i)">
+                                <input type="number" x-model="drug.noon"    class="rx-input" placeholder="0" min="0" step="0.5" style="text-align:center;" @input="calcTotal(i)">
+                                <input type="number" x-model="drug.night"   class="rx-input" placeholder="0" min="0" step="0.5" style="text-align:center;" @input="calcTotal(i)">
+                                <input type="number" x-model="drug.duration" class="rx-input" placeholder="Days" min="1" @input="calcTotal(i)">
                                 <select x-model="drug.dur_unit" class="rx-input" @change="calcTotal(i)">
                                     <option value="days">Days</option>
                                     <option value="weeks">Weeks</option>
@@ -751,22 +674,20 @@
                                 <input type="number" x-model="drug.total_qty" class="rx-input" placeholder="Total" style="text-align:center;">
                                 <button type="button" @click="drugs.splice(i,1)"
                                         style="width:28px;height:28px;border:1px solid #fecaca;border-radius:5px;background:white;cursor:pointer;color:#dc2626;display:flex;align-items:center;justify-content:center;">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
                                 </button>
                             </div>
-                            <div style="display:grid;grid-template-columns:160px 120px 1fr 200px;gap:4px;align-items:center;margin-bottom:8px;padding-left:4px;">
+                            <div style="display:grid;grid-template-columns:160px 120px 1fr;gap:4px;align-items:center;margin-bottom:8px;padding-left:4px;">
                                 <select x-model="drug.food" class="rx-input">
                                     <option value="">Food timing</option>
                                     <option>Before Food</option><option>After Food</option><option>With Food</option>
-                                    <option>Empty Stomach</option><option>Bedtime</option><option>As Directed</option>
+                                    <option>Empty Stomach</option><option>Bedtime</option>
                                 </select>
                                 <select x-model="drug.language" class="rx-input">
                                     <option>English</option><option>Hindi</option><option>Marathi</option>
                                 </select>
-                                <input type="text" x-model="drug.instruction" class="rx-input" placeholder="Instruction (e.g. Apply on affected area)">
-                                <input type="text" x-model="drug.notes" class="rx-input" placeholder="Notes">
+                                <input type="text" x-model="drug.instruction" class="rx-input" placeholder="Instruction / notes">
                             </div>
-                            <div x-show="i < drugs.length-1" style="border-top:1px solid #f3f4f6;margin:4px 0 8px;"></div>
                         </div>
                     </template>
                     <button type="button" @click="addDrug()"
@@ -779,18 +700,17 @@
                 </div>
             </div>
 
-            {{-- Instructions sub-section --}}
+            {{-- Instructions --}}
             <button type="button" class="rx-collapse-btn" :class="showRxInstr?'open':''" @click="showRxInstr=!showRxInstr">
                 <div class="rx-section-head">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                     Instructions to Patient
                 </div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                     :style="showRxInstr?'transform:rotate(180deg)':''" style="transition:transform .2s;color:#9ca3af;"><path d="m6 9 6 6 6-6"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" :style="showRxInstr?'transform:rotate(180deg)':''" style="transition:transform .2s;color:#9ca3af;"><path d="m6 9 6 6 6-6"/></svg>
             </button>
             <div x-show="showRxInstr" x-collapse style="padding:14px 18px;">
                 <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">
-                    @foreach(['Avoid hard/crunchy food for 24 hrs','Do not rinse vigorously','Keep the area clean','Use warm saline rinse','Apply ice pack for swelling','Avoid alcohol & smoking','Avoid spicy food','Complete the full course of antibiotics','Rest for 24 hours','Return if bleeding does not stop'] as $instr)
+                    @foreach(['Avoid hard/crunchy food for 24 hrs','Do not rinse vigorously','Keep the area clean','Use warm saline rinse','Apply ice pack for swelling','Avoid alcohol & smoking','Complete the full course of antibiotics','Return if bleeding does not stop'] as $instr)
                     <button type="button" @click="toggleInstruction('{{$instr}}')"
                             :class="instructions.includes('{{$instr}}') ? 'rx-pill on' : 'rx-pill'">
                         <svg x-show="instructions.includes('{{$instr}}')" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -798,19 +718,16 @@
                     </button>
                     @endforeach
                 </div>
-                <div>
-                    <label class="df-label">Additional Instructions</label>
-                    <textarea x-model="customInstruction" class="df-input" rows="2"
-                              placeholder="Type any additional post-treatment instructions…"></textarea>
-                </div>
+                <textarea x-model="customInstruction" class="df-input" rows="2"
+                          placeholder="Additional instructions…"></textarea>
             </div>
         </div>
     </div>
 
-    {{-- ─── 9. Diagnosis ─── --}}
+    {{-- ─── 8. Diagnosis ─── --}}
     <div class="c-card" x-data="{open:false}">
         <div class="c-card-head" @click="open=!open">
-            <span class="sec-label"><span class="sec-num">9</span>Diagnosis</span>
+            <span class="sec-label"><span class="sec-num">8</span>Diagnosis</span>
             <div style="display:flex;align-items:center;gap:8px;">
                 <span class="sec-summary" x-show="!open && form.diagnosis.primary" x-cloak
                       x-text="form.diagnosis.primary.substring(0,50)+(form.diagnosis.primary.length>50?'…':'')"></span>
@@ -821,7 +738,7 @@
             <div>
                 <label class="df-label">Primary Diagnosis <span class="req">*</span></label>
                 <textarea name="primary_diagnosis" x-model="form.diagnosis.primary" class="df-input" rows="3"
-                          placeholder="e.g. Early Caries #14, 15, 46 with Dentin Hypersensitivity"></textarea>
+                          placeholder="e.g. Chronic Irreversible Pulpitis #36 with Periapical Pathology"></textarea>
             </div>
             <div>
                 <label class="df-label">Secondary Diagnosis</label>
@@ -845,12 +762,12 @@
         </div>
     </div>
 
-    {{-- ─── 10. Treatment Advised ─── --}}
+    {{-- ─── 9. Treatment Advised ─── --}}
     <div class="c-card" x-data="{open:false}">
         <div class="c-card-head" @click="open=!open">
             <span class="sec-label">
-                <span class="sec-num">10</span>Treatment Advised
-                <span style="font-size:9px;color:#9ca3af;font-weight:400;text-transform:none;letter-spacing:0;">Select → appears in treatment plan</span>
+                <span class="sec-num">9</span>Treatment Advised
+                <span style="font-size:9px;color:#9ca3af;font-weight:400;text-transform:none;letter-spacing:0;">Select → goes to Treatment Plan tab</span>
             </span>
             <div style="display:flex;align-items:center;gap:8px;">
                 <span class="sec-summary" x-show="!open && allTxSelected.length" x-cloak x-text="allTxSelected.length+' treatment(s)'"></span>
@@ -858,242 +775,35 @@
             </div>
         </div>
         <div x-show="open" x-collapse style="padding:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;">
-            {{-- Emergency --}}
+            @foreach([
+                ['emergency','#dc2626','#fecaca',['Pain Relief / Stabilization','RCT (if needed)','Extraction (if needed)','Temporary Filling','I&D Abscess','Pulpotomy','Splinting']],
+                ['protective','#2563eb','#bfdbfe',['Scaling & Polishing','Fluoride Therapy','Restorations (Fillings)','RCT','Crown / Onlay','Gum Treatment','Composite Filling','GIC Filling']],
+                ['transformative','#6a0f70','#e9d5ff',['Veneers','Crowns / Bridges','Implants','Aligners','Smile Design','Full Mouth Rehab','Teeth Whitening','Gum Contouring']],
+            ] as [$col,$color,$border,$txlist])
             <div>
-                <div class="tx-col-head" style="color:#dc2626;border-color:#fecaca;">Emergency</div>
-                <template x-for="(tx,i) in txSelected.emergency" :key="'em'+i">
-                    <div class="tx-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
-                            <span x-text="tx" style="font-weight:600;"></span>
-                            <button type="button" class="tx-rm" @click="removeTx('emergency',i)">
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                            </button>
-                        </div>
-                        <input type="text" @click.stop="openTxTeethPicker('emergency',i)"
-                               :value="(txTeeth.emergency[i]||[]).join(', ')||'Click to select teeth…'" readonly
-                               style="width:100%;border:1px dashed #e5e7eb;border-radius:4px;padding:3px 6px;font-size:10px;color:#6b7280;cursor:pointer;background:white;"
-                               onmouseover="this.style.borderColor='#6a0f70'" onmouseout="this.style.borderColor='#e5e7eb'">
+                <div class="tx-col-head" style="color:{{$color}};border-color:{{$border}};">{{ ucfirst($col) }}</div>
+                <template x-for="(tx,i) in txSelected.{{$col}}" :key="'{{$col}}'+i">
+                    <div class="tx-row">
+                        <span x-text="tx" style="font-weight:600;font-size:12px;"></span>
+                        <button type="button" class="tx-rm" @click="removeTx('{{$col}}',i)">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                        </button>
                     </div>
                 </template>
-                <select class="tx-add-select" @change="addTx('emergency',$event)">
+                <select class="tx-add-select" @change="addTx('{{$col}}',$event)">
                     <option value="">+ Add treatment</option>
-                    @foreach(['Pain Relief / Stabilization','RCT (if needed)','Extraction (if needed)','Temporary Filling','I&D Abscess','Pulpotomy','Splinting'] as $t)
-                    <option>{{$t}}</option>
-                    @endforeach
+                    @foreach($txlist as $t)<option>{{$t}}</option>@endforeach
                     <option value="__custom__">+ Custom…</option>
                 </select>
             </div>
-            {{-- Protective --}}
-            <div>
-                <div class="tx-col-head" style="color:#2563eb;border-color:#bfdbfe;">Protective</div>
-                <template x-for="(tx,i) in txSelected.protective" :key="'pr'+i">
-                    <div class="tx-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
-                            <span x-text="tx" style="font-weight:600;"></span>
-                            <button type="button" class="tx-rm" @click="removeTx('protective',i)">
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                            </button>
-                        </div>
-                        <input type="text" @click.stop="openTxTeethPicker('protective',i)"
-                               :value="(txTeeth.protective[i]||[]).join(', ')||'Click to select teeth…'" readonly
-                               style="width:100%;border:1px dashed #e5e7eb;border-radius:4px;padding:3px 6px;font-size:10px;color:#6b7280;cursor:pointer;background:white;"
-                               onmouseover="this.style.borderColor='#6a0f70'" onmouseout="this.style.borderColor='#e5e7eb'">
-                    </div>
-                </template>
-                <select class="tx-add-select" @change="addTx('protective',$event)">
-                    <option value="">+ Add treatment</option>
-                    @foreach(['Scaling & Polishing','Fluoride Therapy','Restorations (Fillings)','RCT','Crown / Onlay','Gum Treatment','Composite Filling','GIC Filling'] as $t)
-                    <option>{{$t}}</option>
-                    @endforeach
-                    <option value="__custom__">+ Custom…</option>
-                </select>
-            </div>
-            {{-- Transformative --}}
-            <div>
-                <div class="tx-col-head" style="color:#6a0f70;border-color:#e9d5ff;">Transformative</div>
-                <template x-for="(tx,i) in txSelected.transformative" :key="'tr'+i">
-                    <div class="tx-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
-                            <span x-text="tx" style="font-weight:600;"></span>
-                            <button type="button" class="tx-rm" @click="removeTx('transformative',i)">
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                            </button>
-                        </div>
-                        <input type="text" @click.stop="openTxTeethPicker('transformative',i)"
-                               :value="(txTeeth.transformative[i]||[]).join(', ')||'Click to select teeth…'" readonly
-                               style="width:100%;border:1px dashed #e5e7eb;border-radius:4px;padding:3px 6px;font-size:10px;color:#6b7280;cursor:pointer;background:white;"
-                               onmouseover="this.style.borderColor='#6a0f70'" onmouseout="this.style.borderColor='#e5e7eb'">
-                    </div>
-                </template>
-                <select class="tx-add-select" @change="addTx('transformative',$event)">
-                    <option value="">+ Add treatment</option>
-                    @foreach(['Veneers','Crowns / Bridges','Implants','Aligners','Smile Design','Full Mouth Rehab','Teeth Whitening','Gum Contouring'] as $t)
-                    <option>{{$t}}</option>
-                    @endforeach
-                    <option value="__custom__">+ Custom…</option>
-                </select>
-            </div>
+            @endforeach
         </div>
     </div>
 
-    {{-- ─── 11A. Treatment Plan — Best Options ─── --}}
-    <div class="c-card" x-data="{open:false}">
-        <div class="c-card-head">
-            <span class="sec-label" @click="open=!open" style="flex:1;cursor:pointer;display:flex;align-items:center;gap:6px;">
-                <span class="sec-num" style="font-size:8px;width:22px;">11A</span>Treatment Plan — Best Options
-            </span>
-            <div style="display:flex;align-items:center;gap:8px;">
-                <button type="button" @click.stop="$dispatch('add-tp-row',{type:'best'})"
-                        style="font-size:11px;color:#6a0f70;border:1px solid rgba(106,15,112,.25);padding:3px 10px;border-radius:3px;background:white;cursor:pointer;white-space:nowrap;">
-                    + Add Row
-                </button>
-                <svg class="sec-chevron" :class="open?'open':''" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="cursor:pointer;" @click="open=!open"><path d="m6 9 6 6 6-6"/></svg>
-            </div>
-        </div>
-        <div x-show="open" x-collapse>
-            <div style="overflow-x:auto;">
-                <table class="tp-table">
-                    <thead><tr>
-                        <th style="width:160px;">Tooth / Area</th>
-                        <th>Treatment</th>
-                        <th style="width:100px;text-align:right;">Cost (₹)</th>
-                        <th style="width:28px;"></th>
-                    </tr></thead>
-                    <tbody>
-                        <template x-for="(row,i) in tpBest" :key="'best'+i">
-                        <tr>
-                            <td>
-                                <div style="display:flex;gap:3px;">
-                                    <input type="text" x-model="row.tooth" class="df-input" placeholder="#14, Full Mouth" style="padding:4px 7px;font-size:12px;flex:1;" readonly
-                                           @click="$dispatch('open-tp-picker',{type:'best',idx:i})">
-                                    <button type="button" @click="$dispatch('open-tp-picker',{type:'best',idx:i})"
-                                            style="border:1px solid #e5e7eb;border-radius:4px;padding:0 7px;background:white;cursor:pointer;color:#6a0f70;flex-shrink:0;"
-                                            title="Select teeth">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-                                    </button>
-                                </div>
-                            </td>
-                            <td>
-                                <div style="display:flex;gap:4px;">
-                                    <input type="text" x-model="row.treatment" class="df-input" placeholder="e.g. Composite Filling" style="padding:4px 7px;font-size:12px;flex:1;">
-                                    <select @change="row.treatment=$event.target.value;$event.target.value=''"
-                                            style="border:1px solid #e5e7eb;border-radius:4px;font-size:11px;color:#9ca3af;padding:0 4px;background:white;cursor:pointer;max-width:70px;">
-                                        <option value="">Quick</option>
-                                        <template x-for="tx in allTxSelected" :key="tx"><option :value="tx" x-text="tx"></option></template>
-                                    </select>
-                                </div>
-                            </td>
-                            <td><input type="number" x-model="row.cost" class="df-input" placeholder="0" @input="$dispatch('recalc-tp',{type:'best'})" style="padding:4px 7px;font-size:12px;text-align:right;"></td>
-                            <td><button type="button" @click="$dispatch('remove-tp-row',{type:'best',idx:i})" style="color:#d1d5db;background:none;border:none;cursor:pointer;padding:2px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></td>
-                        </tr>
-                        </template>
-                    </tbody>
-                    <tfoot><tr>
-                        <td colspan="2" style="color:#6b7280;font-size:11px;">Estimated Total</td>
-                        <td style="text-align:right;color:#6a0f70;">₹ <span x-text="tpBestTotal.toLocaleString('en-IN')"></span></td>
-                        <td></td>
-                    </tr></tfoot>
-                </table>
-            </div>
-            <div style="padding:10px 16px;border-top:1px solid #f3f4f6;">
-                <div style="font-size:10px;font-weight:700;color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">AOCP (if applicable)</div>
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-                    <input type="checkbox" id="aocp_best" x-model="form.aocp_best" style="width:13px;height:13px;accent-color:#6a0f70;">
-                    <label for="aocp_best" style="font-size:12px;color:#374151;cursor:pointer;">Include AOCP</label>
-                </div>
-                <div x-show="form.aocp_best" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;max-width:400px;">
-                    @foreach(['Silver — ₹3,999/yr','Gold — ₹5,999/yr','Platinum — ₹8,999/yr'] as $plan)
-                    <div class="aocp-card" :class="form.aocp_best_plan==='{{$plan}}'?'active':''" @click="form.aocp_best_plan='{{$plan}}'">
-                        <div style="font-size:11px;font-weight:700;color:#374151;">{{ Str::before($plan,' —') }}</div>
-                        <div style="font-size:10px;color:#9ca3af;">{{ Str::after($plan,'— ') }}</div>
-                    </div>
-                    @endforeach
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {{-- ─── 11B. Treatment Plan — Acceptable Options ─── --}}
-    <div class="c-card" x-data="{open:false}">
-        <div class="c-card-head">
-            <span class="sec-label" @click="open=!open" style="flex:1;cursor:pointer;display:flex;align-items:center;gap:6px;">
-                <span class="sec-num" style="font-size:8px;width:22px;">11B</span>Treatment Plan — Acceptable Options
-            </span>
-            <div style="display:flex;align-items:center;gap:8px;">
-                <button type="button" @click.stop="$dispatch('add-tp-row',{type:'acceptable'})"
-                        style="font-size:11px;color:#6a0f70;border:1px solid rgba(106,15,112,.25);padding:3px 10px;border-radius:3px;background:white;cursor:pointer;white-space:nowrap;">
-                    + Add Row
-                </button>
-                <svg class="sec-chevron" :class="open?'open':''" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="cursor:pointer;" @click="open=!open"><path d="m6 9 6 6 6-6"/></svg>
-            </div>
-        </div>
-        <div x-show="open" x-collapse>
-            <div style="overflow-x:auto;">
-                <table class="tp-table">
-                    <thead><tr>
-                        <th style="width:160px;">Tooth / Area</th>
-                        <th>Treatment</th>
-                        <th style="width:100px;text-align:right;">Cost (₹)</th>
-                        <th style="width:28px;"></th>
-                    </tr></thead>
-                    <tbody>
-                        <template x-for="(row,i) in tpAcceptable" :key="'acceptable'+i">
-                        <tr>
-                            <td>
-                                <div style="display:flex;gap:3px;">
-                                    <input type="text" x-model="row.tooth" class="df-input" placeholder="#14, Full Mouth" style="padding:4px 7px;font-size:12px;flex:1;" readonly
-                                           @click="$dispatch('open-tp-picker',{type:'acceptable',idx:i})">
-                                    <button type="button" @click="$dispatch('open-tp-picker',{type:'acceptable',idx:i})"
-                                            style="border:1px solid #e5e7eb;border-radius:4px;padding:0 7px;background:white;cursor:pointer;color:#6a0f70;flex-shrink:0;"
-                                            title="Select teeth">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-                                    </button>
-                                </div>
-                            </td>
-                            <td>
-                                <div style="display:flex;gap:4px;">
-                                    <input type="text" x-model="row.treatment" class="df-input" placeholder="e.g. Composite Filling" style="padding:4px 7px;font-size:12px;flex:1;">
-                                    <select @change="row.treatment=$event.target.value;$event.target.value=''"
-                                            style="border:1px solid #e5e7eb;border-radius:4px;font-size:11px;color:#9ca3af;padding:0 4px;background:white;cursor:pointer;max-width:70px;">
-                                        <option value="">Quick</option>
-                                        <template x-for="tx in allTxSelected" :key="tx"><option :value="tx" x-text="tx"></option></template>
-                                    </select>
-                                </div>
-                            </td>
-                            <td><input type="number" x-model="row.cost" class="df-input" placeholder="0" @input="$dispatch('recalc-tp',{type:'acceptable'})" style="padding:4px 7px;font-size:12px;text-align:right;"></td>
-                            <td><button type="button" @click="$dispatch('remove-tp-row',{type:'acceptable',idx:i})" style="color:#d1d5db;background:none;border:none;cursor:pointer;padding:2px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></td>
-                        </tr>
-                        </template>
-                    </tbody>
-                    <tfoot><tr>
-                        <td colspan="2" style="color:#6b7280;font-size:11px;">Estimated Total</td>
-                        <td style="text-align:right;color:#6a0f70;">₹ <span x-text="tpAcceptableTotal.toLocaleString('en-IN')"></span></td>
-                        <td></td>
-                    </tr></tfoot>
-                </table>
-            </div>
-            <div style="padding:10px 16px;border-top:1px solid #f3f4f6;">
-                <div style="font-size:10px;font-weight:700;color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">AOCP (if applicable)</div>
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-                    <input type="checkbox" id="aocp_acceptable" x-model="form.aocp_acceptable" style="width:13px;height:13px;accent-color:#6a0f70;">
-                    <label for="aocp_acceptable" style="font-size:12px;color:#374151;cursor:pointer;">Include AOCP</label>
-                </div>
-                <div x-show="form.aocp_acceptable" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;max-width:400px;">
-                    @foreach(['Silver — ₹3,999/yr','Gold — ₹5,999/yr','Platinum — ₹8,999/yr'] as $plan)
-                    <div class="aocp-card" :class="form.aocp_acceptable_plan==='{{$plan}}'?'active':''" @click="form.aocp_acceptable_plan='{{$plan}}'">
-                        <div style="font-size:11px;font-weight:700;color:#374151;">{{ Str::before($plan,' —') }}</div>
-                        <div style="font-size:10px;color:#9ca3af;">{{ Str::after($plan,'— ') }}</div>
-                    </div>
-                    @endforeach
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {{-- ─── 12. Finishing Section ─── --}}
+    {{-- ─── 10. Finishing Section ─── --}}
     <div class="c-card" x-data="{open:false}">
         <div class="c-card-head" @click="open=!open">
-            <span class="sec-label"><span class="sec-num">12</span>Finishing Section</span>
+            <span class="sec-label"><span class="sec-num">10</span>Finishing Section</span>
             <div style="display:flex;align-items:center;gap:8px;">
                 <span class="sec-summary" x-show="!open && form.finishing.next_visit_date" x-cloak x-text="'Next: '+form.finishing.next_visit_date"></span>
                 <svg class="sec-chevron" :class="open?'open':''" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
@@ -1142,21 +852,12 @@
                     <div style="font-size:11px;color:#9ca3af;">+ Add File</div>
                     <input type="file" id="att-input" name="attachments[]" multiple style="display:none;" @change="handleAttachments($event)">
                 </div>
-                <template x-for="(f,i) in attachments" :key="i">
-                    <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#374151;margin-top:4px;">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        <span x-text="f.name" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-                        <button type="button" @click="attachments.splice(i,1)" style="background:none;border:none;color:#d1d5db;cursor:pointer;">×</button>
-                    </div>
-                </template>
             </div>
         </div>
         {{-- Footer --}}
         <div style="padding:14px 18px;border-top:1px solid #f3f4f6;background:#fafafa;display:flex;align-items:center;gap:10px;">
             <a href="{{ route('patients.show', $patient) }}"
-               style="padding:7px 16px;font-size:13px;border:1px solid #e5e7eb;color:#6b7280;border-radius:3px;text-decoration:none;"
-               onmouseover="this.style.borderColor='#fca5a5';this.style.color='#dc2626';"
-               onmouseout="this.style.borderColor='#e5e7eb';this.style.color='#6b7280';">
+               style="padding:7px 16px;font-size:13px;border:1px solid #e5e7eb;color:#6b7280;border-radius:3px;text-decoration:none;">
                 Cancel Consultation
             </a>
             <div style="flex:1;"></div>
@@ -1170,16 +871,16 @@
 
 </div>{{-- /consult-body --}}
 
-{{-- ══ COMPLAINT TOOTH PICKER OVERLAY ══ --}}
+{{-- ══ TOOTH PICKER OVERLAY ══ --}}
 <div x-show="showToothPicker" x-cloak @click.self="showToothPicker=false"
      style="position:fixed;inset:0;z-index:200;background:rgba(14,1,24,.45);display:flex;align-items:center;justify-content:center;">
     <div style="background:white;border-radius:14px;width:580px;max-width:96vw;box-shadow:0 24px 64px rgba(0,0,0,.22);overflow:hidden;">
         <div style="padding:16px 20px 12px;background:linear-gradient(135deg,#6a0f70,#380740);display:flex;align-items:center;justify-content:space-between;">
             <div>
                 <div style="font-size:14px;font-weight:700;color:white;">Select Tooth / Area</div>
-                <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:2px;">Click individual teeth or use quick-select</div>
+                <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:2px;">FDI Notation</div>
             </div>
-            <button type="button" @click="showToothPicker=false" style="background:rgba(255,255,255,.15);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;">×</button>
+            <button type="button" @click="showToothPicker=false" style="background:rgba(255,255,255,.15);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;">×</button>
         </div>
         <div style="padding:16px 20px;">
             <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px;">
@@ -1199,19 +900,15 @@
             <div style="display:grid;grid-template-columns:repeat(16,1fr);gap:3px;margin-bottom:2px;">
                 @foreach([18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28] as $t)
                 <div style="border:1.5px solid #e5e7eb;border-radius:5px;padding:7px 2px;text-align:center;cursor:pointer;font-size:11px;font-weight:700;color:#9ca3af;transition:all .12s;background:white;user-select:none;"
-                     :style="selectedTeeth.includes({{$t}}) ? 'background:#6a0f70;border-color:#380740;color:white;box-shadow:0 2px 6px rgba(106,15,112,.3);' : ''"
+                     :style="selectedTeeth.includes({{$t}}) ? 'background:#6a0f70;border-color:#380740;color:white;' : ''"
                      @click="toggleComplaintTooth({{$t}})">{{$t}}</div>
                 @endforeach
             </div>
-            <div style="display:flex;align-items:center;gap:6px;margin:6px 0;">
-                <div style="flex:1;height:1px;background:linear-gradient(to right,transparent,#d1d5db);"></div>
-                <span style="font-size:9px;color:#9ca3af;font-weight:600;letter-spacing:.06em;">UPPER / LOWER</span>
-                <div style="flex:1;height:1px;background:linear-gradient(to left,transparent,#d1d5db);"></div>
-            </div>
+            <div style="border-top:1.5px dashed #e5e7eb;margin:6px 0;"></div>
             <div style="display:grid;grid-template-columns:repeat(16,1fr);gap:3px;margin-bottom:14px;">
                 @foreach([48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38] as $t)
                 <div style="border:1.5px solid #e5e7eb;border-radius:5px;padding:7px 2px;text-align:center;cursor:pointer;font-size:11px;font-weight:700;color:#9ca3af;transition:all .12s;background:white;user-select:none;"
-                     :style="selectedTeeth.includes({{$t}}) ? 'background:#6a0f70;border-color:#380740;color:white;box-shadow:0 2px 6px rgba(106,15,112,.3);' : ''"
+                     :style="selectedTeeth.includes({{$t}}) ? 'background:#6a0f70;border-color:#380740;color:white;' : ''"
                      @click="toggleComplaintTooth({{$t}})">{{$t}}</div>
                 @endforeach
             </div>
@@ -1222,369 +919,74 @@
                          x-text="selectedTeeth.length ? '#'+selectedTeeth.sort((a,b)=>a-b).join(', #') : '—'"></div>
                 </div>
                 <button type="button" @click="showToothPicker=false"
-                        style="padding:9px 24px;background:#6a0f70;color:white;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;"
-                        onmouseover="this.style.background='#380740'" onmouseout="this.style.background='#6a0f70'">Done</button>
+                        style="padding:9px 24px;background:#6a0f70;color:white;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;">Done</button>
             </div>
         </div>
     </div>
 </div>
 
-{{-- ══ TX TEETH PICKER OVERLAY (Treatment Advised section) ══ --}}
-<div x-show="showTxTeethPicker" x-cloak @click.self="showTxTeethPicker=false"
-     style="position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;">
-    <div style="background:white;border-radius:12px;padding:20px;width:500px;max-width:96vw;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+{{-- ══ TOOTH CHART MODAL ══ --}}
+<div id="tooth-chart-modal"
+     style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.55);align-items:center;justify-content:center;">
+    <div style="background:white;border-radius:12px;padding:20px;width:600px;max-width:96vw;box-shadow:0 20px 60px rgba(0,0,0,.2);">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-            <span style="font-size:13px;font-weight:700;color:#111827;">Select Teeth for Treatment</span>
-            <button type="button" @click="showTxTeethPicker=false" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:20px;line-height:1;">×</button>
+            <span style="font-size:14px;font-weight:700;color:#111827;">Tooth Chart — Existing Condition</span>
+            <button onclick="document.getElementById('tooth-chart-modal').style.display='none'" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:22px;">×</button>
         </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:9px;font-weight:700;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:10px;font-weight:700;">
             <span style="color:#dc2626;">RIGHT</span><span style="color:#2563eb;">LEFT</span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(16,1fr);gap:2px;margin-bottom:2px;">
+        <div style="display:grid;grid-template-columns:repeat(16,1fr);gap:3px;margin-bottom:4px;">
             @foreach([18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28] as $t)
-            <div style="border:1.5px solid #e5e7eb;border-radius:4px;padding:5px 1px;text-align:center;cursor:pointer;font-size:10px;font-weight:600;color:#9ca3af;transition:all .1s;user-select:none;"
-                 :style="selectedTeeth.includes({{$t}}) ? 'background:#6a0f70;border-color:#380740;color:white;' : 'background:white;'"
-                 @click="toggleComplaintTooth({{$t}})">{{$t}}</div>
+            <div style="border:1.5px solid #e5e7eb;border-radius:5px;padding:7px 2px;text-align:center;cursor:pointer;font-size:10px;font-weight:700;color:#9ca3af;background:white;"
+                 id="chart-t-{{$t}}" onclick="chartToggle({{$t}})">{{$t}}</div>
             @endforeach
         </div>
         <div style="border-top:1.5px dashed #e5e7eb;margin:4px 0;"></div>
-        <div style="display:grid;grid-template-columns:repeat(16,1fr);gap:2px;margin-bottom:14px;">
+        <div style="display:grid;grid-template-columns:repeat(16,1fr);gap:3px;margin-bottom:14px;">
             @foreach([48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38] as $t)
-            <div style="border:1.5px solid #e5e7eb;border-radius:4px;padding:5px 1px;text-align:center;cursor:pointer;font-size:10px;font-weight:600;color:#9ca3af;transition:all .1s;user-select:none;"
-                 :style="selectedTeeth.includes({{$t}}) ? 'background:#6a0f70;border-color:#380740;color:white;' : 'background:white;'"
-                 @click="toggleComplaintTooth({{$t}})">{{$t}}</div>
+            <div style="border:1.5px solid #e5e7eb;border-radius:5px;padding:7px 2px;text-align:center;cursor:pointer;font-size:10px;font-weight:700;color:#9ca3af;background:white;"
+                 id="chart-t-{{$t}}" onclick="chartToggle({{$t}})">{{$t}}</div>
             @endforeach
         </div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px;">
-            @foreach(['Upper','Lower','Full Mouth','Right','Left','Anterior','Posterior'] as $qs)
-            <button type="button" @click="quickSelectComplaint('{{ strtolower($qs) }}')"
-                    style="font-size:10px;padding:3px 9px;border:1px solid #e5e7eb;border-radius:4px;background:white;cursor:pointer;color:#6b7280;">{{$qs}}</button>
-            @endforeach
-            <button type="button" @click="selectedTeeth=[]"
-                    style="font-size:10px;padding:3px 9px;border:1px solid #fecaca;border-radius:4px;background:white;cursor:pointer;color:#dc2626;">Clear</button>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:11px;color:#6a0f70;font-weight:600;"
-                  x-text="selectedTeeth.length ? selectedTeeth.sort((a,b)=>a-b).join(', ') : 'No teeth selected'"></span>
-            <button type="button" @click="confirmTxTeethPicker()"
-                    style="padding:7px 20px;background:#6a0f70;color:white;border:none;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;">Confirm</button>
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+            <button onclick="document.getElementById('tooth-chart-modal').style.display='none'" style="padding:7px 20px;background:#6a0f70;color:white;border:none;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;">Done</button>
         </div>
     </div>
 </div>
-
-{{-- ══ TP ROW TOOTH PICKER OVERLAY (Treatment Plan 11A/11B rows) ══ --}}
-<div x-show="showTpRowPicker" x-cloak @click.self="showTpRowPicker=false"
-     style="position:fixed;inset:0;z-index:200;background:rgba(14,1,24,.45);display:flex;align-items:center;justify-content:center;">
-    <div style="background:white;border-radius:14px;width:580px;max-width:96vw;box-shadow:0 24px 64px rgba(0,0,0,.22);overflow:hidden;">
-        <div style="padding:16px 20px 12px;background:linear-gradient(135deg,#6a0f70,#380740);display:flex;align-items:center;justify-content:space-between;">
-            <div>
-                <div style="font-size:14px;font-weight:700;color:white;">Select Tooth / Area</div>
-                <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:2px;">For treatment plan row</div>
-            </div>
-            <button type="button" @click="showTpRowPicker=false" style="background:rgba(255,255,255,.15);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;">×</button>
-        </div>
-        <div style="padding:16px 20px;">
-            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px;">
-                @foreach(['Upper','Lower','Full Mouth','Right','Left','Anterior','Posterior'] as $qs)
-                <button type="button" @click="tpPickerQuickSelect('{{ strtolower($qs) }}')"
-                        style="font-size:11px;font-weight:600;padding:5px 12px;border:1.5px solid #e5e7eb;border-radius:99px;background:white;cursor:pointer;color:#6b7280;transition:all .12s;"
-                        onmouseover="this.style.background='#6a0f70';this.style.color='white';this.style.borderColor='#6a0f70';"
-                        onmouseout="this.style.background='white';this.style.color='#6b7280';this.style.borderColor='#e5e7eb';">{{$qs}}</button>
-                @endforeach
-                <button type="button" @click="tpPickerTeeth=[]"
-                        style="font-size:11px;font-weight:600;padding:5px 12px;border:1.5px solid #fecaca;border-radius:99px;background:white;cursor:pointer;color:#dc2626;margin-left:auto;">Clear</button>
-            </div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                <span style="font-size:10px;font-weight:700;color:#dc2626;">◀ RIGHT</span>
-                <span style="font-size:10px;font-weight:700;color:#2563eb;">LEFT ▶</span>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(16,1fr);gap:3px;margin-bottom:2px;">
-                @foreach([18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28] as $t)
-                <div style="border:1.5px solid #e5e7eb;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;font-weight:700;color:#9ca3af;transition:all .12s;background:white;user-select:none;margin:0 auto;"
-                     :style="tpPickerTeeth.includes({{$t}}) ? 'background:#6a0f70;border-color:#380740;color:white;box-shadow:0 2px 6px rgba(106,15,112,.3);' : ''"
-                     @click="tpPickerToggle({{$t}})">{{$t}}</div>
-                @endforeach
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;margin:8px 0;">
-                <div style="flex:1;height:1px;background:linear-gradient(to right,transparent,#d1d5db);"></div>
-                <span style="font-size:9px;color:#9ca3af;font-weight:600;letter-spacing:.06em;">UPPER / LOWER</span>
-                <div style="flex:1;height:1px;background:linear-gradient(to left,transparent,#d1d5db);"></div>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(16,1fr);gap:3px;margin-bottom:14px;">
-                @foreach([48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38] as $t)
-                <div style="border:1.5px solid #e5e7eb;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;font-weight:700;color:#9ca3af;transition:all .12s;background:white;user-select:none;margin:0 auto;"
-                     :style="tpPickerTeeth.includes({{$t}}) ? 'background:#6a0f70;border-color:#380740;color:white;box-shadow:0 2px 6px rgba(106,15,112,.3);' : ''"
-                     @click="tpPickerToggle({{$t}})">{{$t}}</div>
-                @endforeach
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#f9fafb;border-radius:8px;">
-                <div>
-                    <div style="font-size:10px;color:#9ca3af;font-weight:600;margin-bottom:2px;">SELECTED</div>
-                    <div style="font-size:13px;font-weight:700;color:#6a0f70;min-height:20px;"
-                         x-text="tpPickerTeeth.length ? '#'+tpPickerTeeth.slice().sort((a,b)=>a-b).join(', #') : '—'"></div>
-                </div>
-                <button type="button" @click="confirmTpRowPicker()"
-                        style="padding:9px 24px;background:#6a0f70;color:white;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;"
-                        onmouseover="this.style.background='#380740'" onmouseout="this.style.background='#6a0f70'">Done</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-{{-- ══ TOOTH CHART MODAL — ARCH SVG ══ --}}
-<div id="tooth-chart-modal"
-     style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.55);align-items:center;justify-content:center;">
-    <div style="background:white;border-radius:14px;width:980px;max-width:98vw;max-height:96vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.28);display:flex;flex-direction:column;">
-
-        {{-- Header --}}
-        <div style="padding:14px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:white;z-index:2;flex-shrink:0;">
-            <span style="font-size:14px;font-weight:700;color:#111827;">Tooth Chart — Existing Condition</span>
-            <button onclick="document.getElementById('tooth-chart-modal').style.display='none'"
-                    style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:22px;line-height:1;">×</button>
-        </div>
-
-        <div style="display:flex;flex:1;overflow:hidden;">
-
-            {{-- ── Left: Tool palette ── --}}
-            <div style="width:170px;flex-shrink:0;border-right:1px solid #f3f4f6;padding:14px 12px;display:flex;flex-direction:column;gap:6px;background:#fafafa;">
-                <div style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Condition</div>
-                @php $tools=[['C','#ef4444','Caries'],['F','#16a34a','Filling'],['RCT','#6a0f70','Root Canal'],['CR','#d97706','Crown'],['B','#2563eb','Bridge'],['I','#0891b2','Implant'],['V','#db2777','Veneer'],['M','#9ca3af','Missing'],['X','#dc2626','Extraction'],['FR','#f97316','Fracture'],['A','#374151','Amalgam'],['GI','#059669','GIC']]; @endphp
-                @foreach($tools as [$sym,$col,$lbl])
-                <button type="button" id="tool-btn-{{$sym}}" onclick="setChartTool('{{$sym}}','{{$col}}','{{$lbl}}')"
-                        style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:7px;background:white;cursor:pointer;font-size:11px;font-weight:600;color:#374151;transition:all .12s;text-align:left;">
-                    <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:{{$col}}18;color:{{$col}};font-size:10px;font-weight:800;flex-shrink:0;">{{$sym}}</span>
-                    <span style="color:#6b7280;font-size:10px;">{{$lbl}}</span>
-                </button>
-                @endforeach
-                <div style="margin-top:8px;padding:8px;background:white;border:1px solid #e5e7eb;border-radius:7px;text-align:center;">
-                    <div style="font-size:9px;color:#9ca3af;margin-bottom:3px;">ACTIVE</div>
-                    <div id="chart-active-sym" style="font-size:18px;font-weight:800;color:#ef4444;line-height:1;">C</div>
-                    <div id="chart-active-lbl" style="font-size:9px;color:#6b7280;margin-top:1px;">Caries</div>
-                </div>
-            </div>
-
-            {{-- ── Right: Arch chart ── --}}
-            <div style="flex:1;padding:16px;display:flex;flex-direction:column;align-items:center;overflow-y:auto;">
-
-                {{-- Labels row --}}
-                <div style="display:flex;align-items:center;justify-content:space-between;width:100%;max-width:680px;margin-bottom:6px;">
-                    <span style="font-size:10px;font-weight:700;color:#dc2626;">◀ RIGHT</span>
-                    <span style="font-size:10px;font-weight:600;color:#9ca3af;letter-spacing:.06em;">UPPER JAW</span>
-                    <span style="font-size:10px;font-weight:700;color:#2563eb;">LEFT ▶</span>
-                </div>
-
-                {{-- SVG Arch Chart --}}
-                <svg id="arch-chart-svg" viewBox="0 0 680 560" style="width:100%;max-width:680px;" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                        <!-- tooth shape: circle for selector + root line below -->
-                        <style>
-                            .arch-tooth { cursor:pointer; }
-                            .arch-tooth:hover .tooth-circle { stroke:#6a0f70; stroke-width:2.5; filter:drop-shadow(0 0 3px rgba(106,15,112,.3)); }
-                            .tooth-circle { transition:all .15s; }
-                            .tooth-num { font-size:9px; font-weight:700; fill:#9ca3af; pointer-events:none; font-family:'DM Sans',sans-serif; }
-                        </style>
-                    </defs>
-
-                    {{-- ── UPPER ARCH ── --}}
-                    {{-- Arch guide line (decorative) --}}
-                    <path d="M 40 260 Q 340 20 640 260" fill="none" stroke="#f3f4f6" stroke-width="1" stroke-dasharray="4,4"/>
-
-                    {{-- Upper teeth: 18..11 right side, 21..28 left side --}}
-                    {{-- Positions computed along upper arch ellipse centre y=250, rx=280, ry=210 --}}
-                    {{-- Angles: tooth 18=180°, 17=168°, 16=156°, 15=144°, 14=130°, 13=112°, 12=96°, 11=82° --}}
-                    {{--          tooth 21=98°, 22=84°…  mirrored --}}
-
-                    @php
-                    $cx = 340; $cy = 270;
-                    $rx = 270; $ry = 195;
-                    // Upper arch: right side 18-11, left side 21-28
-                    // Angles in degrees from 3-o'clock (0°=right), going counter-clockwise for right side
-                    $upperRight = [18=>168, 17=>156, 16=>142, 15=>127, 14=>112, 13=>96, 12=>83, 11=>70];
-                    $upperLeft  = [21=>110, 22=>97, 23=>84, 24=>69, 25=>54, 26=>38, 27=>22, 28=>8]; // mirrored
-                    // Actually use standard: angles from top, fanning out
-                    // Let's use absolute (x,y) positions computed for a horseshoe arch
-                    // Upper arch teeth positions (cx,cy offset from SVG origin):
-                    $upperPositions = [
-                        18 => [68,  245], 17 => [95,  195], 16 => [127, 153], 15 => [163, 120],
-                        14 => [204, 97],  13 => [248, 83],  12 => [293, 76],  11 => [338, 73],
-                        21 => [342, 73],  22 => [387, 76],  23 => [432, 83],  24 => [476, 97],
-                        25 => [517,120],  26 => [553, 153], 27 => [585, 195], 28 => [612, 245],
-                    ];
-                    $lowerPositions = [
-                        48 => [88,  320], 47 => [113, 370], 46 => [143, 408], 45 => [178, 435],
-                        44 => [218, 453], 43 => [260, 463], 42 => [302, 468], 41 => [340, 469],
-                        31 => [340, 469], 32 => [378, 468], 33 => [420, 463], 34 => [462, 453],
-                        35 => [502, 435], 36 => [537, 408], 37 => [567, 370], 38 => [592, 320],
-                    ];
-                    $r = 22; // circle radius
-                    @endphp
-
-                    {{-- Upper arch arch-line --}}
-                    <path d="M 68 245 C 68 180, 200 60, 340 56 C 480 60, 612 180, 612 245"
-                          fill="none" stroke="#e9d5ff" stroke-width="2"/>
-
-                    {{-- Upper teeth --}}
-                    @foreach($upperPositions as $num => [$tx,$ty])
-                    <g class="arch-tooth" id="ct-{{$num}}" onclick="archChartClick({{$num}},this)">
-                        <circle id="ct-{{$num}}-O" cx="{{$tx}}" cy="{{$ty}}" r="{{$r}}" fill="white" stroke="#d1d5db" stroke-width="1.5" class="tooth-circle"/>
-                        {{-- Inner division cross (occlusal surface) --}}
-                        <line x1="{{$tx-$r*0.5}}" y1="{{$ty}}" x2="{{$tx+$r*0.5}}" y2="{{$ty}}" stroke="#e5e7eb" stroke-width="1" pointer-events="none"/>
-                        <line x1="{{$tx}}" y1="{{$ty-$r*0.5}}" x2="{{$tx}}" y2="{{$ty+$r*0.5}}" stroke="#e5e7eb" stroke-width="1" pointer-events="none"/>
-                        {{-- Root line going up --}}
-                        <line id="ct-{{$num}}-R" x1="{{$tx}}" y1="{{$ty-$r}}" x2="{{$tx}}" y2="{{$ty-$r-10}}" stroke="#e5e7eb" stroke-width="2" stroke-linecap="round"/>
-                        <text x="{{$tx}}" y="{{$ty+1}}" text-anchor="middle" dominant-baseline="central" class="tooth-num">{{$num}}</text>
-                    </g>
-                    @endforeach
-
-                    {{-- Arch separator --}}
-                    <line x1="40" y1="280" x2="640" y2="280" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="6,4"/>
-                    <text x="340" y="275" text-anchor="middle" style="font-size:8px;fill:#d1d5db;font-family:'DM Sans',sans-serif;font-weight:600;letter-spacing:.04em;">UPPER · LOWER</text>
-
-                    {{-- Lower arch arch-line --}}
-                    <path d="M 88 320 C 88 390, 200 490, 340 493 C 480 490, 592 390, 592 320"
-                          fill="none" stroke="#e9d5ff" stroke-width="2"/>
-
-                    {{-- Lower teeth --}}
-                    @foreach($lowerPositions as $num => [$tx,$ty])
-                    <g class="arch-tooth" id="ct-{{$num}}" onclick="archChartClick({{$num}},this)">
-                        <circle id="ct-{{$num}}-O" cx="{{$tx}}" cy="{{$ty}}" r="{{$r}}" fill="white" stroke="#d1d5db" stroke-width="1.5" class="tooth-circle"/>
-                        <line x1="{{$tx-$r*0.5}}" y1="{{$ty}}" x2="{{$tx+$r*0.5}}" y2="{{$ty}}" stroke="#e5e7eb" stroke-width="1" pointer-events="none"/>
-                        <line x1="{{$tx}}" y1="{{$ty-$r*0.5}}" x2="{{$tx}}" y2="{{$ty+$r*0.5}}" stroke="#e5e7eb" stroke-width="1" pointer-events="none"/>
-                        {{-- Root line going down --}}
-                        <line id="ct-{{$num}}-R" x1="{{$tx}}" y1="{{$ty+$r}}" x2="{{$tx}}" y2="{{$ty+$r+10}}" stroke="#e5e7eb" stroke-width="2" stroke-linecap="round"/>
-                        <text x="{{$tx}}" y="{{$ty+1}}" text-anchor="middle" dominant-baseline="central" class="tooth-num">{{$num}}</text>
-                    </g>
-                    @endforeach
-
-                    {{-- Jaw labels --}}
-                    <text x="340" y="35" text-anchor="middle" style="font-size:9px;fill:#9ca3af;font-family:'DM Sans',sans-serif;font-weight:600;letter-spacing:.06em;">UPPER JAW</text>
-                    <text x="340" y="548" text-anchor="middle" style="font-size:9px;fill:#9ca3af;font-family:'DM Sans',sans-serif;font-weight:600;letter-spacing:.06em;">LOWER JAW</text>
-                </svg>
-
-                {{-- Summary --}}
-                <div style="margin-top:12px;padding:10px 14px;background:#f9fafb;border-radius:8px;min-height:36px;width:100%;max-width:680px;">
-                    <div style="font-size:10px;font-weight:600;color:#6a0f70;margin-bottom:4px;">Charted Findings</div>
-                    <div id="chart-summary" style="font-size:11px;color:#374151;line-height:2;">No findings charted yet.</div>
-                </div>
-            </div>
-        </div>
-
-        {{-- Footer --}}
-        <div style="padding:12px 20px;border-top:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center;background:white;flex-shrink:0;">
-            <button type="button" onclick="clearArchChart()" style="padding:7px 16px;border:1px solid #e5e7eb;border-radius:5px;font-size:12px;font-weight:600;color:#6b7280;background:white;cursor:pointer;">Clear All</button>
-            <button type="button" onclick="document.getElementById('tooth-chart-modal').style.display='none'"
-                    style="padding:7px 24px;background:#6a0f70;color:white;border:none;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;">Done</button>
-        </div>
-    </div>
-</div>
-
-{{-- ══ ARCH TOOTH CHART JS ══ --}}
-<script>
-var chartTool = { sym:'C', color:'#ef4444', lbl:'Caries' };
-var chartData = {};
-
-function setChartTool(sym,color,lbl) {
-    chartTool = {sym:sym,color:color,lbl:lbl};
-    document.getElementById('chart-active-sym').textContent = sym;
-    document.getElementById('chart-active-sym').style.color = color;
-    document.getElementById('chart-active-lbl').textContent = lbl;
-    document.querySelectorAll('[id^="tool-btn-"]').forEach(function(b){
-        b.style.borderColor='#e5e7eb';b.style.background='white';
-    });
-    var btn = document.getElementById('tool-btn-'+sym);
-    if(btn){btn.style.borderColor=color;btn.style.background=color+'18';}
-}
-
-function archChartClick(tooth, gEl) {
-    if(!chartData[tooth]) chartData[tooth]={};
-    var circEl = document.getElementById('ct-'+tooth+'-O');
-    var rootEl = document.getElementById('ct-'+tooth+'-R');
-    if(!circEl) return;
-
-    // Toggle: if same tool already applied, remove it
-    if(chartData[tooth].sym === chartTool.sym) {
-        delete chartData[tooth].sym;
-        delete chartData[tooth].color;
-        circEl.setAttribute('fill','white');
-        circEl.setAttribute('stroke','#d1d5db');
-        circEl.setAttribute('stroke-width','1.5');
-        if(rootEl){rootEl.setAttribute('stroke','#e5e7eb');}
-        // reset text
-        var textEl = gEl.querySelector('text');
-        if(textEl) textEl.setAttribute('fill','#9ca3af');
-    } else {
-        chartData[tooth].sym   = chartTool.sym;
-        chartData[tooth].color = chartTool.color;
-        circEl.setAttribute('fill', chartTool.color+'30');
-        circEl.setAttribute('stroke', chartTool.color);
-        circEl.setAttribute('stroke-width','2.5');
-        if(rootEl){rootEl.setAttribute('stroke',chartTool.color+'80');}
-        // update number text colour
-        var textEl = gEl.querySelector('text');
-        if(textEl) textEl.setAttribute('fill', chartTool.color);
-    }
-    updateArchChartSummary();
-}
-
-function updateArchChartSummary() {
-    var groups = {};
-    Object.entries(chartData).forEach(function(te){
-        var tooth=te[0], data=te[1];
-        if(!data.sym) return;
-        if(!groups[data.sym]) groups[data.sym]={color:data.color,teeth:[]};
-        groups[data.sym].teeth.push(parseInt(tooth));
-    });
-    var html='';
-    Object.entries(groups).forEach(function(g){
-        var sym=g[0],info=g[1];
-        info.teeth.sort(function(a,b){return a-b;});
-        html+='<span style="display:inline-flex;align-items:center;gap:5px;margin-right:16px;margin-bottom:3px;padding:3px 8px;border-radius:99px;background:'+info.color+'15;border:1px solid '+info.color+'40;">'
-            +'<span style="font-weight:800;color:'+info.color+';font-size:11px;">'+sym+'</span>'
-            +'<span style="color:#374151;font-size:10px;">#'+info.teeth.join(', #')+'</span>'
-            +'</span>';
-    });
-    var summaryEl=document.getElementById('chart-summary');
-    if(summaryEl) summaryEl.innerHTML=html||'No findings charted yet.';
-    var clinWrap=document.getElementById('clinical-chart-summary-wrap');
-    var clinEl=document.getElementById('clinical-chart-summary');
-    if(clinWrap&&clinEl){clinWrap.style.display=html?'block':'none';clinEl.innerHTML=html;}
-}
-
-function clearArchChart() {
-    chartData={};
-    document.querySelectorAll('.arch-tooth').forEach(function(gEl){
-        var tooth = gEl.id.replace('ct-','');
-        var circEl = document.getElementById('ct-'+tooth+'-O');
-        var rootEl = document.getElementById('ct-'+tooth+'-R');
-        if(circEl){circEl.setAttribute('fill','white');circEl.setAttribute('stroke','#d1d5db');circEl.setAttribute('stroke-width','1.5');}
-        if(rootEl){rootEl.setAttribute('stroke','#e5e7eb');}
-        var textEl = gEl.querySelector('text');
-        if(textEl) textEl.setAttribute('fill','#9ca3af');
-    });
-    updateArchChartSummary();
-}
-
-setChartTool('C','#ef4444','Caries');
-</script>
 
 </form>
 </div>
 
 @push('scripts')
 <script>
-/* ── Expand / Collapse All — Alpine 3 compatible ── */
+/* ── Expand / Collapse All ── */
 function toggleAllSections(expand) {
     document.querySelectorAll('[x-data]').forEach(function(el) {
         try {
             var data = Alpine.$data(el);
             if ('open'   in data) data.open   = expand;
-            if ('open2'  in data) data.open2  = expand;
             if ('rxOpen' in data) data.rxOpen = expand;
         } catch(e) {}
     });
 }
 
-/* ── DBM checklist ── */
+/* ── Simple tooth chart ── */
+var chartSelected = [];
+function chartToggle(t) {
+    var el = document.getElementById('chart-t-'+t);
+    if(!el) return;
+    var idx = chartSelected.indexOf(t);
+    if(idx >= 0) {
+        chartSelected.splice(idx,1);
+        el.style.background='white'; el.style.color='#9ca3af'; el.style.borderColor='#e5e7eb';
+    } else {
+        chartSelected.push(t);
+        el.style.background='#6a0f70'; el.style.color='white'; el.style.borderColor='#380740';
+    }
+}
+
+/* ── DBM ── */
 var dbmState = Array(33).fill(null);
 function dbmSet(idx, val, dotEl) {
     dbmState[idx] = val;
@@ -1603,11 +1005,13 @@ function dbmUpdateScore() {
     var pct = Math.round(answered/33*100);
     var fill  = document.getElementById('dbm-prog-fill');
     var badge = document.getElementById('dbm-score-badge');
+    var badgehdr = document.getElementById('dbm-score-badge-hdr');
     if(fill)  fill.style.width = pct+'%';
     if(badge) badge.textContent = answered+'/33';
+    if(badgehdr) badgehdr.textContent = answered+'/33';
 }
 
-/* ── Rx form component ── */
+/* ── Rx component ── */
 function rxForm() {
     return {
         rxOpen: false,
@@ -1617,7 +1021,7 @@ function rxForm() {
         instructions: [],
         customInstruction: '',
         addDrug() {
-            this.drugs.push({name:'',sos:false,morning:'',noon:'',night:'',duration:'',dur_unit:'days',total_qty:'',food:'',language:'English',instruction:'',notes:''});
+            this.drugs.push({name:'',sos:false,morning:'',noon:'',night:'',duration:'',dur_unit:'days',total_qty:'',food:'',language:'English',instruction:''});
         },
         calcTotal(i) {
             var d=this.drugs[i];
@@ -1633,32 +1037,19 @@ function rxForm() {
     }
 }
 
-/* ── Main consultation form component ── */
+/* ── Main consultation form ── */
 function consultationForm() {
     return {
-        status: 'draft',
+        status: 'completed',
         showToothPicker: false,
-        showTxTeethPicker: false,
         selectedTeeth: [],
         progress: 0,
         photoCount: 0,
         photos: Array(9).fill(null),
-        scanTeeth: [],
         scanFiles: [],
         attachments: [],
-        dbm: Array(33).fill(null),
-        tpBest:            [{ tooth:'', treatment:'', cost:'' }],
-        tpAcceptable:      [{ tooth:'', treatment:'', cost:'' }],
-        tpBestTotal:       0,
-        tpAcceptableTotal: 0,
-        txSelected: { emergency:[], protective:[], transformative:[] },
-        txTeeth:    { emergency:[], protective:[], transformative:[] },
         invFiles: {},
-        activeTxPicker: null,
-        _prevTeeth: [],
-        showTpRowPicker: false,
-        tpPickerTeeth: [],
-        activeTpPicker: null,
+        txSelected: { emergency:[], protective:[], transformative:[] },
 
         get allTxSelected() {
             return [...this.txSelected.emergency,...this.txSelected.protective,...this.txSelected.transformative];
@@ -1666,19 +1057,45 @@ function consultationForm() {
 
         form: {
             chief_complaint:'', complaint_duration:'', severity:'',
-            tooth_area:'', location:'', complaint_notes:'',
-            visit_type:'routine', scan_date:'', investigations:[],
+            tooth_area:'', complaint_notes:'',
+            visit_type:'emergency',
+            doctor_id:'{{ auth()->id() }}',
+            scan_date:'',
+            investigations:[],
             clinical:{ soft_tissue:'',caries:'',periodontal:'',bleeding_on_probing:'',plaque_index:'',occlusion:'',tmj:'',existing_condition:'',oral_hygiene:'',notes:'' },
-            radio:{ opg:'',iopa:'',cbct:'',notes:'' },
+            radio: { type:'', findings:'' },
             diagnosis:{ primary:'',secondary:'',risk:'',notes:'' },
-            aocp_best:false, aocp_best_plan:'',
-            aocp_acceptable:false, aocp_acceptable_plan:'',
             finishing:{ notes:'',next_visit_type:'',next_visit_date:'',recall_interval:'',recall_custom:'',responsible_id:'' },
         },
 
         init() {
-            this.$watch('form', () => this.updateProgress(), { deep:true });
-        },
+    this.$watch('form', () => this.updateProgress(), { deep:true });
+    @if(isset($consultation))
+    // Pre-populate form with existing consultation data
+    this.form.chief_complaint    = @json($consultation->chief_complaint ?? '');
+    this.form.complaint_duration = @json($consultation->complaint_duration ?? '');
+    this.form.severity           = @json($consultation->severity ?? '');
+    this.form.tooth_area         = @json($consultation->tooth_area ?? '');
+    this.form.complaint_notes    = @json($consultation->complaint_notes ?? '');
+    this.form.visit_type         = @json($consultation->visit_type ?? 'emergency');
+    this.form.scan_date          = @json($consultation->scan_date?->format('Y-m-d') ?? '');
+    this.form.investigations     = @json($consultation->investigations ?? []);
+    this.form.radio              = @json(is_array($consultation->radio_data) ? $consultation->radio_data : ['type'=>'','findings'=>'']);
+    this.form.diagnosis.primary  = @json($consultation->primary_diagnosis ?? '');
+    this.form.diagnosis.secondary= @json($consultation->secondary_diagnosis ?? '');
+    this.form.diagnosis.risk     = @json($consultation->risk_assessment ?? '');
+    this.form.diagnosis.notes    = @json($consultation->diagnosis_notes ?? '');
+    this.form.finishing.notes           = @json($consultation->finishing_notes ?? '');
+    this.form.finishing.next_visit_type = @json($consultation->next_visit_type ?? '');
+    this.form.finishing.next_visit_date = @json($consultation->next_visit_date?->format('Y-m-d') ?? '');
+    this.form.finishing.recall_interval = @json($consultation->recall_interval ?? '');
+    this.form.finishing.recall_custom   = @json($consultation->recall_custom ?? '');
+    this.form.finishing.responsible_id  = @json($consultation->responsible_user_id ?? '');
+    this.txSelected.emergency      = @json($consultation->tx_emergency ?? []);
+    this.txSelected.protective     = @json($consultation->tx_protective ?? []);
+    this.txSelected.transformative = @json($consultation->tx_transformative ?? []);
+    @endif
+},
 
         toggleComplaintTooth(t) {
             var i=this.selectedTeeth.indexOf(t);
@@ -1704,7 +1121,7 @@ function consultationForm() {
         handlePhoto(e,i) {
             var f=e.target.files[0]; if(!f) return;
             var r=new FileReader();
-            r.onload=ev=>{this.photos[i]={file:f,preview:ev.target.result};this.photoCount=this.photos.filter(Boolean).length;this.updateProgress();};
+            r.onload=ev=>{this.photos[i]={file:f,preview:ev.target.result};this.photoCount=this.photos.filter(Boolean).length;};
             r.readAsDataURL(f);
         },
         handleInvUpload(e,key) {
@@ -1714,24 +1131,6 @@ function consultationForm() {
         handleScanUpload(e) { Array.from(e.target.files).forEach(f=>this.scanFiles.push(f)); },
         handleAttachments(e) { Array.from(e.target.files).forEach(f=>this.attachments.push(f)); },
 
-        openTxTeethPicker(col,i) {
-            this.activeTxPicker={col,i};
-            this._prevTeeth=[...this.selectedTeeth];
-            this.selectedTeeth=[...(this.txTeeth[col][i]||[])];
-            this.showToothPicker=false;
-            this.showTxTeethPicker=true;
-        },
-        confirmTxTeethPicker() {
-            if(this.activeTxPicker){
-                var {col,i}=this.activeTxPicker;
-                if(!this.txTeeth[col]) this.txTeeth[col]=[];
-                this.txTeeth[col][i]=[...this.selectedTeeth];
-            }
-            this.selectedTeeth=this._prevTeeth||[];
-            this.showTxTeethPicker=false;
-            this.activeTxPicker=null;
-        },
-
         addTx(col,e) {
             var val=e.target.value; if(!val) return;
             if(val==='__custom__'){var c=prompt('Enter custom treatment:');if(c)this.txSelected[col].push(c.trim());}
@@ -1740,71 +1139,16 @@ function consultationForm() {
         },
         removeTx(col,i) { this.txSelected[col].splice(i,1); },
 
-        /* ── TP row tooth picker ── */
-        openTpRowPicker(type, idx) {
-            this.activeTpPicker = {type, idx};
-            var arr = type==='best' ? this.tpBest : this.tpAcceptable;
-            var existing = (arr[idx] && arr[idx].tooth) ? arr[idx].tooth.split(',').map(s=>parseInt(s.replace('#','').trim())).filter(n=>!isNaN(n)) : [];
-            this.tpPickerTeeth = existing;
-            this.showTpRowPicker = true;
-        },
-        tpPickerToggle(t) {
-            var i = this.tpPickerTeeth.indexOf(t);
-            if(i>=0) this.tpPickerTeeth.splice(i,1); else this.tpPickerTeeth.push(t);
-        },
-        tpPickerQuickSelect(q) {
-            var map={
-                upper:[11,12,13,14,15,16,17,18,21,22,23,24,25,26,27,28],
-                lower:[31,32,33,34,35,36,37,38,41,42,43,44,45,46,47,48],
-                right:[11,12,13,14,15,16,17,18,41,42,43,44,45,46,47,48],
-                left: [21,22,23,24,25,26,27,28,31,32,33,34,35,36,37,38],
-                'full mouth':[11,12,13,14,15,16,17,18,21,22,23,24,25,26,27,28,31,32,33,34,35,36,37,38,41,42,43,44,45,46,47,48],
-                anterior:[11,12,13,21,22,23,31,32,33,41,42,43],
-                posterior:[14,15,16,17,18,24,25,26,27,28,34,35,36,37,38,44,45,46,47,48],
-            };
-            (map[q]||[]).forEach(t=>{if(!this.tpPickerTeeth.includes(t))this.tpPickerTeeth.push(t);});
-        },
-        confirmTpRowPicker() {
-            if(this.activeTpPicker) {
-                var {type, idx} = this.activeTpPicker;
-                var arr = type==='best' ? this.tpBest : this.tpAcceptable;
-                if(arr[idx]) {
-                    arr[idx].tooth = this.tpPickerTeeth.length
-                        ? '#'+this.tpPickerTeeth.slice().sort((a,b)=>a-b).join(', #')
-                        : '';
-                }
-            }
-            this.showTpRowPicker = false;
-            this.activeTpPicker = null;
-            this.tpPickerTeeth = [];
-        },
-
-        /* FIX 3: addTpRow / removeTpRow / calcTotal now also handle window events */
-        addTpRow(type) {
-            (type==='best'?this.tpBest:this.tpAcceptable).push({tooth:'',treatment:'',cost:''});
-        },
-        removeTpRow(type,i) {
-            var arr=type==='best'?this.tpBest:this.tpAcceptable;
-            if(arr.length>1) arr.splice(i,1);
-            this.calcTotal(type);
-        },
-        calcTotal(type) {
-            var arr=type==='best'?this.tpBest:this.tpAcceptable;
-            var t=arr.reduce((s,r)=>s+(parseFloat(r.cost)||0),0);
-            if(type==='best') this.tpBestTotal=t; else this.tpAcceptableTotal=t;
-        },
-
         updateProgress() {
             var s=0;
-            if(this.form.chief_complaint.trim())   s+=15;
-            if(this.form.visit_type)               s+=5;
-            if(this.photoCount>0)                  s+=10;
-            if(this.form.investigations.length)    s+=5;
-            if(this.form.clinical.soft_tissue)     s+=10;
-            if(this.form.radio.opg.trim())         s+=10;
-            if(this.form.diagnosis.primary.trim()) s+=20;
-            if(this.tpBest.some(r=>r.treatment))   s+=15;
-            if(this.form.finishing.next_visit_date) s+=10;
+            if(this.form.chief_complaint && this.form.chief_complaint.trim()) s+=15;
+            if(this.form.visit_type)                                          s+=5;
+            if(this.photoCount>0)                                             s+=10;
+            if(this.form.investigations.length)                               s+=5;
+            if(this.form.clinical.soft_tissue)                                s+=10;
+            if(this.form.radio.findings && this.form.radio.findings.trim())   s+=10;
+            if(this.form.diagnosis.primary && this.form.diagnosis.primary.trim()) s+=20;
+            if(this.form.finishing.next_visit_date)                           s+=10;
             this.progress=Math.min(s,100);
         },
 
@@ -1812,20 +1156,22 @@ function consultationForm() {
 
         async submitConsultation() {
             var fd=new FormData(document.getElementById('cForm'));
-            fd.set('clinical_data',JSON.stringify(this.form.clinical));
-            fd.set('radio_data',JSON.stringify(this.form.radio));
-            fd.set('diagnosis_data',JSON.stringify(this.form.diagnosis));
-            fd.set('treatment_plan_best',JSON.stringify(this.tpBest));
-            fd.set('treatment_plan_acceptable',JSON.stringify(this.tpAcceptable));
-            fd.set('scan_teeth',JSON.stringify(this.scanTeeth));
-            fd.set('dbm_checklist',JSON.stringify(this.dbm));
-            fd.set('tx_emergency',JSON.stringify(this.txSelected.emergency));
-            fd.set('tx_protective',JSON.stringify(this.txSelected.protective));
+            fd.set('clinical_data',    JSON.stringify(this.form.clinical));
+            fd.set('radio_data',       JSON.stringify(this.form.radio));
+            fd.set('tx_emergency',     JSON.stringify(this.txSelected.emergency));
+            fd.set('tx_protective',    JSON.stringify(this.txSelected.protective));
             fd.set('tx_transformative',JSON.stringify(this.txSelected.transformative));
+            fd.set('dbm_checklist',    JSON.stringify(dbmState));
             this.photos.forEach((p,i)=>{if(p?.file) fd.set('photo_'+i,p.file);});
             this.scanFiles.forEach((f,i)=>{fd.set('scan_file_'+i,f);});
             try {
-                var r=await fetch('{{ route("consultations.store") }}',{
+                @if(isset($consultation))
+                var url = '{{ route("patients.consultations.update", [$patient, $consultation]) }}';
+                fd.append('_method','PUT');
+                @else
+var url = '{{ route("patients.consultations.store", $patient) }}';
+                @endif
+                var r=await fetch(url,{
                     method:'POST',
                     headers:{'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content,'Accept':'application/json'},
                     body:fd,
@@ -1835,7 +1181,12 @@ function consultationForm() {
                     window.DFLayout?.toast(d.message,'success');
                     setTimeout(()=>window.location.href=d.redirect||'{{ route("patients.show",$patient) }}',800);
                 } else {
-                    window.DFLayout?.toast(d.message||'Error saving.','error');
+                    if(d.errors) {
+                        var msgs = Object.values(d.errors).flat().join('\n');
+                        alert('Please fix:\n'+msgs);
+                    } else {
+                        window.DFLayout?.toast(d.message||'Error saving.','error');
+                    }
                 }
             } catch(e){ window.DFLayout?.toast('Network error.','error'); }
         },

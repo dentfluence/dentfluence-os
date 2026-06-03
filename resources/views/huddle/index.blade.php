@@ -4,6 +4,7 @@
 
 @section('head-extra')
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+@vite(['resources/css/communication/huddle.css'])
 @endsection
 
 @push('scripts')
@@ -749,7 +750,7 @@ document.addEventListener('alpine:init', () => {
         <div class="hd-icon-btn" @click="window.location.reload()">
             <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </div>
-        <button class="hd-add-task-btn" @click.prevent="window.dispatchEvent(new CustomEvent('open-booking-modal'))">
+        <button class="hd-add-task-btn" @click.prevent="openCombinedModal('appointment')">
             <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
             Add Task
         </button>
@@ -848,10 +849,14 @@ document.addEventListener('alpine:init', () => {
             @endif
         </div>
     </div>
-
+ 
 </div>
 
 {{-- ══ KANBAN BOARD ════════════════════════════════════════════════════════ --}}
+   <div style="padding: 0 1.5rem .85rem;">
+    @include('communication.huddle.communication-alerts', ['alerts' => $commAlerts, 'counts' => $commCounts])
+
+</div>
 <div class="hd-board-wrap">
 <div class="hd-board">
 
@@ -875,6 +880,23 @@ document.addEventListener('alpine:init', () => {
                 instruction: '{{ addslashes($appt->staff_instruction ?? '') }}',
                 original: '{{ addslashes($appt->staff_instruction ?? '') }}',
                 saving: false,
+                status: '{{ $appt->status }}',
+                statusSaving: false,
+                statusFlow: ['scheduled','checkin','in_chair','done'],
+                async cycleStatus() {
+                    if (this.statusSaving) return;
+                    const idx = this.statusFlow.indexOf(this.status);
+                    if (idx === this.statusFlow.length - 1) return;
+                    const next = this.statusFlow[idx + 1];
+                    this.statusSaving = true;
+                    this.status = next;
+                    await fetch('{{ route('appointments.updateStatus', $appt->id) }}', {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
+                        body: JSON.stringify({ status: next })
+                    });
+                    this.statusSaving = false;
+                },
                 async save() {
                     this.saving = true;
                     await fetch('{{ route('huddle.appointments.instruction', $appt->id) }}', {
@@ -917,10 +939,13 @@ document.addEventListener('alpine:init', () => {
                 @endif
 
                 <div class="hd-pfc-footer">
-                    <span class="hd-badge hd-b-{{ $appt->status }}">{{ str_replace('_',' ',ucfirst($appt->status)) }}</span>
-                    @if($appt->status === 'checkin')
-                        <span class="hd-pfc-arrived">✓ Arrived</span>
-                    @endif
+                    <span class="hd-badge"
+                          :class="'hd-b-' + status"
+                          :style="statusSaving ? 'opacity:.6' : 'cursor:pointer'"
+                          x-text="status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())"
+                          @click="cycleStatus()"
+                          title="Click to advance status"></span>
+                    <span class="hd-pfc-arrived" x-show="status === 'checkin'">✓ Arrived</span>
                 </div>
 
                 {{-- Inline instruction note --}}
@@ -944,6 +969,77 @@ document.addEventListener('alpine:init', () => {
         @empty
         <div class="hd-empty-col">No appointments today.</div>
         @endforelse
+
+        {{-- ── Today: Treatment Visits ── --}}
+        @if($todaysTreatmentVisits->isNotEmpty())
+        <div style="padding:.3rem .6rem .1rem;border-top:1px solid var(--c-border);margin-top:.4rem;">
+            <span style="font-size:.63rem;font-weight:700;color:var(--c-green);text-transform:uppercase;letter-spacing:.07em;">Treatment Visits ({{ $todaysTreatmentVisits->count() }})</span>
+        </div>
+        @foreach($todaysTreatmentVisits as $tv)
+        <div class="hd-card" style="border-left:3px solid var(--c-green);">
+            <div class="hd-pfc">
+                <div class="hd-pfc-top">
+                    <span class="hd-pfc-time" style="background:#f0fdf4;color:var(--c-green);">
+                        <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                    </span>
+                    <div style="flex:1;min-width:0;padding:0 .3rem;">
+                        <div style="font-size:.72rem;color:var(--c-muted);font-weight:500;">
+                            {{ $tv->treatment_name ?? ucfirst(str_replace('_',' ',$tv->visit_type ?? 'Treatment')) }}
+                        </div>
+                        <a href="{{ route('patients.show', $tv->patient_id) }}" class="hd-pfc-name">{{ $tv->patient->name ?? '—' }}</a>
+                    </div>
+                </div>
+                <div class="hd-pfc-meta">
+                    <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    {{ $tv->doctor->name ?? '—' }}
+                </div>
+                <div class="hd-pfc-footer">
+                    <span class="hd-badge" style="background:#dcfce7;color:#16a34a;border-color:#bbf7d0;">
+                        {{ ucfirst(str_replace('_',' ',$tv->status ?? 'scheduled')) }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        @endforeach
+        @endif
+
+        {{-- ── Today: Consultations ── --}}
+        @if($todaysConsultations->isNotEmpty())
+        <div style="padding:.3rem .6rem .1rem;border-top:1px solid var(--c-border);margin-top:.4rem;">
+            <span style="font-size:.63rem;font-weight:700;color:var(--c-accent2);text-transform:uppercase;letter-spacing:.07em;">Consultations ({{ $todaysConsultations->count() }})</span>
+        </div>
+        @foreach($todaysConsultations as $tc)
+        <div class="hd-card" style="border-left:3px solid var(--c-accent2);">
+            <div class="hd-pfc">
+                <div class="hd-pfc-top">
+                    <span class="hd-pfc-time" style="background:#f5f3ff;color:var(--c-accent2);">
+                        <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    </span>
+                    <div style="flex:1;min-width:0;padding:0 .3rem;">
+                        <div style="font-size:.72rem;color:var(--c-muted);font-weight:500;">
+                            {{ $tc->visit_type ? ucwords(str_replace('_',' ',$tc->visit_type)) : 'Consultation' }}
+                        </div>
+                        <a href="{{ route('patients.show', $tc->patient_id) }}" class="hd-pfc-name">{{ $tc->patient->name ?? '—' }}</a>
+                    </div>
+                </div>
+                @if($tc->chief_complaint)
+                <div style="font-size:.68rem;color:var(--c-muted);margin:.2rem 0 .15rem;line-height:1.35;">
+                    <span style="font-weight:500;color:var(--c-text);">CC:</span> {{ Str::limit($tc->chief_complaint, 55) }}
+                </div>
+                @endif
+                <div class="hd-pfc-meta">
+                    <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    {{ $tc->doctor->name ?? '—' }}
+                </div>
+                <div class="hd-pfc-footer">
+                    <span class="hd-badge" style="background:#ede9fe;color:#7c3aed;border-color:#c4b5fd;">
+                        {{ ucfirst($tc->status ?? 'draft') }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        @endforeach
+        @endif
 
         <a href="#" class="hd-view-all" @click.prevent="window.dispatchEvent(new CustomEvent('open-booking-modal'))">
             + Add Appointment
@@ -1043,6 +1139,82 @@ document.addEventListener('alpine:init', () => {
         @empty
         <div class="hd-empty-col">No appointments yesterday.</div>
         @endforelse
+
+        {{-- ── Yesterday: Treatment Visits ── --}}
+        @if($yesterdaysTreatmentVisits->isNotEmpty())
+        <div style="padding:.3rem .6rem .1rem;border-top:1px solid var(--c-border);margin-top:.4rem;">
+            <span style="font-size:.63rem;font-weight:700;color:var(--c-green);text-transform:uppercase;letter-spacing:.07em;">Treatment Visits ({{ $yesterdaysTreatmentVisits->count() }})</span>
+        </div>
+        @foreach($yesterdaysTreatmentVisits as $ytv)
+        <div class="hd-card" style="border-left:3px solid var(--c-green);">
+            <div class="hd-pfc">
+                <div class="hd-pfc-top">
+                    <span class="hd-pfc-time" style="background:#f0fdf4;color:var(--c-green);">
+                        <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                    </span>
+                    <div style="flex:1;min-width:0;padding:0 .3rem;">
+                        <div style="font-size:.72rem;color:var(--c-muted);font-weight:500;">
+                            {{ $ytv->treatment_name ?? ucfirst(str_replace('_',' ',$ytv->visit_type ?? 'Treatment')) }}
+                        </div>
+                        <a href="{{ route('patients.show', $ytv->patient_id) }}" class="hd-pfc-name">{{ $ytv->patient->name ?? '—' }}</a>
+                    </div>
+                </div>
+                <div class="hd-pfc-meta">
+                    <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    {{ $ytv->doctor->name ?? '—' }}
+                </div>
+                <div class="hd-pfc-footer">
+                    <span class="hd-badge" style="background:#dcfce7;color:#16a34a;border-color:#bbf7d0;">
+                        {{ ucfirst(str_replace('_',' ',$ytv->status ?? 'completed')) }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        @endforeach
+        @endif
+
+        {{-- ── Yesterday: Consultations ── --}}
+        @if($yesterdaysConsultations->isNotEmpty())
+        <div style="padding:.3rem .6rem .1rem;border-top:1px solid var(--c-border);margin-top:.4rem;">
+            <span style="font-size:.63rem;font-weight:700;color:var(--c-accent2);text-transform:uppercase;letter-spacing:.07em;">Consultations ({{ $yesterdaysConsultations->count() }})</span>
+        </div>
+        @foreach($yesterdaysConsultations as $yc)
+        <div class="hd-card" style="border-left:3px solid var(--c-accent2);">
+            <div class="hd-pfc">
+                <div class="hd-pfc-top">
+                    <span class="hd-pfc-time" style="background:#f5f3ff;color:var(--c-accent2);">
+                        <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    </span>
+                    <div style="flex:1;min-width:0;padding:0 .3rem;">
+                        <div style="font-size:.72rem;color:var(--c-muted);font-weight:500;">
+                            {{ $yc->visit_type ? ucwords(str_replace('_',' ',$yc->visit_type)) : 'Consultation' }}
+                        </div>
+                        <a href="{{ route('patients.show', $yc->patient_id) }}" class="hd-pfc-name">{{ $yc->patient->name ?? '—' }}</a>
+                    </div>
+                </div>
+                @if($yc->chief_complaint)
+                <div style="font-size:.68rem;color:var(--c-muted);margin:.2rem 0 .15rem;line-height:1.35;">
+                    <span style="font-weight:500;color:var(--c-text);">CC:</span> {{ Str::limit($yc->chief_complaint, 55) }}
+                </div>
+                @endif
+                @if($yc->primary_diagnosis)
+                <div style="font-size:.68rem;color:var(--c-muted);margin:.1rem 0;line-height:1.35;">
+                    <span style="font-weight:500;color:var(--c-text);">Dx:</span> {{ Str::limit($yc->primary_diagnosis, 55) }}
+                </div>
+                @endif
+                <div class="hd-pfc-meta">
+                    <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    {{ $yc->doctor->name ?? '—' }}
+                </div>
+                <div class="hd-pfc-footer">
+                    <span class="hd-badge" style="background:#ede9fe;color:#7c3aed;border-color:#c4b5fd;">
+                        {{ ucfirst($yc->status ?? 'completed') }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        @endforeach
+        @endif
 
         <a href="{{ route('huddle.accountability') }}" class="hd-view-all">View All Yesterday</a>
     </div>
@@ -1220,15 +1392,19 @@ document.addEventListener('alpine:init', () => {
             </div>
         </div>
 
-        @forelse($criticalAlerts->where('level','error') as $inv)
+        @forelse($criticalAlerts->where('type','inventory')->where('level','error') as $inv)
         <div class="hd-card">
             <div class="hd-ic">
                 <div class="hd-ic-row">
                     <div>
                         <div class="hd-ic-name">{{ $inv['message'] }}</div>
-                        <div class="hd-ic-qty">Low stock</div>
+                        <div class="hd-ic-qty" style="color:var(--c-red);">
+                            {{ isset($inv['qty']) ? 'Qty: ' . $inv['qty'] . ' / Min: ' . $inv['min_qty'] : 'Out of stock' }}
+                        </div>
                     </div>
-                    <svg class="hd-ic-ico" fill="none" stroke="var(--c-red)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    <a href="{{ route('inventory.index') }}" style="flex-shrink:0;">
+                        <svg class="hd-ic-ico" fill="none" stroke="var(--c-red)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    </a>
                 </div>
             </div>
         </div>
@@ -1239,22 +1415,27 @@ document.addEventListener('alpine:init', () => {
         </div>
         @endforelse
 
-        @foreach($criticalAlerts->where('level','warning') as $warn)
+        @foreach($criticalAlerts->where('type','inventory')->where('level','warning') as $warn)
         <div class="hd-card">
             <div class="hd-ic">
                 <div class="hd-ic-row">
                     <div>
                         <div class="hd-ic-name">{{ $warn['message'] }}</div>
-                        <div class="hd-ic-qty">Reorder soon</div>
+                        <div class="hd-ic-qty" style="color:var(--c-amber);">
+                            Qty: {{ $warn['qty'] ?? 0 }} / Min: {{ $warn['min_qty'] ?? 0 }} — Reorder soon
+                        </div>
                     </div>
-                    <svg class="hd-ic-ico" fill="none" stroke="var(--c-amber)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    <a href="{{ route('inventory.index') }}" style="flex-shrink:0;">
+                        <svg class="hd-ic-ico" fill="none" stroke="var(--c-amber)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    </a>
                 </div>
             </div>
         </div>
         @endforeach
 
-        @if($criticalAlerts->count() > 4)
-        <a href="#" class="hd-view-all">+ {{ $criticalAlerts->count() - 4 }} more items</a>
+        @php $invAlertCount = $criticalAlerts->where('type','inventory')->count(); @endphp
+        @if($invAlertCount > 4)
+        <a href="{{ route('inventory.index') }}" class="hd-view-all">+ {{ $invAlertCount - 4 }} more items →</a>
         @endif
     </div>
 
@@ -1406,9 +1587,17 @@ document.addEventListener('alpine:init', () => {
 </div>
 
 {{-- Modals --}}
-<div x-data="huddleBooking">
-    @include('partials.appointment-booking-modal')
-</div>
+<script>
+window.__APPT_DATA = {
+    csrfToken: '{{ csrf_token() }}',
+    routes: {
+        store:         '{{ route("appointments.store") }}',
+        checkConflict: '{{ route("appointments.check.conflict") }}',
+        patientSearch: '/patients/search'
+    }
+};
+</script>
+@include('appointments._modal')
 @include('partials.add-patient-modal')
 
 </div>{{-- /hd hd-escape --}}

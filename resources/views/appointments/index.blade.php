@@ -3,6 +3,7 @@
 
 @push('styles')
 <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css' rel='stylesheet' />
+<link href='https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css' rel='stylesheet' />
 <style>
 /* ─── CSS Variables ─────────────────────────────────────────── */
 :root {
@@ -862,6 +863,58 @@
 @media (max-width: 900px) {
     .appt-sidebar { display: none; }
 }
+
+/* ─── Flatpickr overrides ───────────────────────────────────── */
+.flatpickr-calendar {
+    font-family: 'DM Sans', sans-serif !important;
+    font-size: 13px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 8px 30px rgba(0,0,0,.14) !important;
+    border: 1px solid #e2e8f0 !important;
+}
+.flatpickr-day.selected,
+.flatpickr-day.selected:hover {
+    background: #2563eb !important;
+    border-color: #2563eb !important;
+}
+.flatpickr-day:hover { background: #eff6ff !important; }
+.flatpickr-months .flatpickr-month { background: #f8fafc !important; }
+.flatpickr-current-month { font-size: 13px !important; font-weight: 700 !important; }
+.flatpickr-weekday { font-size: 11px !important; font-weight: 700 !important; color: #94a3b8 !important; }
+.flatpickr-day.today { border-color: #2563eb !important; }
+
+/* Date input wrapper — shows calendar icon */
+.date-input-wrap {
+    position: relative;
+}
+.date-input-wrap svg {
+    position: absolute;
+    right: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    pointer-events: none;
+}
+.date-input-wrap input {
+    padding-right: 30px !important;
+    cursor: pointer;
+}
+
+/* Time slot select */
+.time-slot-select {
+    width: 100%;
+    padding: 7px 10px;
+    font-size: 13px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color .15s;
+    background: #fff;
+    color: #1e293b;
+    cursor: pointer;
+    appearance: auto;
+}
+.time-slot-select:focus { border-color: #3b82f6; }
 </style>
 @endpush
 
@@ -1092,6 +1145,12 @@ window.__APPT_DATA = {
                                             x-show="apt.patient_phone">
                                         WA
                                     </button>
+                                    <a class="q-action-btn q-btn-edit"
+                                       :href="`/patients/${apt.patient_id}`"
+                                       @click.stop=""
+                                       style="text-decoration:none;display:inline-flex;align-items:center;">
+                                        👤
+                                    </a>
                                 </div>
                             </div>
                         </template>
@@ -1105,9 +1164,9 @@ window.__APPT_DATA = {
                     <div class="reminder-list">
                         <template x-for="(r, i) in reminders" :key="i">
                             <div class="reminder-item" :class="{ done: r.done }">
-                                <input type="checkbox" :id="`rem-${i}`" x-model="r.done">
+                                <input type="checkbox" :id="`rem-${i}`" x-model="r.done" @change="saveReminders()">
                                 <label :for="`rem-${i}`" x-text="r.text"></label>
-                                <button class="reminder-del" @click="reminders.splice(i,1)">✕</button>
+                                <button class="reminder-del" @click="reminders.splice(i,1); saveReminders()">✕</button>
                             </div>
                         </template>
                     </div>
@@ -1144,13 +1203,29 @@ window.__APPT_DATA = {
         <div class="qvc-row"><span class="qvc-row-key">Treatment</span><span class="qvc-row-val" id="qvc-treatment">—</span></div>
         <div class="qvc-row"><span class="qvc-row-key">Duration</span><span class="qvc-row-val" id="qvc-duration">—</span></div>
         <div class="qvc-row"><span class="qvc-row-key">Status</span><span class="qvc-row-val" id="qvc-status">—</span></div>
+        <div class="qvc-row" id="qvc-age-row" style="display:none;"><span class="qvc-row-key">Age</span><span class="qvc-row-val" id="qvc-age">—</span></div>
         <div class="qvc-row"><span class="qvc-row-key">Chair</span><span class="qvc-row-val" id="qvc-chair">—</span></div>
         <div class="qvc-row"><span class="qvc-row-key">Phone</span><span class="qvc-row-val" id="qvc-phone">—</span></div>
+        <div class="qvc-row" id="qvc-checkin-row" style="display:none;"><span class="qvc-row-key">Checked In</span><span class="qvc-row-val" id="qvc-checkin-time">—</span></div>
+        <div class="qvc-row" id="qvc-inchair-row" style="display:none;"><span class="qvc-row-key">In Chair At</span><span class="qvc-row-val" id="qvc-inchair-time">—</span></div>
+        <div class="qvc-row" id="qvc-done-row" style="display:none;"><span class="qvc-row-key">Completed At</span><span class="qvc-row-val" id="qvc-done-time">—</span></div>
         <div class="qvc-row" id="qvc-notes-row" style="display:none;">
             <span class="qvc-row-key">Notes</span><span class="qvc-row-val" id="qvc-notes">—</span>
         </div>
     </div>
     <div class="qvc-actions" id="qvc-actions"></div>
+    <div style="padding:0 12px 10px;display:flex;gap:6px;border-top:1px solid #f8fafc;padding-top:8px;">
+        <a id="qvc-open-patient" href="#" target="_blank"
+           style="flex:1;text-align:center;font-size:10px;font-weight:700;padding:5px 8px;border-radius:6px;background:#f1f5f9;color:#475569;text-decoration:none;transition:background .12s;"
+           onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
+            👤 Open Patient
+        </a>
+        <button id="qvc-reschedule-btn" onclick="qvcReschedule()"
+                style="flex:1;font-size:10px;font-weight:700;padding:5px 8px;border-radius:6px;background:#eff6ff;color:#1d4ed8;border:none;cursor:pointer;transition:background .12s;"
+                onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
+            📅 Reschedule
+        </button>
+    </div>
 </div>
 
 
@@ -1209,11 +1284,17 @@ window.__APPT_DATA = {
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
                 <div>
                     <label class="form-label-sm">Date *</label>
-                    <input class="form-control-sm" id="am-date" type="date">
+                    <div class="date-input-wrap">
+                        <input class="form-control-sm" id="am-date" type="text"
+                               placeholder="Select date…" autocomplete="off" readonly style="cursor:pointer;">
+                        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+                        </svg>
+                    </div>
                 </div>
                 <div>
                     <label class="form-label-sm">Time *</label>
-                    <input class="form-control-sm" id="am-time" type="time">
+                    <select class="time-slot-select" id="am-time"></select>
                 </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
@@ -1251,7 +1332,23 @@ window.__APPT_DATA = {
     {{-- ── TAB: Walk-In ─────────────────────────────────────── --}}
     <div id="tab-walkin" class="modal-tab-panel">
         <div class="modal-custom-body">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+            {{-- Mobile-first search: finds existing patient or creates new --}}
+            <div style="margin-bottom:10px;">
+                <label class="form-label-sm">Mobile Number *</label>
+                <div style="display:flex;gap:6px;">
+                    <input class="form-control-sm" id="wi-mobile" type="tel" placeholder="9876543210"
+                           oninput="wiSearchPatient(this.value)" style="flex:1;">
+                    <div id="wi-search-status"
+                         style="display:flex;align-items:center;font-size:11px;font-weight:600;color:#94a3b8;white-space:nowrap;min-width:60px;padding-right:4px;"></div>
+                </div>
+                <div id="wi-existing-notice"
+                     style="display:none;margin-top:5px;padding:7px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;font-size:11.5px;color:#15803d;font-weight:600;">
+                    ✓ Existing patient found — booking as walk-in
+                </div>
+            </div>
+            <input type="hidden" id="wi-existing-patient-id" value="">
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;" id="wi-name-section">
                 <div>
                     <label class="form-label-sm">First Name *</label>
                     <input class="form-control-sm" id="wi-first" type="text" placeholder="Rahul">
@@ -1260,10 +1357,6 @@ window.__APPT_DATA = {
                     <label class="form-label-sm">Last Name *</label>
                     <input class="form-control-sm" id="wi-last" type="text" placeholder="Sharma">
                 </div>
-            </div>
-            <div style="margin-bottom:10px;">
-                <label class="form-label-sm">Mobile *</label>
-                <input class="form-control-sm" id="wi-mobile" type="tel" placeholder="9876543210">
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
                 <div>
@@ -1276,8 +1369,7 @@ window.__APPT_DATA = {
                 </div>
                 <div>
                     <label class="form-label-sm">Time</label>
-                    <input class="form-control-sm" id="wi-time" type="time"
-                           value="{{ now()->format('H:i') }}">
+                    <select class="time-slot-select" id="wi-time"></select>
                 </div>
             </div>
             <div style="margin-bottom:10px;">
@@ -1311,8 +1403,61 @@ window.__APPT_DATA = {
 ══════════════════════════════════════════════════════════════ --}}
 @push('scripts')
 <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/flatpickr'></script>
 
 <script>
+// ─── 12-hr Time Slot Builder ──────────────────────────────────
+// Generates options from 8:00 AM to 9:30 PM in 30-min steps
+function buildTimeSlots(selectId, selectedValue) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    sel.innerHTML = '';
+    for (let h = 8; h <= 21; h++) {
+        for (let m = 0; m < 60; m += 30) {
+            const h24  = h.toString().padStart(2, '0');
+            const mm   = m.toString().padStart(2, '0');
+            const val  = `${h24}:${mm}`;             // 24hr for backend
+            const ampm = h < 12 ? 'AM' : 'PM';
+            const h12  = h === 0 ? 12 : h > 12 ? h - 12 : h;
+            const lbl  = `${h12}:${mm} ${ampm}`;     // 12hr for display
+            const opt  = document.createElement('option');
+            opt.value = val;
+            opt.textContent = lbl;
+            if (val === selectedValue) opt.selected = true;
+            sel.appendChild(opt);
+        }
+    }
+}
+
+// Nearest 30-min slot to now
+function nearestSlot() {
+    const now  = new Date();
+    const mins = now.getHours() * 60 + now.getMinutes();
+    const snap = Math.ceil(mins / 30) * 30;
+    const h    = Math.min(Math.floor(snap / 60), 21);
+    const m    = snap % 60 === 0 ? '00' : '30';
+    return `${h.toString().padStart(2,'0')}:${m}`;
+}
+
+// ─── Flatpickr instances ──────────────────────────────────────
+let amDatePicker = null;
+
+function initFlatpickrs() {
+    amDatePicker = flatpickr('#am-date', {
+        dateFormat: 'd M Y',        // display: "26 May 2026"
+        altInput:   false,
+        // No minDate — backdated appointments allowed for rescheduling and data entry
+        disableMobile: true,
+        onChange(selectedDates, dateStr, instance) {
+            // Store ISO value as data attribute for submitApptModal to read
+            if (selectedDates[0]) {
+                instance.element.dataset.isoDate =
+                    selectedDates[0].toISOString().split('T')[0];
+            }
+        },
+    });
+}
+
 // ─── Doctor color palette ──────────────────────────────────────
 const DOC_COLORS = ['#2563eb','#059669','#d97706','#dc2626','#7c3aed','#0891b2','#be185d','#0284c7'];
 
@@ -1431,6 +1576,12 @@ function initCalendar(appointments) {
     });
 
     calendar.render();
+
+    // Init date pickers and time slot selects after DOM is ready
+    initFlatpickrs();
+    const now = nearestSlot();
+    buildTimeSlots('am-time', now);
+    buildTimeSlots('wi-time', nearestSlot());
 }
 
 function renderEvent(info) {
@@ -1460,10 +1611,28 @@ function renderEvent(info) {
 
 // ─── Quick View Card ──────────────────────────────────────────
 let qvcHideTimeout;
+let qvcCurrentApt = null;
 const qvc = document.getElementById('quick-view-card');
+
+function qvcReschedule() {
+    if (!qvcCurrentApt) return;
+    // Pre-fill the appointment modal with this appointment's data for rescheduling
+    hideQuickView();
+    openCombinedModal('appointment', qvcCurrentApt.appointment_date);
+    // Pre-select patient and doctor after modal opens
+    setTimeout(() => {
+        const patSel = document.getElementById('am-patient');
+        if (patSel) patSel.value = qvcCurrentApt.patient_id;
+        const docSel = document.getElementById('am-doctor');
+        if (docSel) docSel.value = qvcCurrentApt.doctor_id;
+        const catSel = document.getElementById('am-category');
+        if (catSel && qvcCurrentApt.treatment_category_id) catSel.value = qvcCurrentApt.treatment_category_id;
+    }, 50);
+}
 
 function showQuickView(apt, event) {
     clearTimeout(qvcHideTimeout);
+    qvcCurrentApt = apt;
 
     document.getElementById('qvc-name').textContent      = apt.patient_name;
     document.getElementById('qvc-sub').textContent       = `${apt.appointment_time} · ${apt.appointment_date}`;
@@ -1474,12 +1643,35 @@ function showQuickView(apt, event) {
     document.getElementById('qvc-chair').textContent     = apt.chair_number ? 'Chair ' + apt.chair_number : '—';
     document.getElementById('qvc-phone').textContent     = apt.patient_phone || '—';
 
+    // Age
+    const ageRow = document.getElementById('qvc-age-row');
+    if (apt.patient_age) {
+        document.getElementById('qvc-age').textContent = apt.patient_age + ' yrs';
+        ageRow.style.display = 'flex';
+    } else {
+        ageRow.style.display = 'none';
+    }
+
+    // Timestamps
+    const showTs = (rowId, valId, val) => {
+        const row = document.getElementById(rowId);
+        if (val) { document.getElementById(valId).textContent = val; row.style.display = 'flex'; }
+        else row.style.display = 'none';
+    };
+    showTs('qvc-checkin-row', 'qvc-checkin-time', apt.checked_in_at);
+    showTs('qvc-inchair-row', 'qvc-inchair-time', apt.in_chair_at);
+    showTs('qvc-done-row',    'qvc-done-time',    apt.completed_at);
+
+    // Notes
     if (apt.notes) {
         document.getElementById('qvc-notes').textContent       = apt.notes;
         document.getElementById('qvc-notes-row').style.display = 'flex';
     } else {
         document.getElementById('qvc-notes-row').style.display = 'none';
     }
+
+    // Open Patient link
+    document.getElementById('qvc-open-patient').href = `/patients/${apt.patient_id}`;
 
     // Actions
     const actions = document.getElementById('qvc-actions');
@@ -1493,10 +1685,10 @@ function showQuickView(apt, event) {
         actions.appendChild(b);
     };
 
-    if (apt.status === 'scheduled') makeBtn('Check In','#92400e','#fef3c7',() => { window._apptApp.updateStatus(apt.id,'checkin'); hideQuickView(); });
-    if (apt.status === 'checkin')   makeBtn('In Chair','#5b21b6','#ede9fe',() => { window._apptApp.updateStatus(apt.id,'in_chair'); hideQuickView(); });
-    if (apt.status === 'in_chair')  makeBtn('Done','#14532d','#dcfce7',() => { window._apptApp.updateStatus(apt.id,'done'); hideQuickView(); });
-    if (apt.patient_phone) makeBtn('WhatsApp','#15803d','#dcfce7',() => window._apptApp.waContact(apt.patient_phone));
+    if (apt.status === 'scheduled') makeBtn('✓ Check In','#92400e','#fef3c7',() => { window._apptApp.updateStatus(apt.id,'checkin'); hideQuickView(); });
+    if (apt.status === 'checkin')   makeBtn('🦷 In Chair','#5b21b6','#ede9fe',() => { window._apptApp.updateStatus(apt.id,'in_chair'); hideQuickView(); });
+    if (apt.status === 'in_chair')  makeBtn('✓ Done','#14532d','#dcfce7',() => { window._apptApp.updateStatus(apt.id,'done'); hideQuickView(); });
+    if (apt.patient_phone) makeBtn('WA','#15803d','#dcfce7',() => window._apptApp.waContact(apt.patient_phone));
 
     // Position
     qvc.style.display = 'block';
@@ -1547,6 +1739,59 @@ function onDateClick(info) {
 }
 
 
+// ─── Walk-In: patient mobile search ──────────────────────────
+let wiSearchTimer = null;
+
+function wiSearchPatient(mobile) {
+    clearTimeout(wiSearchTimer);
+    const status  = document.getElementById('wi-search-status');
+    const notice  = document.getElementById('wi-existing-notice');
+    const nameSection = document.getElementById('wi-name-section');
+    const hiddenId = document.getElementById('wi-existing-patient-id');
+
+    if (mobile.replace(/\D/g,'').length < 8) {
+        status.textContent = '';
+        notice.style.display = 'none';
+        nameSection.style.display = 'grid';
+        hiddenId.value = '';
+        return;
+    }
+
+    status.textContent = '…';
+    wiSearchTimer = setTimeout(async () => {
+        try {
+            const res  = await fetch(`/patients/search?q=${encodeURIComponent(mobile)}`, {
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken }
+            });
+            const data = await res.json();
+            const patients = Array.isArray(data) ? data : (data.patients || data.data || []);
+
+            if (patients.length > 0) {
+                const p = patients[0];
+                hiddenId.value = p.id;
+                // Auto-fill name fields (readonly when found)
+                const nameParts = (p.name || '').split(' ');
+                document.getElementById('wi-first').value = nameParts[0] || '';
+                document.getElementById('wi-last').value  = nameParts.slice(1).join(' ') || '';
+                document.getElementById('wi-first').readOnly = true;
+                document.getElementById('wi-last').readOnly  = true;
+                notice.style.display = 'block';
+                status.textContent = '✓ Found';
+                status.style.color = '#15803d';
+            } else {
+                hiddenId.value = '';
+                document.getElementById('wi-first').readOnly = false;
+                document.getElementById('wi-last').readOnly  = false;
+                notice.style.display = 'none';
+                status.textContent = 'New';
+                status.style.color = '#94a3b8';
+            }
+        } catch (e) {
+            status.textContent = '';
+        }
+    }, 400);
+}
+
 // ─── Combined Modal (tabbed) ──────────────────────────────────
 let activeModalTab = 'appointment';
 
@@ -1554,14 +1799,29 @@ function openCombinedModal(tab = 'appointment', dateStr = null, dateObj = null) 
     switchModalTab(tab);
 
     if (tab === 'appointment') {
-        const apptDate = dateStr
+        // Determine ISO date string
+        const isoDate = dateStr
             ? dateStr.split('T')[0]
             : new Date().toISOString().split('T')[0];
-        const timeStr = dateObj
-            ? dateObj.getHours().toString().padStart(2,'0') + ':' + dateObj.getMinutes().toString().padStart(2,'0')
-            : new Date().toTimeString().slice(0,5);
-        document.getElementById('am-date').value = apptDate;
-        document.getElementById('am-time').value = timeStr;
+
+        // Set flatpickr to the date
+        if (amDatePicker) {
+            amDatePicker.setDate(isoDate, true, 'Y-m-d');
+            amDatePicker.element.dataset.isoDate = isoDate;
+        }
+
+        // Set time slot to the clicked time or nearest slot
+        const timeVal = dateObj
+            ? (() => {
+                const h = dateObj.getHours();
+                const m = dateObj.getMinutes() < 30 ? '00' : '30';
+                return `${h.toString().padStart(2,'0')}:${m}`;
+            })()
+            : nearestSlot();
+
+        const amSel = document.getElementById('am-time');
+        if (amSel) amSel.value = timeVal;
+
         document.getElementById('am-conflict-warn').style.display = 'none';
     }
 
@@ -1621,7 +1881,9 @@ async function checkConflict(doctorId, date, time, duration) {
 async function submitApptModal() {
     const patient = document.getElementById('am-patient').value;
     const doctor  = document.getElementById('am-doctor').value;
-    const date    = document.getElementById('am-date').value;
+    // Read ISO date from flatpickr data attribute; fall back to raw value if somehow set directly
+    const dateEl  = document.getElementById('am-date');
+    const date    = dateEl.dataset.isoDate || dateEl.value;
     const time    = document.getElementById('am-time').value;
     const type    = document.getElementById('am-type').value;
 
@@ -1673,14 +1935,24 @@ async function submitApptModal() {
 }
 
 async function submitWalkin() {
-    const first  = document.getElementById('wi-first').value.trim();
-    const last   = document.getElementById('wi-last').value.trim();
-    const mobile = document.getElementById('wi-mobile').value.trim();
-    const time   = document.getElementById('wi-time').value;
+    const mobile  = document.getElementById('wi-mobile').value.trim();
+    const time    = document.getElementById('wi-time').value;
+    const existingId = document.getElementById('wi-existing-patient-id').value;
 
-    if (!first || !last || !mobile) {
-        alert('Please fill in First Name, Last Name, and Mobile.');
+    // Validation: mobile always required
+    if (!mobile) {
+        alert('Please enter the patient mobile number.');
         return;
+    }
+
+    // If no existing patient found, require name fields
+    if (!existingId) {
+        const first = document.getElementById('wi-first').value.trim();
+        const last  = document.getElementById('wi-last').value.trim();
+        if (!first || !last) {
+            alert('Please fill in First Name and Last Name.');
+            return;
+        }
     }
 
     const btn = document.getElementById('wi-submit-btn');
@@ -1689,6 +1961,29 @@ async function submitWalkin() {
 
     try {
         const today = new Date().toISOString().split('T')[0];
+        const first = document.getElementById('wi-first').value.trim();
+        const last  = document.getElementById('wi-last').value.trim();
+
+        const payload = {
+            doctor_id:             document.getElementById('wi-doctor').value,
+            appointment_date:      today,
+            appointment_time:      time,
+            treatment_category_id: document.getElementById('wi-category').value || null,
+            notes:                 document.getElementById('wi-notes').value || '',
+            is_walkin:             true,
+        };
+
+        if (existingId) {
+            // Existing patient path — send patient_id directly
+            payload.patient_id = existingId;
+            payload.type       = 'consultation';
+        } else {
+            // New patient path — send name fields
+            payload.first_name = first;
+            payload.last_name  = last;
+            payload.mobile     = mobile;
+        }
+
         const res = await fetch(window.__APPT_DATA.routes.store, {
             method: 'POST',
             headers: {
@@ -1696,17 +1991,7 @@ async function submitWalkin() {
                 'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken,
                 'Accept': 'application/json',
             },
-            body: JSON.stringify({
-                first_name:            first,
-                last_name:             last,
-                mobile,
-                doctor_id:             document.getElementById('wi-doctor').value,
-                appointment_date:      today,
-                appointment_time:      time,
-                treatment_category_id: document.getElementById('wi-category').value || null,
-                notes:                 document.getElementById('wi-notes').value || '',
-                is_walkin:             true,
-            }),
+            body: JSON.stringify(payload),
         });
 
         const data = await res.json();
@@ -1718,8 +2003,16 @@ async function submitWalkin() {
             setTimeout(() => {
                 closeCombinedModal();
                 window._apptApp.refreshQueue();
-                ['wi-first','wi-last','wi-mobile','wi-notes'].forEach(id => document.getElementById(id).value = '');
+                // Reset form
+                ['wi-mobile','wi-notes'].forEach(id => document.getElementById(id).value = '');
+                ['wi-first','wi-last'].forEach(id => {
+                    document.getElementById(id).value = '';
+                    document.getElementById(id).readOnly = false;
+                });
                 document.getElementById('wi-category').value = '';
+                document.getElementById('wi-existing-patient-id').value = '';
+                document.getElementById('wi-existing-notice').style.display = 'none';
+                document.getElementById('wi-search-status').textContent = '';
                 document.getElementById('wi-success').style.display = 'none';
             }, 1200);
         } else {
@@ -1770,6 +2063,12 @@ function appointmentApp() {
 
             this.counts    = window.__APPT_DATA.statusCounts;
             this.queueList = this.sortQueue([...window.__APPT_DATA.todayQueue]);
+
+            // Load persisted reminders from localStorage
+            try {
+                const saved = localStorage.getItem('dentfluence_reminders');
+                if (saved) this.reminders = JSON.parse(saved);
+            } catch(e) {}
 
             initCalendar(window.__APPT_DATA.appointments);
 
@@ -1918,7 +2217,12 @@ function appointmentApp() {
             if (this.newReminder.trim()) {
                 this.reminders.push({ text: this.newReminder.trim(), done: false });
                 this.newReminder = '';
+                this.saveReminders();
             }
+        },
+
+        saveReminders() {
+            try { localStorage.setItem('dentfluence_reminders', JSON.stringify(this.reminders)); } catch(e) {}
         },
 
         // Helpers exposed to templates

@@ -65,7 +65,8 @@ Route::middleware(['auth', 'web'])->prefix('huddle')->name('huddle.')->group(fun
     // ── Settings ─────────────────────────────────────────────────────────────
     Route::prefix('settings')->name('settings.')->group(function () {
 
-        Route::get('/', [HuddleSettingsController::class, 'index'])
+        // GET redirects to unified Settings module; PATCH remains for API use
+        Route::get('/', fn() => redirect()->route('settings.index', ['tab' => 'huddle']))
             ->name('index');
 
         Route::patch('/', [HuddleSettingsController::class, 'update'])

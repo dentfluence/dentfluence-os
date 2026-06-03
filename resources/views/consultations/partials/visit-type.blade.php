@@ -3,8 +3,8 @@
     Section 2 — Visit Type
     Requires: $patient (for medical_alert banner), $consultation nullable
 --}}
-<div class="c-card" x-data="{open: {{ $consultation?->visit_type ? 'true' : 'false' }}}">
-    <div class="c-card-head" @click="open=!open">
+<div class="c-card" x-data="{open: true}">
+        <div class="c-card-head" @click="open=!open">
         <span class="sec-label"><span class="sec-num">2</span>Visit Type</span>
         <div style="display:flex;align-items:center;gap:8px;">
             <span class="sec-summary" x-show="!open && form.visit_type" x-cloak
@@ -18,12 +18,11 @@
 
     <div x-show="open" x-collapse style="padding:18px;">
 
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:560px;">
-            @foreach([
-                ['emergency', '#dc2626', '#fef2f2', 'Pain / Swelling / Trauma',        'M21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3ZM12 9v4M12 17h.01'],
-                ['routine',   '#6a0f70', '#f5f3ff', 'Full Mouth Evaluation',            'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
-                ['followup',  '#2563eb', '#eff6ff', 'Review / Re-evaluation',           'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10'],
-            ] as [$vt, $col, $bg, $sub, $path])
+<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;max-width:380px;">
+                @foreach([
+    ['emergency', '#dc2626', '#fef2f2', 'Pain / Swelling / Trauma',  'M21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3ZM12 9v4M12 17h.01'],
+    ['routine',   '#6a0f70', '#f5f3ff', 'Full Mouth Evaluation',      'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
+] as [$vt, $col, $bg, $sub, $path])
             <div class="vt-card"
                  :class="form.visit_type==='{{ $vt }}' ? 'sel-{{ $vt }}' : ''"
                  @click="form.visit_type='{{ $vt }}'">

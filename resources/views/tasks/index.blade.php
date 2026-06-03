@@ -1,480 +1,396 @@
 @extends('layouts.app')
+@section('page-title', 'Tasks')
 
 @section('content')
 <div
-    x-data="taskPage()"
+    x-data="taskModule()"
     x-init="init()"
-    class="max-w-5xl mx-auto px-4 py-8"
-    style="font-family:'DM Sans',sans-serif"
+    style="font-family:'DM Sans',sans-serif;padding:0;height:100%;display:flex;flex-direction:column;"
 >
 
-    {{-- ── Page Header ──────────────────────────────────────────────────────── --}}
-    <div class="flex items-center justify-between mb-6">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-900">All Tasks</h1>
-            <p class="text-sm text-gray-500 mt-0.5">Branch overview · {{ today()->format('d M Y') }}</p>
+{{-- TOP BAR --}}
+<div style="padding:24px 28px 0;display:flex;align-items:center;justify-content:space-between;">
+    <div>
+        <h1 style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;color:#1a0320;margin:0 0 2px;">Tasks</h1>
+        <p style="font-size:12.5px;color:#9a7aaa;margin:0;">{{ today()->format('l, d M Y') }}</p>
+    </div>
+    <button @click="drawerOpen=true"
+            style="display:inline-flex;align-items:center;gap:7px;padding:9px 18px;background:#6a0f70;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;box-shadow:0 2px 8px rgba(106,15,112,.25);">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
+        Assign Task
+    </button>
+</div>
+
+{{-- COUNTER CARDS --}}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:20px 28px 0;">
+
+    <div @click="setFilter('backlog')"
+         :style="activeFilter==='backlog'?'border-color:#b52020;background:#fdeaea;':''"
+         style="background:#fff;border:1.5px solid #ede4f3;border-radius:10px;padding:16px 18px;cursor:pointer;transition:all 140ms;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#b52020;">Backlog</span>
+            <div style="width:30px;height:30px;border-radius:8px;background:#fdeaea;display:flex;align-items:center;justify-content:center;">
+                <svg width="15" height="15" fill="none" stroke="#b52020" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
         </div>
-        <button @click="drawerOpen = true"
-                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm hover:opacity-90"
-                style="background:#6a0f70">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-            </svg>
-            New Task
+        <div style="font-size:28px;font-weight:700;color:#b52020;line-height:1;">{{ $overdue->count() }}</div>
+        <div style="font-size:11.5px;color:#c88080;margin-top:3px;">Overdue tasks</div>
+    </div>
+
+    <div @click="setFilter('today')"
+         :style="activeFilter==='today'?'border-color:#a05c00;background:#fff4e0;':''"
+         style="background:#fff;border:1.5px solid #ede4f3;border-radius:10px;padding:16px 18px;cursor:pointer;transition:all 140ms;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#a05c00;">Due Today</span>
+            <div style="width:30px;height:30px;border-radius:8px;background:#fff4e0;display:flex;align-items:center;justify-content:center;">
+                <svg width="15" height="15" fill="none" stroke="#a05c00" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>
+            </div>
+        </div>
+        <div style="font-size:28px;font-weight:700;color:#a05c00;line-height:1;">{{ $today->count() }}</div>
+        <div style="font-size:11.5px;color:#c8a060;margin-top:3px;">Pending today</div>
+    </div>
+
+    <div @click="setFilter('done')"
+         :style="activeFilter==='done'?'border-color:#1a7a45;background:#e8f7ef;':''"
+         style="background:#fff;border:1.5px solid #ede4f3;border-radius:10px;padding:16px 18px;cursor:pointer;transition:all 140ms;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#1a7a45;">Completed</span>
+            <div style="width:30px;height:30px;border-radius:8px;background:#e8f7ef;display:flex;align-items:center;justify-content:center;">
+                <svg width="15" height="15" fill="none" stroke="#1a7a45" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+        </div>
+        <div style="font-size:28px;font-weight:700;color:#1a7a45;line-height:1;">{{ $done->count() }}</div>
+        <div style="font-size:11.5px;color:#60a87a;margin-top:3px;">This period</div>
+    </div>
+
+    <div @click="setFilter('upcoming')"
+         :style="activeFilter==='upcoming'?'border-color:#1a5ea8;background:#e6f0fb;':''"
+         style="background:#fff;border:1.5px solid #ede4f3;border-radius:10px;padding:16px 18px;cursor:pointer;transition:all 140ms;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#1a5ea8;">Upcoming</span>
+            <div style="width:30px;height:30px;border-radius:8px;background:#e6f0fb;display:flex;align-items:center;justify-content:center;">
+                <svg width="15" height="15" fill="none" stroke="#1a5ea8" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/></svg>
+            </div>
+        </div>
+        <div style="font-size:28px;font-weight:700;color:#1a5ea8;line-height:1;">{{ $upcoming->count() }}</div>
+        <div style="font-size:11.5px;color:#608ab8;margin-top:3px;">Next 30 days</div>
+    </div>
+
+</div>
+
+{{-- TABS + PERIOD FILTER --}}
+<div style="padding:16px 28px 0;display:flex;align-items:flex-end;justify-content:space-between;border-bottom:1.5px solid #ede4f3;">
+    {{-- Tabs --}}
+    <div style="display:flex;gap:2px;">
+        <button @click="activeTab='dashboard'" class="task-tab" :class="activeTab==='dashboard' ? 'task-tab--active' : ''">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            Dashboard
+        </button>
+        <button @click="activeTab='mine'" class="task-tab" :class="activeTab==='mine' ? 'task-tab--active' : ''">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            My Tasks
+        </button>
+        <button @click="activeTab='assign'" class="task-tab" :class="activeTab==='assign' ? 'task-tab--active' : ''">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M12 4v16m8-8H4"/></svg>
+            Assign Task
         </button>
     </div>
-
-    {{-- ── Flash ────────────────────────────────────────────────────────────── --}}
-    @if(session('success'))
-    <div class="mb-4 px-4 py-3 rounded-lg bg-green-50 text-green-700 text-sm border border-green-200">
-        {{ session('success') }}
+    {{-- Period Segmented Control --}}
+    <div style="display:flex;background:#f3eef7;border-radius:8px;padding:3px;gap:2px;margin-bottom:6px;">
+        <button @click="period='daily'" class="task-period" :class="period==='daily' ? 'task-period--active' : ''">Daily</button>
+        <button @click="period='weekly'" class="task-period" :class="period==='weekly' ? 'task-period--active' : ''">Weekly</button>
+        <button @click="period='monthly'" class="task-period" :class="period==='monthly' ? 'task-period--active' : ''">Monthly</button>
     </div>
-    @endif
+</div>
 
-    {{-- ── Filter Bar ───────────────────────────────────────────────────────── --}}
-    <form method="GET" action="{{ route('tasks.index') }}"
-          class="flex flex-wrap gap-3 mb-8 p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
+{{-- TAB CONTENT --}}
+<div style="flex:1;overflow-y:auto;padding:20px 28px;">
 
-        <input type="date" name="date" value="{{ request('date') }}"
-               class="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400">
+    {{-- DASHBOARD TAB --}}
+    <div x-show="activeTab==='dashboard'">
+        <div style="display:flex;gap:10px;margin-bottom:16px;">
+            <input type="text" x-model="search" placeholder="Search tasks…"
+                   style="flex:1;padding:9px 14px;border:1.5px solid #ede4f3;border-radius:7px;font-size:13px;font-family:inherit;outline:none;">
+            <select x-model="staffFilter" style="padding:9px 14px;border:1.5px solid #ede4f3;border-radius:7px;font-size:13px;font-family:inherit;color:#1a0320;min-width:160px;">
+                <option value="">All Staff</option>
+                @foreach($users as $u)
+                <option value="{{ $u->id }}">{{ $u->name }}</option>
+                @endforeach
+            </select>
+        </div>
 
-        <select name="priority" class="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400">
-            <option value="">All Priorities</option>
-            <option value="urgent" @selected(request('priority')=='urgent')>🔴 Urgent</option>
-            <option value="high"   @selected(request('priority')=='high')>🟠 High</option>
-            <option value="medium" @selected(request('priority')=='medium')>🟡 Medium</option>
-            <option value="low"    @selected(request('priority')=='low')>🟢 Low</option>
-        </select>
-
-        <select name="assigned_to" class="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400">
-            <option value="">All Staff</option>
-            @foreach($users as $u)
-            <option value="{{ $u->id }}" @selected(request('assigned_to')==$u->id)>{{ $u->name }}</option>
-            @endforeach
-        </select>
-
-        <select name="status" class="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400">
-            <option value="">All Statuses</option>
-            <option value="pending"   @selected(request('status')=='pending')>Pending</option>
-            <option value="done"      @selected(request('status')=='done')>Done</option>
-            <option value="escalated" @selected(request('status')=='escalated')>Escalated</option>
-        </select>
-
-        <button type="submit" class="px-4 py-2 text-sm font-medium text-white rounded-lg" style="background:#6a0f70">Filter</button>
-
-        @if(request()->anyFilled(['date','priority','assigned_to','status']))
-        <a href="{{ route('tasks.index') }}" class="px-4 py-2 text-sm text-gray-500 rounded-lg border border-gray-200 hover:bg-gray-50">Clear</a>
+        @if($overdue->count())
+        <div style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                <div style="width:8px;height:8px;border-radius:50%;background:#b52020;"></div>
+                <span style="font-size:11.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#b52020;">Backlog · {{ $overdue->count() }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                @foreach($overdue as $task)@include('tasks._card',['task'=>$task,'badge'=>'backlog'])@endforeach
+            </div>
+        </div>
         @endif
-    </form>
 
-    {{-- ── Overdue ───────────────────────────────────────────────────────────── --}}
-    @if($overdue->count())
-    <div class="mb-6">
-        <h2 class="text-xs font-semibold uppercase tracking-wider text-red-600 mb-3 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
-            Overdue · {{ $overdue->count() }}
-        </h2>
-        <div class="space-y-2">
-            @foreach($overdue as $task)
-                @include('tasks._task_row', ['task' => $task])
+        @if($today->count())
+        <div style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                <div style="width:8px;height:8px;border-radius:50%;background:#a05c00;"></div>
+                <span style="font-size:11.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#a05c00;">Due Today · {{ $today->count() }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                @foreach($today as $task)@include('tasks._card',['task'=>$task,'badge'=>'today'])@endforeach
+            </div>
+        </div>
+        @endif
+
+        @if($upcoming->count())
+        <div style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                <div style="width:8px;height:8px;border-radius:50%;background:#1a5ea8;"></div>
+                <span style="font-size:11.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#1a5ea8;">Upcoming · {{ $upcoming->count() }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                @foreach($upcoming as $task)@include('tasks._card',['task'=>$task,'badge'=>'upcoming'])@endforeach
+            </div>
+        </div>
+        @endif
+
+        @if($done->count())
+        <div style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                <div style="width:8px;height:8px;border-radius:50%;background:#1a7a45;"></div>
+                <span style="font-size:11.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#1a7a45;">Completed · {{ $done->count() }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                @foreach($done as $task)@include('tasks._card',['task'=>$task,'badge'=>'done'])@endforeach
+            </div>
+        </div>
+        @endif
+
+        @if($overdue->isEmpty() && $today->isEmpty() && $upcoming->isEmpty() && $done->isEmpty())
+        <div style="text-align:center;padding:60px 20px;color:#b0a0bb;">
+            <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24" style="margin:0 auto 14px;display:block;opacity:.35;"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            <p style="font-size:14px;font-weight:500;margin:0 0 4px;">No tasks yet</p>
+            <p style="font-size:12.5px;color:#c5b0d5;margin:0;">Click Assign Task to create one.</p>
+        </div>
+        @endif
+    </div>
+
+    {{-- MY TASKS TAB --}}
+    <div x-show="activeTab==='mine'" x-cloak>
+        @php
+            $myTasks = collect()
+                ->merge($overdue->where('assigned_to', auth()->id()))
+                ->merge($today->where('assigned_to', auth()->id()));
+        @endphp
+        @if($myTasks->isEmpty())
+        <div style="text-align:center;padding:60px 20px;color:#b0a0bb;">
+            <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24" style="margin:0 auto 14px;display:block;opacity:.35;"><polyline points="20 6 9 17 4 12"/></svg>
+            <p style="font-size:14px;font-weight:500;margin:0;">You're all caught up!</p>
+        </div>
+        @else
+        <div style="display:flex;flex-direction:column;gap:8px;">
+            @foreach($myTasks as $task)
+                @include('tasks._card',['task'=>$task,'badge'=>$task->due_date->lt(today())?'backlog':'today','showActions'=>true])
             @endforeach
         </div>
+        @endif
     </div>
-    @endif
 
-    {{-- ── Today ─────────────────────────────────────────────────────────────── --}}
-    <div class="mb-6">
-        <h2 class="text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2" style="color:#6a0f70">
-            <span class="w-2 h-2 rounded-full inline-block" style="background:#6a0f70"></span>
-            Today · <span id="today-count">{{ $today->count() }}</span>
-        </h2>
-        <div class="space-y-2" id="list-today">
-            @forelse($today as $task)
-                @include('tasks._task_row', ['task' => $task])
-            @empty
-                <p class="text-sm text-gray-400 py-4 text-center" id="today-empty">No tasks due today.</p>
-            @endforelse
+    {{-- ASSIGN TASK TAB --}}
+    <div x-show="activeTab==='assign'" x-cloak>
+        <div style="max-width:600px;">
+            <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:28px;">
+                <h3 style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:#1a0320;margin:0 0 20px;">New Task Assignment</h3>
+                <form action="{{ route('tasks.store') }}" method="POST">
+                    @csrf
+                    <div style="margin-bottom:14px;">
+                        <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Task Description *</label>
+                        <input type="text" name="title" required placeholder="e.g. Call katara dental lab regarding crown case"
+                               style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
+                    </div>
+                    <div style="margin-bottom:14px;">
+                        <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Assign To *</label>
+                        <select name="assigned_to" required style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;color:#1a0320;box-sizing:border-box;">
+                            <option value="">— Select staff member —</option>
+                            @foreach($users as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
+                        </select>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+                        <div>
+                            <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Due Date *</label>
+                            <input type="date" name="due_date" required value="{{ today()->toDateString() }}"
+                                   style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Due Time</label>
+                            <input type="time" name="due_time" style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+                        <div>
+                            <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Priority</label>
+                            <select name="priority" style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
+                                <option value="urgent">🔴 Urgent</option>
+                                <option value="high">🟠 High</option>
+                                <option value="medium" selected>🟡 Medium</option>
+                                <option value="low">🟢 Low</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Category</label>
+                            <select name="category" style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
+                                <option value="admin">Admin</option>
+                                <option value="clinical">Clinical</option>
+                                <option value="lab">Lab</option>
+                                <option value="follow_up">Follow-up</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="margin-bottom:14px;">
+                        <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Link to Patient <span style="font-weight:400;color:#b0a0bb;">optional</span></label>
+                        <input type="hidden" name="patient_id">
+                        <input type="text" placeholder="Search patient…" style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
+                    </div>
+                    <div style="margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+                        <label class="df-toggle" :class="needEvidence?'on':''">
+                            <input type="checkbox" name="need_evidence" x-model="needEvidence" style="display:none;">
+                            <span class="df-toggle-track"></span>
+                        </label>
+                        <span style="font-size:13px;color:#1a0320;">Require evidence on completion</span>
+                    </div>
+                    <div style="display:flex;gap:10px;">
+                        <button type="submit" style="flex:1;padding:11px;background:#6a0f70;color:#fff;border:none;border-radius:7px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;">Assign Task</button>
+                        <button type="button" @click="activeTab='dashboard'" style="padding:11px 20px;background:#fff;color:#6a0f70;border:1.5px solid #ede4f3;border-radius:7px;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
-    {{-- ── Upcoming ──────────────────────────────────────────────────────────── --}}
-    @if($upcoming->count())
-    <div class="mb-6">
-        <h2 class="text-xs font-semibold uppercase tracking-wider text-blue-600 mb-3 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-blue-400 inline-block"></span>
-            Upcoming · {{ $upcoming->count() }}
-        </h2>
-        <div class="space-y-2" id="list-upcoming">
-            @foreach($upcoming as $task)
-                @include('tasks._task_row', ['task' => $task])
-            @endforeach
-        </div>
-    </div>
-    @endif
+</div>{{-- /tab content --}}
 
-    {{-- ── Done ─────────────────────────────────────────────────────────────── --}}
-    @if($done->count())
-    <div class="mb-6">
-        <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-gray-300 inline-block"></span>
-            Done · {{ $done->count() }}
-        </h2>
-        <div class="space-y-2 opacity-60">
-            @foreach($done as $task)
-                @include('tasks._task_row', ['task' => $task])
-            @endforeach
-        </div>
-    </div>
-    @endif
-
-    {{-- ════════════════════════════════════════════════════════════════════
-         SLIDE-IN DRAWER  — everything in the SAME x-data scope
-    ═══════════════════════════════════════════════════════════════════════ --}}
-
-    {{-- Backdrop --}}
-    <div x-show="drawerOpen"
-         x-transition:enter="transition ease-out duration-200"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-150"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0"
-         @click="drawerOpen = false"
-         class="fixed inset-0 bg-black/40 z-40"
-         x-cloak></div>
-
-    {{-- Panel --}}
-    <div x-show="drawerOpen"
-         x-transition:enter="transition ease-out duration-250"
-         x-transition:enter-start="translate-x-full"
-         x-transition:enter-end="translate-x-0"
-         x-transition:leave="transition ease-in duration-200"
-         x-transition:leave-start="translate-x-0"
-         x-transition:leave-end="translate-x-full"
-         @click.stop
-         class="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col"
-         x-cloak>
-
-        {{-- Drawer Header --}}
-        <div class="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
-            <h2 class="text-lg font-semibold text-gray-900">New Task</h2>
-            <button @click="drawerOpen = false" class="text-gray-400 hover:text-gray-600">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
+{{-- SLIDE-IN DRAWER --}}
+<div x-show="drawerOpen" x-cloak style="position:fixed;inset:0;z-index:60;display:flex;">
+    <div style="position:absolute;inset:0;background:rgba(14,1,24,.35);" @click="drawerOpen=false"></div>
+    <div style="position:absolute;right:0;top:0;bottom:0;width:420px;background:#fff;box-shadow:-4px 0 24px rgba(14,1,24,.15);overflow-y:auto;padding:28px;z-index:1;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
+            <h2 style="font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:700;color:#1a0320;margin:0;">Create a Task</h2>
+            <button @click="drawerOpen=false" style="background:none;border:none;cursor:pointer;color:#9a7aaa;padding:4px;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
         </div>
-
-        {{-- Scrollable Form Body --}}
-        <form @submit.prevent="submitTask()" class="flex flex-col flex-1 overflow-y-auto px-6 py-6 gap-5">
-
-            {{-- Error banner --}}
-            <div x-show="formError" x-text="formError" x-cloak
-                 class="px-4 py-3 rounded-lg bg-red-50 text-red-700 text-sm border border-red-200"></div>
-
-            {{-- Title --}}
-            <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1.5">Task Title <span class="text-red-400">*</span></label>
-                <input type="text" x-model="form.title" placeholder="e.g. Call patient Mrs. Sharma"
-                       class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" required>
+        <form action="{{ route('tasks.store') }}" method="POST">
+            @csrf
+            <div style="margin-bottom:14px;">
+                <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Task *</label>
+                <input type="text" name="title" required placeholder="What needs to be done?" style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
             </div>
-
-            {{-- Description --}}
-            <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1.5">Description</label>
-                <textarea x-model="form.description" rows="2" placeholder="Any notes…"
-                          class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"></textarea>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Assign To *</label>
+                <select name="assigned_to" required style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;color:#1a0320;box-sizing:border-box;">
+                    <option value="">— Select —</option>
+                    @foreach($users as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
+                </select>
             </div>
-
-            {{-- Assign + Priority --}}
-            <div class="grid grid-cols-2 gap-4">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
                 <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1.5">Assign To <span class="text-red-400">*</span></label>
-                    <select x-model="form.assigned_to" required
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
-                        <option value="">Select…</option>
-                        @foreach($users as $u)
-                        <option value="{{ $u->id }}">{{ $u->name }}</option>
-                        @endforeach
-                    </select>
+                    <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Due Date *</label>
+                    <input type="date" name="due_date" required value="{{ today()->toDateString() }}" style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1.5">Priority <span class="text-red-400">*</span></label>
-                    <select x-model="form.priority" required
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
-                        <option value="medium">🟡 Medium</option>
-                        <option value="low">🟢 Low</option>
-                        <option value="high">🟠 High</option>
-                        <option value="urgent">🔴 Urgent</option>
+                    <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Priority</label>
+                    <select name="priority" style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
+                        <option value="urgent">🔴 Urgent</option><option value="high">🟠 High</option><option value="medium" selected>🟡 Medium</option><option value="low">🟢 Low</option>
                     </select>
                 </div>
             </div>
-
-            {{-- Due Date + Category --}}
-            <div class="grid grid-cols-2 gap-4">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
                 <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1.5">Due Date <span class="text-red-400">*</span></label>
-                    <input type="date" x-model="form.due_date" required
-                           class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1.5">Category</label>
-                    <select x-model="form.category"
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
-                        <option value="admin">Admin</option>
-                        <option value="clinical">Clinical</option>
-                        <option value="lab">Lab</option>
-                        <option value="follow_up">Follow-up</option>
-                        <option value="other">Other</option>
+                    <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Category</label>
+                    <select name="category" style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
+                        <option value="admin">Admin</option><option value="clinical">Clinical</option><option value="lab">Lab</option><option value="follow_up">Follow-up</option><option value="other">Other</option>
                     </select>
                 </div>
-            </div>
-
-            {{-- ── Patient Linkage ──────────────────────────────────────────── --}}
-            <div class="rounded-xl border border-gray-200 p-4 bg-gray-50">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-xs font-medium text-gray-600">Link to Patient?</span>
-                    <div class="flex rounded-lg overflow-hidden border border-gray-200 text-xs font-medium">
-                        <button type="button"
-                                @click="linkPatient = false; clearPatient()"
-                                :class="!linkPatient ? 'bg-gray-700 text-white' : 'bg-white text-gray-500'"
-                                class="px-4 py-1.5 transition-colors">No</button>
-                        <button type="button"
-                                @click="linkPatient = true"
-                                :style="linkPatient ? 'background:#6a0f70;color:white' : ''"
-                                :class="!linkPatient ? 'bg-white text-gray-500' : ''"
-                                class="px-4 py-1.5 transition-colors">Yes</button>
-                    </div>
-                </div>
-
-                <div x-show="linkPatient" x-cloak>
-
-                    {{-- Selected patient chip --}}
-                    <template x-if="selectedPatient">
-                        <div class="flex items-center justify-between px-3 py-2 rounded-lg border border-purple-200 bg-purple-50">
-                            <div>
-                                <p class="text-sm font-medium text-gray-900" x-text="selectedPatient.name"></p>
-                                <p class="text-xs text-gray-500" x-text="selectedPatient.phone ?? '—'"></p>
-                            </div>
-                            <button type="button" @click="clearPatient()"
-                                    class="text-gray-400 hover:text-red-500 text-xl leading-none ml-3">&times;</button>
-                        </div>
-                    </template>
-
-                    {{-- Search box --}}
-                    <template x-if="!selectedPatient">
-                        <div class="relative">
-                            <input type="text"
-                                   x-model="patientQuery"
-                                   @input.debounce.350ms="searchPatients()"
-                                   placeholder="Search by name or phone…"
-                                   class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-
-                            {{-- spinner --}}
-                            <div x-show="patientSearching" x-cloak
-                                 class="absolute right-3 top-3 w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
-
-                            {{-- results --}}
-                            <div x-show="patientResults.length > 0" x-cloak
-                                 class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                                <template x-for="p in patientResults" :key="p.id">
-                                    <button type="button" @click="selectPatient(p)"
-                                            class="w-full text-left px-4 py-2.5 hover:bg-purple-50 border-b border-gray-50 last:border-0">
-                                        <p class="text-sm font-medium text-gray-900" x-text="p.name"></p>
-                                        <p class="text-xs text-gray-400" x-text="p.phone ?? '—'"></p>
-                                    </button>
-                                </template>
-                            </div>
-
-                            {{-- no results --}}
-                            <div x-show="patientNoResults" x-cloak
-                                 class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow px-4 py-3 text-sm text-gray-400">
-                                No patients found.
-                            </div>
-                        </div>
-                    </template>
-
+                <div>
+                    <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Due Time</label>
+                    <input type="time" name="due_time" style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
                 </div>
             </div>
-            {{-- /patient linkage --}}
-
-            {{-- Action buttons — pinned to bottom --}}
-            <div class="flex gap-3 pt-2">
-                <button type="button" @click="drawerOpen = false"
-                        class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">
-                    Cancel
-                </button>
-                <button type="submit" :disabled="submitting"
-                        class="flex-1 px-4 py-2.5 text-sm font-medium text-white rounded-lg disabled:opacity-60"
-                        style="background:#6a0f70">
-                    <span x-text="submitting ? 'Saving…' : 'Create Task'">Create Task</span>
-                </button>
+            <div style="margin-bottom:20px;">
+                <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Link Patient <span style="font-weight:400;color:#b0a0bb;">optional</span></label>
+                <input type="hidden" name="patient_id">
+                <input type="text" placeholder="Patient name or ID…" style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
             </div>
-
+            <button type="submit" style="width:100%;padding:12px;background:#6a0f70;color:#fff;border:none;border-radius:7px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;">Assign Task</button>
         </form>
     </div>
-    {{-- /drawer panel --}}
+</div>
 
-</div>{{-- /x-data --}}
-@endsection
+<style>
+[x-cloak]{display:none!important;}
 
+/* ── Task Tabs ── */
+.task-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    background: none;
+    border: none;
+    border-bottom: 2.5px solid transparent;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
+    color: #9a7aaa;
+    cursor: pointer;
+    transition: color 150ms, border-color 150ms;
+    margin-bottom: -1.5px;
+    white-space: nowrap;
+}
+.task-tab:hover { color: #6a0f70; }
+.task-tab--active {
+    color: #6a0f70 !important;
+    border-bottom-color: #6a0f70 !important;
+    font-weight: 600;
+}
 
-@push('scripts')
+/* ── Period Segmented Control ── */
+.task-period {
+    padding: 5px 14px;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: inherit;
+    font-weight: 500;
+    color: #9a7aaa;
+    cursor: pointer;
+    transition: all 150ms;
+}
+.task-period--active {
+    background: #6a0f70 !important;
+    color: #fff !important;
+    box-shadow: 0 1px 4px rgba(106,15,112,.25);
+}
+
+/* ── Toggle ── */
+.df-toggle{display:inline-flex;align-items:center;cursor:pointer;}
+.df-toggle-track{width:36px;height:20px;border-radius:10px;background:#e0d5e8;display:inline-block;position:relative;transition:background 180ms;}
+.df-toggle-track::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform 180ms;box-shadow:0 1px 3px rgba(0,0,0,.18);}
+.df-toggle.on .df-toggle-track{background:#6a0f70;}
+.df-toggle.on .df-toggle-track::after{transform:translateX(16px);}
+</style>
+
 <script>
-function taskPage() {
+function taskModule(){
     return {
-        // drawer
-        drawerOpen: false,
-
-        // form data
-        form: {
-            title:       '',
-            description: '',
-            assigned_to: '',
-            due_date:    '',
-            priority:    'medium',
-            category:    'admin',
-            patient_id:  null,
-        },
-        submitting: false,
-        formError:  '',
-
-        // patient search
-        linkPatient:      false,
-        patientQuery:     '',
-        patientResults:   [],
-        patientNoResults: false,
-        patientSearching: false,
-        selectedPatient:  null,
-
-        init() {
-            this.form.due_date = new Date().toISOString().slice(0, 10);
-        },
-
-        // ── patient search ────────────────────────────────────────────────────
-        async searchPatients() {
-            const q = this.patientQuery.trim();
-            if (q.length < 2) { this.patientResults = []; this.patientNoResults = false; return; }
-            this.patientSearching = true;
-            this.patientNoResults = false;
-            try {
-                const res  = await fetch(`/patients/search?q=${encodeURIComponent(q)}`, {
-                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf() }
-                });
-                const data = await res.json();
-                this.patientResults   = data;
-                this.patientNoResults = data.length === 0;
-            } catch(e) {
-                this.patientResults = [];
-            } finally {
-                this.patientSearching = false;
-            }
-        },
-
-        selectPatient(p) {
-            this.selectedPatient  = p;
-            this.form.patient_id  = p.id;
-            this.patientResults   = [];
-            this.patientNoResults = false;
-        },
-
-        clearPatient() {
-            this.selectedPatient = null;
-            this.form.patient_id = null;
-            this.patientQuery    = '';
-            this.patientResults  = [];
-            this.patientNoResults= false;
-        },
-
-        // ── submit ────────────────────────────────────────────────────────────
-        async submitTask() {
-            this.submitting = true;
-            this.formError  = '';
-            try {
-                const res  = await fetch('{{ route("tasks.store") }}', {
-                    method:  'POST',
-                    headers: { 'Content-Type':'application/json', 'Accept':'application/json', 'X-CSRF-TOKEN': csrf() },
-                    body:    JSON.stringify(this.form),
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                    const msgs = data.errors ? Object.values(data.errors).flat() : [];
-                    this.formError = msgs[0] ?? data.message ?? 'Something went wrong.';
-                    return;
-                }
-                this.drawerOpen = false;
-                this.insertNewTask(data.task);
-                this.resetForm();
-            } catch(e) {
-                this.formError = 'Network error — please try again.';
-            } finally {
-                this.submitting = false;
-            }
-        },
-
-        // ── inject new row ────────────────────────────────────────────────────
-        insertNewTask(task) {
-            const today  = new Date().toISOString().slice(0, 10);
-            const listId = task.due_date_ts === today ? 'list-today' : 'list-upcoming';
-            const list   = document.getElementById(listId);
-            if (!list) return;
-            document.getElementById('today-empty')?.remove();
-
-            const badge = { urgent:'bg-red-100 text-red-700', high:'bg-orange-100 text-orange-700',
-                            medium:'bg-yellow-100 text-yellow-700', low:'bg-green-100 text-green-700' };
-            const bc    = badge[task.priority] ?? badge.medium;
-
-            const row = document.createElement('div');
-            row.className = 'flex items-start justify-between bg-white border border-gray-100 rounded-xl px-4 py-3 shadow-sm';
-            row.dataset.taskId = task.id;
-            row.innerHTML = `
-                <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium text-gray-900 truncate">${esc(task.title)}</p>
-                    <p class="text-xs text-gray-400 mt-0.5">
-                        ${esc(task.assigned_to)} · ${esc(task.due_date)}
-                        ${task.patient_name ? ` · <span class="text-purple-600 font-medium">👤 ${esc(task.patient_name)}</span>` : ''}
-                    </p>
-                </div>
-                <div class="flex items-center gap-2 ml-4 shrink-0">
-                    <span class="text-xs font-medium px-2 py-0.5 rounded-full ${bc}">${esc(task.priority)}</span>
-                    <button onclick="markDone(${task.id},this)"
-                            class="text-xs text-gray-400 hover:text-green-600 px-2 py-1 rounded border border-gray-200 hover:border-green-300">Done</button>
-                </div>`;
-            list.prepend(row);
-
-            if (listId === 'list-today') {
-                const ctr = document.getElementById('today-count');
-                if (ctr) ctr.textContent = parseInt(ctr.textContent || 0) + 1;
-            }
-            row.style.transition = 'background 0.7s';
-            row.style.background = '#f3e8f4';
-            setTimeout(() => { row.style.background = ''; }, 900);
-        },
-
-        resetForm() {
-            this.form = { title:'', description:'', assigned_to:'', due_date: new Date().toISOString().slice(0,10), priority:'medium', category:'admin', patient_id:null };
-            this.clearPatient();
-            this.linkPatient = false;
-            this.formError   = '';
-        },
+        activeTab:'dashboard', activeFilter:null, period:'daily',
+        drawerOpen:false, search:'', staffFilter:'', needEvidence:false,
+        init(){},
+        setFilter(f){ this.activeFilter = this.activeFilter===f ? null : f; },
     };
 }
-
-async function markDone(taskId, btn) {
-    btn.disabled = true; btn.textContent = '…';
-    try {
-        const res = await fetch(`/tasks/${taskId}/done`, {
-            method: 'PATCH',
-            headers: { 'Accept':'application/json', 'X-CSRF-TOKEN': csrf() }
-        });
-        if (res.ok) {
-            const row = btn.closest('[data-task-id]');
-            if (row) { row.style.transition='opacity 0.4s'; row.style.opacity='0'; setTimeout(()=>row.remove(),400); }
-        }
-    } catch(e) { btn.disabled=false; btn.textContent='Done'; }
-}
-
-function csrf() { return document.querySelector('meta[name="csrf-token"]').content; }
-function esc(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 </script>
-@endpush
+@endsection

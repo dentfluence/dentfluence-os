@@ -10,6 +10,9 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             UserSeeder::class,
+            CmsEduSeeder::class,
+            InventoryDemoSeeder::class, // Dental inventory demo data
+            MasterDemoSeeder::class,    // 10 patients + appointments + consultations + visits + plans + finance
         ]);
     }
 }
