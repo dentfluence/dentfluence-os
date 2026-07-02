@@ -1,0 +1,83 @@
+flowchart TB
+
+subgraph CLIENTS["Clients"]
+  browser["Clinic staff browser<br/>Blade + Alpine + Tailwind"]
+  mobileapp["Flutter mobile app<br/>(repo: dentfluence-mobile)"]
+  publicpg["Patients (public)<br/>review pages /r/token"]
+end
+
+subgraph HTTPL["Laravel HTTP layer"]
+  webroutes["web.php (936 lines)"]
+  apiroutes["api.php /api/v1<br/>Sanctum tokens"]
+  middleware["Middleware: auth, RBAC,<br/>branch scope, throttle, audit"]
+end
+
+subgraph CTRL["Controllers (136)"]
+  webctrl["119 web controllers"]
+  apictrl["17 API v1 controllers"]
+end
+
+subgraph SVC["Domain services (98, in 18 folders)"]
+  patientsvc["PatientService /<br/>PatientProfileService"]
+  apptsvc["AppointmentService"]
+  clinsvc["Clinical: TreatmentVisit,<br/>Prescription + CDSS"]
+  billsvc["InvoicePaymentService,<br/>Wallet, Membership, Finance"]
+  invsvc["InventoryService<br/>PO-GRN-AP chain"]
+  labsvc["Lab services"]
+  consent["ConsentManager (DPDP,<br/>hash-chained)"]
+end
+
+subgraph COMMOS["Communication OS — engine-first"]
+  engines["13 ENGINES = policy (WHAT)<br/>Rules, Relationship, Reminder,<br/>TodayActions, Score, Task,<br/>Notification, Activity"]
+  identity["IdentityResolver<br/>+ relationships master table"]
+  autoeng["AutomationEngine = timing (WHEN)<br/>retry, cooldown, idempotency"]
+  guard["CommunicationGuard (HOW)<br/>8-factor: consent, opt-out,<br/>quiet hours, capacity, dedup"]
+  outbound["Outbound delivery<br/>WhatsApp / mail / review requests"]
+  inbox["Unified inbox +<br/>PRM lead pipeline"]
+end
+
+subgraph SCHED["Scheduler (cron)"]
+  cron["recall engine · reminders 10:00<br/>reviews:request 11:00"]
+end
+
+subgraph DATA["MySQL (per-clinic instance)"]
+  maindb[("Business data<br/>PHI encrypted at rest<br/>323 migrations")]
+  auditdb[("Hash-chained audit log<br/>+ consent ledger")]
+end
+
+subgraph EXT["External services"]
+  meta["Meta WhatsApp<br/>Cloud API"]
+  brevo["Brevo (mail)"]
+  greviews["Google Reviews"]
+  ollama["Local Ollama AI<br/>(optional, OFF in prod v1)"]
+end
+
+flags["config/features.php<br/>per-clinic feature flags<br/>shadow-mode cutover seams"]
+
+browser --> webroutes
+mobileapp --> apiroutes
+publicpg --> webroutes
+webroutes --> middleware
+apiroutes --> middleware
+middleware --> webctrl
+middleware --> apictrl
+webctrl --> SVC
+apictrl --> SVC
+webctrl --> inbox
+SVC --> maindb
+SVC --> auditdb
+consent --> auditdb
+cron --> engines
+engines --> identity
+engines --> autoeng
+autoeng --> guard
+guard --> outbound
+outbound --> meta
+outbound --> brevo
+outbound --> greviews
+inbox --> engines
+COMMOS --> maindb
+COMMOS --> auditdb
+meta -. inbound webhooks .-> apiroutes
+SVC -. voice notes, receipt scan,<br/>Tulip copilot .-> ollama
+flags -. gates every transition .-> COMMOS

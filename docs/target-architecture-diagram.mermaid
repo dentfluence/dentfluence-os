@@ -1,0 +1,198 @@
+%% Dentfluence — TARGET Architecture (Engine-First, Events, Clinic-Shaped) · Revision 3 (STABLE / FROZEN)
+%% Companion to docs/target-architecture-engine-first.md (2026-07-02)
+%% Read top-to-bottom: the Clinic Operating Cycle is true north; Surfaces announce FACTS ->
+%% engines react/keep views -> work reaches Today's Actions & Analytics.
+%% Rev 3: AI is a cross-cutting INTERFACE (not a surface); Rules has a Decision Log;
+%% Task Engine splits Human/System; Organization Engine is RESERVED (future).
+
+flowchart TB
+
+    %% ================= CLINIC OPERATING CYCLE (product true north) =================
+    subgraph CYCLE["THE CLINIC OPERATING CYCLE — the intake test: which step does a feature improve?"]
+        direction LR
+        C1["Morning"] --> C2["Daily Huddle"] --> C3["Today's Actions"] --> C4["Reception"] --> C5["Doctor"] --> C6["Treatment"] --> C7["Billing"] --> C8["Lab"] --> C9["Relationship Follow-up"] --> C10["Analytics"] --> C11["Tomorrow"]
+    end
+
+    %% ================= AI ASSISTANT — cross-cutting INTERFACE (NOT a surface) =================
+    AIx["AI ASSISTANT (Tulip) — an INTERFACE, not a surface · owns NO logic, NO data<br/>only: reads projections · requests actions · invokes workflows · asks engines to act<br/>every action is Guarded, audited & explained via the Decision Log"]
+
+    %% ================= PRODUCT SURFACES (thin consumers) =================
+    subgraph SURFACES["PRODUCT SURFACES — announce facts, read views, route intent through engines"]
+        OS["Dentfluence OS"]
+        CHAIR["Chairside"]
+        APP["Patient App"]
+        HUD["Daily Huddle"]
+        INVs["Inventory"]
+        LABs["Lab"]
+        MKT["Marketing"]
+        MKTP["Future Marketplace"]
+    end
+
+    %% ================= EVENTS (bus is INVISIBLE plumbing) =================
+    EVENTS{{"DOMAIN EVENTS — the language of the platform<br/>facts (AppointmentCompleted...) + intents (CommunicationRequested)<br/>published via shared services · transport hidden (in-memory solo → broker DSO)<br/>*products think in Events, never 'a bus'*"}}
+
+    %% ================= LAYER A · WRITE SPINE =================
+    subgraph SPINE["LAYER A · WRITE SPINE — what is true (immediately consistent)"]
+        REL["Relationship Engine ★ CENTRAL<br/>owns: Master Relationship + IDENTITY + dedup + merge history + Journeys"]
+        ACT["Activity Engine — Fact Ledger<br/>owns: the ONE append-only history of everything"]
+    end
+
+    %% ================= LAYER B · ORCHESTRATION & AUTOMATION =================
+    subgraph AUTO["LAYER B · ORCHESTRATION & AUTOMATION — decide, run, schedule, do"]
+        RUL["Rules Engine — DECIDES (reactive)<br/>fact happened → should we act? · requests, never executes"]
+        DLOG[("DECISION LOG<br/>rule · inputs · conditions · result · decision ·<br/>requesting engine · time · relationship · user<br/>→ answers 'why wasn't this patient contacted?'")]
+        AUT["Automation Engine — EXECUTES time-based<br/>recall · reminders · delays · retries · cooldowns · expirations · sweeps"]
+        WF["Workflow Engine — PROCEDURES (non-linear)<br/>branching · optional · retries · loops · skips · parallel ·<br/>manual override · pause/resume · versioning<br/>RCT · Implant · Ortho · Membership · Recall · Marketing · Lab · HR onboarding"]
+        TSK["Task Engine — ONE store, TWO classes<br/>HUMAN tasks (call/estimate/collect) — Reception/Huddle<br/>SYSTEM tasks (retry webhook/sync/refresh) — admin only<br/>separate priority · queue · SLA · dashboard · permissions"]
+    end
+
+    %% ================= LAYER C · DELIVERY =================
+    subgraph DEL["LAYER C · DELIVERY — reach patients & staff"]
+        COM["Communication Engine — one intelligent gateway<br/>threads · templates · all channels · delivers THROUGH Integration"]
+        GUARD["Communication GUARD (fail-closed, urgency-aware)<br/>Preference · Consent · Frequency · Quiet Hours ·<br/>Urgency · Relationship Context · Channel · History"]
+        NOT["Notification Engine<br/>owns: the ONE internal staff-alert store"]
+    end
+
+    %% ================= LAYER D · READ & INSIGHTS =================
+    subgraph READ["LAYER D · READ & INSIGHTS — views (near-real-time, rebuildable, never authoritative)"]
+        TML["Timeline Engine<br/>the patient's unified story"]
+        INS["Insights Engine (AI-agnostic — AI consumes it)<br/>Health · LTV · Risk · Referral · Opportunity ·<br/>Engagement · Behaviour · Preference · AI Summary"]
+        ANA["Analytics Engine<br/>metrics · cohorts · DSO roll-ups"]
+        SRC["Search Engine<br/>unified index"]
+    end
+
+    %% ================= PRESENTATION =================
+    subgraph PRES["PRESENTATION — owns NO data; reads ONE view each"]
+        TODAY["Today's Actions — 'MY WORK FOR TODAY'<br/>Calls · Appointments · Lab Deliveries · Collections ·<br/>Renewals · Recalls · Birthdays · Missed · Estimates · Opportunities"]
+        DASH["Dashboards / Profile / Roll-ups"]
+    end
+
+    %% ================= LAYER E · INTEGRATION =================
+    subgraph INTG["LAYER E · INTEGRATION — the single edge of the platform (anti-corruption)"]
+        INT["Integration Engine<br/>WhatsApp · Google Calendar · Google Reviews · Meta ·<br/>Website · ABDM · Payment Gateways · 3rd-party PMS · Marketplace · future APIs"]
+    end
+
+    EXT(["EXTERNAL SYSTEMS"])
+
+    %% ================= RESERVED — NOT BUILT =================
+    ORG["ORGANIZATION ENGINE — RESERVED (future, NOT built today)<br/>multi-clinic · region/zone · enterprise · franchise ·<br/>cross-clinic referral & patient movement · central analytics · benchmarking · org permissions<br/>sits ABOVE the 13 engines as consumer/coordinator — never reaches inside them"]
+
+    %% ---- Cycle guides the surfaces ----
+    CYCLE -. shapes .-> SURFACES
+
+    %% ---- AI is an interface OVER the engines: reads views, requests via events ----
+    AIx -. reads projections .-> TML
+    AIx -. reads projections .-> INS
+    AIx -. reads projections .-> SRC
+    AIx -. requests actions / invoke workflow (same guarded paths) .-> EVENTS
+
+    %% ---- Surfaces announce facts / intents ----
+    OS -->|announce events| EVENTS
+    CHAIR -->|run Workflows + clinical facts| EVENTS
+    APP -->|events| EVENTS
+    HUD -->|TaskCompleted| EVENTS
+    INVs -->|stock events| EVENTS
+    LABs -->|LabCaseReady| EVENTS
+    MKT -->|CommunicationRequested| EVENTS
+
+    %% ---- Spine ----
+    EVENTS -->|person signal| REL
+    REL -->|identity + journey events| EVENTS
+    EVENTS --> ACT
+    ACT -->|ActivityRecorded| EVENTS
+
+    %% ---- Events fan out to reactors ----
+    EVENTS --> RUL
+    EVENTS --> AUT
+    EVENTS --> WF
+
+    %% ---- Rules writes its Decision Log ----
+    RUL --> DLOG
+
+    %% ---- Orchestration: decide/schedule/orchestrate -> request (never execute) ----
+    AUT -->|temporal facts: RecallDue, Expiring...| EVENTS
+    WF -->|WorkflowStep events| EVENTS
+    RUL -->|TaskRequested (human)| TSK
+    WF -->|step needs work| TSK
+    AUT -->|system job: retry/sync| TSK
+    RUL -->|CommunicationRequested| COM
+    WF -->|step message| COM
+    RUL -->|NotificationRequested| NOT
+    RUL -.->|TransitionProposed| REL
+    WF -.->|drive Journey state| REL
+    WF -->|schedule next step| AUT
+    RUL -->|schedule/defer| AUT
+
+    TSK -->|task lifecycle| EVENTS
+    NOT -->|delivery events| EVENTS
+
+    %% ---- Communication goes through Guard, then Integration ----
+    COM --> GUARD
+    GUARD -->|approved send| INT
+    INT --> EXT
+    EXT -->|inbound webhook| INT
+    INT -->|normalized inbound fact| EVENTS
+    COM -->|Sent/Received| EVENTS
+    INS -.->|preferred channel + time| GUARD
+    DPDP["DPDP domain — owns consent policy"] -.->|consent| GUARD
+
+    %% ---- Integration also fronts non-message externals ----
+    INT -. payments/ABDM/calendar/reviews .- COM
+
+    %% ---- Views listen (observe only) ----
+    EVENTS -. observe .-> TML
+    EVENTS -. observe .-> INS
+    EVENTS -. observe .-> ANA
+    EVENTS -. observe .-> SRC
+    EVENTS -. actionable facts .-> TODAY
+
+    %% ---- Presentation & surfaces read views ----
+    TML --> OS
+    TML --> CHAIR
+    TML --> APP
+    INS --> TODAY
+    INS --> DASH
+    INS --> MKT
+    ANA --> DASH
+    ANA --> HUD
+    SRC --> MKT
+    TSK --> TODAY
+    TSK --> HUD
+    WF --> CHAIR
+    TODAY --> OS
+    TODAY --> APP
+    DASH --> OS
+
+    %% ---- Reserved Organization Engine consumes roll-ups (future) ----
+    ANA -. future roll-up .-> ORG
+    REL -. future cross-clinic linking .-> ORG
+
+    classDef cycle fill:#fdf2e0,stroke:#b9770e,color:#000,stroke-width:2px;
+    classDef ai fill:#e8daef,stroke:#6c3483,color:#000,stroke-width:2px;
+    classDef surface fill:#eaf2f8,stroke:#2e86c1,color:#000;
+    classDef spine fill:#d6eaf8,stroke:#1f618d,color:#000,stroke-width:2px;
+    classDef auto fill:#fdebd0,stroke:#b9770e,color:#000;
+    classDef log fill:#fcf3cf,stroke:#9a7d0a,color:#000;
+    classDef del fill:#fad7e0,stroke:#a93226,color:#000;
+    classDef read fill:#e8f8f5,stroke:#148f77,color:#000;
+    classDef pres fill:#f4ecf7,stroke:#7d3c98,color:#000;
+    classDef intg fill:#f6ddcc,stroke:#a04000,color:#000;
+    classDef events fill:#1b2631,stroke:#000,color:#fff,stroke-width:2px;
+    classDef policy fill:#fef9e7,stroke:#9a7d0a,color:#000;
+    classDef ext fill:#d5d8dc,stroke:#566573,color:#000;
+    classDef reserved fill:#fdfefe,stroke:#7f8c8d,color:#566573,stroke-width:2px,stroke-dasharray: 6 4;
+
+    class C1,C2,C3,C4,C5,C6,C7,C8,C9,C10,C11 cycle;
+    class AIx ai;
+    class OS,CHAIR,APP,HUD,INVs,LABs,MKT,MKTP surface;
+    class REL,ACT spine;
+    class RUL,AUT,WF,TSK auto;
+    class DLOG log;
+    class COM,GUARD,NOT del;
+    class TML,INS,ANA,SRC read;
+    class TODAY,DASH pres;
+    class INT intg;
+    class EVENTS events;
+    class DPDP policy;
+    class EXT ext;
+    class ORG reserved;

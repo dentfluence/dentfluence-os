@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dentfluence — Group, Products & Architecture</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#0e1116;color:#e7e9ee;font-family:'Segoe UI',system-ui,-apple-system,sans-serif}
+  .app{max-width:1180px;margin:0 auto;padding:16px}
+  .bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:6px}
+  .bar h1{font-size:17px;font-weight:600;margin:0 12px 0 2px}
+  .bar .sp{flex:1}
+  .btn{font-size:13px;color:#e7e9ee;background:#1b1f27;border:1px solid #2c323d;border-radius:8px;padding:6px 11px;cursor:pointer}
+  .btn:hover{background:#232834}
+  .subtitle{font-size:12.5px;color:#9aa1ad;margin:0 0 9px 2px;max-width:980px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:#9aa1ad;margin-bottom:9px}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .viewport{position:relative;height:580px;border:1px solid #2c323d;border-radius:14px;overflow:hidden;cursor:grab;
+    background-color:#11151c;background-image:radial-gradient(circle,#272d38 1px,transparent 1px);background-size:26px 26px}
+  .viewport.drag{cursor:grabbing}
+  .canvas{position:absolute;top:0;left:0;transform-origin:0 0}
+  svg.links{position:absolute;top:0;left:0;overflow:visible;pointer-events:none}
+  .node{position:absolute;border-radius:10px;padding:7px 12px;font-size:13px;line-height:1.25;border:1.5px solid;cursor:pointer;
+    user-select:none;display:flex;align-items:center;gap:8px;box-shadow:0 1px 0 rgba(0,0,0,.25)}
+  .node .cap{font-size:10px;opacity:.85;font-weight:600;letter-spacing:.03em;text-transform:uppercase}
+  .node .x{margin-left:auto;font-size:11px;opacity:.7}
+  .node.leaf{cursor:default;font-size:12px;padding:5px 10px;border-style:dashed}
+  .node.excl{opacity:.6}
+  .node.root{font-weight:700;font-size:15px}
+  .node.detached{border-style:dashed;cursor:default;flex-direction:column;align-items:flex-start;gap:2px}
+  .extra{position:absolute;font-size:11px;color:#8a93b5;letter-spacing:.04em;text-transform:uppercase}
+  .hint{font-size:12px;color:#6b7280;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="bar">
+    <h1>Dentfluence — group, products &amp; architecture</h1>
+    <div class="sp"></div>
+    <button class="btn" id="expand">Expand all</button>
+    <button class="btn" id="collapse">Collapse all</button>
+    <button class="btn" id="zout">&minus;</button>
+    <button class="btn" id="zin">+</button>
+    <button class="btn" id="fit">Fit</button>
+  </div>
+  <p class="subtitle">The parent group holds two divisions. Dentfluence (software) ships two apps — <b>Elite</b> for clinics and <b>ProConsult</b> for visiting consultants — plus modules sold standalone. Website &amp; Growth is a separate division. Tulip Dental is a separate business outside the group.</p>
+  <div class="legend">
+    <span><i class="dot" style="background:#5f6b80"></i>parent group</span>
+    <span><i class="dot" style="background:#1D9E75"></i>Dentfluence · Elite</span>
+    <span><i class="dot" style="background:#378ADD"></i>ProConsult app</span>
+    <span><i class="dot" style="background:#BA7517"></i>Website &amp; Growth</span>
+    <span><i class="dot" style="background:#7F77DD"></i>Tulip Dental — separate</span>
+  </div>
+  <div class="viewport" id="vp">
+    <div class="canvas" id="cv"><svg class="links" id="lk"></svg></div>
+  </div>
+  <div class="hint">Drag to pan · scroll to zoom · click a node to open or close its branch. Faded items under ProConsult are not available to consultants.</div>
+</div>
+
+<script>
+const C={
+  root:{f:'#1b2230',t:'#e7e9ee',s:'#5f6b80'},
+  dent:{f:'#103029',t:'#9FE1CB',s:'#1D9E75'},
+  pc:{f:'#11233a',t:'#B5D4F4',s:'#378ADD'},
+  web:{f:'#332714',t:'#FAC775',s:'#BA7517'},
+  tulip:{f:'#211f3a',t:'#CECBF6',s:'#7F77DD'}
+};
+const TREE={id:'root',label:'Parent group',cap:'holding · portfolio',cat:'root',ch:[
+
+  {id:'dent',label:'Dentfluence',cap:'software business',cat:'dent',ch:[
+
+    {id:'elite',label:'Dentfluence Elite',cap:'app · for clinics',cat:'dent',ch:[
+      {id:'e_clin',label:'Clinical core',cat:'dent',ch:['Patients','Appointments','Consultations','Treatment plans','Prescriptions','Clinical records','Lab']},
+      {id:'e_fin',label:'Finance & billing',cat:'dent',ch:['Billing & invoices','Wallet & membership','Finance ledger','GST · EMI','Reports & KPIs']},
+      {id:'e_supply',label:'Supply chain',cat:'dent',ch:['Inventory & implants','Procurement (PO → GRN → AP)','Stock counts']},
+      {id:'e_acq',label:'Acquisition & growth',cat:'dent',ch:['Communication (4 engines)','Leads / CRM','Unified inbox']},
+      {id:'e_plat',label:'People & platform',cat:'dent',ch:['HR','Admin & RBAC','AI copilot','Notifications']}
+    ]},
+
+    {id:'proconsult',label:'ProConsult',cap:'separate app · visiting consultants',cat:'pc',ch:[
+      {id:'pc_core',label:'Clinical tools',cap:'included',cat:'pc',ch:['Consultations','Treatment plans','Clinical records','Prescriptions','Lab cases','My reports']},
+      {id:'pc_addon',label:'Add-ons',cap:'can buy · personal growth',cat:'pc',ch:['Marketing Engine','Clinical Library']},
+      {id:'pc_excl',label:'Not available',cap:'excluded',cat:'pc',excl:true,ch:['PRM (cannot buy)','No patient connection','No recall / follow-up','Clinic finance & supply','HR & operations']}
+    ]},
+
+    {id:'standalone',label:'Standalone products',cap:'sold separately',cat:'dent',ch:[
+      {id:'s_lib',label:'Clinical Library',cat:'dent',ch:['Clinical content','Patient education','Treatment cases']},
+      {id:'s_prm',label:'PRM',cat:'dent',ch:['Recall engine','Follow-ups','Patient relationship','Templates & inbox']},
+      {id:'s_mkt',label:'Marketing Engine',cat:'dent',ch:['Campaigns','Posts & brand kit','Content calendar','Multi-platform publish']}
+    ]},
+    {id:'dtech',label:'Technology',cap:'foundation',cat:'dent',ch:['Laravel · MySQL · Blade','Runs on Laragon','Local & private AI (Whisper · Ollama)','Security & RBAC']},
+    {id:'dcomm',label:'Commercial',cap:'go to market',cat:'dent',ch:['Pilot → prove → sell','Subscription pricing','25 → 150 → 500 clinics']}
+  ]},
+
+  {id:'web',label:'Website & Growth',cap:'separate division',cat:'web',ch:[
+    {id:'w_sites',label:'Clinic websites',cat:'web',ch:['Design & build','Booking integration','Hosting & care']},
+    {id:'w_seo',label:'SEO & local growth',cat:'web',ch:['Local SEO','Google Business','Reviews & ratings']},
+    {id:'w_content',label:'Social & content',cat:'web',ch:['Social management','Content & reels','Ad campaigns']},
+    {id:'w_lead',label:'Lead generation',cat:'web',ch:['Landing pages','Lead capture','Hand-off to clinic']}
+  ]}
+]};
+
+const DETACHED=[{label:'Tulip Dental',cap:'separate business · not part of the group',cat:'tulip'}];
+
+const COLW=236,ROWH=34,NW=196;
+const expanded=new Set(['root','dent','web','elite','proconsult','standalone','dtech','dcomm']);
+const isLeaf=n=>typeof n==='string';
+let cursor=0,nodes=[],links=[];
+function layout(n,depth,cat,excl){
+  if(isLeaf(n)){const y=cursor*ROWH;cursor++;return {y,obj:n,depth,leaf:true,cat,excl};}
+  const open=expanded.has(n.id);let rec={obj:n,depth,leaf:false,id:n.id,open,cat:n.cat,excl:n.excl||excl};
+  if(open&&n.ch&&n.ch.length){rec.kids=n.ch.map(c=>layout(c,depth+1,n.cat,rec.excl));rec.y=(rec.kids[0].y+rec.kids[rec.kids.length-1].y)/2;}
+  else{rec.y=cursor*ROWH;cursor++;}
+  return rec;
+}
+function collect(rec){rec.x=rec.depth*COLW;nodes.push(rec);if(rec.kids)rec.kids.forEach(k=>{links.push([rec,k]);collect(k);});}
+const vp=document.getElementById('vp'),cv=document.getElementById('cv'),lk=document.getElementById('lk');
+let panx=24,pany=24,z=1,moved=false;
+function render(){
+  cursor=0;nodes=[];links=[];collect(layout(TREE,0,'root',false));
+  cv.querySelectorAll('.node,.extra').forEach(e=>e.remove());
+  let maxx=0,maxy=0,paths='';
+  links.forEach(([p,c])=>{const x1=p.x+NW,y1=p.y+15,x2=c.x,y2=c.y+15,mx=(x1+x2)/2;paths+=`<path d="M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}" fill="none" stroke="${(C[c.cat]||C.root).s}" stroke-width="1.4" opacity="${c.excl?0.28:0.5}"/>`;});
+  nodes.forEach(r=>{maxx=Math.max(maxx,r.x+NW);maxy=Math.max(maxy,r.y+30);});
+  const sepY=maxy+34;
+  paths+=`<line x1="0" y1="${sepY}" x2="${Math.max(maxx,520)}" y2="${sepY}" stroke="#7F77DD" stroke-width="1" stroke-dasharray="7 7" opacity="0.55"/>`;
+  lk.innerHTML=paths;
+  nodes.forEach(r=>{
+    const col=C[r.cat]||C.root,d=document.createElement('div');
+    d.className='node'+(r.leaf?' leaf':'')+(r.depth===0?' root':'')+(r.excl?' excl':'');
+    d.style.cssText+=`left:${r.x}px;top:${r.y}px;width:${NW}px;background:${col.f};color:${col.t};border-color:${col.s}`;
+    if(r.leaf){d.textContent=r.obj;}
+    else{const hk=r.obj.ch&&r.obj.ch.length;const cap=r.obj.cap?'<br><span class="cap">'+r.obj.cap+'</span>':'';d.innerHTML='<span>'+r.obj.label+cap+'</span>'+(hk?'<span class="x">'+(r.open?'−':'+')+'</span>':'');
+      d.addEventListener('click',e=>{if(moved)return;e.stopPropagation();if(hk){r.open?expanded.delete(r.id):expanded.add(r.id);render();}});}
+    cv.appendChild(d);
+  });
+  const lab=document.createElement('div');lab.className='extra';lab.style.cssText=`left:0px;top:${sepY+8}px`;lab.textContent='outside the group';cv.appendChild(lab);
+  let dx=0;const dy=sepY+30;
+  DETACHED.forEach(b=>{const col=C[b.cat];const d=document.createElement('div');d.className='node detached';
+    d.style.cssText+=`left:${dx}px;top:${dy}px;width:${NW+40}px;background:${col.f};color:${col.t};border-color:${col.s}`;
+    d.innerHTML='<span style="font-size:13.5px;font-weight:600">'+b.label+'</span><span class="cap" style="opacity:.85">'+b.cap+'</span>';
+    cv.appendChild(d);dx+=NW+60;});
+  lk.setAttribute('width',Math.max(maxx,520)+40);lk.setAttribute('height',dy+70);apply();
+}
+function apply(){cv.style.transform=`translate(${panx}px,${pany}px) scale(${z})`;}
+let down=false,sx,sy;
+vp.addEventListener('mousedown',e=>{down=true;moved=false;sx=e.clientX-panx;sy=e.clientY-pany;vp.classList.add('drag');});
+window.addEventListener('mousemove',e=>{if(!down)return;const nx=e.clientX-sx,ny=e.clientY-sy;if(Math.abs(nx-panx)>3||Math.abs(ny-pany)>3)moved=true;panx=nx;pany=ny;apply();});
+window.addEventListener('mouseup',()=>{down=false;vp.classList.remove('drag');setTimeout(()=>moved=false,30);});
+vp.addEventListener('wheel',e=>{e.preventDefault();const r=vp.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top,nz=Math.min(2,Math.max(.3,z*(e.deltaY<0?1.12:.89)));panx=mx-(mx-panx)*(nz/z);pany=my-(my-pany)*(nz/z);z=nz;apply();},{passive:false});
+function fit(){const r=vp.getBoundingClientRect(),w=+lk.getAttribute('width'),h=+lk.getAttribute('height');z=Math.min((r.width-24)/w,(r.height-24)/h,1);panx=12;pany=12;apply();}
+document.getElementById('zin').onclick=()=>{z=Math.min(2,z*1.15);apply();};
+document.getElementById('zout').onclick=()=>{z=Math.max(.3,z*.87);apply();};
+document.getElementById('fit').onclick=fit;
+document.getElementById('expand').onclick=()=>{(function a(n){if(isLeaf(n))return;expanded.add(n.id);(n.ch||[]).forEach(a);})(TREE);render();fit();};
+document.getElementById('collapse').onclick=()=>{expanded.clear();expanded.add('root');render();fit();};
+render();setTimeout(fit,30);
+</script>
+</body>
+</html>

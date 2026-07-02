@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dentfluence — Architecture Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/iconfont/tabler-icons.min.css">
+<style>
+  :root{
+    --bg:#0f1115; --surface:#181b22; --surface2:#11141a; --line:#2a2f3a;
+    --text:#e7e9ee; --muted:#9aa1ad; --hint:#6b7280;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.6}
+  .wrap{max-width:1100px;margin:0 auto;padding:28px 22px 60px}
+  h1{font-size:24px;font-weight:600;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:20px}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:18px;font-size:13px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:7px}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .reset{margin-left:auto;font-size:13px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:5px 12px;cursor:pointer}
+  .sec{margin-bottom:12px}
+  .sec h2{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--muted);margin:10px 0 9px}
+  .row{display:flex;flex-wrap:wrap;gap:9px}
+  .card{display:flex;align-items:center;gap:9px;padding:10px 13px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:14px;cursor:pointer;transition:opacity .15s,box-shadow .15s;font-family:inherit}
+  .card i{font-size:17px}
+  .detail{margin-top:20px;background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:18px;min-height:100px}
+  .detail .head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .detail .head .name{font-size:17px;font-weight:600}
+  .chip-cat{font-size:11px;border-radius:999px;padding:2px 10px}
+  .detail .role{font-size:14px;color:var(--muted);margin-bottom:14px}
+  .ckicker{font-size:11px;color:var(--hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{font-size:12px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--text);cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit}
+  .chip i{font-size:13px}
+  .placeholder{font-size:14px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Dentfluence — system architecture map</h1>
+  <div class="sub">Five functional layers, the patient record as the central hub. Click any module to see its role and how it wires into the rest of the app.</div>
+
+  <div class="legend">
+    <span><i class="dot" style="background:#D4537E"></i>acquisition &amp; growth</span>
+    <span><i class="dot" style="background:#1D9E75"></i>clinical core</span>
+    <span><i class="dot" style="background:#BA7517"></i>supply chain</span>
+    <span><i class="dot" style="background:#378ADD"></i>finance &amp; billing</span>
+    <span><i class="dot" style="background:#7F77DD"></i>people &amp; platform</span>
+    <button class="reset" id="resetBtn">show all</button>
+  </div>
+
+  <div id="board"></div>
+
+  <div class="detail" id="detail">
+    <div class="placeholder"><i class="ti ti-pointer"></i> Click any module to explore. Connected modules stay lit; the rest dim.</div>
+  </div>
+</div>
+
+<script>
+const CAT={acq:{n:'Acquisition & growth',c:'#D4537E'},clin:{n:'Clinical core',c:'#1D9E75'},supply:{n:'Supply chain',c:'#BA7517'},fin:{n:'Finance & billing',c:'#378ADD'},plat:{n:'People & platform',c:'#7F77DD'}};
+const N={
+  marketing:{l:'Marketing',cat:'acq',i:'speakerphone',r:'Campaigns, posts, brand kit, content calendar and multi-platform publishing. Feeds new enquiries into the lead pipeline.',c:['crm','communication','content']},
+  communication:{l:'Communication',cat:'acq',i:'messages',r:'Four engines — recall, opportunity, inbound/leads and B2B — funnel into one unified inbox. Drives follow-ups, huddles and templated messaging.',c:['patient','appointment','treatmentplan','crm','notifications']},
+  crm:{l:'Leads / CRM',cat:'acq',i:'user-plus',r:'Captures inbound leads and converts them into patients. Tracks lead activity and source.',c:['patient','communication','marketing']},
+  patient:{l:'Patient — core hub',cat:'clin',i:'user-heart',r:'The central record everything hangs off. Appointments, consultations, clinical files, prescriptions, billing, wallet and communication all reference the patient.',c:['appointment','consultation','prescriptions','clinical','lab','billing','wallet','communication']},
+  appointment:{l:'Appointments',cat:'clin',i:'calendar',r:'Scheduling against operatories and doctors. Drives recall communication and opens consultations.',c:['patient','consultation','communication']},
+  consultation:{l:'Consultations',cat:'clin',i:'stethoscope',r:'Four workflows: new, same-issue, minor and emergency. The clinical engine — generates findings, prescriptions, lab cases and treatment plans.',c:['patient','appointment','treatmentplan','prescriptions','clinical','lab','ai']},
+  treatmentplan:{l:'Treatment plans',cat:'clin',i:'clipboard-list',r:'Proposed and accepted treatments. Consumes inventory and converts into billable invoices.',c:['consultation','billing','inventory']},
+  prescriptions:{l:'Prescriptions (Rx)',cat:'clin',i:'prescription',r:'Drug catalogue, dose and duration templates with allergy and interaction rule checks, plus a full audit trail.',c:['patient','consultation']},
+  clinical:{l:'Clinical records',cat:'clin',i:'photo',r:'Findings, media, photographs, scans and documentation protocols attached to consultations.',c:['consultation','patient']},
+  lab:{l:'Lab',cat:'clin',i:'flask',r:'Lab cases to external vendors, attachments, events and monthly reconciliation — billed back through vendor invoices.',c:['consultation','procurement','finance']},
+  inventory:{l:'Inventory & implants',cat:'supply',i:'package',r:'Stock, variants, locations, implant catalogue and stock counts. Replenished by procurement, consumed by treatment.',c:['treatmentplan','procurement']},
+  procurement:{l:'Procurement',cat:'supply',i:'truck-delivery',r:'Purchase order → goods receipt note → vendor invoice → accounts payable. Receives stock and posts to finance.',c:['inventory','finance']},
+  billing:{l:'Billing & invoices',cat:'fin',i:'receipt',r:'Invoices, items, payments and receipts generated from treatment plans. Applies coupons and membership pricing.',c:['patient','treatmentplan','wallet','finance']},
+  wallet:{l:'Wallet & membership',cat:'fin',i:'wallet',r:'Patient wallet balance, membership plans and benefit logs. Settles against invoices.',c:['billing','patient','finance']},
+  finance:{l:'Finance ledger',cat:'fin',i:'book',r:'Transactions, expenses, bank and cashbook, GST, vouchers, vendor payments and payroll — the accounting backbone.',c:['billing','procurement','lab','hr','reports']},
+  reports:{l:'Reports & analytics',cat:'fin',i:'chart-bar',r:'Reads across finance, clinical, inventory and HR to produce KPI and management views.',c:['finance','clinical','inventory','hr']},
+  hr:{l:'HR',cat:'plat',i:'users',r:'Staff profiles, attendance, shifts, training, performance memos and salary. Payroll flows into finance.',c:['finance','admin']},
+  admin:{l:'Admin & RBAC',cat:'plat',i:'shield-lock',r:'Roles, module permissions, masters, operatories, branches and settings. Gates access to every module.',c:['patient','finance','hr','communication']},
+  ai:{l:'AI copilot "Tulip"',cat:'plat',i:'sparkles',r:'App-wide local AI plus voice notes (transcribe → clinical notes). Reads and acts across modules with confirm-cards for clinical and financial actions.',c:['consultation','patient','communication','finance']},
+  content:{l:'Content / CMS',cat:'plat',i:'books',r:'Clinical library, patient education content and treatment case studies — surfaced in consultations and marketing.',c:['consultation','marketing']},
+  notifications:{l:'Notifications & tasks',cat:'plat',i:'bell',r:'App notifications and task queue triggered by communication, appointments and escalations.',c:['communication','appointment']}
+};
+const ORDER={acq:['marketing','communication','crm'],clin:['patient','appointment','consultation','treatmentplan','prescriptions','clinical','lab'],supply:['inventory','procurement'],fin:['billing','wallet','finance','reports'],plat:['hr','admin','ai','content','notifications']};
+
+const board=document.getElementById('board');
+Object.keys(ORDER).forEach(cat=>{
+  const sec=document.createElement('div'); sec.className='sec';
+  sec.innerHTML='<h2><i class="dot" style="background:'+CAT[cat].c+'"></i>'+CAT[cat].n+'</h2>';
+  const row=document.createElement('div'); row.className='row';
+  ORDER[cat].forEach(id=>{
+    const n=N[id], card=document.createElement('button');
+    card.className='card'; card.id='c-'+id;
+    card.innerHTML='<i class="ti ti-'+n.i+'" style="color:'+CAT[cat].c+'"></i>'+n.l;
+    card.onclick=()=>select(id);
+    row.appendChild(card);
+  });
+  sec.appendChild(row); board.appendChild(sec);
+});
+const all=Object.keys(N);
+function reset(){all.forEach(id=>{const e=document.getElementById('c-'+id);e.style.opacity='1';e.style.boxShadow='none';});}
+let cur=null;
+function select(id){
+  if(cur===id){cur=null;reset();intro();return;}
+  cur=id; const n=N[id], set=new Set([id,...n.c]);
+  all.forEach(x=>{const e=document.getElementById('c-'+x);
+    if(x===id){e.style.opacity='1';e.style.boxShadow='0 0 0 2px '+CAT[n.cat].c;}
+    else if(set.has(x)){e.style.opacity='1';e.style.boxShadow='0 0 0 1.5px #4b5563';}
+    else{e.style.opacity='.28';e.style.boxShadow='none';}});
+  const chips=n.c.map(x=>'<button class="chip" data-go="'+x+'"><i class="ti ti-'+N[x].i+'" style="color:'+CAT[N[x].cat].c+'"></i>'+N[x].l+'</button>').join('');
+  document.getElementById('detail').innerHTML=
+    '<div class="head"><i class="ti ti-'+n.i+'" style="font-size:22px;color:'+CAT[n.cat].c+'"></i><span class="name">'+n.l+'</span><span class="chip-cat" style="color:'+CAT[n.cat].c+';border:1px solid '+CAT[n.cat].c+'66">'+CAT[n.cat].n+'</span></div>'+
+    '<div class="role">'+n.r+'</div>'+
+    '<div class="ckicker">Connects to</div><div class="chips">'+chips+'</div>';
+  document.querySelectorAll('#detail .chip').forEach(b=>b.onclick=()=>select(b.dataset.go));
+}
+function intro(){document.getElementById('detail').innerHTML='<div class="placeholder"><i class="ti ti-pointer"></i> Click any module to explore. Connected modules stay lit; the rest dim.</div>';}
+document.getElementById('resetBtn').onclick=()=>{cur=null;reset();intro();};
+</script>
+</body>
+</html>

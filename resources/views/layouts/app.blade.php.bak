@@ -1,0 +1,825 @@
+{{--
+|==========================================================================
+| Dentfluence OS — Master Application Layout
+| File: resources/views/layouts/app.blade.php
+|
+| Architecture:
+|   <html>
+|     <head>  — fonts, Tailwind, meta
+|     <body>
+|       #df-shell                  ← full-viewport root
+|         #df-sidebar              ← fixed left column (from component)
+|         #df-body-column          ← right column, flex-col
+|           #df-topbar             ← fixed topbar (from component)
+|           #df-content-area       ← scrollable main content
+|             @yield('content')
+|         #df-drawer-overlay       ← mobile sidebar backdrop
+|       #df-toast-region           ← global notification portal
+|
+| Usage in child views:
+|   @extends('layouts.app')
+|   @section('page-title', 'Appointments')
+|   @section('content') ... @endsection
+|   @section('head-extra') ... @endsection   (optional extra head tags)
+|==========================================================================
+--}}
+<!DOCTYPE html>
+<html
+    lang="{{ str_replace('_', '-', app()->getLocale()) }}"
+    class="h-full"
+    data-sidebar="expanded"
+>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="theme-color" content="#1e0030">
+
+    <title>@yield('page-title', 'Dashboard') — Dentfluence OS</title>
+
+    {{-- Alpine.js — collapse plugin MUST come before Alpine so it registers in time --}}
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    {{-- ── Preconnect for fast font load ── --}}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    {{-- ── Tailwind CDN ── --}}
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        display: ['"Cormorant Garamond"', 'Georgia', 'serif'],
+                        ui:      ['"Inter"', 'system-ui', 'sans-serif'],
+                        mono:    ['"Inter"', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        /* ── Tulip Dental brand ramp ── */
+                        brand: {
+                            50:  '#f9f3fa',
+                            100: '#f3e8f4',
+                            200: '#dfc5e1',
+                            300: '#b95cb7',
+                            400: '#8e24aa',
+                            500: '#6a0f70',
+                            600: '#4e0a53',
+                            700: '#380740',
+                            800: '#2d0538',
+                            900: '#1a0320',
+                        },
+                        /* ── Sidebar-specific deep palette ── */
+                        sidebar: {
+                            DEFAULT: '#160220',
+                            hover:   '#200a2e',
+                            active:  '#2a0e3a',
+                            border:  'rgba(185,92,183,0.10)',
+                            text:    'rgba(215,185,228,0.60)',
+                            muted:   'rgba(185,150,205,0.35)',
+                        },
+                        /* ── Canvas / surface ── */
+                        canvas:  '#f5eef9',
+                        surface: '#ffffff',
+                        /* ── Operational semantic ── */
+                        ok:    { DEFAULT: '#1a7a45', bg: '#e8f7ef' },
+                        warn:  { DEFAULT: '#a05c00', bg: '#fff4e0' },
+                        err:   { DEFAULT: '#b52020', bg: '#fdeaea' },
+                        info:  { DEFAULT: '#1a5ea8', bg: '#e6f0fb' },
+                    },
+                    spacing: {
+                        sidebar:   '240px',
+                        'sidebar-sm': '64px',
+                        topbar:    '64px',
+                    },
+                    zIndex: {
+                        sidebar:   '30',
+                        topbar:    '40',
+                        overlay:   '50',
+                        modal:     '60',
+                        toast:     '80',
+                    },
+                    boxShadow: {
+                        'sidebar-right': '1px 0 0 0 rgba(185,92,183,0.08)',
+                        'topbar-bottom': '0 1px 0 0 rgba(185,92,183,0.06)',
+                        'input-focus':   '0 0 0 3px rgba(106,15,112,0.14)',
+                    },
+                    transitionDuration: {
+                        sidebar: '280ms',
+                    },
+                }
+            }
+        }
+    </script>
+
+    {{-- ── Global application styles ── --}}
+    <style>
+        /* ── Reset ── */
+        *, *::before, *::after { box-sizing: border-box; }
+
+        /* ── Root ── */
+        html, body {
+            height: 100%;
+            font-family: var(--df-font-body, 'Inter', system-ui, sans-serif);
+            font-size: 14px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background: #f5eef9;
+            color: #1a0a24;
+        }
+
+        /* ════════════════════════════════════════════
+           SHELL — full viewport, no overflow at root
+        ════════════════════════════════════════════ */
+        #df-shell {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* ════════════════════════════════════════════
+           SIDEBAR COLUMN
+        ════════════════════════════════════════════ */
+        #df-sidebar {
+            width: 240px;
+            flex-shrink: 0;
+            height: 100vh;
+            position: relative;
+            z-index: 30;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: width 280ms cubic-bezier(0.4, 0, 0.2, 1);
+
+            /* Deep luxury background — glow overlays tint with scheme colour */
+            background:
+                radial-gradient(ellipse 120% 55% at 60% 0%,
+                    color-mix(in srgb, var(--df-color-primary, #8c1eaa) 38%, transparent) 0%, transparent 50%),
+                radial-gradient(ellipse 80%  50% at 10% 100%,
+                    color-mix(in srgb, var(--df-color-primary, #5a0a78) 28%, transparent) 0%, transparent 55%),
+                linear-gradient(175deg, #130c1e 0%, #0e0a18 40%, #090612 100%);
+
+            /* Right edge separator */
+            box-shadow: 1px 0 0 0 color-mix(in srgb, var(--df-color-primary, #b95cb7) 12%, transparent);
+        }
+
+        /* Collapsed: icon-only */
+        #df-shell[data-sidebar="collapsed"] #df-sidebar {
+            width: 64px;
+        }
+
+        /* Collapsed: hide text labels */
+        #df-shell[data-sidebar="collapsed"] .df-nav-label,
+        #df-shell[data-sidebar="collapsed"] .df-nav-section-label,
+        #df-shell[data-sidebar="collapsed"] .df-sidebar-brand-sub,
+        #df-shell[data-sidebar="collapsed"] .df-nav-badge-text {
+            opacity: 0;
+            pointer-events: none;
+            width: 0;
+            overflow: hidden;
+        }
+
+        /* Collapsed: center icons */
+        #df-shell[data-sidebar="collapsed"] .df-nav-item {
+            justify-content: center;
+            padding-left: 0;
+            padding-right: 0;
+        }
+
+        #df-shell[data-sidebar="collapsed"] .df-sidebar-brand {
+            justify-content: center;
+            padding-left: 0;
+            padding-right: 0;
+        }
+
+        /* ════════════════════════════════════════════
+           BODY COLUMN (topbar + content)
+        ════════════════════════════════════════════ */
+        #df-body-column {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ════════════════════════════════════════════
+           TOPBAR
+        ════════════════════════════════════════════ */
+        #df-topbar {
+            height: 64px;
+            flex-shrink: 0;
+            z-index: 40;
+            display: flex;
+            align-items: center;
+            background: #ffffff;
+            border-bottom: 1px solid rgba(185,92,183,0.10);
+            padding: 0 28px;
+            gap: 16px;
+        }
+
+        /* ════════════════════════════════════════════
+           CONTENT AREA — owns the scroll
+        ════════════════════════════════════════════ */
+        #df-content-area {
+            flex: 1;
+            min-height: 0;     /* critical: allows shrinking in flex */
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: #f5eef9;
+        }
+
+        /* Scrollbar — slim, brand-tinted */
+        #df-content-area::-webkit-scrollbar         { width: 5px; }
+        #df-content-area::-webkit-scrollbar-track   { background: transparent; }
+        #df-content-area::-webkit-scrollbar-thumb   { background: rgba(185,92,183,0.28); }
+        #df-content-area::-webkit-scrollbar-thumb:hover { background: rgba(106,15,112,0.45); }
+
+        /* Inner content wrapper — max-width + consistent padding */
+        #df-content-inner {
+            max-width: 1440px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 28px 32px 48px;
+        }
+
+        /* ════════════════════════════════════════════
+           SIDEBAR INNER SCROLL (nav items)
+        ════════════════════════════════════════════ */
+        #df-sidebar-nav {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 8px 0;
+        }
+        #df-sidebar-nav::-webkit-scrollbar         { width: 3px; }
+        #df-sidebar-nav::-webkit-scrollbar-track   { background: transparent; }
+        #df-sidebar-nav::-webkit-scrollbar-thumb   { background: rgba(185,92,183,0.20); }
+
+        /* ════════════════════════════════════════════
+           MOBILE DRAWER OVERLAY
+        ════════════════════════════════════════════ */
+        #df-drawer-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 25;
+            background: rgba(14, 1, 24, 0.55);
+            backdrop-filter: blur(2px);
+        }
+        #df-drawer-overlay.visible { display: block; }
+
+        /* Mobile: sidebar becomes drawer */
+        @media (max-width: 767px) {
+            #df-sidebar {
+                position: fixed;
+                left: 0; top: 0; bottom: 0;
+                width: 240px !important;
+                z-index: 50;
+                transform: translateX(-100%);
+                transition: transform 280ms cubic-bezier(0.4, 0, 0.2, 1),
+                            box-shadow 280ms;
+                box-shadow: none;
+            }
+            #df-sidebar.drawer-open {
+                transform: translateX(0);
+                box-shadow: 4px 0 24px rgba(14,1,24,0.45);
+            }
+            #df-body-column { width: 100%; }
+            #df-content-inner { padding: 20px 16px 40px; }
+            #df-topbar { padding: 0 16px; }
+        }
+
+        /* Tablet: auto-collapse sidebar to icon-only */
+        @media (min-width: 768px) and (max-width: 1199px) {
+            #df-sidebar { width: 64px; }
+            .df-nav-label,
+            .df-nav-section-label,
+            .df-sidebar-brand-sub,
+            .df-nav-badge-text {
+                opacity: 0;
+                pointer-events: none;
+                width: 0;
+                overflow: hidden;
+            }
+            .df-nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
+            .df-sidebar-brand { justify-content: center; padding-left: 0; padding-right: 0; }
+        }
+
+        /* ════════════════════════════════════════════
+           TOAST NOTIFICATION REGION
+        ════════════════════════════════════════════ */
+        #df-toast-region {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 80;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+            max-width: 360px;
+            width: calc(100vw - 48px);
+        }
+
+        /* Individual toast — injected via JS */
+        .df-toast {
+            pointer-events: all;
+            background: #ffffff;
+            border: 1px solid #ede8e0;
+            border-left: 3px solid var(--df-color-primary, #6a0f70);
+            border-radius: 3px;
+            padding: 12px 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 400;
+            color: #1a0a24;
+            box-shadow: 0 4px 12px rgba(14,1,24,0.10);
+            animation: toastIn 150ms cubic-bezier(0.16,1,0.3,1) both;
+        }
+        .df-toast.toast-success  { border-left-color: #1a7a45; }
+        .df-toast.toast-error    { border-left-color: #b52020; }
+        .df-toast.toast-warning  { border-left-color: #a05c00; }
+        .df-toast.toast-info     { border-left-color: #1a5ea8; }
+        .df-toast.toast-out      { animation: toastOut 150ms ease-in both; }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0);   }
+        }
+        @keyframes toastOut {
+            from { opacity: 1; transform: translateY(0); max-height: 100px; }
+            to   { opacity: 0; transform: translateY(4px); max-height: 0; padding: 0; margin: 0; }
+        }
+
+        /* ════════════════════════════════════════════
+           PAGE HEADER (standardised, used in yield)
+        ════════════════════════════════════════════ */
+        .df-page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .df-page-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 28px;
+            font-weight: 600;
+            color: #1e0a2c;
+            line-height: 1.1;
+            letter-spacing: -0.01em;
+        }
+        .df-page-subtitle {
+            font-size: 13px;
+            font-weight: 300;
+            color: #7a6884;
+            margin-top: 3px;
+        }
+        .df-page-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        /* ════════════════════════════════════════════
+           SKELETON LOADING STATE (reusable utility)
+        ════════════════════════════════════════════ */
+        .df-skeleton {
+            background: #e8dff0;
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+        .df-skeleton::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                90deg,
+                transparent 0%,
+                rgba(255,255,255,0.40) 50%,
+                transparent 100%
+            );
+            animation: skeletonShimmer 1.6s ease-in-out infinite;
+        }
+        @keyframes skeletonShimmer {
+            0%   { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        /* ════════════════════════════════════════════
+           FOCUS RING — global accessible default
+        ════════════════════════════════════════════ */
+        :focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--df-color-primary, #6a0f70) 22%, transparent);
+        }
+
+        /* ════════════════════════════════════════════
+           UTILITY — content section card
+        ════════════════════════════════════════════ */
+        .df-card {
+            background: #ffffff;
+            border: 1px solid rgba(185,92,183,0.12);
+            border-radius: 3px;
+        }
+        .df-card-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid rgba(185,92,183,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #faf5fb;
+        }
+        .df-card-body { padding: 20px; }
+
+        /* ════════════════════════════════════════════
+           DENTFLUENCE DESIGN SYSTEM — Shared tokens
+           Use these across ALL modules so every page
+           looks like it belongs to the same product.
+        ════════════════════════════════════════════ */
+
+        /* KPI card shell */
+        .df-kpi-card {
+            background: #ffffff;
+            border: 1px solid rgba(185,92,183,0.12);
+            border-radius: 4px;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+            transition: box-shadow 150ms, transform 150ms;
+        }
+        .df-kpi-card:hover {
+            box-shadow: 0 4px 14px rgba(106,15,112,0.08);
+            transform: translateY(-1px);
+        }
+        .df-kpi-card.df-kpi-alert {
+            border-left: 3px solid var(--df-alert-color, var(--df-color-primary));
+        }
+
+        /* Circular icon container (36 × 36 px) */
+        .df-icon-circle {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-bottom: 12px;
+        }
+
+        /* KPI numeric value */
+        .df-kpi-value {
+            font-family: 'Inter', sans-serif;
+            font-size: 22px;
+            font-weight: 600;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        /* KPI primary label */
+        .df-kpi-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: #1e0a2c;
+            margin-bottom: 3px;
+        }
+
+        /* KPI sub-text / insight line */
+        .df-kpi-insight {
+            font-size: 11px;
+            color: #9a85aa;
+            font-weight: 400;
+        }
+
+        /* Alert dot (top-right corner of card) */
+        .df-kpi-dot {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+        }
+
+        /* Section/card header label — small all-caps */
+        .df-section-label {
+            font-size: 10.5px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--df-color-primary, #6a0f70);
+        }
+
+        /* Standard SVG icon sizes */
+        .df-icon-sm  svg, svg.df-icon-sm  { width: 13px; height: 13px; }
+        .df-icon-md  svg, svg.df-icon-md  { width: 16px; height: 16px; }
+        .df-icon-lg  svg, svg.df-icon-lg  { width: 20px; height: 20px; }
+        .df-icon-xl  svg, svg.df-icon-xl  { width: 24px; height: 24px; }
+
+        /* ════════════════════════════════════════════
+           PRINT
+        ════════════════════════════════════════════ */
+        @media print {
+            #df-sidebar, #df-topbar, #df-toast-region, #df-drawer-overlay {
+                display: none !important;
+            }
+            #df-body-column {
+                width: 100% !important;
+                height: auto !important;
+            }
+            #df-content-area {
+                overflow: visible !important;
+                height: auto !important;
+            }
+        }
+    </style>
+
+    {{-- ── Flatpickr (date / time pickers) ── --}}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
+    <style>
+        /* Flatpickr brand overrides */
+        .flatpickr-calendar { font-family: var(--df-font-body, 'Inter', sans-serif); border-radius: 10px; box-shadow: 0 6px 24px rgba(14,1,24,0.13); border: 1px solid rgba(185,92,183,0.18); }
+        .flatpickr-day.selected, .flatpickr-day.selected:hover { background: var(--df-color-primary, #6a0f70); border-color: var(--df-color-primary, #6a0f70); }
+        .flatpickr-day:hover { background: var(--df-color-light, #f9f3fa); color: var(--df-color-primary, #6a0f70); }
+        .flatpickr-day.today { border-color: var(--df-color-primary, #6a0f70); }
+        .flatpickr-months .flatpickr-month { color: #1a0a24; background: #faf4fb; }
+        .flatpickr-current-month .flatpickr-monthDropdown-months { color: #1a0a24; }
+        .flatpickr-weekday { color: var(--df-color-primary, #6a0f70); }
+    </style>
+
+    {{-- ── Personalisation CSS defaults (overridden at runtime by JS above) ── --}}
+    <style>
+        :root {
+            --df-font-body:       'Inter', sans-serif;
+            --df-color-primary:   #6a0f70;
+            --df-color-hover:     #3a0050;
+            --df-color-light:     #f9f3fa;
+            --df-color-border:    rgba(185,92,183,0.18);
+
+            /* Derived opacity variants — auto-update when --df-color-primary changes */
+            --df-color-5:   color-mix(in srgb, var(--df-color-primary)  5%, transparent);
+            --df-color-10:  color-mix(in srgb, var(--df-color-primary) 10%, transparent);
+            --df-color-14:  color-mix(in srgb, var(--df-color-primary) 14%, transparent);
+            --df-color-18:  color-mix(in srgb, var(--df-color-primary) 18%, transparent);
+            --df-color-22:  color-mix(in srgb, var(--df-color-primary) 22%, transparent);
+            --df-color-28:  color-mix(in srgb, var(--df-color-primary) 28%, transparent);
+            --df-color-35:  color-mix(in srgb, var(--df-color-primary) 35%, transparent);
+            --df-color-50:  color-mix(in srgb, var(--df-color-primary) 50%, transparent);
+            --df-color-65:  color-mix(in srgb, var(--df-color-primary) 65%, #fff);
+
+            /* Theme tokens (light defaults) */
+            --df-bg:              #f5eef9;
+            --df-surface:         #ffffff;
+            --df-surface-2:       #faf4fb;
+            --df-topbar-bg:       #ffffff;
+            --df-topbar-border:   rgba(185,92,183,0.10);
+            --df-text:            #1a0a24;
+            --df-text-muted:      #7a6884;
+            --df-text-subtle:     #b0a4bc;
+            --df-border-ui:       #e0d4ea;
+            --df-card-bg:         #ffffff;
+            --df-input-bg:        #ffffff;
+        }
+
+        /* ══════════════════════════════════════════════════════════
+           INLINE STYLE COLOUR INTERCEPTION
+           Catches hardcoded #6a0f70 purple in inline style=""
+           attributes across ALL 199 view files — no per-file edits needed.
+           CSS attribute selectors + !important override inline styles.
+        ══════════════════════════════════════════════════════════ */
+
+        /* --- Background colours --- */
+        [style*="background:#6a0f70"],[style*="background: #6a0f70"],
+        [style*="background-color:#6a0f70"],[style*="background-color: #6a0f70"] {
+            background-color: var(--df-color-primary) !important;
+            background:       var(--df-color-primary) !important;
+        }
+        [style*="background:#530b5a"],[style*="background: #530b5a"],
+        [style*="background:#3a0050"],[style*="background: #3a0050"],
+        [style*="background-color:#530b5a"],[style*="background-color:#3a0050"] {
+            background-color: var(--df-color-hover) !important;
+            background:       var(--df-color-hover) !important;
+        }
+        [style*="background:#f9f3fa"],[style*="background: #f9f3fa"],
+        [style*="background:#faf4fb"],[style*="background: #faf4fb"] {
+            background-color: var(--df-color-light) !important;
+            background:       var(--df-color-light) !important;
+        }
+
+        /* --- Text colours --- */
+        [style*="color:#6a0f70"],[style*="color: #6a0f70"]   { color: var(--df-color-primary) !important; }
+        [style*="color:#530b5a"],[style*="color: #530b5a"]   { color: var(--df-color-hover)   !important; }
+
+        /* --- Border colours --- */
+        [style*="border-color:#6a0f70"]                      { border-color: var(--df-color-primary) !important; }
+        [style*="border:1px solid #6a0f70"],
+        [style*="border: 1px solid #6a0f70"]                 { border-color: var(--df-color-primary) !important; }
+        [style*="border:2px solid #6a0f70"],
+        [style*="border: 2px solid #6a0f70"]                 { border-color: var(--df-color-primary) !important; }
+        [style*="border-bottom:2px solid #6a0f70"],
+        [style*="border-bottom: 2px solid #6a0f70"],
+        [style*="border-bottom:3px solid #6a0f70"],
+        [style*="border-bottom: 3px solid #6a0f70"]          { border-bottom-color: var(--df-color-primary) !important; }
+        [style*="border-left:2px solid #6a0f70"],
+        [style*="border-left: 2px solid #6a0f70"],
+        [style*="border-left:3px solid #6a0f70"],
+        [style*="border-left: 3px solid #6a0f70"],
+        [style*="border-left:4px solid #6a0f70"],
+        [style*="border-left: 4px solid #6a0f70"]            { border-left-color:   var(--df-color-primary) !important; }
+        [style*="border-top:2px solid #6a0f70"],
+        [style*="border-top: 2px solid #6a0f70"]             { border-top-color:    var(--df-color-primary) !important; }
+
+        /* --- Box shadows using primary colour --- */
+        [style*="box-shadow"][style*="6a0f70"]               { box-shadow: 0 0 0 3px var(--df-color-18) !important; }
+
+        /* --- SVG stroke / fill (for inline SVGs with style attr) --- */
+        [style*="stroke:#6a0f70"],[style*="stroke: #6a0f70"] { stroke: var(--df-color-primary) !important; }
+        [style*="fill:#6a0f70"],[style*="fill: #6a0f70"]     { fill:   var(--df-color-primary) !important; }
+
+        /* ══════════════════════════════════════════════════════════
+           TAILWIND ARBITRARY CLASS OVERRIDES
+           Catches bg-[#6a0f70], text-[#6a0f70], border-[#6a0f70]
+           etc. that have no inline style attr to intercept.
+        ══════════════════════════════════════════════════════════ */
+
+        /* --- Primary solid colour --- */
+        .bg-\[\#6a0f70\]              { background-color: var(--df-color-primary) !important; }
+        .text-\[\#6a0f70\]            { color:            var(--df-color-primary) !important; }
+        .border-\[\#6a0f70\]          { border-color:     var(--df-color-primary) !important; }
+        .ring-\[\#6a0f70\]            { --tw-ring-color:  var(--df-color-primary) !important; }
+        .hover\:bg-\[\#6a0f70\]:hover { background-color: var(--df-color-primary) !important; }
+
+        /* --- Darker hover shades (#380740, #52095a, #570c5d, #530b5a) → hover colour --- */
+        .bg-\[\#380740\]               { background-color: var(--df-color-hover) !important; }
+        .text-\[\#380740\]             { color:            var(--df-color-hover) !important; }
+        .hover\:bg-\[\#380740\]:hover  { background-color: var(--df-color-hover) !important; }
+        .hover\:bg-\[\#52095a\]:hover  { background-color: var(--df-color-hover) !important; }
+        .hover\:bg-\[\#570c5d\]:hover  { background-color: var(--df-color-hover) !important; }
+        .hover\:bg-\[\#530b5a\]:hover  { background-color: var(--df-color-hover) !important; }
+
+        /* --- Light tint backgrounds (all the near-white purples → light colour) --- */
+        .bg-\[\#f9f4fb\],.bg-\[\#f5eef9\],.bg-\[\#f3e8f4\],.bg-\[\#f3e8f9\],
+        .bg-\[\#faf5fc\],.bg-\[\#faf5fb\],.bg-\[\#faf8fc\],.bg-\[\#faf5ff\],
+        .bg-\[\#fdf5ff\],.bg-\[\#fdf8ff\]                   { background-color: var(--df-color-light) !important; }
+        .hover\:bg-\[\#f5eef9\]:hover,.hover\:bg-\[\#fdf8ff\]:hover,
+        .hover\:bg-\[\#f3e8f4\]:hover,.hover\:bg-\[\#f3e8f9\]:hover,
+        .hover\:bg-\[\#faf5fc\]:hover,.hover\:bg-\[\#faf5ff\]:hover { background-color: var(--df-color-light) !important; }
+
+        /* --- Light borders (near-white purple borders → 18% primary) --- */
+        .border-\[\#e8d5f0\],.border-\[\#f0e4f7\],.border-\[\#f3e8f4\],
+        .border-\[\#d4b8dc\],.border-\[\#f3e8ff\]           { border-color: var(--df-color-18) !important; }
+
+        /* ── Dark mode ── */
+        html[data-theme="dark"] {
+            --df-bg:              #0e0a14;
+            --df-surface:         #1a1224;
+            --df-surface-2:       #221830;
+            --df-topbar-bg:       #160e22;
+            --df-topbar-border:   rgba(185,92,183,0.14);
+            --df-text:            #ece6f4;
+            --df-text-muted:      #9e8fa0;
+            --df-text-subtle:     #6a5870;
+            --df-border-ui:       rgba(185,92,183,0.20);
+            --df-card-bg:         #1a1224;
+            --df-input-bg:        #1e1430;
+        }
+
+        /* Apply theme tokens to structural elements */
+        body                { background: var(--df-bg); color: var(--df-text); }
+        #df-topbar          { background: var(--df-topbar-bg) !important; border-bottom-color: var(--df-topbar-border) !important; }
+        #df-content-area    { background: var(--df-bg) !important; }
+
+        /* Dark mode: override white cards/panels rendered with inline styles */
+        html[data-theme="dark"] .bg-white,
+        html[data-theme="dark"] [style*="background:#fff"],
+        html[data-theme="dark"] [style*="background: #fff"],
+        html[data-theme="dark"] [style*="background:#ffffff"],
+        html[data-theme="dark"] [style*="background: #ffffff"] {
+            background: var(--df-surface) !important;
+        }
+        html[data-theme="dark"] [style*="background:#faf"],
+        html[data-theme="dark"] [style*="background: #faf"],
+        html[data-theme="dark"] [style*="background:#f9f"],
+        html[data-theme="dark"] [style*="background: #f9f"],
+        html[data-theme="dark"] [style*="background:#f5f"],
+        html[data-theme="dark"] [style*="background: #f5f"],
+        html[data-theme="dark"] [style*="background:#f0e"],
+        html[data-theme="dark"] [style*="background: #f0e"],
+        html[data-theme="dark"] [style*="background:#fdf"],
+        html[data-theme="dark"] [style*="background: #fdf"],
+        html[data-theme="dark"] [style*="background:#f7f"],
+        html[data-theme="dark"] [style*="background: #f7f"] {
+            background: var(--df-surface-2) !important;
+        }
+
+        /* Dark: text overrides */
+        html[data-theme="dark"] [style*="color:#1a"],
+        html[data-theme="dark"] [style*="color: #1a"],
+        html[data-theme="dark"] [style*="color:#2a"],
+        html[data-theme="dark"] [style*="color: #2a"] {
+            color: var(--df-text) !important;
+        }
+        html[data-theme="dark"] [style*="color:#7a"],
+        html[data-theme="dark"] [style*="color: #7a"],
+        html[data-theme="dark"] [style*="color:#9a"],
+        html[data-theme="dark"] [style*="color: #9a"],
+        html[data-theme="dark"] [style*="color:#9e"],
+        html[data-theme="dark"] [style*="color: #9e"] {
+            color: var(--df-text-muted) !important;
+        }
+
+        /* Dark: border overrides */
+        html[data-theme="dark"] [style*="border:1px solid #e"],
+        html[data-theme="dark"] [style*="border: 1px solid #e"],
+        html[data-theme="dark"] [style*="border-bottom:1px solid #e"],
+        html[data-theme="dark"] [style*="border-bottom: 1px solid #e"] {
+            border-color: var(--df-border-ui) !important;
+        }
+
+        /* Dark: inputs */
+        html[data-theme="dark"] input,
+        html[data-theme="dark"] select,
+        html[data-theme="dark"] textarea {
+            background: var(--df-input-bg) !important;
+            color: var(--df-text) !important;
+            border-color: var(--df-border-ui) !important;
+        }
+
+        /* Dark: Tailwind utility overrides */
+        html[data-theme="dark"] .bg-gray-50  { background-color: #1e1430 !important; }
+        html[data-theme="dark"] .bg-gray-100 { background-color: #221838 !important; }
+        html[data-theme="dark"] .text-gray-700, html[data-theme="dark"] .text-gray-800, html[data-theme="dark"] .text-gray-900 { color: var(--df-text) !important; }
+        html[data-theme="dark"] .text-gray-500, html[data-theme="dark"] .text-gray-400 { color: var(--df-text-muted) !important; }
+        html[data-theme="dark"] .border-gray-100, html[data-theme="dark"] .border-gray-200 { border-color: var(--df-border-ui) !important; }
+        html[data-theme="dark"] .shadow-sm { box-shadow: 0 1px 4px rgba(0,0,0,0.4) !important; }
+
+        /* Dark: Flatpickr */
+        html[data-theme="dark"] .flatpickr-calendar { background: #1a1224; color: var(--df-text); }
+        html[data-theme="dark"] .flatpickr-day { color: var(--df-text); }
+        html[data-theme="dark"] .flatpickr-day:hover { background: var(--df-surface-2); }
+        html[data-theme="dark"] .flatpickr-months { background: #221830; color: var(--df-text); }
+        html[data-theme="dark"] .flatpickr-monthDropdown-months { background: #221830; }
+    </style>
+
+    {{-- ── Page-specific head injection ── --}}
+    @yield('head-extra')
+    @stack('styles')
+    <link rel="stylesheet" href="{{ asset('css/communication/manager.css') }}">
+</head>
+
+<body class="h-full antialiased">
+
+{{-- ── Personalisation: apply stored preferences before first paint ── --}}
+<script>
+(function () {
+    try {
+        var p = JSON.parse(localStorage.getItem('df_prefs') || '{}');
+
+        // Font
+        var fonts = {
+            'inter':   "'Inter', sans-serif",
+            'nunito':  "'Nunito', sans-serif",
+            'roboto':  "'Roboto', sans-serif",
+            'poppins': "'Poppins', sans-serif",
+        };
+        var googleFonts = {
+            'nunito':  'Nunito:wght@400;500;600;700',
+            'roboto':  'Roboto:wght@400;500;700',
+            'poppins': 'Poppins:wght@400;500;600;700',
+        };
+        if (p.font && fonts[p.font]) {
+            document.documentElement.style.setProperty('--df-font-body', fonts[p.font]);
+            // Inject Google Fonts link tag for fonts not already loaded (Inter is in the main <head> link)
+            if (p.font !== 'inter' && googleFonts[p.font]) {
+                var link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = 'https://fonts.googleapis.com/css2?family=' + googleFonts[p.font] + '&display=swap';
+                document.head.appendChild(link);
+            }
+        }
+
+        // Color scheme — rgb values for inline-style rgba() replacement
+        var schemes = {
+            'default': { primary:'#6a0f70', hover:'#530b5a', light:'#f9f3fa', border:'rgba(185,92,183,0.18)', rgb:'106,15,112',  borderRgb:'185,92,183'  },
+            'blue':    { primary:'#1558b0', hover:'#0d3d80', light:'#f0f5ff', border:'rgba(21,88,176,0.18)',  rgb:'21,88,176',   borderRgb:'21,88,176'   },
+            'teal':    { primary:'#0d7a6a', hover:'#095a4e', light:'#f0faf8', border:'rgba(13,122,106,0.18)', rgb:'13,122,106',  borderRgb:'13,122,106'  },
+            'green':   { primary:'#1a7a45', hover:'#0f5030', light:'#f0faf4', border:'rgba(26,122,69,0.18)',  rgb:'26,122,69',   borderRgb:'26,122,69'   },
+            'rose':    { primary:'#b52058', hover:'#821040', light:'#fff0f5', border:'rgba(181,32,88,0.18)',  rgb                                                                                                                                                           

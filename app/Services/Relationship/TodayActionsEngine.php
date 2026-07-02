@@ -1,0 +1,518 @@
+<?php
+
+namespace App\Services\Relationship;
+
+use App\Models\Appointment;
+use App\Models\CommunicationQueue;
+use App\Models\Invoice;
+use App\Models\LabCase;
+use App\Models\Lead;
+use App\Models\Patient;
+use App\Models\TreatmentOpportunity;
+use App\Models\Finance\FinancePatientMembership;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * TodayActionsEngine
+ *
+ * The most important page in Dentfluence: everything reception
+ * needs to do today, generated automatically from live data.
+ *
+ * 12 categories, each returning a flat array of action items.
+ * Every item shares the same shape so the view is uniform.
+ *
+ * Item shape:
+ * [
+ *   'category'         => string,
+ *   'patient_name'     => string,
+ *   'patient_id'       => int|null,
+ *   'lead_id'          => int|null,
+ *   'relationship_id'  => int|null,
+ *   'reason'           => string,      // one-line why they appear today
+ *   'priority'         => 'high'|'medium'|'low',
+ *   'suggested_action' => string,
+ *   'link'             => string,      // route to open the record
+ *   'meta'             => array,       // extra context for the drawer
+ * ]
+ *
+ * Usage:
+ *   $actions = app(TodayActionsEngine::class)->generate();
+ *   // $actions is an array keyed by category, each value = array of items
+ */
+class TodayActionsEngine
+{
+    public function __construct(
+        private readonly YesterdayReviewService $yesterdayReview,
+    ) {}
+
+    /**
+     * Generate all today's actions, grouped by category.
+     *
+     * @return array<string, array>  Keys = category names; values = item arrays
+     */
+    public function generate(): array
+    {
+        $groups = [];
+
+        // Run all 12 categories — each is fault-tolerant (errors return [])
+        $categories = [
+            'new_enquiries'                => fn () => $this->newEnquiries(),
+            'lead_followups'               => fn () => $this->leadFollowups(),
+            'opportunities'                => fn () => $this->opportunities(),
+            'recall_calls'                 => fn () => $this->recallCalls(),
+            'appointment_reminders'        => fn () => $this->appointmentReminders(),
+            'pending_estimates'            => fn () => $this->pendingEstimates(),
+            'membership_renewals'          => fn () => $this->membershipRenewals(),
+            'birthdays'                    => fn () => $this->birthdays(),
+            'lab_ready'                    => fn () => $this->labReady(),
+            'payment_reminders'            => fn () => $this->paymentReminders(),
+        ];
+
+        foreach ($categories as $key => $resolver) {
+            try {
+                $groups[$key] = $resolver();
+            } catch (\Throwable $e) {
+                Log::warning("TodayActionsEngine: category [{$key}] failed", ['error' => $e->getMessage()]);
+                $groups[$key] = [];
+            }
+        }
+
+        // Yesterday review — returns two sub-categories
+        try {
+            $yesterday = $this->yesterdayReview->generateYesterdayReview();
+            $groups['missed_calls_yesterday']        = $yesterday['missed_calls'];
+            $groups['missed_appointments_yesterday'] = $yesterday['missed_appointments'];
+        } catch (\Throwable $e) {
+            Log::warning('TodayActionsEngine: yesterday review failed', ['error' => $e->getMessage()]);
+            $groups['missed_calls_yesterday']        = [];
+            $groups['missed_appointments_yesterday'] = [];
+        }
+
+        return $groups;
+    }
+
+    /**
+     * Flat list of all items (unsorted). Used for totalling counts.
+     */
+    public function generateFlat(): array
+    {
+        return array_merge(...array_values($this->generate()));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY 1 — New Enquiries
+    // Leads created in last 24 hours, stage = new_enquiry
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function newEnquiries(): array
+    {
+        $cutoff = Carbon::now()->subHours(24);
+
+        return Lead::with('relationship:id,name')
+            ->where('stage', 'new_enquiry')
+            ->where('created_at', '>=', $cutoff)
+            ->orderByDesc('created_at')
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (Lead $lead) => [
+                'category'        => 'new_enquiries',
+                'patient_name'    => $lead->name,
+                'patient_id'      => null,
+                'lead_id'         => $lead->id,
+                'relationship_id' => $lead->relationship_id ?? null,
+                'reason'          => 'New enquiry received ' . $lead->created_at->diffForHumans(),
+                'priority'        => 'high',
+                'suggested_action'=> 'Call within 30 minutes — first contact wins',
+                'link'            => route('prm.lead-detail', $lead->id),
+                'meta'            => [
+                    'phone'        => $lead->phone,
+                    'source'       => $lead->lead_source ?? $lead->source,
+                    'treatment'    => $lead->treatment,
+                    'ai_summary'   => $lead->ai_summary ?? null,
+                    'created_at'   => $lead->created_at->format('d M Y H:i'),
+                ],
+            ])
+            ->toArray();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY 2 — Lead Follow-ups
+    // followup_date = today or overdue, stage not in [converted, lost]
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function leadFollowups(): array
+    {
+        return Lead::with('relationship:id,name')
+            ->whereNotNull('followup_date')
+            ->where('followup_date', '<=', Carbon::today())
+            ->whereNotIn('stage', ['converted', 'lost'])
+            ->orderBy('followup_date')
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (Lead $lead) => [
+                'category'        => 'lead_followups',
+                'patient_name'    => $lead->name,
+                'patient_id'      => null,
+                'lead_id'         => $lead->id,
+                'relationship_id' => $lead->relationship_id ?? null,
+                'reason'          => $lead->followup_date->isToday()
+                    ? 'Follow-up due today'
+                    : 'Follow-up overdue by ' . $lead->followup_date->diffForHumans(now(), true),
+                'priority'        => $lead->followup_date->isPast() && !$lead->followup_date->isToday()
+                    ? 'high' : 'medium',
+                'suggested_action'=> 'Call and update lead stage',
+                'link'            => route('prm.lead-detail', $lead->id),
+                'meta'            => [
+                    'phone'        => $lead->phone,
+                    'stage'        => $lead->stage,
+                    'followup_date'=> $lead->followup_date->format('d M Y'),
+                    'treatment'    => $lead->treatment,
+                ],
+            ])
+            ->toArray();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY 3 — Treatment Opportunities
+    // follow_up_date <= today, status not in [completed, declined]
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function opportunities(): array
+    {
+        return TreatmentOpportunity::with('patient:id,name,phone,relationship_id')
+            ->whereNotNull('follow_up_date')
+            ->where('follow_up_date', '<=', Carbon::today())
+            ->whereNotIn('status', ['completed', 'declined'])
+            ->orderBy('follow_up_date')
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (TreatmentOpportunity $opp) => [
+                'category'        => 'opportunities',
+                'patient_name'    => $opp->patient?->name ?? 'Unknown',
+                'patient_id'      => $opp->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $opp->patient?->relationship_id ?? null,
+                'reason'          => $opp->follow_up_date->isToday()
+                    ? 'Opportunity follow-up due today'
+                    : 'Opportunity overdue — ' . $opp->follow_up_date->diffForHumans(now(), true) . ' ago',
+                'priority'        => $opp->isOverdue() ? 'high' : 'medium',
+                'suggested_action'=> 'Call and confirm if patient wants to proceed',
+                'link'            => route('patients.show', $opp->patient_id),
+                'meta'            => [
+                    'phone'          => $opp->patient?->phone,
+                    'treatment'      => $opp->label ?? null,
+                    'status'         => $opp->status,
+                    'follow_up_date' => $opp->follow_up_date->format('d M Y'),
+                    'value'          => $opp->estimated_value ?? null,
+                ],
+            ])
+            ->toArray();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY 4 — Recall Calls
+    // communication_queue where purpose contains 'recall', status = pending
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function recallCalls(): array
+    {
+        return CommunicationQueue::with('patient:id,name,phone,relationship_id')
+            ->where(function ($q) {
+                $q->where('purpose', 'like', '%recall%')
+                  ->orWhere('purpose', 'recall_due')
+                  ->orWhere('purpose', 'recall_birthday');
+            })
+            ->where('status', 'pending')
+            ->orderBy('follow_up_date')
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (CommunicationQueue $item) => [
+                'category'        => 'recall_calls',
+                'patient_name'    => $item->patient?->name ?? $item->person_name ?? 'Unknown',
+                'patient_id'      => $item->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $item->patient?->relationship_id ?? null,
+                'reason'          => 'Recall due — last visit was over 6 months ago',
+                'priority'        => 'medium',
+                'suggested_action'=> 'Call and book a recall appointment',
+                'link'            => $item->patient_id
+                    ? route('patients.show', $item->patient_id)
+                    : '#',
+                'meta'            => [
+                    'phone'          => $item->patient?->phone ?? $item->phone,
+                    'comm_queue_id'  => $item->id,
+                    'purpose'        => $item->purpose,
+                    'follow_up_date' => $item->follow_up_date?->format('d M Y'),
+                ],
+            ])
+            ->toArray();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY 5 — Appointment Reminders
+    // Appointments today or tomorrow (within N hours), not cancelled
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function appointmentReminders(): array
+    {
+        $hoursAhead = (int) config('relationship_rules.today_actions.appointment_reminder_hours_ahead', 24);
+        $cutoff     = Carbon::now()->addHours($hoursAhead)->toDateString();
+
+        return Appointment::with('patient:id,name,phone,relationship_id')
+            ->whereDate('appointment_date', '<=', $cutoff)
+            ->whereDate('appointment_date', '>=', Carbon::today()->toDateString())
+            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->orderBy('appointment_date')
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (Appointment $appt) => [
+                'category'        => 'appointment_reminders',
+                'patient_name'    => $appt->patient?->name ?? $appt->patient_name ?? 'Unknown',
+                'patient_id'      => $appt->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $appt->patient?->relationship_id ?? null,
+                'reason'          => $appt->appointment_date->isToday()
+                    ? 'Appointment is today'
+                    : 'Appointment tomorrow — reminder call due',
+                'priority'        => $appt->appointment_date->isToday() ? 'high' : 'medium',
+                'suggested_action'=> 'Call to confirm attendance',
+                'link'            => $appt->patient_id
+                    ? route('patients.show', $appt->patient_id)
+                    : '#',
+                'meta'            => [
+                    'phone'            => $appt->patient?->phone,
+                    'appointment_date' => $appt->appointment_date->format('d M Y'),
+                    'time'             => $appt->appointment_time ?? null,
+                    'doctor'           => $appt->doctor_name ?? null,
+                    'treatment'        => $appt->treatment_type ?? $appt->notes ?? null,
+                ],
+            ])
+            ->toArray();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY 6 — Pending Estimates
+    // TreatmentOpportunity status = quoted, follow_up_date overdue
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function pendingEstimates(): array
+    {
+        return TreatmentOpportunity::with('patient:id,name,phone,relationship_id')
+            ->where('status', 'quoted')
+            ->whereNotNull('follow_up_date')
+            ->where('follow_up_date', '<', Carbon::today())
+            ->orderBy('follow_up_date')
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (TreatmentOpportunity $opp) => [
+                'category'        => 'pending_estimates',
+                'patient_name'    => $opp->patient?->name ?? 'Unknown',
+                'patient_id'      => $opp->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $opp->patient?->relationship_id ?? null,
+                'reason'          => 'Estimate sent — awaiting decision (overdue by '
+                    . $opp->follow_up_date->diffForHumans(now(), true) . ')',
+                'priority'        => 'medium',
+                'suggested_action'=> 'Call to check if they have reviewed the estimate',
+                'link'            => route('patients.show', $opp->patient_id),
+                'meta'            => [
+                    'phone'          => $opp->patient?->phone,
+                    'treatment'      => $opp->label ?? null,
+                    'value'          => $opp->estimated_value ?? null,
+                    'follow_up_date' => $opp->follow_up_date->format('d M Y'),
+                ],
+            ])
+            ->toArray();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY 7 — Membership Renewals
+    // FinancePatientMembership expiring within N days
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function membershipRenewals(): array
+    {
+        $daysAhead = (int) config('relationship_rules.today_actions.membership_renewal_days_ahead', 30);
+        $cutoff    = Carbon::today()->addDays($daysAhead);
+
+        return FinancePatientMembership::with('patient:id,name,phone,relationship_id')
+            ->where('status', 'active')
+            ->whereBetween('end_date', [Carbon::today(), $cutoff])
+            ->orderBy('end_date')
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (FinancePatientMembership $m) => [
+                'category'        => 'membership_renewals',
+                'patient_name'    => $m->patient?->name ?? 'Unknown',
+                'patient_id'      => $m->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $m->patient?->relationship_id ?? null,
+                'reason'          => 'Membership expires in ' . Carbon::today()->diffInDays($m->end_date) . ' days ('
+                    . $m->end_date->format('d M Y') . ')',
+                'priority'        => $m->daysUntilExpiry() <= 7 ? 'high' : 'medium',
+                'suggested_action'=> 'Call to renew membership before expiry',
+                'link'            => route('patients.show', $m->patient_id),
+                'meta'            => [
+                    'phone'    => $m->patient?->phone,
+                    'end_date' => $m->end_date->format('d M Y'),
+                    'plan'     => $m->plan?->name ?? null,
+                    'days_left'=> $m->daysUntilExpiry(),
+                ],
+            ])
+            ->toArray();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY 8 — Birthdays
+    // Patients with birthday today ± window
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function birthdays(): array
+    {
+        $window = (int) config('relationship_rules.today_actions.birthday_window_days', 1);
+
+        $items = [];
+
+        // Build date window: today ± $window days as MM-DD strings for matching
+        for ($offset = -$window; $offset <= $window; $offset++) {
+            $date  = Carbon::today()->addDays($offset);
+            $mmdd  = $date->format('m-d');
+
+            $patients = Patient::with('relationship:id,name')
+                ->where('dob_unknown', false)
+                ->whereRaw("DATE_FORMAT(date_of_birth, '%m-%d') = ?", [$mmdd])
+                ->limit($this->limit())
+                ->get();
+
+            foreach ($patients as $patient) {
+                $label = match ($offset) {
+                    0  => 'Birthday today',
+                    1  => 'Birthday tomorrow',
+                    -1 => 'Birthday was yesterday',
+                    default => ($offset > 0
+                        ? "Birthday in {$offset} days"
+                        : 'Birthday ' . abs($offset) . ' days ago'),
+                };
+
+                $items[] = [
+                    'category'        => 'birthdays',
+                    'patient_name'    => $patient->name,
+                    'patient_id'      => $patient->id,
+                    'lead_id'         => null,
+                    'relationship_id' => $patient->relationship_id ?? null,
+                    'reason'          => $label,
+                    'priority'        => $offset === 0 ? 'high' : 'low',
+                    'suggested_action'=> 'Call to wish a happy birthday and check in',
+                    'link'            => route('patients.show', $patient->id),
+                    'meta'            => [
+                        'phone'         => $patient->phone,
+                        'date_of_birth' => $patient->date_of_birth?->format('d M Y'),
+                        'age'           => $patient->date_of_birth?->age,
+                        'offset_days'   => $offset,
+                    ],
+                ];
+            }
+        }
+
+        // Sort: today first, then tomorrow, then yesterday
+        usort($items, fn ($a, $b) => abs($a['meta']['offset_days']) <=> abs($b['meta']['offset_days']));
+
+        return $items;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY 9 — Lab Ready
+    // LabCase status = final_received or complete, no upcoming appointment
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function labReady(): array
+    {
+        $readyStatuses = config(
+            'relationship_rules.today_actions.lab_ready_statuses',
+            ['final_received', 'complete']
+        );
+
+        // Patient IDs who have an upcoming scheduled appointment (exclude them)
+        $patientsWithAppt = Appointment::whereDate('appointment_date', '>=', Carbon::today())
+            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->pluck('patient_id')
+            ->unique()
+            ->toArray();
+
+        return LabCase::with('patient:id,name,phone,relationship_id')
+            ->whereIn('status', $readyStatuses)
+            ->whereNotNull('patient_id')
+            ->whereNotIn('patient_id', $patientsWithAppt)
+            ->orderBy('updated_at')
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (LabCase $case) => [
+                'category'        => 'lab_ready',
+                'patient_name'    => $case->patient?->name ?? 'Unknown',
+                'patient_id'      => $case->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $case->patient?->relationship_id ?? null,
+                'reason'          => 'Lab work ready — no upcoming appointment to deliver it',
+                'priority'        => 'medium',
+                'suggested_action'=> 'Call to schedule fitting/delivery appointment',
+                'link'            => route('patients.show', $case->patient_id),
+                'meta'            => [
+                    'phone'         => $case->patient?->phone,
+                    'lab_case_id'   => $case->id,
+                    'work_category' => $case->work_category,
+                    'status'        => $case->status,
+                    'ready_since'   => $case->updated_at?->format('d M Y'),
+                ],
+            ])
+            ->toArray();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY 10 — Payment Reminders
+    // Overdue invoices above threshold
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function paymentReminders(): array
+    {
+        $threshold = (int) config('relationship_rules.today_actions.payment_reminder_threshold', 500);
+
+        return Invoice::with('patient:id,name,phone,relationship_id')
+            ->where('due_date', '<', Carbon::today())
+            ->where('balance_due', '>', $threshold)
+            ->whereNotIn('status', ['paid', 'cancelled'])
+            ->whereNotNull('patient_id')
+            ->orderByDesc('balance_due')
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (Invoice $inv) => [
+                'category'        => 'payment_reminders',
+                'patient_name'    => $inv->patient?->name ?? 'Unknown',
+                'patient_id'      => $inv->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $inv->patient?->relationship_id ?? null,
+                'reason'          => '₹' . number_format($inv->balance_due, 0) . ' overdue since '
+                    . $inv->due_date->format('d M Y'),
+                'priority'        => $inv->balance_due > 5000 ? 'high' : 'medium',
+                'suggested_action'=> 'Call to arrange payment',
+                'link'            => route('patients.show', $inv->patient_id),
+                'meta'            => [
+                    'phone'       => $inv->patient?->phone,
+                    'invoice_no'  => $inv->invoice_number ?? $inv->id,
+                    'balance_due' => $inv->balance_due,
+                    'due_date'    => $inv->due_date->format('d M Y'),
+                    'total'       => $inv->total_amount,
+                ],
+            ])
+            ->toArray();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────────────────────────────
+
+    private function limit(): int
+    {
+        return (int) config('relationship_rules.today_actions.max_per_category', 50);
+    }
+}

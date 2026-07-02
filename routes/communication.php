@@ -1,0 +1,146 @@
+<?php
+
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Communication\DashboardController;
+use App\Http\Controllers\Communication\CommunicationController;
+
+/*
+|--------------------------------------------------------------------------
+| Communication OS — Routes
+| Dentfluence · Session 1: Foundation
+|--------------------------------------------------------------------------
+|
+| All routes are prefixed /communication and named communication.*
+| Middleware: auth + communication.access (defined in Session 1)
+|
+| Controllers for Sessions 2-8 are registered here as stubs now
+| and filled out in their respective sessions.
+|
+*/
+
+Route::prefix('communication')
+    ->name('communication.')
+    ->middleware(['web', 'auth', 'communication.access', 'module:prm'])
+    ->group(function () {
+
+        // ── Module Home ──────────────────────────────────────────────────
+        Route::get('/', [DashboardController::class, 'index'])
+            ->name('index');
+
+        // ── Communication List / Manager (PRM Update 2026-06-13) ────────
+        Route::prefix('manager')->name('manager.')->group(function () {
+            // Tabbed inbox
+            Route::get('/',    [CommunicationController::class, 'index'])->name('index');
+
+            // Add Communication
+            Route::get('/add', [CommunicationController::class, 'logForm'])->name('log.form');
+            Route::post('/add',[CommunicationController::class, 'logStore'])->name('log.store');
+
+            // AJAX patient search (before /{id} to avoid conflict)
+            Route::get('/patient-search', [CommunicationController::class, 'patientSearch'])->name('patient.search');
+
+            // Bulk action
+            Route::post('/bulk', [CommunicationController::class, 'bulkAction'])->name('bulk');
+
+            // Single record
+            Route::get('/{id}',          [CommunicationController::class, 'show'])->name('show');
+            Route::put('/{id}',          [CommunicationController::class, 'update'])->name('update');
+            Route::post('/{id}/assign',  [CommunicationController::class, 'assign'])->name('assign');
+            Route::post('/{id}/move',    [CommunicationController::class, 'move'])->name('move');
+            // Phase 1: attempt logging + mandatory-outcome close
+            Route::post('/{id}/attempt', [CommunicationController::class, 'logAttempt'])->name('attempt');
+            Route::post('/{id}/close',   [CommunicationController::class, 'closeWithOutcome'])->name('close');
+        });
+
+        // ── PRM Pipeline ─────────────────────────────────────────────────
+        // NOTE: The PRM routes now live in routes/prm.php (named `prm.*`),
+        // which is the single source of truth and carries the full feature
+        // set (inbox, reports, source-analytics, AI enrich/reply, etc.).
+        // The old duplicate stub group that was here (named `communication.prm.*`)
+        // was removed 2026-06-26 — all references were migrated to `prm.*`.
+
+        // ── Follow-up Engine (Session 4) ─────────────────────────────────
+        Route::prefix('followup')->name('followup.')->group(function () {
+            Route::get('/',                          [\App\Http\Controllers\Communication\FollowUpController::class, 'index'])->name('index');
+            Route::get('/queue',                     [\App\Http\Controllers\Communication\FollowUpController::class, 'queue'])->name('queue');
+            Route::get('/overdue',                   [\App\Http\Controllers\Communication\FollowUpController::class, 'overdue'])->name('overdue');
+            Route::get('/calendar',                  [\App\Http\Controllers\Communication\FollowUpController::class, 'calendar'])->name('calendar');
+            Route::get('/recalls',                   [\App\Http\Controllers\Communication\FollowUpController::class, 'recalls'])->name('recalls');
+            Route::post('/schedule',                 [\App\Http\Controllers\Communication\FollowUpController::class, 'schedule'])->name('schedule');
+            Route::post('/{id}/complete',            [\App\Http\Controllers\Communication\FollowUpController::class, 'complete'])->name('complete');
+            Route::post('/{id}/reschedule',          [\App\Http\Controllers\Communication\FollowUpController::class, 'reschedule'])->name('reschedule');
+            Route::post('/{id}/note',                [\App\Http\Controllers\Communication\FollowUpController::class, 'addNote'])->name('note');
+            Route::post('/{id}/change-status',       [\App\Http\Controllers\Communication\FollowUpController::class, 'changeStatus'])->name('change-status');
+            Route::post('/{id}/convert',             [\App\Http\Controllers\Communication\FollowUpController::class, 'convertToPatient'])->name('convert');
+            Route::post('/{id}/create-case',         [\App\Http\Controllers\Communication\FollowUpController::class, 'createCase'])->name('create-case');
+        });
+
+        // ── Communication Timeline ───────────────────────────────────────
+        // NOTE: Timeline routes now live solely in routes/timeline.php
+        // (named `communication.timeline.index` / `.show`). The duplicate
+        // group that was here (an extra `.index` + an unused `.patient`) was
+        // removed 2026-06-26. Views reference `.index` and `.show` only.
+
+        // ── Recall Engine (Phase 2) ──────────────────────────────────────
+        Route::prefix('recall')->name('recall.')->group(function () {
+            Route::get('/',         [\App\Http\Controllers\Communication\RecallController::class, 'index'])->name('index');
+            Route::post('/run-now', [\App\Http\Controllers\Communication\RecallController::class, 'runNow'])->name('run-now');
+        });
+
+        // ── Opportunity Engine ───────────────────────────────────────────
+        Route::prefix('opportunities')->name('opportunities.')->group(function () {
+            Route::get('/',                    [\App\Http\Controllers\Communication\OpportunityController::class, 'index'])->name('index');
+            Route::get('/board',               [\App\Http\Controllers\Communication\OpportunityController::class, 'board'])->name('board');
+            Route::post('/',                   [\App\Http\Controllers\Communication\OpportunityController::class, 'store'])->name('store');
+            // AJAX: patient autocomplete for add-opportunity modal
+            Route::get('/patient-search',      [\App\Http\Controllers\Communication\OpportunityController::class, 'patientSearch'])->name('patient-search');
+            // Single opportunity (must come after named static segments)
+            Route::get('/{id}',                [\App\Http\Controllers\Communication\OpportunityController::class, 'detail'])->name('detail');
+            Route::patch('/{id}/stage',        [\App\Http\Controllers\Communication\OpportunityController::class, 'updateStage'])->name('update-stage');
+            Route::post('/{id}/convert',       [\App\Http\Controllers\Communication\OpportunityController::class, 'convertToLead'])->name('convert');
+        });
+
+        // ── Daily Huddle Widgets (Session 8) ─────────────────────────────
+        Route::prefix('huddle')->name('huddle.')->group(function () {
+            Route::get('/widgets',  [\App\Http\Controllers\Communication\HuddleController::class, 'widgets'])->name('widgets');
+            Route::get('/overdue',  [\App\Http\Controllers\Communication\HuddleController::class, 'overdueSummary'])->name('overdue');
+            Route::get('/alerts',   [\App\Http\Controllers\Communication\HuddleController::class, 'alerts'])->name('alerts');
+        });
+
+        // ── Templates (Session 12) ────────────────────────────────────────
+        Route::prefix('templates')->name('templates.')->group(function () {
+            Route::get('/',     [\App\Http\Controllers\Communication\TemplateController::class, 'index'])->name('index');
+            Route::get('/{id}', [\App\Http\Controllers\Communication\TemplateController::class, 'edit'])->name('edit');
+        });
+
+        // ── Phase 4: B2B Comm Module ──────────────────────────────────────
+        Route::prefix('b2b')->name('b2b.')->group(function () {
+            Route::get('/',                       [\App\Http\Controllers\Communication\B2BController::class, 'index'])->name('index');
+            Route::get('/add',                    [\App\Http\Controllers\Communication\B2BController::class, 'create'])->name('create');
+            Route::post('/add',                   [\App\Http\Controllers\Communication\B2BController::class, 'store'])->name('store');
+            Route::get('/{id}',                   [\App\Http\Controllers\Communication\B2BController::class, 'show'])->name('show');
+            Route::post('/{id}/attempt',          [\App\Http\Controllers\Communication\B2BController::class, 'logAttempt'])->name('attempt');
+            Route::post('/{id}/close',            [\App\Http\Controllers\Communication\B2BController::class, 'close'])->name('close');
+            // AJAX: open lab cases for a vendor (for form dynamic dropdown)
+            Route::get('/ajax/lab-cases-for-vendor', [\App\Http\Controllers\Communication\B2BController::class, 'labCasesForVendor'])->name('ajax.lab-cases');
+        });
+
+        // ── Phase 5: KPI Dashboard ────────────────────────────────────────
+        Route::prefix('kpi')->name('kpi.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Communication\KpiController::class, 'index'])->name('index');
+        });
+
+        // ── Phase B 2.4: Reviews / Reputation ─────────────────────────────
+        Route::prefix('reviews')->name('reviews.')->group(function () {
+            Route::get('/',     [\App\Http\Controllers\Communication\ReviewController::class, 'index'])->name('index');
+            Route::post('/send',[\App\Http\Controllers\Communication\ReviewController::class, 'send'])->name('send');
+        });
+
+        // ── Phase B 1.2: WhatsApp two-way Inbox ───────────────────────────
+        Route::prefix('whatsapp')->name('whatsapp.')->group(function () {
+            Route::get('/',                [\App\Http\Controllers\Communication\WhatsAppInboxController::class, 'index'])->name('index');
+            Route::get('/{thread}',           [\App\Http\Controllers\Communication\WhatsAppInboxController::class, 'show'])->name('show');
+            Route::post('/{thread}/reply',    [\App\Http\Controllers\Communication\WhatsAppInboxController::class, 'reply'])->name('reply');
+            Route::post('/{thread}/template', [\App\Http\Controllers\Communication\WhatsAppInboxController::class, 'sendTemplate'])->name('template');
+        });
+    });

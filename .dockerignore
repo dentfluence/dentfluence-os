@@ -1,0 +1,50 @@
+# =============================================================================
+# Files NOT copied into the Docker image (keeps the image small + secure).
+# These are either rebuilt inside the image, secret, or irrelevant to runtime.
+# =============================================================================
+
+# Dependencies (re-installed inside the image)
+/node_modules
+/vendor
+
+# Local environment + secrets — NEVER bake these into an image
+.env
+.env.*
+!.env.example
+
+# Git + CI
+.git
+.gitignore
+.gitattributes
+
+# Local dev / build caches
+.phpunit.cache
+.phpunit.result.cache
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+public/build
+public/hot
+
+# Tests + dev-only tooling (not needed in production runtime)
+/tests
+.env.dusk.local
+
+# Editor / OS junk
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+*.log
+
+# Project docs + business files (not part of the running app)
+*.docx
+*.xlsx
+*.pdf
+business-discussion
+docs
+
+# Accidental zero-byte artifacts in repo root
+canAccess('practice_protocols')]
+toArray()

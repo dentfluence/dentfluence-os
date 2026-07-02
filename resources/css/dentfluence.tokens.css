@@ -1,0 +1,368 @@
+/**
+ * ============================================================
+ * DENTFLUENCE OS — Design Token System
+ * File: resources/css/dentfluence.tokens.css
+ *
+ * Clinic:   Tulip Dental, Dombivli East
+ * Website:  tulipdental.in
+ * Version:  1.0.0
+ * Source:   Tulip Dental Brand Guidelines 2025
+ *
+ * Architecture: CSS Custom Properties (:root)
+ * Naming:       --df-{category}-{variant}
+ *
+ * Sections:
+ *   01 — Brand Colors
+ *   02 — Sidebar Colors
+ *   03 — Background Colors
+ *   04 — Text Colors
+ *   05 — Border Colors
+ *   06 — Semantic Colors (Success / Warning / Danger / Info)
+ *   07 — Typography Scale
+ *   08 — Font Weights
+ *   09 — Font Families
+ *   10 — Line Heights
+ *   11 — Letter Spacing
+ *   12 — Border Radius
+ *   13 — Shadow System
+ *   14 — Spacing Scale
+ *   15 — Layout Tokens
+ * ============================================================
+ */
+
+:root {
+
+  /* ===========================================================
+     01 — BRAND COLORS
+     Source: Brand Guidelines § 01 — The Purple System
+     =========================================================== */
+
+  --df-primary:           #6a0f70;   /* Primary purple — CTA buttons, links, eyebrows       */
+  --df-primary-hover:     #5a0c5f;   /* Primary hover — 10% darker                          */
+  --df-primary-active:    #4e0a53;   /* Primary active / pressed state                      */
+  --df-primary-subtle:    #f3e8f4;   /* Soft lavender — section alternate bg, chips         */
+  --df-primary-mid:       #dfc5e1;   /* Mid lavender — em text, dividers, icon fills        */
+
+  --df-secondary:         #4e0a53;   /* Dark purple — footer, dark sections                 */
+  --df-secondary-deep:    #380740;   /* Deeper purple — topbar, hero overlays               */
+  --df-secondary-ink:     #1a0320;   /* Darkest purple — maximum depth panels               */
+
+
+  /* ===========================================================
+     02 — SIDEBAR COLORS
+     Sidebar uses deep purple family — independent token set
+     =========================================================== */
+
+  --df-sidebar-bg:            #380740;
+  --df-sidebar-bg-dark:       #2d0538;
+  --df-sidebar-bg-deeper:     #1a0320;
+  --df-sidebar-item-hover:    rgba(255, 255, 255, 0.08);
+  --df-sidebar-item-active:   rgba(255, 255, 255, 0.14);
+  --df-sidebar-item-pressed:  rgba(255, 255, 255, 0.20);
+  --df-sidebar-border:        rgba(185, 92, 183, 0.10);
+  --df-sidebar-text:          rgba(215, 185, 228, 0.65);
+  --df-sidebar-text-active:   #ffffff;
+  --df-sidebar-text-muted:    rgba(185, 150, 210, 0.38);
+  --df-sidebar-accent:        #6a0f70;
+  --df-sidebar-width:         240px;
+  --df-sidebar-width-sm:      64px;
+
+
+  /* ===========================================================
+     03 — BACKGROUND COLORS
+     Section sequence from brand: White → Soft → White → Dark
+     =========================================================== */
+
+  --df-bg-canvas:    #f5eef9;   /* App canvas — content area base                          */
+  --df-bg-surface:   #ffffff;   /* Cards, modals, panels — white surface                   */
+  --df-bg-surface-2: #faf4fc;   /* Card headers, table headers, secondary panels           */
+  --df-bg-surface-3: #f9f3fa;   /* Hover states, subtle area fills                         */
+  --df-bg-soft:      #f3e8f4;   /* Soft lavender — brand section bg sequence               */
+  --df-bg-dark:      #4e0a53;   /* Dark section bg — brand section sequence                */
+  --df-bg-darker:    #380740;   /* Topbar, hero overlays                                   */
+  --df-bg-overlay:   rgba(14, 1, 24, 0.55);   /* Drawer / modal backdrop                   */
+
+
+  /* ===========================================================
+     04 — TEXT COLORS
+     Source: Brand Guidelines § 02 — Typography
+     =========================================================== */
+
+  --df-text-primary:        #0f0a10;                  /* Body text, headings — brand Ink   */
+  --df-text-secondary:      #5a4a5c;                  /* Subtext, captions — brand Muted   */
+  --df-text-tertiary:       #7a6884;                  /* Placeholder, disabled labels      */
+  --df-text-faint:          #b0a4bc;                  /* Ghost text, inactive              */
+  --df-text-ghost:          #d8d2de;                  /* Skeleton, placeholder bg          */
+
+  --df-text-on-dark:        #ffffff;
+  --df-text-on-dark-muted:  rgba(255, 255, 255, 0.65);
+  --df-text-on-dark-faint:  rgba(255, 255, 255, 0.35);
+
+  --df-text-brand:          #6a0f70;                  /* Brand-colored links, eyebrows     */
+  --df-text-em-light:       #6a0f70;                  /* Italic em on light sections       */
+  --df-text-em-dark:        #dfc5e1;                  /* Italic em on dark/hero sections   */
+
+
+  /* ===========================================================
+     05 — BORDER COLORS
+     Source: Brand Guidelines § 01 — Border: #e5d8e7
+     =========================================================== */
+
+  --df-border-default:  #e5d8e7;   /* Card borders, rules, table lines — brand Border      */
+  --df-border-strong:   #dfc5e1;   /* Stronger dividers, section separators                */
+  --df-border-subtle:   #f0e8f1;   /* Subtle dividers inside cards, table rows             */
+  --df-border-brand:    #6a0f70;   /* Focused inputs, active indicators                    */
+  --df-border-dark:     rgba(185, 92, 183, 0.10);   /* Borders on dark bg surfaces        */
+
+
+  /* ===========================================================
+     06 — SEMANTIC COLORS
+     Success / Warning / Danger / Info
+     Non-brand colors — only used for system status indicators
+     =========================================================== */
+
+  /* Success */
+  --df-success:         #1a7a45;
+  --df-success-hover:   #155e37;
+  --df-success-bg:      #e8f7ef;
+  --df-success-border:  rgba(26, 122, 69, 0.25);
+  --df-success-text:    #0e4a28;
+
+  /* Warning */
+  --df-warning:         #a05c00;
+  --df-warning-hover:   #834b00;
+  --df-warning-bg:      #fff4e0;
+  --df-warning-border:  rgba(160, 92, 0, 0.25);
+  --df-warning-text:    #5c3500;
+
+  /* Danger */
+  --df-danger:          #b52020;
+  --df-danger-hover:    #921919;
+  --df-danger-bg:       #fdeaea;
+  --df-danger-border:   rgba(181, 32, 32, 0.25);
+  --df-danger-text:     #6b1010;
+
+  /* Info */
+  --df-info:            #1a5ea8;
+  --df-info-hover:      #154d8a;
+  --df-info-bg:         #e6f0fb;
+  --df-info-border:     rgba(26, 94, 168, 0.25);
+  --df-info-text:       #0d3b6b;
+
+
+  /* ===========================================================
+     07 — TYPOGRAPHY SCALE
+     Source: Brand Guidelines § 02 — Typography
+     clamp() values taken directly from brand specification
+     =========================================================== */
+
+  --df-text-display-xl: clamp(36px, 4.2vw, 58px);   /* H1 — Cormorant Garamond 700        */
+  --df-text-display-lg: clamp(30px, 3.6vw, 48px);   /* H2 — Cormorant Garamond 700        */
+  --df-text-display-md: clamp(19px, 2vw,   23px);   /* H3 — DM Sans 600                   */
+  --df-text-display-sm: 17px;                        /* H4 — DM Sans 600                   */
+  --df-text-body-lg:    17px;                        /* Body — DM Sans 400 (brand spec)    */
+  --df-text-body:       14px;                        /* UI body — buttons, labels, nav     */
+  --df-text-sm:         13px;                        /* Small UI — table cells, inputs     */
+  --df-text-xs:         12px;                        /* Eyebrow labels, meta captions      */
+  --df-text-xxs:        11px;                        /* Badges, tags, timestamps           */
+  --df-text-micro:      10px;                        /* Section labels, collapsed UI       */
+  --df-text-mono:       12px;                        /* Monospace — IDs, codes, times      */
+
+
+  /* ===========================================================
+     08 — FONT WEIGHTS
+     =========================================================== */
+
+  --df-weight-light:    300;
+  --df-weight-regular:  400;
+  --df-weight-medium:   500;
+  --df-weight-semibold: 600;
+  --df-weight-bold:     700;
+
+
+  /* ===========================================================
+     09 — FONT FAMILIES
+     Source: Brand Guidelines § 02 — Cormorant + DM Sans
+     DO NOT use Inter, Roboto, Arial or system fallbacks alone
+     =========================================================== */
+
+  --df-font-display: 'Cormorant Garamond', Georgia, serif;
+  --df-font-ui:      'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --df-font-mono:    'DM Mono', 'SF Mono', 'Fira Code', 'Courier New', monospace;
+
+
+  /* ===========================================================
+     10 — LINE HEIGHTS
+     =========================================================== */
+
+  --df-leading-none:     1;       /* Display-only, no line wrapping                        */
+  --df-leading-tight:    1.1;     /* H1 / H2 display headings                              */
+  --df-leading-snug:     1.3;     /* H3 / H4, UI headings, nav items                       */
+  --df-leading-normal:   1.5;     /* Standard UI, form labels                              */
+  --df-leading-body:     1.78;    /* Body copy — brand specification                       */
+  --df-leading-relaxed:  1.85;    /* Help text, long-form content                          */
+
+
+  /* ===========================================================
+     11 — LETTER SPACING
+     Source: Brand Guidelines — Eyebrow: 3px (= 0.25em at 12px)
+     Buttons: 0.02em
+     =========================================================== */
+
+  --df-tracking-tight:    -0.01em;   /* Large display headings                             */
+  --df-tracking-normal:    0;        /* Body text default                                  */
+  --df-tracking-ui:        0.02em;   /* Buttons — brand specification                      */
+  --df-tracking-wide:      0.05em;   /* Nav section labels                                 */
+  --df-tracking-wider:     0.08em;   /* Table headers, form labels uppercase               */
+  --df-tracking-caps:      0.12em;   /* General uppercase labels                           */
+  --df-tracking-eyebrow:   0.25em;   /* Eyebrow labels — brand spec 3px at 12px            */
+
+
+  /* ===========================================================
+     12 — BORDER RADIUS
+     Source: Brand Guidelines § 03 — border-radius: 0 ALWAYS
+     Buttons, inputs, cards: must use --df-radius-none
+     =========================================================== */
+
+  --df-radius-none:  0px;      /* Buttons, cards, inputs — brand mandated                 */
+  --df-radius-sm:    2px;      /* Micro elements — inline badges, tags, code spans        */
+  --df-radius-md:    4px;      /* Secondary UI only — tooltips, helper panels             */
+  --df-radius-lg:    6px;      /* Dropdowns, popovers — contextual menus                  */
+  --df-radius-xl:    8px;      /* Large containers — analytics panels, onboarding         */
+  --df-radius-full:  9999px;   /* Pills, avatars, status indicator dots only              */
+
+  /*
+   * RULE: All primary interactive elements (buttons, inputs,
+   * cards, modals, table rows) MUST use --df-radius-none.
+   * Brand states: "border-radius: 0 — never rounded."
+   */
+
+
+  /* ===========================================================
+     13 — SHADOW SYSTEM
+     Purposeful elevation only. Never decorative.
+     =========================================================== */
+
+  --df-shadow-none:  none;
+
+  --df-shadow-xs:
+    0 1px 0 0 rgba(185, 92, 183, 0.08);
+
+  --df-shadow-sm:
+    0 1px 3px rgba(26, 3, 32, 0.04),
+    0 1px 2px rgba(26, 3, 32, 0.03);
+
+  --df-shadow-md:
+    0 4px 6px -1px rgba(26, 3, 32, 0.06),
+    0 2px 4px -2px rgba(26, 3, 32, 0.04);
+
+  --df-shadow-lg:
+    0 10px 15px -3px rgba(26, 3, 32, 0.08),
+    0 4px 6px -4px rgba(26, 3, 32, 0.05);
+
+  --df-shadow-xl:
+    0 20px 40px -8px rgba(26, 3, 32, 0.14),
+    0 8px 16px -4px rgba(26, 3, 32, 0.08);
+
+  --df-shadow-2xl:
+    0 32px 64px -12px rgba(26, 3, 32, 0.22),
+    0 12px 24px -6px rgba(26, 3, 32, 0.12);
+
+  --df-shadow-sidebar:
+    4px 0 24px rgba(14, 1, 24, 0.40);
+
+  --df-shadow-topbar:
+    0 1px 0 0 rgba(185, 92, 183, 0.08);
+
+  --df-shadow-focus:
+    0 0 0 3px rgba(106, 15, 112, 0.14);
+
+  --df-shadow-focus-danger:
+    0 0 0 3px rgba(181, 32, 32, 0.14);
+
+  --df-shadow-focus-success:
+    0 0 0 3px rgba(26, 122, 69, 0.14);
+
+  --df-shadow-btn:
+    0 4px 14px rgba(106, 15, 112, 0.28);
+
+  --df-shadow-modal:
+    0 20px 60px rgba(14, 1, 24, 0.35),
+    0 4px 16px rgba(14, 1, 24, 0.15);
+
+
+  /* ===========================================================
+     14 — SPACING SCALE
+     Base unit: 4px — all values multiples of 4
+     --df-space-{N} where N = multiplier (0.5 step allowed)
+     =========================================================== */
+
+  --df-space-0:    0px;
+  --df-space-0-5:  2px;     /* 0.5 × 4 */
+  --df-space-1:    4px;     /* 1   × 4 */
+  --df-space-1-5:  6px;     /* 1.5 × 4 */
+  --df-space-2:    8px;     /* 2   × 4 */
+  --df-space-2-5:  10px;    /* 2.5 × 4 */
+  --df-space-3:    12px;    /* 3   × 4 */
+  --df-space-3-5:  14px;    /* 3.5 × 4 */
+  --df-space-4:    16px;    /* 4   × 4 */
+  --df-space-5:    20px;    /* 5   × 4 */
+  --df-space-6:    24px;    /* 6   × 4 */
+  --df-space-7:    28px;    /* 7   × 4 */
+  --df-space-8:    32px;    /* 8   × 4 */
+  --df-space-9:    36px;    /* 9   × 4 */
+  --df-space-10:   40px;    /* 10  × 4 — section rule hr (brand spec)                     */
+  --df-space-12:   48px;    /* 12  × 4 — mobile section padding (brand spec)              */
+  --df-space-14:   56px;    /* 14  × 4 */
+  --df-space-15:   60px;    /* 15  × 4 — tablet section padding (brand spec)              */
+  --df-space-16:   64px;    /* 16  × 4 — topbar height, page header height                */
+  --df-space-20:   80px;    /* 20  × 4 */
+  --df-space-24:   96px;    /* 24  × 4 — desktop section padding (brand spec)             */
+
+
+  /* ===========================================================
+     15 — LAYOUT TOKENS
+     Source: Brand Guidelines § 05 — Layout & Spacing
+     =========================================================== */
+
+  /* Container */
+  --df-container-max:         1280px;
+  --df-container-padding-xl:  44px;     /* Desktop + tablet (brand spec)                   */
+  --df-container-padding-sm:  20px;     /* Mobile (brand spec)                             */
+
+  /* Topbar */
+  --df-topbar-height:         64px;
+  --df-topbar-height-mobile:  56px;
+  --df-topbar-bg:             #380740;
+
+  /* Section padding — brand spec exact values */
+  --df-section-pad-desktop:   96px;
+  --df-section-pad-tablet:    60px;
+  --df-section-pad-mobile:    48px;
+
+  /* Page header (sticky, inside content area) */
+  --df-page-header-height:    64px;
+
+  /* Sticky action bar (form footers) */
+  --df-action-bar-height:     60px;
+
+  /* Z-index scale */
+  --df-z-base:     0;
+  --df-z-above:    10;
+  --df-z-sticky:   20;
+  --df-z-sidebar:  30;
+  --df-z-topbar:   40;
+  --df-z-overlay:  50;
+  --df-z-modal:    60;
+  --df-z-popover:  70;
+  --df-z-toast:    80;
+  --df-z-tooltip:  90;
+
+  /* Transitions — no animation during initial build phase */
+  --df-transition-instant:  80ms  linear;
+  --df-transition-fast:     120ms ease;
+  --df-transition-base:     150ms ease;
+  --df-transition-smooth:   200ms ease;
+  --df-transition-sidebar:  280ms cubic-bezier(0.4, 0, 0.2, 1);
+
+}

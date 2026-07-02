@@ -1,0 +1,136 @@
+# =============================================================================
+# Dentfluence — Production stack (Docker Compose)
+#
+# Services:
+#   app        -> the Laravel app running as PHP-FPM (built from ./Dockerfile)
+#   nginx      -> web server, serves static files + proxies PHP to `app`
+#   mysql      -> MySQL 8 database (data persisted in a named volume)
+#   queue      -> same app image, runs the queue worker (recall/notifications)
+#   scheduler  -> same app image, runs Laravel's scheduler once a minute
+#
+# All services read secrets/config from .env.production (see Chunk 3).
+# Bring up with:   docker compose --env-file .env.production up -d --build
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PHP-FPM application
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      target: app
+    image: dentfluence-app:latest
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    volumes:
+      # Persist user uploads, logs, sessions, cache across container rebuilds
+      - storage_data:/var/www/html/storage
+      # Shared copy of /public so nginx can serve static assets (entrypoint syncs)
+      - public_data:/var/www/html/public_shared
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - dentfluence
+
+  # ---------------------------------------------------------------------------
+  # nginx web server (public entry point)
+  # ---------------------------------------------------------------------------
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    image: dentfluence-nginx:latest
+    restart: unless-stopped
+    ports:
+      - "8080:80"          # host:container — put a reverse proxy / SSL in front (see DEPLOY.md)
+    volumes:
+      - public_data:/var/www/html/public:ro
+      - storage_data:/var/www/html/storage:ro
+    depends_on:
+      - app
+    networks:
+      - dentfluence
+
+  # ---------------------------------------------------------------------------
+  # MySQL 8 database
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: "${DB_DATABASE}"
+      MYSQL_USER: "${DB_USERNAME}"
+      MYSQL_PASSWORD: "${DB_PASSWORD}"
+      MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD}"
+    command: --default-authentication-plugin=caching_sha2_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Not exposed to the host by default — only reachable inside the network.
+    networks:
+      - dentfluence
+
+  # ---------------------------------------------------------------------------
+  # Queue worker — processes recall, notifications, and other queued jobs
+  # ---------------------------------------------------------------------------
+  queue:
+    image: dentfluence-app:latest
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+    volumes:
+      - storage_data:/var/www/html/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+      app:
+        condition: service_started
+    networks:
+      - dentfluence
+
+  # ---------------------------------------------------------------------------
+  # Scheduler — runs `php artisan schedule:run` every 60s (recall:run, lab tasks)
+  # ---------------------------------------------------------------------------
+  scheduler:
+    image: dentfluence-app:latest
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "while true; do
+         php /var/www/html/artisan schedule:run --verbose --no-interaction;
+         sleep 60;
+       done"
+    volumes:
+      - storage_data:/var/www/html/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+      app:
+        condition: service_started
+    networks:
+      - dentfluence
+
+# -----------------------------------------------------------------------------
+# Named volumes — survive `docker compose down` (data is NOT lost on restart)
+# -----------------------------------------------------------------------------
+volumes:
+  mysql_data:
+  storage_data:
+  public_data:
+
+# -----------------------------------------------------------------------------
+# Private network so containers talk to each other by name (app, mysql, nginx)
+# -----------------------------------------------------------------------------
+networks:
+  dentfluence:
+    driver: bridge

@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dentfluence OS — Build Timeline</title>
+<style>
+  :root{
+    --plum:#3d1f4f; --plum2:#5a2d73; --magenta:#c0258f; --magenta2:#e0479f;
+    --bg:#faf7fb; --card:#ffffff; --ink:#241229; --muted:#7a6b82;
+    --line:#e9dcee; --a:#7b4dff;
+    --done:#16a34a; --code:#2563eb; --partial:#d97706; --notstarted:#94a3b8; --infra:#0891b2; --legal:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:linear-gradient(160deg,#f7f2fa,#fdf6fb);color:#241229;line-height:1.5;padding:0 0 60px}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 22px}
+  header{background:linear-gradient(120deg,#3d1f4f,#5a2d73 55%,#c0258f);color:#fff;padding:34px 0 26px;
+    box-shadow:0 10px 30px rgba(61,31,79,.25)}
+  header h1{margin:0 0 6px;font-size:30px;letter-spacing:-.5px}
+  header .sub{opacity:.9;font-size:15px}
+  header .meta{margin-top:14px;font-size:13px;opacity:.8;display:flex;gap:22px;flex-wrap:wrap}
+  header .meta b{color:#ffd9f0}
+  /* tabs */
+  .tabbar{position:sticky;top:0;z-index:30;background:rgba(253,246,251,.92);backdrop-filter:blur(8px);
+    border-bottom:1px solid #e9dcee;margin-bottom:22px}
+  .tabbar .wrap{display:flex;gap:6px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px}
+  .tab{appearance:none;border:none;background:transparent;font-family:inherit;cursor:pointer;
+    font-size:14px;font-weight:700;color:#7a6b82;padding:10px 16px;border-radius:10px 10px 0 0;
+    border-bottom:3px solid transparent;transition:.15s}
+  .tab:hover{color:#5a2d73;background:#f3e9f7}
+  .tab.active{color:#c0258f;border-bottom-color:#c0258f;background:#fff;box-shadow:0 -2px 10px rgba(90,45,115,.05)}
+  .tabpanel{display:none;animation:fade .25s ease}
+  .tabpanel.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  h2{font-size:20px;margin:8px 0 14px;color:#3d1f4f;border-left:5px solid #c0258f;padding-left:12px}
+  h2.mt{margin-top:30px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;background:#fff;border:1px solid #eadcef;border-radius:12px;padding:12px 16px;font-size:12.5px;box-shadow:0 4px 14px rgba(90,45,115,.06);margin-bottom:18px}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .gantt{background:#fff;border:1px solid #eadcef;border-radius:14px;padding:20px;overflow-x:auto;box-shadow:0 6px 20px rgba(90,45,115,.07)}
+  .gantt table{border-collapse:collapse;width:100%;min-width:760px}
+  .gantt th{font-size:11px;color:#8a7a90;font-weight:600;padding:4px 2px;text-align:center;border-bottom:1px solid #eee}
+  .gantt th.yr{text-align:left;font-size:13px;color:#3d1f4f;padding-top:0}
+  .bar{height:30px;border-radius:7px;color:#fff;font-size:12.5px;font-weight:600;display:flex;align-items:center;
+    padding:0 12px;white-space:nowrap;box-shadow:inset 0 -2px 6px rgba(0,0,0,.12)}
+  .gantt td{padding:5px 3px}
+  .lbl{font-size:12.5px;font-weight:700;color:#3d1f4f;white-space:nowrap;padding-right:12px}
+  .flag{font-size:12px;color:#c0258f;font-weight:700;margin-top:4px}
+  .phase{background:#fff;border:1px solid #eadcef;border-radius:14px;margin:16px 0;overflow:hidden;box-shadow:0 6px 20px rgba(90,45,115,.07)}
+  .phead{padding:16px 20px;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+  .phead h3{margin:0;font-size:18px}
+  .phead .when{font-size:13px;opacity:.92;font-weight:600;background:rgba(255,255,255,.18);padding:3px 10px;border-radius:20px}
+  .pbody{padding:14px 20px 18px}
+  .goal{font-style:italic;color:#6a5b70;font-size:13.5px;margin:0 0 12px}
+  table.feat{border-collapse:collapse;width:100%;font-size:13.5px}
+  table.feat th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#9a8aa0;padding:6px 8px;border-bottom:2px solid #f0e7f4}
+  table.feat td{padding:8px 8px;border-bottom:1px solid #f4eef7;vertical-align:top}
+  table.feat tr:last-child td{border-bottom:none}
+  .id{font-weight:700;color:#5a2d73;white-space:nowrap}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;color:#fff}
+  .eff{font-size:11px;font-weight:700;color:#7a6b82;background:#f3edf6;padding:2px 7px;border-radius:6px}
+  .exit{margin-top:12px;font-size:13px;background:#faf4fc;border-left:3px solid #c0258f;padding:9px 13px;border-radius:0 8px 8px 0}
+  .launch{background:linear-gradient(120deg,#c0258f,#e0479f);color:#fff;border-radius:14px;padding:20px 24px;margin:18px 0;
+    box-shadow:0 10px 26px rgba(192,37,143,.3)}
+  .launch h3{margin:0 0 6px;font-size:20px}
+  .gate{background:#fff7f7;border:1px solid #f6d4d4;border-left:4px solid #dc2626;border-radius:0 10px 10px 0;padding:12px 16px;font-size:13px;margin:14px 0}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:720px){.two{grid-template-columns:1fr}}
+  .box{background:#fff;border:1px solid #eadcef;border-radius:12px;padding:16px 18px;box-shadow:0 4px 14px rgba(90,45,115,.06)}
+  .box h4{margin:0 0 10px;color:#3d1f4f;font-size:15px}
+  .box ul{margin:0;padding-left:18px;font-size:13.5px}
+  .box li{margin-bottom:7px}
+  footer{text-align:center;color:#9a8aa0;font-size:12px;margin-top:30px}
+  .tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.5px;background:rgba(255,255,255,.2);padding:2px 9px;border-radius:20px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>🦷 Dentfluence OS — Build Timeline</h1>
+    <div class="sub">SWOT · features · Claude-speed timeline · phase plan · valuation</div>
+    <div class="meta">
+      <span><b>Companion:</b> plan-os-feature-roadmap.md</span>
+      <span><b>Strategy:</b> eka-care-vs-dentfluence.md</span>
+      <span><b>Updated:</b> 2026-06-27</span>
+    </div>
+  </div>
+</header>
+
+<!-- TAB BAR -->
+<div class="tabbar">
+  <div class="wrap">
+    <button class="tab active" onclick="showTab('swot',this)">SWOT</button>
+    <button class="tab" onclick="showTab('features',this)">Features</button>
+    <button class="tab" onclick="showTab('timeline',this)">Timeline</button>
+    <button class="tab" onclick="showTab('phases',this)">Phase Plan</button>
+    <button class="tab" onclick="showTab('valuation',this)">Valuation</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ===================== TAB: SWOT ===================== -->
+  <section class="tabpanel active" id="swot">
+    <h2>SWOT — Dentfluence OS</h2>
+    <div class="two">
+      <div class="box" style="border-top:4px solid #16a34a">
+        <h4 style="color:#15803d">💪 Strengths</h4>
+        <ul>
+          <li><b>Dentist-founder building for his own clinic</b> — domain depth Eka's PMs only guess at; live-tested at Tulip Dental.</li>
+          <li><b>~90% feature surface already built</b> — 110 controllers, 176 models, 60 services, 267 migrations.</li>
+          <li><b>Dental-specific depth Eka lacks</b> — lab, memberships/AOCP, EMI, procurement→AP, ABDM/FHIR layer already coded.</li>
+          <li><b>Solo + Claude</b> — build &amp; iterate at a fraction of a funded team's cost and time.</li>
+          <li><b>ABDM-ready architecture + DPDP consent built</b> — compliance head-start.</li>
+        </ul>
+      </div>
+      <div class="box" style="border-top:4px solid #dc2626">
+        <h4 style="color:#b91c1c">⚠️ Weaknesses</h4>
+        <ul>
+          <li><b>Deploy-readiness ~0–5%</b> — no host, HTTPS, backups, or production config.</li>
+          <li><b>Thin test net</b> — ~13 feature + ~20 Dusk tests vs 110 controllers; <b>6 money-critical tests currently red</b> (payment→ledger, inventory, lab close, recall, appt status).</li>
+          <li><b>Solo bandwidth + no org/people experience</b> — founder's own stated risk.</li>
+          <li><b>AI features GPU-bound</b> — Tulip / voice / scan won't run on a normal server.</li>
+          <li><b>No patient-facing layer or payments yet; mobile status unconfirmed.</b></li>
+        </ul>
+      </div>
+      <div class="box" style="border-top:4px solid #2563eb">
+        <h4 style="color:#1d4ed8">🚀 Opportunities</h4>
+        <ul>
+          <li><b>100K+ dental clinics in India</b>, growing; generalists serve them shallowly.</li>
+          <li><b>Eka at $100M+ validates the market</b> — the ceiling exists.</li>
+          <li><b>Dental niche depth</b> — DICOM/imaging, lab, memberships = a moat generalists won't build.</li>
+          <li><b>DPDP + ABDM compliance as a selling point</b>, not just a burden.</li>
+          <li><b>Ecosystem play</b> — PRM, marketing, clinical library as standalone products multiply ARR/clinic.</li>
+        </ul>
+      </div>
+      <div class="box" style="border-top:4px solid #d97706">
+        <h4 style="color:#b45309">🌩️ Threats</h4>
+        <ul>
+          <li><b>Eka</b> — funded, ABDM-certified, at scale, already has a dental module.</li>
+          <li><b>Other PMS</b> — CareStack, Cliniify, Dentrix-class incumbents.</li>
+          <li><b>Regulatory weight</b> — DPDP (₹250 cr penalty), ABDM certification overhead.</li>
+          <li><b>Funded rivals move faster on distribution</b> even if you out-build them.</li>
+          <li><b>Trust risk:</b> one money-bug in a real clinic (those red tests) damages reputation fast.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TAB: FEATURES ===================== -->
+  <section class="tabpanel" id="features">
+    <div class="legend">
+      <span><i class="dot" style="background:#16a34a"></i> ✅ Live-verified</span>
+      <span><i class="dot" style="background:#2563eb"></i> 🟢 Built, untested</span>
+      <span><i class="dot" style="background:#d97706"></i> 🟠 Test RED / partial</span>
+      <span><i class="dot" style="background:#7c3aed"></i> 🔌 GPU-bound</span>
+      <span><i class="dot" style="background:#64748b"></i> 📱 Unconfirmed</span>
+      <span><i class="dot" style="background:#94a3b8"></i> ⬜ Planned</span>
+    </div>
+    <h2>Feature inventory — entire app, by status</h2>
+    <p style="font-size:13px;color:#6a5b70;margin-top:-6px">Grounded in <code>PROGRESS_STATUS_2026-06-27.md</code> (code-verified). "Built" = renders/coded; only the green bucket is verified end-to-end.</p>
+
+    <div class="box" style="border-left:4px solid #16a34a">
+      <h4 style="color:#15803d">✅ Live-verified (tested end-to-end / passing tests)</h4>
+      <p style="font-size:13.5px;margin:0">Auth / login (Sanctum) · Patient registration (live at Tulip) · Membership enrolment + finance chain · Treatment create → SOP · Inventory PO → GRN → payable · Settings masters · Marketing idea → campaign · HR auto-absent · Task → assignee notification · App-wide page render (178 pages HTTP 200).</p>
+    </div>
+
+    <div class="box" style="border-left:4px solid #2563eb;margin-top:12px">
+      <h4 style="color:#1d4ed8">🟢 Built &amp; rendering — not yet verified end-to-end</h4>
+      <p style="font-size:13.5px;margin:0">Consultations (4 workflows) · Treatment plans &amp; visits · Prescriptions + CDSS · Lab cases · Wallet / finance reports &amp; analytics · Communication engines (Recall / Opportunity / Inbound / B2B) · PRM board · CMS / Clinical Library · HR module · Marketing engine · ABDM / FHIR mapping layer (Phase 2 tested) · DPDP consent module · Patient documents &amp; timeline.</p>
+    </div>
+
+    <div class="box" style="border-left:4px solid #d97706;margin-top:12px">
+      <h4 style="color:#b45309">🟠 Built but test currently RED / needs fixing</h4>
+      <p style="font-size:13.5px;margin:0"><b>Finance: payment → receipt → ledger → mark-invoice-paid</b> (the one you can't get wrong) · Inventory item create · Inventory stock-in movement · Lab-case auto-close · Recall-engine queues · Appointment status flow / revert. <b>Re-run &amp; green these before any clinic touches money.</b></p>
+    </div>
+
+    <div class="box" style="border-left:4px solid #7c3aed;margin-top:12px">
+      <h4 style="color:#6d28d9">🔌 Built but GPU/environment-bound (off on a normal server)</h4>
+      <p style="font-size:13.5px;margin:0">Tulip AI copilot · Voice notes (faster-whisper) · Receipt / patient-form scan · Vision (x-ray/doc reading). Real code, but need local Ollama + GPU — won't run on the VPS pilot.</p>
+    </div>
+
+    <div class="box" style="border-left:4px solid #64748b;margin-top:12px">
+      <h4 style="color:#475569">📱 Unconfirmed</h4>
+      <p style="font-size:13.5px;margin:0">Flutter mobile app — built in prior sessions per memory, but MASTER brief found zero <code>.dart</code> files in this workspace. <b>Resolve the app's location before claiming status.</b></p>
+    </div>
+
+    <div class="box" style="border-left:4px solid #94a3b8;margin-top:12px">
+      <h4 style="color:#64748b">⬜ Planned — not built</h4>
+      <p style="font-size:13.5px;margin:0">Patient portal · Online 24/7 self-scheduling · Payment gateway · Teledentistry · Imaging upload/viewer/tagging · Perio charting (6-point) · <b>DICOM / PACS (the moat)</b> · Implant/prosthetics tracking · AI x-ray assist · Role-based Job Library · ABDM live (M2→M4) · NHCX · Clinical coding (SNOMED/LOINC/CDT) · GST e-invoicing finish · TDS · Insurance/TPA · Pharmacy registers · Drug-license linkage · MFA · NABH · ISO 27001 · CERT-In · <b>Internal MCP layer</b> (build, unexposed) · <b>Tulip "AI Secretary"</b> (role-aware assistant 4.1 + model-router 4.1a + chairside voice 4.1b + patient 24/7 front-desk 4.1c + health companion 4.1d) · <b>Network layer</b> (lab / consultant→ProConsult / supplier connectors, Phase H).</p>
+    </div>
+  </section>
+
+  <!-- ===================== TAB: TIMELINE (Claude-speed) ===================== -->
+  <section class="tabpanel" id="timeline">
+    <h2>Timeline at Claude-speed (not human-speed)</h2>
+    <div class="box">
+      <p class="goal" style="margin-top:0">Claude collapses the <b>coding</b>, not the <b>reality</b>. What stays fixed: real-clinic testing cycles, external approval queues (payment-gateway KYC, GSTN, ABDM creds), and your own review/decision bandwidth as a solo founder. So the build shrinks ~4–5×; the calendar shrinks ~3×.</p>
+      <table class="feat">
+        <tr><th>Phase</th><th>Human-speed</th><th>Claude-speed</th><th>The real floor (can't compress)</th></tr>
+        <tr><td><b>Pilot go-live</b></td><td>—</td><td><b style="color:#16a34a">1 Jul 2026</b></td><td>VPS provisioning + DB/file transfer.</td></tr>
+        <tr><td>A · Harden &amp; secure</td><td>Jul–Aug 26</td><td><b>Jul 2026 (2–3 wks)</b></td><td>Security audit + clinic QA of red tests.</td></tr>
+        <tr><td>B · Comms &amp; engage</td><td>Sep–Oct 26</td><td><b>Aug 2026</b></td><td>WhatsApp Business approval.</td></tr>
+        <tr><td>C · Patient + pay + cloud 🚀</td><td>Nov–Dec 26</td><td><b style="color:#c0258f">Sep–Oct 2026 → FULL LAUNCH</b></td><td>Payment-gateway KYC + GSTN queues.</td></tr>
+        <tr><td>D · Imaging + DICOM (moat)</td><td>Jan–Mar 27</td><td><b>Oct–Nov 2026</b></td><td>DICOM viewer integration is the long pole even fast.</td></tr>
+        <tr><td>E · Differentiators + MCP</td><td>Apr–Jun 27</td><td><b>Dec 2026</b></td><td>DPDP audit sign-off (deadline 13 May 27 — well clear).</td></tr>
+        <tr><td>F · ABDM full stack</td><td>Jul–Sep 27</td><td><b>Q1 2027*</b></td><td>*Gated on ABDM enrollment, not build speed.</td></tr>
+        <tr><td>G · Finance / pharmacy / accred.</td><td>Oct–Dec 27</td><td><b>Q1 2027</b></td><td>NABH/ISO are external audits.</td></tr>
+        <tr><td>H · Ecosystem &amp; network</td><td>2028 →</td><td><b>2027+ (post-core)</b></td><td>Two-sided network density + ProConsult readiness — not a build-speed problem.</td></tr>
+      </table>
+      <div class="exit"><b>Net:</b> a fully-built, tested, deployed OS (minus ABDM-live, which waits on enrollment) is realistic by <b>~Q4 2026 – Q1 2027</b> at Claude-speed — vs end-2027 at human-speed. <b>Full commercial launch ~Sep–Oct 2026.</b> See the <b>Phase Plan</b> tab for the conservative human-speed breakdown.</div>
+    </div>
+
+    <!-- PILOT GO-LIVE -->
+    <div class="launch" style="background:linear-gradient(120deg,#15803d,#22c55e);box-shadow:0 10px 26px rgba(22,163,74,.28);margin-top:22px">
+      <span class="tag">NOW · PILOT</span>
+      <h3>🩺 Pilot Go-Live — 1 July 2026 (clinic test)</h3>
+      <div style="font-size:14px;opacity:.96">
+        Deploy <b>what's already built</b> to an India-region VPS over HTTPS so your own clinic can test with real patient data. This is a <b>supervised pilot</b>, not the full cloud launch (that's end of Phase C).
+        <div class="two" style="margin-top:10px">
+          <div style="background:rgba(255,255,255,.16);border-radius:10px;padding:10px 14px">
+            <b>✅ Works on the VPS</b><br>patients · consultations · billing/finance · prescriptions · treatment plans · memberships · scheduling · mobile app (Sanctum API)
+          </div>
+          <div style="background:rgba(0,0,0,.14);border-radius:10px;padding:10px 14px">
+            <b>⛔ Off on the VPS (no GPU)</b><br>voice notes · Tulip copilot · receipt / x-ray scan — Whisper + Ollama need a GPU; re-enable later
+          </div>
+        </div>
+        <div style="margin-top:10px;font-size:13px">
+          <b>Must-do before clinic uses it (real PHI):</b> HTTPS + firewall · <code>APP_DEBUG=false</code> · reuse existing <code>APP_KEY</code> · <b>import</b> the DB (never <code>migrate:fresh</code>) · copy <code>storage/app</code> files · daily backup.
+          &nbsp;Full steps → <b>docs/deploy/vps-go-live-runbook.md</b>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TAB: PHASE PLAN ===================== -->
+  <section class="tabpanel" id="phases">
+    <div class="legend">
+      <span><i class="dot" style="background:#16a34a"></i> ✅ Built &amp; tested</span>
+      <span><i class="dot" style="background:#2563eb"></i> 🟢 Code-complete, needs test</span>
+      <span><i class="dot" style="background:#d97706"></i> 🟡 Partial</span>
+      <span><i class="dot" style="background:#94a3b8"></i> ⬜ Not started</span>
+      <span><i class="dot" style="background:#0891b2"></i> 🔵 Infra / business</span>
+      <span><i class="dot" style="background:#dc2626"></i> 🔴 Legal / DPDP</span>
+    </div>
+
+    <h2>The shape of it <span style="font-size:13px;font-weight:400;color:#9a8aa0">(conservative human-speed reference)</span></h2>
+    <div class="gantt">
+      <table>
+        <tr>
+          <th class="yr"></th>
+          <th class="yr" colspan="6">2026</th>
+          <th class="yr" colspan="6">2027</th>
+        </tr>
+        <tr>
+          <th></th>
+          <th>Jul</th><th>Aug</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dec</th>
+          <th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>May</th><th>Jun</th>
+        </tr>
+        <tr><td class="lbl">★ Pilot go-live (clinic test)</td><td><div class="bar" style="background:#16a34a;justify-content:center;padding:0 6px">Jul 1 🚀</div></td><td colspan="11"></td></tr>
+        <tr><td class="lbl">A · Harden &amp; secure</td><td colspan="2"><div class="bar" style="background:#6d28d9">Phase A</div></td><td colspan="10"></td></tr>
+        <tr><td class="lbl">B · Comms &amp; engage</td><td colspan="2"></td><td colspan="2"><div class="bar" style="background:#0ea5e9">Phase B</div></td><td colspan="8"></td></tr>
+        <tr><td class="lbl">C · Patient + pay + cloud 🚀</td><td colspan="4"></td><td colspan="2"><div class="bar" style="background:#c0258f">Phase C → LAUNCH</div></td><td colspan="6"></td></tr>
+        <tr><td class="lbl">D · Clinical depth · DICOM</td><td colspan="6"></td><td colspan="3"><div class="bar" style="background:#0d9488">Phase D</div></td><td colspan="3"></td></tr>
+        <tr><td class="lbl">E · Differentiators + DPDP</td><td colspan="9"></td><td colspan="3"><div class="bar" style="background:#d97706">Phase E</div></td></tr>
+        <tr><td class="lbl">F · ABDM full stack</td><td colspan="12"><div class="flag">↳ Jul–Sep 2027 (gated on ABDM enrollment)</div></td></tr>
+        <tr><td class="lbl">G · Finance / pharmacy / accreditation</td><td colspan="12"><div class="flag">↳ Oct–Dec 2027</div></td></tr>
+        <tr><td class="lbl">H · Ecosystem &amp; network (labs / consultants / suppliers)</td><td colspan="12"><div class="flag">↳ 2028 → (post-core growth · OS-side sockets for ProConsult)</div></td></tr>
+      </table>
+    </div>
+    <p style="font-size:13px;color:#6a5b70;margin-top:12px">
+      <b style="color:#16a34a">🩺 Pilot go-live:</b> 1 Jul 2026 — existing build on a VPS for in-clinic testing (real data, AI features off). Not the full launch.
+      &nbsp;·&nbsp; <b style="color:#c0258f">🚀 Full launch:</b> end of Phase C (~Dec 2026 / Jan 2027) — cloud-hosted, secure, patient-facing, payment-enabled, DPDP-verified.
+      &nbsp;·&nbsp; <b style="color:#dc2626">⚖️ DPDP enforcement 13 May 2027</b> falls in Phase E — Wave 5 already built, so it's an audit gate, not a scramble.
+    </p>
+
+    <h2 class="mt">Phases in detail</h2>
+    <!-- PHASE A -->
+    <div class="phase">
+      <div class="phead" style="background:linear-gradient(110deg,#5b21b6,#7c3aed)">
+        <h3>Phase A — Harden &amp; Secure the Base</h3><span class="when">Jul–Aug 2026</span>
+      </div>
+      <div class="pbody">
+        <p class="goal">Turn "code-complete but untested" into a launchable, secure foundation. Nothing flashy — the cloud-launch prerequisite.</p>
+        <table class="feat">
+          <tr><th>ID</th><th>Item</th><th>Effort</th><th>Status</th><th>Why now</th></tr>
+          <tr><td class="id">0.4</td><td>Security &amp; audit hardening (RBAC, encryption, MFA, tamper-evident logs)</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td><td>Cloud-launch + DPDP both depend on it.</td></tr>
+          <tr><td class="id">8.1</td><td>Encryption at rest + in transit</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td><td>Non-negotiable before cloud PHI.</td></tr>
+          <tr><td class="id">8.2</td><td>MFA + session security</td><td><span class="eff">S–M</span></td><td><span class="pill" style="background:#94a3b8">⬜ Not started</span></td><td>Same.</td></tr>
+          <tr><td class="id">0.3</td><td>API layer harden (<code>/api/v1</code>, Sanctum)</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td><td>Mobile + portal + sync all ride on it.</td></tr>
+          <tr><td class="id">1.3</td><td>Mobile app — stabilise &amp; test built modules</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td><td>Large untested surface; QA now.</td></tr>
+          <tr><td class="id">1.4</td><td>Inventory / material tracking — test &amp; ship</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td><td>Already built; verify + flip on.</td></tr>
+          <tr><td class="id">🔵</td><td><b>Cloud infra plan</b> (India-region host, backups, secrets, CI)</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#0891b2">🔵 Infra</span></td><td>Decide stack now; provision in Phase C.</td></tr>
+          <tr><td class="id">🔵</td><td><b>Sync-layer design</b> (cloud = source of truth, encrypted offline cache)</td><td><span class="eff">S–M</span></td><td><span class="pill" style="background:#0891b2">🔵 Infra</span></td><td>Replaces "offline-capable"; design before launch.</td></tr>
+        </table>
+        <div class="exit"><b>Exit:</b> security audit passed · all Phase-A modules tested · cloud infra + sync architecture decided.</div>
+      </div>
+    </div>
+
+    <!-- PHASE B -->
+    <div class="phase">
+      <div class="phead" style="background:linear-gradient(110deg,#0369a1,#0ea5e9)">
+        <h3>Phase B — Communication &amp; Engagement</h3><span class="when">Sep–Oct 2026</span>
+      </div>
+      <div class="pbody">
+        <p class="goal">Close the ~5 matrix rows Eka bundles natively (comms, WhatsApp, reviews). The Eka-overlap zone — match it before launch.</p>
+        <table class="feat">
+          <tr><th>ID</th><th>Item</th><th>Effort</th><th>Status</th></tr>
+          <tr><td class="id">1.1</td><td>Communication OS — 4 engines + unified inbox</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td></tr>
+          <tr><td class="id">1.2</td><td>WhatsApp messaging (India's primary channel)</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td></tr>
+          <tr><td class="id">2.4</td><td>Reputation / reviews management</td><td><span class="eff">S–M</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td></tr>
+          <tr><td class="id">4.7</td><td>Marketing Engine — mature; tie to reviews + recall</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td></tr>
+          <tr><td class="id">1.5</td><td>Voice notes — extend beyond Phase 1 (→ dental-native scribe)</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td></tr>
+          <tr><td class="id">1.6</td><td>Lab module v2 — remaining phases</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td></tr>
+        </table>
+        <div class="exit"><b>Exit:</b> two-way patient messaging live (WhatsApp + reminders) · reviews loop working · lab v2 usable.</div>
+      </div>
+    </div>
+
+    <!-- PHASE C -->
+    <div class="phase">
+      <div class="phead" style="background:linear-gradient(110deg,#9d174d,#c0258f)">
+        <h3>Phase C — Patient-Facing + Payments + Cloud 🚀</h3><span class="when">Nov–Dec 2026</span>
+      </div>
+      <div class="pbody">
+        <p class="goal">Everything a clinic needs to run on the cloud and let patients self-serve. Ends in LAUNCH.</p>
+        <table class="feat">
+          <tr><th>ID</th><th>Item</th><th>Effort</th><th>Status</th></tr>
+          <tr><td class="id">2.1</td><td>Online 24/7 self-scheduling</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜ Not started</span></td></tr>
+          <tr><td class="id">2.3</td><td>Online digital intake forms (patient-completed)</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td></tr>
+          <tr><td class="id">2.5</td><td>Payment gateway (Razorpay/Stripe-class, card-on-file)</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜ Not started</span></td></tr>
+          <tr><td class="id">2.2</td><td>Patient portal (book, forms, records, pay)</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#94a3b8">⬜ Not started</span></td></tr>
+          <tr><td class="id">7.1</td><td>GST e-invoicing + HSN/SAC codes</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td></tr>
+          <tr><td class="id">7.2</td><td>UPI / gateway reconciliation</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#d97706">🟡 Partial</span></td></tr>
+          <tr><td class="id">🔵</td><td><b>Cloud migration</b> (provision infra from Phase A plan, data-residency)</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#0891b2">🔵 Infra</span></td></tr>
+          <tr><td class="id">🔵</td><td><b>Sync layer</b> (build the encrypted offline cache designed in Phase A)</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#0891b2">🔵 Infra</span></td></tr>
+          <tr><td class="id">🔴</td><td><b>DPDP pre-launch verification</b> (consent/rights/breach/purge audit — Wave 5 already built)</td><td><span class="eff">S</span></td><td><span class="pill" style="background:#16a34a">✅ → verify</span></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- LAUNCH -->
+    <div class="launch">
+      <span class="tag">MILESTONE</span>
+      <h3>🚀 LAUNCH — target end Dec 2026 / early Jan 2027</h3>
+      <div style="font-size:14px;opacity:.95">Cloud-hosted · secure (MFA / encryption / audit) · patient self-scheduling + portal + online payments · GST-compliant billing · <b>DPDP-verified before any PHI touches the cloud.</b> Flat bundled pricing (no metering) is the go-to-market hook.</div>
+    </div>
+
+    <!-- PHASE D -->
+    <div class="phase">
+      <div class="phead" style="background:linear-gradient(110deg,#0f766e,#0d9488)">
+        <h3>Phase D — Clinical Depth: Imaging, DICOM, Charting</h3><span class="when">Jan–Mar 2027</span>
+      </div>
+      <div class="pbody">
+        <p class="goal">Build the dental moat. Where "dental-native" becomes visible and Eka has nothing. Highest post-launch priority.</p>
+        <table class="feat">
+          <tr><th>ID</th><th>Item</th><th>Effort</th><th>Status</th><th>Note</th></tr>
+          <tr><td class="id">3.1</td><td>Imaging — upload + viewer + editing + tooth tagging</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td>Upload-first (skip sensor drivers).</td></tr>
+          <tr><td class="id">3.3</td><td>Full odontogram / dental charting</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#d97706">🟡</span></td><td>Conditions + history + treatment linkage.</td></tr>
+          <tr><td class="id">3.2</td><td>Perio charting (6-point)</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td></td></tr>
+          <tr><td class="id">3.7</td><td>Treatment plan + consent forms w/ e-signature</td><td><span class="eff">S–M</span></td><td><span class="pill" style="background:#d97706">🟡</span></td><td>Feeds DPDP consent (already built).</td></tr>
+          <tr><td class="id">3.5</td><td><b>DICOM viewer / PACS</b> (OPG, CBCT, intraoral)</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td><b>Headline dental gap vs Eka.</b> Integrate OHIF/dcm4che-class, don't build from scratch.</td></tr>
+          <tr><td class="id">3.6</td><td>Implant / prosthetics tracking + batch/lot traceability</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td>Medical-device rules.</td></tr>
+          <tr><td class="id">3.4</td><td>Local AI x-ray <i>assist</i> (non-diagnostic)</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td>Triage / patient-explanation only; partner diagnostic AI later if needed.</td></tr>
+        </table>
+        <div class="exit"><b>Exit:</b> a dentist can upload + view + tag radiographs, run DICOM (OPG/CBCT), chart odontogram + perio, and capture e-signed consent. <b>This phase alone is your strongest sales story.</b></div>
+      </div>
+    </div>
+
+    <!-- PHASE E -->
+    <div class="phase">
+      <div class="phead" style="background:linear-gradient(110deg,#b45309,#d97706)">
+        <h3>Phase E — Differentiators + DPDP Legal Checkpoint</h3><span class="when">Apr–Jun 2027</span>
+      </div>
+      <div class="pbody">
+        <p class="goal">Deepen where you already beat everyone — anchored by <b>Tulip, your "AI Secretary"</b> (role-aware personal assistant). DPDP enforcement (13 May 2027) lands mid-phase — Wave 5 is built, so this is a final compliance audit, not a build.</p>
+        <table class="feat">
+          <tr><th>ID</th><th>Item</th><th>Effort</th><th>Status</th></tr>
+          <tr><td class="id">🔴</td><td><b>DPDP final compliance audit</b> before 13 May 2027 enforcement (Wave 5 ✅)</td><td><span class="eff">S</span></td><td><span class="pill" style="background:#16a34a">✅ → audit</span></td></tr>
+          <tr><td class="id">4.0</td><td><b>Drug-data sourcing decision (CDSS spike)</b> — neutral Indian drug DB + interactions + calculators. <b>Not</b> Eka's MedAI API (competitor; metered; sees prescribing data).</td><td><span class="eff">S</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td></tr>
+          <tr><td class="id">4.1</td><td><b>Tulip — role-aware personal assistant ("AI Secretary")</b> — one brain, role-scoped: dentist (personal + clinical, chairside is one mode), consultant (+ finance/visits → ProConsult), front desk (tasks/what's-next), staff (in-the-moment SOP). A genuine personal assistant across each person's whole work life, not a task-bot. Confirm-cards for clinical/financial.</td><td><span class="eff">XL</span></td><td><span class="pill" style="background:#d97706">🟡</span></td></tr>
+          <tr><td class="id">4.1a</td><td><b>Tulip orchestration — indigenous, model-agnostic MCP router</b> — routes Claude/GPT/Gemini + local models, pulls + grounds dental data. <b>Moat = orchestration + dental grounding, not the model</b> (models are swappable engines). A buying driver.</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td></tr>
+          <tr><td class="id">4.1b</td><td><b>Tulip chairside voice secretary</b> — hands-free, voice-first charting/notes + proactive morning briefing (ties to Huddle). Dentist gloved mid-procedure → voice is a <i>need</i>, not a nicety.</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td></tr>
+          <tr><td class="id">4.1c</td><td><b>Patient layer 1 — 24/7 AI front desk (service)</b> — always-on bot: answers WhatsApp/calls after hours, books, reminds, reschedules, billing/queries (multilingual). Clinic feels "open 24/7" without staff.</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td></tr>
+          <tr><td class="id">4.1d</td><td><b>Patient layer 2 — personal health companion</b> — patient's own assistant: post-op/after-care, plain-language treatment, medication adherence + recall, access to own records. Boosts case acceptance + retention.</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td></tr>
+          <tr><td class="id">MCP</td><td><b>Internal ecosystem-glue MCP</b> — wrap Tulip's ToolRegistry (Clinical Library ↔ PRM ↔ Marketing ↔ Tulip). <b>Build but don't launch/expose</b>; <code>ConsentManager</code>-gated. <i>Distinct from 4.1a</i> — plumbing, not a buying driver.</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜ Build, unexposed</span></td></tr>
+          <tr><td class="id">4.5</td><td>PRM + AI automation</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#d97706">🟡</span></td></tr>
+          <tr><td class="id">4.2</td><td>Role-based Job Library + SOPs</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td></tr>
+          <tr><td class="id">4.3</td><td>Procurement → AP — extend (moat vs all rivals)</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#16a34a">✅ → extend</span></td></tr>
+          <tr><td class="id">4.6</td><td>Membership / AOCP — deepen</td><td><span class="eff">S</span></td><td><span class="pill" style="background:#16a34a">✅ → deepen</span></td></tr>
+          <tr><td class="id">4.4</td><td>Snap-a-bill / OCR — extend to more doc types</td><td><span class="eff">S–M</span></td><td><span class="pill" style="background:#16a34a">✅ → extend</span></td></tr>
+        </table>
+        <div class="gate"><b>🔒 Design rule:</b> model-agnostic routing must be <b>PII / consent-gated</b> — strip/mask PHI before any external-model call, keep sensitive clinical/financial work on local models, gate through Wave 5 consent, confirm-cards on clinical/financial actions. Also a sales point: "your data is gated, not shipped wholesale to OpenAI."</div>
+        <div class="exit"><b>Two MCPs, don't confuse:</b> <code>4.1a</code> = Tulip's model-router (the assistant's brain — a buying driver). <code>MCP</code> = ecosystem-glue (internal plumbing, unexposed, not a buying driver).</div>
+        <div class="exit"><b>Exit:</b> DPDP audit signed off · Tulip role-aware assistant shipping value across ≥2 roles · model-router PII-gated · ops differentiators matured.</div>
+      </div>
+    </div>
+
+    <!-- PHASE F -->
+    <div class="phase">
+      <div class="phead" style="background:linear-gradient(110deg,#1d4ed8,#2563eb)">
+        <h3>Phase F — ABDM Full Stack &amp; Interoperability</h3><span class="when">Jul–Sep 2027</span>
+      </div>
+      <div class="pbody">
+        <p class="goal">Flip ABDM-ready → ABDM-live when you incorporate/enroll. The FHIR engine is already built (Phase 2 complete), so this is mostly wiring + registration + the national stack.</p>
+        <table class="feat">
+          <tr><th>ID</th><th>Item</th><th>Effort</th><th>Status</th><th>Note</th></tr>
+          <tr><td class="id">6.0</td><td><b>Schema validation vs Eka public docs</b> — diff our ABDM / prescription / codification tables against Eka's published API schemas (<code>developer.eka.care</code>) before building 6.x. Reference only — no Eka API dependency.</td><td><span class="eff">S</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td>Free design input; cheap; run any time before this phase.</td></tr>
+          <tr><td class="id">6.1</td><td>ABHA creation + verification at registration (M1)</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#2563eb">🟢</span></td><td>Local capture built; needs sandbox creds.</td></tr>
+          <tr><td class="id">6.2</td><td>HPR — register dentists / hygienists</td><td><span class="eff">S–M</span></td><td><span class="pill" style="background:#2563eb">🟢</span></td><td>Capture built.</td></tr>
+          <tr><td class="id">6.3</td><td>HFR — register branches / facilities</td><td><span class="eff">S–M</span></td><td><span class="pill" style="background:#2563eb">🟢</span></td><td>Capture built.</td></tr>
+          <tr><td class="id">6.5</td><td>FHIR R4 record format</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#2563eb">🟢</span></td><td><b>Engine code-complete &amp; tested.</b></td></tr>
+          <tr><td class="id">6.7</td><td>Clinical coding: SNOMED CT, LOINC, ICD-10/ICD-DA, ADA CDT</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td>Terminology maps seeded; extend.</td></tr>
+          <tr><td class="id">6.4</td><td>M2 link → M3 consent HIE → M4</td><td><span class="eff">XL</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td>Gated on ABDM sandbox→prod creds.</td></tr>
+          <tr><td class="id">6.6</td><td>NHCX — health claims exchange</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td>Lower priority; pairs with 7.4.</td></tr>
+        </table>
+        <div class="gate"><b>⛔ Gate:</b> depends on incorporating + getting ABDM sandbox credentials. Deferred until you choose to enroll — the architecture is ready whenever you flip it. If enrollment slips, Phase F slides <b>without blocking anything else.</b></div>
+      </div>
+    </div>
+
+    <!-- PHASE G -->
+    <div class="phase">
+      <div class="phead" style="background:linear-gradient(110deg,#475569,#64748b)">
+        <h3>Phase G — Finance, Pharmacy &amp; Accreditation</h3><span class="when">Oct–Dec 2027</span>
+      </div>
+      <div class="pbody">
+        <p class="goal">The compliance long-tail that matters as you scale to multi-clinic / sell to bigger practices.</p>
+        <table class="feat">
+          <tr><th>ID</th><th>Item</th><th>Effort</th><th>Status</th></tr>
+          <tr><td class="id">7.3</td><td>TDS handling for vendor / lab payments</td><td><span class="eff">S–M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td></tr>
+          <tr><td class="id">7.5</td><td>Pharmacy: Schedule H/H1/X dispensing register</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td></tr>
+          <tr><td class="id">7.6</td><td>e-prescription standards aligned to ABDM</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#d97706">🟡</span></td></tr>
+          <tr><td class="id">7.7</td><td>Drug license linkage (if dispensing)</td><td><span class="eff">S</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td></tr>
+          <tr><td class="id">7.4</td><td>Insurance / TPA claim formats (+ NHCX path)</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td></tr>
+          <tr><td class="id">8.3</td><td>NABH digital health / dental accreditation support</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td></tr>
+          <tr><td class="id">8.5</td><td>CERT-In incident reporting readiness</td><td><span class="eff">S–M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td></tr>
+          <tr><td class="id">8.4</td><td>ISO 27001 posture</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td></tr>
+        </table>
+        <div class="exit"><b>Exit:</b> finance/tax/pharmacy compliant · accreditation-support features in place for clinics that want NABH/ISO.</div>
+      </div>
+    </div>
+
+    <!-- PHASE H -->
+    <div class="phase">
+      <div class="phead" style="background:linear-gradient(110deg,#3730a3,#7c3aed)">
+        <h3>Phase H — Dental Vertical Ecosystem &amp; Network Effects</h3><span class="when">2028 → (post-core growth)</span>
+      </div>
+      <div class="pbody">
+        <p class="goal">Turn the single-clinic product into a dental <b>network</b> — the moves a general EMR (Eka) structurally won't make. <b>Data stays clinic-owned</b> (no cross-clinic patient sharing); value comes from connecting <i>people</i> (visiting consultants, labs, suppliers) into a clinic's own data with scoped, consented, audit-logged access. Every item is DPDP-gated via Wave 5.</p>
+        <div class="gate" style="border-left-color:#7c3aed;background:#f6f2fc;border-color:#e2d7f5;color:#3d1f4f"><b>⛔ ProConsult is a SEPARATE, parallel project.</b> This timeline holds only the <b>OS-side network layer</b> — the integration sockets the OS exposes over <code>/api/v1</code>. Three connectors share one bridge core: consultant (9.1 → ProConsult), lab (9.2, the wedge), supplier (9.5). <i>We build the sockets; ProConsult builds the plug.</i></div>
+        <table class="feat">
+          <tr><th>ID</th><th>Item</th><th>Effort</th><th>Status</th><th>Note</th></tr>
+          <tr><td class="id">9.2</td><td><b>Lab connector (two-sided portal)</b> — labs get a login: case submission, intraoral scans (STL/PLY), shade, try-in scheduling, live status, QR tracking, remake/NEM analytics. Extends Lab v2.</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td><b>The wedge — start here.</b> Easiest true two-sided network.</td></tr>
+          <tr><td class="id">9.1</td><td><b>Consultant connector (bridge to ProConsult)</b> — scoped, time-boxed, consent-gated case access so a visiting endodontist / surgeon / ortho sees ONLY their cases + visiting-day scheduling + payment/settlement + HPR-verified profile/ratings.</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td>Highest ceiling; gated on ProConsult (separate project).</td></tr>
+          <tr><td class="id">9.5</td><td><b>Supplier connector (group-buying)</b> — shared consumables / implant-system catalog; multi-clinic group buying (better pricing + margin). Extends procurement→AP.</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td>Third connector of the network layer.</td></tr>
+          <tr><td class="id">9.3</td><td><b>Dental clinical-data layer</b> — formulary, protocols (RCT / extraction / implant / perio), calculators (LA max-dose, implant torque, CAMBRA, AAP-2017 staging). Grounds Tulip; pairs with 4.0.</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td>Cheapest way to make Tulip visibly out-depth Eka.</td></tr>
+          <tr><td class="id">9.4</td><td><b>Specialty mini-modules</b> — Ortho, Implantology, Endo, Pedo, Perio. Each a "built for your specialty" hook. Builds on Phase D charting.</td><td><span class="eff">L</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td></td></tr>
+          <tr><td class="id">9.6</td><td><b>Dental recall intelligence</b> — hygiene / ortho / implant / perio-specific recall intervals, not generic reminders. Recall = recurring revenue.</td><td><span class="eff">S–M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td>On Comms OS (Phase B).</td></tr>
+          <tr><td class="id">9.7</td><td><b>Smile / case-acceptance tools</b> — before/after galleries, treatment visualisation, dental EMI financing (reuses finance chain).</td><td><span class="eff">M</span></td><td><span class="pill" style="background:#94a3b8">⬜</span></td><td>A sales / case-acceptance tool, not just records.</td></tr>
+        </table>
+        <div class="exit"><b>Why not "portable patient records across clinics":</b> rejected by design — clinics read it as data poaching. The India-correct network is the <b>visiting consultant</b> (9.1): the consultant moves, the patient data doesn't. Marketplace moat = <b>rails (case access + payments + verified reputation)</b>, not matchmaking (which leaks via WhatsApp disintermediation).</div>
+        <div class="exit"><b>Exit:</b> ≥1 dense two-sided network live (labs or consultants) · Tulip grounded in dental-native data · specialty depth no general EMR matches.</div>
+      </div>
+    </div>
+
+    <!-- CRITICAL PATH + RISKS -->
+    <h2 class="mt">Critical path &amp; risks</h2>
+    <div class="two">
+      <div class="box">
+        <h4>🧭 Critical path &amp; parallelism</h4>
+        <ul>
+          <li><b>To launch:</b> Phase A (security + infra) → Phase C (payments + portal + cloud + DPDP verify). Phase B can overlap.</li>
+          <li><b>Parallelise:</b> Wave 4 items (4.3 / 4.4 / 4.6) are mostly built — slot them into earlier gaps as filler.</li>
+          <li><b>Biggest post-launch bet:</b> Phase D (DICOM + imaging + charting). If you cut scope anywhere, protect this — it's the whole moat.</li>
+          <li><b>Don't let ABDM (F) block launch.</b> Deferred-by-design, gated on enrollment.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h4>⚠️ Risks to the timeline</h4>
+        <ul>
+          <li><b>Testing debt.</b> Most modules are code-complete-but-untested; rework stretches Phases A–B first.</li>
+          <li><b>Solo bandwidth.</b> Every date assumes the stated pace — keep a 2–3 week buffer per phase.</li>
+          <li><b>DICOM unknowns.</b> 3.5 is least-scoped; integrate OHIF/dcm4che rather than build.</li>
+          <li><b>Data-residency.</b> India-region hosting + DPDP verify both green before cloud PHI.</li>
+          <li><b>Payments + GST.</b> External KYC/GSTN dependencies — start early in Phase C.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TAB: VALUATION ===================== -->
+  <section class="tabpanel" id="valuation">
+    <h2>Valuation — honest read</h2>
+    <div class="box">
+      <p class="goal" style="margin-top:0">The hard truth first: <b>valuation tracks customers and recurring revenue, not how "finished" the code is.</b> A fully-built, deployed OS with ~0 paying clinics is worth its <b>replacement cost + option value</b> — not a SaaS multiple. The multiple shows up only when clinics pay. Figures below are <b>illustrative scaffolding, not a forecast</b> (per your MASTER brief), assuming a flat ~₹24K/clinic/year.</p>
+      <table class="feat">
+        <tr><th>Stage</th><th>Paying clinics</th><th>ARR</th><th>Illustrative valuation</th></tr>
+        <tr><td><b>Fully built + deployed, pre-traction</b> (your question)</td><td>~0</td><td>₹0</td><td><b>₹1–3 Cr</b> — rebuild/IP cost + strategic option value. <i>Not</i> a revenue multiple.</td></tr>
+        <tr><td>Pilot proof</td><td>10</td><td>₹2.4 L</td><td>Not yet meaningfully valued — this buys <i>evidence</i>, not price.</td></tr>
+        <tr><td>Early traction</td><td>100</td><td>₹24 L</td><td>~₹0.5–1.5 Cr (2–5× ARR, early-stage)</td></tr>
+        <tr><td>Real business</td><td>1,000</td><td>₹2.4 Cr</td><td>~₹7–20 Cr (3–8× ARR)</td></tr>
+        <tr><td>Scale</td><td>5,000</td><td>₹12 Cr</td><td>~₹50–100 Cr</td></tr>
+        <tr><td>Category leader</td><td>10,000</td><td>₹24 Cr</td><td>~₹100–200+ Cr</td></tr>
+        <tr><td style="color:#9a8aa0"><i>Context anchor — Eka Care</i></td><td style="color:#9a8aa0"><i>platform, funded</i></td><td style="color:#9a8aa0">—</td><td style="color:#9a8aa0"><i>~$100M+ (~₹850 Cr+), VC-backed &amp; diluted</i></td></tr>
+      </table>
+      <div class="exit"><b>Takeaway:</b> finishing the build moves you from "₹1–3 Cr asset" to "ready to <i>create</i> value" — but the value itself is unlocked by the clinic ladder, not the codebase. The whole valuation question collapses into one near-term test: <b>can you get from pilot → 100 paying clinics?</b> Everything above 100 is the same motion repeated. <span style="color:#9a8aa0">Note: ranges are rough, India SaaS multiples vary widely, and pre-revenue valuation is more art than math.</span></div>
+    </div>
+  </section>
+
+  <footer>
+    Dentfluence OS · dates rest on a stated solo-builder pace assumption — flex as testing &amp; clinic feedback land.
+  </footer>
+</div>
+
+<script>
+  function showTab(id, btn){
+    document.querySelectorAll('.tabpanel').forEach(function(p){p.classList.remove('active')});
+    document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active')});
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+</script>
+</body>
+</html>

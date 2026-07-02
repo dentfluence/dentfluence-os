@@ -1,0 +1,126 @@
+%% Dentfluence — Architecture Map (2026-07-02)
+%% Companion to docs/architecture-audit-2026-07-02.md
+%% Focus: the three-generation engagement layer around the shared clinical/finance core.
+
+flowchart TB
+
+    subgraph INGRESS["Lead Ingress"]
+        WH["Webhooks<br/>Meta / Website / WhatsApp"]
+    end
+
+    subgraph PRM["GEN 1 · Legacy PRM (leads kanban)"]
+        LIS["LeadIngestService"]
+        LENR["LeadEnrichmentService (AI)"]
+        LROUTE["LeadRoutingService"]
+        LREPLY["LeadReplyService (AI draft)"]
+        LFU["LeadFollowUpService"]
+        PRMC["PrmController<br/>board / moveStage / analytics"]
+        LEADS[("leads")]
+        LACT[("lead_activities")]
+    end
+
+    subgraph COMMS["GEN 2 · Communication OS"]
+        RECALL["RecallEngineService<br/>(recall:run 07:00)"]
+        FURULES["FollowUpRulesService<br/>(legacy rules — frozen)"]
+        OPP["Opportunity / B2B / Inbox"]
+        CQ[("communication_queue")]
+        FU[("follow_ups")]
+        CAL[("comm_activity_logs")]
+        TL["TimelineController<br/>(MOCK — dead)"]
+    end
+
+    subgraph REL["GEN 3 · Relationship Engine (spine)"]
+        RENG["RelationshipEngine<br/>linkLead ✔ · linkPatient ✖"]
+        AENG["ActivityEngine (hub)"]
+        RULES["RulesEngine"]
+        TASKE["TaskEngine"]
+        REME["ReminderEngine"]
+        APPTR["AppointmentReminderEngine<br/>(08:00)"]
+        SCORE["RelationshipScoreEngine"]
+        NOTE["NotificationEngine"]
+        GUARD["CommunicationGuard<br/>(fails OPEN)"]
+        TODAY["TodayActionsEngine<br/>(~12 live categories)"]
+        RELT[("relationships")]
+        ACTS[("activities")]
+        JRN[("relationship_journeys")]
+        RNOTIF[("relationship_notifications")]
+    end
+
+    subgraph CORE["Shared Clinical / Finance Core (read by the spine)"]
+        PAT[("patients")]
+        APPT[("appointments")]
+        TP[("treatment_plans")]
+        MEMB[("patient_memberships")]
+        INV[("invoices")]
+        LAB[("lab_cases")]
+        TASKS[("tasks")]
+        APPN[("app_notifications")]
+    end
+
+    subgraph API["Reuse Layer (good SSOT)"]
+        APIV1["/api/v1/* — Sanctum<br/>reuses shared services (web + mobile)"]
+    end
+
+    %% Ingress flow
+    WH --> LIS
+    LIS --> LEADS
+    LIS -->|linkLead| RENG
+    LEADS -->|ObservedBy| LENR
+    LENR --> LROUTE
+    PRMC --> LEADS
+    PRMC --> LACT
+    LFU --> FU
+
+    %% PRM now depends on the spine
+    PRMC -->|moveStage transition| JRN
+    PRMC -.->|leadDetail redirect| RENG
+
+    %% Communication OS
+    RECALL --> CQ
+    RECALL -->|dual-write| AENG
+    FURULES --> FU
+    OPP --> CQ
+
+    %% Relationship spine internal
+    RENG --> RELT
+    RENG --> JRN
+    AENG --> ACTS
+    AENG -->|afterCommit| RULES
+    AENG -->|dispatch| SCORE
+    RULES --> TASKE
+    RULES --> REME
+    RULES --> NOTE
+    TASKE --> TASKS
+    REME --> TASKS
+    APPTR --> TASKS
+    NOTE --> RNOTIF
+    NOTE -->|mirror| APPN
+
+    %% God-reader coupling (raw cross-domain reads)
+    SCORE -.->|raw reads| APPT & CQ & TP & MEMB & LEADS
+    TODAY -.->|raw reads| LEADS & CQ & APPT & MEMB & PAT & LAB & INV
+
+    %% API reuse
+    APIV1 --> RENG
+    APIV1 --> AENG
+    APIV1 --> TODAY
+
+    %% Duplication callouts
+    LACT -. "DUP: 3 activity logs" .- CAL
+    CAL -. "DUP" .- ACTS
+    FURULES -. "DUP: 2 rules engines" .- RULES
+    RECALL -. "DUP: 2 reminder pipelines" .- APPTR
+    LEADS -. "DUP: pipeline state in 2 places" .- JRN
+    APPN -. "DUP: 2 notification stores (bridged)" .- RNOTIF
+
+    classDef gen1 fill:#fde2e2,stroke:#c0392b,color:#000;
+    classDef gen2 fill:#fdebd0,stroke:#b9770e,color:#000;
+    classDef gen3 fill:#d6eaf8,stroke:#2471a3,color:#000;
+    classDef core fill:#e8f8f5,stroke:#148f77,color:#000;
+    classDef dead fill:#ccc,stroke:#666,color:#000,stroke-dasharray: 4 4;
+
+    class LIS,LENR,LROUTE,LREPLY,LFU,PRMC,LEADS,LACT gen1;
+    class RECALL,FURULES,OPP,CQ,FU,CAL gen2;
+    class TL dead;
+    class RENG,AENG,RULES,TASKE,REME,APPTR,SCORE,NOTE,GUARD,TODAY,RELT,ACTS,JRN,RNOTIF gen3;
+    class PAT,APPT,TP,MEMB,INV,LAB,TASKS,APPN core;

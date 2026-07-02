@@ -1,0 +1,359 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\BillingPrompt;
+use App\Models\LabCase;
+use App\Models\Patient;
+use App\Models\Task;
+use App\Models\TreatmentPlan;
+use App\Models\TreatmentVisit;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+
+/**
+ * TreatmentVisitService
+ * ---------------------
+ * The single "brain" for creating / updating treatment visits. Both the web
+ * controller and the API (mobile) controller call this, so a visit saved from
+ * the phone behaves EXACTLY like one saved from the web — same side-effects:
+ *
+ *   • visit items  → billing prompt for front desk (F2)
+ *   • lab section  → draft LabCase
+ *   • mark plan complete → plan status = completed + auto 6-month recall task
+ *
+ * This was lifted verbatim out of App\Http\Controllers\TreatmentVisitController
+ * so existing web behaviour is unchanged; the controller is now a thin wrapper.
+ */
+class TreatmentVisitService
+{
+    /**
+     * Validation rules shared by store + update (web + API identical).
+     * Kept here so there is one source of truth for the visit contract.
+     *
+     * NOTE: cost, amount_paid, payment_mode, payment_reference intentionally
+     * excluded. Billing is managed by front desk via billing prompts (F3+).
+     */
+    public static function rules(): array
+    {
+        return [
+            'visit_date'           => ['required', 'date'],
+            'visit_type'           => ['required', Rule::in(['treatment','followup','emergency','recall'])],
+            'status'               => ['required', Rule::in(['scheduled','in_chair','completed','cancelled','no_show'])],
+            'doctor_id'            => ['nullable', 'exists:users,id'],
+            'appointment_id'        => ['nullable', 'exists:appointments,id'],
+            'consultation_id'      => ['nullable', 'exists:consultations,id'],
+            'treatment_plan_id'    => ['nullable', 'exists:treatment_plans,id'],  // links visit to plan
+            'treatment_name'       => ['nullable', 'string', 'max:100'],
+            'current_stage'        => ['nullable', 'string', 'max:100'],
+            'completed_stages'     => ['nullable', 'array'],
+            'tooth_number'         => ['nullable', 'string', 'max:100'],
+            'notes'                => ['nullable', 'string'],
+            'chief_complaint'      => ['nullable', 'string', 'max:500'],
+            'next_visit_date'      => ['nullable', 'date'],
+            'next_visit_type'      => ['nullable', 'string', 'max:100'],
+            // RCT
+            'rct_num_canals'         => ['nullable', 'integer', 'min:1', 'max:5'],
+            'rct_canal_lengths'      => ['nullable', 'array'],
+            'rct_file_type'          => ['nullable', 'string', 'max:100'],
+            'rct_irrigant'           => ['nullable', 'string', 'max:100'],
+            'rct_obturation_method'  => ['nullable', 'string', 'max:100'],
+            // Implant
+            'impl_brand'             => ['nullable', 'string', 'max:100'],
+            'impl_size'              => ['nullable', 'string', 'max:50'],
+            'impl_torque'            => ['nullable', 'string', 'max:50'],
+            'impl_graft_used'        => ['nullable', 'string', 'max:100'],
+            'impl_graft_brand'       => ['nullable', 'string', 'max:100'],
+            'impl_membrane'          => ['nullable', 'string', 'max:100'],
+            'impl_healing_collar'    => ['nullable', 'string', 'max:100'],
+            // Filling
+            'fill_material'          => ['nullable', 'string', 'max:100'],
+            'fill_shade'             => ['nullable', 'string', 'max:50'],
+            // Scaling
+            'scale_quadrants'        => ['nullable', 'string', 'max:100'],
+            'scale_method'           => ['nullable', 'string', 'max:50'],
+            // Extraction
+            'ext_type'               => ['nullable', 'string', 'max:50'],
+            'ext_socket'             => ['nullable', 'string', 'max:100'],
+            'ext_suture'             => ['nullable', 'boolean'],
+            // Crown prep
+            'crown_type'             => ['nullable', 'string', 'max:50'],
+            'crown_shade'            => ['nullable', 'string', 'max:50'],
+            'crown_impression'       => ['nullable', 'boolean'],
+            'crown_temp_placed'      => ['nullable', 'string', 'max:100'],
+            // Prescription
+            'prescription_drugs'         => ['nullable', 'array'],
+            'prescription_instructions'  => ['nullable', 'array'],
+            'prescription_custom_notes'  => ['nullable', 'string'],
+            // Vitals (all optional)
+            'bp_systolic'        => ['nullable', 'integer', 'min:40',  'max:300'],
+            'bp_diastolic'       => ['nullable', 'integer', 'min:20',  'max:200'],
+            'pulse_rate'         => ['nullable', 'integer', 'min:20',  'max:250'],
+            'spo2'               => ['nullable', 'integer', 'min:50',  'max:100'],
+            'temperature'        => ['nullable', 'numeric', 'min:30',  'max:45'],
+            'blood_sugar'        => ['nullable', 'integer', 'min:20',  'max:800'],
+            'blood_sugar_type'   => ['nullable', Rule::in(['random','fasting','pp'])],
+            'weight'             => ['nullable', 'numeric', 'min:1',   'max:400'],
+            'vitals_notes'       => ['nullable', 'string', 'max:255'],
+            // F2: Visit items for billing (doctor selects what was done; front desk bills from this)
+            'visit_items'                              => ['nullable', 'array'],
+            'visit_items.*.treatment_plan_item_id'     => ['nullable', 'exists:treatment_plan_items,id'],
+            'visit_items.*.treatment_name'             => ['required_with:visit_items', 'string', 'max:150'],
+            'visit_items.*.material_option'            => ['nullable', 'string', 'max:100'],
+            'visit_items.*.tooth_number'               => ['nullable', 'string', 'max:20'],
+            'visit_items.*.suggested_price'            => ['nullable', 'numeric', 'min:0'],
+            'visit_items.*.notes'                      => ['nullable', 'string', 'max:500'],
+            // Repeat-work tracking — reason is required when an item is flagged as repeat
+            'visit_items.*.is_repeat'                  => ['nullable', 'boolean'],
+            'visit_items.*.repeat_reason'              => ['nullable', 'required_if:visit_items.*.is_repeat,true', 'string', 'max:300'],
+            'visit_items.*.repeat_of_visit_item_id'    => ['nullable', 'integer'],
+            // Mark the linked treatment plan as completed
+            'mark_treatment_complete'          => ['nullable', 'boolean'],
+            // Lab case creation (optional — only if treatment needs lab)
+            'lab_case'                         => ['nullable', 'array'],
+            'lab_case.enabled'                 => ['nullable', 'boolean'],
+            'lab_case.lab_vendor_id'           => ['nullable', 'exists:lab_vendors,id'],
+            'lab_case.work_category'           => ['nullable', 'string', 'max:100'],
+            'lab_case.work_subtype'            => ['nullable', 'string', 'max:100'],
+            'lab_case.priority'                => ['nullable', 'in:routine,urgent,express'],
+            'lab_case.expected_return_date'    => ['nullable', 'date'],
+            'lab_case.instructions'            => ['nullable', 'string'],
+        ];
+    }
+
+    /**
+     * Create a treatment visit and fire all the same side-effects the web does.
+     */
+    public function create(Patient $patient, array $data): TreatmentVisit
+    {
+        $visit = DB::transaction(function () use ($data, $patient) {
+            // Strip visit_items, lab_case, mark_treatment_complete — handled separately
+            $visit = $patient->treatmentVisits()->create(
+                array_diff_key($data, ['visit_items' => true, 'lab_case' => true, 'mark_treatment_complete' => true])
+            );
+
+            // Save visit items and fire billing prompt (F2)
+            if (!empty($data['visit_items'])) {
+                $this->saveVisitItems($visit, $data['visit_items']);
+            }
+
+            // Create lab case if doctor filled the lab section
+            if (!empty($data['lab_case']['enabled'])) {
+                $this->createLabCase($visit, $data['lab_case']);
+            }
+
+            // Mark the linked treatment plan as completed if requested
+            if (!empty($data['mark_treatment_complete']) && $visit->treatment_plan_id) {
+                $this->completePlanAndQueueRecall($visit->treatment_plan_id, $patient->id, $patient->name);
+            }
+
+            return $visit;
+        });
+
+        return $visit->load(['doctor', 'visitItems']);
+    }
+
+    /**
+     * Update an existing treatment visit (mirrors the web update exactly).
+     */
+    public function update(TreatmentVisit $visit, array $data): TreatmentVisit
+    {
+        DB::transaction(function () use ($data, $visit) {
+            $visit->update(array_diff_key($data, ['visit_items' => true, 'lab_case' => true, 'mark_treatment_complete' => true]));
+
+            // Mark the linked treatment plan as completed if requested
+            if (!empty($data['mark_treatment_complete']) && $visit->treatment_plan_id) {
+                $this->completePlanAndQueueRecall(
+                    $visit->treatment_plan_id,
+                    $visit->patient_id,
+                    $visit->patient->name ?? 'Patient'
+                );
+            }
+
+            // Re-sync visit items if provided (F2)
+            if (array_key_exists('visit_items', $data)) {
+                // Delete old pending items and re-create
+                $visit->visitItems()->delete();
+                if (!empty($data['visit_items'])) {
+                    // Dismiss any existing pending billing prompt for this visit
+                    BillingPrompt::where('trigger_type', 'treatment_visit')
+                        ->where('trigger_id', $visit->id)
+                        ->where('status', 'pending')
+                        ->update(['status' => 'dismissed']);
+
+                    $this->saveVisitItems($visit, $data['visit_items']);
+                }
+            }
+        });
+
+        return $visit->load(['doctor', 'visitItems']);
+    }
+
+    /**
+     * Mark the linked plan complete and auto-create a 6-month recall task
+     * (due 1 week before the 6-month mark). Skipped if a recall already exists.
+     * Identical to the block that previously lived in store()/update().
+     */
+    private function completePlanAndQueueRecall(int $treatmentPlanId, int $patientId, string $patientName): void
+    {
+        TreatmentPlan::where('id', $treatmentPlanId)->update(['status' => 'completed']);
+
+        $hasRecall = Task::where('patient_id', $patientId)
+            ->where('category', 'follow_up')
+            ->where('status', 'pending')
+            ->where(function ($q) {
+                $q->where('title', 'like', '%recall%')
+                  ->orWhere('title', 'like', '%6-month%');
+            })
+            ->exists();
+
+        if (! $hasRecall) {
+            Task::create([
+                'title'       => '6-Month Recall: Book appointment for ' . $patientName,
+                'description' => 'Treatment plan completed. Please contact the patient and schedule their 6-month recall checkup appointment.',
+                'category'    => 'follow_up',
+                'priority'    => 'medium',
+                'status'      => 'pending',
+                'patient_id'  => $patientId,
+                'branch_id'   => Auth::user()->branch_id,
+                'created_by'  => Auth::id(),
+                // Due 1 week before the 6-month mark so staff has time to reach out
+                'due_date'    => now()->addMonths(6)->subWeek(),
+            ]);
+        }
+    }
+
+    /**
+     * Create a LabCase linked to the given visit.
+     */
+    private function createLabCase(TreatmentVisit $visit, array $lc): void
+    {
+        LabCase::create([
+            'patient_id'           => $visit->patient_id,
+            'treatment_visit_id'   => $visit->id,
+            'doctor_id'            => $visit->doctor_id ?? auth()->id(),
+            'lab_vendor_id'        => $lc['lab_vendor_id'] ?? null,
+            'work_category'        => $lc['work_category'] ?? 'Other',
+            'work_subtype'         => $lc['work_subtype'] ?? null,
+            'priority'             => $lc['priority'] ?? 'routine',
+            'expected_return_date' => $lc['expected_return_date'] ?? null,
+            'instructions'         => $lc['instructions'] ?? null,
+            'status'               => 'draft',
+            'payment_status'       => 'pending',
+        ]);
+    }
+
+    /**
+     * Save visit items to treatment_visit_items and fire a billing prompt.
+     */
+    private function saveVisitItems(TreatmentVisit $visit, array $items): void
+    {
+        foreach ($items as $row) {
+            $visit->visitItems()->create([
+                'patient_id'             => $visit->patient_id,
+                'treatment_plan_item_id' => $row['treatment_plan_item_id'] ?? null,
+                'treatment_name'         => $row['treatment_name'],
+                'material_option'        => $row['material_option'] ?? null,
+                'tooth_number'           => $row['tooth_number'] ?? null,
+                'suggested_price'        => $row['suggested_price'] ?? 0,
+                'billing_status'         => 'pending',
+                'notes'                  => $row['notes'] ?? null,
+                // Repeat-work tracking
+                'is_repeat'               => !empty($row['is_repeat']),
+                'repeat_reason'           => !empty($row['is_repeat']) ? ($row['repeat_reason'] ?? null) : null,
+                'repeat_of_visit_item_id' => !empty($row['is_repeat']) ? ($row['repeat_of_visit_item_id'] ?? null) : null,
+            ]);
+        }
+
+        // Build a human-readable description for the front desk
+        $parts = collect($items)->map(function ($i) {
+            $label = $i['treatment_name'];
+            if (!empty($i['material_option'])) $label .= ' (' . $i['material_option'] . ')';
+            if (!empty($i['tooth_number']))    $label .= ' — Tooth ' . $i['tooth_number'];
+            return $label;
+        });
+
+        BillingPrompt::create([
+            'patient_id'   => $visit->patient_id,
+            'trigger_type' => 'treatment_visit',
+            'trigger_id'   => $visit->id,
+            'description'  => 'Bill for: ' . $parts->join(', '),
+            'status'       => 'pending',
+            'created_by'   => Auth::id(),
+        ]);
+    }
+
+    /**
+     * Normalise a visit to the array shape the web JS (and now the API) expects.
+     */
+    public function format(TreatmentVisit $v): array
+    {
+        return [
+            'id'                  => $v->id,
+            'appointment_id'      => $v->appointment_id,
+            'visit_date'          => $v->visit_date->format('Y-m-d'),
+            'visit_type'          => $v->visit_type,
+            'status'              => $v->status,
+            'doctor_id'           => $v->doctor_id,
+            'doctor_name'         => $v->doctor?->name,
+            'treatment_plan_id'   => $v->treatment_plan_id,
+            'treatment_name'      => $v->treatment_name,
+            'current_stage'       => $v->current_stage,
+            'completed_stages'    => $v->completed_stages ?? [],
+            'tooth_number'        => $v->tooth_number,
+            'notes'               => $v->notes,
+            'chief_complaint'     => $v->chief_complaint,
+            'next_visit_date'     => $v->next_visit_date?->format('Y-m-d'),
+            'next_visit_type'     => $v->next_visit_type,
+            // RCT
+            'rct_num_canals'         => $v->rct_num_canals,
+            'rct_canal_lengths'      => $v->rct_canal_lengths ?? [],
+            'rct_file_type'          => $v->rct_file_type,
+            'rct_irrigant'           => $v->rct_irrigant,
+            'rct_obturation_method'  => $v->rct_obturation_method,
+            // Implant
+            'impl_brand'             => $v->impl_brand,
+            'impl_size'              => $v->impl_size,
+            'impl_torque'            => $v->impl_torque,
+            'impl_graft_used'        => $v->impl_graft_used,
+            'impl_graft_brand'       => $v->impl_graft_brand,
+            'impl_membrane'          => $v->impl_membrane,
+            'impl_healing_collar'    => $v->impl_healing_collar,
+            // Filling
+            'fill_material'          => $v->fill_material,
+            'fill_shade'             => $v->fill_shade,
+            // Scaling
+            'scale_quadrants'        => $v->scale_quadrants,
+            'scale_method'           => $v->scale_method,
+            // Extraction
+            'ext_type'               => $v->ext_type,
+            'ext_socket'             => $v->ext_socket,
+            'ext_suture'             => $v->ext_suture,
+            // Crown
+            'crown_type'             => $v->crown_type,
+            'crown_shade'            => $v->crown_shade,
+            'crown_impression'       => $v->crown_impression,
+            'crown_temp_placed'      => $v->crown_temp_placed,
+            // Prescription
+            'prescription_drugs'         => $v->prescription_drugs ?? [],
+            'prescription_instructions'  => $v->prescription_instructions ?? [],
+            'prescription_custom_notes'  => $v->prescription_custom_notes,
+            // F2: visit items for billing
+            'visit_items' => ($v->relationLoaded('visitItems') ? $v->visitItems : collect())->map(fn($i) => [
+                'id'                     => $i->id,
+                'treatment_plan_item_id' => $i->treatment_plan_item_id,
+                'treatment_name'         => $i->treatment_name,
+                'material_option'        => $i->material_option,
+                'tooth_number'           => $i->tooth_number,
+                'suggested_price'        => (float)$i->suggested_price,
+                'billing_status'         => $i->billing_status,
+                'notes'                  => $i->notes,
+                'is_repeat'              => (bool)$i->is_repeat,
+                'repeat_reason'          => $i->repeat_reason,
+                'repeat_of_visit_item_id'=> $i->repeat_of_visit_item_id,
+            ])->values()->all(),
+            '_isNew' => false,
+        ];
+    }
+}

@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 330" fill="none">
+  <defs>
+    <linearGradient id="dfg" x1="0%" y1="30%" x2="100%" y2="70%">
+      <stop offset="0%"   stop-color="#7B28C8"/>
+      <stop offset="50%"  stop-color="#9C27B0"/>
+      <stop offset="100%" stop-color="#E040FB"/>
+    </linearGradient>
+    <linearGradient id="dfh" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#C060F0" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#F090FF" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="txt" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#7B28C8"/>
+      <stop offset="100%" stop-color="#C040E8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Glow -->
+  <path
+    d="M 210,112 C 196,68 162,38 108,38 C 54,38 22,76 22,125 C 22,174 54,212 108,212
+       C 162,212 196,182 210,138 L 205,150 Q 203,166 210,172 Q 217,166 215,150 L 210,138
+       C 224,182 258,212 312,212 C 366,212 398,174 398,125 C 398,76 366,38 312,38
+       C 258,38 224,68 210,112 Z"
+    stroke="rgba(160,40,200,0.22)"
+    stroke-width="38"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Main ribbon -->
+  <path
+    d="M 210,112 C 196,68 162,38 108,38 C 54,38 22,76 22,125 C 22,174 54,212 108,212
+       C 162,212 196,182 210,138 L 205,150 Q 203,166 210,172 Q 217,166 215,150 L 210,138
+       C 224,182 258,212 312,212 C 366,212 398,174 398,125 C 398,76 366,38 312,38
+       C 258,38 224,68 210,112 Z"
+    stroke="url(#dfg)"
+    stroke-width="22"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Inner highlight -->
+  <path
+    d="M 210,112 C 196,68 162,38 108,38 C 54,38 22,76 22,125 C 22,174 54,212 108,212
+       C 162,212 196,182 210,138 C 224,182 258,212 312,212 C 366,212 398,174 398,125
+       C 398,76 366,38 312,38 C 258,38 224,68 210,112 Z"
+    stroke="url(#dfh)"
+    stroke-width="6"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Wordmark: DENTFLUENCE -->
+  <text
+    x="210" y="256"
+    text-anchor="middle"
+    font-family="'Trebuchet MS', 'Segoe UI', Arial, sans-serif"
+    font-size="32"
+    font-weight="700"
+    letter-spacing="10"
+    fill="url(#txt)"
+  >DENTFLUENCE</text>
+
+  <!-- Tagline -->
+  <text
+    x="210" y="286"
+    text-anchor="middle"
+    font-family="'Trebuchet MS', 'Segoe UI', Arial, sans-serif"
+    font-size="11"
+    font-weight="400"
+    letter-spacing="5"
+    fill="rgba(156,39,176,0.65)"
+  >INFLUENCE, GROW  BEYOND LIMITS.</text>
+</svg>
