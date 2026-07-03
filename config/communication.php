@@ -155,7 +155,7 @@ return [
             'key'   => 'prm',
             'label' => 'PRM Pipeline',
             'icon'  => 'layout-kanban',
-            'route' => 'prm.index',
+            'route' => 'relationship.pipeline', // prm.index retired in Phase 8
             'badge' => null,
         ],
         [

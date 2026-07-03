@@ -81,7 +81,7 @@
             <span class="co-stat__label">New Leads</span>
             <span class="co-stat__value">{{ $stats['new_leads'] ?? 0 }}</span>
         </div>
-        <a href="{{ route('prm.index') }}" class="co-stat__cta co-stat__cta--purple">View all leads &rarr;</a>
+        <a href="{{ route('relationship.pipeline') }}" class="co-stat__cta co-stat__cta--purple">View all leads &rarr;</a>
     </div>
 
     <div class="co-stat co-stat--amber">
@@ -103,7 +103,7 @@
             <span class="co-stat__label">Converted</span>
             <span class="co-stat__value">{{ $stats['converted'] ?? 0 }}</span>
         </div>
-        <a href="{{ route('prm.index') }}" class="co-stat__cta co-stat__cta--green">This period &rarr;</a>
+        <a href="{{ route('relationship.pipeline') }}" class="co-stat__cta co-stat__cta--green">This period &rarr;</a>
     </div>
 
     <div class="co-stat co-stat--red">
@@ -142,7 +142,7 @@
         <span class="co-qa__arrow">&rarr;</span>
     </a>
 
-    <a href="{{ route('prm.index') }}" class="co-qa">
+    <a href="{{ route('relationship.pipeline') }}" class="co-qa">
         <div class="co-qa__icon co-qa__icon--green">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
         </div>
@@ -233,7 +233,7 @@
                 <span class="co-ov__label">Active Leads</span>
                 <span class="co-ov__value">{{ $stats['active_leads'] ?? 0 }}</span>
                 <span class="co-ov__desc">In pipeline</span>
-                <a href="{{ route('prm.index') }}" class="co-ov__cta">Open Pipeline &rarr;</a>
+                <a href="{{ route('relationship.pipeline') }}" class="co-ov__cta">Open Pipeline &rarr;</a>
             </div>
 
             <div class="co-ov co-ov--blue">

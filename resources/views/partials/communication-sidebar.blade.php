@@ -61,14 +61,15 @@
         <span>Call Manager</span>
     </a>
 
-    <a href="{{ route('prm.index') }}"
-       class="comm-nav-item {{ request()->routeIs('prm.index') ? 'comm-nav-item--active' : '' }}">
+    {{-- prm.index / prm.board retired in Phase 8 — both now point at the PRE lead pipeline --}}
+    <a href="{{ route('relationship.pipeline') }}"
+       class="comm-nav-item {{ request()->routeIs('relationship.pipeline') ? 'comm-nav-item--active' : '' }}">
         <i class="ti ti-users"></i>
         <span>Leads</span>
     </a>
 
-    <a href="{{ route('prm.board') }}"
-       class="comm-nav-item {{ request()->routeIs('prm.board') || request()->routeIs('prm.*') ? 'comm-nav-item--active' : '' }}">
+    <a href="{{ route('relationship.pipeline') }}"
+       class="comm-nav-item {{ request()->routeIs('relationship.pipeline') ? 'comm-nav-item--active' : '' }}">
         <i class="ti ti-layout-kanban"></i>
         <span>Pipeline</span>
     </a>
@@ -97,8 +98,9 @@
     {{-- ── Settings ─────────────────────────────────────────────────── --}}
     <div class="comm-nav-section">SETTINGS</div>
 
-    <a href="{{ route('prm.settings') }}"
-       class="comm-nav-item {{ request()->routeIs('prm.settings') ? 'comm-nav-item--active' : '' }}">
+    {{-- prm.settings retired in Phase 8 — PRE's own settings live at relationship.settings --}}
+    <a href="{{ route('relationship.settings') }}"
+       class="comm-nav-item {{ request()->routeIs('relationship.settings') ? 'comm-nav-item--active' : '' }}">
         <i class="ti ti-settings"></i>
         <span>PRM Settings</span>
     </a>

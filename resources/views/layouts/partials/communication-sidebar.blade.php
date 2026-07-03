@@ -63,9 +63,9 @@
                 </a>
             </li>
 
-            {{-- PRM Pipeline --}}
+            {{-- PRM Pipeline (now backed by the PRE lead pipeline — routes/prm.php was retired in Phase 8) --}}
             <li class="comm-sidebar__nav-item">
-                <a href="{{ route('prm.index') }}"
+                <a href="{{ route('relationship.pipeline') }}"
                    class="comm-sidebar__nav-link {{ $activeNav === 'prm' ? 'is-active' : '' }}"
                    aria-current="{{ $activeNav === 'prm' ? 'page' : 'false' }}">
                     <span class="comm-sidebar__nav-icon" aria-hidden="true">
