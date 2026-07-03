@@ -43,6 +43,12 @@ return [
             'description' => 'CommunicationGuard enforces consent. Consent can NEVER be overridden by urgency.',
         ],
 
+        // ── Workstream F — PRE navigation cutover ───────────────────────
+        'nav.pre_primary' => [
+            'default'     => (bool) env('FEATURE_NAV_PRE_PRIMARY', false),
+            'description' => 'Sidebar shows PRE (Relationships) as the primary entry; PRM is demoted to a Legacy link (still reachable).',
+        ],
+
         // ── Phase 1 (Relationship Foundation) ───────────────────────────
         'identity.link_patient'        => ['default' => false, 'description' => 'Auto-link new patients to a Master Relationship.'],
         'identity.reads_relationship'  => ['default' => false, 'description' => 'Reads resolve through the relationship spine.'],
@@ -75,8 +81,9 @@ return [
 
         // ── Phase 7 (Integration) — per-provider pattern ────────────────
         'integration.whatsapp' => ['default' => false, 'description' => 'WhatsApp routed through the Integration Engine boundary.'],
-        'integration.google'   => ['default' => false, 'description' => 'Google (Calendar/Reviews) routed through Integration.'],
-        'integration.meta'     => ['default' => false, 'description' => 'Meta routed through Integration.'],
+        'integration.google'   => ['default' => false, 'description' => 'Google (Calendar/Reviews, Business Profile OAuth + publish, Analytics) routed through Integration.'],
+        'integration.meta'     => ['default' => false, 'description' => 'Meta (OAuth, Instagram/Facebook publish, Lead Ads webhook) routed through Integration.'],
+        'integration.website'  => ['default' => false, 'description' => "The clinic's own website (WordPress publish) routed through Integration. Added Slice 3 — named in the Phase 7 deliverables but missing from this table until now."],
         'integration.payments' => ['default' => false, 'description' => 'Payment gateways routed through Integration.'],
         'integration.abdm'     => ['default' => false, 'description' => 'ABDM routed through Integration.'],
     ],

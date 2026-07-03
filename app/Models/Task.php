@@ -23,6 +23,7 @@ class Task extends Model
         'due_time',
         'priority',
         'category',
+        'task_type',
         'status',
         'done_at',
         'escalated_at',
@@ -77,6 +78,22 @@ class Task extends Model
 
     /** Categories that are communication-type (auto-create CommunicationQueue). */
     public const COMM_CATEGORIES = ['call', 'whatsapp', 'follow_up'];
+
+    /**
+     * Phase 3 — Task Engine Human/System split (flag: tasks.human_system_split).
+     *
+     * 'human'  → a person must act on this. Default for every task, including
+     *            manual, Practice Protocol, Lab, PO, TreatmentVisit, and
+     *            AppointmentReminderEngine tasks — a staff member still has
+     *            to do the work even though those are auto-generated.
+     * 'system' → a record created by TaskEngine::autoCreate() (i.e. Automation
+     *            / RulesEngine-driven). Hidden from reception-facing task
+     *            lists when the flag is on.
+     */
+    public const TASK_TYPES = [
+        'human'  => 'Human',
+        'system' => 'System',
+    ];
 
     /** Maintenance sub-types. */
     public const MAINTENANCE_TYPES = [
@@ -192,6 +209,34 @@ class Task extends Model
         return $query->where('category', 'maintenance');
     }
 
+    /** Only tasks a person must act on. */
+    public function scopeHuman(Builder $query): Builder
+    {
+        return $query->where('task_type', 'human');
+    }
+
+    /** Only Automation-created record tasks. */
+    public function scopeSystem(Builder $query): Builder
+    {
+        return $query->where('task_type', 'system');
+    }
+
+    /**
+     * Reception-facing lists should call this instead of scopeHuman() directly —
+     * it respects the tasks.human_system_split flag. While the flag is off,
+     * behaviour is unchanged (System tasks still show, exactly like before the
+     * split existed). Once the flag is flipped on, System tasks disappear from
+     * staff "my work" lists without any further code changes.
+     */
+    public function scopeVisibleToReception(Builder $query): Builder
+    {
+        if (\App\Support\Features\Feature::enabled('tasks.human_system_split')) {
+            return $query->where('task_type', 'human');
+        }
+
+        return $query;
+    }
+
     // ── Recurring / AMC Helper ────────────────────────────────────
 
     /**
@@ -272,6 +317,16 @@ class Task extends Model
     public function isCommTask(): bool
     {
         return in_array($this->category, self::COMM_CATEGORIES);
+    }
+
+    public function isSystemTask(): bool
+    {
+        return $this->task_type === 'system';
+    }
+
+    public function isHumanTask(): bool
+    {
+        return $this->task_type !== 'system';
     }
 
     public function categoryLabel(): string

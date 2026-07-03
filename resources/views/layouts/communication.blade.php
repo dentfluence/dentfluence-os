@@ -21,7 +21,8 @@
     </div>
     @endunless
     @yield('communication-content')
-    <x-prm.add-lead-modal />
+    {{-- <x-prm.add-lead-modal /> removed — Phase 8 PRM Retirement (Slice 5).
+         Archived at under_review/phase8_prm_retirement/resources/views/components/prm/. --}}
 @endsection
 
 @push('scripts')

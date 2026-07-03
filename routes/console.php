@@ -277,3 +277,22 @@ Schedule::command('today:rebuild-projection')
     ->withoutOverlapping()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/today-actions-projection.log'));
+
+/*
+|--------------------------------------------------------------------------
+| Analytics Engine — snapshot rebuild (Phase 6 · Slice 2)
+|--------------------------------------------------------------------------
+| Runs every 15 minutes. Rebuilds the `analytics_snapshots` projection from
+| AnalyticsController's own (now-public) metric methods — same cadence as the
+| Today's Actions projection. Shadow only: the live /relationship/analytics
+| dashboard still renders from AnalyticsController's own cached methods;
+| nothing reads this projection yet.
+|
+| Manual trigger: php artisan analytics:rebuild-snapshots
+| Parity check:   php artisan analytics:rebuild-snapshots --check
+*/
+Schedule::command('analytics:rebuild-snapshots')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/analytics-snapshots.log'));

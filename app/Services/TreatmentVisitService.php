@@ -8,9 +8,11 @@ use App\Models\Patient;
 use App\Models\Task;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentVisit;
+use App\Services\Workflow\WorkflowShadowRunner;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 /**
  * TreatmentVisitService
@@ -22,12 +24,19 @@ use Illuminate\Validation\Rule;
  *   • visit items  → billing prompt for front desk (F2)
  *   • lab section  → draft LabCase
  *   • mark plan complete → plan status = completed + auto 6-month recall task
+ *   • Phase 5 shadow-run  → observe current_stage against the Workflow
+ *     Engine (behind `workflow.engine`, off by default; log-only, see
+ *     App\Services\Workflow\WorkflowShadowRunner)
  *
  * This was lifted verbatim out of App\Http\Controllers\TreatmentVisitController
  * so existing web behaviour is unchanged; the controller is now a thin wrapper.
  */
 class TreatmentVisitService
 {
+    public function __construct(private WorkflowShadowRunner $workflowShadow)
+    {
+    }
+
     /**
      * Validation rules shared by store + update (web + API identical).
      * Kept here so there is one source of truth for the visit contract.
@@ -151,6 +160,17 @@ class TreatmentVisitService
             return $visit;
         });
 
+        // Phase 5 shadow-run — AFTER the transaction has committed, and
+        // self-contained (see WorkflowShadowRunner::run() docblock), so a
+        // shadow-run bug can NEVER roll back or block the real visit save
+        // that already succeeded above. Extra try/catch here is belt and
+        // braces on top of the runner's own internal guard.
+        try {
+            $this->workflowShadow->run($visit);
+        } catch (Throwable $e) {
+            report($e);
+        }
+
         return $visit->load(['doctor', 'visitItems']);
     }
 
@@ -186,6 +206,13 @@ class TreatmentVisitService
                 }
             }
         });
+
+        // Phase 5 shadow-run — see the matching comment in create() above.
+        try {
+            $this->workflowShadow->run($visit);
+        } catch (Throwable $e) {
+            report($e);
+        }
 
         return $visit->load(['doctor', 'visitItems']);
     }

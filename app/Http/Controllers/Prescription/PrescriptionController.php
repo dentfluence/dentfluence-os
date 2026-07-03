@@ -20,6 +20,7 @@ use App\Models\Prescription\{
     RxDurationTemplate,
 };
 use App\Services\Prescription\PrescriptionAlertService;
+use App\Services\Relationship\CommunicationGuard;
 
 class PrescriptionController extends Controller
 {
@@ -547,6 +548,65 @@ class PrescriptionController extends Controller
     public function sendWhatsApp(Patient $patient, Prescription $prescription)
     {
         abort_unless($prescription->isFinalized(), 422, 'Only issued prescriptions can be sent via WhatsApp.');
+
+        // ── Phase 4: DPDP consent gate (closes a live bypass) ────────────────
+        // This used to build the wa.me link with zero consent check. It now
+        // reuses the same PatientConsent/ConsentPurpose lookup the real
+        // WhatsApp Cloud API send path uses (CommunicationGuard::hasWhatsAppConsent).
+        // Gated behind guard.consent_required (same flag Phase 0 declared for
+        // "no-consent blocks") so this stays a no-op — logged only — until you
+        // flip it, exactly like every other Guard rule. That keeps today's
+        // Prescription-send behaviour unchanged unless you deliberately enable
+        // enforcement (e.g. after confirming ConsentPurposeSeeder has run).
+        $consent = app(CommunicationGuard::class)->hasWhatsAppConsent($patient, 'service');
+        if (! $consent['allowed']) {
+            \Illuminate\Support\Facades\Log::info('Prescription WhatsApp send blocked by consent check (shadow unless guard.consent_required is on)', [
+                'patient_id'     => $patient->id,
+                'prescription_id'=> $prescription->id,
+                'reason'         => $consent['reason'],
+            ]);
+
+            if (\App\Support\Features\Feature::enabled('guard.consent_required')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $consent['reason'] ?? 'WhatsApp consent required before sending.',
+                ], 422);
+            }
+        }
+        // ──────────────────────────────────────────────────────────────────
+
+        // ── Phase 4: Do-Not-Contact + channel eligibility ────────────────────
+        // Only runs if this patient is linked to a Master Relationship
+        // (identity.link_patient backfill/linking — unlinked patients have
+        // nothing to check against, so they pass through unaffected).
+        // Deliberately uses the FOCUSED check, not the full Guard decide()
+        // pipeline — that also runs frequency/quiet-hours/birthday rules meant
+        // for batch/automated contact, not a doctor-requested prescription send.
+        // Gated behind guard.full_8factor, same shadow-log-then-enforce pattern.
+        if ($patient->relationship_id) {
+            $guardCheck = app(CommunicationGuard::class)
+                ->checkDoNotContactAndChannel($patient->relationship_id, 'whatsapp');
+
+            if (! $guardCheck['allowed']) {
+                \Illuminate\Support\Facades\Log::info('Prescription WhatsApp send blocked by CommunicationGuard (shadow unless guard.full_8factor is on)', [
+                    'patient_id'      => $patient->id,
+                    'prescription_id' => $prescription->id,
+                    'reason'          => $guardCheck['reason'],
+                ]);
+
+                if (\App\Support\Features\Feature::enabled('guard.full_8factor')) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => match ($guardCheck['reason']) {
+                            'do_not_contact'     => 'This patient has asked not to be contacted.',
+                            'channel_ineligible'  => 'No phone number on file for WhatsApp.',
+                            default               => 'This message was blocked by the communication guard.',
+                        },
+                    ], 422);
+                }
+            }
+        }
+        // ──────────────────────────────────────────────────────────────────
 
         // Load items if not already loaded
         $prescription->loadMissing(['items', 'prescribedBy']);

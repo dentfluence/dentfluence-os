@@ -1,45 +1,48 @@
 {{--
 |==========================================================================
-| PRE — Lead Pipeline (Phase 1 · Workstream D, slice 2)
-| Route: GET /relationship/pipeline   [relationship.pipeline]
+| PRE — Lead Pipeline (Phase 1 · Workstream D, slice 2;
+|        writes added Phase 8 · Slice 1 — PRM Retirement)
+| Route: GET  /relationship/pipeline               [relationship.pipeline]
+|        POST /relationship/pipeline/{id}/move     [relationship.pipeline.move]
+|        POST /relationship/pipeline/{id}/activity [relationship.pipeline.activity]
+|        POST /relationship/pipeline/{id}/convert  [relationship.pipeline.convert]
 |
-| Read-only, relationship-centric lead board. Grouped by the RELIABLE legacy
-| leads.stage column. Additive — the legacy PRM board is untouched.
+| Relationship-centric lead board. Grouped by the RELIABLE legacy leads.stage
+| column. Additive — the legacy PRM board is untouched and stays usable.
+| Each card now has working Move / + Activity / Convert actions — these call
+| the SAME PrmRelationshipAdapter the legacy PRM board's actions use, so both
+| boards stay in parity by construction.
 | Variables from LeadPipelineController@index:
 |   $columns, $totalLeads, $activeCount, $pipelineValue,
 |   $showJourney, $journeyByRelationship
 |==========================================================================
 --}}
-@extends('layouts.app')
+@extends('relationship.layouts.app')
 
 @section('page-title', 'Lead Pipeline')
 
-@section('content')
+@section('relationship-content')
 <div style="max-width:1400px;margin:0 auto;padding:8px 4px 40px;">
 
     {{-- Header --}}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
         <div>
-            <h1 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;">Lead Pipeline</h1>
+            <h1 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;font-family:'Cormorant Garamond',serif;">Lead Pipeline</h1>
             <p style="margin:4px 0 0;color:#6b7280;font-size:13px;">
                 Every active enquiry, grouped by stage. Relationship-first view.
             </p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <a href="{{ route('relationship.dashboard') }}"
-               style="background:#EEEDFE;color:#534AB7;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
-               ← Relationships
+            {{-- Phase 8 · Slice 2 — working add-lead entry points --}}
+            <a href="{{ route('relationship.pipeline.quick-add') }}"
+               style="background:#fff;color:#534AB7;border:1px solid #EEEDFE;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
+               + Quick Add
             </a>
-            <a href="{{ route('relationship.today') }}"
-               style="background:#534AB7;color:#fff;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
-               Today's Actions
+            <a href="{{ route('relationship.pipeline.add-lead') }}"
+               style="background:#fff;color:#534AB7;border:1px solid #EEEDFE;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
+               + New Lead
             </a>
-            @if (! empty($prmSecondary))
-                <a href="{{ route('prm.board', ['legacy' => 1]) }}"
-                   style="background:#fff;color:#6b7280;border:1px solid #e5e7eb;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
-                   Legacy PRM board
-                </a>
-            @endif
+            {{-- "Legacy PRM board" link removed — Phase 8 PRM Retirement (Slice 5). --}}
         </div>
     </div>
 
@@ -125,6 +128,35 @@
                                     Journey (shadow): <strong style="color:#6b7280;">{{ str_replace('_', ' ', $journeyState) }}</strong>
                                 </div>
                             @endif
+
+                            {{-- Phase 8 · Slice 1 — working card actions --}}
+                            <div style="margin-top:9px;padding-top:8px;border-top:1px solid #f1f2f4;display:flex;flex-direction:column;gap:6px;">
+                                <select onchange="ppMoveStage({{ $lead->id }}, this)"
+                                        style="width:100%;font-size:11px;padding:5px 6px;border:1px solid #e5e7eb;border-radius:6px;color:#4b5563;background:#fff;">
+                                    <option value="">Move to…</option>
+                                    @foreach ($columns as $moveCol)
+                                        @if ($moveCol['key'] !== $lead->stage)
+                                            <option value="{{ $moveCol['key'] }}">{{ $moveCol['label'] }}</option>
+                                        @endif
+                                    @endforeach
+                                </select>
+                                <div style="display:flex;gap:6px;">
+                                    <a href="{{ route('relationship.pipeline.edit-lead', $lead->id) }}"
+                                       style="flex:1;text-align:center;font-size:11px;padding:5px 6px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;color:#4b5563;text-decoration:none;">
+                                        Edit
+                                    </a>
+                                    <button type="button" onclick="ppOpenActivity({{ $lead->id }})"
+                                            style="flex:1;font-size:11px;padding:5px 6px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;color:#4b5563;cursor:pointer;">
+                                        + Activity
+                                    </button>
+                                    @if (! in_array($lead->stage, ['converted', 'lost'], true))
+                                        <button type="button" onclick="ppConvert({{ $lead->id }})"
+                                                style="flex:1;font-size:11px;padding:5px 6px;border:1px solid #EAF3DE;border-radius:6px;background:#EAF3DE;color:#3B6D11;cursor:pointer;font-weight:600;">
+                                            Convert
+                                        </button>
+                                    @endif
+                                </div>
+                            </div>
                         </div>
                     @empty
                         <div style="color:#c2c6cd;font-size:12px;text-align:center;padding:14px 0;">No leads</div>
@@ -141,13 +173,133 @@
     </div>
 
     <p style="margin-top:16px;color:#9ca3af;font-size:12px;">
-        PRE (Relationship Platform) · read-only. Columns use the reliable legacy stage.
+        PRE (Relationship Platform). Columns use the reliable legacy stage.
         @if ($showJourney)
             Shadow journey state shown for context only.
         @else
             Shadow journey state is hidden (flag <code>relationship.pipeline_journey_column</code> is off).
         @endif
-        The legacy PRM board remains available and unchanged.
     </p>
+
+    {{-- Phase 8 · Slice 1 — Log Activity modal (kept dead simple: type + note). --}}
+    <div id="ppActivityModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;padding:20px;width:320px;max-width:92vw;">
+            <h3 style="margin:0 0 12px;font-size:15px;color:#1f2937;">Log Activity</h3>
+            <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Type</label>
+            <select id="ppActType" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;margin-bottom:12px;">
+                <option value="note">Note</option>
+                <option value="call">Call</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="sms">SMS</option>
+                <option value="email">Email</option>
+            </select>
+            <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Note</label>
+            <textarea id="ppActNote" rows="3" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;margin-bottom:14px;resize:vertical;" placeholder="What happened?"></textarea>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button type="button" onclick="ppCloseActivity()" style="padding:8px 14px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;">Cancel</button>
+                <button type="button" onclick="ppSubmitActivity()" style="padding:8px 14px;border:none;border-radius:8px;background:#534AB7;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">Save</button>
+            </div>
+        </div>
+    </div>
 </div>
+
+<script>
+// Phase 8 · Slice 1 — PRE lead pipeline write actions. Plain fetch, same
+// pattern as the legacy PRM board's working convert button (openConvertToPatient
+// in prm-board.js) — keeps this additive and easy to follow for a solo builder.
+const ppBaseUrl = "{{ url('/relationship/pipeline') }}";
+
+function ppCsrf() {
+    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+}
+
+function ppMoveStage(leadId, select) {
+    const newStage = select.value;
+    if (!newStage) return;
+    const label = select.options[select.selectedIndex].text;
+
+    if (!confirm('Move this lead to "' + label + '"?')) {
+        select.value = '';
+        return;
+    }
+
+    fetch(ppBaseUrl + '/' + leadId + '/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': ppCsrf(), 'Accept': 'application/json' },
+        body: JSON.stringify({ stage: newStage }),
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert(data.message || 'Could not move the lead. Please try again.');
+                select.value = '';
+            }
+        })
+        .catch(() => { alert('Network error. Please try again.'); select.value = ''; });
+}
+
+let ppActiveLeadId = null;
+
+function ppOpenActivity(leadId) {
+    ppActiveLeadId = leadId;
+    document.getElementById('ppActNote').value = '';
+    document.getElementById('ppActType').value = 'note';
+    document.getElementById('ppActivityModal').style.display = 'flex';
+}
+
+function ppCloseActivity() {
+    document.getElementById('ppActivityModal').style.display = 'none';
+    ppActiveLeadId = null;
+}
+
+function ppSubmitActivity() {
+    if (!ppActiveLeadId) return;
+
+    const type  = document.getElementById('ppActType').value;
+    const note  = document.getElementById('ppActNote').value.trim();
+    const labelMap = { note: 'Note added', call: 'Call logged', whatsapp: 'WhatsApp sent', sms: 'SMS sent', email: 'Email sent' };
+
+    if (!note) {
+        alert('Please add a note before saving.');
+        return;
+    }
+
+    fetch(ppBaseUrl + '/' + ppActiveLeadId + '/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': ppCsrf(), 'Accept': 'application/json' },
+        body: JSON.stringify({ type: type, label: labelMap[type] || 'Note added', note: note }),
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                ppCloseActivity();
+                window.location.reload();
+            } else {
+                alert(data.message || 'Could not log the activity. Please try again.');
+            }
+        })
+        .catch(() => alert('Network error. Please try again.'));
+}
+
+function ppConvert(leadId) {
+    if (!confirm('Convert this lead to a patient? This creates a new patient record.')) return;
+
+    fetch(ppBaseUrl + '/' + leadId + '/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': ppCsrf(), 'Accept': 'application/json' },
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message || 'Lead converted to patient.');
+                window.location.reload();
+            } else {
+                alert(data.message || 'Conversion failed. Please try again.');
+            }
+        })
+        .catch(() => alert('Conversion failed. Please try again.'));
+}
+</script>
 @endsection

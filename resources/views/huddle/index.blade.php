@@ -1049,10 +1049,10 @@ document.addEventListener('alpine:init', () => {
         </div>
     </a>
 
-    {{-- Today's Calls --}}
+    {{-- Today's Calls — now includes PRE relationship items (recalls, missed yesterday, lead follow-ups, renewals), not just reminders/follow-ups/PRM queue --}}
     <a href="{{ route('communication.manager.index') }}" class="hd-stat-pill" style="text-decoration:none;color:inherit;">
         <div>
-            <div class="hd-stat-val">{{ $commList->count() }}</div>
+            <div class="hd-stat-val">{{ $commTotalCount }}</div>
             <div class="hd-stat-label">Today's Calls</div>
             <div class="hd-stat-sub">{{ $commList->where('status','pending')->count() }} pending</div>
         </div>
@@ -1547,7 +1547,7 @@ document.addEventListener('alpine:init', () => {
                 </a>
             </div>
             <div style="display:flex;align-items:center;gap:.3rem;">
-                <span class="hd-col-count" x-text="items.length"></span>
+                <span class="hd-col-count">{{ $commTotalCount }}</span>
             </div>
         </div>
         <div class="hd-col-body">
@@ -1736,42 +1736,63 @@ document.addEventListener('alpine:init', () => {
             </div>
         </div>
 
-        {{-- ── SECTION 6: PRM TASKS ── --}}
+        {{-- ── SECTIONS 6a-6d: PRE RELATIONSHIP ACTIONS (replaces old "PRM Tasks") ──
+             Recall Calls / Missed Yesterday / Lead Follow-ups / Membership Renewals.
+             Source: $relationshipItems (TodayActionsEngine via HuddleAggregationService) —
+             the same data already shown in the "Relationship Actions" section further
+             down this page, surfaced here too so staff see it without scrolling.
+             Read-only: these live in the Relationship Engine, not CommunicationQueue,
+             so they're not part of the checkbox/push-to-queue flow above. --}}
+        @php
+            $preByCategory = collect($relationshipItems ?? [])->groupBy('categoryName');
+            $preCategoryMeta = [
+                'recall_calls'                  => ['label' => 'Recall Calls',         'bg' => '#eff6ff', 'fg' => '#1e40af'],
+                'missed_appointments_yesterday' => ['label' => 'Missed Yesterday',     'bg' => '#fef2f2', 'fg' => '#991b1b'],
+                'lead_followups'                => ['label' => 'Lead Follow-ups',      'bg' => '#f5f3ff', 'fg' => '#5b21b6'],
+                'membership_renewals'           => ['label' => 'Membership Renewals',  'bg' => '#fffbeb', 'fg' => '#854d0e'],
+            ];
+        @endphp
+        @foreach($preCategoryMeta as $catKey => $catMeta)
+        @php $catItems = $preByCategory->get($catKey) ?? collect(); @endphp
         <div x-data="{ open: true }">
             <div class="hd-cs-hdr" @click="open = !open">
-                <div class="hd-cs-left" style="color:var(--c-accent);">
-                    <span>PRM Tasks</span>
-                    <span class="hd-cs-count" style="background:#ede9fe;color:var(--c-accent);" x-text="prmComms.length"></span>
+                <div class="hd-cs-left" style="color:{{ $catMeta['fg'] }};">
+                    <span>{{ $catMeta['label'] }}</span>
+                    <span class="hd-cs-count" style="background:{{ $catMeta['bg'] }};color:{{ $catMeta['fg'] }};">{{ $catItems->count() }}</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:.5rem;">
-                    <a href="{{ route('communication.manager.index') }}"
-                       style="font-size:.6rem;color:var(--c-accent);text-decoration:none;font-weight:600;" @click.stop>View all →</a>
+                    <a href="{{ route('relationship.today') }}"
+                       style="font-size:.6rem;color:{{ $catMeta['fg'] }};text-decoration:none;font-weight:600;" @click.stop>View all →</a>
                     <svg class="hd-cs-chevron" :class="open ? 'open' : ''" width="11" height="11" fill="none" stroke="var(--c-muted)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
                 </div>
             </div>
             <div class="hd-cs-body" x-show="open">
-                <template x-if="prmComms.length === 0">
-                    <div style="font-size:.68rem;color:var(--c-muted);text-align:center;padding:.3rem 0;">No pending PRM tasks</div>
-                </template>
-                <template x-for="item in prmComms" :key="item.id">
-                    <div class="hd-card" style="cursor:default;">
+                @if($catItems->isEmpty())
+                    <div style="font-size:.68rem;color:var(--c-muted);text-align:center;padding:.3rem 0;">None today</div>
+                @else
+                    @foreach($catItems as $card)
+                    <a href="{{ $card->meta['link'] ?? '#' }}" class="hd-card" style="cursor:pointer;text-decoration:none;color:inherit;display:block;">
                         <div class="hd-cc" style="gap:.5rem;">
-                            <div style="flex-shrink:0;width:8px;height:8px;border-radius:50%;margin-top:4px;"
-                                 :style="item.note && item.note.includes('Overdue') ? 'background:#ef4444;' : 'background:var(--c-accent);'"></div>
-                            <div class="hd-cc-ico" style="flex-shrink:0;background:#f3f0ff;">
-                                <svg width="11" height="11" fill="none" stroke="var(--c-accent)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                            <div style="flex-shrink:0;width:8px;height:8px;border-radius:50%;margin-top:4px;
+                                background:{{ $card->status === 'high' ? '#ef4444' : ($card->status === 'medium' ? '#f59e0b' : '#22c55e') }};"></div>
+                            <div class="hd-cc-ico" style="flex-shrink:0;background:{{ $catMeta['bg'] }};">
+                                <svg width="11" height="11" fill="none" stroke="{{ $catMeta['fg'] }}" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
                             </div>
                             <div class="hd-cc-body">
-                                <div class="hd-cc-type" x-text="item.label"></div>
-                                <div class="hd-cc-desc" x-text="item.patient_name"></div>
-                                <div class="hd-cc-footer"><span class="hd-cc-by" x-text="item.phone"></span></div>
-                                <div style="font-size:.63rem;color:var(--c-muted);margin-top:.1rem;" x-text="item.note"></div>
+                                <div class="hd-cc-type">{{ $card->patientName ?? '—' }}</div>
+                                <div class="hd-cc-desc">{{ $card->chiefComplaint }}</div>
+                                <div class="hd-cc-footer"><span class="hd-cc-by">{{ $card->meta['phone'] ?? '—' }}</span></div>
+                                @if($card->notes)
+                                <div style="font-size:.63rem;color:var(--c-muted);margin-top:.1rem;">→ {{ $card->notes }}</div>
+                                @endif
                             </div>
                         </div>
-                    </div>
-                </template>
+                    </a>
+                    @endforeach
+                @endif
             </div>
         </div>
+        @endforeach
 
         {{-- ── ADD COMMUNICATION LINK ── --}}
         <a href="{{ route('communication.manager.log.form') }}"

@@ -277,11 +277,15 @@ class HuddleService
 
         $callbackCats = ['call', 'whatsapp', 'follow_up'];
 
+        // Phase 3: visibleToReception() hides Automation-record (System) tasks
+        // from the Huddle report once tasks.human_system_split is on.
         $overdue = \App\Models\Task::where('status', 'pending')
+            ->visibleToReception()
             ->whereDate('due_date', '<', $day)
             ->orderBy('due_date')->limit(10)->get(['title', 'category', 'due_date']);
 
         $dueToday = \App\Models\Task::where('status', 'pending')
+            ->visibleToReception()
             ->whereDate('due_date', $day)->get(['title', 'category']);
 
         $lines = [];

@@ -2,12 +2,14 @@
 
 namespace App\Services\Whatsapp;
 
+use App\Integration\IntegrationEngine;
 use App\Models\AuditLog;
 use App\Models\ConsentPurpose;
 use App\Models\Patient;
 use App\Models\PatientConsent;
 use App\Models\WaMessage;
 use App\Models\WaThread;
+use App\Support\Features\Feature;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 
@@ -80,7 +82,17 @@ class OutboundMessageService
         ]);
 
         // ── SEND via provider (dry-run aware) ──────────────────────────────────
-        $res = $this->client->sendText($thread->contact_phone, $body);
+        // Phase 7 (Integration boundary): routed through the connector once
+        // `integration.whatsapp` is on; the legacy direct call otherwise —
+        // default OFF means this line behaves EXACTLY as before. Either way,
+        // IntegrationEngine shadow-logs a comparison for the parity report;
+        // that logging is side-effect-free and never causes a second real send.
+        $viaConnector = Feature::enabled('integration.whatsapp');
+        $res = $viaConnector
+            ? app(IntegrationEngine::class)->whatsapp()->sendText($thread->contact_phone, $body)
+            : $this->client->sendText($thread->contact_phone, $body);
+
+        app(IntegrationEngine::class)->logWhatsAppText($thread->contact_phone, $body, $res, $viaConnector);
 
         $finalStatus = $res['success']
             ? ($res['status'] === 'dry_run' ? 'dry_run' : WaMessage::STATUS_SENT)
@@ -261,12 +273,15 @@ class OutboundMessageService
         ]);
 
         // ── SEND ─────────────────────────────────────────────────────────────
-        $res = $this->client->sendTemplate(
-            $thread->contact_phone,
-            $def['meta_name'] ?? $templateKey,
-            $def['language'] ?? 'en',
-            $components,
-        );
+        // Phase 7: same Integration Engine routing as sendText() above.
+        $viaConnector = Feature::enabled('integration.whatsapp');
+        $metaName     = $def['meta_name'] ?? $templateKey;
+        $language     = $def['language'] ?? 'en';
+        $res = $viaConnector
+            ? app(IntegrationEngine::class)->whatsapp()->sendTemplate($thread->contact_phone, $metaName, $language, $components)
+            : $this->client->sendTemplate($thread->contact_phone, $metaName, $language, $components);
+
+        app(IntegrationEngine::class)->logWhatsAppTemplate($thread->contact_phone, $metaName, $language, $components, $res, $viaConnector);
 
         $finalStatus = $res['success']
             ? ($res['status'] === 'dry_run' ? 'dry_run' : WaMessage::STATUS_SENT)

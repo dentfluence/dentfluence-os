@@ -186,6 +186,63 @@ $appointmentsJson = ($patient->appointments ?? collect())
         @endforeach
     </div>
 
+    {{-- Phase 5, Slice 3 — Workflow Engine read-only preview.
+         Sourced from the Slice 2 shadow WorkflowInstance(s) for this patient's
+         treatment plan(s). Purely informational: gated behind the
+         `workflow.engine` flag (off by default), renders nothing if the flag
+         is off or no shadow instance exists yet, and never affects the
+         Add/Edit Visit form below — current_stage stays exactly as
+         doctors already use it. --}}
+    @php
+        $workflowPanels = [];
+        if (\App\Support\Features\Feature::enabled('workflow.engine')) {
+            $wfPlanIds = $patient->treatmentVisits->pluck('treatment_plan_id')->filter()->unique();
+            if ($wfPlanIds->isNotEmpty()) {
+                $wfEngine = app(\App\Services\Workflow\WorkflowEngine::class);
+                $wfInstances = \App\Models\WorkflowInstance::whereIn('subject_id', $wfPlanIds)
+                    ->where('subject_type', \App\Models\TreatmentPlan::class)
+                    ->with('template')
+                    ->get();
+                foreach ($wfInstances as $wfi) {
+                    $workflowPanels[] = array_merge($wfEngine->status($wfi), [
+                        'template_name' => $wfi->template->name,
+                    ]);
+                }
+            }
+        }
+    @endphp
+
+    @if(count($workflowPanels) > 0)
+    <div class="mb-6 space-y-2">
+        @foreach($workflowPanels as $wf)
+        <div class="rounded-lg border border-purple-100 bg-purple-50/60 px-4 py-3 flex items-center justify-between gap-4">
+            <div>
+                <div class="text-[10px] uppercase tracking-wide text-purple-500 font-semibold mb-0.5">
+                    Workflow (preview) — {{ $wf['template_name'] }}
+                </div>
+                <div class="text-sm font-semibold text-gray-800">
+                    Stage {{ $wf['position'] }} of {{ $wf['total_steps'] }}: {{ $wf['current_step_label'] }}
+                    @if($wf['status'] === 'completed')
+                        <span class="ml-1 text-green-600 font-normal">— complete</span>
+                    @endif
+                </div>
+                @if($wf['next_step_label'])
+                    <div class="text-xs text-gray-500 mt-0.5">
+                        Next: {{ $wf['next_step_label'] }}
+                        @if($wf['next_eligible_at'])
+                            — {{ $wf['next_due'] ? 'due now' : 'not due until ' . $wf['next_eligible_at']->format('d M') }}
+                        @endif
+                    </div>
+                @endif
+            </div>
+            <div class="text-[10px] text-gray-400 italic text-right max-w-[160px]">
+                Read-only preview, based on the stages logged below. Doesn't change how you log visits.
+            </div>
+        </div>
+        @endforeach
+    </div>
+    @endif
+
     {{-- Header --}}
     <div class="flex items-center justify-between mb-4">
         <div>

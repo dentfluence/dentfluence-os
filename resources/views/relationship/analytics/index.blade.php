@@ -1,11 +1,11 @@
-@extends('layouts.app')
+@extends('relationship.layouts.app')
 @section('page-title', 'Relationship Analytics')
 
 @section('head-extra')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 @endsection
 
-@section('content')
+@section('relationship-content')
 
 {{-- ─────────────────────────────────────────────────────────────────────
      Page header
@@ -16,13 +16,6 @@
         <p class="df-page-subtitle">
             Pipeline health · Last 30 days · Cached hourly
         </p>
-    </div>
-    <div class="df-page-actions">
-        <a href="{{ route('relationship.today') }}"
-           style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:12.5px;font-weight:500;color:#6a0f70;background:#f5eef9;border:1px solid rgba(185,92,183,0.22);border-radius:3px;text-decoration:none;">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            Today's Actions
-        </a>
     </div>
 </div>
 

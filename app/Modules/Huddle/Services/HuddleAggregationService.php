@@ -330,6 +330,10 @@ class HuddleAggregationService
                         'lead_id'         => $item['lead_id'] ?? null,
                         'relationship_id' => $item['relationship_id'] ?? null,
                         'category_label'  => ucwords(str_replace('_', ' ', $category)),
+                        // Carried through so the Huddle Comms List can show/call it —
+                        // the raw TodayActionsEngine item already has this, it just
+                        // wasn't being forwarded onto the card before.
+                        'phone'           => $item['phone'] ?? null,
                     ]),
                 );
             }

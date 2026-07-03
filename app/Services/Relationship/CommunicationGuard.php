@@ -2,6 +2,10 @@
 
 namespace App\Services\Relationship;
 
+use App\Models\ConsentPurpose;
+use App\Models\Patient;
+use App\Models\PatientConsent;
+use App\Models\Relationship;
 use App\Support\Features\Feature;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -23,8 +27,21 @@ use Illuminate\Support\Facades\Log;
  *     BLOCKS instead of failing open. Default OFF preserves current fail-open.
  *   - Consent gate: when 'guard.consent_required' is ON, no-consent BLOCKS.
  *     INVARIANT: consent is checked FIRST and is NEVER relaxed by urgency.
+ *     Phase 4: wired to the real DPDP consent domain for WhatsApp
+ *     (see hasWhatsAppConsent()) — still dormant until the flag flips.
  *   - Quiet hours: optional window (config), relaxable by urgency.
  *   - Urgency: may relax FREQUENCY and QUIET-HOURS only — never consent.
+ *
+ * ── Phase 4 (gated behind guard.full_8factor, default OFF) ──
+ *   - Do-Not-Contact: hard block, all channels, NEVER relaxed by urgency
+ *     (same tier as consent).
+ *   - Channel eligibility: mechanical — blocks only if the relationship has
+ *     no contact detail for that channel (no phone for whatsapp/call/sms, no
+ *     email for email). Does not enforce per-channel opt-outs (none exist yet).
+ *   - Preference (preferred_channel): informational only. Logged in the
+ *     decision's factors for every call while the flag is on; never blocks.
+ *   - Context: declared seam, always passes. No business rule exists for
+ *     "relationship context" yet — see docs/phase-4/README.md before adding one.
  *
  * With every flag at its default (off) and $isUrgent = false, decide() reduces
  * EXACTLY to the original three rules + fail-open. This class does not change
@@ -70,6 +87,29 @@ class CommunicationGuard
             if ($this->flagEnabled('guard.consent_required')
                 && ! $this->patientHasConsent($relationshipId, $channel, $type)) {
                 return GuardDecision::block('consent', $factors + ['blocked_by' => 'consent']);
+            }
+
+            // ── 1b. DO-NOT-CONTACT, CHANNEL ELIGIBILITY, PREFERENCE, CONTEXT ──
+            // All gated behind guard.full_8factor (default off) — this whole
+            // block is a no-op today. Do-Not-Contact is checked here (same
+            // tier as consent, NEVER relaxed by urgency) because "do not
+            // contact me" has only one reasonable reading. Preference is
+            // logged only — it never blocks (see class docblock). Context is
+            // a declared seam with no rule yet — see docs/phase-4/README.md.
+            if ($this->flagEnabled('guard.full_8factor')) {
+                $relationship = Relationship::find($relationshipId);
+
+                if ($relationship?->do_not_contact) {
+                    return GuardDecision::block('do_not_contact', $factors + ['blocked_by' => 'do_not_contact']);
+                }
+
+                if (! $this->isChannelEligible($relationship, $channel)) {
+                    return GuardDecision::block('channel_ineligible', $factors + ['blocked_by' => 'channel']);
+                }
+
+                $factors['preferred_channel'] = $relationship?->preferred_channel;
+                // Context: seam only, always passes — no business rule defined yet.
+                $factors['context'] = 'not_evaluated';
             }
 
             // Whether urgency may relax the frequency / quiet-hours families.
@@ -146,23 +186,128 @@ class CommunicationGuard
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Consent seam (Phase 0 stub — real lookup arrives in Phase 4)
+    // Consent (Phase 4 — wired to the real DPDP consent domain)
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * Does the patient consent to this contact? Phase 0 is a foundation-only
-     * seam that returns true (enforcement is disabled by default anyway). It is
-     * `protected` so tests can force `false` and prove that urgency can NEVER
-     * override consent. Phase 4 wires this to the DPDP consent domain.
+     * Does the patient consent to this contact? Only WhatsApp has a real
+     * consent-purpose defined today (`whatsapp_comms` / `marketing_promotions` —
+     * see `hasWhatsAppConsent()`). Other channels (call/sms/email) have no DPDP
+     * consent-purpose infrastructure yet, so we don't invent a rule for them —
+     * they pass through unaffected until that infra exists.
+     *
+     * Still `protected` so tests can force a result and prove urgency can NEVER
+     * override consent — decide() checks this before anything urgency-relaxable.
      */
     protected function patientHasConsent(int $relationshipId, string $channel, string $type): bool
     {
-        return true;
+        if ($channel !== 'whatsapp') {
+            return true;
+        }
+
+        $patient = Relationship::find($relationshipId)?->patient; // hasOne primary patient (back-compat)
+
+        return $this->hasWhatsAppConsent($patient, $type)['allowed'];
+    }
+
+    /**
+     * Real DPDP WhatsApp consent check, patient-scoped (not thread-scoped), so
+     * anything that needs "can we WhatsApp this patient a service/marketing
+     * message" can call it directly — even before a WaThread exists (e.g. the
+     * Prescription "Send WhatsApp" button). Mirrors the purpose-key mapping in
+     * `OutboundMessageService::consentGate()`.
+     *
+     * Deliberately NOT wired INTO OutboundMessageService — that class already
+     * has its own real, live, thread-aware consent gate (handles unknown
+     * numbers + the 24h reply window, which this patient-only version can't).
+     * Reconciling the *logic* (same PatientConsent/ConsentPurpose lookup) was
+     * judged safer than merging the *code path* of an already-live send flow.
+     *
+     * @return array{allowed: bool, reason: ?string}
+     */
+    public function hasWhatsAppConsent(?Patient $patient, string $type = 'service'): array
+    {
+        if (! $patient) {
+            // No linked patient (e.g. lead-only relationship) — DPDP consent
+            // infra here is patient-scoped only; nothing to check yet.
+            return ['allowed' => true, 'reason' => null];
+        }
+
+        $config            = config('relationship_rules.communication_guard', []);
+        $promotionalTypes  = $config['promotional_types'] ?? ['marketing', 'offer', 'recall_campaign', 'newsletter'];
+        $key = in_array($type, $promotionalTypes, true)
+            ? config('whatsapp.consent.marketing_purpose_key', 'marketing_promotions')
+            : config('whatsapp.consent.service_purpose_key', 'whatsapp_comms');
+
+        $purpose = ConsentPurpose::where('key', $key)->first();
+        if (! $purpose) {
+            return ['allowed' => false, 'reason' => "Consent purpose '{$key}' is missing — run ConsentPurposeSeeder."];
+        }
+
+        $consent = PatientConsent::where('patient_id', $patient->id)
+            ->where('consent_purpose_id', $purpose->id)
+            ->first();
+
+        if ($consent && $consent->isGranted()) {
+            return ['allowed' => true, 'reason' => null];
+        }
+
+        return ['allowed' => false, 'reason' => "Patient has not granted '{$purpose->name}' consent (DPDP)."];
+    }
+
+    /**
+     * Do-Not-Contact + channel eligibility ONLY — deliberately NOT the full
+     * decide() pipeline, which also runs frequency/quiet-hours/birthday
+     * checks. Those are scoped to batch/automated contact (recall, reminders,
+     * marketing) and aren't appropriate to silently impose on a direct,
+     * doctor-requested send like a prescription — a patient who got a recall
+     * WhatsApp that morning should still be able to receive their
+     * prescription the same day. Reused by any manually-triggered send that
+     * wants the two hard/mechanical checks without the batch-messaging rules.
+     *
+     * Always evaluates (so callers can log/observe); callers decide whether
+     * to enforce based on guard.full_8factor.
+     *
+     * @return array{allowed: bool, reason: ?string}
+     */
+    public function checkDoNotContactAndChannel(int $relationshipId, string $channel): array
+    {
+        $relationship = Relationship::find($relationshipId);
+
+        if ($relationship?->do_not_contact) {
+            return ['allowed' => false, 'reason' => 'do_not_contact'];
+        }
+
+        if (! $this->isChannelEligible($relationship, $channel)) {
+            return ['allowed' => false, 'reason' => 'channel_ineligible'];
+        }
+
+        return ['allowed' => true, 'reason' => null];
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Private guard checks
     // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Channel eligibility (Phase 4): can this relationship even be reached on
+     * this channel? Deliberately mechanical — "no phone number on file" isn't
+     * a policy call, it's a fact. Only checks contact-detail presence; does
+     * NOT check per-channel opt-outs (no such data exists yet — see
+     * do_not_contact for the only opt-out signal implemented so far).
+     */
+    protected function isChannelEligible(?Relationship $relationship, string $channel): bool
+    {
+        if (! $relationship) {
+            return true; // no relationship row to check against — don't invent a block
+        }
+
+        return match ($channel) {
+            'whatsapp', 'call', 'sms' => ! empty($relationship->phone),
+            'email'                   => ! empty($relationship->email),
+            default                   => true, // unknown channel — don't block on ignorance
+        };
+    }
 
     /** Rule 1: same channel used for this relationship within N hours? */
     protected function isSameChannelBlocked(int $relationshipId, string $channel, array $config): bool

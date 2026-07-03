@@ -9,6 +9,7 @@ use App\Http\Controllers\Relationship\ReceptionController;
 use App\Http\Controllers\Relationship\RelationshipListController;
 use App\Http\Controllers\Relationship\NotificationController as RelationshipNotificationController;
 use App\Http\Controllers\Relationship\ProfileController;
+use App\Http\Controllers\Relationship\SettingsController as RelationshipSettingsController;
 use App\Http\Controllers\Relationship\TodayController;
 use Illuminate\Support\Facades\Route;
 
@@ -59,11 +60,69 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
 
     // ── PRE Lead Pipeline (Phase 1 · Workstream D, slice 2) ────────────────
     // Relationship-centric lead board grouped by the reliable legacy stage.
-    // Additive alongside the legacy PRM board (/communication/prm/board),
-    // which is left completely untouched. Read-only. Static segment — must
-    // stay above the /{id} wildcard below.
+    // The legacy PRM board was retired in Phase 8 · Slice 5 (moved to
+    // under_review/phase8_prm_retirement/, not deleted). This is now the
+    // only lead-pipeline surface. Static segment — must stay above the
+    // /{id} wildcard below.
     Route::get('/pipeline', [LeadPipelineController::class, 'index'])
         ->name('pipeline');  // relationship.pipeline
+
+    // ── PRE Lead Pipeline writes (Phase 8 · Slice 1 — PRM Retirement) ───────
+    // Core lifecycle writes ported onto PRE, alongside (not instead of) the
+    // legacy prm.move-stage / prm.log-activity / prm.convert routes, which
+    // stay untouched as a warm fallback through the soak. Static segments —
+    // must stay above the /{id} wildcard below.
+    Route::post('/pipeline/{id}/move', [LeadPipelineController::class, 'moveStage'])
+        ->whereNumber('id')
+        ->name('pipeline.move');  // relationship.pipeline.move
+
+    Route::post('/pipeline/{id}/activity', [LeadPipelineController::class, 'logActivity'])
+        ->whereNumber('id')
+        ->name('pipeline.activity');  // relationship.pipeline.activity
+
+    Route::post('/pipeline/{id}/convert', [LeadPipelineController::class, 'convertToPatient'])
+        ->whereNumber('id')
+        ->name('pipeline.convert');  // relationship.pipeline.convert
+
+    // ── PRE Lead create + edit (Phase 8 · Slice 2 — PRM Retirement) ─────────
+    // Ported alongside (not instead of) prm.add-lead / prm.store-lead /
+    // prm.edit-lead / prm.update-lead / prm.quick-add / prm.store-quick-lead,
+    // which stay untouched. Static 2-segment routes first, then the 3-segment
+    // {id}/edit route — none of these collide with the trailing /{id}
+    // wildcard (different segment counts), but declared here for readability.
+    Route::get('/pipeline/quick-add', [LeadPipelineController::class, 'quickAdd'])
+        ->name('pipeline.quick-add');  // relationship.pipeline.quick-add
+
+    Route::post('/pipeline/quick-add', [LeadPipelineController::class, 'storeQuickLead'])
+        ->name('pipeline.store-quick-lead');  // relationship.pipeline.store-quick-lead
+
+    Route::get('/pipeline/add', [LeadPipelineController::class, 'addLead'])
+        ->name('pipeline.add-lead');  // relationship.pipeline.add-lead
+
+    Route::post('/pipeline/add', [LeadPipelineController::class, 'storeLead'])
+        ->name('pipeline.store-lead');  // relationship.pipeline.store-lead
+
+    Route::get('/pipeline/{id}/edit', [LeadPipelineController::class, 'editLead'])
+        ->whereNumber('id')
+        ->name('pipeline.edit-lead');  // relationship.pipeline.edit-lead
+
+    Route::post('/pipeline/{id}/edit', [LeadPipelineController::class, 'updateLead'])
+        ->whereNumber('id')
+        ->name('pipeline.update-lead');  // relationship.pipeline.update-lead
+
+    // ── PRE AI helpers (Phase 8 · Slice 3 — PRM Retirement) ─────────────────
+    // Ported alongside prm.enrich / prm.draft-reply / prm.log-reply.
+    Route::post('/pipeline/{id}/enrich', [LeadPipelineController::class, 'reEnrich'])
+        ->whereNumber('id')
+        ->name('pipeline.enrich');  // relationship.pipeline.enrich
+
+    Route::post('/pipeline/{id}/draft-reply', [LeadPipelineController::class, 'draftReply'])
+        ->whereNumber('id')
+        ->name('pipeline.draft-reply');  // relationship.pipeline.draft-reply
+
+    Route::post('/pipeline/{id}/log-reply', [LeadPipelineController::class, 'logReply'])
+        ->whereNumber('id')
+        ->name('pipeline.log-reply');  // relationship.pipeline.log-reply
 
     // ── PRE Opportunity + Recall pipelines (Phase 1 · Workstream D, slice 3) ─
     // Read-only, relationship-centric boards, additive alongside the legacy
@@ -83,6 +142,15 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     // ── Analytics (Phase 6) ────────────────────────────────────────────────
     Route::get('/analytics', [RelationshipAnalyticsController::class, 'index'])
         ->name('analytics');  // relationship.analytics
+
+    // ── Module-scoped Settings (2026-07-03) ─────────────────────────────────
+    // Only PRE-relevant flags — moved out of the global Settings module so
+    // PRE can be sold/run standalone. Static segments — before /{id} below.
+    Route::get('/settings', [RelationshipSettingsController::class, 'index'])
+        ->name('settings');  // relationship.settings
+
+    Route::post('/settings/toggle', [RelationshipSettingsController::class, 'toggleFlag'])
+        ->name('settings.toggle');  // relationship.settings.toggle
 
     // ── Profile + Universal Search ─────────────────────────────────────────
     // IMPORTANT: /{id} wildcard must come LAST — all static routes above.

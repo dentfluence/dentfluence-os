@@ -10,7 +10,8 @@ export default defineConfig({
                 'resources/css/app.css',
                 'resources/js/app.js',
                 'resources/css/communication/module.css',
-                'resources/css/communication/prm.css',
+                // prm.css removed — Phase 8 PRM Retirement (Slice 5), archived at
+                // under_review/phase8_prm_retirement/resources/css/communication/prm.css
                 'resources/css/communication/manager.css',
                 'resources/css/communication/followup.css',
                 'resources/css/communication/huddle.css',

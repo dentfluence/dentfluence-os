@@ -2,8 +2,10 @@
 
 namespace App\Services\Marketing;
 
+use App\Integration\IntegrationEngine;
 use App\Models\Marketing\MarketingActivityLog;
 use App\Models\Marketing\PlatformConnection;
+use App\Support\Features\Feature;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -174,37 +176,61 @@ class OAuthService
 
         $redirect = route('marketing.integrations.callback', ['platform' => $platform]);
 
-        return 'https://www.facebook.com/v19.0/dialog/oauth?' . http_build_query([
+        $legacyUrl = 'https://www.facebook.com/v19.0/dialog/oauth?' . http_build_query([
             'client_id'     => $appId,
             'redirect_uri'  => $redirect,
             'scope'         => $scopes,
             'response_type' => 'code',
             'state'         => $state,
         ]);
+
+        // Phase 7: same side-effect-free dual-compute as googleAuthUrl() above.
+        $viaConnector = Feature::enabled('integration.meta');
+        $connectorUrl = app(IntegrationEngine::class)->meta()->authUrl($platform, $clinicId);
+
+        app(IntegrationEngine::class)->logMetaAuthUrl($legacyUrl, $connectorUrl, $viaConnector);
+
+        return $viaConnector ? $connectorUrl : $legacyUrl;
     }
 
     private function handleMetaCallback(string $platform, Request $request, int $clinicId): PlatformConnection
     {
-        $code    = $request->input('code');
-        $appId   = config('services.meta.app_id');
-        $secret  = config('services.meta.app_secret');
+        $code     = $request->input('code');
         $redirect = route('marketing.integrations.callback', ['platform' => $platform]);
 
-        // Exchange code for access token
-        $tokenResponse = Http::get('https://graph.facebook.com/v19.0/oauth/access_token', [
-            'client_id'     => $appId,
-            'client_secret' => $secret,
-            'redirect_uri'  => $redirect,
-            'code'          => $code,
-        ])->throw()->json();
+        // Phase 7: same single-path flag branch as handleGoogleCallback() above.
+        $viaConnector = Feature::enabled('integration.meta');
+
+        try {
+            if ($viaConnector) {
+                $tokenResponse = app(IntegrationEngine::class)->meta()->exchangeCode($platform, $code, $redirect);
+                $meResponse    = app(IntegrationEngine::class)->meta()->fetchAccountInfo($tokenResponse['access_token']);
+            } else {
+                $appId  = config('services.meta.app_id');
+                $secret = config('services.meta.app_secret');
+
+                // Exchange code for access token
+                $tokenResponse = Http::get('https://graph.facebook.com/v19.0/oauth/access_token', [
+                    'client_id'     => $appId,
+                    'client_secret' => $secret,
+                    'redirect_uri'  => $redirect,
+                    'code'          => $code,
+                ])->throw()->json();
+
+                // Get user/page info
+                $meResponse = Http::withToken($tokenResponse['access_token'])
+                    ->get('https://graph.facebook.com/v19.0/me', ['fields' => 'id,name,picture'])
+                    ->throw()->json();
+            }
+        } catch (\Throwable $e) {
+            app(IntegrationEngine::class)->logMetaExchange($viaConnector, false, $e->getMessage());
+            throw $e;
+        }
+
+        app(IntegrationEngine::class)->logMetaExchange($viaConnector, true);
 
         $accessToken = $tokenResponse['access_token'];
         $expiresIn   = $tokenResponse['expires_in'] ?? null; // seconds
-
-        // Get user/page info
-        $meResponse = Http::withToken($accessToken)
-            ->get('https://graph.facebook.com/v19.0/me', ['fields' => 'id,name,picture'])
-            ->throw()->json();
 
         return PlatformConnection::updateOrCreate(
             ['clinic_id' => $clinicId, 'platform' => $platform],
@@ -229,9 +255,20 @@ class OAuthService
 
     private function pingMeta(PlatformConnection $conn): bool
     {
-        $r = Http::withToken($conn->access_token)
-            ->get('https://graph.facebook.com/v19.0/me', ['fields' => 'id']);
-        return $r->successful() && isset($r->json()['id']);
+        // Phase 7: same single-path flag branch as pingGoogle() above.
+        $viaConnector = Feature::enabled('integration.meta');
+
+        if ($viaConnector) {
+            $ok = app(IntegrationEngine::class)->meta()->ping($conn->access_token);
+        } else {
+            $r  = Http::withToken($conn->access_token)
+                ->get('https://graph.facebook.com/v19.0/me', ['fields' => 'id']);
+            $ok = $r->successful() && isset($r->json()['id']);
+        }
+
+        app(IntegrationEngine::class)->logMetaPing($viaConnector, $ok);
+
+        return $ok;
     }
 
     // -----------------------------------------------------------------------
@@ -255,7 +292,7 @@ class OAuthService
 
         $redirect = route('marketing.integrations.callback', ['platform' => $platform]);
 
-        return 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
+        $legacyUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
             'client_id'             => $clientId,
             'redirect_uri'          => $redirect,
             'response_type'         => 'code',
@@ -264,32 +301,65 @@ class OAuthService
             'prompt'                => 'consent',
             'state'                 => $state,
         ]);
+
+        // Phase 7 (Integration boundary): authUrl-building has no side effects
+        // on either path, so we can genuinely compute both and diff them for
+        // real evidence — unlike the network calls below, which must run on
+        // exactly one path. Default OFF (integration.google) returns
+        // $legacyUrl unchanged, so behaviour is identical to before this slice.
+        $viaConnector = Feature::enabled('integration.google');
+        $connectorUrl = app(IntegrationEngine::class)->google()->authUrl($platform, $clinicId);
+
+        app(IntegrationEngine::class)->logGoogleAuthUrl($legacyUrl, $connectorUrl, $viaConnector);
+
+        return $viaConnector ? $connectorUrl : $legacyUrl;
     }
 
     private function handleGoogleCallback(string $platform, Request $request, int $clinicId): PlatformConnection
     {
-        $code       = $request->input('code');
-        $clientId   = config('services.google.client_id');
-        $secret     = config('services.google.client_secret');
-        $redirect   = route('marketing.integrations.callback', ['platform' => $platform]);
+        $code     = $request->input('code');
+        $redirect = route('marketing.integrations.callback', ['platform' => $platform]);
 
-        // Exchange code for tokens
-        $tokenResponse = Http::post('https://oauth2.googleapis.com/token', [
-            'code'          => $code,
-            'client_id'     => $clientId,
-            'client_secret' => $secret,
-            'redirect_uri'  => $redirect,
-            'grant_type'    => 'authorization_code',
-        ])->throw()->json();
+        // Phase 7 (Integration boundary): the authorization `code` is
+        // single-use, so EXACTLY ONE of these two branches may call Google —
+        // never both for the same code. Default OFF (integration.google)
+        // takes the legacy branch, unchanged from before this slice.
+        $viaConnector = Feature::enabled('integration.google');
+        $exchangeError = null;
+
+        try {
+            if ($viaConnector) {
+                $tokenResponse = app(IntegrationEngine::class)->google()->exchangeCode($platform, $code, $redirect);
+                $userInfo      = app(IntegrationEngine::class)->google()->fetchAccountInfo($tokenResponse['access_token']);
+            } else {
+                $clientId = config('services.google.client_id');
+                $secret   = config('services.google.client_secret');
+
+                // Exchange code for tokens
+                $tokenResponse = Http::post('https://oauth2.googleapis.com/token', [
+                    'code'          => $code,
+                    'client_id'     => $clientId,
+                    'client_secret' => $secret,
+                    'redirect_uri'  => $redirect,
+                    'grant_type'    => 'authorization_code',
+                ])->throw()->json();
+
+                // Get user info
+                $userInfo = Http::withToken($tokenResponse['access_token'])
+                    ->get('https://www.googleapis.com/oauth2/v2/userinfo')
+                    ->throw()->json();
+            }
+        } catch (\Throwable $e) {
+            $exchangeError = $e->getMessage();
+            app(IntegrationEngine::class)->logGoogleExchange($viaConnector, false, $exchangeError);
+            throw $e;
+        }
+
+        app(IntegrationEngine::class)->logGoogleExchange($viaConnector, true);
 
         $accessToken  = $tokenResponse['access_token'];
         $refreshToken = $tokenResponse['refresh_token'] ?? null;
         $expiresIn    = $tokenResponse['expires_in'] ?? 3600;
-
-        // Get user info
-        $userInfo = Http::withToken($accessToken)
-            ->get('https://www.googleapis.com/oauth2/v2/userinfo')
-            ->throw()->json();
 
         return PlatformConnection::updateOrCreate(
             ['clinic_id' => $clinicId, 'platform' => $platform],
@@ -315,9 +385,20 @@ class OAuthService
 
     private function pingGoogle(PlatformConnection $conn): bool
     {
-        $r = Http::withToken($conn->access_token)
-            ->get('https://www.googleapis.com/oauth2/v2/userinfo');
-        return $r->successful() && isset($r->json()['id']);
+        // Phase 7: same single-path flag branch as handleGoogleCallback() above.
+        $viaConnector = Feature::enabled('integration.google');
+
+        if ($viaConnector) {
+            $ok = app(IntegrationEngine::class)->google()->ping($conn->access_token);
+        } else {
+            $r  = Http::withToken($conn->access_token)
+                ->get('https://www.googleapis.com/oauth2/v2/userinfo');
+            $ok = $r->successful() && isset($r->json()['id']);
+        }
+
+        app(IntegrationEngine::class)->logGooglePing($viaConnector, $ok);
+
+        return $ok;
     }
 
     // -----------------------------------------------------------------------
@@ -330,7 +411,17 @@ class OAuthService
         if (! $token) return;
 
         if (in_array($platform, self::GOOGLE_PLATFORMS)) {
-            Http::post('https://oauth2.googleapis.com/revoke', ['token' => $token]);
+            // Phase 7: same single-path flag branch — revoke has a real side
+            // effect (invalidates the token), so only one path ever calls it.
+            $viaConnector = Feature::enabled('integration.google');
+
+            if ($viaConnector) {
+                app(IntegrationEngine::class)->google()->revoke($token);
+            } else {
+                Http::post('https://oauth2.googleapis.com/revoke', ['token' => $token]);
+            }
+
+            app(IntegrationEngine::class)->logGoogleRevoke($viaConnector);
         }
         // Meta doesn't have a revoke endpoint — token expires naturally
     }

@@ -8,7 +8,7 @@
 |   $relationships (paginator), $q, $status, $has, $sort, $dir, $total
 |==========================================================================
 --}}
-@extends('layouts.app')
+@extends('relationship.layouts.app')
 
 @section('page-title', 'All Relationships')
 
@@ -34,17 +34,13 @@
     };
 @endphp
 
-@section('content')
+@section('relationship-content')
 <div style="max-width:1100px;margin:0 auto;padding:8px 4px 40px;">
 
     {{-- Header --}}
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
-        <div>
-            <h1 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;">All Relationships</h1>
-            <p style="margin:4px 0 0;color:#6b7280;font-size:13px;">{{ number_format($total) }} people your clinic knows — search and filter the whole base.</p>
-        </div>
-        <a href="{{ route('relationship.dashboard') }}"
-           style="background:#EEEDFE;color:#534AB7;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">← Overview</a>
+    <div style="margin-bottom:16px;">
+        <h1 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;font-family:'Cormorant Garamond',serif;">All Relationships</h1>
+        <p style="margin:4px 0 0;color:#6b7280;font-size:13px;">{{ number_format($total) }} people your clinic knows — search and filter the whole base.</p>
     </div>
 
     {{-- Search --}}

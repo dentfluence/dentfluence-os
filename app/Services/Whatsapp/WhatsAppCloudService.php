@@ -34,17 +34,26 @@ class WhatsAppCloudService
      */
     public function sendText(string $toPhone, string $body): array
     {
+        return $this->dispatch($this->buildTextPayload($toPhone, $body));
+    }
+
+    /**
+     * Build the outgoing text payload WITHOUT sending it (Phase 7 — used by
+     * the Integration Engine's connector preview for shadow comparison only).
+     * Pulled out of sendText() so both call sites build the exact same shape;
+     * sendText()'s behaviour is unchanged.
+     */
+    public function buildTextPayload(string $toPhone, string $body): array
+    {
         $to = $this->normalizePhone($toPhone);
 
-        $payload = [
+        return [
             'messaging_product' => 'whatsapp',
             'recipient_type'    => 'individual',
             'to'                => $to,
             'type'              => 'text',
             'text'              => ['preview_url' => false, 'body' => $body],
         ];
-
-        return $this->dispatch($payload);
     }
 
     /**
@@ -56,6 +65,15 @@ class WhatsAppCloudService
      */
     public function sendTemplate(string $toPhone, string $templateName, string $languageCode = 'en', array $components = []): array
     {
+        return $this->dispatch($this->buildTemplatePayload($toPhone, $templateName, $languageCode, $components));
+    }
+
+    /**
+     * Build the outgoing template payload WITHOUT sending it (Phase 7 — see
+     * buildTextPayload() docblock; same purpose, template variant).
+     */
+    public function buildTemplatePayload(string $toPhone, string $templateName, string $languageCode = 'en', array $components = []): array
+    {
         $to = $this->normalizePhone($toPhone);
 
         $template = [
@@ -66,15 +84,13 @@ class WhatsAppCloudService
             $template['components'] = $components;
         }
 
-        $payload = [
+        return [
             'messaging_product' => 'whatsapp',
             'recipient_type'    => 'individual',
             'to'                => $to,
             'type'              => 'template',
             'template'          => $template,
         ];
-
-        return $this->dispatch($payload);
     }
 
     // ──────────────────────────────────────────────────────────────────────────

@@ -3,20 +3,12 @@
  * Communication widgets embedded in Daily Huddle
  */
 
-/* ── Alert card actions ─────────────────────────────────────── */
+/* ── Alert card actions ─────────────────────────────────────────
+   Phase 8 PRM Retirement (Slice 5): PRM board retired, all alert types
+   now land on PRE's lead pipeline. It doesn't parse ?filter= yet, so the
+   pre-filtered view is lost for now — lands on the full board instead. */
 window.commHuddleAlertAction = function (type) {
-    const routes = {
-        birthday:    '/communication/prm?filter=birthday',
-        missed_apt:  '/communication/prm?filter=missed_apt',
-        vip:         '/communication/prm?filter=vip',
-        estimate:    '/communication/prm?filter=estimate',
-        escalation:  '/communication/prm?filter=escalated',
-    };
-
-    const url = routes[type];
-    if (url) {
-        window.location.href = url;
-    }
+    window.location.href = '/relationship/pipeline';
 };
 
 /* ── Quick call from overdue list ───────────────────────────── */

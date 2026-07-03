@@ -87,6 +87,11 @@ class TaskEngine
             'branch_id'       => $resolvedBranchId,
             'patient_id'      => $patientId,
             'relationship_id' => $relationshipId,
+            // Phase 3 — Task Engine Human/System split: every task that comes
+            // through TaskEngine::autoCreate() is Automation-created, so it is
+            // tagged 'system'. Hidden from reception lists once
+            // tasks.human_system_split is flipped on (Task::scopeVisibleToReception).
+            'task_type'       => 'system',
         ]);
 
         // Log to ActivityEngine so the Timeline shows why this task appeared

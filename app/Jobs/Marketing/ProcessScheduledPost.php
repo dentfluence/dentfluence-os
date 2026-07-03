@@ -2,11 +2,13 @@
 
 namespace App\Jobs\Marketing;
 
+use App\Integration\IntegrationEngine;
 use App\Models\Marketing\MarketingActivityLog;
 use App\Models\Marketing\MarketingPost;
 use App\Models\Marketing\PlatformConnection;
 use App\Models\Marketing\PostSchedule;
 use App\Models\Marketing\PostVariant;
+use App\Support\Features\Feature;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -68,10 +70,18 @@ class ProcessScheduledPost implements ShouldQueue
                 $platformResult = $this->dispatchToPlatform($variant, $post);
                 $results[$variant->platform] = $platformResult;
 
+                // NOTE: this used to write a 'meta' key, which isn't a real
+                // column on mkt_post_variants (the column is
+                // platform_specific_meta) — Eloquent silently drops unknown
+                // fillable keys, so external_id/publish_error were NEVER
+                // actually saved anywhere the UI could show them. Fixed to
+                // write the real columns the migration + model define.
                 $variant->update([
-                    'status'       => $platformResult['success'] ? 'published' : 'failed',
-                    'published_at' => $platformResult['success'] ? now() : null,
-                    'meta'         => array_merge($variant->meta ?? [], [
+                    'status'                 => $platformResult['success'] ? 'published' : 'failed',
+                    'published_at'           => $platformResult['success'] ? now() : null,
+                    'external_id'            => $platformResult['platform_post_id'] ?? null,
+                    'publish_error'          => $platformResult['error'] ?? null,
+                    'platform_specific_meta' => array_merge($variant->platform_specific_meta ?? [], [
                         'publish_result' => $platformResult,
                     ]),
                 ]);
@@ -126,6 +136,25 @@ class ProcessScheduledPost implements ShouldQueue
     {
         $clinicId = $post->clinic_id;
         $platform = $variant->platform;
+
+        // WhatsApp is selectable in the compose form (PublishController validates
+        // it as an allowed platform) but was never actually wired here — it fell
+        // through to the generic "no connection" / "platform_not_implemented"
+        // branches below, both of which return success:true. That silently lied:
+        // the post would show as "published" on WhatsApp while nothing was ever
+        // sent. Also, unlike Instagram/Facebook/Google Business/WordPress (which
+        // publish to a public page), "publishing" via WhatsApp would mean
+        // broadcasting to a list of patients/leads — a fundamentally different,
+        // consent-gated flow (see Phase 4's CommunicationGuard), not a simple
+        // page post. Real WhatsApp Business API isn't configured yet (confirmed
+        // via .env — dry-run only; Sumit's buying the real API a few months after
+        // VPS go-live). Fail honestly instead of pretending it worked.
+        if ($platform === 'whatsapp') {
+            return [
+                'success' => false,
+                'error'   => 'WhatsApp marketing broadcast is not built yet — the WhatsApp Business API isn\'t configured. This post will NOT be sent on WhatsApp. Remove the WhatsApp platform from this post, or wait until WhatsApp broadcast is wired up.',
+            ];
+        }
 
         $conn = PlatformConnection::where('clinic_id', $clinicId)
             ->where('platform', $platform)
@@ -195,6 +224,38 @@ class ProcessScheduledPost implements ShouldQueue
             return ['success' => true, 'platform_post_id' => null, 'note' => 'no_image_skipped'];
         }
 
+        // Phase 7 (Integration boundary): routed through MetaConnector once
+        // `integration.meta` is on; legacy inline Graph calls otherwise —
+        // default OFF means the block below behaves exactly as before this
+        // slice. A live publish creates a real post, so exactly one branch
+        // ever runs — never both for the same schedule.
+        $viaConnector = Feature::enabled('integration.meta');
+        $engine       = app(IntegrationEngine::class);
+
+        if ($viaConnector) {
+            $step1 = $engine->meta()->createInstagramContainer($igUserId, $token, $mediaPayload);
+            if (! $step1['success']) {
+                Log::warning("ProcessScheduledPost: Instagram container create failed: {$step1['error']}");
+                $engine->logMetaPublish('instagram', true, false, $step1['error']);
+                return ['success' => false, 'error' => "Instagram media container error: {$step1['error']}"];
+            }
+
+            $containerId = $step1['id'];
+            Log::info("ProcessScheduledPost: Instagram container created: {$containerId}");
+
+            $step2 = $engine->meta()->publishInstagramContainer($igUserId, $token, $containerId);
+            if (! $step2['success']) {
+                Log::warning("ProcessScheduledPost: Instagram publish failed: {$step2['error']}");
+                $engine->logMetaPublish('instagram', true, false, $step2['error']);
+                return ['success' => false, 'error' => "Instagram publish error: {$step2['error']}"];
+            }
+
+            Log::info("ProcessScheduledPost: Instagram published OK — post ID {$step2['id']}");
+            $engine->logMetaPublish('instagram', true, true);
+            return ['success' => true, 'platform_post_id' => $step2['id']];
+        }
+
+        // ── legacy inline Graph calls (unchanged) ───────────────────────────
         $r1 = Http::withToken($token)
             ->timeout(20)
             ->post("{$base}/{$igUserId}/media", $mediaPayload);
@@ -202,6 +263,7 @@ class ProcessScheduledPost implements ShouldQueue
         if (! $r1->successful() || ! $r1->json('id')) {
             $err = $r1->json('error.message') ?? "HTTP {$r1->status()}";
             Log::warning("ProcessScheduledPost: Instagram container create failed: {$err}");
+            $engine->logMetaPublish('instagram', false, false, $err);
             return ['success' => false, 'error' => "Instagram media container error: {$err}"];
         }
 
@@ -218,11 +280,13 @@ class ProcessScheduledPost implements ShouldQueue
         if (! $r2->successful() || ! $r2->json('id')) {
             $err = $r2->json('error.message') ?? "HTTP {$r2->status()}";
             Log::warning("ProcessScheduledPost: Instagram publish failed: {$err}");
+            $engine->logMetaPublish('instagram', false, false, $err);
             return ['success' => false, 'error' => "Instagram publish error: {$err}"];
         }
 
         $platformPostId = $r2->json('id');
         Log::info("ProcessScheduledPost: Instagram published OK — post ID {$platformPostId}");
+        $engine->logMetaPublish('instagram', false, true);
 
         return ['success' => true, 'platform_post_id' => $platformPostId];
     }
@@ -256,6 +320,24 @@ class ProcessScheduledPost implements ShouldQueue
             $payload['link'] = $firstMedia->url;
         }
 
+        // Phase 7: same Integration Engine routing as publishToInstagram() above.
+        $viaConnector = Feature::enabled('integration.meta');
+        $engine       = app(IntegrationEngine::class);
+
+        if ($viaConnector) {
+            $result = $engine->meta()->publishFacebookFeed($pageId, $token, $payload);
+            $engine->logMetaPublish('facebook', true, $result['success'], $result['error']);
+
+            if (! $result['success']) {
+                Log::warning("ProcessScheduledPost: Facebook post failed: {$result['error']}");
+                return ['success' => false, 'error' => "Facebook post error: {$result['error']}"];
+            }
+
+            Log::info("ProcessScheduledPost: Facebook published OK — post ID {$result['id']}");
+            return ['success' => true, 'platform_post_id' => $result['id']];
+        }
+
+        // ── legacy inline Graph call (unchanged) ────────────────────────────
         $r = Http::withToken($token)
             ->timeout(20)
             ->post("{$base}/{$pageId}/feed", $payload);
@@ -263,11 +345,13 @@ class ProcessScheduledPost implements ShouldQueue
         if (! $r->successful()) {
             $err = $r->json('error.message') ?? "HTTP {$r->status()}";
             Log::warning("ProcessScheduledPost: Facebook post failed: {$err}");
+            $engine->logMetaPublish('facebook', false, false, $err);
             return ['success' => false, 'error' => "Facebook post error: {$err}"];
         }
 
         $platformPostId = $r->json('id');
         Log::info("ProcessScheduledPost: Facebook published OK — post ID {$platformPostId}");
+        $engine->logMetaPublish('facebook', false, true);
 
         return ['success' => true, 'platform_post_id' => $platformPostId];
     }
@@ -314,6 +398,27 @@ class ProcessScheduledPost implements ShouldQueue
             ];
         }
 
+        // Phase 7: this is a Google vendor call (not Meta), so it routes
+        // through `integration.google` — the same flag as the Google OAuth
+        // methods in OAuthService (Slice 2). Discovered living in this Meta-
+        // adjacent job while wrapping Instagram/Facebook above.
+        $viaConnector = Feature::enabled('integration.google');
+        $engine       = app(IntegrationEngine::class);
+
+        if ($viaConnector) {
+            $result = $engine->google()->publishBusinessPost($locationName, $token, $payload);
+            $engine->logGoogleBusinessPublish(true, $result['success'], $result['error']);
+
+            if (! $result['success']) {
+                Log::warning("ProcessScheduledPost: Google Business post failed: {$result['error']}");
+                return ['success' => false, 'error' => "Google Business error: {$result['error']}"];
+            }
+
+            Log::info("ProcessScheduledPost: Google Business published OK — {$result['id']}");
+            return ['success' => true, 'platform_post_id' => $result['id']];
+        }
+
+        // ── legacy inline call (unchanged) ──────────────────────────────────
         $r = Http::withToken($token)
             ->timeout(30)
             ->post("https://mybusiness.googleapis.com/v4/{$locationName}/localPosts", $payload);
@@ -321,11 +426,13 @@ class ProcessScheduledPost implements ShouldQueue
         if (! $r->successful()) {
             $err = $r->json('error.message') ?? "HTTP {$r->status()}";
             Log::warning("ProcessScheduledPost: Google Business post failed: {$err}");
+            $engine->logGoogleBusinessPublish(false, false, $err);
             return ['success' => false, 'error' => "Google Business error: {$err}"];
         }
 
         $platformPostId = $r->json('name'); // GBP returns the resource name
         Log::info("ProcessScheduledPost: Google Business published OK — {$platformPostId}");
+        $engine->logGoogleBusinessPublish(false, true);
 
         return ['success' => true, 'platform_post_id' => $platformPostId];
     }
@@ -345,17 +452,38 @@ class ProcessScheduledPost implements ShouldQueue
             return ['success' => false, 'error' => 'WordPress credentials incomplete. Re-connect in Integrations.'];
         }
 
+        $payload = [
+            'title'   => $post->title ?: substr($post->caption, 0, 60),
+            'content' => $variant->caption ?: $post->caption,
+            'status'  => 'publish',
+        ];
+
+        // Phase 7: WordPress is the clinic's own website — routes through the
+        // new `integration.website` flag (Slice 3), separate from Meta/Google.
+        $viaConnector = Feature::enabled('integration.website');
+        $engine       = app(IntegrationEngine::class);
+
+        if ($viaConnector) {
+            $result = $engine->website()->publishWordpress($siteUrl, $username, $password, $payload);
+            $engine->logWebsitePublish(true, $result['success'], $result['error']);
+
+            return $result['success']
+                ? ['success' => true, 'platform_post_id' => $result['id']]
+                : ['success' => false, 'error' => 'WP API error: ' . $result['error']];
+        }
+
+        // ── legacy inline call (unchanged) ──────────────────────────────────
         $r = Http::withBasicAuth($username, $password)
-            ->post("{$siteUrl}/wp-json/wp/v2/posts", [
-                'title'   => $post->title ?: substr($post->caption, 0, 60),
-                'content' => $variant->caption ?: $post->caption,
-                'status'  => 'publish',
-            ]);
+            ->post("{$siteUrl}/wp-json/wp/v2/posts", $payload);
 
         if ($r->successful()) {
+            $engine->logWebsitePublish(false, true);
             return ['success' => true, 'platform_post_id' => (string) $r->json('id')];
         }
 
-        return ['success' => false, 'error' => 'WP API error: ' . ($r->json('message') ?? $r->status())];
+        $err = $r->json('message') ?? ('HTTP ' . $r->status());
+        $engine->logWebsitePublish(false, false, $err);
+
+        return ['success' => false, 'error' => 'WP API error: ' . $err];
     }
 }

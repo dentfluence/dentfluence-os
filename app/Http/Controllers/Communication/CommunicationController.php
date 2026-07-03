@@ -231,9 +231,10 @@ class CommunicationController extends Controller
         if ($moveTo === 'prm_pipeline' ||
             in_array($validated['comm_type'], ['new_lead', 'existing_patient'])) {
             $this->createLeadFromComm($comm);
-            CommActivityLog::log($comm->id, 'moved', 'Lead created in PRM Pipeline', ['destination' => 'prm_pipeline']);
-            return redirect()->route('prm.index')
-                ->with('success', 'Communication logged — lead added to PRM Pipeline.');
+            CommActivityLog::log($comm->id, 'moved', 'Lead created in Pipeline', ['destination' => 'prm_pipeline']);
+            // Phase 8 PRM Retirement (Slice 5) — PRE's lead pipeline replaces the retired PRM board.
+            return redirect()->route('relationship.pipeline')
+                ->with('success', 'Communication logged — lead added to the pipeline.');
         }
 
         if ($moveTo === 'follow_ups') {
@@ -342,8 +343,9 @@ class CommunicationController extends Controller
 
         if ($dest === 'prm_pipeline') {
             $this->createLeadFromComm($comm);
-            return redirect()->route('prm.index')
-                ->with('success', 'Moved to PRM Pipeline.');
+            // Phase 8 PRM Retirement (Slice 5) — PRE's lead pipeline replaces the retired PRM board.
+            return redirect()->route('relationship.pipeline')
+                ->with('success', 'Moved to the pipeline.');
         }
         if ($dest === 'follow_ups') {
             return redirect()->route('communication.followup.index')
@@ -469,7 +471,8 @@ class CommunicationController extends Controller
         }
 
         $count = count($validated['comm_ids']);
-        if ($action === 'move_prm')       return redirect()->route('prm.index')->with('success', "{$count} moved to PRM Pipeline.");
+        // Phase 8 PRM Retirement (Slice 5) — PRE's lead pipeline replaces the retired PRM board.
+        if ($action === 'move_prm')       return redirect()->route('relationship.pipeline')->with('success', "{$count} moved to the pipeline.");
         if ($action === 'move_followups') return redirect()->route('communication.followup.index')->with('success', "{$count} moved to Follow-ups.");
         return redirect()->route('communication.manager.index')->with('success', "{$count} communications updated.");
     }

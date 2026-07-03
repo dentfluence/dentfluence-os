@@ -21,6 +21,7 @@ class TaskController extends Controller
 
         $query = Task::with(['assignedTo', 'patient', 'protocol.materials'])
             ->where('branch_id', $branchId)
+            ->visibleToReception() // Phase 3: hides System (Automation-record) tasks once tasks.human_system_split is on
             ->orderBy('due_date');
 
         // ── Role-based visibility ───────────────────────────────────────────
@@ -270,6 +271,7 @@ class TaskController extends Controller
         // Admin on the main dashboard sees all; here they see only their own.
         $tasks = Task::with(['assignedTo', 'patient', 'protocol.materials'])
             ->where('assigned_to', Auth::id())
+            ->visibleToReception() // Phase 3: hides System (Automation-record) tasks once tasks.human_system_split is on
             ->orderBy('due_date')
             ->get();
 

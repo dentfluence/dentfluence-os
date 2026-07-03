@@ -55,10 +55,20 @@ class AnalyticsController extends Controller
     /**
      * New relationships per month for the last 6 months.
      * Returns: [ ['month' => 'Jan 26', 'count' => 12], ... ]
+     *
+     * Made public (Phase 6 · Slice 2, visibility-only — same technique used
+     * for ProfileController::buildTimeline) so AnalyticsProjector can call
+     * the SAME code as the live dashboard, avoiding any duplicated query
+     * logic that could drift out of sync.
+     *
+     * $fresh bypasses the cache (used only by AnalyticsProjector's rebuild/
+     * parity, so it can force a true recompute rather than the cached value
+     * a within-TTL call would otherwise return). Default is unchanged —
+     * every existing call site (index()) behaves exactly as before.
      */
-    protected function relationshipGrowth(): array
+    public function relationshipGrowth(bool $fresh = false): array
     {
-        return Cache::remember('rel_analytics_growth', $this->cacheTtl, function () {
+        $compute = function () {
             $months = [];
             for ($i = 5; $i >= 0; $i--) {
                 $date  = now()->subMonths($i);
@@ -73,31 +83,35 @@ class AnalyticsController extends Controller
                 ];
             }
             return $months;
-        });
+        };
+
+        return $fresh ? $compute() : Cache::remember('rel_analytics_growth', $this->cacheTtl, $compute);
     }
 
     /**
      * Lead → Patient conversion rate (%).
      * Returns: [ 'total' => 240, 'converted' => 86, 'rate' => 35.8 ]
      */
-    protected function leadConversionRate(): array
+    public function leadConversionRate(bool $fresh = false): array
     {
-        return Cache::remember('rel_analytics_conversion', $this->cacheTtl, function () {
+        $compute = function () {
             $total     = DB::table('leads')->count();
             $converted = DB::table('leads')->where('stage', 'converted')->count();
             $rate      = $total > 0 ? round($converted / $total * 100, 1) : 0;
 
             return compact('total', 'converted', 'rate');
-        });
+        };
+
+        return $fresh ? $compute() : Cache::remember('rel_analytics_conversion', $this->cacheTtl, $compute);
     }
 
     /**
      * Recall success rate — recalls that resulted in an appointment booking.
      * Returns: [ 'total' => 150, 'successful' => 72, 'rate' => 48.0 ]
      */
-    protected function recallSuccessRate(): array
+    public function recallSuccessRate(bool $fresh = false): array
     {
-        return Cache::remember('rel_analytics_recall', $this->cacheTtl, function () {
+        $compute = function () {
             $total = DB::table('communication_queue')
                 ->where('source_engine', 'recall')
                 ->count();
@@ -110,16 +124,18 @@ class AnalyticsController extends Controller
             $rate = $total > 0 ? round($successful / $total * 100, 1) : 0;
 
             return compact('total', 'successful', 'rate');
-        });
+        };
+
+        return $fresh ? $compute() : Cache::remember('rel_analytics_recall', $this->cacheTtl, $compute);
     }
 
     /**
      * Average lifetime value per patient relationship (total invoiced / patient count).
      * Returns: [ 'avg' => 18450, 'total_revenue' => 4500000, 'patient_count' => 244 ]
      */
-    protected function avgLifetimeValue(): array
+    public function avgLifetimeValue(bool $fresh = false): array
     {
-        return Cache::remember('rel_analytics_ltv', $this->cacheTtl, function () {
+        $compute = function () {
             $totalRevenue = DB::table('invoices')
                 ->where('status', 'paid')
                 ->sum('total_amount');
@@ -133,16 +149,18 @@ class AnalyticsController extends Controller
                 'total_revenue' => (int) $totalRevenue,
                 'patient_count' => $patientCount,
             ];
-        });
+        };
+
+        return $fresh ? $compute() : Cache::remember('rel_analytics_ltv', $this->cacheTtl, $compute);
     }
 
     /**
      * Relationship score distribution by band (High/Medium/Low).
      * Returns: [ ['label' => 'High (80–100)', 'count' => 45, 'color' => '#1a7a45'], ... ]
      */
-    protected function scoreDistribution(): array
+    public function scoreDistribution(bool $fresh = false): array
     {
-        return Cache::remember('rel_analytics_score_distrib', $this->cacheTtl, function () {
+        $compute = function () {
             $bands  = config('relationship_score.bands', []);
             $result = [];
 
@@ -160,16 +178,18 @@ class AnalyticsController extends Controller
             }
 
             return $result;
-        });
+        };
+
+        return $fresh ? $compute() : Cache::remember('rel_analytics_score_distrib', $this->cacheTtl, $compute);
     }
 
     /**
      * Staff KPIs: calls logged, tasks completed, leads converted — per user.
      * Returns: array of user rows sorted by calls_logged desc.
      */
-    protected function staffKpis(): array
+    public function staffKpis(bool $fresh = false): array
     {
-        return Cache::remember('rel_analytics_staff_kpis', $this->cacheTtl, function () {
+        $compute = function () {
             // Calls/comms logged per user (last 30 days)
             $since = now()->subDays(30);
 
@@ -224,13 +244,15 @@ class AnalyticsController extends Controller
             usort($rows, fn($a, $b) => $b['calls_logged'] - $a['calls_logged']);
 
             return $rows;
-        });
+        };
+
+        return $fresh ? $compute() : Cache::remember('rel_analytics_staff_kpis', $this->cacheTtl, $compute);
     }
 
     /**
      * Simple total relationship count (not cached — tiny query).
      */
-    protected function totalRelationships(): int
+    public function totalRelationships(): int
     {
         return DB::table('relationships')->count();
     }

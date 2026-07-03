@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Webhooks;
 
 use App\Http\Controllers\Controller;
+use App\Integration\IntegrationEngine;
 use App\Services\Prm\LeadIngestService;
+use App\Support\Features\Feature;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -89,8 +91,23 @@ class MetaLeadController extends Controller
             return null;
         }
 
+        // Phase 7 (Integration boundary): routed through MetaConnector once
+        // `integration.meta` is on; legacy inline call otherwise — default
+        // OFF means the block below behaves exactly as before this slice.
+        // This is a read (GET), so re-fetching is harmless, but kept to the
+        // same single-path pattern as every other Integration touchpoint for
+        // consistency.
+        $viaConnector = Feature::enabled('integration.meta');
+        $version      = config('prm.webhooks.meta.graph_version', 'v19.0');
+
         try {
-            $version = config('prm.webhooks.meta.graph_version', 'v19.0');
+            if ($viaConnector) {
+                $fields = app(IntegrationEngine::class)->meta()->fetchLeadFields($leadgenId, $token, $version);
+                app(IntegrationEngine::class)->logMetaLeadFetch(true, $fields !== null);
+                return $fields;
+            }
+
+            // ── legacy inline call (unchanged) ──────────────────────────────
             $resp = Http::timeout(15)->get("https://graph.facebook.com/{$version}/{$leadgenId}", [
                 'access_token' => $token,
                 'fields'       => 'field_data',
@@ -98,12 +115,15 @@ class MetaLeadController extends Controller
 
             if (! $resp->successful()) {
                 Log::warning('PRM Meta webhook: graph fetch failed', ['body' => $resp->body()]);
+                app(IntegrationEngine::class)->logMetaLeadFetch(false, false);
                 return null;
             }
 
+            app(IntegrationEngine::class)->logMetaLeadFetch(false, true);
             return $resp->json('field_data', []);
         } catch (\Throwable $e) {
             Log::warning('PRM Meta webhook: graph fetch error', ['error' => $e->getMessage()]);
+            app(IntegrationEngine::class)->logMetaLeadFetch($viaConnector, false);
             return null;
         }
     }

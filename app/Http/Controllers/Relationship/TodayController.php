@@ -23,6 +23,8 @@ class TodayController extends Controller
      * Human-readable labels for each category (used in the view).
      */
     private const CATEGORY_LABELS = [
+        'appointment_reminders_today'  => "Today's Appointments — Confirm",
+        'wellness_check_yesterday'     => "Yesterday's Treated Patients — Wellness Call",
         'new_enquiries'                => 'New Enquiries',
         'lead_followups'               => 'Lead Follow-ups',
         'opportunities'                => 'Treatment Opportunities',
@@ -35,12 +37,15 @@ class TodayController extends Controller
         'birthdays'                    => 'Birthday Wishes',
         'lab_ready'                    => 'Lab Work Ready',
         'payment_reminders'            => 'Payment Reminders',
+        'appointment_reminders_tomorrow'=> "Tomorrow Morning's Appointments",
     ];
 
     /**
      * Tabler icon for each category (used in the view).
      */
     private const CATEGORY_ICONS = [
+        'appointment_reminders_today'  => 'ti-calendar-check',
+        'wellness_check_yesterday'     => 'ti-heart',
         'new_enquiries'                => 'ti-inbox',
         'lead_followups'               => 'ti-phone-call',
         'opportunities'                => 'ti-report-money',
@@ -53,24 +58,32 @@ class TodayController extends Controller
         'birthdays'                    => 'ti-cake',
         'lab_ready'                    => 'ti-flask',
         'payment_reminders'            => 'ti-receipt-2',
+        'appointment_reminders_tomorrow'=> 'ti-calendar-event',
     ];
 
     /**
      * Priority sort order — lower number = shown first.
      */
+    // Re-ranked 2026-07-03 at Sumit's request: the day should open with
+    // confirming today's own appointments (incl. evening sessions), then
+    // yesterday's follow-ups, then everything else, and finish with
+    // confirming tomorrow morning's appointments last.
     private const CATEGORY_PRIORITY = [
-        'new_enquiries'                => 1,
-        'missed_calls_yesterday'       => 2,
-        'missed_appointments_yesterday'=> 3,
-        'lead_followups'               => 4,
-        'appointment_reminders'        => 5,
-        'recall_calls'                 => 6,
-        'opportunities'                => 7,
-        'pending_estimates'            => 8,
-        'birthdays'                    => 9,
-        'lab_ready'                    => 10,
-        'membership_renewals'          => 11,
-        'payment_reminders'            => 12,
+        'appointment_reminders_today'  => 1,  // confirm today's own sessions first, incl. evening
+        'wellness_check_yesterday'     => 2,  // check on patients treated yesterday — doing okay?
+        'missed_calls_yesterday'       => 3,  // someone tried to reach the clinic yesterday
+        'missed_appointments_yesterday'=> 4,  // yesterday's no-show — rebook fast
+        'new_enquiries'                => 5,  // fresh lead — call within 30 min or lose them
+        'recall_calls'                 => 6,  // bring patients back for due recall
+        'lab_ready'                    => 7,  // patient waiting on a crown/denture etc.
+        'lead_followups'               => 8,  // ongoing lead nurture
+        'opportunities'                => 9,  // proposed treatment conversion
+        'pending_estimates'            => 10, // estimate awaiting approval
+        'payment_reminders'            => 11, // collections
+        'membership_renewals'          => 12, // plan renewal reminder
+        'birthdays'                    => 13, // relationship touch — least urgent
+        'appointment_reminders'        => 13, // fallback bucket, only used if today/tomorrow split fails
+        'appointment_reminders_tomorrow'=> 14, // confirm tomorrow morning's sessions — last
     ];
 
     public function __construct(
@@ -104,6 +117,38 @@ class TodayController extends Controller
             }
         } else {
             $raw = $this->engine->generate();
+        }
+
+        // Split the single "appointment_reminders" bucket into "today" and
+        // "tomorrow morning" so they can sit at opposite ends of the list
+        // (confirm today's sessions first thing, tomorrow's sessions last).
+        // Pure display-layer split — TodayActionsEngine itself is untouched.
+        if (array_key_exists('appointment_reminders', $raw)) {
+            $todayItems    = [];
+            $tomorrowItems = [];
+
+            foreach ($raw['appointment_reminders'] as $item) {
+                $isToday = false;
+                $rawDate = $item['meta']['appointment_date'] ?? null;
+
+                if ($rawDate) {
+                    try {
+                        $isToday = \Illuminate\Support\Carbon::createFromFormat('d M Y', $rawDate)->isToday();
+                    } catch (\Throwable $e) {
+                        $isToday = false; // if unparsable, fall back to the "tomorrow" bucket
+                    }
+                }
+
+                if ($isToday) {
+                    $todayItems[] = $item;
+                } else {
+                    $tomorrowItems[] = $item;
+                }
+            }
+
+            unset($raw['appointment_reminders']);
+            $raw['appointment_reminders_today']    = $todayItems;
+            $raw['appointment_reminders_tomorrow'] = $tomorrowItems;
         }
 
         // Build enriched groups array for the view

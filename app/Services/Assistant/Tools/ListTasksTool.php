@@ -60,7 +60,7 @@ class ListTasksTool implements AssistantTool
         $type = ($args['type'] ?? 'all') === 'calls' ? 'calls' : 'all';
         $due  = in_array($args['due'] ?? '', ['today', 'overdue', 'upcoming', 'all'], true) ? $args['due'] : 'today';
 
-        $q = Task::query()->where('status', 'pending');
+        $q = Task::query()->where('status', 'pending')->visibleToReception();
 
         if (!empty($user->branch_id)) {
             $q->where('branch_id', $user->branch_id);

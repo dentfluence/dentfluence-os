@@ -164,10 +164,12 @@
                     Full Clinical Record →
                 </a>
             @endif
+            {{-- Phase 8 PRM Retirement (Slice 5) — "PRM Lead View" removed (it only ever
+                 redirected back here). Replaced with a working edit action on PRE. --}}
             @if($lead)
-                <a href="{{ route('prm.lead-detail', $lead->id) }}"
+                <a href="{{ route('relationship.pipeline.edit-lead', $lead->id) }}"
                    class="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 hover:border-[#6a0f70] hover:text-[#6a0f70] transition-colors bg-white font-medium">
-                    PRM Lead View
+                    Edit Lead
                 </a>
             @endif
         </div>

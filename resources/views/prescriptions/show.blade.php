@@ -354,6 +354,13 @@ function rxSendWhatsApp(btn) {
     })
     .then(r => r.json())
     .then(data => {
+        // Blocked (e.g. DPDP consent gate) — show why, don't reload.
+        if (data.success === false) {
+            alert(data.message || 'This message was blocked. Please check with admin.');
+            btn.disabled    = false;
+            btn.textContent = 'Send WhatsApp';
+            return;
+        }
         if (data.url) window.open(data.url, '_blank');
         // Short delay so the new tab can open before the page reloads
         setTimeout(() => window.location.reload(), 800);

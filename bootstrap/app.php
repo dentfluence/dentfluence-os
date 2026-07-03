@@ -16,7 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::middleware('web')->group(base_path('routes/clinical-library.php')); // has own auth inside
             Route::middleware('web')->group(base_path('routes/communication.php')); // has own auth + communication.access inside
             // followup.php removed — routes already defined in communication.php
-            Route::middleware('web')->group(base_path('routes/prm.php'));           // has own auth inside (added 2026-06-18)
+            // prm.php removed — Phase 8 PRM Retirement (Slice 5). PRE (routes/relationship.php)
+            // now owns every lead-pipeline write. Archived at under_review/phase8_prm_retirement/.
             Route::middleware('web')->group(base_path('routes/tags-routes.php'));   // has own auth inside
             Route::middleware('web')->group(base_path('routes/timeline.php'));      // has own auth inside
             Route::middleware('web')->group(base_path('routes/reviews.php'));        // PUBLIC patient rating pages (Phase B 2.4)

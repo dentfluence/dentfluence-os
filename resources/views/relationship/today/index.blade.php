@@ -15,7 +15,7 @@
 | Icons: Tabler Icons (loaded via @vite or CDN — check existing views)
 |==========================================================================
 --}}
-@extends('layouts.app')
+@extends('relationship.layouts.app')
 
 @section('page-title', "Today's Actions")
 
@@ -449,7 +449,7 @@
 </style>
 @endsection
 
-@section('content')
+@section('relationship-content')
 
 {{-- ══════════════════════════════════════════════════════════════════════
      ALPINE.JS CONTROLLER

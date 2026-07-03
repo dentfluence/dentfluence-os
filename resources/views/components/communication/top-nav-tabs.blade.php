@@ -20,8 +20,9 @@ $tabs = [
     ['key' => 'whatsapp',           'label' => 'WhatsApp',         'icon' => 'brand-whatsapp',     'route' => '/communication/whatsapp',              'count_key' => null,        'badge_class' => ''],
     ['key' => 'reviews',            'label' => 'Reviews',          'icon' => 'star',               'route' => '/communication/reviews',               'count_key' => null,        'badge_class' => ''],
     ['key' => 'call_manager',       'label' => 'Call Manager',     'icon' => 'phone',              'route' => '/communication/call-manager',          'count_key' => null,        'badge_class' => ''],
-    ['key' => 'leads',              'label' => 'Leads',            'icon' => 'users',              'route' => '/communication/prm/leads',             'count_key' => null,        'badge_class' => ''],
-    ['key' => 'pipeline',           'label' => 'Pipeline',         'icon' => 'layout-kanban',      'route' => '/communication/prm',                   'count_key' => null,        'badge_class' => ''],
+    // 'leads'/'pipeline' repointed to PRE — Phase 8 PRM Retirement (Slice 5).
+    ['key' => 'leads',              'label' => 'Leads',            'icon' => 'users',              'route' => '/relationship/pipeline',               'count_key' => null,        'badge_class' => ''],
+    ['key' => 'pipeline',           'label' => 'Pipeline',         'icon' => 'layout-kanban',      'route' => '/relationship/pipeline',               'count_key' => null,        'badge_class' => ''],
     ['key' => 'activity_log',       'label' => 'Activity Log',     'icon' => 'clipboard-list',     'route' => '/communication/activity-log',          'count_key' => null,        'badge_class' => ''],
     ['key' => 'followup_calendar',  'label' => 'Follow-up Calendar','icon' => 'calendar-event',   'route' => '/communication/followup-calendar',     'count_key' => null,        'badge_class' => ''],
     ['key' => 'tasks',              'label' => 'Tasks',            'icon' => 'checkbox',           'route' => '/communication/tasks',                 'count_key' => null,        'badge_class' => ''],

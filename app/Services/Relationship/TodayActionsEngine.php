@@ -9,6 +9,7 @@ use App\Models\LabCase;
 use App\Models\Lead;
 use App\Models\Patient;
 use App\Models\TreatmentOpportunity;
+use App\Models\TreatmentVisit;
 use App\Models\Finance\FinancePatientMembership;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -67,6 +68,7 @@ class TodayActionsEngine
             'birthdays'                    => fn () => $this->birthdays(),
             'lab_ready'                    => fn () => $this->labReady(),
             'payment_reminders'            => fn () => $this->paymentReminders(),
+            'wellness_check_yesterday'     => fn () => $this->wellnessCheckYesterday(),
         ];
 
         foreach ($categories as $key => $resolver) {
@@ -124,7 +126,10 @@ class TodayActionsEngine
                 'reason'          => 'New enquiry received ' . $lead->created_at->diffForHumans(),
                 'priority'        => 'high',
                 'suggested_action'=> 'Call within 30 minutes — first contact wins',
-                'link'            => route('prm.lead-detail', $lead->id),
+                // Phase 8 PRM Retirement (Slice 5) — link into PRE instead of the retired PRM board.
+                'link'            => $lead->relationship_id
+                    ? route('relationship.profile', $lead->relationship_id)
+                    : route('relationship.pipeline'),
                 'meta'            => [
                     'phone'        => $lead->phone,
                     'source'       => $lead->lead_source ?? $lead->source,
@@ -162,7 +167,10 @@ class TodayActionsEngine
                 'priority'        => $lead->followup_date->isPast() && !$lead->followup_date->isToday()
                     ? 'high' : 'medium',
                 'suggested_action'=> 'Call and update lead stage',
-                'link'            => route('prm.lead-detail', $lead->id),
+                // Phase 8 PRM Retirement (Slice 5) — link into PRE instead of the retired PRM board.
+                'link'            => $lead->relationship_id
+                    ? route('relationship.profile', $lead->relationship_id)
+                    : route('relationship.pipeline'),
                 'meta'            => [
                     'phone'        => $lead->phone,
                     'stage'        => $lead->stage,
@@ -502,6 +510,46 @@ class TodayActionsEngine
                     'balance_due' => $inv->balance_due,
                     'due_date'    => $inv->due_date->format('d M Y'),
                     'total'       => $inv->total_amount,
+                ],
+            ])
+            ->toArray();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY 11 — Wellness Check (Yesterday's Treated Patients)
+    // TreatmentVisit status = completed, visit_date = yesterday.
+    // "Yesterday's follow-up" = check in on how a patient is doing after
+    // the procedure we did on them yesterday — not a missed-call catch-up.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function wellnessCheckYesterday(): array
+    {
+        return TreatmentVisit::with('patient:id,name,phone,relationship_id')
+            ->where('status', 'completed')
+            ->whereDate('visit_date', Carbon::yesterday())
+            ->whereNotNull('patient_id')
+            ->orderBy('visit_date')
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (TreatmentVisit $visit) => [
+                'category'        => 'wellness_check_yesterday',
+                'patient_name'    => $visit->patient?->name ?? 'Unknown',
+                'patient_id'      => $visit->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $visit->patient?->relationship_id ?? null,
+                'reason'          => 'Treated yesterday ('
+                    . ($visit->treatment_name ?? $visit->procedure ?? 'procedure')
+                    . ') — wellness check-in call',
+                'priority'        => 'high',
+                'suggested_action'=> "Call to check how they're feeling after yesterday's treatment",
+                'link'            => $visit->patient_id
+                    ? route('patients.show', $visit->patient_id)
+                    : '#',
+                'meta'            => [
+                    'phone'          => $visit->patient?->phone,
+                    'treatment_name' => $visit->treatment_name,
+                    'procedure'      => $visit->procedure,
+                    'visit_date'     => $visit->visit_date?->format('d M Y'),
                 ],
             ])
             ->toArray();

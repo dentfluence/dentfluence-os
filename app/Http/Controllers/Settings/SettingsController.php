@@ -85,6 +85,23 @@ class SettingsController extends Controller
         // Calendar preferences
         $calendarPrefs = AppSetting::group('calendar');
 
+        // Note: PRE (Relationship Engine) feature flags moved to their own
+        // module-scoped settings page (2026-07-03) — see
+        // App\Http\Controllers\Relationship\SettingsController and
+        // /relationship/settings. Moved so PRE can be sold/configured as a
+        // standalone module without depending on this Settings module.
+        // App-wide flags that are NOT PRE-specific (Communication Guard,
+        // Integrations, Workflow Engine, Search) still belong here — see
+        // the "Cross-App Flags" tab below.
+        $featureFlags = app(\App\Support\Features\FeatureFlagService::class)->all();
+        $flagGroups = [
+            'Safety & Guardrails' => ['guard.fail_closed', 'guard.consent_required', 'guard.full_8factor'],
+            'Communication'       => ['comm.single_gateway', 'notifications.single_store'],
+            'Workflow'            => ['workflow.engine', 'marketing.via_guard'],
+            'Search'              => ['search.index'],
+            'Integrations'        => ['integration.whatsapp', 'integration.google', 'integration.meta', 'integration.website', 'integration.payments', 'integration.abdm'],
+        ];
+
         return view('settings.index', compact(
             'activeTab', 'clinic', 'notifications', 'billing', 'print',
             'staff', 'roles',
@@ -93,8 +110,39 @@ class SettingsController extends Controller
             'messageTemplates',
             'invCategories', 'invLocations', 'invSubTypes', 'invSettings',
             'huddleSettings', 'emiProviders',
-            'operatories', 'calendarPrefs'
+            'operatories', 'calendarPrefs',
+            'featureFlags', 'flagGroups'
         ));
+    }
+
+    // ── Cross-app feature flags (NOT PRE-specific): toggle one flag globally ──
+    // Whitelist-checked against config/features.php so only declared flags
+    // can ever be written — never trusts the key from the request alone.
+    public function toggleFeatureFlag(Request $request)
+    {
+        $request->validate([
+            'key'     => ['required', 'string'],
+            'enabled' => ['required', 'boolean'],
+        ]);
+
+        $key = $request->string('key')->toString();
+
+        if (! array_key_exists($key, (array) config('features.flags', []))) {
+            return response()->json(['ok' => false, 'message' => 'Unknown flag — refusing to set it.'], 422);
+        }
+
+        app(\App\Support\Features\FeatureFlagService::class)->set(
+            $key,
+            $request->boolean('enabled'),
+            null, // global override, not per-clinic
+            'Toggled from Settings by ' . (auth()->user()->name ?? 'admin')
+        );
+
+        return response()->json([
+            'ok'      => true,
+            'key'     => $key,
+            'enabled' => $request->boolean('enabled'),
+        ]);
     }
 
     // ── Save clinic profile ─────────────────────────────────────────────────

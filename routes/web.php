@@ -321,6 +321,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/settings/notifications',        [\App\Http\Controllers\Settings\SettingsController::class, 'saveNotifications'])->name('settings.notifications.save');
         Route::post('/settings/billing',              [\App\Http\Controllers\Settings\SettingsController::class, 'saveBilling'])->name('settings.billing.save');
         Route::post('/settings/print',               [\App\Http\Controllers\Settings\SettingsController::class, 'savePrint'])->name('settings.print.save');
+        // PRE (Relationship Engine) feature-flag toggles — admin-only, same as everything else in this group
+        Route::post('/settings/feature-flags/toggle', [\App\Http\Controllers\Settings\SettingsController::class, 'toggleFeatureFlag'])->name('settings.feature-flags.toggle');
         // EMI Providers & Schemes
         $sc = \App\Http\Controllers\Settings\SettingsController::class;
         Route::post('/settings/emi-providers',                              [$sc, 'storeEmiProvider'])->name('settings.emi.provider.store');

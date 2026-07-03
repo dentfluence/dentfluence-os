@@ -10,35 +10,19 @@
 |   $showJourney, $journeyByOpportunity
 |==========================================================================
 --}}
-@extends('layouts.app')
+@extends('relationship.layouts.app')
 
 @section('page-title', 'Opportunity Pipeline')
 
-@section('content')
+@section('relationship-content')
 <div style="max-width:1400px;margin:0 auto;padding:8px 4px 40px;">
 
     {{-- Header --}}
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
-        <div>
-            <h1 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;">Opportunity Pipeline</h1>
-            <p style="margin:4px 0 0;color:#6b7280;font-size:13px;">
-                Treatment opportunities by stage. Relationship-first view.
-            </p>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <a href="{{ route('relationship.dashboard') }}"
-               style="background:#EEEDFE;color:#534AB7;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
-               ← Relationships
-            </a>
-            <a href="{{ route('relationship.pipeline') }}"
-               style="background:#EEEDFE;color:#534AB7;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
-               Leads
-            </a>
-            <a href="{{ route('relationship.recalls') }}"
-               style="background:#EEEDFE;color:#534AB7;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
-               Recalls
-            </a>
-        </div>
+    <div style="margin-bottom:18px;">
+        <h1 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;font-family:'Cormorant Garamond',serif;">Opportunity Pipeline</h1>
+        <p style="margin:4px 0 0;color:#6b7280;font-size:13px;">
+            Treatment opportunities by stage. Relationship-first view.
+        </p>
     </div>
 
     {{-- Headline stats --}}

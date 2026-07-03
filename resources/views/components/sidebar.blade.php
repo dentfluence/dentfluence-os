@@ -92,11 +92,24 @@
         <div style="padding:12px 0 4px;">
             <div class="df-nav-section-label" style="font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.20em;text-transform:uppercase;color:rgba(185,130,210,0.38);padding:0 16px 5px;">Communication</div>
             @if($user->canAccess('prm'))
-                @include('components.sidebar-item', [
-                    'href'  => route('communication.index'),
-                    'label' => 'PRM',
-                    'icon'  => '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
-                ])
+                @if(\App\Support\Features\Feature::enabled('nav.pre_primary'))
+                    {{-- Workstream F: PRE is the primary entry --}}
+                    @include('components.sidebar-item', [
+                        'href'  => route('relationship.dashboard'),
+                        'label' => 'Relationships',
+                        'icon'  => '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+                    ])
+                    {{-- Phase 8: legacy "PRM (Legacy)" link removed from the sidebar per Sumit's
+                         call — the PRM board itself was already retired; this only removes the
+                         nav entry pointing at communication.index. The route/controller/view are
+                         untouched and still reachable directly if anything still needs them. --}}
+                @else
+                    @include('components.sidebar-item', [
+                        'href'  => route('communication.index'),
+                        'label' => 'PRM',
+                        'icon'  => '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+                    ])
+                @endif
             @endif
             @if($user->canAccess('marketing'))
                 @include('components.sidebar-item', [

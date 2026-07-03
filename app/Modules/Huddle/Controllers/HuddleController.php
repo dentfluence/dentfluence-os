@@ -615,6 +615,12 @@ class HuddleController extends Controller
         // Today's Actions projection summary instead of running its own queries.
         $todaySnapshot = app(\App\Services\Relationship\TodayActionsProjector::class)->summary();
 
+        // ── Comms List total, including PRE relationship items ────────────────
+        // "Today's Calls" used to count only $commList (reminders + follow-ups +
+        // legacy PRM queue). It now also counts the PRE relationship items so the
+        // stat reflects everything actually shown in the widget.
+        $commTotalCount = $commList->count() + count($relationshipItems);
+
         return view('huddle.index', compact(
             'today',
             'todaySnapshot',
@@ -641,6 +647,7 @@ class HuddleController extends Controller
             'commOverdue',
             'commAlerts',
             'relationshipItems',
+            'commTotalCount',
         ));
     }
 

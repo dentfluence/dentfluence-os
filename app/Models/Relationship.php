@@ -39,11 +39,15 @@ class Relationship extends Model
         'status',
         'score',
         'relationship_since',
+        // Phase 4 — CommunicationGuard Preference factor + hard opt-out.
+        'preferred_channel',
+        'do_not_contact',
     ];
 
     protected $casts = [
         'relationship_since' => 'date',
         'score'              => 'integer',
+        'do_not_contact'     => 'boolean',
     ];
 
     // ── Relationships ──────────────────────────────────────────────────────────

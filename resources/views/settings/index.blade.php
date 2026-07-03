@@ -226,6 +226,7 @@
         'App' => [
             ['id'=>'personalisation', 'label'=>'Personalisation',   'icon'=>'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'],
             ['id'=>'calendar',        'label'=>'Calendar',          'icon'=>'<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'],
+            ['id'=>'cross-app-flags', 'label'=>'Feature Flags',     'icon'=>'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>'],
         ],
         'Data' => [
             ['id'=>'data',            'label'=>'Import / Export',   'icon'=>'<polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/>'],
@@ -2068,6 +2069,132 @@
             }).then(r => r.json()).then(data => {
                 alert(data.message || 'Saved!');
             }).catch(() => alert('Error saving settings.'));
+        }
+        </script>
+    </div>
+
+    {{-- ════════════════════════════════════════════
+         TAB · PRE (RELATIONSHIP ENGINE) — feature flags
+         Read-only values from FeatureFlagService::all(); each switch calls
+         POST /settings/feature-flags/toggle (whitelist-checked server-side).
+         Purely a Settings-module addition — no engine files touched.
+
+         NOTE: PRE (Relationship Engine)-specific flags moved to their own
+         module-scoped page at /relationship/settings (2026-07-03), so PRE
+         can be sold/configured standalone. Only genuinely cross-app flags
+         (Communication Guard, Integrations, Workflow Engine, Search) stay here.
+    ════════════════════════════════════════════ --}}
+    <div x-show="activeTab==='cross-app-flags'" x-cloak x-data="preFlagsPanel()">
+        <style>
+            /* Static layout only — dynamic colour/position comes from x-bind:style,
+               which REPLACES a plain-string style attribute rather than merging it.
+               Keeping the fixed geometry in a class avoids that Alpine gotcha. */
+            .pre-switch {
+                flex-shrink: 0; width: 44px; height: 24px; border-radius: 999px;
+                border: none; position: relative; cursor: pointer; transition: background .15s;
+            }
+            .pre-switch-knob {
+                position: absolute; top: 2px; width: 20px; height: 20px;
+                border-radius: 50%; background: #fff; transition: transform .15s;
+            }
+        </style>
+        <div style="max-width:760px;margin:0 auto;">
+
+            <div style="background:#fff5e6;border:1px solid #f4d9a8;border-radius:12px;padding:16px 20px;margin-bottom:20px;font-size:12.5px;color:#8a5a00;">
+                These switches control app-wide behaviour shared across every module (Communication Guard, Integrations,
+                Workflow Engine, Search). Most are safe to leave as-is — only change one if you understand what it does.
+                Every change here is logged. (Looking for PRE/Relationship Engine flags? Those moved to
+                Relationships → Settings.)
+            </div>
+
+            @foreach($flagGroups as $groupLabel => $keys)
+            <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:20px 24px;margin-bottom:16px;">
+                <h3 class="settings-section-title">{{ $groupLabel }}</h3>
+
+                @foreach($keys as $flagKey)
+                @php $flag = $featureFlags[$flagKey] ?? null; @endphp
+                @continue(!$flag)
+                <div style="padding:12px 0;border-top:1px solid #f3ecf7;"
+                     x-init="state['{{ $flagKey }}'] = {{ $flag['resolved'] ? 'true' : 'false' }}">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:13px;font-weight:600;color:#1a0a24;font-family:monospace;">{{ $flagKey }}</div>
+                            <div style="font-size:12.5px;color:#7a6884;margin-top:2px;">{{ $flag['description'] }}</div>
+                        </div>
+                        <button type="button" class="pre-switch"
+                                @click="arm('{{ $flagKey }}', !state['{{ $flagKey }}'])"
+                                :disabled="busy === '{{ $flagKey }}'"
+                                x-bind:style="'background:' + (state['{{ $flagKey }}'] ? '#1a7a45' : '#c9c3ce')">
+                            <span class="pre-switch-knob"
+                                  x-bind:style="'transform:translateX(' + (state['{{ $flagKey }}'] ? '20px' : '2px') + ')'"></span>
+                        </button>
+                    </div>
+                    {{-- Inline confirm bar — replaces window.confirm(), which was found to
+                         freeze the page (a blocking native dialog is bad UX either way). --}}
+                    <div x-show="pendingKey === '{{ $flagKey }}'" x-cloak x-transition
+                         style="margin-top:8px;display:flex;align-items:center;gap:10px;background:#f9f5fc;border:1px solid #e8d5f0;border-radius:8px;padding:8px 12px;">
+                        <span style="font-size:12.5px;color:#4a3a54;" x-text="'Turn ' + (pendingNext ? 'ON' : 'OFF') + ' ' + pendingKey + '?'"></span>
+                        <button type="button" @click="confirmToggle()" :disabled="busy === '{{ $flagKey }}'"
+                                style="margin-left:auto;padding:4px 12px;background:#6a0f70;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">
+                            <span x-show="busy !== '{{ $flagKey }}'">Yes, confirm</span>
+                            <span x-show="busy === '{{ $flagKey }}'">Working…</span>
+                        </button>
+                        <button type="button" @click="cancelToggle()" :disabled="busy === '{{ $flagKey }}'"
+                                style="padding:4px 12px;background:#fff;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;font-size:12px;cursor:pointer;">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+                @endforeach
+            </div>
+            @endforeach
+
+        </div>
+
+        <script>
+        function preFlagsPanel() {
+            return {
+                state: {},
+                busy: null,
+                pendingKey: null,
+                pendingNext: null,
+                arm(key, next) {
+                    if (this.busy) return;
+                    this.pendingKey = key;
+                    this.pendingNext = next;
+                },
+                cancelToggle() {
+                    this.pendingKey = null;
+                    this.pendingNext = null;
+                },
+                confirmToggle() {
+                    const key = this.pendingKey, next = this.pendingNext;
+                    if (!key) return;
+                    this.busy = key;
+                    fetch('{{ route('settings.feature-flags.toggle') }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('[name=_token]').value,
+                        },
+                        body: JSON.stringify({ key: key, enabled: next }),
+                    })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.ok) {
+                                this.state[key] = data.enabled;
+                            } else {
+                                alert(data.message || 'Could not update that flag.');
+                            }
+                        })
+                        .catch(() => alert('Network error — flag not changed.'))
+                        .finally(() => {
+                            this.busy = null;
+                            this.pendingKey = null;
+                            this.pendingNext = null;
+                        });
+                },
+            };
         }
         </script>
     </div>

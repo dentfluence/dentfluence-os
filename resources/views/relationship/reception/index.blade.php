@@ -8,7 +8,7 @@
 |   $calls, $work, $summary, $generatedAt, $highCount
 |==========================================================================
 --}}
-@extends('layouts.app')
+@extends('relationship.layouts.app')
 
 @section('page-title', 'Reception')
 
@@ -33,13 +33,13 @@
     };
 @endphp
 
-@section('content')
+@section('relationship-content')
 <div style="max-width:1200px;margin:0 auto;padding:8px 4px 40px;">
 
     {{-- Header --}}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
         <div>
-            <h1 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;">Reception</h1>
+            <h1 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;font-family:'Cormorant Garamond',serif;">Reception</h1>
             <p style="margin:4px 0 0;color:#6b7280;font-size:13px;">
                 Everything to call and do today, from the Today's Actions view.
                 @if ($generatedAt)
@@ -53,10 +53,6 @@
             <a href="{{ route('relationship.today') }}"
                style="background:#534AB7;color:#fff;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
                Full Today's Actions
-            </a>
-            <a href="{{ route('relationship.dashboard') }}"
-               style="background:#EEEDFE;color:#534AB7;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
-               Relationships
             </a>
         </div>
     </div>

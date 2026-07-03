@@ -60,6 +60,7 @@ I adopt the proposed Phase 0–7 structure with three deliberate adjustments, ea
 | **Phase 5** | Workflow — Workflow Engine (linear-first), PRM/acquisition integration, Marketing rewire |
 | **Phase 6** | Read & Insights — Insights (3 signals first), Analytics projections, Search index |
 | **Phase 7** | Integration — Integration Engine, external systems behind the boundary |
+| **Phase 8** | PRM Retirement — PRE owns all lead-pipeline **writes**, Journeys made authoritative, legacy PRM board deleted after soak (the final "one engine" cutover) |
 
 **Adjustment 1 — pull three items *earlier* into Phase 0 (WHY).** The event-contract skeleton, the **Guard emergency-hardening (fail-closed + consent-never-overridden)**, and the **Decision Log** are foundations, not features. The Guard hardening is a *compliance* fix (DPDP) that must not wait until Phase 4; the event contracts must exist before Phase 1 can publish anything; the Decision Log must exist before any automation is trusted. Phase 4 still builds the *full* Communication Engine — Phase 0 only does the minimal safety hardening of the existing Guard.
 
@@ -68,6 +69,8 @@ I adopt the proposed Phase 0–7 structure with three deliberate adjustments, ea
 **Adjustment 3 — Insights ships 3 signals first (WHY).** The full 9-signal panel is deferred. Phase 6 delivers **Relationship Health, Lifetime Value, and Risk** — the three that drive Today's Actions and retention — as independent projections. Additional signals are added later, each as a new subscriber. This avoids signal-sprawl before there is demand.
 
 **Interpretation note:** "PRE" in the proposed Phase 5 is read as **PRM / acquisition integration** (wiring the lead pipeline into Workflows + Relationship). If a different meaning was intended, this is the one assumption to confirm before Phase 5.
+
+**Adjustment 4 — add Phase 8, "PRM Retirement," as the final phase (WHY).** Phases 1–5 make PRE a faithful *reading/identity* engine over the lead pipeline: every lead is linked to a Relationship, every PRM write mirrors onto the unified timeline, and PRE's boards render it all — but PRM keeps ownership of the actual *writes* (create/edit lead, move stage, log activity, convert). That split is deliberate: it keeps the whole migration reversible during the soak. Collapsing to a single engine — moving the writes onto PRE, flipping Journeys authoritative, and finally deleting the legacy PRM board — is the last, irreversible step, so it is sequenced **after Phase 7** as its own phase rather than smuggled into Phase 5. Nothing new is designed here; Phase 8 only *executes* the "delete legacy after soak" that the strangler plan always intended.
 
 ---
 
@@ -146,6 +149,15 @@ I adopt the proposed Phase 0–7 structure with three deliberate adjustments, ea
 - **Rollback:** per-provider flags to the legacy direct call.
 - **Testing:** connector contract tests; inbound-normalization tests; per-provider regression tests.
 - **Success criteria:** no vendor SDK remains inside a business engine; all external I/O passes the boundary; no integration regressions.
+
+### Phase 8 — PRM Retirement (the "one engine" cutover)
+- **Objectives:** Collapse the two coexisting engines into one. PRE becomes the *only* surface the front desk touches for acquisition, PRE owns every lead-pipeline write, Journeys become the authoritative pipeline state, and the legacy PRM board is removed. After this phase there is a single relationship/acquisition engine, not a primary + a shadow.
+- **Deliverables:** the lead-lifecycle **writes ported onto PRE** — create lead (quick + full), edit lead, move stage, log activity, convert-to-patient, assign, and the AI helpers (enrich / draft reply / log reply) — each writing through the relationship spine (`RelationshipEngine`, `JourneyService`, `ActivityEngine`) rather than through `PrmController`; **`journey.authoritative` flipped on** so Journeys (not `leads.stage`) drive the pipeline; **`nav.pre_primary` + `prm.secondary` flipped on** so PRM's entry points redirect into PRE; a **write-parity harness** proving a PRE write produces the same lead/journey/activity result the legacy PRM path did; and — only after a production soak — **deletion of the legacy PRM controller, views, and routes**.
+- **Dependencies:** Phases 1–5 (relationship identity, unified timeline, shadow Journeys, `PrmRelationshipAdapter` mirroring, the PRE read surfaces and cutover flags are all prerequisites and already built); Phase 4 (writes that trigger contact go through the Guard).
+- **Risks:** losing a PRM capability in the handover (a button that silently stops working); Journeys diverging from legacy stage at the moment they become authoritative; deleting PRM before the soak proves parity. *Mitigation:* port writes behind flags with the adapter still mirroring, so PRM stays a warm fallback; run the write-parity harness and the existing journey-divergence report to near-zero before flipping `journey.authoritative`; treat deletion as a separate, explicitly-approved step *after* the soak — never bundled with the cutover.
+- **Rollback:** every ported write is flag-gated; `journey.authoritative`, `nav.pre_primary`, and `prm.secondary` are all instantly reversible; the legacy PRM board and routes are kept intact through the entire soak, so rollback is "flags off" until the final deletion step (which is deliberately last and irreversible).
+- **Testing:** write-parity tests (PRE write == legacy PRM write for the same input, across all lifecycle actions); journey-authoritative divergence test at/near zero; "PRM has no capability PRE lacks" coverage checklist; regression pass over the acquisition flow with flags on.
+- **Success criteria:** every acquisition action is performed on PRE and writes the relationship spine as truth; `journey.authoritative` is on with zero divergence; the front desk never sees the PRM board; the legacy PRM controller/views/routes are removed with no loss of function — one engine.
 
 ---
 
@@ -259,6 +271,7 @@ The exact build sequence. Each step is shippable and reversible before the next 
 24. Insights: Health, LTV, Risk projections; retire RelationshipScore.
 25. Analytics projections; Search index; read contracts.
 26. Integration Engine; wrap providers one at a time (shadow → cutover).
+27. PRM retirement: port lead-pipeline writes onto PRE; flip `journey.authoritative` + `nav.pre_primary` + `prm.secondary` (write-parity → cutover); delete legacy PRM board after soak.
 
 ---
 

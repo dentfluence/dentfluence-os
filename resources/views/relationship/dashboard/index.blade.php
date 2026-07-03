@@ -7,33 +7,17 @@
 | Variables from DashboardController@index: $stats, $journeys, $recent
 |==========================================================================
 --}}
-@extends('layouts.app')
+@extends('relationship.layouts.app')
 
 @section('page-title', 'Relationships')
 
-@section('content')
+@section('relationship-content')
 <div style="max-width:1100px;margin:0 auto;padding:8px 4px 40px;">
 
     {{-- Header --}}
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
-        <div>
-            <h1 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;">Relationships</h1>
-            <p style="margin:4px 0 0;color:#6b7280;font-size:13px;">Everyone your clinic knows — one record per person.</p>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <a href="{{ route('relationship.list') }}"
-               style="background:#EEEDFE;color:#534AB7;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
-               All relationships
-            </a>
-            <a href="{{ route('relationship.today') }}"
-               style="background:#534AB7;color:#fff;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
-               Today's Actions
-            </a>
-            <a href="{{ route('relationship.analytics') }}"
-               style="background:#EEEDFE;color:#534AB7;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
-               Analytics
-            </a>
-        </div>
+    <div style="margin-bottom:20px;">
+        <h1 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;font-family:'Cormorant Garamond',serif;">Relationships</h1>
+        <p style="margin:4px 0 0;color:#6b7280;font-size:13px;">Everyone your clinic knows — one record per person.</p>
     </div>
 
     {{-- PRE-scoped search (searches relationships only; results open PRE profiles) --}}
@@ -47,28 +31,57 @@
         <button type="submit" style="background:#534AB7;color:#fff;border:none;padding:11px 22px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">Search</button>
     </form>
 
-    {{-- Stat cards --}}
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:22px;">
+    {{-- Tier 1 — headline stat cards (white, matching the Inventory dashboard style) --}}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:14px;">
         @php
             $cards = [
-                ['label' => 'Relationships',      'value' => $stats['relationships'],      'color' => '#534AB7', 'bg' => '#EEEDFE'],
-                ['label' => 'Patients',           'value' => $stats['patients'],           'color' => '#0F6E56', 'bg' => '#E1F5EE'],
-                ['label' => 'Active leads',       'value' => $stats['active_leads'],       'color' => '#854F0B', 'bg' => '#FAEEDA'],
-                ['label' => 'Open opportunities', 'value' => $stats['open_opportunities'], 'color' => '#185FA5', 'bg' => '#E6F1FB'],
+                ['label' => 'Relationships',      'value' => $stats['relationships'],      'color' => '#534AB7'],
+                ['label' => 'Patients',           'value' => $stats['patients'],           'color' => '#0F6E56'],
+                ['label' => 'Active Leads',       'value' => $stats['active_leads'],       'color' => '#854F0B'],
+                ['label' => 'Open Opportunities', 'value' => $stats['open_opportunities'], 'color' => '#185FA5'],
             ];
         @endphp
         @foreach ($cards as $c)
-            <div style="background:{{ $c['bg'] }};border-radius:12px;padding:16px 18px;">
+            <div style="background:#fff;border:1px solid rgba(83,74,183,0.12);border-radius:10px;padding:16px 18px;">
                 <div style="font-size:28px;font-weight:800;color:{{ $c['color'] }};line-height:1;">{{ number_format($c['value']) }}</div>
                 <div style="margin-top:6px;color:#4b5563;font-size:13px;font-weight:600;">{{ $c['label'] }}</div>
             </div>
         @endforeach
     </div>
 
-    {{-- Journey snapshot (shadow, informational) --}}
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:26px;color:#6b7280;font-size:12.5px;">
-        <span>Open lead journeys: <strong style="color:#374151;">{{ number_format($journeys['lead']) }}</strong></span>
-        <span>Open opportunity journeys: <strong style="color:#374151;">{{ number_format($journeys['opportunity']) }}</strong></span>
+    {{-- Tier 2 — journey snapshot (shadow, informational; tinted like Inventory's second row) --}}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:26px;">
+        <div style="background:#F5F3FF;border-radius:10px;padding:14px 18px;">
+            <div style="font-size:20px;font-weight:800;color:#5b21b6;line-height:1;">{{ number_format($journeys['lead']) }}</div>
+            <div style="margin-top:5px;color:#4b5563;font-size:12.5px;">Open Lead Journeys</div>
+        </div>
+        <div style="background:#EFF6FF;border-radius:10px;padding:14px 18px;">
+            <div style="font-size:20px;font-weight:800;color:#1e40af;line-height:1;">{{ number_format($journeys['opportunity']) }}</div>
+            <div style="margin-top:5px;color:#4b5563;font-size:12.5px;">Open Opportunity Journeys</div>
+        </div>
+    </div>
+
+    {{-- Quick actions — just the two lead-entry forms. Pipeline/Opportunities/Recalls
+         dropped from here since they're already tabs at the top (was duplicate nav). --}}
+    <div style="margin-bottom:26px;">
+        <div style="font-size:12.5px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">Quick Actions</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;">
+            @php
+                $quickActions = [
+                    ['route' => 'relationship.pipeline.quick-add', 'label' => 'Quick Add Lead', 'icon' => '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'],
+                    ['route' => 'relationship.pipeline.add-lead',  'label' => 'New Lead (Full)', 'icon' => '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'],
+                ];
+            @endphp
+            @foreach ($quickActions as $qa)
+            <a href="{{ route($qa['route']) }}"
+               style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:#fff;border:1px solid #eceef2;border-radius:10px;text-decoration:none;color:#4b5563;font-size:12px;font-weight:600;text-align:center;transition:background .15s,color .15s,transform .15s;"
+               onmouseover="this.style.background='#f9f3fa';this.style.color='#534AB7';this.style.transform='translateY(-1px)';"
+               onmouseout="this.style.background='#fff';this.style.color='#4b5563';this.style.transform='translateY(0)';">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{!! $qa['icon'] !!}</svg>
+                {{ $qa['label'] }}
+            </a>
+            @endforeach
+        </div>
     </div>
 
     {{-- Recent relationships --}}
@@ -121,3 +134,4 @@
     </p>
 </div>
 @endsection
+

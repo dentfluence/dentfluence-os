@@ -22,7 +22,10 @@
             <h3 class="comm-overdue-summary__title">Overdue Follow-ups</h3>
             <span class="comm-overdue-summary__badge">{{ $counts['overdue_callbacks'] }}</span>
         </div>
-        <a href="{{ '/communication/prm' }}?filter=overdue"
+        {{-- Phase 8 PRM Retirement (Slice 5) — points at PRE's lead pipeline now.
+             Note: PRE's pipeline board doesn't parse ?filter=/?lead= query params yet,
+             so this lands on the pipeline rather than a pre-filtered view. --}}
+        <a href="{{ route('relationship.pipeline') }}"
            class="comm-overdue-summary__view-all">
             View All →
         </a>
@@ -31,7 +34,7 @@
     {{-- Overdue Cards Row --}}
     <div class="comm-overdue-summary__cards" id="commOverdueCards">
        @forelse($overdue as $item)
-            <a href="/communication/prm?lead={{ $item['id'] ?? '' }}" class="comm-overdue-card" style="text-decoration:none; color:inherit; display:block;">
+            <a href="{{ route('relationship.pipeline') }}" class="comm-overdue-card" style="text-decoration:none; color:inherit; display:block;">
                 {{-- Avatar --}}
                 <div class="comm-overdue-card__avatar"
                      style="background: {{ $item['color'] }}22; color: {{ $item['color'] }}">
@@ -87,7 +90,8 @@
             <span class="comm-escalation-alert__text">
                 <strong>{{ $counts['escalations'] }} escalations</strong> require immediate attention
             </span>
-            <a href="{{ '/communication/prm' }}?filter=escalated"
+            {{-- Phase 8 PRM Retirement (Slice 5) — points at PRE's lead pipeline now. --}}
+            <a href="{{ route('relationship.pipeline') }}"
                class="comm-escalation-alert__btn">
                 Resolve Now
             </a>

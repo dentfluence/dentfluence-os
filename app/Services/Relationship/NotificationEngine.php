@@ -12,9 +12,19 @@ use Illuminate\Support\Facades\Log;
  * NotificationEngine — Phase 6, Relationship Engine
  *
  * Generates in-app notifications for relationship events. Dual-writes:
- *   1. relationship_notifications — relationship-aware record with full metadata
- *   2. app_notifications — mirrors into the existing notification bell (no
- *      changes needed to NotificationsController or the topbar)
+ *   1. app_notifications — THE canonical single store (Phase 4 decision, see
+ *      docs/phase-4/README.md). This is what the topbar bell and
+ *      NotificationsController actually read — the only thing users ever see.
+ *   2. relationship_notifications — kept as an internal metadata/dedup table,
+ *      NOT a second user-facing store. recentlySent() below reads it to power
+ *      the minimal-noise guard, which app_notifications can't do today (it has
+ *      no relationship_id column). Its own JSON CRUD API
+ *      (Http/Controllers/Relationship/NotificationController.php) has zero UI
+ *      callers — it is not an alternate read path, just unused surface area.
+ *
+ * Write ordering matters: app_notifications is written FIRST and independently
+ * try/caught, so a relationship_notifications failure (e.g. a stale schema)
+ * can never silently swallow the notification the user actually sees.
  *
  * Minimal-noise rule: before creating a notification, checks if the same
  * type + relationship_id combination was sent in the last 24 hours.
@@ -174,7 +184,8 @@ class NotificationEngine
         ?string $link,
         ?string $triggeredByEvent,
     ): void {
-        // 1. Mirror to app_notifications (existing bell picks this up automatically)
+        // 1. THE write — app_notifications is the single store users see (the
+        // topbar bell). If this fails, notify() should know: let it throw.
         $appNotif = AppNotification::notify(
             userId:      $userId,
             type:        $this->mapToAppType($type),
@@ -184,17 +195,26 @@ class NotificationEngine
             actionLabel: 'View',
         );
 
-        // 2. Write relationship_notifications record (richer metadata)
-        RelationshipNotification::create([
-            'relationship_id'   => $relationshipId,
-            'recipient_id'      => $userId,
-            'type'              => $type,
-            'title'             => $title,
-            'body'              => $body ?: null,
-            'link'              => $link,
-            'triggered_by_event'=> $triggeredByEvent,
-            'app_notification_id' => $appNotif->id ?? null,
-        ]);
+        // 2. Best-effort metadata/dedup mirror. Isolated try/catch so a
+        // problem here (e.g. schema drift) can never look like the user's
+        // actual notification (step 1, already committed) failed to send.
+        try {
+            RelationshipNotification::create([
+                'relationship_id'   => $relationshipId,
+                'recipient_id'      => $userId,
+                'type'              => $type,
+                'title'             => $title,
+                'body'              => $body ?: null,
+                'link'              => $link,
+                'triggered_by_event'=> $triggeredByEvent,
+                'app_notification_id' => $appNotif->id ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('NotificationEngine: relationship_notifications mirror write failed (app_notifications succeeded, user still got the bell notification)', [
+                'type'  => $type,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
