@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AppSetting;
 use App\Models\Appointment;
 use App\Models\CommunicationQueue;
 use App\Models\LabCase;
@@ -103,11 +104,21 @@ class RecallEngineService
         $cooldown = now()->subDays(self::NO_VISIT_COOLDOWN_DAYS);
         $count    = 0;
 
+        // Kept in parity with RecallAutomationRunner::runNoVisit() — see the
+        // comment there. This path is dormant while automation.engine is ON,
+        // but should behave the same if that flag is ever reverted.
+        $effectiveFrom = AppSetting::get('recall.effective_from');
+
         Patient::query()
             ->whereNotNull('phone')
-            ->where(function ($q) use ($cutoff) {
-                $q->whereDate('last_visit_date', '<=', $cutoff)
-                  ->orWhereNull('last_visit_date');
+            ->where(function ($q) use ($cutoff, $effectiveFrom) {
+                if ($effectiveFrom) {
+                    $q->whereDate('last_visit_date', '>=', $effectiveFrom)
+                      ->whereDate('last_visit_date', '<=', $cutoff);
+                } else {
+                    $q->whereDate('last_visit_date', '<=', $cutoff)
+                      ->orWhereNull('last_visit_date');
+                }
             })
             ->where(function ($q) use ($cooldown) {
                 // Not queued recently

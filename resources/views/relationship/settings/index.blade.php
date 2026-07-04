@@ -111,6 +111,40 @@
         </form>
     </div>
 
+    <div style="background:#fff;border:1px solid #eceef2;border-radius:10px;padding:18px 20px;margin-bottom:24px;">
+        <div style="font-size:14px;font-weight:700;color:#1f2937;margin-bottom:4px;">
+            Recall Automation Go-Live Date
+            <div class="help-hint" tabindex="0">
+                <span class="help-icon">?</span>
+                <div class="help-card">
+                    <strong>What this does</strong>
+                    <p style="margin:6px 0 0;">The "no visit in 6 months" recall only auto-queues patients whose last visit falls on or after this date. Patients with no recorded visit, or whose last visit predates it (old/migrated history), are left out of automatic recall — but the moment a real visit is logged for them, they're back in scope like anyone else.</p>
+                    <p class="help-example">Example: you import years of old patient records on 4 July. Without a go-live date, the system sees all of them as "6+ months overdue" and dumps the entire history into today's call list at once. Set the go-live date to 4 July, and only patients who've actually visited since then — and have now genuinely gone quiet for 6 months — get auto-queued.</p>
+                </div>
+            </div>
+        </div>
+        <div style="font-size:12.5px;color:#7a6884;margin-bottom:14px;">
+            Leave blank for the old, unrestricted behaviour. Historical patients excluded here aren't lost — they can still
+            be called from a manual list; this only controls what the automation queues by itself.
+        </div>
+
+        <form action="{{ route('relationship.settings.recall-effective-from') }}" method="POST"
+              style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+            @csrf
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#1a0a24;">
+                Starts from
+                <input type="date" name="effective_from" value="{{ $recallEffectiveFrom }}"
+                       style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
+            </label>
+            <button type="submit" style="padding:7px 16px;background:#6a0f70;color:#fff;border:none;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;">
+                Save
+            </button>
+            @if($recallEffectiveFrom)
+            <span style="font-size:12px;color:#9ca3af;">Currently active — clear the date and save to remove.</span>
+            @endif
+        </form>
+    </div>
+
     {{-- ── Advanced / Engineering — collapsed by default ── --}}
     <button type="button" @click="advancedOpen = !advancedOpen"
             style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#faf7fb;border:1px solid #eceef2;border-radius:10px;padding:14px 18px;cursor:pointer;margin-bottom:2px;">

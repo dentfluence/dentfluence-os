@@ -2,6 +2,7 @@
 
 namespace App\Services\Automation;
 
+use App\Models\AppSetting;
 use App\Models\CommunicationQueue;
 use App\Models\Patient;
 use App\Services\Relationship\ActivityEngine;
@@ -47,6 +48,18 @@ class RecallAutomationRunner
         $cutoff = $now->copy()->subMonths(self::NO_VISIT_MONTHS);
         $count  = 0;
 
+        // Recall Automation Go-Live Date (Settings > Relationship Engine).
+        // When set, patients whose last_visit_date is missing or predates this
+        // date are historical/migrated data and are excluded from automatic
+        // recall — they're re-included the moment a real post-go-live visit is
+        // logged for them. Without this, a bulk patient-history import gets
+        // treated as "everyone is 6+ months overdue" and dumps the entire
+        // backlog into Today's Actions in a single day (see the 1,810-item
+        // spike on 2026-07-04). Historical patients aren't lost — they can
+        // still be worked as a one-time manual list; this setting only scopes
+        // what the *automation* is allowed to auto-queue going forward.
+        $effectiveFrom = AppSetting::get('recall.effective_from');
+
         // Suppression tallies — kept for the Decision Log summary (explainability:
         // "why didn't we contact these patients?"). Per-patient reasons are
         // available via `php artisan automation:parity recall` (shadow log).
@@ -55,9 +68,14 @@ class RecallAutomationRunner
 
         Patient::query()
             ->whereNotNull('phone')
-            ->where(function ($q) use ($cutoff) {
-                $q->whereDate('last_visit_date', '<=', $cutoff)
-                  ->orWhereNull('last_visit_date');
+            ->where(function ($q) use ($cutoff, $effectiveFrom) {
+                if ($effectiveFrom) {
+                    $q->whereDate('last_visit_date', '>=', $effectiveFrom)
+                      ->whereDate('last_visit_date', '<=', $cutoff);
+                } else {
+                    $q->whereDate('last_visit_date', '<=', $cutoff)
+                      ->orWhereNull('last_visit_date');
+                }
             })
             ->chunkById(100, function ($patients) use ($now, &$count, &$suppressedCooldown, &$suppressedDuplicate) {
                 foreach ($patients as $patient) {

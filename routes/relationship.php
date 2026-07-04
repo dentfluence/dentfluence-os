@@ -160,6 +160,9 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     Route::post('/settings/referral', [RelationshipSettingsController::class, 'saveReferralConfig'])
         ->name('settings.referral');  // relationship.settings.referral
 
+    Route::post('/settings/recall-effective-from', [RelationshipSettingsController::class, 'saveRecallEffectiveFrom'])
+        ->name('settings.recall-effective-from');  // relationship.settings.recall-effective-from
+
     // ── Referral rewards (business config lives in Settings above) ─────────
     // Two-segment static route — no conflict with the /{id} wildcard below.
     Route::post('/{id}/referral-reward', [ReferralRewardController::class, 'store'])

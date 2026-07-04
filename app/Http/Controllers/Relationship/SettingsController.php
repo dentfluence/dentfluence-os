@@ -52,6 +52,10 @@ class SettingsController extends Controller
         $referralRewardEnabled = AppSetting::get('referral.reward_enabled', '0') === '1';
         $referralRewardAmount  = (float) AppSetting::get('referral.reward_amount', '500');
 
+        // Recall Automation Go-Live Date — see RecallAutomationRunner::runNoVisit()
+        // for what this actually gates. Null/blank = legacy behaviour (unrestricted).
+        $recallEffectiveFrom = AppSetting::get('recall.effective_from');
+
         $flagHelp = $this->flagHelp();
 
         return view('relationship.settings.index', compact(
@@ -59,6 +63,7 @@ class SettingsController extends Controller
             'flagGroups',
             'referralRewardEnabled',
             'referralRewardAmount',
+            'recallEffectiveFrom',
             'flagHelp'
         ));
     }
@@ -141,6 +146,30 @@ class SettingsController extends Controller
         AppSetting::set('referral.reward_amount', (string) $data['amount'], 'referral');
 
         return back()->with('success', 'Referral reward settings saved.');
+    }
+
+    /**
+     * Save (or clear) the Recall Automation Go-Live Date.
+     *
+     * Scopes automatic "no visit in 6 months" recall to patients whose last
+     * visit is on/after this date — keeps a bulk historical/migrated patient
+     * import from being auto-queued as a one-day backlog dump. See
+     * RecallAutomationRunner::runNoVisit().
+     */
+    public function saveRecallEffectiveFrom(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'effective_from' => ['nullable', 'date'],
+        ]);
+
+        if (empty($data['effective_from'])) {
+            AppSetting::set('recall.effective_from', null, 'automation');
+            return back()->with('success', 'Recall automation go-live date cleared — back to unrestricted (legacy) behaviour.');
+        }
+
+        AppSetting::set('recall.effective_from', $data['effective_from'], 'automation');
+
+        return back()->with('success', 'Recall automation go-live date saved.');
     }
 
     // Toggle one PRE flag globally. Whitelist-checked against config/features.php
