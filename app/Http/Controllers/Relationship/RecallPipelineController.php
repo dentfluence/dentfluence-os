@@ -4,6 +4,10 @@ namespace App\Http\Controllers\Relationship;
 
 use App\Http\Controllers\Controller;
 use App\Models\CommunicationQueue;
+use App\Models\Patient;
+use App\Services\RecallEngineService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
@@ -74,5 +78,36 @@ class RecallPipelineController extends Controller
             'openCount'    => $openCount,
             'overdueCount' => $overdueCount,
         ]);
+    }
+
+    /**
+     * Manually add a recall for a patient — staff-initiated, distinct from the
+     * 6 automated triggers in RecallEngineService (tagged 'manual' so it's
+     * never mistaken for one of those in reporting). Writes to the same
+     * communication_queue table those triggers use, so it shows up on this
+     * board and in Today's Actions / recall analytics exactly like any other
+     * recall — no separate storage, no new table.
+     */
+    public function store(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'patient_id'     => ['required', 'integer', 'exists:patients,id'],
+            'priority'       => ['required', 'in:high,medium,low'],
+            'follow_up_date' => ['required', 'date'],
+            'note'           => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $patient = Patient::findOrFail($data['patient_id']);
+
+        if (! $patient->phone) {
+            return back()
+                ->withErrors(['patient_id' => 'This patient has no phone number on file — add one before creating a recall.'])
+                ->withInput();
+        }
+
+        app(RecallEngineService::class)->createManual($patient, $data);
+
+        return redirect()->route('relationship.recalls')
+            ->with('success', 'Recall added for ' . $patient->name . '.');
     }
 }

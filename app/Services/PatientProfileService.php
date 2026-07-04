@@ -8,6 +8,7 @@ use App\Models\Finance\FinanceMembershipPlan;
 use App\Models\Finance\FinancePatientMembership;
 use App\Models\Finance\MembershipBenefitLog;
 use App\Models\Invoice;
+use App\Models\Inventory\ImplantCatalog;
 use App\Models\Patient;
 use App\Models\PatientRelationshipNote;
 use App\Models\Task;
@@ -32,6 +33,7 @@ class PatientProfileService
             'alerts',
             'treatmentVisits.doctor',
             'treatmentVisits.visitItems',
+            'treatmentVisits.implantPlacement',
             'treatmentPlans.items',
             'treatmentPlans.creator',
             'consultations',
@@ -111,6 +113,14 @@ class PatientProfileService
             ->orderBy('id', 'desc')
             ->get();
 
+        // Implant catalog — for the stock-linked component picker on the
+        // Treatment Visit "Implant" sub-form (fixture + accessory components).
+        $implantCatalog = ImplantCatalog::active()
+            ->with('inventoryItem.stocks')
+            ->orderBy('component_type')
+            ->orderBy('brand')
+            ->get();
+
         return [
             'patient'           => $patient,
             'recentVisits'      => $patient->appointments->take(10),
@@ -166,6 +176,13 @@ class PatientProfileService
             'estimated_value' => $data['estimated_value'] ?? null,
             'notes'           => $data['notes'] ?? null,
             'created_by'      => Auth::id(),
+            // Phase 4 — stamp the patient's Relationship link so this opportunity shows
+            // up correctly on the PRE Opportunities board (it groups by relationship,
+            // not patient). Previously omitted here — the only other creation path
+            // (Communication\OpportunityController::store) already set this, so
+            // opportunities added from the patient profile page were silently
+            // rendering as "Unlinked opportunity" even when the patient WAS linked.
+            'relationship_id' => $patient->relationship_id,
         ];
 
         if ($id) {

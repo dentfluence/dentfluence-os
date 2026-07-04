@@ -38,6 +38,7 @@ class TodayController extends Controller
         'lab_ready'                    => 'Lab Work Ready',
         'payment_reminders'            => 'Payment Reminders',
         'appointment_reminders_tomorrow'=> "Tomorrow Morning's Appointments",
+        'completed_calls'               => 'Completed Calls',
     ];
 
     /**
@@ -59,6 +60,7 @@ class TodayController extends Controller
         'lab_ready'                    => 'ti-flask',
         'payment_reminders'            => 'ti-receipt-2',
         'appointment_reminders_tomorrow'=> 'ti-calendar-event',
+        'completed_calls'               => 'ti-circle-check',
     ];
 
     /**
@@ -96,59 +98,83 @@ class TodayController extends Controller
     // GET /relationship/today
     // ─────────────────────────────────────────────────────────────────────
 
-    public function index(): \Illuminate\View\View
+    public function index(Request $request): \Illuminate\View\View
     {
-        // Source the 12 category groups.
-        // Behind the `today.projection` flag we read the pre-computed projection
-        // (one table, no god-reader). Default OFF = the live engine, unchanged.
-        // We always project onto the full known category set so empty groups
-        // still render identically whichever source is used.
-        if (Feature::enabled('today.projection')) {
-            $projected = $this->projector->grouped();
-            $raw = [];
-            foreach (array_keys(self::CATEGORY_LABELS) as $key) {
-                $raw[$key] = $projected[$key] ?? [];
+        $today = \Illuminate\Support\Carbon::today();
+        $selectedDate = $today->copy();
+
+        if ($request->filled('date')) {
+            try {
+                $selectedDate = \Illuminate\Support\Carbon::parse($request->query('date'))->startOfDay();
+            } catch (\Throwable $e) {
+                $selectedDate = $today->copy();
             }
-            // Include any projected category not in the label map (forward-safe).
-            foreach ($projected as $key => $items) {
-                if (! array_key_exists($key, $raw)) {
-                    $raw[$key] = $items;
-                }
-            }
-        } else {
-            $raw = $this->engine->generate();
         }
 
-        // Split the single "appointment_reminders" bucket into "today" and
-        // "tomorrow morning" so they can sit at opposite ends of the list
-        // (confirm today's sessions first thing, tomorrow's sessions last).
-        // Pure display-layer split — TodayActionsEngine itself is untouched.
-        if (array_key_exists('appointment_reminders', $raw)) {
-            $todayItems    = [];
-            $tomorrowItems = [];
+        $mode = $selectedDate->isSameDay($today)
+            ? 'today'
+            : ($selectedDate->greaterThan($today) ? 'future' : 'past');
 
-            foreach ($raw['appointment_reminders'] as $item) {
-                $isToday = false;
-                $rawDate = $item['meta']['appointment_date'] ?? null;
+        if ($mode !== 'today') {
+            // Date-picker modes: a lightweight preview (future) or a completed-
+            // call history read (past). Neither touches the live engine's
+            // "today" path below — that stays exactly as it always has.
+            $raw = $mode === 'future'
+                ? $this->engine->generateUpcoming($selectedDate)
+                : $this->engine->generatePast($selectedDate);
+        } else {
+            // Source the 12 category groups.
+            // Behind the `today.projection` flag we read the pre-computed projection
+            // (one table, no god-reader). Default OFF = the live engine, unchanged.
+            // We always project onto the full known category set so empty groups
+            // still render identically whichever source is used.
+            if (Feature::enabled('today.projection')) {
+                $projected = $this->projector->grouped();
+                $raw = [];
+                foreach (array_keys(self::CATEGORY_LABELS) as $key) {
+                    $raw[$key] = $projected[$key] ?? [];
+                }
+                // Include any projected category not in the label map (forward-safe).
+                foreach ($projected as $key => $items) {
+                    if (! array_key_exists($key, $raw)) {
+                        $raw[$key] = $items;
+                    }
+                }
+            } else {
+                $raw = $this->engine->generate();
+            }
 
-                if ($rawDate) {
-                    try {
-                        $isToday = \Illuminate\Support\Carbon::createFromFormat('d M Y', $rawDate)->isToday();
-                    } catch (\Throwable $e) {
-                        $isToday = false; // if unparsable, fall back to the "tomorrow" bucket
+            // Split the single "appointment_reminders" bucket into "today" and
+            // "tomorrow morning" so they can sit at opposite ends of the list
+            // (confirm today's sessions first thing, tomorrow's sessions last).
+            // Pure display-layer split — TodayActionsEngine itself is untouched.
+            if (array_key_exists('appointment_reminders', $raw)) {
+                $todayItems    = [];
+                $tomorrowItems = [];
+
+                foreach ($raw['appointment_reminders'] as $item) {
+                    $isToday = false;
+                    $rawDate = $item['meta']['appointment_date'] ?? null;
+
+                    if ($rawDate) {
+                        try {
+                            $isToday = \Illuminate\Support\Carbon::createFromFormat('d M Y', $rawDate)->isToday();
+                        } catch (\Throwable $e) {
+                            $isToday = false; // if unparsable, fall back to the "tomorrow" bucket
+                        }
+                    }
+
+                    if ($isToday) {
+                        $todayItems[] = $item;
+                    } else {
+                        $tomorrowItems[] = $item;
                     }
                 }
 
-                if ($isToday) {
-                    $todayItems[] = $item;
-                } else {
-                    $tomorrowItems[] = $item;
-                }
+                unset($raw['appointment_reminders']);
+                $raw['appointment_reminders_today']    = $todayItems;
+                $raw['appointment_reminders_tomorrow'] = $tomorrowItems;
             }
-
-            unset($raw['appointment_reminders']);
-            $raw['appointment_reminders_today']    = $todayItems;
-            $raw['appointment_reminders_tomorrow'] = $tomorrowItems;
         }
 
         // Build enriched groups array for the view
@@ -187,6 +213,9 @@ class TodayController extends Controller
             'checklists',
             'responseOpts',
             'nextActions',
+            'selectedDate',
+            'mode',
+            'today',
         ));
     }
 

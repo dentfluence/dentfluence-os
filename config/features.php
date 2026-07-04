@@ -43,12 +43,6 @@ return [
             'description' => 'CommunicationGuard enforces consent. Consent can NEVER be overridden by urgency.',
         ],
 
-        // ── Workstream F — PRE navigation cutover ───────────────────────
-        'nav.pre_primary' => [
-            'default'     => (bool) env('FEATURE_NAV_PRE_PRIMARY', false),
-            'description' => 'Sidebar shows PRE (Relationships) as the primary entry; PRM is demoted to a Legacy link (still reachable).',
-        ],
-
         // ── Phase 1 (Relationship Foundation) ───────────────────────────
         // Flipped on 2026-07-04: the Relationships module was showing as
         // empty/"dummy" because this was never turned on, so no Relationship
@@ -61,7 +55,6 @@ return [
         'journey.authoritative'        => ['default' => false, 'description' => 'Journeys are the authoritative pipeline state.'],
         'relationship.pipeline_journey_column' => ['default' => false, 'description' => 'PRE Lead Pipeline shows the shadow relationship-journey state on each card (context only; journeys are not authoritative until journey.authoritative).'],
         'relationship.opportunity_journey_column' => ['default' => false, 'description' => 'PRE Opportunity Pipeline shows the shadow opportunity-journey state on each card (context only; journeys are not authoritative until journey.authoritative).'],
-        'prm.secondary' => ['default' => false, 'description' => 'Legacy PRM board becomes secondary: its entry points redirect to the PRE lead pipeline (still reachable via ?legacy=1). Default off = PRM primary, unchanged.'],
 
         // ── Phase 2 (Automation) ────────────────────────────────────────
         'automation.engine'   => ['default' => false, 'description' => 'Automation Engine owns recall/reminders/retries/cooldowns.'],

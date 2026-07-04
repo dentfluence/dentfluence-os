@@ -106,6 +106,27 @@
                     </div>
                 </div>
             </div>
+
+            @if(auth()->user()?->role === 'admin')
+            <div class="fsec">
+                <p class="fsec-title">Reset Password</p>
+                <p style="font-size:12px;color:#9a85aa;margin:-6px 0 12px;">
+                    Leave blank to keep {{ $user->name }}'s current password. Only admins can set this.
+                </p>
+                <div class="grid2">
+                    <div>
+                        <label class="fl">New Password</label>
+                        <input type="password" name="new_password" autocomplete="new-password" minlength="8" class="fi" placeholder="Leave blank to keep current password">
+                        @error('new_password')<p style="color:#c0392b;font-size:12px;margin-top:4px;">{{ $message }}</p>@enderror
+                    </div>
+                    <div>
+                        <label class="fl">Confirm New Password</label>
+                        <input type="password" name="new_password_confirmation" autocomplete="new-password" minlength="8" class="fi" placeholder="Re-enter new password">
+                    </div>
+                </div>
+            </div>
+            @endif
+
             <button type="submit" class="save-btn">Save Account</button>
         </form>
     </div>

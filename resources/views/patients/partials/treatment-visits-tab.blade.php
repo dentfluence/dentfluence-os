@@ -5,7 +5,17 @@ $treatmentStages = \App\Models\TreatmentVisit::allStagesFromDb();
 // Safe fallback so the closure below never throws "Undefined variable $prescriptions"
 $_rxCollection = $prescriptions ?? collect();
 
-$visitsJson = $patient->treatmentVisits->map(function($v) use ($_rxCollection) {
+// Implant stock-usage lookups, batched once (not per-visit) to avoid N+1 —
+// used below to re-populate the "components used" picker when editing a visit.
+$_visitIds = $patient->treatmentVisits->pluck('id');
+$_implantMovementsByVisit = \App\Models\Inventory\StockMovement::where('reference_type', \App\Models\TreatmentVisit::class)
+    ->whereIn('reference_id', $_visitIds)
+    ->get()
+    ->groupBy('reference_id');
+$_catalogIdByInventoryItem = \App\Models\Inventory\ImplantCatalog::whereNotNull('inventory_item_id')
+    ->pluck('id', 'inventory_item_id');
+
+$visitsJson = $patient->treatmentVisits->map(function($v) use ($_rxCollection, $_implantMovementsByVisit, $_catalogIdByInventoryItem) {
     return [
         'id'               => $v->id,
         'appointment_id'   => $v->appointment_id,
@@ -39,6 +49,16 @@ $visitsJson = $patient->treatmentVisits->map(function($v) use ($_rxCollection) {
         'impl_graft_brand'      => $v->impl_graft_brand,
         'impl_membrane'         => $v->impl_membrane,
         'impl_healing_collar'   => $v->impl_healing_collar,
+        'implant_fixture_catalog_id' => $v->implantPlacement?->implant_catalog_id,
+        'implant_lot_number'         => $v->implantPlacement?->lot_number,
+        'implant_components_used'    => $v->implantPlacement
+            ? collect($_implantMovementsByVisit->get($v->id, collect()))
+                ->pluck('inventory_item_id')
+                ->map(fn($itemId) => $_catalogIdByInventoryItem->get($itemId))
+                ->filter()
+                ->reject(fn($cid) => $cid === $v->implantPlacement->implant_catalog_id)
+                ->unique()->values()->all()
+            : [],
         'fill_material'         => $v->fill_material,
         'fill_shade'            => $v->fill_shade,
         'scale_quadrants'       => $v->scale_quadrants,
@@ -1085,6 +1105,44 @@ $appointmentsJson = ($patient->appointments ?? collect())
                             <input type="text" x-model="form.impl_membrane" placeholder="e.g. Bio-Gide, Collagen membrane"
                                    class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
                         </div>
+
+                        {{-- Stock-linked components — selecting these deducts real inventory --}}
+                        @php
+                            $implFixtures    = ($implantCatalog ?? collect())->where('component_type', 'fixture');
+                            $implAccessories = ($implantCatalog ?? collect())->where('component_type', '!=', 'fixture');
+                        @endphp
+                        <div class="col-span-2 border-t border-gray-100 pt-3 mt-1">
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Fixture (from stock catalog)</label>
+                            <select x-model="form.implant_fixture_catalog_id"
+                                    class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                                <option value="">— Not in catalog / use free-text Brand + Size above —</option>
+                                @foreach($implFixtures as $fx)
+                                    <option value="{{ $fx->id }}">
+                                        {{ $fx->getFullName() }}@if($fx->inventoryItem) ({{ rtrim(rtrim(number_format($fx->inventoryItem->total_stock, 2), '0'), '.') }} in stock)@endif
+                                    </option>
+                                @endforeach
+                            </select>
+                            <p class="text-[11px] text-gray-400 mt-1">Selecting a fixture deducts it from stock automatically and creates a traceable placement record.</p>
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Lot / Batch Number</label>
+                            <input type="text" x-model="form.implant_lot_number" placeholder="For traceability"
+                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Components Used (deducted from stock)</label>
+                            <div class="flex flex-wrap gap-2 mt-1">
+                                @foreach($implAccessories as $acc)
+                                    <label class="flex items-center gap-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 cursor-pointer">
+                                        <input type="checkbox" value="{{ $acc->id }}" x-model="form.implant_components_used" class="rounded">
+                                        <span>{{ $acc->getComponentTypeLabel() }} — {{ $acc->brand }}@if($acc->inventoryItem)<span class="text-gray-400"> ({{ rtrim(rtrim(number_format($acc->inventoryItem->total_stock, 2), '0'), '.') }})</span>@endif</span>
+                                    </label>
+                                @endforeach
+                                @if($implAccessories->isEmpty())
+                                    <span class="text-xs text-gray-400">No accessory components in the catalog yet — add them under Inventory → Implant Registry.</span>
+                                @endif
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1517,6 +1575,7 @@ function treatmentVisits() {
                 mark_treatment_complete: false,
                 rct_num_canals: '', rct_canal_lengths: [], rct_file_type: '', rct_irrigant: '', rct_obturation_method: '',
                 impl_brand: '', impl_size: '', impl_torque: '', impl_graft_used: '', impl_graft_brand: '', impl_membrane: '', impl_healing_collar: '',
+                implant_fixture_catalog_id: '', implant_components_used: [], implant_lot_number: '',
                 fill_material: '', fill_shade: '',
                 scale_quadrants: '', scale_method: '',
                 ext_type: '', ext_socket: '', ext_suture: false,
@@ -1955,6 +2014,9 @@ function treatmentVisits() {
                 impl_graft_brand:      visit.impl_graft_brand || '',
                 impl_membrane:         visit.impl_membrane || '',
                 impl_healing_collar:   visit.impl_healing_collar || '',
+                implant_fixture_catalog_id: visit.implant_fixture_catalog_id || '',
+                implant_components_used:    [...(visit.implant_components_used || [])],
+                implant_lot_number:         visit.implant_lot_number || '',
                 fill_material:         visit.fill_material || '',
                 fill_shade:            visit.fill_shade || '',
                 scale_quadrants:       visit.scale_quadrants || '',

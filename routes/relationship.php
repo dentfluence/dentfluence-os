@@ -9,6 +9,7 @@ use App\Http\Controllers\Relationship\ReceptionController;
 use App\Http\Controllers\Relationship\RelationshipListController;
 use App\Http\Controllers\Relationship\NotificationController as RelationshipNotificationController;
 use App\Http\Controllers\Relationship\ProfileController;
+use App\Http\Controllers\Relationship\ReferralRewardController;
 use App\Http\Controllers\Relationship\SettingsController as RelationshipSettingsController;
 use App\Http\Controllers\Relationship\TodayController;
 use Illuminate\Support\Facades\Route;
@@ -134,10 +135,14 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     Route::get('/recalls', [RecallPipelineController::class, 'index'])
         ->name('recalls');  // relationship.recalls
 
-    // ── PRE Reception dashboard (Phase 1 · Workstream E, slice E3) ──────────
-    // Reads the Today's Actions projection into Today's Calls / Today's Work.
-    Route::get('/reception', [ReceptionController::class, 'index'])
-        ->name('reception');  // relationship.reception
+    Route::post('/recalls', [RecallPipelineController::class, 'store'])
+        ->name('recalls.store');  // relationship.recalls.store — manual "+ Add Recall"
+
+    // Reception dashboard removed 2026-07-06 (Sumit) — it read the exact same
+    // Today's Actions projection with zero interactivity (no Call drawer, no
+    // date picker), so it was a strictly weaker duplicate of /today. Controller
+    // + view left in place (unreferenced) rather than deleted; ask if you want
+    // those files removed too.
 
     // ── Analytics (Phase 6) ────────────────────────────────────────────────
     Route::get('/analytics', [RelationshipAnalyticsController::class, 'index'])
@@ -151,6 +156,15 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
 
     Route::post('/settings/toggle', [RelationshipSettingsController::class, 'toggleFlag'])
         ->name('settings.toggle');  // relationship.settings.toggle
+
+    Route::post('/settings/referral', [RelationshipSettingsController::class, 'saveReferralConfig'])
+        ->name('settings.referral');  // relationship.settings.referral
+
+    // ── Referral rewards (business config lives in Settings above) ─────────
+    // Two-segment static route — no conflict with the /{id} wildcard below.
+    Route::post('/{id}/referral-reward', [ReferralRewardController::class, 'store'])
+        ->whereNumber('id')
+        ->name('referral-reward.store');  // relationship.referral-reward.store
 
     // ── Profile + Universal Search ─────────────────────────────────────────
     // IMPORTANT: /{id} wildcard must come LAST — all static routes above.

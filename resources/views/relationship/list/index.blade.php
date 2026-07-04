@@ -35,6 +35,9 @@
 @endphp
 
 @section('relationship-content')
+<style>
+    .rl-row:hover { background: #fdf9ff; }
+</style>
 <div style="max-width:1100px;margin:0 auto;padding:8px 4px 40px;">
 
     {{-- Header --}}
@@ -93,7 +96,9 @@
                 </thead>
                 <tbody>
                     @foreach ($relationships as $r)
-                        <tr style="border-top:1px solid #f4f5f7;">
+                        <tr class="rl-row" onclick="window.location='{{ route('relationship.profile', $r->id) }}'"
+                            title="Open {{ $r->name }}'s profile"
+                            style="border-top:1px solid #f4f5f7;cursor:pointer;">
                             <td style="padding:11px 18px;font-weight:600;color:#1f2937;">{{ $r->name }}</td>
                             <td style="padding:11px 18px;color:#4b5563;">{{ $r->phone ?: '—' }}</td>
                             <td style="padding:11px 18px;">
@@ -106,7 +111,7 @@
                             <td style="padding:11px 18px;color:#4b5563;">{{ $r->score ?? 0 }}</td>
                             <td style="padding:11px 18px;color:#6b7280;">{{ optional($r->relationship_since)->format('d M Y') ?? '—' }}</td>
                             <td style="padding:11px 18px;text-align:right;">
-                                <a href="{{ route('relationship.profile', $r->id) }}" style="color:#534AB7;text-decoration:none;font-weight:600;">View →</a>
+                                <span style="color:#534AB7;font-weight:600;">View →</span>
                             </td>
                         </tr>
                     @endforeach

@@ -3,6 +3,10 @@
 namespace App\Services;
 
 use App\Models\BillingPrompt;
+use App\Models\Inventory\ImplantCatalog;
+use App\Models\Inventory\ImplantPlacement;
+use App\Models\Inventory\InventoryLocation;
+use App\Models\Inventory\StockMovement;
 use App\Models\LabCase;
 use App\Models\Patient;
 use App\Models\Task;
@@ -76,6 +80,12 @@ class TreatmentVisitService
             'impl_graft_brand'       => ['nullable', 'string', 'max:100'],
             'impl_membrane'          => ['nullable', 'string', 'max:100'],
             'impl_healing_collar'    => ['nullable', 'string', 'max:100'],
+            // Implant — stock-linked catalog picker (falls back to impl_brand/impl_size
+            // free text above when the fixture isn't in the catalog yet)
+            'implant_fixture_catalog_id'   => ['nullable', 'integer', 'exists:implant_catalog,id'],
+            'implant_components_used'      => ['nullable', 'array'],
+            'implant_components_used.*'    => ['integer', 'exists:implant_catalog,id'],
+            'implant_lot_number'           => ['nullable', 'string', 'max:100'],
             // Filling
             'fill_material'          => ['nullable', 'string', 'max:100'],
             'fill_shade'             => ['nullable', 'string', 'max:50'],
@@ -137,9 +147,10 @@ class TreatmentVisitService
     public function create(Patient $patient, array $data): TreatmentVisit
     {
         $visit = DB::transaction(function () use ($data, $patient) {
-            // Strip visit_items, lab_case, mark_treatment_complete — handled separately
+            // Strip visit_items, lab_case, mark_treatment_complete, implant_* —
+            // these are transient control params, not real treatment_visits columns.
             $visit = $patient->treatmentVisits()->create(
-                array_diff_key($data, ['visit_items' => true, 'lab_case' => true, 'mark_treatment_complete' => true])
+                array_diff_key($data, $this->transientKeys())
             );
 
             // Save visit items and fire billing prompt (F2)
@@ -156,6 +167,9 @@ class TreatmentVisitService
             if (!empty($data['mark_treatment_complete']) && $visit->treatment_plan_id) {
                 $this->completePlanAndQueueRecall($visit->treatment_plan_id, $patient->id, $patient->name);
             }
+
+            // Record implant placement + deduct stock for fixture/components used
+            $this->recordImplantPlacementAndStock($visit, $data);
 
             return $visit;
         });
@@ -180,7 +194,7 @@ class TreatmentVisitService
     public function update(TreatmentVisit $visit, array $data): TreatmentVisit
     {
         DB::transaction(function () use ($data, $visit) {
-            $visit->update(array_diff_key($data, ['visit_items' => true, 'lab_case' => true, 'mark_treatment_complete' => true]));
+            $visit->update(array_diff_key($data, $this->transientKeys()));
 
             // Mark the linked treatment plan as completed if requested
             if (!empty($data['mark_treatment_complete']) && $visit->treatment_plan_id) {
@@ -205,6 +219,10 @@ class TreatmentVisitService
                     $this->saveVisitItems($visit, $data['visit_items']);
                 }
             }
+
+            // Record implant placement + deduct stock for fixture/components used.
+            // Idempotent — re-saving the same visit won't double-deduct (see method docblock).
+            $this->recordImplantPlacementAndStock($visit, $data);
         });
 
         // Phase 5 shadow-run — see the matching comment in create() above.
@@ -215,6 +233,113 @@ class TreatmentVisitService
         }
 
         return $visit->load(['doctor', 'visitItems']);
+    }
+
+    /**
+     * Keys in the validated payload that are transient control params, not
+     * real columns on treatment_visits — stripped before the mass-assignment
+     * create()/update() call and handled by their own dedicated methods.
+     */
+    private function transientKeys(): array
+    {
+        return [
+            'visit_items'                => true,
+            'lab_case'                   => true,
+            'mark_treatment_complete'    => true,
+            'implant_fixture_catalog_id' => true,
+            'implant_components_used'    => true,
+            'implant_lot_number'         => true,
+        ];
+    }
+
+    /**
+     * Record implant placement traceability + deduct stock for the fixture
+     * and any accessory components (healing abutment, cover screw, coping,
+     * scan body, graft) selected from the catalog.
+     *
+     * Idempotent by design:
+     *   - One ImplantPlacement per visit (keyed on treatment_visit_id). Re-saving
+     *     the visit updates traceability fields but never touches the clinical
+     *     `status`, since staff may have already advanced it via the Implant
+     *     Registry (placed → osseointegrating → loaded, etc.).
+     *   - Stock is deducted once per catalog component per visit (guarded via
+     *     the stock_movements reference_type/reference_id pair). Re-saving an
+     *     unchanged visit won't double-deduct; adding a new component on a
+     *     later edit deducts only the newly-added one.
+     *
+     * Deliberately does NOT attempt any "return to stock" / resterilization
+     * automation — reusable components (healing abutment, cover screw, coping,
+     * scan body) are tracked as assets and returned to stock manually via the
+     * existing Inventory screens once cleaned. Keeping this slice to placement
+     * + deduction only.
+     */
+    private function recordImplantPlacementAndStock(TreatmentVisit $visit, array $data): void
+    {
+        if (($data['treatment_name'] ?? null) !== 'Implant') {
+            return;
+        }
+
+        $fixtureCatalogId = $data['implant_fixture_catalog_id'] ?? null;
+        $componentIds     = array_values(array_filter($data['implant_components_used'] ?? []));
+        $hasFreeText      = !empty($data['impl_brand']);
+
+        if (!$fixtureCatalogId && !$hasFreeText && empty($componentIds)) {
+            return; // nothing implant-specific was recorded on this visit
+        }
+
+        // One placement record per visit — traceability fields only.
+        $placement = ImplantPlacement::firstOrNew(['treatment_visit_id' => $visit->id]);
+        $placement->patient_id             = $visit->patient_id;
+        $placement->surgeon_id             = $visit->doctor_id;
+        $placement->tooth_position         = $visit->tooth_number;
+        $placement->surgery_date           = $visit->visit_date;
+        $placement->implant_catalog_id     = $fixtureCatalogId;
+        $placement->implant_brand_freetext = $fixtureCatalogId ? null : ($data['impl_brand'] ?? null);
+        $placement->implant_code_freetext  = $fixtureCatalogId ? null : ($data['impl_size'] ?? null);
+        $placement->lot_number             = $data['implant_lot_number'] ?? $placement->lot_number;
+        if (!$placement->exists) {
+            $placement->status     = 'placed';
+            $placement->created_by = Auth::id();
+        }
+        $placement->save();
+
+        // Deduct stock for the fixture + every accessory component.
+        $catalogIdsToConsume = array_values(array_unique(array_filter(array_merge([$fixtureCatalogId], $componentIds))));
+
+        foreach ($catalogIdsToConsume as $catalogId) {
+            $catalogItem   = ImplantCatalog::with('inventoryItem')->find($catalogId);
+            $inventoryItem = $catalogItem?->inventoryItem;
+            if (!$inventoryItem) {
+                continue; // this component isn't stock-linked yet — nothing to deduct
+            }
+
+            $alreadyMoved = StockMovement::where('inventory_item_id', $inventoryItem->id)
+                ->where('reference_type', TreatmentVisit::class)
+                ->where('reference_id', $visit->id)
+                ->exists();
+            if ($alreadyMoved) {
+                continue;
+            }
+
+            $location = InventoryLocation::where('type', 'implant_drawer')->where('is_active', true)->first()
+                ?? InventoryLocation::where('is_active', true)->first();
+            if (!$location) {
+                continue; // no location configured yet — never block the clinical save on this
+            }
+
+            StockMovement::create([
+                'inventory_item_id' => $inventoryItem->id,
+                'movement_type'     => 'treatment_usage',
+                'qty'               => -1,
+                'from_location_id'  => $location->id,
+                'unit_cost'         => $inventoryItem->average_purchase_price,
+                'total_cost'        => $inventoryItem->average_purchase_price,
+                'reference_type'    => TreatmentVisit::class,
+                'reference_id'      => $visit->id,
+                'notes'             => 'Used in implant placement — ' . $catalogItem->getFullName(),
+                'created_by'        => Auth::id(),
+            ]);
+        }
     }
 
     /**
@@ -347,6 +472,17 @@ class TreatmentVisitService
             'impl_graft_brand'       => $v->impl_graft_brand,
             'impl_membrane'          => $v->impl_membrane,
             'impl_healing_collar'    => $v->impl_healing_collar,
+            'implant_fixture_catalog_id' => $v->implantPlacement?->implant_catalog_id,
+            'implant_lot_number'         => $v->implantPlacement?->lot_number,
+            'implant_components_used'    => $v->implantPlacement
+                ? StockMovement::where('reference_type', TreatmentVisit::class)
+                    ->where('reference_id', $v->id)
+                    ->pluck('inventory_item_id')
+                    ->flatMap(fn($itemId) => ImplantCatalog::where('inventory_item_id', $itemId)
+                        ->where('id', '!=', $v->implantPlacement->implant_catalog_id)
+                        ->pluck('id'))
+                    ->values()->all()
+                : [],
             // Filling
             'fill_material'          => $v->fill_material,
             'fill_shade'             => $v->fill_shade,

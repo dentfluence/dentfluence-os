@@ -92,6 +92,7 @@ $typeColors = [
     'analogue'         => ['bg'=>'#e8f7ee','fg'=>'#1a7a45','label'=>'Analogue'],
     'scan_body'        => ['bg'=>'#fef3e0','fg'=>'#b06a00','label'=>'Scan Body'],
     'coping'           => ['bg'=>'#fdeaea','fg'=>'#b52020','label'=>'Coping'],
+    'cover_screw'      => ['bg'=>'#f0e8f4','fg'=>'#8a3d90','label'=>'Cover Screw'],
     'graft'            => ['bg'=>'#e8f4fb','fg'=>'#1a5ea8','label'=>'Bone Graft'],
     'other'            => ['bg'=>'#f4f4f4','fg'=>'#666','label'=>'Other'],
 ];
@@ -107,6 +108,7 @@ $typeColors = [
                 <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;">Product Code</th>
                 <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;">Dimensions</th>
                 <th style="padding:10px 14px;text-align:right;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;">Price</th>
+                <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;">Stock</th>
                 <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;">Placements</th>
                 <th style="padding:10px 18px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;">Actions</th>
             </tr>
@@ -165,6 +167,27 @@ $typeColors = [
                     @endif
                 </td>
                 <td style="padding:10px 14px;text-align:center;">
+                    @php $stockItem = $item->inventoryItem; @endphp
+                    @if($stockItem)
+                        @php
+                            $qty = $stockItem->total_stock;
+                            $qtyColor = $qty <= 0 ? '#b52020' : ($qty <= $stockItem->minimum_qty ? '#a05c00' : '#1a7a45');
+                        @endphp
+                        <div style="font-family:'Inter',sans-serif;font-size:13px;font-weight:600;color:{{ $qtyColor }};">
+                            {{ rtrim(rtrim(number_format($qty, 2), '0'), '.') }}
+                        </div>
+                        <div style="font-size:10px;color:#9070a0;"
+                             @if($stockItem->usage_mode_changed_at)
+                             title="Changed to {{ $stockItem->is_reusable ? 'reusable' : 'single-use' }} by {{ $stockItem->usageModeChangedBy?->name ?? 'a user' }} on {{ $stockItem->usage_mode_changed_at->format('d M Y') }}"
+                             @endif>
+                            {{ $stockItem->is_reusable ? 'Reusable' : 'Single-use' }}
+                            @if($stockItem->usage_mode_changed_at) <span style="color:#a05c00;">*</span> @endif
+                        </div>
+                    @else
+                        <span style="color:#9a85aa;font-size:12px;">— not linked</span>
+                    @endif
+                </td>
+                <td style="padding:10px 14px;text-align:center;">
                     <span style="background:#f0e8f4;color:#6a0f70;padding:2px 8px;border-radius:10px;
                                  font-size:11px;font-weight:500;font-family:'Inter', sans-serif;">
                         {{ $item->placements_count }}
@@ -181,7 +204,7 @@ $typeColors = [
             </tr>
             @empty
             <tr>
-                <td colspan="8" style="padding:56px;text-align:center;font-family:'Inter',sans-serif;font-size:13px;color:#9070a0;">
+                <td colspan="9" style="padding:56px;text-align:center;font-family:'Inter',sans-serif;font-size:13px;color:#9070a0;">
                     No implant components in catalog yet.<br>
                     <span style="font-size:12px;">Click "Add to Catalog" to register your first component.</span>
                 </td>
@@ -351,7 +374,7 @@ $typeColors = [
                 </div>
                 <div>
                     <label class="imp-label">Component Type *</label>
-                    <select name="component_type" required
+                    <select name="component_type" id="ac-type" required onchange="toggleProductCodeRequired('ac')"
                             style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'Inter',sans-serif;background:#fff;">
                         <option value="fixture">Fixture</option>
                         <option value="abutment">Abutment</option>
@@ -359,13 +382,14 @@ $typeColors = [
                         <option value="analogue">Analogue</option>
                         <option value="scan_body">Scan Body</option>
                         <option value="coping">Coping</option>
+                        <option value="cover_screw">Cover Screw</option>
                         <option value="graft">Bone Graft</option>
                         <option value="other">Other</option>
                     </select>
                 </div>
                 <div>
-                    <label class="imp-label">Product Code</label>
-                    <input type="text" name="product_code" placeholder="Manufacturer's code"
+                    <label class="imp-label" id="ac-code-label">Product Code *</label>
+                    <input type="text" name="product_code" id="ac-code" placeholder="Manufacturer's code — required for fixtures" required
                            style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'Inter', sans-serif;box-sizing:border-box;">
                 </div>
                 <div>
@@ -397,6 +421,21 @@ $typeColors = [
                     <label class="imp-label">Product Photo</label>
                     <input type="file" name="photo" accept="image/*"
                            style="width:100%;padding:6px 0;font-size:12px;font-family:'Inter',sans-serif;">
+                </div>
+                <div>
+                    <label class="imp-label">Minimum Stock Qty</label>
+                    <input type="number" name="minimum_qty" min="0" step="1" value="0"
+                           style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'Inter',sans-serif;box-sizing:border-box;">
+                </div>
+                <div style="grid-column:1/-1;background:#faf5fb;border:1px solid #f0e8f4;border-radius:6px;padding:10px 12px;">
+                    <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+                        <input type="checkbox" name="is_reusable" value="1"
+                               style="accent-color:#6a0f70;margin-top:2px;">
+                        <span style="font-size:12.5px;font-family:'Inter',sans-serif;color:#4e2060;">
+                            <strong>Clinic sterilizes and reuses this component</strong><br>
+                            <span style="color:#9070a0;">Leave unchecked for manufacturer-default single-use (e.g. fixtures, grafts). Check only for off-label reuse (e.g. healing abutment, cover screw, coping, scan body) — this is logged with your name and date.</span>
+                        </span>
+                    </label>
                 </div>
                 <div style="grid-column:1/-1;">
                     <label class="imp-label">Description</label>
@@ -457,7 +496,7 @@ $typeColors = [
                 </div>
                 <div>
                     <label class="imp-label">Component Type *</label>
-                    <select id="ec-type" name="component_type" required
+                    <select id="ec-type" name="component_type" required onchange="toggleProductCodeRequired('ec')"
                             style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'Inter',sans-serif;background:#fff;">
                         <option value="fixture">Fixture</option>
                         <option value="abutment">Abutment</option>
@@ -465,12 +504,13 @@ $typeColors = [
                         <option value="analogue">Analogue</option>
                         <option value="scan_body">Scan Body</option>
                         <option value="coping">Coping</option>
+                        <option value="cover_screw">Cover Screw</option>
                         <option value="graft">Bone Graft</option>
                         <option value="other">Other</option>
                     </select>
                 </div>
                 <div>
-                    <label class="imp-label">Product Code</label>
+                    <label class="imp-label" id="ec-code-label">Product Code</label>
                     <input type="text" id="ec-code" name="product_code"
                            style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'Inter', sans-serif;box-sizing:border-box;">
                 </div>
@@ -504,10 +544,25 @@ $typeColors = [
                     <input type="file" name="photo" accept="image/*"
                            style="width:100%;padding:6px 0;font-size:12px;">
                 </div>
+                <div>
+                    <label class="imp-label">Minimum Stock Qty</label>
+                    <input type="number" id="ec-min-qty" name="minimum_qty" min="0" step="1"
+                           style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'Inter',sans-serif;box-sizing:border-box;">
+                </div>
                 <div style="grid-column:1/-1;">
                     <label class="imp-label">Description</label>
                     <input type="text" id="ec-desc" name="description" maxlength="255"
                            style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'Inter',sans-serif;box-sizing:border-box;">
+                </div>
+                <div style="grid-column:1/-1;background:#faf5fb;border:1px solid #f0e8f4;border-radius:6px;padding:10px 12px;">
+                    <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+                        <input type="checkbox" id="ec-reusable" name="is_reusable" value="1"
+                               style="accent-color:#6a0f70;margin-top:2px;">
+                        <span style="font-size:12.5px;font-family:'Inter',sans-serif;color:#4e2060;">
+                            <strong>Clinic sterilizes and reuses this component</strong><br>
+                            <span id="ec-reusable-audit" style="color:#9070a0;">Changing this is logged with your name and date.</span>
+                        </span>
+                    </label>
                 </div>
                 <div style="grid-column:1/-1;">
                     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
@@ -851,6 +906,17 @@ $typeColors = [
     if (el) el.addEventListener('click', e => { if (e.target === el) el.style.display = 'none'; });
 });
 
+// ── Product code required only for fixtures (the implanted device that a
+// recall/warranty claim actually traces back to) ───────────────────────
+function toggleProductCodeRequired(prefix) {
+    const type  = document.getElementById(prefix + '-type').value;
+    const input = document.getElementById(prefix + '-code');
+    const label = document.getElementById(prefix + '-code-label');
+    const isFixture = type === 'fixture';
+    input.required = isFixture;
+    label.textContent = 'Product Code' + (isFixture ? ' *' : '');
+}
+
 // ── Edit Catalog Item ──────────────────────────────────────────
 function openEditCatalog(item) {
     document.getElementById('ec-brand').value    = item.brand || '';
@@ -864,8 +930,20 @@ function openEditCatalog(item) {
     document.getElementById('ec-desc').value     = item.description || '';
     document.getElementById('ec-active').checked = !!item.is_active;
 
+    const stockItem = item.inventoryItem || null;
+    document.getElementById('ec-reusable').checked = !!(stockItem && stockItem.is_reusable);
+    document.getElementById('ec-min-qty').value     = stockItem ? stockItem.minimum_qty : 0;
+
+    const auditEl = document.getElementById('ec-reusable-audit');
+    if (stockItem && stockItem.usage_mode_changed_at) {
+        auditEl.textContent = 'Last changed ' + new Date(stockItem.usage_mode_changed_at).toLocaleDateString() + '.';
+    } else {
+        auditEl.textContent = 'Changing this is logged with your name and date.';
+    }
+
     const typeSelect = document.getElementById('ec-type');
     for (let opt of typeSelect.options) opt.selected = (opt.value === item.component_type);
+    toggleProductCodeRequired('ec');
 
     document.getElementById('form-edit-catalog').action =
         '/inventory/implants/catalog/' + item.id;

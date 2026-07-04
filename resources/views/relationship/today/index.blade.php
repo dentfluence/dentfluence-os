@@ -28,11 +28,21 @@
     /* ── Today's Actions page styles ── */
     .ta-page-header {
         display: flex;
-        align-items: flex-end;
+        align-items: flex-start;
         justify-content: space-between;
         margin-bottom: 24px;
-        flex-wrap: wrap;
-        gap: 12px;
+        flex-wrap: nowrap;
+        gap: 16px;
+    }
+
+    .ta-page-header-title-col {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: 620px;
+    }
+
+    .ta-page-header-controls-col {
+        flex: 0 0 auto;
     }
 
     .ta-page-title {
@@ -230,17 +240,20 @@
         background: rgba(26, 3, 32, 0.35);
         z-index: 60;
         display: flex;
-        justify-content: flex-end;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
     }
 
     .ta-drawer {
-        width: 420px;
-        max-width: 96vw;
-        height: 100vh;
+        width: 460px;
+        max-width: 100%;
+        max-height: 88vh;
         background: #fff;
         display: flex;
         flex-direction: column;
-        box-shadow: -4px 0 24px rgba(106, 15, 112, 0.12);
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(26, 3, 32, 0.25);
         overflow: hidden;
     }
 
@@ -433,6 +446,101 @@
         margin-bottom: 6px;
     }
 
+    /* ── Category card grid (quick glimpse — each card scrolls internally) ── */
+    #df-content-inner { padding: 10px 24px 8px !important; }
+
+    .ta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .ta-card {
+        background: #fff;
+        border: 1px solid #e8dff0;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        height: 250px;
+        overflow: hidden;
+    }
+
+    .ta-card-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 14px;
+        border-bottom: 1px solid #f0e8f5;
+        background: #faf5fc;
+        flex-shrink: 0;
+    }
+
+    .ta-card-icon {
+        width: 26px; height: 26px; border-radius: 7px; background: #ede4f7;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 13px; color: #6a0f70; flex-shrink: 0;
+    }
+
+    .ta-card-label {
+        font-weight: 600; font-size: 12.5px; color: #1a0320; flex: 1; min-width: 0;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    .ta-card-count {
+        font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 99px;
+        background: #ede4f7; color: #6a0f70; flex-shrink: 0;
+    }
+
+    .ta-card-list { flex: 1; overflow-y: auto; }
+
+    .ta-row {
+        display: flex; align-items: center; gap: 8px;
+        padding: 7px 12px; border-bottom: 1px solid #f8f4fc;
+        transition: background 100ms;
+    }
+
+    .ta-row:last-child { border-bottom: none; }
+    .ta-row:hover { background: #fdf9ff; }
+    .ta-row.ta-row--actioned { opacity: 0.4; }
+
+    .ta-row-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .ta-row-dot--high   { background: #b52020; }
+    .ta-row-dot--medium { background: #a05c00; }
+    .ta-row-dot--low    { background: #1a7a45; }
+
+    .ta-row-body { flex: 1; min-width: 0; }
+    .ta-row-name {
+        font-weight: 600; font-size: 12.5px; color: #1a0320;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ta-row-reason {
+        font-size: 11px; color: #6a5a76;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .ta-row-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
+    .ta-row-btn-call {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 23px; height: 23px; border-radius: 6px; background: #6a0f70;
+        color: #fff; border: none; cursor: pointer; font-size: 11px;
+    }
+    .ta-row-btn-call:hover { background: #4e0a53; }
+
+    .ta-row-btn-open {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 23px; height: 23px; border-radius: 6px; color: #6a0f70;
+        border: 1px solid #dfc5e1; text-decoration: none; font-size: 11px;
+    }
+
+    .ta-row-btn-done {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 23px; height: 23px; color: #1a7a45; font-size: 13px;
+    }
+
+    .ta-empty-footnote { font-size: 11.5px; color: #b3a0b8; text-align: center; padding: 6px 0 2px; }
+
     /* All done banner */
     .ta-all-done {
         background: linear-gradient(135deg, #e8f7ef, #f0faf4);
@@ -458,24 +566,48 @@
 <div
     x-data="todayActions()"
     @keydown.escape.window="closeDrawer()"
-    class="pa-6"
-    style="padding: 28px 28px 60px; max-width: 1100px;"
 >
 
     {{-- ── Page Header ─────────────────────────────────────────────────── --}}
     <div class="ta-page-header">
-        <div>
-            <h1 class="ta-page-title">Today's Actions</h1>
+        <div class="ta-page-header-title-col">
+            <h1 class="ta-page-title">
+                @if($mode === 'today') Today's Actions
+                @elseif($mode === 'future') Upcoming — {{ $selectedDate->format('d M Y') }}
+                @else Completed — {{ $selectedDate->format('d M Y') }}
+                @endif
+            </h1>
             <p class="ta-page-sub">
-                {{ now()->format('l, d F Y') }} &nbsp;·&nbsp;
-                Generated from live patient data
+                @if($mode === 'today')
+                    {{ now()->format('l, d F Y') }} &nbsp;·&nbsp; Generated from live patient data
+                @elseif($mode === 'future')
+                    Preview based on today's data — call, follow-up, and recall dates already on file. A patient could still visit before then and drop off this list.
+                @else
+                    Calls logged as completed on this date, with their outcome. Read-only.
+                @endif
             </p>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;">
+        <div class="ta-page-header-controls-col" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
             <span class="ta-total-badge">
                 <i class="ti ti-list-check"></i>
-                {{ $totalCount }} {{ Str::plural('action', $totalCount) }} today
+                {{ $totalCount }} {{ Str::plural(($mode === 'today' ? 'action' : 'call'), $totalCount) }}
             </span>
+
+            {{-- Date picker — quick chips + a native date input for any day --}}
+            <div style="display:flex;align-items:center;gap:6px;">
+                <a href="{{ route('relationship.today') }}"
+                   style="padding:6px 10px;border:1px solid {{ $mode === 'today' ? '#6a0f70' : '#dfc5e1' }};border-radius:8px;background:{{ $mode === 'today' ? '#f3e8f4' : '#fff' }};color:#6a0f70;font-size:12px;font-weight:600;text-decoration:none;">
+                    Today
+                </a>
+                <a href="{{ route('relationship.today') }}?date={{ $today->copy()->addDay()->toDateString() }}"
+                   style="padding:6px 10px;border:1px solid #dfc5e1;border-radius:8px;background:#fff;color:#6a0f70;font-size:12px;font-weight:600;text-decoration:none;">
+                    Tomorrow
+                </a>
+                <input type="date" value="{{ $selectedDate->toDateString() }}"
+                       onchange="window.location.href = '{{ route('relationship.today') }}?date=' + this.value"
+                       style="padding:6px 10px;border:1px solid #dfc5e1;border-radius:8px;font-size:12px;color:#4e0a53;background:#fff;">
+            </div>
+
             <button
                 onclick="window.location.reload()"
                 style="padding:6px 12px;border:1px solid #dfc5e1;border-radius:8px;background:#fff;color:#6a0f70;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;"
@@ -485,102 +617,98 @@
         </div>
     </div>
 
-    {{-- ── All Done Banner ─────────────────────────────────────────────── --}}
+    {{-- ── All Done / Nothing Found Banner ─────────────────────────────── --}}
     @if($totalCount === 0)
     <div class="ta-all-done">
         <div class="ta-all-done-icon"><i class="ti ti-circle-check"></i></div>
-        <div class="ta-all-done-title">All done — you're caught up!</div>
-        <div class="ta-all-done-sub">No outstanding actions right now. Check back tomorrow morning.</div>
+        @if($mode === 'today')
+            <div class="ta-all-done-title">All done — you're caught up!</div>
+            <div class="ta-all-done-sub">No outstanding actions right now. Check back tomorrow morning.</div>
+        @elseif($mode === 'future')
+            <div class="ta-all-done-title">Nothing scheduled yet for this date</div>
+            <div class="ta-all-done-sub">No recall, follow-up, birthday, or renewal dates fall on {{ $selectedDate->format('d M Y') }}.</div>
+        @else
+            <div class="ta-all-done-title">No completed calls logged</div>
+            <div class="ta-all-done-sub">Nothing was marked completed on {{ $selectedDate->format('d M Y') }}.</div>
+        @endif
     </div>
     @endif
 
-    {{-- ── Category Groups ─────────────────────────────────────────────── --}}
-    @foreach($groups as $catKey => $group)
-    <div
-        class="ta-section {{ $group['count'] === 0 ? 'ta-section--empty' : '' }}"
-        x-data="{ open: {{ $group['count'] > 0 ? 'true' : 'false' }} }"
-    >
-        {{-- Section header — click to collapse --}}
-        <div class="ta-section-header" @click="open = !open">
-            <div class="ta-section-icon">
-                <i class="ti {{ $group['icon'] }}"></i>
-            </div>
-            <span class="ta-section-label">{{ $group['label'] }}</span>
-            <span class="ta-section-count {{ $group['count'] > 0 ? 'ta-section-count--has' : 'ta-section-count--empty' }}">
-                {{ $group['count'] }}
-            </span>
-            <i class="ti ti-chevron-down ta-chevron" :style="open ? 'transform:rotate(180deg)' : ''"></i>
-        </div>
+    {{-- ── Category Cards — grid, one card per active category ──────────── --}}
+    {{-- Each card is a fixed height; its item list scrolls internally. This
+         means the page height depends on the NUMBER of active categories,
+         never on how many items are inside one of them (a category with
+         1,000+ items still fits in one card). Empty categories are skipped
+         entirely rather than shown as dimmed collapsed sections. --}}
+    @php $nonEmptyGroups = collect($groups)->filter(fn($g) => $g['count'] > 0); @endphp
 
-        {{-- Items list --}}
-        <div x-show="open" x-collapse>
-            @if($group['count'] === 0)
-                <div class="ta-empty">
-                    <div class="ta-empty-icon"><i class="ti ti-circle-check"></i></div>
-                    Nothing to action here today.
-                </div>
-            @else
+    @if($nonEmptyGroups->isNotEmpty())
+    <div class="ta-grid">
+        @foreach($nonEmptyGroups as $catKey => $group)
+        <div class="ta-card">
+            <div class="ta-card-head">
+                <div class="ta-card-icon"><i class="ti {{ $group['icon'] }}"></i></div>
+                <span class="ta-card-label">{{ $group['label'] }}</span>
+                <span class="ta-card-count">{{ $group['count'] }}</span>
+            </div>
+            <div class="ta-card-list">
                 @foreach($group['items'] as $idx => $item)
-                @php
-                    $itemId = $catKey . '_' . $idx;
-                    $phone  = $item['meta']['phone'] ?? null;
-                @endphp
+                @php $itemId = $catKey . '_' . $idx; @endphp
                 <div
-                    class="ta-item"
-                    :class="actioned['{{ $itemId }}'] ? 'ta-item--actioned' : ''"
+                    class="ta-row"
+                    :class="actioned['{{ $itemId }}'] ? 'ta-row--actioned' : ''"
                     id="item-{{ $itemId }}"
                 >
-                    {{-- Body --}}
-                    <div class="ta-item-body">
-                        <div class="ta-item-name">{{ $item['patient_name'] }}</div>
-                        <div class="ta-item-reason">{{ $item['reason'] }}</div>
-                        @if($phone)
-                        <div style="font-size:11px;color:#9a7aaa;margin-top:2px;">
-                            <i class="ti ti-phone" style="font-size:10px;"></i>
-                            <a href="tel:{{ $phone }}" style="color:inherit;text-decoration:none;">{{ $phone }}</a>
-                        </div>
-                        @endif
+                    <span class="ta-row-dot ta-row-dot--{{ $item['priority'] }}" title="{{ ucfirst($item['priority']) }} priority"></span>
+
+                    <div class="ta-row-body">
+                        <div class="ta-row-name">{{ $item['patient_name'] }}</div>
+                        <div class="ta-row-reason">{{ $item['reason'] }}</div>
                     </div>
 
-                    {{-- Actions --}}
-                    <div class="ta-item-actions">
-                        {{-- Priority badge --}}
-                        <span class="ta-priority ta-priority--{{ $item['priority'] }}">
-                            {{ $item['priority'] }}
-                        </span>
+                    <div class="ta-row-actions">
+                        @if($mode === 'past')
+                            {{-- Read-only history: show the logged outcome instead of a Call button --}}
+                            @php $outcome = $item['meta']['outcome'] ?? null; @endphp
+                            <span
+                                title="{{ $outcome ? ucwords(str_replace('_', ' ', $outcome)) : 'Completed' }}"
+                                style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:#ede4f7;color:#6a0f70;white-space:nowrap;"
+                            >{{ $outcome ? ucwords(str_replace('_', ' ', $outcome)) : 'Completed' }}</span>
+                        @else
+                            <template x-if="!actioned['{{ $itemId }}']">
+                                <button
+                                    class="ta-row-btn-call"
+                                    title="Log call"
+                                    @click="openDrawer({{ json_encode($item) }}, '{{ $itemId }}')"
+                                >
+                                    <i class="ti ti-phone"></i>
+                                </button>
+                            </template>
 
-                        {{-- Call Workflow button --}}
-                        <template x-if="!actioned['{{ $itemId }}']">
-                            <button
-                                class="ta-btn-call"
-                                @click="openDrawer({{ json_encode($item) }}, '{{ $itemId }}')"
-                            >
-                                <i class="ti ti-phone"></i> Call
-                            </button>
-                        </template>
+                            <template x-if="actioned['{{ $itemId }}']">
+                                <span class="ta-row-btn-done" title="Done"><i class="ti ti-check"></i></span>
+                            </template>
+                        @endif
 
-                        {{-- Done badge (post-action) --}}
-                        <template x-if="actioned['{{ $itemId }}']">
-                            <span class="ta-btn-done">
-                                <i class="ti ti-check"></i> Done
-                            </span>
-                        </template>
-
-                        {{-- Open record link --}}
-                        <a
-                            href="{{ $item['link'] }}"
-                            class="ta-btn-open"
-                            title="Open record"
-                        >
+                        <a href="{{ $item['link'] }}" class="ta-row-btn-open" title="Open record">
                             <i class="ti ti-external-link"></i>
                         </a>
                     </div>
                 </div>
                 @endforeach
-            @endif
+            </div>
         </div>
+        @endforeach
     </div>
-    @endforeach
+    @endif
+
+    @php $emptyCount = collect($groups)->filter(fn($g) => $g['count'] === 0)->count(); @endphp
+    @if($emptyCount > 0)
+    <p class="ta-empty-footnote">
+        {{ $emptyCount }} other {{ Str::plural('category', $emptyCount) }} with nothing to
+        {{ $mode === 'today' ? 'action today' : ($mode === 'future' ? 'show for this date' : 'show') }}.
+    </p>
+    @endif
 
     {{-- ══════════════════════════════════════════════════════════════════
          CALL WORKFLOW DRAWER (Alpine-driven)

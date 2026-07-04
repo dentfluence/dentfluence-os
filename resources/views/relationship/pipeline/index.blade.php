@@ -22,6 +22,11 @@
 @section('page-title', 'Lead Pipeline')
 
 @section('relationship-content')
+<style>
+    .pp-card:active { cursor: grabbing; }
+    .pp-card.pp-dragging { opacity: 0.4; }
+    .pp-drop-zone.pp-drag-over { background: #eef0fb; }
+</style>
 <div style="max-width:1400px;margin:0 auto;padding:8px 4px 40px;">
 
     {{-- Header --}}
@@ -33,18 +38,25 @@
             </p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            {{-- Phase 8 · Slice 2 — working add-lead entry points --}}
-            <a href="{{ route('relationship.pipeline.quick-add') }}"
-               style="background:#fff;color:#534AB7;border:1px solid #EEEDFE;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
+            {{-- Quick Add / New Lead now open as in-page modals instead of separate screens. --}}
+            <button type="button" onclick="ppOpenQuickAdd()"
+               style="background:#fff;color:#534AB7;border:1px solid #EEEDFE;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
                + Quick Add
-            </a>
-            <a href="{{ route('relationship.pipeline.add-lead') }}"
-               style="background:#fff;color:#534AB7;border:1px solid #EEEDFE;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">
+            </button>
+            <button type="button" onclick="ppOpenNewLead()"
+               style="background:#fff;color:#534AB7;border:1px solid #EEEDFE;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
                + New Lead
-            </a>
+            </button>
             {{-- "Legacy PRM board" link removed — Phase 8 PRM Retirement (Slice 5). --}}
         </div>
     </div>
+
+    {{-- Flash banner — quick-add/new-lead forms now submit here instead of a separate page --}}
+    @if (session('success'))
+        <div style="background:#EAF3DE;border:1px solid #c3dba0;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#3B6D11;">
+            {{ session('success') }}
+        </div>
+    @endif
 
     {{-- Headline stats --}}
     <div style="display:flex;gap:22px;flex-wrap:wrap;margin-bottom:20px;color:#6b7280;font-size:13px;">
@@ -74,8 +86,14 @@
                     @endif
                 </div>
 
-                {{-- Cards --}}
-                <div style="padding:10px;display:flex;flex-direction:column;gap:9px;min-height:60px;">
+                {{-- Cards — drag-and-drop Kanban between columns, "Move to…" kept as a
+                     keyboard-friendly fallback for the same action. --}}
+                <div class="pp-drop-zone" data-stage="{{ $col['key'] }}"
+                     ondragover="ppAllowDrop(event)"
+                     ondragenter="ppDragEnterColumn(this)"
+                     ondragleave="ppDragLeaveColumn(this)"
+                     ondrop="ppDrop(event, '{{ $col['key'] }}', this)"
+                     style="padding:10px;display:flex;flex-direction:column;gap:9px;min-height:60px;border-radius:0 0 12px 12px;transition:background 100ms;">
                     @forelse ($col['leads'] as $lead)
                         @php
                             $journeyState = $showJourney && $lead->relationship_id
@@ -86,7 +104,10 @@
                                 && ! in_array($lead->stage, ['converted', 'lost'], true);
                         @endphp
 
-                        <div style="background:#fff;border:1px solid #edeef1;border-radius:10px;padding:11px 12px;">
+                        <div class="pp-card" draggable="true"
+                             ondragstart="ppDragStart(event, {{ $lead->id }}, '{{ $col['key'] }}')"
+                             ondragend="ppDragEnd(event)"
+                             style="background:#fff;border:1px solid #edeef1;border-radius:10px;padding:11px 12px;cursor:grab;">
                             {{-- Name (links to PRE profile when linked) --}}
                             @if ($lead->relationship_id)
                                 <a href="{{ route('relationship.profile', $lead->relationship_id) }}"
@@ -201,6 +222,283 @@
             </div>
         </div>
     </div>
+
+    {{-- ══════════════════════════════════════════════════════════════════
+         Quick Add modal — same 4-field form + validation as before
+         (LeadPipelineController::storeQuickLead), now in-page instead of
+         a separate screen. Auto-reopens if this form's validation failed.
+    ══════════════════════════════════════════════════════════════════ --}}
+    @php $quickAddFailed = $errors->any() && old('form_type') === 'quick_add'; @endphp
+    <div id="ppQuickAddModal" style="display:{{ $quickAddFailed ? 'flex' : 'none' }};position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:210;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:#fff;border-radius:12px;padding:24px;width:440px;max-width:100%;max-height:90vh;overflow-y:auto;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                <h3 style="margin:0;font-size:18px;font-weight:700;color:#1f2937;font-family:'Cormorant Garamond',serif;">New Lead</h3>
+                <button type="button" onclick="ppCloseQuickAdd()" style="border:none;background:none;font-size:18px;color:#9ca3af;cursor:pointer;line-height:1;">&times;</button>
+            </div>
+            <p style="color:#6b7280;font-size:13px;margin:0 0 18px;">Fill in these 4 details and you're done.</p>
+
+            @if ($quickAddFailed)
+                <div style="background:#FDECEC;border:1px solid #f5b5b5;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#8A1F1F;">
+                    @foreach ($errors->all() as $error)
+                        <div>• {{ $error }}</div>
+                    @endforeach
+                </div>
+            @endif
+
+            <form method="POST" action="{{ route('relationship.pipeline.store-quick-lead') }}">
+                @csrf
+                <input type="hidden" name="form_type" value="quick_add">
+
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;font-size:13px;font-weight:600;color:#1f2937;margin-bottom:6px;">
+                        Patient's Name <span style="color:#c0392b;">*</span>
+                    </label>
+                    <input type="text" name="name" value="{{ $quickAddFailed ? old('name') : '' }}" placeholder="e.g. Priya Sharma" required
+                           style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;">
+                </div>
+
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;font-size:13px;font-weight:600;color:#1f2937;margin-bottom:6px;">
+                        Phone Number <span style="color:#c0392b;">*</span>
+                    </label>
+                    <input type="tel" name="phone" value="{{ $quickAddFailed ? old('phone') : '' }}" placeholder="e.g. 9876543210" required
+                           style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;">
+                </div>
+
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;font-size:13px;font-weight:600;color:#1f2937;margin-bottom:6px;">
+                        How did they find us? <span style="color:#c0392b;">*</span>
+                    </label>
+                    <select name="lead_source" required
+                            style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;background:#fff;">
+                        <option value="">— Choose one —</option>
+                        @foreach ($leadSources as $key => $label)
+                            <option value="{{ $key }}" {{ ($quickAddFailed && old('lead_source') === $key) ? 'selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div style="margin-bottom:20px;">
+                    <label style="display:block;font-size:13px;font-weight:600;color:#1f2937;margin-bottom:6px;">
+                        What treatment do they want?
+                    </label>
+                    <select name="treatment"
+                            style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;background:#fff;">
+                        <option value="">— Don't know yet —</option>
+                        @foreach ($treatments as $t)
+                            <option value="{{ $t }}" {{ ($quickAddFailed && old('treatment') === $t) ? 'selected' : '' }}>{{ $t }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div style="display:flex;gap:8px;">
+                    <button type="submit"
+                            style="flex:1;background:#534AB7;color:#fff;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;">
+                        Add to Pipeline
+                    </button>
+                    <button type="button" onclick="ppCloseQuickAdd()"
+                            style="padding:12px 18px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;font-size:14px;color:#6b7280;cursor:pointer;">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+
+            <button type="button" onclick="ppSwitchToNewLead()" style="display:block;width:100%;text-align:center;margin-top:14px;font-size:12px;color:#6b7280;background:none;border:none;cursor:pointer;">
+                Need to add more details? Use the full form →
+            </button>
+        </div>
+    </div>
+
+    {{-- ══════════════════════════════════════════════════════════════════
+         New Lead modal — same full form + validation as before
+         (LeadPipelineController::storeLead), now in-page. Auto-reopens if
+         this form's validation failed. Editing an existing lead still uses
+         its own page (relationship.pipeline.edit-lead) — out of scope here.
+    ══════════════════════════════════════════════════════════════════ --}}
+    @php
+        $newLeadFailed = $errors->any() && old('form_type') === 'new_lead';
+        $inputStyle = 'width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #e5e7eb;border-radius:7px;font-size:13px;background:#fff;';
+    @endphp
+    <div id="ppNewLeadModal" style="display:{{ $newLeadFailed ? 'flex' : 'none' }};position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:210;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:#f7f8fa;border-radius:12px;padding:24px;width:720px;max-width:100%;max-height:90vh;overflow-y:auto;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                <h3 style="margin:0;font-size:18px;font-weight:700;color:#1f2937;font-family:'Cormorant Garamond',serif;">Add New Lead</h3>
+                <button type="button" onclick="ppCloseNewLead()" style="border:none;background:none;font-size:18px;color:#9ca3af;cursor:pointer;line-height:1;">&times;</button>
+            </div>
+            <p style="color:#6b7280;font-size:13px;margin:0 0 18px;">Capture a new patient lead into the pipeline.</p>
+
+            @if ($newLeadFailed)
+                <div style="background:#FDECEC;border:1px solid #f5b5b5;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#8A1F1F;">
+                    @foreach ($errors->all() as $error)
+                        <div>• {{ $error }}</div>
+                    @endforeach
+                </div>
+            @endif
+
+            <form method="POST" action="{{ route('relationship.pipeline.store-lead') }}">
+                @csrf
+                <input type="hidden" name="form_type" value="new_lead">
+
+                {{-- Contact info --}}
+                <div style="background:#fff;border:1px solid #eceef2;border-radius:10px;padding:18px;margin-bottom:14px;">
+                    <div style="font-size:11.5px;font-weight:700;color:#534AB7;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;">Contact Info</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Name <span style="color:#c0392b;">*</span></label>
+                            <input type="text" name="name" value="{{ $newLeadFailed ? old('name') : '' }}" placeholder="Patient's full name" required style="{{ $inputStyle }}">
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Phone <span style="color:#c0392b;">*</span></label>
+                            <input type="tel" name="phone" value="{{ $newLeadFailed ? old('phone') : '' }}" placeholder="e.g. 9876543210" required style="{{ $inputStyle }}">
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Alternate Phone</label>
+                            <input type="tel" name="alt_phone" value="{{ $newLeadFailed ? old('alt_phone') : '' }}" placeholder="Optional" style="{{ $inputStyle }}">
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Email</label>
+                            <input type="email" name="email" value="{{ $newLeadFailed ? old('email') : '' }}" placeholder="Optional" style="{{ $inputStyle }}">
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Source --}}
+                <div style="background:#fff;border:1px solid #eceef2;border-radius:10px;padding:18px;margin-bottom:14px;">
+                    <div style="font-size:11.5px;font-weight:700;color:#534AB7;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;">Where did this lead come from?</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Lead Source</label>
+                            <select name="lead_source" style="{{ $inputStyle }}">
+                                <option value="">— Select channel —</option>
+                                @foreach ($leadSources as $key => $label)
+                                    <option value="{{ $key }}" {{ ($newLeadFailed && old('lead_source') === $key) ? 'selected' : '' }}>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Referred By <small style="color:#9ca3af;">(if Referral)</small></label>
+                            <input type="text" name="referred_by" value="{{ $newLeadFailed ? old('referred_by') : '' }}" placeholder="Referring patient or doctor name" style="{{ $inputStyle }}">
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Treatment + value --}}
+                <div style="background:#fff;border:1px solid #eceef2;border-radius:10px;padding:18px;margin-bottom:14px;">
+                    <div style="font-size:11.5px;font-weight:700;color:#534AB7;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;">Treatment Interest &amp; Value</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Primary Treatment</label>
+                            <select name="treatment" style="{{ $inputStyle }}">
+                                <option value="">— Select treatment —</option>
+                                @foreach ($treatments as $t)
+                                    <option value="{{ $t }}" {{ ($newLeadFailed && old('treatment') === $t) ? 'selected' : '' }}>{{ $t }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Secondary Treatment</label>
+                            <select name="secondary_treatment" style="{{ $inputStyle }}">
+                                <option value="">— None —</option>
+                                @foreach ($treatments as $t)
+                                    <option value="{{ $t }}" {{ ($newLeadFailed && old('secondary_treatment') === $t) ? 'selected' : '' }}>{{ $t }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Estimated Value (₹)</label>
+                            <input type="number" name="lead_value" value="{{ $newLeadFailed ? old('lead_value') : '' }}" placeholder="e.g. 45000" min="0" step="500" style="{{ $inputStyle }}">
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Urgency</label>
+                            <select name="urgency" style="{{ $inputStyle }}">
+                                @foreach (['low' => 'Low', 'medium' => 'Medium', 'high' => 'High'] as $val => $lbl)
+                                    <option value="{{ $val }}" {{ ($newLeadFailed ? old('urgency', 'medium') : 'medium') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Pipeline --}}
+                <div style="background:#fff;border:1px solid #eceef2;border-radius:10px;padding:18px;margin-bottom:14px;">
+                    <div style="font-size:11.5px;font-weight:700;color:#534AB7;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;">Pipeline Stage &amp; Assignment</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Pipeline Stage</label>
+                            <select name="stage" style="{{ $inputStyle }}">
+                                @foreach ($stages as $key => $info)
+                                    <option value="{{ $key }}" {{ ($newLeadFailed ? old('stage', 'new_lead') : 'new_lead') === $key ? 'selected' : '' }}>{{ $info['label'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Assigned To</label>
+                            <select name="assigned_to" style="{{ $inputStyle }}">
+                                <option value="">— Unassigned —</option>
+                                @foreach ($staff as $s)
+                                    <option value="{{ $s }}" {{ ($newLeadFailed && old('assigned_to') === $s) ? 'selected' : '' }}>{{ $s }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Follow-up Date</label>
+                            <input type="date" name="followup_date" value="{{ $newLeadFailed ? old('followup_date') : '' }}" style="{{ $inputStyle }}">
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Preferred Time</label>
+                            <select name="followup_time" style="{{ $inputStyle }}">
+                                <option value="">— Any time —</option>
+                                @foreach ($timeSlots as $slot)
+                                    <option value="{{ $slot }}" {{ ($newLeadFailed && old('followup_time') === $slot) ? 'selected' : '' }}>{{ $slot }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Contact preference + notes --}}
+                <div style="background:#fff;border:1px solid #eceef2;border-radius:10px;padding:18px;margin-bottom:20px;">
+                    <div style="font-size:11.5px;font-weight:700;color:#534AB7;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;">Contact Preference &amp; Notes</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Preferred Contact Method</label>
+                            <select name="preferred_contact" style="{{ $inputStyle }}">
+                                @foreach (['call' => 'Call', 'whatsapp' => 'WhatsApp', 'email' => 'Email'] as $val => $lbl)
+                                    <option value="{{ $val }}" {{ ($newLeadFailed ? old('preferred_contact', 'call') : 'call') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Preferred Language</label>
+                            <select name="language" style="{{ $inputStyle }}">
+                                <option value="">— Any —</option>
+                                @foreach ($languages as $lang)
+                                    <option value="{{ $lang }}" {{ ($newLeadFailed && old('language') === $lang) ? 'selected' : '' }}>{{ $lang }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:12px;color:#4b5563;margin-bottom:5px;">Notes</label>
+                        <textarea name="notes" rows="3" placeholder="Any context about this lead — what they asked, concerns, etc." style="{{ $inputStyle }}resize:vertical;">{{ $newLeadFailed ? old('notes') : '' }}</textarea>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:10px;">
+                    <button type="submit" style="background:#534AB7;color:#fff;border:none;border-radius:8px;padding:11px 26px;font-size:14px;font-weight:600;cursor:pointer;">
+                        Add to Pipeline
+                    </button>
+                    <button type="button" onclick="ppCloseNewLead()" style="padding:11px 20px;font-size:14px;color:#6b7280;background:none;border:none;cursor:pointer;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -223,6 +521,11 @@ function ppMoveStage(leadId, select) {
         return;
     }
 
+    ppSubmitMoveStage(leadId, newStage, () => { select.value = ''; });
+}
+
+/** Shared POST to /pipeline/{id}/move — used by both the dropdown and drag-and-drop. */
+function ppSubmitMoveStage(leadId, newStage, onFail) {
     fetch(ppBaseUrl + '/' + leadId + '/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': ppCsrf(), 'Accept': 'application/json' },
@@ -234,10 +537,58 @@ function ppMoveStage(leadId, select) {
                 window.location.reload();
             } else {
                 alert(data.message || 'Could not move the lead. Please try again.');
-                select.value = '';
+                if (onFail) onFail();
             }
         })
-        .catch(() => { alert('Network error. Please try again.'); select.value = ''; });
+        .catch(() => { alert('Network error. Please try again.'); if (onFail) onFail(); });
+}
+
+// ── Drag-and-drop Kanban — grab a card, drop it on another column ──────────
+let ppDraggedLeadId = null;
+let ppDraggedFromStage = null;
+let ppDraggedEl = null;
+
+function ppDragStart(e, leadId, fromStage) {
+    ppDraggedLeadId = leadId;
+    ppDraggedFromStage = fromStage;
+    ppDraggedEl = e.currentTarget;
+    ppDraggedEl.classList.add('pp-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    // Firefox requires setData to be called for drag to start.
+    e.dataTransfer.setData('text/plain', String(leadId));
+}
+
+function ppDragEnd() {
+    if (ppDraggedEl) ppDraggedEl.classList.remove('pp-dragging');
+    ppDraggedLeadId = null;
+    ppDraggedFromStage = null;
+    ppDraggedEl = null;
+}
+
+function ppAllowDrop(e) {
+    e.preventDefault();
+}
+
+function ppDragEnterColumn(zoneEl) {
+    zoneEl.classList.add('pp-drag-over');
+}
+
+function ppDragLeaveColumn(zoneEl) {
+    zoneEl.classList.remove('pp-drag-over');
+}
+
+function ppDrop(e, toStage, zoneEl) {
+    e.preventDefault();
+    zoneEl.classList.remove('pp-drag-over');
+
+    if (!ppDraggedLeadId || toStage === ppDraggedFromStage) {
+        ppDragEnd();
+        return;
+    }
+
+    const leadId = ppDraggedLeadId;
+    ppDragEnd();
+    ppSubmitMoveStage(leadId, toStage);
 }
 
 let ppActiveLeadId = null;
@@ -282,6 +633,34 @@ function ppSubmitActivity() {
         })
         .catch(() => alert('Network error. Please try again.'));
 }
+
+function ppOpenQuickAdd() {
+    document.getElementById('ppQuickAddModal').style.display = 'flex';
+}
+function ppCloseQuickAdd() {
+    document.getElementById('ppQuickAddModal').style.display = 'none';
+}
+function ppOpenNewLead() {
+    document.getElementById('ppNewLeadModal').style.display = 'flex';
+}
+function ppCloseNewLead() {
+    document.getElementById('ppNewLeadModal').style.display = 'none';
+}
+function ppSwitchToNewLead() {
+    ppCloseQuickAdd();
+    ppOpenNewLead();
+}
+
+// Close on Escape / backdrop click — same convenience as the Activity modal.
+document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    ppCloseQuickAdd();
+    ppCloseNewLead();
+});
+['ppQuickAddModal', 'ppNewLeadModal'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', function (e) { if (e.target === el) el.style.display = 'none'; });
+});
 
 function ppConvert(leadId) {
     if (!confirm('Convert this lead to a patient? This creates a new patient record.')) return;

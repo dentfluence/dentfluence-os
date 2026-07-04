@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class HrStaffController extends Controller
 {
@@ -280,6 +281,8 @@ class HrStaffController extends Controller
             'whatsapp_number'      => 'nullable|string|max:20',
             'alternate_phone'      => 'nullable|string|max:20',
             'alternate_email'      => 'nullable|email|max:255',
+            // Admin password reset (optional — leave blank to keep current password)
+            'new_password' => ['nullable', 'confirmed', Password::defaults()],
         ]);
 
         // Update user
@@ -290,6 +293,11 @@ class HrStaffController extends Controller
             'role'        => $request->role,
             'designation' => $request->designation,
         ]);
+
+        // Admin-only password reset: only touch the password if a new one was submitted.
+        if ($request->filled('new_password') && auth()->user()?->role === 'admin') {
+            $user->update(['password' => Hash::make($request->new_password)]);
+        }
 
         // Update or create HR profile
         $user->hrProfile()->updateOrCreate(

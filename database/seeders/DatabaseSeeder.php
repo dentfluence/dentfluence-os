@@ -11,6 +11,8 @@ class DatabaseSeeder extends Seeder
         $this->call([
             UserSeeder::class,
             ClinicUsersSeeder::class,
+            RolePermissionSeeder::class,       // Roles, modules & default permission matrix (required for Roles & Permissions page)
+            RoleBillingPermissionSeeder::class, // Per-role billing action limits (depends on RolePermissionSeeder)
             CmsEduSeeder::class,
             InventoryDemoSeeder::class, // Dental inventory demo data
             MasterDemoSeeder::class,    // 10 patients + appointments + consultations + visits + plans + finance

@@ -1986,6 +1986,7 @@ class InventoryController extends Controller
         $tab = $request->get('tab', 'catalog');
 
         $catalog = ImplantCatalog::withCount('placements')
+            ->with(['inventoryItem.stocks', 'inventoryItem.usageModeChangedBy'])
             ->orderBy('brand')
             ->orderBy('system')
             ->orderBy('component_type')
@@ -1996,7 +1997,7 @@ class InventoryController extends Controller
             ->paginate(30)->withQueryString();
 
         $brands = ImplantCatalog::distinct('brand')->pluck('brand');
-        $types  = ['fixture','abutment','healing_abutment','analogue','scan_body','coping','graft','other'];
+        $types  = ['fixture','abutment','healing_abutment','analogue','scan_body','coping','cover_screw','graft','other'];
 
         // Load all patients for the placement form dropdown
         $patients = \App\Models\Patient::orderBy('name')
@@ -2011,27 +2012,61 @@ class InventoryController extends Controller
         $data = $request->validate([
             'brand'          => 'required|string|max:100',
             'system'         => 'nullable|string|max:100',
-            'component_type' => 'required|in:fixture,abutment,healing_abutment,analogue,scan_body,coping,graft,other',
-            'product_code'   => 'nullable|string|max:100',
+            'component_type' => 'required|in:fixture,abutment,healing_abutment,analogue,scan_body,coping,cover_screw,graft,other',
+            // Fixtures are the implanted device — product_code is what a recall or
+            // warranty claim traces back to (alongside lot_number on the placement),
+            // so it's required for that type only. Other components rarely have a
+            // real manufacturer code, so it stays optional for them.
+            'product_code'   => ['required_if:component_type,fixture', 'nullable', 'string', 'max:100'],
             'description'    => 'nullable|string|max:255',
             'diameter_mm'    => 'nullable|string|max:30',
             'length_mm'      => 'nullable|string|max:30',
             'platform'       => 'nullable|string|max:60',
             'material'       => 'nullable|string|max:80',
             'unit_price'     => 'nullable|numeric|min:0',
+            'is_reusable'    => 'boolean',
+            'minimum_qty'    => 'nullable|numeric|min:0',
             'photo'          => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
         if ($request->hasFile('photo')) {
-            $path = $request->file('photo')->store('implants/catalog', 'public');
-            $data['photo_path'] = $path;
+            $data['photo_path'] = $request->file('photo')->store('implants/catalog', 'public');
         }
 
+        $isReusable = $request->boolean('is_reusable'); // default false = manufacturer single-use IFU
+        $minimumQty = (float) ($data['minimum_qty'] ?? 0);
+        unset($data['photo'], $data['is_reusable'], $data['minimum_qty']);
         $data['created_by'] = auth()->id();
-        unset($data['photo']);
 
-        ImplantCatalog::create($data);
-        return back()->with('success', 'Implant component added to catalog.');
+        DB::transaction(function () use ($data, $isReusable, $minimumQty) {
+            $catalogItem = ImplantCatalog::create($data);
+
+            // Pair with a real stock-tracked inventory item. This is what makes
+            // quantity for healing abutments / cover screws / copings / scan bodies
+            // real for the first time, instead of the catalog being reference-only.
+            $inventoryItem = InventoryItem::create([
+                'item_code'               => 'IMPL-' . str_pad(InventoryItem::where('item_code', 'like', 'IMPL-%')->count() + 1, 4, '0', STR_PAD_LEFT),
+                'product_name'            => $catalogItem->getFullName(),
+                'brand'                   => $catalogItem->brand,
+                'inventory_behavior'      => $isReusable ? 'reusable' : 'consumable',
+                'usage_type'              => $isReusable ? 'multiple_use' : 'single_use',
+                'is_reusable'             => $isReusable,
+                'sterilization_required'  => $isReusable,
+                'purchase_unit'           => 'piece',
+                'consumption_unit'        => 'piece',
+                'pieces_per_unit'         => 1,
+                'last_purchase_price'     => $catalogItem->unit_price ?? 0,
+                'average_purchase_price'  => $catalogItem->unit_price ?? 0,
+                'minimum_qty'             => $minimumQty,
+                'minimum_order_qty'       => 1,
+                'is_active'               => true,
+                'created_by'              => auth()->id(),
+            ]);
+
+            $catalogItem->update(['inventory_item_id' => $inventoryItem->id]);
+        });
+
+        return back()->with('success', 'Implant component added to catalog with stock tracking.');
     }
 
     public function updateCatalogItem(Request $request, ImplantCatalog $catalogItem)
@@ -2039,8 +2074,8 @@ class InventoryController extends Controller
         $data = $request->validate([
             'brand'          => 'required|string|max:100',
             'system'         => 'nullable|string|max:100',
-            'component_type' => 'required|in:fixture,abutment,healing_abutment,analogue,scan_body,coping,graft,other',
-            'product_code'   => 'nullable|string|max:100',
+            'component_type' => 'required|in:fixture,abutment,healing_abutment,analogue,scan_body,coping,cover_screw,graft,other',
+            'product_code'   => ['required_if:component_type,fixture', 'nullable', 'string', 'max:100'],
             'description'    => 'nullable|string|max:255',
             'diameter_mm'    => 'nullable|string|max:30',
             'length_mm'      => 'nullable|string|max:30',
@@ -2048,6 +2083,8 @@ class InventoryController extends Controller
             'material'       => 'nullable|string|max:80',
             'unit_price'     => 'nullable|numeric|min:0',
             'is_active'      => 'boolean',
+            'is_reusable'    => 'boolean',
+            'minimum_qty'    => 'nullable|numeric|min:0',
             'photo'          => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
@@ -2059,9 +2096,64 @@ class InventoryController extends Controller
         }
 
         $data['is_active'] = $request->boolean('is_active');
-        unset($data['photo']);
+        $isReusable = $request->boolean('is_reusable');
+        $minimumQty = (float) ($data['minimum_qty'] ?? 0);
+        unset($data['photo'], $data['is_reusable'], $data['minimum_qty']);
 
-        $catalogItem->update($data);
+        DB::transaction(function () use ($catalogItem, $data, $isReusable, $minimumQty) {
+            $catalogItem->update($data);
+            $catalogItem->refresh();
+
+            $inventoryItem = $catalogItem->inventoryItem;
+
+            if (!$inventoryItem) {
+                // Legacy catalog row created before stock-linking existed — backfill now.
+                $inventoryItem = InventoryItem::create([
+                    'item_code'               => 'IMPL-' . str_pad(InventoryItem::where('item_code', 'like', 'IMPL-%')->count() + 1, 4, '0', STR_PAD_LEFT),
+                    'product_name'            => $catalogItem->getFullName(),
+                    'brand'                   => $catalogItem->brand,
+                    'inventory_behavior'      => $isReusable ? 'reusable' : 'consumable',
+                    'usage_type'              => $isReusable ? 'multiple_use' : 'single_use',
+                    'is_reusable'             => $isReusable,
+                    'sterilization_required'  => $isReusable,
+                    'purchase_unit'           => 'piece',
+                    'consumption_unit'        => 'piece',
+                    'pieces_per_unit'         => 1,
+                    'last_purchase_price'     => $catalogItem->unit_price ?? 0,
+                    'average_purchase_price'  => $catalogItem->unit_price ?? 0,
+                    'minimum_qty'             => $minimumQty,
+                    'minimum_order_qty'       => 1,
+                    'is_active'               => true,
+                    'created_by'              => auth()->id(),
+                ]);
+                $catalogItem->update(['inventory_item_id' => $inventoryItem->id]);
+                return;
+            }
+
+            // Only stamp the audit trail when the reusable/single-use call actually changes —
+            // this is what makes the override traceable (who + when) without a separate flag.
+            $usageModeChanged = (bool) $inventoryItem->is_reusable !== $isReusable;
+
+            $inventoryItem->product_name = $catalogItem->getFullName();
+            $inventoryItem->brand        = $catalogItem->brand;
+            $inventoryItem->minimum_qty  = $minimumQty;
+            if (!empty($data['unit_price'])) {
+                $inventoryItem->last_purchase_price    = $data['unit_price'];
+                $inventoryItem->average_purchase_price = $data['unit_price'];
+            }
+
+            if ($usageModeChanged) {
+                $inventoryItem->is_reusable            = $isReusable;
+                $inventoryItem->inventory_behavior     = $isReusable ? 'reusable' : 'consumable';
+                $inventoryItem->usage_type             = $isReusable ? 'multiple_use' : 'single_use';
+                $inventoryItem->sterilization_required = $isReusable;
+                $inventoryItem->usage_mode_changed_by   = auth()->id();
+                $inventoryItem->usage_mode_changed_at   = now();
+            }
+
+            $inventoryItem->save();
+        });
+
         return back()->with('success', 'Component updated.');
     }
 

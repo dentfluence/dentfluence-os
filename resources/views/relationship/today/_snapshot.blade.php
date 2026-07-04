@@ -21,7 +21,7 @@
 <div style="background:#fff;border:1px solid #eceef2;border-radius:12px;padding:16px 18px;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
         <span style="font-weight:700;color:#1f2937;font-size:14px;">Today's Actions</span>
-        <a href="{{ route('relationship.reception') }}" style="color:#534AB7;text-decoration:none;font-size:12.5px;font-weight:600;">Open reception →</a>
+        <a href="{{ route('relationship.today') }}" style="color:#534AB7;text-decoration:none;font-size:12.5px;font-weight:600;">Open Today's Actions →</a>
     </div>
 
     <div style="display:flex;gap:22px;flex-wrap:wrap;margin-bottom:12px;">

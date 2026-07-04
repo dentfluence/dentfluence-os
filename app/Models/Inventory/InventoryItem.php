@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class InventoryItem extends Model
 {
@@ -21,6 +22,7 @@ class InventoryItem extends Model
         'minimum_qty', 'minimum_order_qty',
         'has_expiry', 'expiry_alert_days',
         'is_reusable', 'tracking_type', 'max_usage_count', 'sterilization_required',
+        'usage_mode_changed_by', 'usage_mode_changed_at',
         'is_active', 'created_by',
         // Product Master fields
         'sub_type_id', 'variant_id',
@@ -50,6 +52,7 @@ class InventoryItem extends Model
         'alternative_brands'     => 'array',
         'treatment_tags'         => 'array',
         'last_purchase_date'     => 'date',
+        'usage_mode_changed_at'  => 'datetime',
     ];
 
     /* ── Relationships ── */
@@ -97,6 +100,20 @@ class InventoryItem extends Model
             'inventory_item_id',
             'vendor_id'
         )->withPivot('is_primary', 'is_alternate')->withTimestamps();
+    }
+
+    /**
+     * The implant_catalog entry this item backs, if any (e.g. a healing
+     * abutment or cover screw). Most inventory items have none.
+     */
+    public function implantCatalogEntry(): HasOne
+    {
+        return $this->hasOne(ImplantCatalog::class, 'inventory_item_id');
+    }
+
+    public function usageModeChangedBy(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\User::class, 'usage_mode_changed_by');
     }
 
     /* ── Scopes ── */

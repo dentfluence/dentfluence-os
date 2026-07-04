@@ -450,6 +450,38 @@ class RecallEngineService
         $this->summary['birthday_anniversary'] = $count;
     }
 
+    // ── Manual entry point (staff-initiated, via PRE Recall Pipeline "+ Add Recall") ─
+
+    /**
+     * Create a single recall for one patient, initiated by a staff member —
+     * as opposed to the 6 automated triggers above. Uses the same
+     * createQueueItem() defaults (SLA, status, channel) so it behaves
+     * identically to a system-generated recall everywhere it's read
+     * (this board, Today's Actions, analytics) — just tagged 'manual' and
+     * attributed to the staff member who added it.
+     */
+    public function createManual(Patient $patient, array $data): CommunicationQueue
+    {
+        $item = $this->createQueueItem([
+            'patient_id'      => $patient->id,
+            'person_name'     => $patient->name,
+            'phone'           => $patient->phone,
+            'whatsapp_number' => $patient->phone,
+            'purpose'         => 'recall_manual',
+            'comm_type'       => 'existing_patient',
+            'priority'        => $data['priority'] ?? 'medium',
+            'note'            => $data['note'] ?: 'Manually added recall.',
+            'source_engine'   => 'recall',
+            'tags'            => ['recall', 'manual'],
+            'follow_up_date'  => $data['follow_up_date'] ?? today(),
+            'created_by'      => \Illuminate\Support\Facades\Auth::id(),
+        ]);
+
+        $this->logRecallActivity($patient, 'manual');
+
+        return $item;
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /**

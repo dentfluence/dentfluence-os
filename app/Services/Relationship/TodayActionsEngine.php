@@ -111,7 +111,7 @@ class TodayActionsEngine
     {
         $cutoff = Carbon::now()->subHours(24);
 
-        return Lead::with('relationship:id,name')
+        return Lead::query()
             ->where('stage', 'new_enquiry')
             ->where('created_at', '>=', $cutoff)
             ->orderByDesc('created_at')
@@ -148,7 +148,7 @@ class TodayActionsEngine
 
     private function leadFollowups(): array
     {
-        return Lead::with('relationship:id,name')
+        return Lead::query()
             ->whereNotNull('followup_date')
             ->where('followup_date', '<=', Carbon::today())
             ->whereNotIn('stage', ['converted', 'lost'])
@@ -241,8 +241,8 @@ class TodayActionsEngine
                 'patient_id'      => $item->patient_id,
                 'lead_id'         => null,
                 'relationship_id' => $item->patient?->relationship_id ?? null,
-                'reason'          => 'Recall due — last visit was over 6 months ago',
-                'priority'        => 'medium',
+                'reason'          => $this->recallReason($item),
+                'priority'        => $item->priority ?? 'medium',
                 'suggested_action'=> 'Call and book a recall appointment',
                 'link'            => $item->patient_id
                     ? route('patients.show', $item->patient_id)
@@ -255,6 +255,33 @@ class TodayActionsEngine
                 ],
             ])
             ->toArray();
+    }
+
+    /**
+     * Reason text for a recall queue item — prefers the actual note stored
+     * when the recall was queued (each automated trigger writes a specific,
+     * useful note; manual recalls carry whatever the staff member typed),
+     * falling back to a purpose-based label only if no note exists.
+     * Previously this was a single hardcoded "last visit was over 6 months
+     * ago" string for every recall regardless of why it was actually queued
+     * — including manually-added ones, which made their notes invisible.
+     */
+    private function recallReason(CommunicationQueue $item): string
+    {
+        if ($item->note) {
+            return $item->note;
+        }
+
+        return match ($item->purpose) {
+            'recall_no_visit'      => 'Recall due — no visit in 6+ months',
+            'recall_approved_plan' => 'Approved treatment plan — no appointment booked',
+            'recall_post_op'       => 'Post-op follow-up due',
+            'recall_lab_received'  => 'Lab work ready — no appointment booked',
+            'recall_7day_followup' => '7-day post-treatment follow-up',
+            'recall_birthday'      => 'Birthday re-engagement',
+            'recall_manual'        => 'Manually added recall',
+            default                => 'Recall due',
+        };
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -387,7 +414,7 @@ class TodayActionsEngine
             $date  = Carbon::today()->addDays($offset);
             $mmdd  = $date->format('m-d');
 
-            $patients = Patient::with('relationship:id,name')
+            $patients = Patient::query()
                 ->where('dob_unknown', false)
                 ->whereRaw("DATE_FORMAT(date_of_birth, '%m-%d') = ?", [$mmdd])
                 ->limit($this->limit())
@@ -550,6 +577,278 @@ class TodayActionsEngine
                     'treatment_name' => $visit->treatment_name,
                     'procedure'      => $visit->procedure,
                     'visit_date'     => $visit->visit_date?->format('d M Y'),
+                ],
+            ])
+            ->toArray();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // DATE-PICKER MODES — added so Today's Actions can look at a date other
+    // than today. These reuse the exact same due-date fields the categories
+    // above already read (followup_date, follow_up_date, next_recall_date,
+    // date_of_birth, end_date) — no schema change, no new "schedule" table.
+    // Categories that only make sense "right now" (new enquiries, yesterday's
+    // missed calls, lab-ready, pending estimates, payment reminders) are
+    // deliberately NOT included here — they're state checks, not
+    // schedulable-by-date items.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Forward-looking preview for a single future date. Items keep the same
+     * shape as generate() so the existing card grid + Call drawer work
+     * unchanged — this is a preview, not a stored schedule, so it reflects
+     * whatever is true right now for that date (e.g. a patient could still
+     * visit before then and drop off the recall list).
+     */
+    public function generateUpcoming(Carbon $date): array
+    {
+        $groups = [];
+
+        $categories = [
+            'recall_calls'          => fn () => $this->recallCallsOnDate($date),
+            'lead_followups'        => fn () => $this->leadFollowupsOnDate($date),
+            'opportunities'         => fn () => $this->opportunitiesOnDate($date),
+            'appointment_reminders' => fn () => $this->appointmentsOnDate($date),
+            'membership_renewals'   => fn () => $this->membershipOnDate($date),
+            'birthdays'             => fn () => $this->birthdaysOnDate($date),
+        ];
+
+        foreach ($categories as $key => $resolver) {
+            try {
+                $groups[$key] = $resolver();
+            } catch (\Throwable $e) {
+                Log::warning("TodayActionsEngine::generateUpcoming: category [{$key}] failed", [
+                    'error' => $e->getMessage(), 'date' => $date->toDateString(),
+                ]);
+                $groups[$key] = [];
+            }
+        }
+
+        return $groups;
+    }
+
+    /**
+     * Retrospective view for a past date — reads completed communication_queue
+     * rows (status = closed) whose completion (updated_at) falls on that day,
+     * with their logged outcome. Read-only in the view (no Call button —
+     * it already happened).
+     */
+    public function generatePast(Carbon $date): array
+    {
+        $items = CommunicationQueue::with('patient:id,name,phone,relationship_id')
+            ->where('status', 'closed')
+            ->whereDate('updated_at', $date)
+            ->orderByDesc('updated_at')
+            ->limit($this->limit())
+            ->get()
+            ->map(function (CommunicationQueue $item) {
+                $outcome  = $item->outcome ?? 'completed';
+                $priority = match ($outcome) {
+                    'appointment_booked', 'treatment_started'  => 'low',
+                    'not_interested', 'unreachable', 'lost'    => 'high',
+                    default                                     => 'medium',
+                };
+
+                return [
+                    'category'        => 'completed_calls',
+                    'patient_name'    => $item->patient?->name ?? $item->person_name ?? 'Unknown',
+                    'patient_id'      => $item->patient_id,
+                    'lead_id'         => null,
+                    'relationship_id' => $item->patient?->relationship_id ?? null,
+                    'reason'          => ucwords(str_replace('_', ' ', $outcome)) . ' — ' . ($item->purpose ?? 'call'),
+                    'priority'        => $priority,
+                    'suggested_action'=> null,
+                    'link'            => $item->patient_id ? route('patients.show', $item->patient_id) : '#',
+                    'meta'            => [
+                        'phone'         => $item->patient?->phone ?? $item->phone,
+                        'outcome'       => $outcome,
+                        'source_engine' => $item->source_engine,
+                        'completed_at'  => $item->updated_at?->format('d M Y H:i'),
+                    ],
+                ];
+            })
+            ->toArray();
+
+        return ['completed_calls' => $items];
+    }
+
+    // ── Date-mode helpers (mirror the "today" category methods above, but
+    //    matched to an exact given date instead of "today or overdue") ──────
+
+    /**
+     * Same source as recallCalls() (today mode) — the communication_queue call
+     * list, not patients.next_recall_date (a different, clinical-only field).
+     * Fixed 2026-07-06: this previously read next_recall_date, so any recall
+     * actually queued in communication_queue — including manually-added ones
+     * from the Recall Pipeline's "+ Add Recall" — never showed up here even
+     * though it was correctly on the Recall Pipeline board for that date.
+     */
+    private function recallCallsOnDate(Carbon $date): array
+    {
+        return CommunicationQueue::with('patient:id,name,phone,relationship_id')
+            ->where(function ($q) {
+                $q->where('purpose', 'like', '%recall%')
+                  ->orWhere('purpose', 'recall_due')
+                  ->orWhere('purpose', 'recall_birthday');
+            })
+            ->where('status', 'pending')
+            ->whereDate('follow_up_date', $date)
+            ->orderBy('follow_up_date')
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (CommunicationQueue $item) => [
+                'category'        => 'recall_calls',
+                'patient_name'    => $item->patient?->name ?? $item->person_name ?? 'Unknown',
+                'patient_id'      => $item->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $item->patient?->relationship_id ?? null,
+                'reason'          => $this->recallReason($item),
+                'priority'        => $item->priority ?? 'medium',
+                'suggested_action'=> 'Call and book a recall appointment',
+                'link'            => $item->patient_id
+                    ? route('patients.show', $item->patient_id)
+                    : '#',
+                'meta'            => [
+                    'phone'          => $item->patient?->phone ?? $item->phone,
+                    'comm_queue_id'  => $item->id,
+                    'purpose'        => $item->purpose,
+                    'follow_up_date' => $item->follow_up_date?->format('d M Y'),
+                ],
+            ])
+            ->toArray();
+    }
+
+    private function leadFollowupsOnDate(Carbon $date): array
+    {
+        return Lead::query()
+            ->whereDate('followup_date', $date)
+            ->whereNotIn('stage', ['converted', 'lost'])
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (Lead $lead) => [
+                'category'        => 'lead_followups',
+                'patient_name'    => $lead->name,
+                'patient_id'      => null,
+                'lead_id'         => $lead->id,
+                'relationship_id' => $lead->relationship_id ?? null,
+                'reason'          => 'Follow-up scheduled for ' . $date->format('d M Y'),
+                'priority'        => 'medium',
+                'suggested_action'=> 'Call and update lead stage',
+                'link'            => $lead->relationship_id
+                    ? route('relationship.profile', $lead->relationship_id)
+                    : route('relationship.pipeline'),
+                'meta'            => [
+                    'phone'         => $lead->phone,
+                    'stage'         => $lead->stage,
+                    'followup_date' => $lead->followup_date->format('d M Y'),
+                    'treatment'     => $lead->treatment,
+                ],
+            ])
+            ->toArray();
+    }
+
+    private function opportunitiesOnDate(Carbon $date): array
+    {
+        return TreatmentOpportunity::with('patient:id,name,phone,relationship_id')
+            ->whereDate('follow_up_date', $date)
+            ->whereNotIn('status', ['completed', 'declined'])
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (TreatmentOpportunity $opp) => [
+                'category'        => 'opportunities',
+                'patient_name'    => $opp->patient?->name ?? 'Unknown',
+                'patient_id'      => $opp->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $opp->patient?->relationship_id ?? null,
+                'reason'          => 'Opportunity follow-up scheduled for ' . $date->format('d M Y'),
+                'priority'        => 'medium',
+                'suggested_action'=> 'Call and confirm if patient wants to proceed',
+                'link'            => route('patients.show', $opp->patient_id),
+                'meta'            => [
+                    'phone'          => $opp->patient?->phone,
+                    'treatment'      => $opp->label ?? null,
+                    'status'         => $opp->status,
+                    'follow_up_date' => $opp->follow_up_date->format('d M Y'),
+                    'value'          => $opp->estimated_value ?? null,
+                ],
+            ])
+            ->toArray();
+    }
+
+    private function appointmentsOnDate(Carbon $date): array
+    {
+        return Appointment::with('patient:id,name,phone,relationship_id')
+            ->whereDate('appointment_date', $date)
+            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (Appointment $appt) => [
+                'category'        => 'appointment_reminders',
+                'patient_name'    => $appt->patient?->name ?? $appt->patient_name ?? 'Unknown',
+                'patient_id'      => $appt->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $appt->patient?->relationship_id ?? null,
+                'reason'          => 'Appointment on ' . $date->format('d M Y'),
+                'priority'        => 'medium',
+                'suggested_action'=> 'Call to confirm attendance',
+                'link'            => $appt->patient_id ? route('patients.show', $appt->patient_id) : '#',
+                'meta'            => [
+                    'phone'            => $appt->patient?->phone,
+                    'appointment_date' => $appt->appointment_date->format('d M Y'),
+                    'time'             => $appt->appointment_time ?? null,
+                ],
+            ])
+            ->toArray();
+    }
+
+    private function membershipOnDate(Carbon $date): array
+    {
+        return FinancePatientMembership::with('patient:id,name,phone,relationship_id')
+            ->where('status', 'active')
+            ->whereDate('end_date', $date)
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (FinancePatientMembership $m) => [
+                'category'        => 'membership_renewals',
+                'patient_name'    => $m->patient?->name ?? 'Unknown',
+                'patient_id'      => $m->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $m->patient?->relationship_id ?? null,
+                'reason'          => 'Membership expires ' . $date->format('d M Y'),
+                'priority'        => 'medium',
+                'suggested_action'=> 'Call to renew membership before expiry',
+                'link'            => route('patients.show', $m->patient_id),
+                'meta'            => [
+                    'phone'    => $m->patient?->phone,
+                    'end_date' => $m->end_date->format('d M Y'),
+                    'plan'     => $m->plan?->name ?? null,
+                ],
+            ])
+            ->toArray();
+    }
+
+    private function birthdaysOnDate(Carbon $date): array
+    {
+        $mmdd = $date->format('m-d');
+
+        return Patient::query()
+            ->where('dob_unknown', false)
+            ->whereRaw("DATE_FORMAT(date_of_birth, '%m-%d') = ?", [$mmdd])
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (Patient $patient) => [
+                'category'        => 'birthdays',
+                'patient_name'    => $patient->name,
+                'patient_id'      => $patient->id,
+                'lead_id'         => null,
+                'relationship_id' => $patient->relationship_id ?? null,
+                'reason'          => 'Birthday on ' . $date->format('d M Y'),
+                'priority'        => 'low',
+                'suggested_action'=> 'Call to wish a happy birthday and check in',
+                'link'            => route('patients.show', $patient->id),
+                'meta'            => [
+                    'phone'         => $patient->phone,
+                    'date_of_birth' => $patient->date_of_birth?->format('d M Y'),
                 ],
             ])
             ->toArray();

@@ -562,6 +562,113 @@
             </div>
         @endif
 
+        {{-- Referral panel — who referred this patient + who they've referred --}}
+        @if ($referredByPatient || $patient->referrer_name || $referralsMade->isNotEmpty())
+            <div style="background:#fff;border:1px solid rgba(185,92,183,0.14);border-radius:4px;padding:20px;margin-bottom:16px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+                    <span style="font-size:11px;font-weight:700;color:#6a0f70;letter-spacing:0.06em;text-transform:uppercase;">Referral</span>
+                    @if ($referralsMade->isNotEmpty())
+                        <span style="background:#f0e6f2;color:#6a0f70;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;">
+                            {{ $referralsMade->count() }} referred · ₹{{ number_format($referralValue, 0) }} lifetime
+                        </span>
+                    @endif
+                </div>
+
+                @if ($referredByPatient)
+                    <p style="font-size:12.5px;color:#7a6884;margin:0 0 14px;">
+                        Referred by
+                        <a href="{{ route('patients.show', $referredByPatient->id) }}" style="color:#6a0f70;font-weight:600;text-decoration:none;">{{ $referredByPatient->name }}</a>
+                        (#{{ $referredByPatient->id }})
+                    </p>
+                @elseif ($patient->referrer_name)
+                    <p style="font-size:12.5px;color:#7a6884;margin:0 0 14px;">
+                        Referred by {{ $patient->referrer_name }}@if($patient->referrer_mobile) · {{ $patient->referrer_mobile }}@endif
+                        @if($patient->referrer_type)
+                            <span style="font-size:11px;background:#f0e6f2;color:#6a0f70;padding:1px 6px;border-radius:99px;margin-left:4px;">{{ ucfirst($patient->referrer_type) }}</span>
+                        @endif
+                    </p>
+                @endif
+
+                @if ($referralsMade->isNotEmpty())
+                    <p style="font-size:12.5px;color:#7a6884;margin:0 0 10px;">Patients referred by {{ $patient->name }}:</p>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        @foreach ($referralsMade as $rp)
+                            @php $reward = $referralRewards->get($rp->id); @endphp
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid rgba(185,92,183,0.12);border-radius:4px;padding:10px 14px;flex-wrap:wrap;">
+                                <div style="min-width:0;">
+                                    <div style="font-size:14px;font-weight:600;color:#1a0a24;">{{ $rp->name }}</div>
+                                    <div style="font-size:12px;color:#7a6884;">
+                                        #{{ $rp->id }}@if ($rp->phone) · {{ $rp->phone }}@endif
+                                    </div>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                                    @if ($reward)
+                                        <span style="font-size:11.5px;font-weight:600;color:#1a7a45;background:#e8f7ef;padding:4px 10px;border-radius:99px;">
+                                            Rewarded ₹{{ number_format($reward->amount, 0) }} · {{ $reward->created_at->format('d M Y') }}
+                                        </span>
+                                    @elseif ($referralRewardEnabled && $referralPaidPatientIds->contains($rp->id))
+                                        <form action="{{ route('relationship.referral-reward.store', $relationship->id) }}" method="POST" style="margin:0;">
+                                            @csrf
+                                            <input type="hidden" name="referrer_patient_id" value="{{ $patient->id }}">
+                                            <input type="hidden" name="referred_patient_id" value="{{ $rp->id }}">
+                                            <button type="submit"
+                                                    style="border:none;background:#6a0f70;color:#fff;font-size:12px;font-weight:600;padding:7px 12px;border-radius:3px;cursor:pointer;"
+                                                    onclick="return confirm('Credit ₹{{ number_format($referralRewardAmount, 0) }} to {{ $patient->name }}\'s wallet for referring {{ $rp->name }}?');">
+                                                Reward ₹{{ number_format($referralRewardAmount, 0) }}
+                                            </button>
+                                        </form>
+                                    @elseif ($referralRewardEnabled)
+                                        <span style="font-size:11.5px;color:#9a7aaa;">Not yet eligible — no paid invoice</span>
+                                    @endif
+                                    <a href="{{ route('patients.show', $rp->id) }}"
+                                       style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#f0e6f2;color:#6a0f70;font-size:12.5px;font-weight:600;border-radius:3px;text-decoration:none;">
+                                        Open record
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                                    </a>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        @endif
+
+        {{-- Extended family panel — patient_links, separate from the household (shared-phone) panel above --}}
+        @if ($extendedFamily->isNotEmpty())
+            <div style="background:#fff;border:1px solid rgba(185,92,183,0.14);border-radius:4px;padding:20px;margin-bottom:16px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                    <span style="font-size:11px;font-weight:700;color:#6a0f70;letter-spacing:0.06em;text-transform:uppercase;">Family</span>
+                    <span style="background:#f0e6f2;color:#6a0f70;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;">{{ $extendedFamily->count() }} linked</span>
+                </div>
+                <p style="font-size:12.5px;color:#7a6884;margin:0 0 14px;">
+                    Family members linked to {{ $patient->name }} (separate patient records, own phone):
+                </p>
+
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    @foreach ($extendedFamily as $fp)
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid rgba(185,92,183,0.12);border-radius:4px;padding:10px 14px;">
+                            <div style="min-width:0;">
+                                <div style="font-size:14px;font-weight:600;color:#1a0a24;">
+                                    {{ $fp->name }}
+                                    @if (!empty($fp->pivot->relationship))
+                                        <span style="font-size:10.5px;font-weight:600;color:#6a0f70;background:#f5eef9;padding:1px 7px;border-radius:999px;margin-left:6px;">{{ $fp->pivot->relationship }}</span>
+                                    @endif
+                                </div>
+                                <div style="font-size:12px;color:#7a6884;">
+                                    #{{ $fp->id }}@if ($fp->phone) · {{ $fp->phone }}@endif
+                                </div>
+                            </div>
+                            <a href="{{ route('patients.show', $fp->id) }}"
+                               style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#f0e6f2;color:#6a0f70;font-size:12.5px;font-weight:600;border-radius:3px;text-decoration:none;">
+                                Open record
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                            </a>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
         {{-- Summary card —  clinical detail stays in patient show, just a bridge here --}}
         <div style="background:#fff;border:1px solid rgba(185,92,183,0.14);border-radius:4px;padding:28px;text-align:center;">
             <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="1.5" style="margin:0 auto 14px;display:block;opacity:0.6;">
@@ -597,6 +704,24 @@
                 <div style="font-size:15px;font-weight:600;color:{{ $recallStatus === 'overdue' ? '#b52020' : '#1a0a24' }};">
                     {{ ucfirst($recallStatus ?? 'None') }}
                 </div>
+            </div>
+            <div style="background:#fff;border:1px solid rgba(185,92,183,0.12);border-radius:4px;padding:16px;">
+                <div style="font-size:10px;font-weight:700;color:#9a7aaa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Review</div>
+                @if ($latestReview && $latestReview->rating !== null)
+                    <div style="font-size:15px;font-weight:600;color:{{ $latestReview->isPositive() ? '#1a7a45' : '#b52020' }};">
+                        {{ $latestReview->rating }}★ left
+                    </div>
+                @elseif ($latestReview)
+                    <div style="font-size:15px;font-weight:600;color:#1a0a24;">Requested, no reply</div>
+                @else
+                    <form action="{{ route('communication.reviews.send') }}" method="POST" style="margin:0;">
+                        @csrf
+                        <input type="hidden" name="patient_id" value="{{ $patient->id }}">
+                        <button type="submit" style="border:none;background:none;padding:0;font-size:13.5px;font-weight:600;color:#6a0f70;cursor:pointer;text-decoration:underline;">
+                            Never asked — Send request
+                        </button>
+                    </form>
+                @endif
             </div>
         </div>
 

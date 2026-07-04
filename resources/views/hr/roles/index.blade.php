@@ -40,7 +40,7 @@
                 Doctors
             </div>
             @foreach($rolesByCategory['doctor'] as $role)
-            <div @click="selectRole({{ $role->id }}, '{{ $role->name }}', '{{ $role->slug }}')"
+            <div @click="selectRole({{ $role->id }}, '{{ $role->name }}', '{{ $role->slug }}', {{ $role->is_system ? 'true' : 'false' }})"
                  :class="selectedRoleId === {{ $role->id }} ? 'role-item active' : 'role-item'"
                  style="cursor:pointer;">
                 <div style="display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:1px solid #f5f0f8; transition:background 120ms;">
@@ -68,7 +68,7 @@
                 Staff
             </div>
             @foreach($rolesByCategory['staff'] as $role)
-            <div @click="selectRole({{ $role->id }}, '{{ $role->name }}', '{{ $role->slug }}')"
+            <div @click="selectRole({{ $role->id }}, '{{ $role->name }}', '{{ $role->slug }}', {{ $role->is_system ? 'true' : 'false' }})"
                  :class="selectedRoleId === {{ $role->id }} ? 'role-item active' : 'role-item'"
                  style="cursor:pointer;">
                 <div style="display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:1px solid #f5f0f8; transition:background 120ms;">
@@ -98,15 +98,25 @@
                     <span x-text="selectedRoleName || '— select a role'"
                           style="font-size:14px; font-weight:600; color:#1a0320; margin-left:8px;"></span>
                 </div>
-                <button x-show="selectedRoleId" @click="savePermissions()" :disabled="saving"
-                        style="display:inline-flex; align-items:center; gap:6px; padding:7px 16px; background:#6a0f70; color:#fff; border:none; border-radius:6px; font-size:12.5px; font-weight:500; cursor:pointer;"
-                        :style="saving ? 'opacity:.6;cursor:not-allowed;' : ''">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                        <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-                    </svg>
-                    <span x-text="saving ? 'Saving…' : 'Save Changes'"></span>
-                </button>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button x-show="selectedRoleId && !selectedRoleIsSystem" @click="deleteRole()" :disabled="deleting"
+                            style="display:inline-flex; align-items:center; gap:6px; padding:7px 14px; background:#fff; color:#c0392b; border:1px solid #f0c8c8; border-radius:6px; font-size:12.5px; font-weight:500; cursor:pointer;"
+                            :style="deleting ? 'opacity:.6;cursor:not-allowed;' : ''">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                        <span x-text="deleting ? 'Deleting…' : 'Delete Role'"></span>
+                    </button>
+                    <button x-show="selectedRoleId" @click="savePermissions()" :disabled="saving"
+                            style="display:inline-flex; align-items:center; gap:6px; padding:7px 16px; background:#6a0f70; color:#fff; border:none; border-radius:6px; font-size:12.5px; font-weight:500; cursor:pointer;"
+                            :style="saving ? 'opacity:.6;cursor:not-allowed;' : ''">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        <span x-text="saving ? 'Saving…' : 'Save Changes'"></span>
+                    </button>
+                </div>
             </div>
 
             {{-- No role selected state --}}
@@ -255,11 +265,13 @@
 <script>
 function rolesManager() {
     return {
-        selectedRoleId:   null,
-        selectedRoleName: '',
-        selectedRoleSlug: '',
+        selectedRoleId:       null,
+        selectedRoleName:     '',
+        selectedRoleSlug:     '',
+        selectedRoleIsSystem: false,
         permissions:      {},
         saving:           false,
+        deleting:         false,
         savedMsg:         false,
         showNewRoleModal: false,
         newRole:          { name:'', description:'', color:'#6a0f70', category:'staff' },
@@ -268,14 +280,15 @@ function rolesManager() {
 
         init() {
             @if($roles->isNotEmpty())
-            this.selectRole({{ $roles->first()->id }}, '{{ $roles->first()->name }}', '{{ $roles->first()->slug }}');
+            this.selectRole({{ $roles->first()->id }}, '{{ $roles->first()->name }}', '{{ $roles->first()->slug }}', {{ $roles->first()->is_system ? 'true' : 'false' }});
             @endif
         },
 
-        selectRole(id, name, slug) {
-            this.selectedRoleId   = id;
-            this.selectedRoleName = name;
-            this.selectedRoleSlug = slug;
+        selectRole(id, name, slug, isSystem) {
+            this.selectedRoleId       = id;
+            this.selectedRoleName     = name;
+            this.selectedRoleSlug     = slug;
+            this.selectedRoleIsSystem = !!isSystem;
             this.savedMsg         = false;
             this.permissions      = this.allPermissions[id] ?? {};
         },
@@ -308,6 +321,27 @@ function rolesManager() {
                 alert('Error saving permissions: ' + e.message);
             } finally {
                 this.saving = false;
+            }
+        },
+
+        async deleteRole() {
+            if (this.selectedRoleIsSystem) return; // guarded server-side too, but never even try
+            if (!confirm(`Delete the role "${this.selectedRoleName}"? Any users currently on it will need to be reassigned a role separately.`)) return;
+
+            this.deleting = true;
+            try {
+                const res = await fetch(`/settings/roles/${this.selectedRoleId}`, {
+                    method:  'DELETE',
+                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                });
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    throw new Error(body.message || ('Server error ' + res.status));
+                }
+                window.location.reload();
+            } catch(e) {
+                alert('Error deleting role: ' + e.message);
+                this.deleting = false;
             }
         },
 

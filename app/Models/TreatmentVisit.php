@@ -181,6 +181,12 @@ class TreatmentVisit extends Model
         return $this->hasMany(LabCase::class, 'treatment_visit_id');
     }
 
+    /** Implant placement recorded for this visit, if the treatment was "Implant". */
+    public function implantPlacement(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\App\Models\Inventory\ImplantPlacement::class, 'treatment_visit_id');
+    }
+
     /** Clinical files captured during this visit (Phase 9). */
     public function clinicalFiles(): HasMany
     {

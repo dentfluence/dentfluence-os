@@ -15,7 +15,7 @@ class ImplantCatalog extends Model
     protected $table = 'implant_catalog';
 
     protected $fillable = [
-        'brand', 'system', 'component_type', 'product_code',
+        'brand', 'system', 'component_type', 'inventory_item_id', 'product_code',
         'description', 'diameter_mm', 'length_mm', 'platform',
         'material', 'photo_path', 'unit_price', 'is_active', 'created_by',
     ];
@@ -30,6 +30,16 @@ class ImplantCatalog extends Model
     public function placements(): HasMany
     {
         return $this->hasMany(ImplantPlacement::class, 'implant_catalog_id');
+    }
+
+    /**
+     * The stock-tracked inventory_items row backing this catalog entry.
+     * Nullable — legacy/demo rows may not have one yet; the controller
+     * backfills it the next time the catalog entry is edited.
+     */
+    public function inventoryItem(): BelongsTo
+    {
+        return $this->belongsTo(InventoryItem::class, 'inventory_item_id');
     }
 
     public function createdBy(): BelongsTo
@@ -48,6 +58,7 @@ class ImplantCatalog extends Model
             'analogue'         => 'Analogue',
             'scan_body'        => 'Scan Body',
             'coping'           => 'Coping',
+            'cover_screw'      => 'Cover Screw',
             'graft'            => 'Bone Graft',
             default            => 'Other',
         };

@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Relationship;
 use App\Http\Controllers\Controller;
 use App\Models\Activity;
 use App\Models\Appointment;
+use App\Models\AppSetting;
 use App\Models\Invoice;
 use App\Models\LeadActivity;
 use App\Models\Patient;
 use App\Models\PatientNote;
+use App\Models\ReferralReward;
 use App\Models\Relationship;
+use App\Models\Review;
 use App\Models\Task;
 use App\Models\TreatmentOpportunity;
 use App\Models\TreatmentVisit;
@@ -60,6 +63,64 @@ class ProfileController extends Controller
             ->orderBy('id')
             ->get();
         $isHousehold = $householdPatients->count() > 1;
+
+        // ── Referral chain (read-only surface — data already existed on Patient) ──
+        $referredByPatient = null;
+        $referralsMade     = collect();
+        $referralValue     = 0;
+
+        if ($patient) {
+            $referredByPatient = $patient->referred_patient_id
+                ? Patient::withoutGlobalScope(\App\Models\Scopes\BranchScope::class)->find($patient->referred_patient_id)
+                : null;
+
+            $referralsMade = Patient::withoutGlobalScope(\App\Models\Scopes\BranchScope::class)
+                ->where('referred_patient_id', $patient->id)
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            if ($referralsMade->isNotEmpty()) {
+                $referralValue = Invoice::whereIn('patient_id', $referralsMade->pluck('id'))
+                    ->whereIn('status', ['paid', 'partially_paid'])
+                    ->sum('paid_amount');
+            }
+        }
+
+        // ── Referral reward state — who's already been rewarded, who's eligible ──
+        $referralRewardEnabled = AppSetting::get('referral.reward_enabled', '0') === '1';
+        $referralRewardAmount  = (float) AppSetting::get('referral.reward_amount', '500');
+        $referralRewards        = collect();
+        $referralPaidPatientIds = collect();
+
+        if ($referralsMade->isNotEmpty()) {
+            $referralRewards = ReferralReward::whereIn('referred_patient_id', $referralsMade->pluck('id'))
+                ->get()
+                ->keyBy('referred_patient_id');
+
+            $referralPaidPatientIds = Invoice::whereIn('patient_id', $referralsMade->pluck('id'))
+                ->whereIn('status', ['paid', 'partially_paid'])
+                ->distinct()
+                ->pluck('patient_id');
+        }
+
+        // ── Extended family (patient_links) — beyond the household panel ─────────
+        // Household above = patients sharing one relationship/phone. patient_links
+        // covers family who are separate patient records with their own phone
+        // (e.g. a spouse or adult child with an independent number).
+        $extendedFamily = collect();
+        if ($patient) {
+            $householdIds   = $householdPatients->pluck('id');
+            $extendedFamily = $patient->linkedPatients()->get()
+                ->merge($patient->linkedByPatients()->get())
+                ->unique('id')
+                ->reject(fn ($p) => $householdIds->contains($p->id))
+                ->values();
+        }
+
+        // ── Review status (Phase B reviews module — surfaced here for the first time) ──
+        $latestReview = $patient
+            ? Review::where('patient_id', $patient->id)->latest('requested_at')->first()
+            : null;
 
         // ── Summary stats ──────────────────────────────────────────────────────
 
@@ -165,6 +226,15 @@ class ProfileController extends Controller
             'patient',
             'householdPatients',
             'isHousehold',
+            'referredByPatient',
+            'referralsMade',
+            'referralValue',
+            'referralRewardEnabled',
+            'referralRewardAmount',
+            'referralRewards',
+            'referralPaidPatientIds',
+            'extendedFamily',
+            'latestReview',
             'lifetimeRevenue',
             'totalVisits',
             'pendingTreatment',
@@ -210,16 +280,20 @@ class ProfileController extends Controller
             $initials = strtoupper(substr($words[0], 0, 1) . (isset($words[1]) ? substr($words[1], 0, 1) : ''));
 
             return [
-                'id'       => $r->id,
-                'name'     => $r->name,
-                'phone'    => $r->phone,
-                'email'    => $r->email,
-                'source'   => $r->source,
-                'score'    => $r->score,
-                'status'   => $r->status,
-                'initials' => $initials,
-                'meta'     => collect([$r->phone, $r->email])->filter()->implode(' · '),
-                'link'     => route('relationship.profile', $r->id),
+                'id'         => $r->id,
+                'name'       => $r->name,
+                'phone'      => $r->phone,
+                'email'      => $r->email,
+                'source'     => $r->source,
+                'score'      => $r->score,
+                'status'     => $r->status,
+                'initials'   => $initials,
+                'meta'       => collect([$r->phone, $r->email])->filter()->implode(' · '),
+                'link'       => route('relationship.profile', $r->id),
+                // Additive — lets callers (e.g. the Recall Pipeline's "+ Add Recall"
+                // patient picker) know whether this relationship has an actual
+                // Patient record to recall, without a second query.
+                'patient_id' => $r->patient?->id,
             ];
         }));
     }

@@ -55,15 +55,17 @@ use Illuminate\View\View;
  * spine here — the legacy logReply() never did, a pre-existing gap this fixes.
  *
  * Slice 4 shipped a write-parity harness (retired with PRM in Slice 5, since
- * there is no longer a second engine to compare against — see
- * under_review/phase8_prm_retirement/app/Console/Commands/PrmWriteParity.php).
+ * there is no longer a second engine to compare against — the harness lived
+ * at app/Console/Commands/PrmWriteParity.php).
  * Slice 5 retired PrmController/routes/views and repointed every live link
  * that used to point at them (sidebar tabs, Today's Actions, huddle overdue
  * widget, opportunities board, communication move-to-pipeline flows) at this
- * controller instead. `journey.authoritative`, `nav.pre_primary`, and
- * `prm.secondary` still default off — flipping them is a separate, explicit
- * decision (journey.authoritative in particular changes what drives the
- * pipeline state machine, not just navigation).
+ * controller instead. The PRM board was hard-deleted 2026-07-04 (it had been
+ * sitting in under_review/ since Slice 5) along with the now-pointless
+ * `nav.pre_primary`/`prm.secondary` flags — Relationships (PRE) is the only
+ * nav entry now, no toggle needed. `journey.authoritative` still defaults
+ * off — flipping it is a separate, explicit decision (it changes what
+ * drives the pipeline state machine, not just navigation).
  *
  * Routes: GET  /relationship/pipeline                     [relationship.pipeline]
  *         POST /relationship/pipeline/{id}/move           [relationship.pipeline.move]
@@ -184,14 +186,14 @@ class LeadPipelineController extends Controller
         $activeCount   = $leads->whereNotIn('stage', ['converted', 'lost'])->count();
         $pipelineValue = (float) $leads->whereNotIn('stage', ['converted', 'lost'])->sum('lead_value');
 
-        return view('relationship.pipeline.index', [
+        return view('relationship.pipeline.index', array_merge($this->formData(), [
             'columns'               => $columns,
             'totalLeads'            => $leads->count(),
             'activeCount'           => $activeCount,
             'pipelineValue'         => $pipelineValue,
             'showJourney'           => $showJourney,
             'journeyByRelationship' => $journeyByRelationship,
-        ]);
+        ]));
     }
 
     // ── Phase 8 · Slice 1 — core lifecycle writes ─────────────────────────────
