@@ -47,6 +47,38 @@ class IdentityResolver
     }
 
     /**
+     * Best existing match for a PATIENT, or null. Read-only.
+     *
+     * Unlike match(), this only reuses a Relationship that has no patient
+     * attached yet (i.e. it's still just a Lead's inquiry record) — a
+     * household commonly shares one phone number, so two genuinely distinct
+     * patients must never be matched to each other here. Clinic ID (the
+     * Patient record itself) is the only guaranteed-unique identity for a
+     * patient; phone/email are contact details, not identity. Mirrors
+     * RelationshipEngine::findOrCreateForPatient().
+     *
+     * @param array{phone?:?string, email?:?string} $data
+     */
+    public function matchAvailableForPatient(array $data): ?Relationship
+    {
+        $phone = $data['phone'] ?? null;
+        $email = $data['email'] ?? null;
+
+        if ($phone) {
+            $byPhone = Relationship::byPhone($phone)->whereDoesntHave('patient')->first();
+            if ($byPhone) {
+                return $byPhone;
+            }
+        }
+
+        if ($email) {
+            return Relationship::byEmail($email)->whereDoesntHave('patient')->first();
+        }
+
+        return null;
+    }
+
+    /**
      * Other relationships that MIGHT be the same person as $relationship,
      * based on a shared exact phone or email. For the dedup review queue.
      * Never includes $relationship itself. Empty if it has no phone/email.

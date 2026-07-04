@@ -60,7 +60,9 @@ class RelationshipBackfillService
             ->select('id', 'phone', 'email')
             ->chunkById(500, function ($rows) use (&$patWouldMatch, &$patWouldCreate) {
                 foreach ($rows as $r) {
-                    $this->resolver->match(['phone' => $r->phone ?: null, 'email' => $r->email])
+                    // Patients only match an UNCLAIMED relationship (a Lead's
+                    // inquiry) — never another patient's, even same phone/email.
+                    $this->resolver->matchAvailableForPatient(['phone' => $r->phone ?: null, 'email' => $r->email])
                         ? $patWouldMatch++ : $patWouldCreate++;
                 }
             });

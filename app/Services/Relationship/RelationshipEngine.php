@@ -59,13 +59,55 @@ class RelationshipEngine
         }
 
         // 3. Create a new Relationship record
+        return $this->createRelationship($data);
+    }
+
+    /**
+     * Find a Relationship suitable for linking a NEW patient, or create one.
+     *
+     * Patients are never matched to another patient's Relationship just
+     * because they share a phone/email — a household commonly shares one
+     * registered contact number (e.g. a parent's number used for the whole
+     * family), and clinic ID (the Patient record itself) is the only
+     * guaranteed-unique identity for a patient. An existing Relationship is
+     * only reused if it has no patient attached yet — meaning it's still
+     * just a Lead's inquiry record — which preserves the Lead → Patient
+     * conversion journey. Otherwise a dedicated new Relationship is created.
+     *
+     * @param array $data  Must include 'name'. May include 'phone', 'email', 'source'.
+     */
+    public function findOrCreateForPatient(array $data): Relationship
+    {
+        $phone = $data['phone'] ?? null;
+        $email = $data['email'] ?? null;
+
+        if ($phone) {
+            $relationship = Relationship::byPhone($phone)->whereDoesntHave('patient')->first();
+            if ($relationship) {
+                return $relationship;
+            }
+        }
+
+        if ($email) {
+            $relationship = Relationship::byEmail($email)->whereDoesntHave('patient')->first();
+            if ($relationship) {
+                return $relationship;
+            }
+        }
+
+        return $this->createRelationship($data);
+    }
+
+    /** Create a brand-new Relationship record from lead/patient data. */
+    private function createRelationship(array $data): Relationship
+    {
         return Relationship::create([
-            'name'              => $data['name'] ?? 'Unknown',
-            'phone'             => $phone,
-            'email'             => $email,
-            'source'            => $data['source'] ?? null,
-            'status'            => 'active',
-            'score'             => 0,
+            'name'               => $data['name'] ?? 'Unknown',
+            'phone'              => $data['phone'] ?? null,
+            'email'              => $data['email'] ?? null,
+            'source'             => $data['source'] ?? null,
+            'status'             => 'active',
+            'score'              => 0,
             'relationship_since' => now()->toDateString(),
         ]);
     }
@@ -135,8 +177,10 @@ class RelationshipEngine
                     return;
                 }
 
-                // Try to find a relationship already linked to a lead with the same phone/email
-                $relationship = $this->findOrCreate([
+                // Try to find an unclaimed relationship (a Lead's inquiry with the
+                // same phone/email) — never another patient's, even if they share
+                // a phone. See findOrCreateForPatient().
+                $relationship = $this->findOrCreateForPatient([
                     'name'  => $patient->name,
                     'phone' => $patient->phone ?? null,
                     'email' => $patient->email ?? null,
