@@ -121,6 +121,9 @@ class MembershipController extends ApiController
             'family_head_membership_id' => 'nullable|exists:finance_patient_memberships,id',
             'family_name'               => 'nullable|string|max:100',
             'start_date'                => 'nullable|date|before_or_equal:today',
+            // Default is now to invoice the fee as outstanding, not auto-collect it.
+            // Staff must explicitly confirm payment was taken at enrollment.
+            'collect_now'               => 'nullable|boolean',
         ]);
 
         $familyHeadId = $data['family_head_membership_id'] ?? null;
@@ -145,6 +148,8 @@ class MembershipController extends ApiController
             }
         }
 
+        $collectNow = (bool) ($data['collect_now'] ?? false);
+
         $result = MembershipBenefitService::enrollWithFinance(
             $pt->id,
             (int) $data['plan_id'],
@@ -154,13 +159,18 @@ class MembershipController extends ApiController
             $memberType,
             $familyHeadId ? (int) $familyHeadId : null,
             $familyName,
-            $data['start_date'] ?? null
+            $data['start_date'] ?? null,
+            $collectNow
         );
+
+        $message = $collectNow
+            ? 'Membership enrolled. Receipt generated.'
+            : 'Membership enrolled. Fee added to outstanding dues.';
 
         return $this->success([
             'membership' => $this->membershipPayload($result['membership']),
             'invoice_id' => $result['invoice']->id,
-        ], 'Membership enrolled. Receipt generated.', 201);
+        ], $message, 201);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

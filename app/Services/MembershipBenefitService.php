@@ -204,12 +204,23 @@ class MembershipBenefitService
     }
 
     /**
-     * Enroll a patient AND create the full finance chain (invoice → item →
-     * payment → receipt → final bill → finance transaction), identical to the
-     * web BillingController@enrollMembership flow. Wrapped in a transaction so
+     * Enroll a patient AND create the membership invoice, identical to the web
+     * BillingController@enrollMembership flow. Wrapped in a transaction so
      * mobile and web produce the same records atomically.
      *
-     * Returns ['membership' => FinancePatientMembership, 'invoice' => Invoice].
+     * Product decision (2026-07): membership enrollment used to force-mark the
+     * invoice "paid" and fabricate a Payment/Receipt/FinalBill/FinanceTransaction
+     * on the spot — regardless of whether the fee was actually collected. That
+     * meant a patient could enroll on account balance/goodwill and the system
+     * would still claim the ₹1999 was received. Now the invoice is created as
+     * an outstanding (draft) invoice by default, so it shows up wherever the
+     * patient's other dues show up. Pass $collectNow = true only when staff
+     * have explicitly confirmed cash/card/UPI was collected at the counter
+     * right now — that path reuses InvoicePaymentService::recordPayment() so
+     * the resulting Payment/Receipt/FinalBill/FinanceTransaction chain is
+     * identical to collecting it through the normal "Record Payment" flow.
+     *
+     * Returns ['membership' => FinancePatientMembership, 'invoice' => Invoice, 'payment' => ?InvoicePayment].
      */
     public static function enrollWithFinance(
         int $patientId,
@@ -220,11 +231,12 @@ class MembershipBenefitService
         string $memberType = 'individual',
         ?int $familyHeadMembershipId = null,
         ?string $familyName = null,
-        ?string $enrollDate = null
+        ?string $enrollDate = null,
+        bool $collectNow = false
     ): array {
         return \Illuminate\Support\Facades\DB::transaction(function () use (
             $patientId, $planId, $amountPaid, $paymentMode, $createdBy,
-            $memberType, $familyHeadMembershipId, $familyName, $enrollDate
+            $memberType, $familyHeadMembershipId, $familyName, $enrollDate, $collectNow
         ) {
             $date = $enrollDate ?: now()->toDateString();
 
@@ -235,7 +247,9 @@ class MembershipBenefitService
             );
             $plan = $membership->plan;
 
-            // 2. Membership invoice (fully paid at enrollment)
+            // 2. Membership invoice — created as outstanding (draft). Tagged via
+            // the existing membership_id column so it's identifiable in reports
+            // without needing a new invoice "type"/flag.
             $invoice = \App\Models\Invoice::create([
                 'invoice_number' => \App\Models\Invoice::nextNumber(),
                 'patient_id'     => $patientId,
@@ -247,9 +261,9 @@ class MembershipBenefitService
                 'taxable_amount' => $amountPaid,
                 'gst_amount'     => 0,
                 'total_amount'   => $amountPaid,
-                'paid_amount'    => $amountPaid,
-                'balance_due'    => 0,
-                'status'         => 'paid',
+                'paid_amount'    => 0,
+                'balance_due'    => $amountPaid,
+                'status'         => 'draft',
                 'membership_id'  => $membership->id,
                 'notes'          => 'AOCP Membership — ' . $plan->plan_name,
                 'created_by'     => $createdBy,
@@ -270,53 +284,37 @@ class MembershipBenefitService
                 'sort_order'  => 1,
             ]))->save();
 
-            // 4. Payment
-            $payment = \App\Models\InvoicePayment::create([
-                'invoice_id'   => $invoice->id,
-                'patient_id'   => $patientId,
-                'amount'       => $amountPaid,
-                'payment_mode' => $paymentMode,
-                'payment_date' => $date,
-                'notes'        => 'Membership enrollment — ' . $plan->plan_name,
-                'created_by'   => $createdBy,
-            ]);
+            // Derive subtotal/total/status from the item we just saved (keeps
+            // this consistent with every other invoice in the app instead of
+            // hand-computing totals here).
+            $invoice->recalculate();
 
-            // 5. Receipt
-            \App\Models\Receipt::create([
-                'receipt_number'     => \App\Models\Receipt::nextNumber(),
-                'invoice_id'         => $invoice->id,
-                'invoice_payment_id' => $payment->id,
-                'patient_id'         => $patientId,
-                'amount'             => $amountPaid,
-                'payment_mode'       => $paymentMode,
-                'receipt_date'       => $date,
-                'invoice_total'      => $amountPaid,
-                'amount_paid_before' => 0,
-                'balance_after'      => 0,
-                'notes'              => 'AOCP Membership — ' . $plan->plan_name,
-                'created_by'         => $createdBy,
-            ]);
+            $payment = null;
 
-            // 6. Final bill (invoice fully paid)
-            \App\Models\FinalBill::generateFromInvoice($invoice, $createdBy);
+            if ($collectNow) {
+                // Staff confirmed the fee was actually collected right now —
+                // run it through the standard payment pipeline so the
+                // Payment -> Receipt -> FinalBill -> FinanceTransaction chain
+                // is byte-for-byte the same as collecting it later.
+                $result = app(\App\Services\Billing\InvoicePaymentService::class)->recordPayment(
+                    $invoice,
+                    [
+                        'amount'       => $amountPaid,
+                        'payment_mode' => $paymentMode,
+                        'payment_date' => $date,
+                        'notes'        => 'Membership enrollment — ' . $plan->plan_name,
+                    ],
+                    $createdBy ?? 0
+                );
+                $payment = $result['payment'];
+                $invoice = $result['invoice'];
+            }
 
-            // 7. Finance mirror
-            \App\Models\Finance\FinanceTransaction::create([
-                'type'             => 'income',
-                'direction'        => 'credit',
-                'source_type'      => \App\Models\InvoicePayment::class,
-                'source_id'        => $payment->id,
-                'amount'           => $amountPaid,
-                'net_amount'       => $amountPaid,
-                'payment_mode'     => $paymentMode,
-                'patient_id'       => $patientId,
-                'status'           => 'active',
-                'transaction_date' => $date,
-                'notes'            => 'AOCP Membership — ' . $plan->plan_name,
-                'created_by'       => $createdBy,
-            ]);
-
-            return ['membership' => $membership->fresh('plan'), 'invoice' => $invoice];
+            return [
+                'membership' => $membership->fresh('plan'),
+                'invoice'    => $invoice->fresh(),
+                'payment'    => $payment,
+            ];
         });
     }
 

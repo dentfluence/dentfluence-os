@@ -1106,6 +1106,7 @@
 </script>
 @include('partials.appointment-modal-global')
 @include('partials.create-task-modal')
+@include('partials.yesterday-followup-card')
 
 {{-- ── Global File Viewer — Clinical Library (Phase 5) ── --}}
 @include('clinical-library.partials.file-viewer')

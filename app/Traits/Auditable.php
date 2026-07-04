@@ -50,18 +50,27 @@ trait Auditable
 
     public function writeAudit(string $action, ?array $old, ?array $new): void
     {
-        AuditLog::create([
-            'user_id'        => auth()->id(),
-            'action'         => $action,
-            'auditable_type' => static::class,
-            'auditable_id'   => $this->getKey(),
-            'module'         => property_exists($this, 'auditModule') ? $this->auditModule : null,
-            'old_values'     => $old ?: null,
-            'new_values'     => $new ?: null,
-            'device_type'    => static::auditDevice(),
-            'ip_address'     => request()->ip(),
-            'user_agent'     => static::auditTrim(request()->userAgent()),
-        ]);
+        // This runs synchronously inside the model's create/update/delete event,
+        // i.e. AFTER the real write already happened. If audit logging itself
+        // throws (bad column size, encoding issue, etc.) that exception must
+        // never propagate back out and make the caller think the actual save
+        // failed. Log it and move on instead.
+        try {
+            AuditLog::create([
+                'user_id'        => auth()->id(),
+                'action'         => $action,
+                'auditable_type' => static::class,
+                'auditable_id'   => $this->getKey(),
+                'module'         => property_exists($this, 'auditModule') ? $this->auditModule : null,
+                'old_values'     => $old ?: null,
+                'new_values'     => $new ?: null,
+                'device_type'    => static::auditDevice(),
+                'ip_address'     => request()->ip(),
+                'user_agent'     => static::auditTrim(request()->userAgent()),
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /** web | android | ios | api — the app can send an X-Client-Type header. */

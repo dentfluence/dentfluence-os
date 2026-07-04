@@ -29,6 +29,11 @@ Route::middleware(['auth', 'web', 'module:daily_huddle'])->prefix('huddle')->nam
     Route::post('/comms/push', [HuddleController::class, 'pushToCommList'])
         ->name('comms.push');
 
+    // Yesterday's Flow quick-action card — logs a task and/or a follow-up call
+    // for a patient instead of navigating straight to their profile.
+    Route::post('/yesterday-flow/log', [HuddleController::class, 'logYesterdayFollowUp'])
+        ->name('yesterday-flow.log');
+
     Route::post('/notes', [HuddleController::class, 'storeNote'])
         ->name('notes.store');
 

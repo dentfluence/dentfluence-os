@@ -512,6 +512,15 @@
                     </select>
                 </div>
 
+                <div class="mb-5 flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5">
+                    <input type="checkbox" name="collect_now" id="enrollCollectNow" value="1"
+                           class="mt-0.5 rounded border-gray-300 text-[#6a0f70] focus:ring-purple-400">
+                    <label for="enrollCollectNow" class="text-xs text-gray-600 leading-snug">
+                        <span class="font-medium text-gray-700">Collected now</span> — tick this only if the amount above was actually received at the counter right now.
+                        A receipt is generated immediately. Leave unchecked to add the fee to the patient's outstanding dues and collect it later from the Billing tab.
+                    </label>
+                </div>
+
                 <div class="flex justify-end gap-3 pt-1">
                     <button type="button"
                             onclick="document.getElementById('enrollModal').classList.add('hidden')"

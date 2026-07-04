@@ -475,6 +475,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/billing/{invoice}/final-bill',        [\App\Http\Controllers\BillingController::class, 'showFinalBill'])->name('billing.finalBill');
         // Provider EMI
         Route::post('/billing/{invoice}/payment/{payment}/mark-provider-paid', [\App\Http\Controllers\BillingController::class, 'markProviderPaid'])->name('billing.markProviderPaid');
+        // Edit an already-recorded payment's date (cascades to receipt + finance transaction)
+        Route::patch('/billing/{invoice}/payment/{payment}', [\App\Http\Controllers\BillingController::class, 'updatePayment'])->name('billing.payment.update');
         // Void receipt
         Route::post('/billing/{invoice}/receipt/{receipt}/void', [\App\Http\Controllers\BillingController::class, 'voidReceipt'])->name('billing.receipt.void');
         // Cancel invoice with reason + refund

@@ -321,4 +321,31 @@ class InvoicePaymentService
             return $receipt;
         });
     }
+
+    /**
+     * Correct the date on an already-recorded payment. There was previously no
+     * way to do this at all — once saved, payment_date/receipt_date rendered
+     * as static text with no edit path anywhere in the app.
+     *
+     * Cascades to the linked Receipt(s) and FinanceTransaction so the payment
+     * date, the receipt date, and the finance ledger date always agree —
+     * otherwise a corrected receipt would silently disagree with the books.
+     *
+     * @return InvoicePayment the updated payment (fresh)
+     */
+    public function updatePaymentDate(InvoicePayment $payment, string $newDate, int $userId): InvoicePayment
+    {
+        DB::transaction(function () use ($payment, $newDate, $userId) {
+            $payment->update(['payment_date' => $newDate]);
+
+            Receipt::where('invoice_payment_id', $payment->id)
+                ->update(['receipt_date' => $newDate]);
+
+            FinanceTransaction::where('source_type', InvoicePayment::class)
+                ->where('source_id', $payment->id)
+                ->update(['transaction_date' => $newDate]);
+        });
+
+        return $payment->fresh();
+    }
 }

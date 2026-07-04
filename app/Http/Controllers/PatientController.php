@@ -349,11 +349,17 @@ class PatientController extends Controller
                 $meta = collect([$p->patient_id, $p->phone])->filter()->implode(' • ');
 
                 return [
-                    'id'       => $p->id,
-                    'name'     => $p->name,
-                    'url'      => route('patients.show', $p->id), // link that opens the profile
-                    'initials' => $initials ?: '?',
-                    'meta'     => $meta,
+                    'id'         => $p->id,
+                    'name'       => $p->name,
+                    'url'        => route('patients.show', $p->id), // link that opens the profile
+                    'initials'   => $initials ?: '?',
+                    'meta'       => $meta,
+                    // patient_id/phone are also returned as their own keys (not just
+                    // folded into `meta`) because the referral picker on the patient
+                    // edit form (edit-patient-drawer.blade.php) reads these directly
+                    // for the selected-patient chip.
+                    'patient_id' => $p->patient_id,
+                    'phone'      => $p->phone,
                 ];
             })
         );

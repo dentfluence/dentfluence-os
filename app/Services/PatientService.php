@@ -300,7 +300,22 @@ class PatientService
         $dobUnknown = array_key_exists('dob_unknown', $in) ? (bool) $in['dob_unknown'] : null;
         $dob        = $in['date_of_birth'] ?? $in['dob'] ?? null;
 
-        $patient->update(array_filter([
+        // Structured referral fields are only meaningful when Source = Referral.
+        // Normalize explicitly (rather than relying on the blanket array_filter
+        // below) so both setting AND clearing a referral persist reliably —
+        // an empty string must become null, not survive as '' or be silently
+        // dropped, and referred_patient_id must be a clean int for the FK.
+        $referralType = array_key_exists('referral_type', $in) && $in['referral_type'] !== ''
+            ? $in['referral_type']
+            : null;
+        $referredPatientId = array_key_exists('referred_patient_id', $in) && $in['referred_patient_id'] !== ''
+            ? (int) $in['referred_patient_id']
+            : null;
+        $referrerType = array_key_exists('referrer_type', $in) && $in['referrer_type'] !== ''
+            ? $in['referrer_type']
+            : null;
+
+        $fields = array_filter([
             'title'       => $in['title'] ?? null,
             'first_name'  => $in['first_name'] ?? null,
             'middle_name' => $in['middle_name'] ?? null,
@@ -335,17 +350,29 @@ class PatientService
             'source_referral_name' => $in['source_referral_name'] ?? null,
             'source_camp_name'     => $in['source_camp_name'] ?? null,
             'source_campaign'      => $in['source_campaign'] ?? null,
-            'referral_type'       => $in['referral_type'] ?? null,
-            'referred_patient_id' => $in['referred_patient_id'] ?? null,
             'referrer_name'       => $in['referrer_name'] ?? null,
             'referrer_mobile'     => $in['referrer_mobile'] ?? null,
-            'referrer_type'       => $in['referrer_type'] ?? null,
             'referrer_notes'      => $in['referrer_notes'] ?? null,
             'membership_status'    => $in['membership_status'] ?? null,
             'membership_expires_at' => $in['membership_expires_at'] ?? null,
             'follow_up_status'     => $in['follow_up_status'] ?? null,
             'follow_up_date'       => $in['follow_up_date'] ?? null,
-        ], fn ($v) => $v !== null));
+        ], fn ($v) => $v !== null);
+
+        // referral_type / referred_patient_id / referrer_type are handled
+        // separately (not inside the array_filter above) because they can
+        // legitimately need to be set back to NULL — e.g. switching the
+        // "Existing Patient" / "Others" toggle, or clearing a referral
+        // entirely. array_filter(fn($v) => $v !== null) would silently drop
+        // a null here and never persist the clear. Only touch them at all
+        // when the referral panel was actually part of this submission.
+        if (array_key_exists('referral_type', $in) || array_key_exists('referred_patient_id', $in) || array_key_exists('referrer_type', $in)) {
+            $fields['referral_type']       = $referralType;
+            $fields['referred_patient_id'] = $referredPatientId;
+            $fields['referrer_type']       = $referrerType;
+        }
+
+        $patient->update($fields);
 
         return $patient->fresh();
     }

@@ -50,7 +50,12 @@ return [
         ],
 
         // ── Phase 1 (Relationship Foundation) ───────────────────────────
-        'identity.link_patient'        => ['default' => false, 'description' => 'Auto-link new patients to a Master Relationship.'],
+        // Flipped on 2026-07-04: the Relationships module was showing as
+        // empty/"dummy" because this was never turned on, so no Relationship
+        // row was ever created for real patients. Turning this on links new
+        // patients going forward; existing patients still need a one-time
+        // `php artisan relationship:backfill --apply --force` run (see runbook).
+        'identity.link_patient'        => ['default' => true, 'description' => 'Auto-link new patients to a Master Relationship.'],
         'identity.reads_relationship'  => ['default' => false, 'description' => 'Reads resolve through the relationship spine.'],
         'activity.single_ledger_reads' => ['default' => false, 'description' => 'Timeline reads from the single Activity ledger.'],
         'journey.authoritative'        => ['default' => false, 'description' => 'Journeys are the authoritative pipeline state.'],

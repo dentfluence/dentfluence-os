@@ -353,19 +353,25 @@
     </div>
 
     {{-- Footer --}}
-    <div class="px-6 py-4 border-t border-gray-200 flex gap-3 bg-white">
-        <button
-            type="button"
-            x-on:click="submitEditPatient()"
-            class="flex-1 py-2.5 text-sm bg-[#380740] text-white hover:bg-[#6a0f70] transition-colors font-medium">
-            Save Changes
-        </button>
-        <button
-            type="button"
-            x-on:click="editDrawerOpen = false"
-            class="px-5 py-2.5 text-sm border border-gray-300 text-gray-600 hover:bg-gray-50">
-            Cancel
-        </button>
+    <div class="px-6 py-4 border-t border-gray-200 bg-white">
+        <span x-show="editSaveError" x-text="editSaveError" class="block mb-2 text-xs text-red-500"></span>
+        <div class="flex gap-3">
+            <button
+                type="button"
+                x-on:click="submitEditPatient()"
+                x-bind:disabled="editSaving"
+                x-bind:class="editSaving ? 'opacity-60 cursor-not-allowed' : ''"
+                class="flex-1 py-2.5 text-sm bg-[#380740] text-white hover:bg-[#6a0f70] transition-colors font-medium">
+                <span x-show="!editSaving">Save Changes</span>
+                <span x-show="editSaving">Saving…</span>
+            </button>
+            <button
+                type="button"
+                x-on:click="editDrawerOpen = false"
+                class="px-5 py-2.5 text-sm border border-gray-300 text-gray-600 hover:bg-gray-50">
+                Cancel
+            </button>
+        </div>
     </div>
 </div>
 

@@ -987,6 +987,32 @@ class BillingController extends Controller
         return back()->with('success', 'Provider payment marked as received. Settlement receipt generated for ₹' . number_format($payment->clinic_net_amount, 2) . '.');
     }
 
+    // ── Edit Payment Date ────────────────────────────────────────────────────
+    // Corrects the date on an already-recorded payment. Previously there was no
+    // edit path at all for a saved payment/receipt — this was raised as a bug
+    // ("receipt dates can't be edited"). Cascades to the linked Receipt and
+    // FinanceTransaction so payment date, receipt date, and the finance ledger
+    // never disagree.
+
+    public function updatePayment(Request $request, Invoice $invoice, InvoicePayment $payment, \App\Services\Billing\InvoicePaymentService $service)
+    {
+        if ($payment->invoice_id !== $invoice->id) {
+            abort(403, 'Payment does not belong to this invoice.');
+        }
+
+        if ($invoice->status === 'cancelled') {
+            return back()->with('error', 'Cannot edit a payment on a cancelled invoice.');
+        }
+
+        $request->validate([
+            'payment_date' => ['required', 'date', 'before_or_equal:today'],
+        ]);
+
+        $service->updatePaymentDate($payment, $request->input('payment_date'), Auth::id());
+
+        return back()->with('success', 'Payment date updated.');
+    }
+
     // ── Refund charge rate by payment mode ───────────────────────────────────
     // Only card / debit_card attract a 2.5% processing charge on bank transfer.
     // UPI, cash, cheque, netbanking, EMI, and others have no charge.
@@ -1418,6 +1444,9 @@ class BillingController extends Controller
             'family_head_membership_id' => 'nullable|exists:finance_patient_memberships,id',
             'family_name'               => 'nullable|string|max:100',
             'start_date'                => 'nullable|date|before_or_equal:today', // backdated entry allowed, no future dates
+            // Default is to invoice the membership fee as outstanding — staff
+            // must explicitly tick this to record it as collected right now.
+            'collect_now'               => 'nullable|boolean',
         ]);
 
         // Enrollment date — defaults to today, but can be backdated.
@@ -1453,106 +1482,41 @@ class BillingController extends Controller
             }
         }
 
-        // 1. Enroll patient — creates FinancePatientMembership record
-        $membership = MembershipBenefitService::enroll(
+        // Enroll + create the membership invoice via the shared service (same
+        // one the mobile API uses), so web and mobile always produce identical
+        // records. Delegating here also removes ~90 lines of duplicated
+        // finance-chain code that used to live in this controller.
+        //
+        // By default the fee is invoiced as outstanding (draft), not
+        // auto-collected — see MembershipBenefitService::enrollWithFinance()
+        // for the reasoning. Staff tick "Collected now" in the enroll modal
+        // to record it as paid immediately instead.
+        $collectNow = $request->boolean('collect_now');
+
+        $result = MembershipBenefitService::enrollWithFinance(
             $patient->id,
             (int) $request->plan_id,
             (float) $request->amount_paid,
+            $request->payment_mode,
             Auth::id(),
             $memberType,
             $familyHeadId ? (int) $familyHeadId : null,
             $familyName,
-            $enrollDate   // backdated enrollment date (or today)
+            $enrollDate,   // backdated enrollment date (or today)
+            $collectNow
         );
 
-        $plan       = $membership->plan;
-        $amountPaid = (float) $request->amount_paid;
+        $invoice = $result['invoice'];
 
-        // 2. Create membership invoice
-        $invoice = Invoice::create([
-            'invoice_number' => Invoice::nextNumber(),
-            'patient_id'     => $patient->id,
-            'invoice_date'   => $enrollDate,
-            'due_date'       => $enrollDate,
-            'subtotal'       => $amountPaid,
-            'discount_pct'   => 0,
-            'discount_amount'=> 0,
-            'taxable_amount' => $amountPaid,
-            'gst_amount'     => 0,
-            'total_amount'   => $amountPaid,
-            'paid_amount'    => $amountPaid,
-            'balance_due'    => 0,
-            'status'         => 'paid',
-            'membership_id'  => $membership->id,
-            'notes'          => 'AOCP Membership — ' . $plan->plan_name,
-            'created_by'     => Auth::id(),
-        ]);
+        if ($collectNow) {
+            return redirect()->route('billing.print', $invoice->id)
+                             ->with('success', 'AOCP Membership enrolled. Receipt generated.');
+        }
 
-        // 3. Add line item
-        $item = new InvoiceItem([
-            'invoice_id'  => $invoice->id,
-            'description' => 'AOCP Membership: ' . $plan->plan_name,
-            'unit_price'  => $amountPaid,
-            'qty'         => 1,
-            'disc_pct'    => 0,
-            'disc_amount' => 0,
-            'net_amount'  => $amountPaid,
-            'gst_pct'     => 0,
-            'gst_amount'  => 0,
-            'total'       => $amountPaid,
-            'sort_order'  => 1,
-        ]);
-        $item->save();
-
-        // 4. Record payment
-        $payment = InvoicePayment::create([
-            'invoice_id'    => $invoice->id,
-            'patient_id'    => $patient->id,
-            'amount'        => $amountPaid,
-            'payment_mode'  => $request->payment_mode,
-            'payment_date'  => $enrollDate,
-            'notes'         => 'Membership enrollment — ' . $plan->plan_name,
-            'created_by'    => Auth::id(),
-        ]);
-
-        // 5. Generate Receipt
-        Receipt::create([
-            'receipt_number'     => Receipt::nextNumber(),
-            'invoice_id'         => $invoice->id,
-            'invoice_payment_id' => $payment->id,
-            'patient_id'         => $patient->id,
-            'amount'             => $amountPaid,
-            'payment_mode'       => $request->payment_mode,
-            'receipt_date'       => $enrollDate,
-            'invoice_total'      => $amountPaid,
-            'amount_paid_before' => 0,
-            'balance_after'      => 0,
-            'notes'              => 'AOCP Membership — ' . $plan->plan_name,
-            'created_by'         => Auth::id(),
-        ]);
-
-        // 6. Generate FinalBill (invoice is fully paid at enrollment)
-        FinalBill::generateFromInvoice($invoice, Auth::id());
-
-        // 7. Finance mirror
-        FinanceTransaction::create([
-            'type'              => 'income',
-            'direction'         => 'credit',
-            'source_type'       => InvoicePayment::class,
-            'source_id'         => $payment->id,
-            'amount'            => $amountPaid,
-            'net_amount'        => $amountPaid,
-            'payment_mode'      => $request->payment_mode,
-            'patient_id'        => $patient->id,
-            'status'            => 'active',
-            'transaction_date'  => $enrollDate,
-            'notes'             => 'AOCP Membership — ' . $plan->plan_name,
-            'created_by'        => Auth::id(),
-        ]);
-
-        // 8. Redirect to printable receipt/invoice
-        return redirect()->route('billing.print', $invoice->id)
-                         ->with('success', 'AOCP Membership enrolled. Receipt generated.');
+        return redirect()->route('patients.show', $patient->id)->with('success',
+            'AOCP Membership enrolled. Rs. ' . number_format((float) $request->amount_paid, 2)
+            . ' added to outstanding dues — collect it from the Billing tab when received.'
+        );
     }
 
     // ── Delete Invoice with Auth ─────────────────────────────────────────────

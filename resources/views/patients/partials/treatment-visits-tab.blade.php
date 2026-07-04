@@ -605,24 +605,47 @@ $appointmentsJson = ($patient->appointments ?? collect())
                             </template>
                             <template x-if="!planItemsLoading && planItems.length > 0">
                                 <div>
-                                    <div class="flex flex-wrap gap-2 mb-2">
+                                    <p class="text-[10px] text-gray-400 mb-1.5">Tick every treatment done this visit. Star marks the primary one (drives stage-tracker &amp; clinical fields below).</p>
+                                    <div class="space-y-1.5 mb-2">
                                         <template x-for="pi in planItems" :key="pi.id">
-                                            <button type="button"
-                                                    @click="selectPlanTreatment(pi)"
-                                                    :class="form.plan_item_id == pi.id
-                                                        ? 'bg-[#6a0f70] border-[#380740] text-white shadow-sm'
-                                                        : 'bg-white border-gray-200 text-gray-700 hover:border-[#6a0f70] hover:bg-purple-50'"
-                                                    class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all">
-                                                <span x-text="pi.treatment_name"></span>
-                                                <span x-show="pi.tooth_number" class="opacity-60" x-text="'· T' + pi.tooth_number"></span>
-                                                <svg x-show="form.plan_item_id == pi.id" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                                            </button>
+                                            <div>
+                                                <div class="flex items-center gap-1">
+                                                    <button type="button"
+                                                            @click="togglePlanItem(pi)"
+                                                            :class="isPlanItemSelected(pi.id)
+                                                                ? 'bg-[#6a0f70] border-[#380740] text-white shadow-sm'
+                                                                : 'bg-white border-gray-200 text-gray-700 hover:border-[#6a0f70] hover:bg-purple-50'"
+                                                            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all">
+                                                        <span x-text="pi.treatment_name"></span>
+                                                        <span x-show="pi.tooth_number" class="opacity-60" x-text="'· T' + pi.tooth_number"></span>
+                                                        <svg x-show="isPlanItemSelected(pi.id)" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                                    </button>
+                                                    <button type="button" x-show="isPlanItemSelected(pi.id)"
+                                                            @click="setPrimaryPlanItem(pi)"
+                                                            :title="isPlanItemPrimary(pi.id) ? 'Primary treatment for this visit' : 'Set as primary — drives stage-tracker & clinical fields'"
+                                                            :class="isPlanItemPrimary(pi.id) ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'"
+                                                            class="flex-shrink-0 p-1 transition-colors">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" :fill="isPlanItemPrimary(pi.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                                    </button>
+                                                </div>
+                                                {{-- Narrow to specific teeth when this plan item spans more than one --}}
+                                                <div x-show="isPlanItemSelected(pi.id) && planItemTeeth(pi).length > 1" class="flex flex-wrap items-center gap-1 mt-1 ml-1">
+                                                    <span class="text-[10px] text-gray-400 mr-1">Done today on:</span>
+                                                    <template x-for="t in planItemTeeth(pi)" :key="t">
+                                                        <button type="button" @click="toggleItemTooth(pi, t)"
+                                                                :class="itemToothSelected(pi, t) ? 'bg-purple-100 border-purple-300 text-[#6a0f70]' : 'bg-white border-gray-200 text-gray-400'"
+                                                                class="px-1.5 py-0.5 text-[10px] font-semibold border rounded">
+                                                            T<span x-text="t"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
                                         </template>
                                     </div>
                                     {{-- Fallback: treatment not in plan --}}
                                     <button type="button"
-                                            @click="selectPlanTreatment(null)"
-                                            :class="form.plan_item_id === '__other__'
+                                            @click="toggleOtherTreatment()"
+                                            :class="otherActive
                                                 ? 'bg-gray-100 border-gray-400 text-gray-700'
                                                 : 'bg-white border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600'"
                                             class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all">
@@ -631,7 +654,7 @@ $appointmentsJson = ($patient->appointments ?? collect())
                                 </div>
                             </template>
                             {{-- Typeahead when "Other" picked --}}
-                            <div x-show="form.plan_item_id === '__other__'" class="mt-2">
+                            <div x-show="otherActive" class="mt-2">
                                 <div class="relative" @click.outside="txSuggestOpen = false">
                                     <div class="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-[#6a0f70] bg-white transition-colors">
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -1415,6 +1438,7 @@ function treatmentVisits() {
         // Plan items + visit items state
         planItems: [],
         planItemsLoading: false,
+        otherActive: false, // "Other / Not in plan" typeahead toggled on
         visitItems: [],   // billing line items (from plan + add-ons + custom)
         addonItems: [],   // layer-3 add-on procedures (lightweight, merged into visitItems on save)
         form: {},
@@ -1535,6 +1559,21 @@ function treatmentVisits() {
             this.form.treatment_name = name;
             this.txSearch            = name;
             this.txSuggestOpen       = false;
+            if (this.otherActive) {
+                // Keep a single "other" billing line in sync with the typeahead pick,
+                // and make it the primary treatment (matches the old single-pick behavior).
+                this.visitItems = this.visitItems.filter(i => i._isOther !== true);
+                this.visitItems.push({
+                    _isOther:                true,
+                    treatment_plan_item_id:  null,
+                    treatment_name:          name,
+                    material_option:         '',
+                    tooth_number:            '',
+                    suggested_price:         '',
+                    notes:                   '',
+                });
+                this.form.plan_item_id = '__other__';
+            }
             this.onTreatmentChange();
         },
         clearTx() {
@@ -1542,6 +1581,13 @@ function treatmentVisits() {
             this.txSearch            = '';
             this.txSuggestions       = [];
             this.txSuggestOpen       = false;
+            if (this.otherActive) {
+                this.visitItems = this.visitItems.filter(i => i._isOther !== true);
+                if (this.form.plan_item_id === '__other__') {
+                    this._promoteNextPrimary();
+                    return;
+                }
+            }
             this.onTreatmentChange();
         },
 
@@ -1733,54 +1779,28 @@ function treatmentVisits() {
             this.form.current_stage = '';
             this.visitItems = [];
             this.planItems  = [];
+            this.otherActive = false;
             if (this.form.treatment_plan_id) this.loadPlanItems();
         },
-
-        // Layer-2: select a plan item as the primary treatment for this visit.
-        // Passing null means "Other / Not in plan" — free-text mode.
-        selectPlanTreatment(pi) {
-            if (!pi) {
-                this.form.plan_item_id   = '__other__';
-                this.form.treatment_name = '';
-                // Remove any previously auto-added plan item from visitItems
-                this.visitItems = this.visitItems.filter(i => i._fromPlanLayer2 !== true);
-                this.onTreatmentChange();
-                return;
-            }
-            // Toggle: clicking the already-selected item deselects it
-            if (this.form.plan_item_id == pi.id) {
-                this.form.plan_item_id   = '';
-                this.form.treatment_name = '';
-                this.visitItems = this.visitItems.filter(i => i._fromPlanLayer2 !== true);
-                this.onTreatmentChange();
-                return;
-            }
-            this.form.plan_item_id   = pi.id;
-            this.form.treatment_name = pi.treatment_name;
-            // Remove previous layer-2 billing item, add new one
-            this.visitItems = this.visitItems.filter(i => i._fromPlanLayer2 !== true);
-            this.visitItems.unshift({
-                _fromPlanLayer2:        true,
-                treatment_plan_item_id: pi.id,
-                treatment_name:         pi.treatment_name,
-                material_option:        '',
-                tooth_number:           pi.tooth_number || '',
-                suggested_price:        pi.unit_price   || '',
-                notes:                  '',
-            });
-            this.onTreatmentChange();
-        },
-
-        _loadPlanItemsOLD() { /* replaced below */ },
 
         isPlanItemSelected(planItemId) {
             return this.visitItems.some(i => i.treatment_plan_item_id == planItemId);
         },
 
+        isPlanItemPrimary(planItemId) {
+            return this.form.plan_item_id == planItemId;
+        },
+
+        // Layer-2: toggle a plan item on/off as one of today's billing lines.
+        // Multiple items may be selected at once — the first one selected
+        // automatically becomes "primary" (drives the stage-tracker + smart
+        // clinical fields below); staff can re-pick primary via the star icon.
         togglePlanItem(pi) {
             const idx = this.visitItems.findIndex(i => i.treatment_plan_item_id == pi.id);
             if (idx >= 0) {
+                const wasPrimary = this.isPlanItemPrimary(pi.id);
                 this.visitItems.splice(idx, 1);
+                if (wasPrimary) this._promoteNextPrimary();
             } else {
                 this.visitItems.push({
                     treatment_plan_item_id: pi.id,
@@ -1790,8 +1810,82 @@ function treatmentVisits() {
                     suggested_price: pi.unit_price   || '',
                     notes:           '',
                 });
+                if (!this.form.plan_item_id) this.setPrimaryPlanItem(pi);
             }
             this._checkRepeatWork();
+        },
+
+        // After the primary item is removed, hand primary to whatever billing
+        // line is left (another plan item, or the "other" typeahead pick).
+        // Clears primary entirely when nothing is left selected.
+        _promoteNextPrimary() {
+            const next = this.visitItems.find(i => i.treatment_plan_item_id) || this.visitItems.find(i => i._isOther);
+            if (!next) {
+                this.form.plan_item_id   = '';
+                this.form.treatment_name = '';
+                this.onTreatmentChange();
+                return;
+            }
+            if (next.treatment_plan_item_id) {
+                this.setPrimaryPlanItem({ id: next.treatment_plan_item_id, treatment_name: next.treatment_name });
+            } else {
+                this.form.plan_item_id   = '__other__';
+                this.form.treatment_name = next.treatment_name;
+                this.form.tooth_number   = next.tooth_number || '';
+                this._syncTeethFromString();
+                this.onTreatmentChange();
+            }
+        },
+
+        // Mark a selected plan item as the visit's primary treatment — the one
+        // whose stage-tracker, RCT/Implant/Crown fields and lab-case prompt show.
+        setPrimaryPlanItem(pi) {
+            const item = this.visitItems.find(i => i.treatment_plan_item_id == pi.id);
+            this.form.plan_item_id   = pi.id;
+            this.form.treatment_name = pi.treatment_name;
+            this.form.tooth_number   = item ? (item.tooth_number || '') : '';
+            this._syncTeethFromString();
+            this.onTreatmentChange();
+        },
+
+        // Teeth listed on a plan item itself (e.g. "42, 46" -> ['42','46'])
+        planItemTeeth(pi) {
+            return this._teethSet(pi.tooth_number);
+        },
+
+        itemToothSelected(pi, tooth) {
+            const item = this.visitItems.find(i => i.treatment_plan_item_id == pi.id);
+            if (!item) return false;
+            return this._teethSet(item.tooth_number).includes(tooth);
+        },
+
+        // Narrow a multi-tooth plan item down to just the tooth/teeth actually
+        // done today — keeps the billing line's tooth_number in sync, and if
+        // it's the primary item, keeps the visit-level Tooth No. in sync too.
+        toggleItemTooth(pi, tooth) {
+            const item = this.visitItems.find(i => i.treatment_plan_item_id == pi.id);
+            if (!item) return;
+            const order = this.planItemTeeth(pi);
+            let teeth = this._teethSet(item.tooth_number);
+            const idx = teeth.indexOf(tooth);
+            if (idx >= 0) teeth.splice(idx, 1); else teeth.push(tooth);
+            item.tooth_number = order.filter(t => teeth.includes(t)).join(', ');
+            if (this.isPlanItemPrimary(pi.id)) {
+                this.form.tooth_number = item.tooth_number;
+                this._syncTeethFromString();
+            }
+            this._checkRepeatWork();
+        },
+
+        // Layer-2 fallback: a treatment not listed in the accepted plan.
+        toggleOtherTreatment() {
+            this.otherActive = !this.otherActive;
+            if (!this.otherActive) {
+                this.txSearch = ''; this.txSuggestions = []; this.txSuggestOpen = false;
+                const wasPrimary = this.form.plan_item_id === '__other__';
+                this.visitItems = this.visitItems.filter(i => i._isOther !== true);
+                if (wasPrimary) this._promoteNextPrimary();
+            }
         },
 
         // Layer-3: add an add-on procedure row
@@ -1820,6 +1914,7 @@ function treatmentVisits() {
             this.visitItems    = [];
             this.addonItems    = [];
             this.planItems     = [];
+            this.otherActive   = false;
             this.selectedTeeth = [];
             this.toothChartOpen = false;
             this.errorMsg = '';
@@ -1892,6 +1987,23 @@ function treatmentVisits() {
             this.visitItems = (visit.visit_items || []).map(i => ({...i}));
             this.addonItems = [];
             this.planItems  = [];
+            // Restore which billing line was the visit's primary treatment, matched
+            // by name against visit.treatment_name (the field that drove this visit's
+            // stage-tracker / clinical fields when it was saved).
+            const primaryItem = this.visitItems.find(i =>
+                (i.treatment_name || '').trim().toLowerCase() === (visit.treatment_name || '').trim().toLowerCase()
+            );
+            if (primaryItem && primaryItem.treatment_plan_item_id) {
+                this.form.plan_item_id = primaryItem.treatment_plan_item_id;
+                this.otherActive = false;
+            } else if (primaryItem) {
+                primaryItem._isOther = true;
+                this.form.plan_item_id = '__other__';
+                this.otherActive = true;
+            } else {
+                this.form.plan_item_id = '';
+                this.otherActive = false;
+            }
             if (this.form.treatment_plan_id) this.loadPlanItems();
             this._syncTeethFromString();
             this.toothChartOpen = false;
@@ -1910,6 +2022,7 @@ function treatmentVisits() {
             this.visitItems = [];
             this.addonItems = [];
             this.planItems  = [];
+            this.otherActive = false;
             this.selectedTeeth = [];
             this.repeatWarnings = []; this.repeatReason = '';
             this.txSearch = ''; this.txSuggestions = []; this.txSuggestOpen = false;

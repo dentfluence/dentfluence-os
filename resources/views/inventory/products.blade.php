@@ -82,12 +82,10 @@
         @if($locationId)  <input type="hidden" name="location_id" value="{{ $locationId }}">@endif
         @if($stockLevel)  <input type="hidden" name="stock_level" value="{{ $stockLevel }}">@endif
     </form>
-    @if(!$search && !$catId && !$subTypeId && !$brandFilter && !$locationId && !$stockLevel)
     <div style="flex-shrink:0;">
         <span style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#1a0a1e;">Inventory</span>
         <span style="font-size:12px;color:#9a85aa;font-family:'Inter',sans-serif;margin-left:8px;">{{ $products->total() }} products</span>
     </div>
-    @endif
     @if(auth()->user()?->role === 'admin')
     <button onclick="openAddProduct()"
             style="background:#6a0f70;color:#fff;border:none;border-radius:6px;padding:9px 16px;
@@ -103,32 +101,11 @@
 
 {{-- ══════════════════════════════════════════════════
      TABLE VIEW
+     (header/button/flash-messages above already cover this —
+     the old duplicate header block + duplicate flash messages
+     that used to live here were removed 2026-07-04.)
 ══════════════════════════════════════════════════ --}}
 <div>
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-    <div>
-        <h1 style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#1a0a1e;margin:0 0 2px;">Inventory</h1>
-        <p style="font-family:'Inter',sans-serif;font-size:13px;color:#7a6884;margin:0;">{{ $products->total() }} products · stock levels &amp; product catalogue</p>
-    </div>
-    @if(auth()->user()?->role === 'admin')
-    <button onclick="openAddProduct()" style="background:#6a0f70;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:7px;">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Product
-    </button>
-    @endif
-</div>
-{{-- Flash messages --}}
-@if(session('success'))
-<div style="background:#e8f7ee;border:1px solid #a3d9b8;color:#1a7a45;padding:10px 16px;
-            border-radius:6px;font-size:13px;font-family:'DM Sans',sans-serif;margin-bottom:16px;">
-    ✓ {{ session('success') }}
-</div>
-@endif
-@if($errors->any())
-<div style="background:#fdeaea;border:1px solid #f5c6c6;color:#b52020;padding:10px 16px;
-            border-radius:6px;font-size:13px;font-family:'DM Sans',sans-serif;margin-bottom:16px;">
-    @foreach($errors->all() as $e)<div>• {{ $e }}</div>@endforeach
-</div>
-@endif
 
 {{-- ── Filters bar ── --}}
 <form method="GET" action="{{ route('inventory.products') }}"
@@ -567,7 +544,7 @@ document.addEventListener('click', closeDotMenus);
             <input type="hidden" id="fp-method" name="_method" value="POST">
 
             {{-- ── 3-column grid ── --}}
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;">
 
                 {{-- COL 1: Basic Information --}}
                 <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
@@ -837,7 +814,7 @@ document.addEventListener('click', closeDotMenus);
             </div>
 
             {{-- ── Row 2: Pricing | Location & Stock | Dealer/Supplier ── --}}
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:20px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-top:20px;">
 
                 {{-- Pricing & Cost --}}
                 <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
@@ -906,6 +883,7 @@ document.addEventListener('click', closeDotMenus);
                                 @endforeach
                             </select>
                         </div>
+                        <div>
                             <label class="pml-label">Minimum Stock (Alert)</label>
                             <div style="display:flex;gap:6px;">
                                 <input type="number" name="minimum_qty" id="fp-minimum_qty"
@@ -978,7 +956,7 @@ document.addEventListener('click', closeDotMenus);
             </div>
 
             {{-- ── Row 3: Treatment Tags | Notes ── --}}
-            <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-top:20px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-top:20px;">
 
                 {{-- Treatment Tags --}}
                 <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">

@@ -110,7 +110,7 @@ class TreatmentVisitService
             'visit_items.*.treatment_plan_item_id'     => ['nullable', 'exists:treatment_plan_items,id'],
             'visit_items.*.treatment_name'             => ['required_with:visit_items', 'string', 'max:150'],
             'visit_items.*.material_option'            => ['nullable', 'string', 'max:100'],
-            'visit_items.*.tooth_number'               => ['nullable', 'string', 'max:20'],
+            'visit_items.*.tooth_number'               => ['nullable', 'string', 'max:100'],
             'visit_items.*.suggested_price'            => ['nullable', 'numeric', 'min:0'],
             'visit_items.*.notes'                      => ['nullable', 'string', 'max:500'],
             // Repeat-work tracking — reason is required when an item is flagged as repeat

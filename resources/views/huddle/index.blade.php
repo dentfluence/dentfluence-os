@@ -1307,14 +1307,14 @@ document.addEventListener('alpine:init', () => {
 
         @forelse($yesterdaysAppointments as $yAppt)
         <div class="hd-card" x-data="{ calling: false, called: false }"
-             @click="window.location.href='{{ route('patients.show', $yAppt->patient_id) }}'"
+             @click="window.dispatchEvent(new CustomEvent('open-yesterday-followup-card', { detail: { patientId: {{ $yAppt->patient_id }}, patientName: '{{ addslashes($yAppt->patient->name ?? '') }}' } }))"
              style="cursor:pointer;">
             <div class="hd-pfc">
 
                 {{-- ── Row 1: Patient name + visit type badge ── --}}
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.4rem;">
                     <div style="min-width:0;">
-                        <a href="{{ route('patients.show', $yAppt->patient_id) }}" class="hd-pfc-name" style="font-size:.8rem;">
+                        <a href="{{ route('patients.show', $yAppt->patient_id) }}" @click.stop class="hd-pfc-name" style="font-size:.8rem;">
                             {{ $yAppt->patient->name ?? '—' }}
                             @if(!empty($yAppt->patient->medical_alert))
                                 <span class="hd-pfc-star" title="{{ $yAppt->patient->medical_alert }}" style="font-size:.65rem;">★</span>

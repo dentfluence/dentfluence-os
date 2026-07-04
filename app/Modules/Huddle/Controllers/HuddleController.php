@@ -1091,6 +1091,101 @@ class HuddleController extends Controller
     }
 
     /**
+     * POST /huddle/yesterday-flow/log
+     *
+     * Saved from the "Yesterday's Flow" quick-action card (patient profile is
+     * no longer opened on click — this card is shown instead). At least one
+     * of `task` or `book_followup_call` must be provided.
+     *
+     *   - task text                -> creates a Task (category=follow_up),
+     *                                  assigned to the chosen staff member.
+     *   - book_followup_call = yes -> creates a FollowUp (trigger_type=manual,
+     *                                  channel=call), also assigned to them.
+     *
+     * Both records point at the same $assigned_to so the follow-up shows up
+     * on that staff member's task list — this is the "assign to relationship
+     * manager" behaviour. There's no persistent "relationship manager per
+     * patient" field in the schema yet, so the staff member is picked on the
+     * card each time (defaults to whoever is currently logged in).
+     */
+    public function logYesterdayFollowUp(Request $request): JsonResponse
+    {
+        $request->validate([
+            'patient_id'          => ['required', 'integer', 'exists:patients,id'],
+            'task'                => ['nullable', 'string', 'max:255'],
+            'book_followup_call'  => ['required', 'boolean'],
+            'date'                => ['required_if:book_followup_call,1', 'nullable', 'date'],
+            'reason'              => ['nullable', 'string', 'max:500'],
+            'assigned_to'         => ['required', 'integer', 'exists:users,id'],
+        ]);
+
+        $task   = trim((string) $request->input('task', ''));
+        $bookIt = $request->boolean('book_followup_call');
+
+        if ($task === '' && ! $bookIt) {
+            return response()->json([
+                'message' => 'Add a task or tick "Book Follow-up call" before saving.',
+            ], 422);
+        }
+
+        $user       = auth()->user();
+        $assignedTo = (int) $request->input('assigned_to');
+        $date       = $request->input('date') ?: now()->toDateString();
+        $reason     = $request->input('reason');
+
+        $result = DB::transaction(function () use ($request, $task, $bookIt, $user, $assignedTo, $date, $reason) {
+            $createdTask     = null;
+            $createdFollowUp = null;
+
+            if ($task !== '') {
+                $createdTask = \App\Models\Task::create([
+                    'title'       => $task,
+                    'description' => $reason,
+                    'assigned_to' => $assignedTo,
+                    'created_by'  => $user->id,
+                    'branch_id'   => $user->branch_id,
+                    'patient_id'  => (int) $request->input('patient_id'),
+                    'due_date'    => $date,
+                    'priority'    => 'medium',
+                    'category'    => 'follow_up',
+                    'task_type'   => 'human',
+                    'status'      => 'pending',
+                ]);
+            }
+
+            if ($bookIt) {
+                $createdFollowUp = \App\Models\FollowUp::create([
+                    'patient_id'   => (int) $request->input('patient_id'),
+                    'label'        => 'Follow-up call — logged from Yesterday\'s Flow',
+                    'due_date'     => $date,
+                    'due_time'     => '10:00',
+                    'channel'      => 'call',
+                    'priority'     => 'medium',
+                    'note'         => $reason,
+                    'trigger_type' => 'manual',
+                    'auto_created' => false,
+                    'assigned_to'  => $assignedTo,
+                    'status'       => 'pending',
+                ]);
+            }
+
+            return [$createdTask, $createdFollowUp];
+        });
+
+        [$createdTask, $createdFollowUp] = $result;
+
+        $parts = [];
+        if ($createdTask)     $parts[] = 'Task assigned';
+        if ($createdFollowUp) $parts[] = 'Follow-up call scheduled';
+
+        return response()->json([
+            'message' => implode(' · ', $parts) . '.',
+            'task_id' => $createdTask?->id,
+            'follow_up_id' => $createdFollowUp?->id,
+        ]);
+    }
+
+    /**
      * PATCH /huddle/appointments/{id}/instruction
      */
     public function updateInstruction(Request $request, int $id): JsonResponse

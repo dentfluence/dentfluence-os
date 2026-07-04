@@ -3362,6 +3362,8 @@ function patientProfile() {
     return {
         activeTab: 'profile',
         editDrawerOpen: false,
+        editSaving: false,
+        editSaveError: '',
         aocpModalOpen: false,
         showNoteForm: false,
         showOppForm: false,
@@ -3408,6 +3410,60 @@ function patientProfile() {
 
         oppStageLabel(s) {
             return {prospect:'Identified',discussed:'Discussed',quoted:'Financial Discussion',accepted:'Planned',completed:'Completed'}[s] || s;
+        },
+
+        // Save the Edit Patient drawer (form lives in patients/partials/edit-patient-drawer.blade.php).
+        // Two fields need a small transform before they match what PatientController@update expects:
+        //   - medical_alert_flags[] + medical_alert_custom  -> single comma-separated medical_alert string
+        //   - allergies_text (comma separated)               -> allergies[] array
+        async submitEditPatient() {
+            const form = document.getElementById('editPatientForm');
+            if (!form) return;
+
+            this.editSaving = true;
+            this.editSaveError = '';
+
+            const fd = new FormData(form);
+
+            const alertFlags  = fd.getAll('medical_alert_flags[]');
+            const customAlert = (fd.get('medical_alert_custom') || '').trim();
+            const allAlerts   = customAlert ? [...alertFlags, customAlert] : alertFlags;
+            fd.delete('medical_alert_flags[]');
+            fd.delete('medical_alert_custom');
+            fd.set('medical_alert', allAlerts.join(', '));
+
+            const allergiesText = (fd.get('allergies_text') || '').trim();
+            fd.delete('allergies_text');
+            allergiesText.split(',').map(a => a.trim()).filter(Boolean).forEach(a => fd.append('allergies[]', a));
+
+            try {
+                const r = await fetch('{{ route('patients.update', $patient->id) }}', {
+                    method: 'POST', // _method=PATCH is spoofed via the @method('PATCH') hidden field already in the form
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+                        'Accept': 'application/json',
+                    },
+                    body: fd,
+                });
+
+                if (!r.ok) {
+                    const errBody = await r.json().catch(() => ({}));
+                    this.editSaveError = errBody.message
+                        || (errBody.errors ? Object.values(errBody.errors).flat().join(' ') : null)
+                        || `Save failed (${r.status}). Please check the fields and try again.`;
+                    console.error('submitEditPatient HTTP error', r.status, errBody);
+                    this.editSaving = false;
+                    return;
+                }
+
+                // Full reload — simplest way to make every tab (header name, billing,
+                // referral display, etc.) reflect the updated patient consistently.
+                window.location.reload();
+            } catch (e) {
+                this.editSaveError = 'Network error. Please check your connection.';
+                console.error('submitEditPatient error', e);
+                this.editSaving = false;
+            }
         },
 
         toggleNoteTag(t) {

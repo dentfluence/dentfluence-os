@@ -315,7 +315,17 @@
                             $stdRcpt       = !$isProviderEmi ? $pmtReceipts->first() : null;
                         @endphp
                         <tr>
-                            <td class="px-4 py-2 text-gray-600">{{ $pmt->payment_date->format('d M Y') }}</td>
+                            <td class="px-4 py-2 text-gray-600">
+                                <span class="inline-flex items-center gap-1.5">
+                                    {{ $pmt->payment_date->format('d M Y') }}
+                                    <button type="button"
+                                            onclick="openEditPaymentDateModal({{ $pmt->id }}, '{{ $pmt->payment_date->format('Y-m-d') }}')"
+                                            title="Edit payment date"
+                                            class="text-gray-300 hover:text-[#6a0f70]">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                    </button>
+                                </span>
+                            </td>
                             <td class="px-4 py-2 text-gray-600 capitalize">
                                 {{ $pmt->payment_mode }}
                                 @if($isProviderEmi)
@@ -1303,7 +1313,7 @@ document.addEventListener('DOMContentLoaded', () => {
 @endif
 
 // Close modals on backdrop click
-['paymentModal','editAuthModal','deleteAuthModal','voidReceiptModal'].forEach(id => {
+['paymentModal','editAuthModal','deleteAuthModal','voidReceiptModal','editPaymentDateModal'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('click', e => { if (e.target === el) el.classList.add('hidden'); });
 });
@@ -1420,7 +1430,49 @@ function openVoidModal(receiptNumber, receiptId, amount) {
     document.querySelector('#voidReceiptForm input[value="none"]').checked   = true;
     document.getElementById('voidReceiptModal').classList.remove('hidden');
 }
+
+// Edit payment date modal — populated dynamically per payment row
+const _editPaymentDateRouteBase = '{{ route("billing.payment.update", [$invoice, "__PAYMENT_ID__"]) }}';
+
+function openEditPaymentDateModal(paymentId, currentDate) {
+    document.getElementById('editPaymentDateForm').action = _editPaymentDateRouteBase.replace('__PAYMENT_ID__', paymentId);
+    document.querySelector('#editPaymentDateForm input[name="payment_date"]').value = currentDate;
+    document.getElementById('editPaymentDateModal').classList.remove('hidden');
+}
 </script>
+
+{{-- ── Edit Payment Date Modal ─────────────────────────────────────────────── --}}
+<div id="editPaymentDateModal"
+     class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+        <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-gray-800">Edit Payment Date</h3>
+            <button onclick="document.getElementById('editPaymentDateModal').classList.add('hidden')"
+                    class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+        <p class="text-xs text-gray-500">Also updates the linked receipt date and finance ledger entry so they stay in sync.</p>
+        <form id="editPaymentDateForm" method="POST" action="" class="space-y-4">
+            @csrf
+            @method('PATCH')
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Payment Date</label>
+                <input type="date" name="payment_date" required max="{{ now()->toDateString() }}"
+                       class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
+            </div>
+            <div class="flex gap-3 pt-1">
+                <button type="submit"
+                        class="flex-1 py-2.5 bg-[#6a0f70] text-white font-medium text-sm rounded-lg hover:bg-[#5a0c60]">
+                    Save
+                </button>
+                <button type="button"
+                        onclick="document.getElementById('editPaymentDateModal').classList.add('hidden')"
+                        class="flex-1 py-2.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
 @endsection
                                                                                                                                                                                              
