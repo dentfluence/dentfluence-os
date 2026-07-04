@@ -6,6 +6,7 @@ use App\Models\Patient;
 use App\Models\Relationship;
 use App\Models\Scopes\BranchScope;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * RelationshipSplitService — one-time repair for household phone-sharing merges.
@@ -54,6 +55,7 @@ class RelationshipSplitService
 
         $split = 0;
         $failed = 0;
+        $errors = [];
 
         foreach ($groups as $patients) {
             // Keep the earliest-registered patient on the original relationship;
@@ -68,7 +70,7 @@ class RelationshipSplitService
                             'name'               => $patient->name,
                             'phone'              => $patient->phone,
                             'email'              => $patient->email,
-                            'source'             => 'relationship_split',
+                            'source'             => 'other', // not a marketing source — data-repair split, no 'source' enum value fits better
                             'status'             => 'active',
                             'score'              => 0,
                             'relationship_since' => $patient->created_at?->toDateString() ?? now()->toDateString(),
@@ -80,11 +82,18 @@ class RelationshipSplitService
                     $split++;
                 } catch (\Throwable $e) {
                     $failed++;
+                    Log::error('RelationshipSplitService::apply failed for patient', [
+                        'patient_id' => $patient->id ?? null,
+                        'error'      => $e->getMessage(),
+                    ]);
+                    if (count($errors) < 5) {
+                        $errors[] = 'patient #' . ($patient->id ?? '?') . ': ' . $e->getMessage();
+                    }
                 }
             }
         }
 
-        return ['mode' => 'applied', 'patients_split' => $split, 'failed' => $failed];
+        return ['mode' => 'applied', 'patients_split' => $split, 'failed' => $failed, 'errors' => $errors];
     }
 
     /**

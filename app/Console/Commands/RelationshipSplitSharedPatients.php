@@ -57,6 +57,15 @@ class RelationshipSplitSharedPatients extends Command
             ['Patients split off', 'Failed/Skipped'],
             [[$r['patients_split'], $r['failed']]]
         );
+
+        if (! empty($r['errors'])) {
+            $this->newLine();
+            $this->error('Sample errors (first 5, full list in storage/logs/laravel.log):');
+            foreach ($r['errors'] as $err) {
+                $this->line("  - {$err}");
+            }
+        }
+
         return self::SUCCESS;
     }
 }
