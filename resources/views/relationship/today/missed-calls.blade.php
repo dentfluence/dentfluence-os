@@ -237,28 +237,6 @@
         color: #1a7a45;
     }
 
-    /* ── WhatsApp compose modal ── */
-    .mc-modal-backdrop {
-        position: fixed; inset: 0; background: rgba(26,3,32,0.35);
-        z-index: 70; display: flex; align-items: center; justify-content: center; padding: 20px;
-    }
-    .mc-modal {
-        width: 440px; max-width: 100%; background: #fff; border-radius: 14px;
-        box-shadow: 0 20px 60px rgba(26,3,32,0.25); overflow: hidden;
-    }
-    .mc-modal-header {
-        padding: 16px 18px 12px; background: linear-gradient(135deg, #4e0a53, #6a0f70); color: #fff;
-    }
-    .mc-modal-title { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 19px; font-weight: 600; margin: 0; }
-    .mc-modal-sub { font-size: 12px; opacity: 0.8; margin: 2px 0 0; }
-    .mc-modal-body { padding: 18px; }
-    .mc-modal-textarea {
-        width: 100%; min-height: 110px; border: 1.5px solid #dfc5e1; border-radius: 8px;
-        padding: 10px; font-size: 13px; font-family: 'DM Sans', system-ui, sans-serif; resize: vertical; outline: none;
-    }
-    .mc-modal-textarea:focus { border-color: #6a0f70; }
-    .mc-modal-footer { padding: 14px 18px; border-top: 1px solid #f0e8f5; display: flex; gap: 10px; }
-
     #df-content-inner { padding: 10px 24px 24px !important; }
 </style>
 @endsection
@@ -409,21 +387,42 @@
             </table>
 
             {{-- ── Bulk bar — appears once >=1 row selected ─────────────── --}}
-            <div class="mc-bulk-bar" x-show="selected.length > 0" x-transition style="display:none;">
-                <span class="mc-bulk-count" x-text="selected.length + ' selected'"></span>
+            <div class="mc-bulk-bar" x-show="selected.length > 0 || selectAllMatching" x-transition style="display:none;">
+                <span class="mc-bulk-count" x-show="!selectAllMatching" x-text="selected.length + ' selected'"></span>
+                <span class="mc-bulk-count" x-show="selectAllMatching">All {{ $items->total() }} matching this filter selected</span>
 
-                <button type="button" class="mc-bulk-btn" @click="openWhatsapp()">
-                    <i class="ti ti-brand-whatsapp"></i> Bulk WhatsApp
-                </button>
+                {{-- Only offer "select all" once every row on the current page is checked
+                     and there's more backlog than what's loaded — no point offering it
+                     for a single 40-row page. --}}
+                <template x-if="!selectAllMatching && selected.length === {{ $items->count() }} && {{ $items->total() }} > {{ $items->count() }}">
+                    <button type="button" class="mc-bulk-btn" @click="selectAllMatching = true">
+                        Select all {{ $items->total() }} matching this filter
+                    </button>
+                </template>
+                <template x-if="selectAllMatching">
+                    <button type="button" class="mc-bulk-btn" @click="selectAllMatching = false">
+                        Just these {{ $items->count() }}
+                    </button>
+                </template>
 
                 <form method="POST" action="{{ route('relationship.today.missed-calls.bulk-dismiss') }}" style="display:inline;"
                       onsubmit="return confirm('Dismiss the selected item(s)? They will be marked closed.')">
                     @csrf
+                    <template x-if="selectAllMatching">
+                        <div style="display:inline;">
+                            <input type="hidden" name="select_all" value="1">
+                            <input type="hidden" name="search" value="{{ $filters['search'] ?? '' }}">
+                            <input type="hidden" name="purpose" value="{{ $filters['purpose'] ?? '' }}">
+                            <input type="hidden" name="priority" value="{{ $filters['priority'] ?? '' }}">
+                            <input type="hidden" name="show_ignored" value="{{ $showIgnored ? '1' : '' }}">
+                        </div>
+                    </template>
                     <template x-for="id in selected" :key="id">
                         <input type="hidden" name="comm_ids[]" :value="id">
                     </template>
                     <button type="submit" class="mc-bulk-btn mc-bulk-btn--danger">
-                        <i class="ti ti-check"></i> Bulk Dismiss
+                        <i class="ti ti-check"></i>
+                        <span x-text="selectAllMatching ? 'Dismiss all {{ $items->total() }}' : 'Bulk Dismiss'"></span>
                     </button>
                 </form>
 
@@ -454,61 +453,29 @@
         </div>
     @endif
 
-    {{-- ── Bulk WhatsApp compose modal ─────────────────────────────────── --}}
-    <template x-if="whatsapp.open">
-        <div class="mc-modal-backdrop" @click.self="whatsapp.open = false">
-            <div class="mc-modal" @click.stop>
-                <div class="mc-modal-header">
-                    <p class="mc-modal-title">Bulk WhatsApp</p>
-                    <p class="mc-modal-sub" x-text="selected.length + ' recipient(s)'"></p>
-                </div>
-                <form method="POST" action="{{ route('relationship.today.missed-calls.bulk-whatsapp') }}">
-                    @csrf
-                    <div class="mc-modal-body">
-                        <template x-for="id in selected" :key="id">
-                            <input type="hidden" name="comm_ids[]" :value="id">
-                        </template>
-                        <textarea name="message" class="mc-modal-textarea" required maxlength="1000"
-                                  placeholder="Hi, we tried reaching you yesterday regarding your appointment. Please call us back at your convenience."></textarea>
-                        <p style="font-size:11px;color:#9a7aaa;margin-top:6px;">
-                            Sent only to recipients with DPDP consent on file — others are skipped and reported back.
-                        </p>
-                    </div>
-                    <div class="mc-modal-footer">
-                        <button type="button" class="mc-btn" @click="whatsapp.open = false" style="flex:0;">Cancel</button>
-                        <button type="submit" class="mc-btn mc-btn--primary" style="flex:1;justify-content:center;">
-                            <i class="ti ti-send"></i> Send
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </template>
-
 </div>
 
 <script>
 function missedCalls() {
     return {
         selected: [],
-        whatsapp: { open: false },
+        selectAllMatching: false,
 
         toggleAll(e) {
             const boxes = document.querySelectorAll('.mc-row-check');
             this.selected = e.target.checked ? Array.from(boxes).map(b => parseInt(b.value)) : [];
             boxes.forEach(b => b.checked = e.target.checked);
+            if (!e.target.checked) this.selectAllMatching = false;
         },
         toggleRow(id) {
+            this.selectAllMatching = false;
             const idx = this.selected.indexOf(id);
             idx === -1 ? this.selected.push(id) : this.selected.splice(idx, 1);
         },
         clearSelection() {
             this.selected = [];
+            this.selectAllMatching = false;
             document.querySelectorAll('.mc-row-check, thead input[type=checkbox]').forEach(b => b.checked = false);
-        },
-        openWhatsapp() {
-            if (this.selected.length === 0) return;
-            this.whatsapp.open = true;
         },
     };
 }

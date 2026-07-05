@@ -345,7 +345,7 @@
                                      style="position:absolute;right:0;top:100%;background:#fff;border:1px solid #e2e8f0;border-radius:6px;min-width:158px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:50;padding:4px 0;">
                                     <form method="POST" action="{{ route('communication.manager.move', $item->id) }}">
                                         @csrf
-                                        @foreach(['prm_pipeline'=>'PRM Pipeline','follow_ups'=>'Follow-ups','calendar'=>'Calendar/Appointment','task'=>'Create Task','archive'=>'Archive'] as $d => $dl)
+                                        @foreach(['prm_pipeline'=>'Lead Pipeline','follow_ups'=>'Follow-ups','calendar'=>'Calendar/Appointment','task'=>'Create Task','archive'=>'Archive'] as $d => $dl)
                                         <button type="submit" name="move_to" value="{{ $d }}"
                                             class="cl-dropdown-item" style="display:block;width:100%;text-align:left;padding:7px 14px;font-size:12px;background:none;border:none;cursor:pointer;color:#374151;"
                                             onmouseover="this.style.background='#f8f4fa'" onmouseout="this.style.background='none'">
@@ -416,7 +416,6 @@
 
             <button type="button" class="cl-bulk-btn" @click="showBulkAssign=!showBulkAssign">Assign…</button>
             <button type="submit" name="action" value="assign" class="cl-bulk-btn" x-show="showBulkAssign">Apply Assign</button>
-            <button type="submit" name="action" value="move_prm" class="cl-bulk-btn">→ PRM Pipeline</button>
             <button type="submit" name="action" value="move_followups" class="cl-bulk-btn">→ Follow-ups</button>
             <button type="submit" name="action" value="mark_closed" class="cl-bulk-btn">Mark Closed</button>
             <button type="submit" name="action" value="archive" class="cl-bulk-btn cl-bulk-btn--danger"

@@ -350,7 +350,7 @@
                 <button type="button" class="add-comm__move-btn"
                     :class="moveTo === 'prm_pipeline' ? 'is-active' : ''"
                     @click="moveTo='prm_pipeline'">
-                    PRM Pipeline
+                    Lead Pipeline
                 </button>
                 <button type="button" class="add-comm__move-btn"
                     :class="moveTo === 'follow_ups' ? 'is-active' : ''"

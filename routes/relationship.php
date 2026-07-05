@@ -50,9 +50,6 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     Route::get('/today/missed-calls', [MissedCallsController::class, 'index'])
         ->name('today.missed-calls');
 
-    Route::post('/today/missed-calls/bulk-whatsapp', [MissedCallsController::class, 'bulkWhatsapp'])
-        ->name('today.missed-calls.bulk-whatsapp');
-
     Route::post('/today/missed-calls/bulk-dismiss', [MissedCallsController::class, 'bulkDismiss'])
         ->name('today.missed-calls.bulk-dismiss');
 

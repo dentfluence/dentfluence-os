@@ -447,12 +447,6 @@ class CommunicationController extends Controller
                     $comm->save();
                     CommActivityLog::log($comm->id, 'closed', 'Bulk: archived');
                     break;
-                case 'move_prm':
-                    $comm->move_to = 'prm_pipeline';
-                    $comm->save();
-                    $this->createLeadFromComm($comm);
-                    CommActivityLog::log($comm->id, 'moved', 'Bulk: moved to PRM Pipeline');
-                    break;
                 case 'move_followups':
                     $comm->move_to = 'follow_ups';
                     $comm->save();
@@ -471,8 +465,6 @@ class CommunicationController extends Controller
         }
 
         $count = count($validated['comm_ids']);
-        // Phase 8 PRM Retirement (Slice 5) — PRE's lead pipeline replaces the retired PRM board.
-        if ($action === 'move_prm')       return redirect()->route('relationship.pipeline')->with('success', "{$count} moved to the pipeline.");
         if ($action === 'move_followups') return redirect()->route('communication.followup.index')->with('success', "{$count} moved to Follow-ups.");
         return redirect()->route('communication.manager.index')->with('success', "{$count} communications updated.");
     }
