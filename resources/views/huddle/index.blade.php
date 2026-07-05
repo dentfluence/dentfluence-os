@@ -165,14 +165,30 @@
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
 /* ─── Stats Strip ──────────────────────────────────────────── */
+/* 2026-07-06: now lives inside .hd-actions-row alongside the Today's Actions
+   snapshot card instead of its own full-width row — reclaims the empty
+   space to the right of that banner instead of stacking below it. */
 .hd-stats-strip {
     display: flex;
     gap: .6rem;
-    padding: 0 1.5rem .85rem;
+    flex: 1;
+    min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
 }
 .hd-stats-strip::-webkit-scrollbar { display: none; }
+.hd-actions-row {
+    display: flex;
+    align-items: stretch;
+    gap: .6rem;
+    padding: 0 1.5rem .7rem;
+}
+.hd-actions-snapshot {
+    flex: 0 0 auto;
+    min-width: 230px;
+    max-width: 300px;
+}
+.hd-actions-snapshot > div { height: 100%; box-sizing: border-box; }
 .hd-stat-pill {
     background: var(--c-white);
     border: 1px solid var(--c-border);
@@ -209,6 +225,11 @@
 .hd-stat-sub.warn { color: var(--c-red); }
 
 /* ─── Kanban Board ─────────────────────────────────────────── */
+/* 2026-07-06: Sumit confirmed the huddle screen itself must NOT scroll —
+   the board stays locked to the viewport (one screen, everything visible)
+   and each column scrolls internally for its own overflow. Collapsible
+   Comms List sections (below) are the tool for managing overflow within
+   a column, not page-level scroll. */
 .hd-board-wrap {
     padding: 0 1.2rem 1rem;
     overflow-x: auto;
@@ -625,14 +646,6 @@
     border: 1px solid var(--c-border);
     border-radius: 10px;
 }
-.hd-bottom-row {
-    display: flex;
-    gap: .75rem;
-    padding: 0 1.5rem 1.5rem;
-    align-items: flex-start;
-}
-.hd-bottom-col { flex: 1; min-width: 0; }
-.hd-bottom-wide { flex: 1.4; min-width: 0; }
 .hd-section-hdr {
     font-size: .68rem;
     font-weight: 700;
@@ -1030,15 +1043,44 @@ document.addEventListener('alpine:init', () => {
     </div>
 </div>
 
-{{-- ══ TODAY'S ACTIONS SNAPSHOT (PRE · Workstream E, slice E4) ═══════════════ --}}
-@isset($todaySnapshot)
-<div style="margin:0 0 14px;">
-    @include('relationship.today._snapshot', ['snapshot' => $todaySnapshot])
-</div>
-@endisset
+{{-- ══ TODAY'S ACTIONS SNAPSHOT + STATS STRIP ═══════════════════════════════
+     2026-07-06: merged into one row — the snapshot banner had a lot of unused
+     width next to its numbers, so the stat pills now sit alongside it instead
+     of stacking in their own row underneath (reclaims a full row of height,
+     part of keeping the whole Huddle screen on one non-scrolling page). ══ --}}
+<div class="hd-actions-row">
 
-{{-- ══ STATS STRIP ══════════════════════════════════════════════════════════ --}}
-<div class="hd-stats-strip">
+    {{-- Compact inline snapshot instead of the full shared partial — the
+         partial's title row / counts row / badges / "updated X ago" footer
+         stack to ~150px, roughly double a stat pill's natural height. This
+         keeps the same numbers at a glance but sized to match the pills next
+         to it, per Sumit's "half the height" call 2026-07-06. --}}
+    @isset($todaySnapshot)
+    @php
+        $tas_total = $todaySnapshot['total'] ?? 0;
+        $tas_high  = $todaySnapshot['by_priority']['high'] ?? 0;
+    @endphp
+    <a href="{{ route('relationship.today') }}" class="hd-stat-pill" style="text-decoration:none;color:inherit;min-width:190px;">
+        <div style="width:100%;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span class="hd-stat-label" style="margin:0;">Today's Actions</span>
+                <span style="color:var(--c-accent);font-size:.68rem;font-weight:600;">Open →</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:.9rem;margin-top:.2rem;">
+                <span>
+                    <span class="hd-stat-val" style="font-size:1.1rem;">{{ number_format($tas_total) }}</span>
+                    <span style="font-size:.62rem;color:var(--c-muted);"> total</span>
+                </span>
+                <span>
+                    <span class="hd-stat-val" style="font-size:1.1rem;color:{{ $tas_high > 0 ? 'var(--c-red)' : 'var(--c-text)' }};">{{ number_format($tas_high) }}</span>
+                    <span style="font-size:.62rem;color:var(--c-muted);"> high</span>
+                </span>
+            </div>
+        </div>
+    </a>
+    @endisset
+
+    <div class="hd-stats-strip">
 
     {{-- Today's Appointments --}}
     <a href="{{ route('appointments.index', ['date' => today()->toDateString()]) }}" class="hd-stat-pill" style="text-decoration:none;color:inherit;">
@@ -1085,7 +1127,9 @@ document.addEventListener('alpine:init', () => {
     {{-- Communication Alert Pills --}}
     @include('communication.huddle.communication-alerts', ['alerts' => $commAlerts, 'counts' => $commCounts])
 
-</div>
+    </div>{{-- /hd-stats-strip --}}
+
+</div>{{-- /hd-actions-row --}}
 <div class="hd-board-wrap">
 <div class="hd-board">
 
@@ -1529,18 +1573,30 @@ document.addEventListener('alpine:init', () => {
         @if(($relationshipItems ?? []) === [] || count($relationshipItems) === 0)
             <div class="hd-empty-col">No pending actions for today.</div>
         @else
-        <div style="max-height:420px;overflow-y:auto;padding-right:.2rem;">
+        {{-- 2026-07-06: dropped the fixed max-height/scroll box in favour of the
+             page's own scrollbar; each category is now its own collapsible
+             section instead, so the column only takes up as much room as the
+             categories the user leaves expanded. --}}
+        <div x-data="{ openCats: {} }">
             @foreach($glimpseByCategory as $catKey => $catItems)
             @php [$ico, $bgColor, $textColor, $catLabel] = $glimpseMeta[$catKey] ?? ['📋', '#f3f4f6', '#374151', ucwords(str_replace('_', ' ', $catKey))]; @endphp
             <div style="margin-bottom:.4rem;">
-                <div style="display:flex;align-items:center;gap:.4rem;padding:.3rem .2rem;">
+                <div style="display:flex;align-items:center;gap:.4rem;padding:.3rem .2rem;cursor:pointer;user-select:none;"
+                     @click="openCats['{{ $catKey }}'] = (openCats['{{ $catKey }}'] === false)">
                     <span style="background:{{ $bgColor }};color:{{ $textColor }};padding:.15rem .45rem;border-radius:999px;font-size:.65rem;font-weight:700;">
                         {{ $ico }} {{ $catLabel }}
                     </span>
                     <span class="hd-cs-count" style="background:{{ $bgColor }};color:{{ $textColor }};">{{ $catItems->count() }}</span>
+                    <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                         style="margin-left:auto;flex-shrink:0;color:var(--c-muted);transition:transform .15s;"
+                         :style="(openCats['{{ $catKey }}'] === false) ? 'transform:rotate(-90deg)' : ''">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
                 </div>
+                <template x-if="openCats['{{ $catKey }}'] !== false">
+                <div>
                 @foreach($catItems as $glimpseCard)
-                <a href="{{ $glimpseCard->meta['link'] ?? '#' }}" class="hd-card" style="cursor:pointer;text-decoration:none;color:inherit;display:block;">
+                <a href="{{ $glimpseCard->meta['link'] ?? '#' }}" class="hd-card" style="cursor:pointer;text-decoration:none;color:inherit;display:block;margin-top:.3rem;">
                     <div class="hd-cc" style="gap:.5rem;">
                         <div style="flex-shrink:0;width:8px;height:8px;border-radius:50%;margin-top:4px;
                             background:{{ $glimpseCard->status === 'high' ? '#ef4444' : ($glimpseCard->status === 'medium' ? '#f59e0b' : '#22c55e') }};"></div>
@@ -1554,6 +1610,8 @@ document.addEventListener('alpine:init', () => {
                     </div>
                 </a>
                 @endforeach
+                </div>
+                </template>
             </div>
             @endforeach
         </div>
@@ -1820,21 +1878,19 @@ document.addEventListener('alpine:init', () => {
         </div>{{-- /hd-col-body --}}
     </div>
 
-</div>{{-- /hd-board --}}
-</div>{{-- /hd-board-wrap --}}
-
-{{-- ══ BOTTOM ROW: MARKETING + FAILURES + QUICK ACTIONS ══════════════════ --}}
-<div class="hd-bottom-row">
-
-    {{-- Marketing --}}
-    <div class="hd-bottom-col">
-        <div class="hd-section-hdr">
-            <span>
-                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;margin-right:.3rem;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
-                Marketing – What to Post
-            </span>
-            <span class="hd-section-hdr-count">4</span>
+    {{-- ── COL: MARKETING — WHAT TO POST ──
+         2026-07-06 (3rd pass, back to this per Sumit): a regular board column
+         beside Inventory rather than a separate bottom strip — scroll right
+         on the board to reach it, same as any other column. --}}
+    <div class="hd-col">
+        <div class="hd-col-hdr">
+            <div class="hd-col-title">
+                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
+                Marketing
+            </div>
+            <span class="hd-col-count">4</span>
         </div>
+        <div class="hd-col-body">
         <div class="hd-card">
             <div class="hd-mc">
                 <div class="hd-mc-ico hd-mc-ig"></div>
@@ -1867,17 +1923,19 @@ document.addEventListener('alpine:init', () => {
             </div>
             <a href="#" class="hd-view-all">+ 2 more content ideas</a>
         </div>
+        </div>{{-- /hd-col-body --}}
     </div>
 
-    {{-- Failures / Maintenance --}}
-    <div class="hd-bottom-col">
-        <div class="hd-section-hdr">
-            <span>
-                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;margin-right:.3rem;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                Failures / Maintenance
-            </span>
-            <span class="hd-section-hdr-count">{{ $criticalAlerts->count() }}</span>
+    {{-- ── COL: FAILURES / MAINTENANCE ── --}}
+    <div class="hd-col">
+        <div class="hd-col-hdr">
+            <div class="hd-col-title">
+                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                Failures / Maint.
+            </div>
+            <span class="hd-col-count">{{ $criticalAlerts->count() }}</span>
         </div>
+        <div class="hd-col-body">
         <div class="hd-card">
             @forelse($criticalAlerts as $alert)
             <div class="hd-fc">
@@ -1907,10 +1965,11 @@ document.addEventListener('alpine:init', () => {
                 + Add New Issue
             </button>
         </div>
+        </div>{{-- /hd-col-body --}}
     </div>
 
-
-</div>{{-- /hd-bottom-row --}}
+</div>{{-- /hd-board --}}
+</div>{{-- /hd-board-wrap --}}
 
 {{-- ══ FOOTER BAR ══════════════════════════════════════════════════════════ --}}
 <div class="hd-footer-bar">

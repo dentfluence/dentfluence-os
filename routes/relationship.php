@@ -175,14 +175,33 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
         ->whereNumber('id')
         ->name('opportunities.convert');  // relationship.opportunities.convert
 
-    // ── PRE Recall pipeline (Phase 1 · Workstream D, slice 3) ────────────────
-    // Read-only, relationship-centric board, additive alongside the legacy
-    // Communication / Recall surfaces (which are left untouched).
+    // ── PRE Recalls (Phase 1 · Workstream D, slice 3; rebuilt 2026-07-06) ────
+    // Filterable, actionable list — additive alongside the legacy
+    // Communication / Recall surfaces (which are left untouched). Static
+    // segments only, all before the /{id} wildcard at the bottom of this file.
     Route::get('/recalls', [RecallPipelineController::class, 'index'])
         ->name('recalls');  // relationship.recalls
 
     Route::post('/recalls', [RecallPipelineController::class, 'store'])
         ->name('recalls.store');  // relationship.recalls.store — manual "+ Add Recall"
+
+    Route::post('/recalls/bulk-dismiss', [RecallPipelineController::class, 'bulkDismiss'])
+        ->name('recalls.bulk-dismiss');  // relationship.recalls.bulk-dismiss
+
+    Route::post('/recalls/bulk-assign', [RecallPipelineController::class, 'bulkAssign'])
+        ->name('recalls.bulk-assign');  // relationship.recalls.bulk-assign
+
+    Route::post('/recalls/{recall}/ignore', [RecallPipelineController::class, 'ignore'])
+        ->whereNumber('recall')
+        ->name('recalls.ignore');  // relationship.recalls.ignore
+
+    Route::post('/recalls/{recall}/unignore', [RecallPipelineController::class, 'unignore'])
+        ->whereNumber('recall')
+        ->name('recalls.unignore');  // relationship.recalls.unignore
+
+    Route::post('/recalls/{recall}/convert', [RecallPipelineController::class, 'convertToOpportunity'])
+        ->whereNumber('recall')
+        ->name('recalls.convert');  // relationship.recalls.convert
 
     // Reception dashboard removed 2026-07-06 (Sumit) — it read the exact same
     // Today's Actions projection with zero interactivity (no Call drawer, no
