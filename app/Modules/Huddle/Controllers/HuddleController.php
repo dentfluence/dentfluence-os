@@ -47,6 +47,7 @@ class HuddleController extends Controller
         $todaysAppointments = DB::table('appointments')
             ->join('patients', 'patients.id', '=', 'appointments.patient_id')
             ->leftJoin('users as doctors', 'doctors.id', '=', 'appointments.doctor_id')
+            ->leftJoin('users as assistants', 'assistants.id', '=', 'appointments.chairside_assistant_id')
             ->leftJoin('treatment_types', 'treatment_types.id', '=', 'appointments.treatment_id')
             ->where('appointments.branch_id', $branchId)
             ->whereDate('appointments.appointment_date', $today->toDateString())
@@ -57,11 +58,16 @@ class HuddleController extends Controller
                 'appointments.appointment_time',
                 'appointments.status',
                 'appointments.staff_instruction',
+                'appointments.amount_to_collect',
+                'appointments.prep_item',
+                'appointments.chairside_assistant_id',
+                'appointments.is_walkin',
                 'appointments.type',
                 'patients.name as patient_name',
                 'patients.medical_alert',
                 'doctors.name as doctor_name',
                 'doctors.color as doctor_color',
+                'assistants.name as assistant_name',
                 'treatment_types.name as treatment_name',
             ])
             ->orderBy('appointments.appointment_time')
@@ -72,6 +78,14 @@ class HuddleController extends Controller
                 $row->treatment = $row->treatment_name ? (object) ['name' => $row->treatment_name] : null;
                 return $row;
             });
+
+        // ── Collections (Today) — front-desk target, scheduled appointments only ──
+        // Walk-ins are excluded on purpose: they aren't planned the night before,
+        // so there's nothing for the front desk to prep a collection figure against.
+        $collectionsScheduled   = $todaysAppointments->where('is_walkin', 0);
+        $collectionsTarget      = (float) $collectionsScheduled->sum('amount_to_collect');
+        $collectionsLoggedCount = $collectionsScheduled->filter(fn ($r) => ! is_null($r->amount_to_collect))->count();
+        $collectionsTotalCount  = $collectionsScheduled->count();
 
         // ── Yesterday summary ─────────────────────────────────────────────────
         $yesterdayAppts = DB::table('appointments')
@@ -648,6 +662,9 @@ class HuddleController extends Controller
             'commAlerts',
             'relationshipItems',
             'commTotalCount',
+            'collectionsTarget',
+            'collectionsLoggedCount',
+            'collectionsTotalCount',
         ));
     }
 
@@ -1187,21 +1204,42 @@ class HuddleController extends Controller
 
     /**
      * PATCH /huddle/appointments/{id}/instruction
+     *
+     * Today's Patient Flow popup (Huddle board) — saves the note, the
+     * front-desk collection target, an essential prep item/task, and the
+     * chairside assistant, all in one call. "amount_to_collect" is ignored
+     * for walk-ins: they aren't planned ahead of time, so there's nothing
+     * for the front desk to have prepped a collection figure against.
      */
     public function updateInstruction(Request $request, int $id): JsonResponse
     {
         $request->validate([
-            'staff_instruction' => ['nullable', 'string', 'max:1000'],
+            'staff_instruction'      => ['nullable', 'string', 'max:1000'],
+            'amount_to_collect'      => ['nullable', 'numeric', 'min:0'],
+            'prep_item'              => ['nullable', 'string', 'max:255'],
+            'chairside_assistant_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
-        $updated = DB::table('appointments')
+        $appointment = DB::table('appointments')
             ->where('id', $id)
             ->where('branch_id', auth()->user()->branch_id)
-            ->update(['staff_instruction' => $request->input('staff_instruction')]);
+            ->first(['id', 'is_walkin']);
 
-        if (!$updated) {
+        if (!$appointment) {
             return response()->json(['message' => 'Appointment not found.'], 404);
         }
+
+        $update = [
+            'staff_instruction'      => $request->input('staff_instruction'),
+            'prep_item'              => $request->input('prep_item'),
+            'chairside_assistant_id' => $request->input('chairside_assistant_id'),
+        ];
+
+        if (!$appointment->is_walkin) {
+            $update['amount_to_collect'] = $request->input('amount_to_collect');
+        }
+
+        DB::table('appointments')->where('id', $id)->update($update);
 
         return response()->json(['message' => 'Saved.']);
     }

@@ -3,26 +3,31 @@
 namespace App\Http\Controllers\Relationship;
 
 use App\Http\Controllers\Controller;
+use App\Models\Lead;
+use App\Models\Patient;
 use App\Models\RelationshipJourney;
 use App\Models\TreatmentOpportunity;
+use App\Models\User;
 use App\Support\Features\Feature;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
- * OpportunityPipelineController — PRE (Phase 1 · Workstream D, slice 3).
+ * OpportunityPipelineController — PRE (Phase 1 · Workstream D, slice 3;
+ * writes added 2026-07-06 — full retirement of the legacy Communication
+ * "Opportunity Engine" board).
  *
- * A read-only, relationship-centric board of treatment opportunities. Columns
- * come from the RELIABLE legacy `treatment_opportunities.status` (the vocabulary
- * already declared on TreatmentOpportunity::STAGES), so grouping is
- * authoritative today. The shadow opportunity-journey state is shown per card
- * for context ONLY, and only when `relationship.opportunity_journey_column` is
- * on (journeys are shadow until Blueprint Phase 4).
+ * A relationship-centric board of treatment opportunities. Columns come from
+ * the RELIABLE legacy `treatment_opportunities.status` (the vocabulary already
+ * declared on TreatmentOpportunity::STAGES), so grouping is authoritative.
+ * The shadow opportunity-journey state is shown per card for context ONLY,
+ * and only when `relationship.opportunity_journey_column` is on (journeys are
+ * shadow until Blueprint Phase 4).
  *
- * Fully additive: NEW route (relationship.opportunities); the legacy
- * Communication / Opportunity surfaces are untouched. No writes, no migration.
- *
- * Person names are read from the plain Relationship spine (never the encrypted
- * Patient fields).
+ * This is now the ONLY place opportunities are managed — the legacy
+ * communication/opportunities screen redirects here (routes/communication.php).
  *
  * Route: GET /relationship/opportunities  [relationship.opportunities]
  */
@@ -36,12 +41,13 @@ class OpportunityPipelineController extends Controller
         $showJourney = Feature::enabled('relationship.opportunity_journey_column');
 
         // Read side — legacy status is the reliable grouping key.
-        // Eager-load the relationship (plain name) for a safe display label.
+        // Eager-load the relationship (plain name) + assigned staff for a safe display label.
         $opportunities = TreatmentOpportunity::query()
-            ->with(['relationship:id,name,phone'])
+            ->with(['relationship:id,name,phone', 'assignedStaff:id,name'])
             ->select([
                 'id', 'relationship_id', 'patient_id', 'type', 'label', 'status',
-                'priority', 'follow_up_date', 'estimated_value', 'assigned_to',
+                'priority', 'follow_up_date', 'estimated_value', 'assigned_to', 'updated_at',
+                'declined_reason',
             ])
             ->orderByRaw('follow_up_date IS NULL, follow_up_date ASC')
             ->orderByDesc('id')
@@ -84,17 +90,153 @@ class OpportunityPipelineController extends Controller
             ];
         }
 
-        $openStatuses  = array_diff(array_keys(TreatmentOpportunity::STAGES), ['completed', 'declined']);
-        $openCount     = $opportunities->whereIn('status', $openStatuses)->count();
-        $pipelineValue = (float) $opportunities->whereIn('status', $openStatuses)->sum('estimated_value');
+        $openStatuses   = array_diff(array_keys(TreatmentOpportunity::STAGES), ['completed', 'declined']);
+        $openCount      = $opportunities->whereIn('status', $openStatuses)->count();
+        $pipelineValue  = (float) $opportunities->whereIn('status', $openStatuses)->sum('estimated_value');
+        $followUpToday  = $opportunities->filter(fn ($o) => $o->due_today)->count();
+        $convertedMTD   = TreatmentOpportunity::where('status', 'completed')
+                            ->whereMonth('updated_at', now()->month)
+                            ->count();
+
+        $staff = User::orderBy('name')->get(['id', 'name']);
 
         return view('relationship.opportunities.index', [
             'columns'              => $columns,
             'total'                => $opportunities->count(),
             'openCount'            => $openCount,
             'pipelineValue'        => $pipelineValue,
+            'followUpToday'        => $followUpToday,
+            'convertedMTD'         => $convertedMTD,
+            'staff'                => $staff,
             'showJourney'          => $showJourney,
             'journeyByOpportunity' => $journeyByOpportunity,
+        ]);
+    }
+
+    // ── Store — save new opportunity (Add Opportunity modal) ──────────────────
+
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'patient_id'      => 'required|exists:patients,id',
+            'type'            => 'required|string|max:100',
+            'label'           => 'nullable|string|max:150',
+            'priority'        => 'required|in:high,medium,low',
+            'estimated_value' => 'nullable|numeric|min:0',
+            'follow_up_date'  => 'required|date',
+            'follow_up_time'  => 'nullable|date_format:H:i',
+            'assigned_to'     => 'nullable|exists:users,id',
+            'notes'           => 'nullable|string|max:1000',
+        ]);
+
+        // Auto-link to the patient's Relationship record if one exists.
+        $patient        = Patient::find($validated['patient_id']);
+        $relationshipId = $patient?->relationship_id;
+
+        TreatmentOpportunity::create([
+            ...$validated,
+            'relationship_id' => $relationshipId,
+            'status'          => 'prospect',   // always starts at Identified
+            'created_by'      => Auth::id(),
+        ]);
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'Opportunity added.']);
+        }
+
+        return redirect()->route('relationship.opportunities')
+                         ->with('success', 'Opportunity added successfully.');
+    }
+
+    // ── Patient Search — AJAX autocomplete for Add Opportunity modal ───────────
+
+    public function patientSearch(Request $request)
+    {
+        $term = $request->get('q', '');
+
+        $patients = Patient::where(function ($q) use ($term) {
+                $q->where('name', 'like', "%{$term}%")
+                  ->orWhere('phone', 'like', "%{$term}%");
+            })
+            ->limit(10)
+            ->get(['id', 'name', 'phone']);
+
+        return response()->json($patients);
+    }
+
+    // ── Detail Modal — rendered as a partial for the board's popup card ───────
+
+    public function detailModal(int $id)
+    {
+        $opportunity = TreatmentOpportunity::with(['patient', 'assignedStaff', 'author', 'treatmentPlan'])
+            ->findOrFail($id);
+
+        return view('relationship.opportunities._detail-card', compact('opportunity'));
+    }
+
+    // ── Update Stage — drag-drop / Move-to dropdown ────────────────────────────
+
+    public function updateStage(Request $request, int $id)
+    {
+        $request->validate([
+            'status' => 'required|in:prospect,discussed,quoted,accepted,completed,declined',
+            'reason' => 'nullable|string|max:1000',
+        ]);
+
+        $opp = TreatmentOpportunity::findOrFail($id);
+
+        $update = ['status' => $request->status];
+        // Optional reason, only meaningful (and only saved) when declining.
+        if ($request->status === 'declined') {
+            $update['declined_reason'] = $request->filled('reason') ? $request->reason : null;
+        }
+        $opp->update($update);
+
+        $stageInfo = TreatmentOpportunity::STAGES[$request->status] ?? [];
+
+        return response()->json([
+            'success'     => true,
+            'status'      => $request->status,
+            'stage_label' => $stageInfo['label'] ?? $request->status,
+        ]);
+    }
+
+    // ── Convert to PRE Lead ─────────────────────────────────────────────────────
+
+    public function convertToLead(Request $request, int $id)
+    {
+        $request->validate([
+            'stage'       => 'nullable|string|max:50',
+            'assigned_to' => 'nullable|exists:users,id',
+        ]);
+
+        $opp = TreatmentOpportunity::with(['patient', 'assignedStaff'])->findOrFail($id);
+
+        DB::transaction(function () use ($opp, $request) {
+            $opp->update(['status' => 'completed']);
+
+            // Lead::assigned_to is a plain staff-name string (unlike TreatmentOpportunity's
+            // FK column of the same name) — resolve to a name before saving.
+            $assignedName = $request->filled('assigned_to')
+                ? User::find($request->assigned_to)?->name
+                : $opp->assignedStaff?->name;
+
+            Lead::create([
+                'name'        => $opp->patient->name ?? 'Unknown',
+                'phone'       => $opp->patient->phone ?? '',
+                'stage'       => $request->stage ?? 'new',
+                'lead_source' => 'referral',    // originated from internal clinical tagging
+                'source'      => 'opportunity', // internal tag
+                'treatment'   => $opp->display_label,
+                'lead_value'  => $opp->estimated_value,
+                'assigned_to' => $assignedName,
+                'notes'       => "Converted from Treatment Opportunity #{$opp->id}.\n\n" . ($opp->notes ?? ''),
+            ]);
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Opportunity converted to a lead in the Lead Pipeline.',
         ]);
     }
 }

@@ -485,8 +485,8 @@ Route::middleware('auth')->group(function () {
         Route::delete('/billing/final-bill/{finalBill}', [\App\Http\Controllers\BillingController::class, 'deleteFinalBill'])->name('billing.finalBill.delete');
     }); // end module:finance (billing)
 
-    // CRM — redirects to Opportunity Engine (the real patient pipeline)
-    Route::get('/crm', fn() => redirect()->route('communication.opportunities.index'))->name('crm.index');
+    // CRM — redirects to the Opportunity Pipeline (the real patient pipeline)
+    Route::get('/crm', fn() => redirect()->route('relationship.opportunities'))->name('crm.index');
 
     // Analytics — Finance AnalyticsController (wired 2026-06-18)
     Route::middleware('module:analytics')->prefix('analytics')->name('analytics.')->group(function () {

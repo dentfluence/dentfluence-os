@@ -173,17 +173,30 @@ class HuddleBoardApiService
             $collectedToday = 0.0;
         }
 
+        // Collections (Today) target — front-desk figure from scheduled
+        // appointments' "Amount to Collect" (Today's Patient Flow popup).
+        // Walk-ins excluded on purpose: they aren't planned ahead of time, so
+        // there's nothing to prep a collection figure against. Mirrors web's
+        // HuddleController::index() $collectionsTarget/$collectionsLoggedCount.
+        $collectionsScheduled   = $schedule->where('is_walkin', false);
+        $collectionsTarget      = (float) $collectionsScheduled->sum('amount_to_collect');
+        $collectionsLoggedCount = $collectionsScheduled->filter(fn ($r) => $r['amount_to_collect'] !== null)->count();
+        $collectionsTotalCount  = $collectionsScheduled->count();
+
         return [
-            'appointments_today'   => $schedule->count(),
-            'appointments_done'    => $todayDone,
-            'appointments_pending' => max(0, $schedule->count() - $todayDone),
-            'yesterday_treated'    => $yTreated,
-            'yesterday_missing'    => $yMissing,
-            'tasks_total'          => $tasks->count(),
-            'tasks_overdue'        => $tasks->where('is_overdue', true)->count(),
-            'collected_today'      => $collectedToday,
-            'labs_due'             => (int) (($labs['due'] ?? null) ? count($labs['due']) : 0),
-            'comms_pending'        => $comms->count(),
+            'appointments_today'      => $schedule->count(),
+            'appointments_done'       => $todayDone,
+            'appointments_pending'    => max(0, $schedule->count() - $todayDone),
+            'yesterday_treated'       => $yTreated,
+            'yesterday_missing'       => $yMissing,
+            'tasks_total'             => $tasks->count(),
+            'tasks_overdue'           => $tasks->where('is_overdue', true)->count(),
+            'collected_today'         => $collectedToday,
+            'collections_target'          => $collectionsTarget,
+            'collections_logged_count'    => $collectionsLoggedCount,
+            'collections_total_count'     => $collectionsTotalCount,
+            'labs_due'                => (int) (($labs['due'] ?? null) ? count($labs['due']) : 0),
+            'comms_pending'           => $comms->count(),
         ];
     }
 
@@ -196,6 +209,7 @@ class HuddleBoardApiService
         return DB::table('appointments')
             ->join('patients', 'patients.id', '=', 'appointments.patient_id')
             ->leftJoin('users as doctors', 'doctors.id', '=', 'appointments.doctor_id')
+            ->leftJoin('users as chairside', 'chairside.id', '=', 'appointments.chairside_assistant_id')
             ->leftJoin('treatment_types', 'treatment_types.id', '=', 'appointments.treatment_id')
             ->where('appointments.branch_id', $branchId)
             ->whereDate('appointments.appointment_date', $today->toDateString())
@@ -206,26 +220,37 @@ class HuddleBoardApiService
                 'appointments.status',
                 'appointments.type',
                 'appointments.staff_instruction',
+                'appointments.is_walkin',
+                'appointments.amount_to_collect',
+                'appointments.prep_item',
+                'appointments.chairside_assistant_id',
                 'patients.name as patient_name',
                 'patients.medical_alert',
                 'doctors.name as doctor_name',
+                'chairside.name as chairside_assistant_name',
                 'treatment_types.name as treatment_name',
             ])
             ->orderBy('appointments.appointment_time')
             ->get()
             ->map(fn ($r) => [
-                'id'                => (int) $r->id,
-                'patient_id'        => (int) $r->patient_id,
-                'patient_name'      => $r->patient_name,
-                'doctor_name'       => $r->doctor_name,
-                'treatment'         => $r->treatment_name,
-                'time'              => $r->appointment_time
+                'id'                       => (int) $r->id,
+                'patient_id'               => (int) $r->patient_id,
+                'patient_name'             => $r->patient_name,
+                'doctor_name'              => $r->doctor_name,
+                'treatment'                => $r->treatment_name,
+                'time'                     => $r->appointment_time
                     ? Carbon::parse($r->appointment_time)->format('h:i A')
                     : null,
-                'status'            => $r->status,
-                'type'              => $r->type,
-                'medical_alert'     => $r->medical_alert,
-                'staff_instruction' => $r->staff_instruction,
+                'status'                   => $r->status,
+                'type'                     => $r->type,
+                'medical_alert'            => $r->medical_alert,
+                'staff_instruction'        => $r->staff_instruction,
+                // Today's Patient Flow popup (Huddle board, 2026-07-06)
+                'is_walkin'                => (bool) $r->is_walkin,
+                'amount_to_collect'        => $r->amount_to_collect !== null ? (float) $r->amount_to_collect : null,
+                'prep_item'                => $r->prep_item,
+                'chairside_assistant_id'   => $r->chairside_assistant_id ? (int) $r->chairside_assistant_id : null,
+                'chairside_assistant_name' => $r->chairside_assistant_name,
             ]);
     }
 

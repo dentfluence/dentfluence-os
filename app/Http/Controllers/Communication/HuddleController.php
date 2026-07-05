@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Communication;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\FollowUp;
+use App\Models\Lead;
 use App\Models\Patient;
 use App\Models\Task;
+use App\Models\TreatmentOpportunity;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentVisit;
 use Carbon\Carbon;
@@ -124,13 +126,6 @@ class HuddleController extends Controller
      */
     public function buildAlerts(): array
     {
-        // ── Birthdays today ──────────────────────────────────────────────────
-        $birthdayPatients = Patient::whereNotNull('date_of_birth')
-            ->whereMonth('date_of_birth', today()->month)
-            ->whereDay('date_of_birth', today()->day)
-            ->pluck('name')
-            ->toArray();
-
         // ── Missed appointments (last 7 days) ────────────────────────────────
         $missedAll   = Appointment::where('status', 'no_show')
             ->whereDate('appointment_date', '>=', today()->subDays(7))
@@ -148,9 +143,6 @@ class HuddleController extends Controller
         $vipCount = $vipAll->count();
         $vipNames = $vipAll->take(3)->toArray();
 
-        // ── Pending treatment plan estimates ────────────────────────────────
-        $pendingEstimates = TreatmentPlan::where('status', 'pending')->count();
-
         // ── Escalated tasks ──────────────────────────────────────────────────
         $escalatedAll   = Task::where('status', 'escalated')
             ->with('patient:id,name')
@@ -158,26 +150,8 @@ class HuddleController extends Controller
         $escalatedCount = $escalatedAll->count();
         $escalatedNames = $escalatedAll->take(2)->map(fn ($t) => $t->patient?->name ?? 'No patient')->toArray();
 
-        // ── Overdue follow-ups ───────────────────────────────────────────────
-        $overdueAll   = FollowUp::overdue()->with('patient:id,name')->get();
-        $overdueCount = $overdueAll->count();
-        $overdueNames = $overdueAll->take(2)->map(fn ($f) => $f->patient?->name ?? 'Unknown')->toArray();
-
         // Only return alert types that have something to show
         $alerts = [];
-
-        if (count($birthdayPatients) > 0) {
-            $alerts[] = [
-                'type'   => 'birthday',
-                'icon'   => '🎂',
-                'title'  => 'Birthdays Today',
-                'count'  => count($birthdayPatients),
-                'names'  => array_slice($birthdayPatients, 0, 3),
-                'color'  => '#9B59B6',
-                'action' => 'Send Wishes',
-                'link'   => route('patients.index', ['birthday' => today()->format('m-d')]),
-            ];
-        }
 
         if ($missedCount > 0) {
             $alerts[] = [
@@ -205,19 +179,6 @@ class HuddleController extends Controller
             ];
         }
 
-        if ($pendingEstimates > 0) {
-            $alerts[] = [
-                'type'   => 'estimate',
-                'icon'   => '📋',
-                'title'  => 'Pending Estimates',
-                'count'  => $pendingEstimates,
-                'names'  => [],
-                'color'  => '#2980B9',
-                'action' => 'Review',
-                'link'   => route('patients.index', ['tp_status' => 'pending']),
-            ];
-        }
-
         if ($escalatedCount > 0) {
             $alerts[] = [
                 'type'   => 'escalation',
@@ -232,16 +193,36 @@ class HuddleController extends Controller
             ];
         }
 
-        if ($overdueCount > 0) {
+        // ── Open Leads / Open Opportunities (PRE) ─────────────────────────────
+        // Replaces Birthdays Today / Pending Estimates / Overdue Follow-ups
+        // 2026-07-06 (Sumit's call) — those three were generalised backlog
+        // counts, not scoped to today, and duplicated what Today's Actions
+        // already covers properly. These two read from PRE instead.
+        $openLeadsCount = Lead::whereNotIn('stage', ['converted', 'lost'])->count();
+        if ($openLeadsCount > 0) {
             $alerts[] = [
-                'type'   => 'overdue',
-                'icon'   => '🔴',
-                'title'  => 'Overdue Follow-ups',
-                'count'  => $overdueCount,
-                'names'  => $overdueNames,
-                'color'  => '#E74C3C',
-                'action' => 'View All',
-                'link'   => route('communication.manager.index'),
+                'type'   => 'open_leads',
+                'icon'   => '📥',
+                'title'  => 'Open Leads',
+                'count'  => $openLeadsCount,
+                'names'  => [],
+                'color'  => '#2980B9',
+                'action' => 'View Pipeline',
+                'link'   => route('relationship.pipeline'),
+            ];
+        }
+
+        $openOpportunitiesCount = TreatmentOpportunity::whereNotIn('status', ['completed', 'declined'])->count();
+        if ($openOpportunitiesCount > 0) {
+            $alerts[] = [
+                'type'   => 'open_opportunities',
+                'icon'   => '💬',
+                'title'  => 'Open Opportunities',
+                'count'  => $openOpportunitiesCount,
+                'names'  => [],
+                'color'  => '#2980B9',
+                'action' => 'Review',
+                'link'   => route('relationship.opportunities'),
             ];
         }
 

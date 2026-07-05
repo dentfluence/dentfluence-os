@@ -29,8 +29,15 @@ Route::prefix('communication')
 
         // ── Communication List / Manager (PRM Update 2026-06-13) ────────
         Route::prefix('manager')->name('manager.')->group(function () {
-            // Tabbed inbox
-            Route::get('/',    [CommunicationController::class, 'index'])->name('index');
+            // Tabbed inbox — RETIRED 2026-07-06 (Sumit's call): this list read
+            // like the old PRM board and duplicated what PRE's Today's Actions
+            // now covers (recall calls, missed appointments, lead follow-ups,
+            // membership renewals, and manually-logged comms via the new
+            // 'logged_communications' category). Redirects rather than 404s so
+            // any stale bookmark/link still lands somewhere useful — same
+            // pattern as the recall-settings/templates retirements below.
+            // Controller method + view left in place (unreachable, not deleted).
+            Route::get('/', fn () => redirect()->route('relationship.today'))->name('index');
 
             // Add Communication
             Route::get('/add', [CommunicationController::class, 'logForm'])->name('log.form');
@@ -105,15 +112,23 @@ Route::prefix('communication')
             Route::post('/anniversary', fn () => redirect()->route('relationship.settings'))->name('anniversary');
         });
 
-        // ── Opportunity Engine ───────────────────────────────────────────
+        // ── Opportunity Engine — RETIRED 2026-07-06 ──────────────────────
+        // Fully replaced by the PRE Opportunity Pipeline (relationship.opportunities),
+        // which now has the full read/write board (Add, drag-drop, Convert, popup
+        // detail) that this screen used to be the only place for. These two GET
+        // routes are safety nets for stale bookmarks/links; everything else in this
+        // group is unreachable dead code left in place (never deleted, per project
+        // convention) — nothing calls it anymore. Old view moved to under_review/.
         Route::prefix('opportunities')->name('opportunities.')->group(function () {
-            Route::get('/',                    [\App\Http\Controllers\Communication\OpportunityController::class, 'index'])->name('index');
-            Route::get('/board',               [\App\Http\Controllers\Communication\OpportunityController::class, 'board'])->name('board');
+            Route::get('/',                    fn () => redirect()->route('relationship.opportunities'))->name('index');
+            Route::get('/board',               fn () => redirect()->route('relationship.opportunities'))->name('board');
             Route::post('/',                   [\App\Http\Controllers\Communication\OpportunityController::class, 'store'])->name('store');
             // AJAX: patient autocomplete for add-opportunity modal
             Route::get('/patient-search',      [\App\Http\Controllers\Communication\OpportunityController::class, 'patientSearch'])->name('patient-search');
             // Single opportunity (must come after named static segments)
             Route::get('/{id}',                [\App\Http\Controllers\Communication\OpportunityController::class, 'detail'])->name('detail');
+            // Detail popup content (AJAX) — powers the board/list click-to-open modal
+            Route::get('/{id}/modal',          [\App\Http\Controllers\Communication\OpportunityController::class, 'detailModal'])->name('detail-modal');
             Route::patch('/{id}/stage',        [\App\Http\Controllers\Communication\OpportunityController::class, 'updateStage'])->name('update-stage');
             Route::post('/{id}/convert',       [\App\Http\Controllers\Communication\OpportunityController::class, 'convertToLead'])->name('convert');
         });

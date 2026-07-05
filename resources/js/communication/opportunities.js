@@ -206,6 +206,7 @@ function initConvertButton() {
         .then(d => {
             if (d.success) {
                 closeConvertModal();
+                closeOpportunityDetailModal();
                 // Remove converted card from board and reload stats
                 const card = document.querySelector(`.opp-card[data-id="${id}"]`);
                 if (card) card.remove();
@@ -223,6 +224,55 @@ function initConvertButton() {
             btn.textContent = 'Convert to Lead';
         });
     });
+}
+
+// ── Opportunity Detail Modal (board/list click-to-open, replaces full-page nav) ─
+
+function openOpportunityDetailModal(id) {
+    const modal = document.getElementById('opp-detail-modal');
+    const body  = document.getElementById('opp-detail-modal-body');
+    if (!modal || !body) return;
+
+    window._detailOppId = id;
+    body.innerHTML = '<div style="padding:48px 24px;text-align:center;color:#9ca3af;font-size:13px">Loading...</div>';
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    const routes = window.oppRoutes || {};
+    fetch(`${routes.base}/${id}/modal`)
+        .then(r => r.text())
+        .then(html => { body.innerHTML = html; })
+        .catch(() => {
+            body.innerHTML = '<div style="padding:48px 24px;text-align:center;color:#e74c3c;font-size:13px">Could not load this opportunity. Please try again.</div>';
+        });
+}
+
+function closeOpportunityDetailModal(event) {
+    const modal = document.getElementById('opp-detail-modal');
+    if (!modal) return;
+    if (event && event.target !== modal) return;
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+// ── Stage move — shared by board quick-actions and the detail modal ───────────
+
+function moveStage(id, newStatus) {
+    const routes = window.oppRoutes || {};
+    fetch(`${routes.base}/${id}/stage`, {
+        method:  'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': routes.csrfToken,
+        },
+        body: JSON.stringify({ status: newStatus }),
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.success) window.location.reload();
+        else alert('Failed to update stage.');
+    })
+    .catch(() => alert('Network error. Please try again.'));
 }
 
 // ── Misc helpers ───────────────────────────────────────────────────────────────
@@ -244,5 +294,6 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
         closeAddOpportunityModal();
         closeConvertModal();
+        closeOpportunityDetailModal();
     }
 });

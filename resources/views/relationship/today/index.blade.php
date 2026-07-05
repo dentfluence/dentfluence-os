@@ -924,6 +924,7 @@ const CATEGORY_LABELS = {
     lead_followups:                'Lead Follow-ups',
     opportunities:                 'Treatment Opportunities',
     recall_calls:                  'Recall Calls',
+    follow_up_calls:               'Follow-up Calls',
     appointment_reminders:         'Appointment Reminders',
     missed_calls_yesterday:        "Yesterday's Missed Calls",
     missed_appointments_yesterday: "Yesterday's Missed Appointments",
@@ -932,6 +933,7 @@ const CATEGORY_LABELS = {
     birthdays:                     'Birthday Wishes',
     lab_ready:                     'Lab Work Ready',
     payment_reminders:             'Payment Reminders',
+    logged_communications:         'Logged Communications',
 };
 
 function todayActions() {

@@ -130,7 +130,7 @@
                      draggable="true"
                      data-id="{{ $opp->id }}"
                      data-status="{{ $opp->status }}"
-                     onclick="window.location.href='{{ route('communication.opportunities.detail', $opp->id) }}'">
+                     onclick="openOpportunityDetailModal({{ $opp->id }})">
                     <div class="opp-card-top">
                         <div class="opp-card-avatar">{{ $initials }}</div>
                         <div class="opp-card-nameblock">
@@ -203,7 +203,7 @@
                     $pl  = $priorityLabels[$opp->priority] ?? $opp->priority;
                 @endphp
                 <tr class="opp-table-row"
-                    onclick="window.location.href='{{ route('communication.opportunities.detail', $opp->id) }}'">
+                    onclick="openOpportunityDetailModal({{ $opp->id }})">
                     <td>
                         <div class="opp-tbl-patient">
                             <div class="opp-tbl-avatar">
@@ -358,6 +358,22 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/></svg>
                 Convert to Lead
             </button>
+        </div>
+    </div>
+</div>
+
+{{-- Opportunity Detail Modal — board/list cards open this instead of navigating to a new page --}}
+<div id="opp-detail-modal" class="opp-modal-overlay" style="display:none" onclick="closeOpportunityDetailModal(event)">
+    <div class="opp-modal" style="max-width:720px">
+        <div class="opp-modal-header">
+            <h3>Opportunity Detail</h3>
+            <p>Full history and stage controls for this opportunity</p>
+            <button class="opp-modal-close" onclick="closeOpportunityDetailModal()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="opp-modal-body" id="opp-detail-modal-body" style="padding:0;max-height:70vh;overflow-y:auto">
+            <div style="padding:48px 24px;text-align:center;color:#9ca3af;font-size:13px">Loading...</div>
         </div>
     </div>
 </div>

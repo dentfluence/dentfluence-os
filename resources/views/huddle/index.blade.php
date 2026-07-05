@@ -1049,8 +1049,10 @@ document.addEventListener('alpine:init', () => {
         </div>
     </a>
 
-    {{-- Today's Calls — now includes PRE relationship items (recalls, missed yesterday, lead follow-ups, renewals), not just reminders/follow-ups/PRM queue --}}
-    <a href="{{ route('communication.manager.index') }}" class="hd-stat-pill" style="text-decoration:none;color:inherit;">
+    {{-- Today's Calls — points at PRE's Today's Actions directly. The old
+         Communication Manager screen this used to link to is retired
+         (2026-07-06, Sumit's call — it read like the old PRM board). --}}
+    <a href="{{ route('relationship.today') }}" class="hd-stat-pill" style="text-decoration:none;color:inherit;">
         <div>
             <div class="hd-stat-val">{{ $commTotalCount }}</div>
             <div class="hd-stat-label">Today's Calls</div>
@@ -1058,12 +1060,16 @@ document.addEventListener('alpine:init', () => {
         </div>
     </a>
 
-    {{-- Collections --}}
+    {{-- Collections — front-desk target from scheduled appointments' "Amount to
+         Collect" (Today's Patient Flow popup). Walk-ins excluded — see Huddle
+         controller comment. --}}
     <a href="{{ route('analytics.index') }}" class="hd-stat-pill" style="text-decoration:none;color:inherit;">
         <div>
-            <div class="hd-stat-val">—</div>
+            <div class="hd-stat-val">{{ $collectionsTarget > 0 ? '₹'.number_format($collectionsTarget) : '—' }}</div>
             <div class="hd-stat-label">Collections (Today)</div>
-            <div class="hd-stat-sub" style="color:var(--c-muted);">34% of target</div>
+            <div class="hd-stat-sub" style="color:var(--c-muted);">
+                {{ $collectionsLoggedCount }} of {{ $collectionsTotalCount }} appointments logged
+            </div>
         </div>
     </a>
 
@@ -1073,19 +1079,6 @@ document.addEventListener('alpine:init', () => {
             <div class="hd-stat-val">{{ $myTasks->count() }}</div>
             <div class="hd-stat-label">Pending Tasks</div>
             <div class="hd-stat-sub" style="color:var(--c-muted);">Across team</div>
-        </div>
-    </a>
-
-    {{-- Critical Alerts --}}
-    <a href="{{ route('notifications.index') }}" class="hd-stat-pill" style="text-decoration:none;color:inherit;">
-        <div>
-            <div class="hd-stat-val" style="color:var(--c-red);">{{ $criticalAlerts->count() }}</div>
-            <div class="hd-stat-label">Critical Alerts</div>
-            @if($criticalAlerts->isNotEmpty())
-                <div class="hd-stat-sub warn">Needs attention</div>
-            @else
-                <div class="hd-stat-sub">All clear</div>
-            @endif
         </div>
     </a>
 
@@ -1117,12 +1110,17 @@ document.addEventListener('alpine:init', () => {
         @endphp
         <div class="hd-card"
              style="background:rgba({{ $r }},{{ $g }},{{ $b }},0.07);border-left:3px solid {{ $hdDocHex }};"
-             @click="window.location.href='{{ route('patients.show', $appt->patient_id) }}'"
-             x-data="{
-                editing: false,
+             @click="window.dispatchEvent(new CustomEvent('open-today-flow-card', { detail: {
+                appointmentId: {{ $appt->id }},
+                patientId: {{ $appt->patient_id }},
+                patientName: '{{ addslashes($appt->patient->name ?? '') }}',
+                isWalkin: {{ $appt->is_walkin ? 'true' : 'false' }},
                 instruction: '{{ addslashes($appt->staff_instruction ?? '') }}',
-                original: '{{ addslashes($appt->staff_instruction ?? '') }}',
-                saving: false,
+                prepItem: '{{ addslashes($appt->prep_item ?? '') }}',
+                amountToCollect: {{ $appt->amount_to_collect !== null ? $appt->amount_to_collect : 'null' }},
+                chairsideAssistantId: {{ $appt->chairside_assistant_id ?? 'null' }}
+             } }))"
+             x-data="{
                 status: '{{ $appt->status }}',
                 statusSaving: false,
                 statusFlow: ['scheduled','checkin','in_chair','done'],
@@ -1139,17 +1137,6 @@ document.addEventListener('alpine:init', () => {
                         body: JSON.stringify({ status: next })
                     });
                     this.statusSaving = false;
-                },
-                async save() {
-                    this.saving = true;
-                    await fetch('{{ route('huddle.appointments.instruction', $appt->id) }}', {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
-                        body: JSON.stringify({ staff_instruction: this.instruction })
-                    });
-                    this.original = this.instruction;
-                    this.editing = false;
-                    this.saving = false;
                 }
              }">
             <div class="hd-pfc">
@@ -1159,7 +1146,7 @@ document.addEventListener('alpine:init', () => {
                         <div style="font-size:.72rem;color:var(--c-muted);font-weight:500;">
                             {{ $appt->type ? ucfirst(str_replace('_',' ',$appt->type)) : 'Consultation' }}
                         </div>
-                        <a href="{{ route('patients.show', $appt->patient_id) }}" class="hd-pfc-name">{{ $appt->patient->name ?? '—' }}</a>
+                        <a href="{{ route('patients.show', $appt->patient_id) }}" class="hd-pfc-name" @click.stop>{{ $appt->patient->name ?? '—' }}</a>
                     </div>
                     @if(!empty($appt->patient->medical_alert))
                         <span class="hd-pfc-star" title="{{ $appt->patient->medical_alert }}">★</span>
@@ -1172,6 +1159,9 @@ document.addEventListener('alpine:init', () => {
                     &nbsp;·&nbsp;
                     <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                     {{ $appt->doctor->name ?? '—' }}
+                    @if($appt->assistant_name)
+                        &nbsp;·&nbsp;<span title="Chairside assistant">🧑‍⚕️ {{ $appt->assistant_name }}</span>
+                    @endif
                 </div>
 
                 @if(!empty($appt->patient->medical_alert))
@@ -1191,22 +1181,20 @@ document.addEventListener('alpine:init', () => {
                     <span class="hd-pfc-arrived" x-show="status === 'checkin'">✓ Arrived</span>
                 </div>
 
-                {{-- Inline instruction note --}}
-                <div style="margin-top:.3rem;">
-                    <div x-show="!editing" @click.stop="editing=true" class="hd-pfc-instr" x-text="instruction || ''"></div>
-                    <template x-if="editing">
-                        <div @click.stop>
-                            <input x-model="instruction"
-                                   @keydown.enter="save()"
-                                   @keydown.escape="instruction=original;editing=false"
-                                   class="hd-pfc-instr-inp"
-                                   placeholder="Add note…"
-                                   x-init="$el.focus()"
-                                   :disabled="saving">
-                            <span @click.stop="save()" style="font-size:.62rem;color:var(--c-accent);cursor:pointer;" x-text="saving ? 'Saving…' : 'Save'"></span>
-                        </div>
-                    </template>
+                {{-- Notes / amount-to-collect / prep item preview — click card to edit --}}
+                @if($appt->staff_instruction || $appt->prep_item || ($appt->amount_to_collect !== null && !$appt->is_walkin))
+                <div class="hd-pfc-instr" style="margin-top:.3rem;">
+                    @if($appt->staff_instruction){{ $appt->staff_instruction }}@endif
+                    @if($appt->prep_item)
+                        @if($appt->staff_instruction) · @endif
+                        📌 {{ $appt->prep_item }}
+                    @endif
+                    @if($appt->amount_to_collect !== null && !$appt->is_walkin)
+                        @if($appt->staff_instruction || $appt->prep_item) · @endif
+                        ₹{{ number_format($appt->amount_to_collect) }} to collect
+                    @endif
                 </div>
+                @endif
             </div>
         </div>
         @empty
@@ -1306,7 +1294,7 @@ document.addEventListener('alpine:init', () => {
         <div class="hd-col-body">
 
         @forelse($yesterdaysAppointments as $yAppt)
-        <div class="hd-card" x-data="{ calling: false, called: false }"
+        <div class="hd-card"
              @click="window.dispatchEvent(new CustomEvent('open-yesterday-followup-card', { detail: { patientId: {{ $yAppt->patient_id }}, patientName: '{{ addslashes($yAppt->patient->name ?? '') }}' } }))"
              style="cursor:pointer;">
             <div class="hd-pfc">
@@ -1413,35 +1401,6 @@ document.addEventListener('alpine:init', () => {
                 </div>
                 @endif
 
-                {{-- ── Row 5: Call button ── --}}
-                <div style="margin-top:.5rem;border-top:1px solid var(--c-border);padding-top:.4rem;">
-                    <button
-                        x-show="!called"
-                        :disabled="calling"
-                        @click.stop.prevent="
-                            calling = true;
-                            fetch('{{ route('huddle.comms.push') }}', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content
-                                },
-                                body: JSON.stringify({ items: [{ patient_id: {{ $yAppt->patient_id }}, comm_type: 'follow_up', note: 'Follow-up call for {{ addslashes($yAppt->patient->name ?? '') }}' }] })
-                            }).then(r => { if(r.ok) { calling = false; called = true; } else { calling = false; } })
-                        "
-                        style="width:100%;text-align:center;font-size:.67rem;font-weight:600;color:var(--c-accent2);background:#f5f3ff;border:1px solid #c4b5fd;border-radius:5px;padding:.28rem .5rem;cursor:pointer;transition:background .15s;"
-                        onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='#f5f3ff'"
-                    >
-                        <span style="display:inline-flex;align-items:center;justify-content:center;gap:.35rem;">
-                            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
-                            <span x-text="calling ? 'Adding…' : 'Add to Call List'"></span>
-                        </span>
-                    </button>
-                    <div x-show="called" style="text-align:center;font-size:.65rem;font-weight:600;color:#16a34a;">
-                        ✓ Added to call list
-                    </div>
-                </div>
-
             </div>
         </div>
         @empty
@@ -1530,16 +1489,10 @@ document.addEventListener('alpine:init', () => {
     </div>
 
     {{-- ── COL 3: COMMS LIST ── --}}
-    {{-- Isolate JSON from HTML attribute to avoid quote-breaking issues --}}
-    <script>
-        window.__huddleCommList = {!! json_encode($commList->values(), JSON_UNESCAPED_UNICODE) !!};
-        window.__huddleCommPushUrl = '{{ route('huddle.comms.push') }}';
-    </script>
-
-    <div class="hd-col" x-data="huddleCommListWidget()">
+    <div class="hd-col">
         <div class="hd-col-hdr">
             <div class="hd-col-title">
-                <a href="{{ route('communication.manager.index') }}" title="Open Communication List"
+                <a href="{{ route('relationship.today') }}" title="Open Today's Actions"
                    style="display:flex;align-items:center;gap:.3rem;color:inherit;text-decoration:none;"
                    onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">
                     <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
@@ -1547,224 +1500,64 @@ document.addEventListener('alpine:init', () => {
                 </a>
             </div>
             <div style="display:flex;align-items:center;gap:.3rem;">
-                <span class="hd-col-count">{{ $commTotalCount }}</span>
+                <span class="hd-col-count">{{ count($relationshipItems ?? []) }}</span>
             </div>
         </div>
         <div class="hd-col-body">
 
-        {{-- Empty state --}}
-        <template x-if="items.length === 0">
-            <div class="hd-empty-col">No reminders, follow-ups, or pending comms for today.</div>
-        </template>
+        {{-- ── TODAY'S ACTIONS GLIMPSE ──────────────────────────────────────
+             Replaces the old Reminders / Yesterday's Follow-ups / Special Day
+             Calls / Lab-Vendor / Other sections (2026-07-06, Sumit's call) —
+             those were synthetic, separate from PRE, and duplicated what
+             Today's Actions already tracks properly. This is a compact,
+             scrollable preview of the same $relationshipItems shown on
+             /relationship/today — read-only here, click through to act.
+             Includes 'logged_communications', so a manually-logged call to a
+             doctor/vendor/lab/other contact still shows up here too. --}}
+        @php
+            $glimpseByCategory = collect($relationshipItems ?? [])->groupBy('categoryName');
+            $glimpseMeta = [
+                'follow_up_calls'               => ['📲', '#f5f3ff', '#4338ca', 'Follow-up Calls'],
+                'recall_calls'                  => ['🔔', '#eff6ff', '#1e40af', 'Recall Calls'],
+                'missed_appointments_yesterday' => ['⚠️',  '#fef2f2', '#991b1b', 'Missed Yesterday'],
+                'lead_followups'                => ['👤', '#f5f3ff', '#5b21b6', 'Lead Follow-ups'],
+                'membership_renewals'           => ['🏅', '#fffbeb', '#854d0e', 'Membership Renewals'],
+                'logged_communications'         => ['📞', '#f0fdf4', '#166534', 'Logged Communications'],
+            ];
+        @endphp
 
-        {{-- ════ MACRO for a comm card ════
-             Reused across all sections — pass item + checkColor --}}
-
-        {{-- ── SECTION 1: REMINDERS ── --}}
-        <div x-data="{ open: true }">
-            <div class="hd-cs-hdr" @click="open = !open"
-                 style="background: open ? '#eff6ff22' : '';">
-                <div class="hd-cs-left" style="color:var(--c-blue);">
-                    <span>Reminders</span>
-                    <span class="hd-cs-count" style="background:#dbeafe;color:var(--c-blue);" x-text="reminders.length"></span>
+        @if(($relationshipItems ?? []) === [] || count($relationshipItems) === 0)
+            <div class="hd-empty-col">No pending actions for today.</div>
+        @else
+        <div style="max-height:420px;overflow-y:auto;padding-right:.2rem;">
+            @foreach($glimpseByCategory as $catKey => $catItems)
+            @php [$ico, $bgColor, $textColor, $catLabel] = $glimpseMeta[$catKey] ?? ['📋', '#f3f4f6', '#374151', ucwords(str_replace('_', ' ', $catKey))]; @endphp
+            <div style="margin-bottom:.4rem;">
+                <div style="display:flex;align-items:center;gap:.4rem;padding:.3rem .2rem;">
+                    <span style="background:{{ $bgColor }};color:{{ $textColor }};padding:.15rem .45rem;border-radius:999px;font-size:.65rem;font-weight:700;">
+                        {{ $ico }} {{ $catLabel }}
+                    </span>
+                    <span class="hd-cs-count" style="background:{{ $bgColor }};color:{{ $textColor }};">{{ $catItems->count() }}</span>
                 </div>
-                <div style="display:flex;align-items:center;gap:.5rem;">
-                    <template x-if="open && reminders.length > 0">
-                        <div style="display:flex;gap:.3rem;" @click.stop>
-                            <button @click="selectAll('reminder')"   style="font-size:.6rem;color:var(--c-blue);background:none;border:none;cursor:pointer;padding:0;font-weight:600;">All</button>
-                            <button @click="deselectAll('reminder')" style="font-size:.6rem;color:var(--c-muted);background:none;border:none;cursor:pointer;padding:0;">None</button>
-                        </div>
-                    </template>
-                    <svg class="hd-cs-chevron" :class="open ? 'open' : ''" width="11" height="11" fill="none" stroke="var(--c-muted)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-                </div>
-            </div>
-            <div class="hd-cs-body" x-show="open">
-                <template x-if="reminders.length === 0">
-                    <div style="font-size:.68rem;color:var(--c-muted);text-align:center;padding:.3rem 0;">No reminders today</div>
-                </template>
-                <template x-for="item in reminders" :key="item.id">
-                    <div class="hd-card" :style="item.pushed ? 'opacity:.5;' : ''" style="cursor:pointer;" @click="toggle(item.id)">
-                        <div class="hd-cc" style="gap:.5rem;">
-                            <div style="flex-shrink:0;width:15px;height:15px;border-radius:4px;border:2px solid;display:flex;align-items:center;justify-content:center;transition:.15s;"
-                                 :style="item.selected ? 'background:var(--c-blue);border-color:var(--c-blue);' : 'background:#fff;border-color:#d1d5db;'">
-                                <svg x-show="item.selected" width="8" height="8" fill="none" stroke="white" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-                            </div>
-                            <div class="hd-cc-ico hd-cc-ico-call" style="flex-shrink:0;">
-                                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
-                            </div>
-                            <div class="hd-cc-body">
-                                <div class="hd-cc-type" x-text="item.label"></div>
-                                <div class="hd-cc-desc" x-text="item.patient_name"></div>
-                                <div class="hd-cc-footer"><span class="hd-cc-by" x-text="item.phone"></span><template x-if="item.pushed"><span style="font-size:.62rem;color:var(--c-green);font-weight:600;">✓ Added</span></template></div>
-                                <div style="font-size:.63rem;color:var(--c-muted);margin-top:.1rem;" x-text="item.note"></div>
-                            </div>
+                @foreach($catItems as $glimpseCard)
+                <a href="{{ $glimpseCard->meta['link'] ?? '#' }}" class="hd-card" style="cursor:pointer;text-decoration:none;color:inherit;display:block;">
+                    <div class="hd-cc" style="gap:.5rem;">
+                        <div style="flex-shrink:0;width:8px;height:8px;border-radius:50%;margin-top:4px;
+                            background:{{ $glimpseCard->status === 'high' ? '#ef4444' : ($glimpseCard->status === 'medium' ? '#f59e0b' : '#22c55e') }};"></div>
+                        <div class="hd-cc-body">
+                            <div class="hd-cc-type">{{ $glimpseCard->patientName ?? '—' }}</div>
+                            <div class="hd-cc-desc">{{ $glimpseCard->chiefComplaint }}</div>
+                            @if($glimpseCard->meta['phone'] ?? null)
+                                <div class="hd-cc-footer"><span class="hd-cc-by">{{ $glimpseCard->meta['phone'] }}</span></div>
+                            @endif
                         </div>
                     </div>
-                </template>
+                </a>
+                @endforeach
             </div>
+            @endforeach
         </div>
-
-        {{-- ── SECTION 2: YESTERDAY'S FOLLOW-UPS ── --}}
-        <div x-data="{ open: true }">
-            <div class="hd-cs-hdr" @click="open = !open">
-                <div class="hd-cs-left" style="color:var(--c-green);">
-                    <span>Yesterday's Follow-ups</span>
-                    <span class="hd-cs-count" style="background:#dcfce7;color:var(--c-green);" x-text="followUps.length"></span>
-                </div>
-                <div style="display:flex;align-items:center;gap:.5rem;">
-                    <template x-if="open && followUps.length > 0">
-                        <div style="display:flex;gap:.3rem;" @click.stop>
-                            <button @click="selectAll('follow_up')"   style="font-size:.6rem;color:var(--c-green);background:none;border:none;cursor:pointer;padding:0;font-weight:600;">All</button>
-                            <button @click="deselectAll('follow_up')" style="font-size:.6rem;color:var(--c-muted);background:none;border:none;cursor:pointer;padding:0;">None</button>
-                        </div>
-                    </template>
-                    <svg class="hd-cs-chevron" :class="open ? 'open' : ''" width="11" height="11" fill="none" stroke="var(--c-muted)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-                </div>
-            </div>
-            <div class="hd-cs-body" x-show="open">
-                <template x-if="followUps.length === 0">
-                    <div style="font-size:.68rem;color:var(--c-muted);text-align:center;padding:.3rem 0;">No follow-ups</div>
-                </template>
-                <template x-for="item in followUps" :key="item.id">
-                    <div class="hd-card" :style="item.pushed ? 'opacity:.5;' : ''" style="cursor:pointer;" @click="toggle(item.id)">
-                        <div class="hd-cc" style="gap:.5rem;">
-                            <div style="flex-shrink:0;width:15px;height:15px;border-radius:4px;border:2px solid;display:flex;align-items:center;justify-content:center;transition:.15s;"
-                                 :style="item.selected ? 'background:var(--c-green);border-color:var(--c-green);' : 'background:#fff;border-color:#d1d5db;'">
-                                <svg x-show="item.selected" width="8" height="8" fill="none" stroke="white" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-                            </div>
-                            <div class="hd-cc-ico hd-cc-ico-msg" style="flex-shrink:0;">
-                                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-                            </div>
-                            <div class="hd-cc-body">
-                                <div class="hd-cc-type" x-text="item.label"></div>
-                                <div class="hd-cc-desc" x-text="item.patient_name"></div>
-                                <div class="hd-cc-footer"><span class="hd-cc-by" x-text="item.phone"></span><template x-if="item.pushed"><span style="font-size:.62rem;color:var(--c-green);font-weight:600;">✓ Added</span></template></div>
-                                <div style="font-size:.63rem;color:var(--c-muted);margin-top:.1rem;" x-text="item.note"></div>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </div>
-
-        {{-- ── SECTION 3: SPECIAL DAY CALLS ── --}}
-        <div x-data="{ open: true }" x-show="specialDayCalls.length > 0">
-            <div class="hd-cs-hdr" @click="open = !open">
-                <div class="hd-cs-left" style="color:#d97706;">
-                    <span>Special Day Calls</span>
-                    <span class="hd-cs-count" style="background:#fef3c7;color:#d97706;" x-text="specialDayCalls.length"></span>
-                </div>
-                <svg class="hd-cs-chevron" :class="open ? 'open' : ''" width="11" height="11" fill="none" stroke="var(--c-muted)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-            </div>
-            <div class="hd-cs-body" x-show="open">
-                <template x-for="item in specialDayCalls" :key="item.id">
-                    <div class="hd-card" :style="item.pushed ? 'opacity:.5;' : ''" style="cursor:pointer;" @click="toggle(item.id)">
-                        <div class="hd-cc" style="gap:.5rem;">
-                            <div style="flex-shrink:0;width:15px;height:15px;border-radius:4px;border:2px solid;display:flex;align-items:center;justify-content:center;transition:.15s;"
-                                 :style="item.selected ? 'background:#d97706;border-color:#d97706;' : 'background:#fff;border-color:#d1d5db;'">
-                                <svg x-show="item.selected" width="8" height="8" fill="none" stroke="white" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-                            </div>
-                            <div class="hd-cc-ico" style="flex-shrink:0;background:#fef3c7;">
-                                <svg width="11" height="11" fill="none" stroke="#d97706" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-1.5-.454M9 6l3-3 3 3M12 3v4M9 10h.01M15 10h.01M12 10h.01"/></svg>
-                            </div>
-                            <div class="hd-cc-body">
-                                <div class="hd-cc-type" x-text="item.label"></div>
-                                <div class="hd-cc-desc" x-text="item.patient_name"></div>
-                                <div class="hd-cc-footer"><span class="hd-cc-by" x-text="item.phone"></span></div>
-                                <div style="font-size:.63rem;color:var(--c-muted);margin-top:.1rem;" x-text="item.note"></div>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </div>
-
-        {{-- ── SECTION 4: LAB / VENDOR COMMS ── --}}
-        <div x-data="{ open: true }" x-show="labVendorComms.length > 0">
-            <div class="hd-cs-hdr" @click="open = !open">
-                <div class="hd-cs-left" style="color:var(--c-teal);">
-                    <span>Lab / Vendor</span>
-                    <span class="hd-cs-count" style="background:#ecfeff;color:var(--c-teal);" x-text="labVendorComms.length"></span>
-                </div>
-                <svg class="hd-cs-chevron" :class="open ? 'open' : ''" width="11" height="11" fill="none" stroke="var(--c-muted)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-            </div>
-            <div class="hd-cs-body" x-show="open">
-                <template x-for="item in labVendorComms" :key="item.id">
-                    <div class="hd-card" style="cursor:default;">
-                        <div class="hd-cc" style="gap:.5rem;">
-                            <div class="hd-cc-ico" style="flex-shrink:0;background:#ecfeff;">
-                                <svg width="11" height="11" fill="none" stroke="var(--c-teal)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
-                            </div>
-                            <div class="hd-cc-body">
-                                <div class="hd-cc-type" x-text="item.label"></div>
-                                <div class="hd-cc-desc" x-text="item.patient_name"></div>
-                                <div class="hd-cc-footer"><span class="hd-cc-by" x-text="item.phone"></span></div>
-                                <div style="font-size:.63rem;color:var(--c-muted);margin-top:.1rem;" x-text="item.note"></div>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </div>
-
-        {{-- ── SECTION 5: OTHER ── --}}
-        <div x-data="{ open: false }" x-show="otherComms.length > 0">
-            <div class="hd-cs-hdr" @click="open = !open">
-                <div class="hd-cs-left" style="color:var(--c-muted);">
-                    <span>Other</span>
-                    <span class="hd-cs-count" style="background:#e9ebf0;color:var(--c-muted);" x-text="otherComms.length"></span>
-                </div>
-                <svg class="hd-cs-chevron" :class="open ? 'open' : ''" width="11" height="11" fill="none" stroke="var(--c-muted)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-            </div>
-            <div class="hd-cs-body" x-show="open">
-                <template x-for="item in otherComms" :key="item.id">
-                    <div class="hd-card" :style="item.pushed ? 'opacity:.5;' : ''" style="cursor:pointer;" @click="toggle(item.id)">
-                        <div class="hd-cc" style="gap:.5rem;">
-                            <div style="flex-shrink:0;width:15px;height:15px;border-radius:4px;border:2px solid;display:flex;align-items:center;justify-content:center;transition:.15s;"
-                                 :style="item.selected ? 'background:var(--c-muted);border-color:var(--c-muted);' : 'background:#fff;border-color:#d1d5db;'">
-                                <svg x-show="item.selected" width="8" height="8" fill="none" stroke="white" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-                            </div>
-                            <div class="hd-cc-body">
-                                <div class="hd-cc-type" x-text="item.label"></div>
-                                <div class="hd-cc-desc" x-text="item.patient_name"></div>
-                                <div class="hd-cc-footer"><span class="hd-cc-by" x-text="item.phone"></span></div>
-                                <div style="font-size:.63rem;color:var(--c-muted);margin-top:.1rem;" x-text="item.note"></div>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </div>
-
-        {{-- ── ADD COMMUNICATION LINK ── --}}
-        <a href="{{ route('communication.manager.log.form') }}"
-           class="hd-view-all"
-           style="background:#f5f0ff;border:1px solid #e0d4ff;border-radius:10px;text-decoration:none;display:block;text-align:center;color:var(--c-accent);font-weight:600;margin-top:.5rem;">
-            + Add Communication
-        </a>
-
-        {{-- ── PUSH BUTTON ── --}}
-        <template x-if="items.length > 0">
-            <div style="margin-top:.5rem;">
-                <template x-if="!pushed">
-                    <button
-                        @click.stop="pushToCommList()"
-                        :disabled="pushing || selectedCount === 0"
-                        :style="selectedCount === 0
-                            ? 'width:100%;padding:.45rem;font-size:.73rem;font-weight:600;font-family:inherit;cursor:not-allowed;background:#f0ecff;border:1px solid #d8ccf5;border-radius:10px;text-align:center;color:var(--c-accent);opacity:.45;'
-                            : 'width:100%;padding:.45rem;font-size:.73rem;font-weight:600;font-family:inherit;cursor:pointer;background:#edf9f0;border:1px solid #b7e8c6;border-radius:10px;text-align:center;color:#16a34a;opacity:1;'">
-                        <span x-show="!pushing">Add <span x-text="selectedCount"></span> to Comm List →</span>
-                        <span x-show="pushing">Adding…</span>
-                    </button>
-                </template>
-                <template x-if="pushed">
-                    <div style="text-align:center;padding:.45rem;font-size:.73rem;color:var(--c-green);font-weight:600;
-                                background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;">
-                        ✓ Added to Communication List
-                    </div>
-                </template>
-            </div>
-        </template>
+        @endif
 
         </div>{{-- /hd-col-body --}}
     </div>
@@ -2076,114 +1869,6 @@ document.addEventListener('alpine:init', () => {
         </div>
     </div>
 
-    {{-- ── RELATIONSHIP ACTIONS (Phase 7 — TodayActionsEngine) ─────────── --}}
-    {{-- Additive section: recall calls, missed appts, lead follow-ups, renewals --}}
-    @php
-        $relItemsByCategory = collect($relationshipItems ?? [])->groupBy('categoryName');
-        $relTotal = count($relationshipItems ?? []);
-        $relHighCount = collect($relationshipItems ?? [])->filter(fn($c) => $c->status === 'high')->count();
-    @endphp
-    <div class="hd-bottom-wide">
-        <div class="hd-section-hdr">
-            <span>
-                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;margin-right:.3rem;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                Relationship Actions
-            </span>
-            <div style="display:flex;align-items:center;gap:.4rem;">
-                @if($relHighCount > 0)
-                    <span class="hd-section-hdr-count" style="background:#fee2e2;color:#991b1b;">{{ $relHighCount }} urgent</span>
-                @endif
-                <span class="hd-section-hdr-count">{{ $relTotal }} total</span>
-                <a href="{{ route('relationship.today') }}" style="font-size:.65rem;color:var(--c-accent);font-weight:600;text-decoration:none;">View All →</a>
-            </div>
-        </div>
-
-        @if($relTotal === 0)
-            <div class="hd-card">
-                <div style="text-align:center;padding:1rem .75rem;color:var(--c-muted);font-size:.75rem;">
-                    ✓ No relationship actions for today
-                </div>
-            </div>
-        @else
-        <div class="hd-card">
-        @php
-            $categoryIcons = [
-                'recall_calls'                  => ['🔔', '#eff6ff', '#1e40af'],
-                'missed_appointments_yesterday' => ['⚠️',  '#fef2f2', '#991b1b'],
-                'lead_followups'                => ['👤', '#f5f3ff', '#5b21b6'],
-                'membership_renewals'           => ['🏅', '#fffbeb', '#854d0e'],
-            ];
-            $categoryLabels = [
-                'recall_calls'                  => 'Recall Calls',
-                'missed_appointments_yesterday' => 'Missed Yesterday',
-                'lead_followups'                => 'Lead Follow-ups',
-                'membership_renewals'           => 'Membership Renewals',
-            ];
-        @endphp
-
-        @foreach($relItemsByCategory as $catKey => $catItems)
-        @php
-            [$ico, $bgColor, $textColor] = $categoryIcons[$catKey] ?? ['📋', '#f3f4f6', '#374151'];
-            $catLabel = $categoryLabels[$catKey] ?? ucwords(str_replace('_', ' ', $catKey));
-            $showCount = $catItems->count();
-        @endphp
-
-        {{-- Category sub-header --}}
-        <div class="hd-cs-hdr" x-data="{ open: true }" @click="open = !open" style="margin:.3rem .5rem 0;">
-            <div class="hd-cs-left">
-                <span style="background:{{ $bgColor }};color:{{ $textColor }};padding:.15rem .45rem;border-radius:999px;font-size:.65rem;font-weight:700;">
-                    {{ $ico }} {{ $catLabel }}
-                </span>
-                <span class="hd-cs-count" style="background:{{ $bgColor }};color:{{ $textColor }};">{{ $showCount }}</span>
-            </div>
-            <svg class="hd-cs-chevron" :class="open ? 'open' : ''" width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-        </div>
-
-        <div class="hd-cs-body" x-show="open" x-transition style="padding:.3rem .5rem .4rem;">
-            @foreach($catItems->take(5) as $relCard)
-            <div style="display:flex;align-items:flex-start;gap:.55rem;padding:.5rem .55rem;border-radius:8px;border:1px solid var(--c-border);background:var(--c-bg);margin-bottom:.3rem;">
-                {{-- Priority dot --}}
-                <div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;
-                    background: {{ $relCard->status === 'high' ? 'var(--c-red)' : ($relCard->status === 'medium' ? 'var(--c-amber)' : 'var(--c-green)') }};">
-                </div>
-                <div style="flex:1;min-width:0;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;margin-bottom:.15rem;">
-                        <a href="{{ $relCard->meta['link'] ?? '#' }}"
-                           style="font-size:.78rem;font-weight:600;color:var(--c-text);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
-                           title="{{ $relCard->patientName }}">
-                            {{ $relCard->patientName ?? '—' }}
-                        </a>
-                        <span class="hd-badge hd-b-{{ $relCard->status }}" style="flex-shrink:0;">
-                            {{ ucfirst($relCard->status) }}
-                        </span>
-                    </div>
-                    <div style="font-size:.68rem;color:var(--c-muted);line-height:1.35;">
-                        {{ $relCard->chiefComplaint }}
-                    </div>
-                    @if($relCard->notes)
-                    <div style="font-size:.65rem;color:var(--c-accent);margin-top:.12rem;">
-                        → {{ $relCard->notes }}
-                    </div>
-                    @endif
-                </div>
-            </div>
-            @endforeach
-
-            @if($catItems->count() > 5)
-            <a href="{{ route('relationship.today') }}" class="hd-view-all" style="font-size:.68rem;">
-                + {{ $catItems->count() - 5 }} more in this category →
-            </a>
-            @endif
-        </div>
-        @endforeach
-
-        <a href="{{ route('relationship.today') }}" class="hd-view-all">
-            Open Today's Actions (full view) →
-        </a>
-        </div>{{-- /hd-card --}}
-        @endif
-    </div>{{-- /relationship actions --}}
-
     {{-- Failures / Maintenance --}}
     <div class="hd-bottom-col">
         <div class="hd-section-hdr">
@@ -2217,7 +1902,10 @@ document.addEventListener('alpine:init', () => {
                 </div>
             </div>
             @endforelse
-            <a href="#" class="hd-view-all">+ Add New Issue</a>
+            <button type="button" class="hd-view-all" style="width:100%;border:none;cursor:pointer;font:inherit;"
+                    @click="window.dispatchEvent(new CustomEvent('open-create-task', { detail: { category: 'maintenance' } }))">
+                + Add New Issue
+            </button>
         </div>
     </div>
 

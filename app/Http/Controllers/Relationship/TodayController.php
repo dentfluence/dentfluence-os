@@ -33,6 +33,7 @@ class TodayController extends Controller
         'lead_followups'               => 'Lead Follow-ups',
         'opportunities'                => 'Treatment Opportunities',
         'recall_calls'                 => 'Recall Calls',
+        'follow_up_calls'              => 'Follow-up Calls',
         'appointment_reminders'        => 'Appointment Reminders',
         'missed_calls_yesterday'       => 'Yesterday\'s Missed Calls',
         'missed_appointments_yesterday'=> 'Yesterday\'s Missed Appointments',
@@ -43,6 +44,7 @@ class TodayController extends Controller
         'payment_reminders'            => 'Payment Reminders',
         'appointment_reminders_tomorrow'=> "Tomorrow Morning's Appointments",
         'completed_calls'               => 'Completed Calls',
+        'logged_communications'         => 'Logged Communications',
     ];
 
     /**
@@ -55,6 +57,7 @@ class TodayController extends Controller
         'lead_followups'               => 'ti-phone-call',
         'opportunities'                => 'ti-report-money',
         'recall_calls'                 => 'ti-calendar-repeat',
+        'follow_up_calls'              => 'ti-phone-calling',
         'appointment_reminders'        => 'ti-calendar-event',
         'missed_calls_yesterday'       => 'ti-phone-x',
         'missed_appointments_yesterday'=> 'ti-calendar-x',
@@ -65,6 +68,7 @@ class TodayController extends Controller
         'payment_reminders'            => 'ti-receipt-2',
         'appointment_reminders_tomorrow'=> 'ti-calendar-event',
         'completed_calls'               => 'ti-circle-check',
+        'logged_communications'         => 'ti-phone-outgoing',
     ];
 
     /**
@@ -76,20 +80,22 @@ class TodayController extends Controller
     // confirming tomorrow morning's appointments last.
     private const CATEGORY_PRIORITY = [
         'appointment_reminders_today'  => 1,  // confirm today's own sessions first, incl. evening
-        'wellness_check_yesterday'     => 2,  // check on patients treated yesterday — doing okay?
-        'missed_calls_yesterday'       => 3,  // someone tried to reach the clinic yesterday
-        'missed_appointments_yesterday'=> 4,  // yesterday's no-show — rebook fast
-        'new_enquiries'                => 5,  // fresh lead — call within 30 min or lose them
-        'recall_calls'                 => 6,  // bring patients back for due recall
-        'lab_ready'                    => 7,  // patient waiting on a crown/denture etc.
-        'lead_followups'               => 8,  // ongoing lead nurture
-        'opportunities'                => 9,  // proposed treatment conversion
-        'pending_estimates'            => 10, // estimate awaiting approval
-        'payment_reminders'            => 11, // collections
-        'membership_renewals'          => 12, // plan renewal reminder
-        'birthdays'                    => 13, // relationship touch — least urgent
-        'appointment_reminders'        => 13, // fallback bucket, only used if today/tomorrow split fails
-        'appointment_reminders_tomorrow'=> 14, // confirm tomorrow morning's sessions — last
+        'follow_up_calls'              => 2,  // booked call-backs (Yesterday's Flow, Follow-up Engine, etc.) due today/overdue
+        'wellness_check_yesterday'     => 3,  // check on patients treated yesterday — doing okay?
+        'missed_calls_yesterday'       => 4,  // someone tried to reach the clinic yesterday
+        'missed_appointments_yesterday'=> 5,  // yesterday's no-show — rebook fast
+        'new_enquiries'                => 6,  // fresh lead — call within 30 min or lose them
+        'recall_calls'                 => 7,  // bring patients back for due recall
+        'lab_ready'                    => 8,  // patient waiting on a crown/denture etc.
+        'lead_followups'               => 9,  // ongoing lead nurture
+        'logged_communications'        => 9,  // manually-logged calls not in another category
+        'opportunities'                => 10, // proposed treatment conversion
+        'pending_estimates'            => 11, // estimate awaiting approval
+        'payment_reminders'            => 12, // collections
+        'membership_renewals'          => 13, // plan renewal reminder
+        'birthdays'                    => 14, // relationship touch — least urgent
+        'appointment_reminders'        => 14, // fallback bucket, only used if today/tomorrow split fails
+        'appointment_reminders_tomorrow'=> 15, // confirm tomorrow morning's sessions — last
     ];
 
     public function __construct(

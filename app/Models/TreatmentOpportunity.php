@@ -19,6 +19,7 @@ class TreatmentOpportunity extends Model
         'follow_up_time',
         'estimated_value',
         'notes',
+        'declined_reason',
         'created_by',
         'assigned_to',
     ];

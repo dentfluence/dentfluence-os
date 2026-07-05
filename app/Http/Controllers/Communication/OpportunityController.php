@@ -116,6 +116,16 @@ class OpportunityController extends Controller
         return $this->show($id);
     }
 
+    // ── Detail Modal — same data, rendered as a partial for the board/list popup ─
+
+    public function detailModal(int $id)
+    {
+        $opportunity = TreatmentOpportunity::with(['patient', 'assignedStaff', 'author', 'treatmentPlan'])
+            ->findOrFail($id);
+
+        return view('communication.opportunities._detail-card', compact('opportunity'));
+    }
+
     // ── Update Stage — AJAX drag-drop / quick action ───────────────────────────
 
     public function updateStage(Request $request, int $id)

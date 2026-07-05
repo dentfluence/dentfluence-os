@@ -257,6 +257,25 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             Route::post('/recalls',        [RelationshipController::class, 'recallStore'])
                 ->name('recalls.store');
 
+            // Opportunity lifecycle writes (2026-07-06 web parity) — static
+            // segments ('opportunities', 'patient-search') before the generic
+            // /{id} show route below so they aren't swallowed by the wildcard.
+            Route::prefix('opportunities')->name('opportunities.')->group(function () {
+                Route::post('/',              [RelationshipController::class, 'opportunityStore'])
+                    ->name('store');
+                Route::get('/patient-search', [RelationshipController::class, 'opportunityPatientSearch'])
+                    ->name('patient-search');
+                Route::get('/{id}',           [RelationshipController::class, 'opportunityShow'])
+                    ->whereNumber('id')
+                    ->name('show');
+                Route::patch('/{id}/stage',   [RelationshipController::class, 'opportunityUpdateStage'])
+                    ->whereNumber('id')
+                    ->name('update-stage');
+                Route::post('/{id}/convert',  [RelationshipController::class, 'opportunityConvert'])
+                    ->whereNumber('id')
+                    ->name('convert');
+            });
+
             // Grouped call-outcome vocabulary for the Activity Completion
             // Bottom Sheet (mobile + web). Static ref data — before /{id}.
             Route::get('/call-outcomes',   [RelationshipController::class, 'callOutcomes'])
@@ -457,6 +476,12 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
 
         Route::patch('/huddle/tasks/{task}/assign', [HuddleController::class, 'assignTask'])
             ->middleware('api.role:admin,front_desk');
+
+        // Today's Patient Flow popup (2026-07-06 web parity) — notes / amount
+        // to collect / prep item / chairside assistant, one call, one screen.
+        Route::patch('/huddle/appointments/{id}/instruction', [HuddleController::class, 'updateInstruction'])
+            ->whereNumber('id')
+            ->middleware('api.role:admin,front_desk,doctor');
 
         // "Yesterday's Flow" quick-action — mirrors the web huddle modal:
         // logs a task and/or books a follow-up call for a patient instead of

@@ -10,6 +10,7 @@ use App\Models\Patient;
 use App\Models\Relationship;
 use App\Models\Scopes\BranchScope;
 use App\Models\TreatmentOpportunity;
+use App\Models\User;
 use App\Services\Prm\LeadFollowUpService;
 use App\Services\Prm\PrmRelationshipAdapter;
 use App\Services\RecallEngineService;
@@ -20,6 +21,7 @@ use App\Services\Relationship\TodayActionsEngine;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * RelationshipController (API v1)
@@ -39,6 +41,11 @@ use Illuminate\Http\Request;
  *   GET  /api/v1/relationships/pipelines/leads         → Lead pipeline, grouped by stage
  *   GET  /api/v1/relationships/pipelines/opportunities → Opportunity pipeline, grouped by status
  *   GET  /api/v1/relationships/pipelines/recalls       → Recall pipeline, grouped by status
+ *   POST /api/v1/relationships/opportunities                    → Add an opportunity (2026-07-06 web parity)
+ *   GET  /api/v1/relationships/opportunities/patient-search     → Patient autocomplete for Add Opportunity
+ *   GET  /api/v1/relationships/opportunities/{id}                → Opportunity detail sheet
+ *   PATCH /api/v1/relationships/opportunities/{id}/stage         → Move stage / decline (+ optional reason)
+ *   POST /api/v1/relationships/opportunities/{id}/convert         → Convert opportunity to a lead
  *   POST /api/v1/relationships/recalls                 → Manually add a recall for a patient
  *   GET  /api/v1/relationships/{id}                    → Relationship profile summary (+ household)
  *   GET  /api/v1/relationships/{id}/timeline           → Paginated activity timeline
@@ -490,6 +497,7 @@ class RelationshipController extends ApiController
             ->select([
                 'id', 'relationship_id', 'patient_id', 'type', 'label', 'status',
                 'priority', 'follow_up_date', 'estimated_value', 'assigned_to',
+                'declined_reason',
             ])
             ->orderByRaw('follow_up_date IS NULL, follow_up_date ASC')
             ->orderByDesc('id')
@@ -520,6 +528,7 @@ class RelationshipController extends ApiController
                     'follow_up_date'   => $o->follow_up_date?->toDateString(),
                     'estimated_value'  => (float) $o->estimated_value,
                     'assigned_to'      => $o->assigned_to,
+                    'declined_reason'  => $o->declined_reason,
                 ])->values(),
                 'hidden' => max(0, $bucket->count() - self::CARDS_PER_GROUP),
             ];
@@ -534,6 +543,162 @@ class RelationshipController extends ApiController
             'open_count'     => $openCount,
             'pipeline_value' => $pipelineValue,
         ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Opportunity lifecycle writes (2026-07-06 web parity) — mobile equivalents
+    // of OpportunityPipelineController::store/patientSearch/updateStage/
+    // convertToLead. Same TreatmentOpportunity table + STAGES vocabulary, same
+    // effect, so behaviour never drifts between web and app.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** POST /api/v1/relationships/opportunities — Add Opportunity sheet. */
+    public function opportunityStore(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'patient_id'      => 'required|integer|exists:patients,id',
+            'type'            => 'required|string|max:100',
+            'label'           => 'nullable|string|max:150',
+            'priority'        => 'required|in:high,medium,low',
+            'estimated_value' => 'nullable|numeric|min:0',
+            'follow_up_date'  => 'required|date',
+            'follow_up_time'  => 'nullable|date_format:H:i',
+            'assigned_to'     => 'nullable|integer|exists:users,id',
+            'notes'           => 'nullable|string|max:1000',
+        ]);
+
+        $patient        = Patient::find($validated['patient_id']);
+        $relationshipId = $patient?->relationship_id;
+
+        $opportunity = TreatmentOpportunity::create([
+            ...$validated,
+            'relationship_id' => $relationshipId,
+            'status'          => 'prospect',   // always starts at Identified
+            'created_by'      => $request->user()->id,
+        ]);
+
+        return $this->success(['id' => $opportunity->id], 'Opportunity added.', 201);
+    }
+
+    /** GET /api/v1/relationships/opportunities/patient-search?q= */
+    public function opportunityPatientSearch(Request $request): JsonResponse
+    {
+        $term = trim((string) $request->query('q', ''));
+
+        $patients = Patient::where(function ($q) use ($term) {
+                $q->where('name', 'like', "%{$term}%")
+                  ->orWhere('phone', 'like', "%{$term}%");
+            })
+            ->limit(10)
+            ->get(['id', 'name', 'phone']);
+
+        return $this->success($patients);
+    }
+
+    /** GET /api/v1/relationships/opportunities/{id} — full detail sheet. */
+    public function opportunityShow(int $id): JsonResponse
+    {
+        $opportunity = TreatmentOpportunity::with(['patient', 'assignedStaff', 'author', 'treatmentPlan'])
+            ->findOrFail($id);
+
+        $stageInfo = TreatmentOpportunity::STAGES[$opportunity->status] ?? [];
+
+        return $this->success([
+            'id'               => $opportunity->id,
+            'patient_id'       => $opportunity->patient_id,
+            'patient_name'     => $opportunity->patient->name ?? 'Unknown',
+            'patient_phone'    => $opportunity->patient->phone ?? null,
+            'type'             => $opportunity->type,
+            'display_label'    => $opportunity->display_label,
+            'status'           => $opportunity->status,
+            'stage_label'      => $stageInfo['label'] ?? $opportunity->status,
+            'priority'         => $opportunity->priority,
+            'priority_label'   => $opportunity->priority_label,
+            'estimated_value'  => (float) $opportunity->estimated_value,
+            'follow_up_date'   => $opportunity->follow_up_date?->toDateString(),
+            'follow_up_time'   => $opportunity->follow_up_time,
+            'assigned_to'      => $opportunity->assigned_to,
+            'assigned_to_name' => $opportunity->assignedStaff?->name,
+            'created_by_name'  => $opportunity->author?->name,
+            'notes'            => $opportunity->notes,
+            'declined_reason'  => $opportunity->declined_reason,
+            'created_at'       => $opportunity->created_at?->toIso8601String(),
+            'updated_at'       => $opportunity->updated_at?->toIso8601String(),
+            'treatment_plan'   => $opportunity->treatmentPlan ? [
+                'id'    => $opportunity->treatmentPlan->id,
+                'name'  => $opportunity->treatmentPlan->plan_name ?? ('Treatment Plan #' . $opportunity->treatment_plan_id),
+                'total' => (float) ($opportunity->treatmentPlan->total ?? 0),
+            ] : null,
+        ]);
+    }
+
+    /**
+     * PATCH /api/v1/relationships/opportunities/{id}/stage — move-stage /
+     * decline. `reason` is optional free text, only saved when moving to
+     * 'declined' (skippable — a decline with no reason is fine).
+     */
+    public function opportunityUpdateStage(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'status' => 'required|in:prospect,discussed,quoted,accepted,completed,declined',
+            'reason' => 'nullable|string|max:1000',
+        ]);
+
+        $opp = TreatmentOpportunity::findOrFail($id);
+
+        $update = ['status' => $request->input('status')];
+        if ($request->input('status') === 'declined') {
+            $update['declined_reason'] = $request->filled('reason') ? $request->input('reason') : null;
+        }
+        $opp->update($update);
+
+        $stageInfo = TreatmentOpportunity::STAGES[$request->input('status')] ?? [];
+
+        return $this->success([
+            'id'          => $opp->id,
+            'status'      => $opp->status,
+            'stage_label' => $stageInfo['label'] ?? $opp->status,
+        ], 'Opportunity moved to ' . ($stageInfo['label'] ?? $opp->status) . '.');
+    }
+
+    /**
+     * POST /api/v1/relationships/opportunities/{id}/convert — Convert to Lead
+     * modal. Creates a Lead in the chosen starting stage and marks the
+     * opportunity completed (same effect as OpportunityPipelineController::
+     * convertToLead()).
+     */
+    public function opportunityConvert(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'stage'       => 'nullable|string|max:50',
+            'assigned_to' => 'nullable|integer|exists:users,id',
+        ]);
+
+        $opp = TreatmentOpportunity::with(['patient', 'assignedStaff'])->findOrFail($id);
+
+        $leadId = DB::transaction(function () use ($opp, $request) {
+            $opp->update(['status' => 'completed']);
+
+            $assignedName = $request->filled('assigned_to')
+                ? User::find($request->input('assigned_to'))?->name
+                : $opp->assignedStaff?->name;
+
+            $lead = Lead::create([
+                'name'        => $opp->patient->name ?? 'Unknown',
+                'phone'       => $opp->patient->phone ?? '',
+                'stage'       => $request->input('stage') ?: 'new',
+                'lead_source' => 'referral',
+                'source'      => 'opportunity',
+                'treatment'   => $opp->display_label,
+                'lead_value'  => $opp->estimated_value,
+                'assigned_to' => $assignedName,
+                'notes'       => "Converted from Treatment Opportunity #{$opp->id}.\n\n" . ($opp->notes ?? ''),
+            ]);
+
+            return $lead->id;
+        });
+
+        return $this->success(['lead_id' => $leadId], 'Opportunity converted to a lead in the Lead Pipeline.');
     }
 
     // ─────────────────────────────────────────────────────────────────────────

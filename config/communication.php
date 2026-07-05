@@ -169,7 +169,7 @@ return [
             'key'   => 'opportunities',
             'label' => 'Opportunity Engine',
             'icon'  => 'sparkles',
-            'route' => 'communication.opportunities.index',
+            'route' => 'relationship.opportunities', // retired 2026-07-06, now the PRE Opportunity Pipeline
             'badge' => null,
         ],
         [

@@ -1,5 +1,8 @@
 {{-- ══ GLOBAL CREATE TASK MODAL ══════════════════════════════════════════════ --}}
-{{-- Trigger: window.dispatchEvent(new CustomEvent('open-create-task', { detail: { patient_id, patient_name } })) --}}
+{{-- Trigger: window.dispatchEvent(new CustomEvent('open-create-task', { detail: { patient_id, patient_name, category } }))
+     category is optional — defaults to 'admin' if omitted. Pass 'maintenance' to
+     land directly on the Maintenance Details fields (e.g. from Failures/Maintenance's
+     "+ Add New Issue"). --}}
 @php
     $ctmUsers = \App\Models\User::where('branch_id', auth()->user()->branch_id)
                     ->where('is_active', true)
@@ -37,7 +40,7 @@
         init() {
             window.addEventListener('open-create-task', e => {
                 this.open          = true;
-                this.category      = 'admin';
+                this.category      = (e.detail && e.detail.category) ? e.detail.category : 'admin';
                 this.isRecurring   = false;
                 this.ptId          = '';
                 this.ptQuery       = '';

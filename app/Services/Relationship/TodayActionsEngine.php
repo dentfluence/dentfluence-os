@@ -4,6 +4,7 @@ namespace App\Services\Relationship;
 
 use App\Models\Appointment;
 use App\Models\CommunicationQueue;
+use App\Models\FollowUp;
 use App\Models\Invoice;
 use App\Models\LabCase;
 use App\Models\Lead;
@@ -20,7 +21,7 @@ use Illuminate\Support\Facades\Log;
  * The most important page in Dentfluence: everything reception
  * needs to do today, generated automatically from live data.
  *
- * 11 categories, each returning a flat array of action items.
+ * 13 categories, each returning a flat array of action items.
  * Every item shares the same shape so the view is uniform.
  *
  * Item shape:
@@ -59,12 +60,13 @@ class TodayActionsEngine
     {
         $groups = [];
 
-        // Run all 11 categories — each is fault-tolerant (errors return [])
+        // Run all categories — each is fault-tolerant (errors return [])
         $categories = [
             'new_enquiries'                => fn () => $this->newEnquiries(),
             'lead_followups'               => fn () => $this->leadFollowups(),
             'opportunities'                => fn () => $this->opportunities(),
             'recall_calls'                 => fn () => $this->recallCalls(),
+            'follow_up_calls'              => fn () => $this->followUpCalls(),
             'appointment_reminders'        => fn () => $this->appointmentReminders(),
             'pending_estimates'            => fn () => $this->pendingEstimates(),
             'membership_renewals'          => fn () => $this->membershipRenewals(),
@@ -72,6 +74,7 @@ class TodayActionsEngine
             'lab_ready'                    => fn () => $this->labReady(),
             'payment_reminders'            => fn () => $this->paymentReminders(),
             'wellness_check_yesterday'     => fn () => $this->wellnessCheckYesterday(),
+            'logged_communications'        => fn () => $this->loggedCommunications(),
         ];
 
         foreach ($categories as $key => $resolver) {
@@ -285,6 +288,106 @@ class TodayActionsEngine
             'recall_manual'        => 'Manually added recall',
             default                => 'Recall due',
         };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY — Follow-up Calls
+    // FollowUp model — pending, due today or overdue. This is the general
+    // "book a call/reminder" record (Follow-up Engine, Yesterday's Flow's
+    // "Book Follow-up call?" toggle, PRM lead follow-ups, etc.) — previously
+    // invisible from Today's Actions entirely; added 2026-07-06 so anything
+    // booked this way actually surfaces here instead of only on the separate
+    // legacy Follow-up Engine board.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function followUpCalls(): array
+    {
+        return FollowUp::with([
+                'patient:id,name,phone,relationship_id',
+                'lead:id,name,phone,relationship_id',
+            ])
+            ->where('status', 'pending')
+            ->whereDate('due_date', '<=', Carbon::today())
+            ->orderBy('due_date')
+            ->limit($this->limit())
+            ->get()
+            ->map(function (FollowUp $fu) {
+                $label = $fu->note ?: ($fu->label ?: 'Follow-up call');
+
+                return [
+                    'category'        => 'follow_up_calls',
+                    'patient_name'    => $fu->subjectName(),
+                    'patient_id'      => $fu->patient_id,
+                    'lead_id'         => $fu->lead_id,
+                    'relationship_id' => $fu->patient?->relationship_id ?? $fu->lead?->relationship_id ?? null,
+                    'reason'          => $fu->due_date->isToday()
+                        ? $label
+                        : $label . ' — overdue by ' . $fu->due_date->diffForHumans(now(), true),
+                    'priority'        => $fu->priority ?? 'medium',
+                    'suggested_action'=> 'Call as scheduled',
+                    'link'            => $fu->patient_id
+                        ? route('patients.show', $fu->patient_id)
+                        : ($fu->lead?->relationship_id
+                            ? route('relationship.profile', $fu->lead->relationship_id)
+                            : route('relationship.pipeline')),
+                    'meta'            => [
+                        'phone'        => $fu->subjectPhone(),
+                        'follow_up_id' => $fu->id,
+                        'channel'      => $fu->channel,
+                        'due_date'     => $fu->due_date->format('d M Y'),
+                    ],
+                ];
+            })
+            ->toArray();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY 12 — Logged Communications
+    // Manually-logged calls/comms (source_engine = 'manual') that don't fall
+    // into any other category — i.e. everything the retired Communication
+    // Manager screen used to be the only place to review. Excludes anything
+    // recall-flavoured so it never double-counts with recallCalls() above.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function loggedCommunications(): array
+    {
+        return CommunicationQueue::with('patient:id,name,phone,relationship_id')
+            ->where('source_engine', 'manual')
+            ->where('status', 'pending')
+            ->where(function ($q) {
+                $q->whereNull('purpose')
+                  ->orWhere(function ($q2) {
+                      $q2->where('purpose', 'not like', '%recall%')
+                         ->where('purpose', '!=', 'recall_due')
+                         ->where('purpose', '!=', 'recall_birthday');
+                  });
+            })
+            ->orderByRaw("FIELD(priority,'high','medium','low')")
+            ->orderBy('follow_up_date')
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (CommunicationQueue $item) => [
+                'category'        => 'logged_communications',
+                'patient_name'    => $item->patient?->name ?? $item->person_name ?? 'Unknown',
+                'patient_id'      => $item->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $item->patient?->relationship_id ?? null,
+                'reason'          => $item->note
+                    ?: (CommunicationQueue::PURPOSES[$item->purpose] ?? ucfirst(str_replace('_', ' ', $item->comm_type ?? 'Communication'))),
+                'priority'        => $item->priority ?? 'medium',
+                'suggested_action'=> 'Follow up on this logged communication',
+                'link'            => $item->patient_id
+                    ? route('patients.show', $item->patient_id)
+                    : '#',
+                'meta'            => [
+                    'phone'          => $item->patient?->phone ?? $item->phone,
+                    'comm_queue_id'  => $item->id,
+                    'purpose'        => $item->purpose,
+                    'channel'        => $item->channel,
+                    'follow_up_date' => $item->follow_up_date?->format('d M Y'),
+                ],
+            ])
+            ->toArray();
     }
 
     // ═══════════════════════════════════════════════════════════════════════

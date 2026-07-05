@@ -30,6 +30,11 @@ class Appointment extends Model
         'cancel_reason',   // reason captured when an appointment is cancelled
         'notes',
         'chief_complaint',
+        'staff_instruction',
+        // Today's Patient Flow popup (Huddle board, 2026-07-06)
+        'amount_to_collect',
+        'prep_item',
+        'chairside_assistant_id',
         // Phase 2 additions
         'is_walkin',
         'checked_in_at',
@@ -48,6 +53,7 @@ class Appointment extends Model
         'checked_in_at'     => 'datetime',
         'in_chair_at'       => 'datetime',
         'completed_at'      => 'datetime',
+        'amount_to_collect' => 'decimal:2',
     ];
  
     // ── Relationships ─────────────────────────────────────────────
@@ -58,6 +64,7 @@ class Appointment extends Model
     public function treatment()       { return $this->belongsTo(Treatment::class); }
     public function treatmentCategory() { return $this->belongsTo(TreatmentCategory::class); }
     public function operatory()          { return $this->belongsTo(Operatory::class); }
+    public function chairsideAssistant() { return $this->belongsTo(User::class, 'chairside_assistant_id'); }
  
     // ── Scopes ────────────────────────────────────────────────────
  

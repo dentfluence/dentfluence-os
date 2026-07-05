@@ -286,12 +286,14 @@ class HuddleAggregationService
      */
     public function getRelationshipItems(): array
     {
-        // Categories we surface in the huddle — a focused subset of the 12.
+        // Categories we surface in the huddle — a focused subset of the full list.
         $huddleCategories = [
+            'follow_up_calls',
             'recall_calls',
             'missed_appointments_yesterday',
             'lead_followups',
             'membership_renewals',
+            'logged_communications',
         ];
 
         try {

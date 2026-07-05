@@ -244,11 +244,11 @@ class CommunicationController extends Controller
         }
 
         if ($moveTo === 'archive' || $validated['comm_type'] === 'spam') {
-            return redirect()->route('communication.manager.index')
+            return redirect()->route('relationship.today')
                 ->with('success', 'Communication archived.');
         }
 
-        return redirect()->route('communication.manager.index')
+        return redirect()->route('relationship.today')
             ->with('success', 'Communication logged.');
     }
 
@@ -414,7 +414,7 @@ class CommunicationController extends Controller
             ]
         );
 
-        return redirect()->route('communication.manager.index')
+        return redirect()->route('relationship.today')
             ->with('success', 'Communication closed. Outcome recorded.');
     }
 
@@ -466,7 +466,7 @@ class CommunicationController extends Controller
 
         $count = count($validated['comm_ids']);
         if ($action === 'move_followups') return redirect()->route('communication.followup.index')->with('success', "{$count} moved to Follow-ups.");
-        return redirect()->route('communication.manager.index')->with('success', "{$count} communications updated.");
+        return redirect()->route('relationship.today')->with('success', "{$count} communications updated.");
     }
 
     // ── AJAX Patient Search ────────────────────────────────────────────────

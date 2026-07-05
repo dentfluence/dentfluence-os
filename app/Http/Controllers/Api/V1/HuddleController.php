@@ -25,6 +25,7 @@ use Illuminate\Validation\Rule;
  *   POST  /api/v1/huddle/tasks                 Create a task
  *   PATCH /api/v1/huddle/tasks/{task}/status   Mark done / pending / in_progress
  *   PATCH /api/v1/huddle/tasks/{task}/assign   Re-assign a task
+ *   PATCH /api/v1/huddle/appointments/{id}/instruction  Today's Patient Flow popup (2026-07-06)
  *
  * Everything is branch-scoped to the logged-in user. Writes are role-gated in
  * routes/api.php; reads are open to any logged-in staff member.
@@ -334,6 +335,47 @@ class HuddleController extends ApiController
             'task_id'      => $createdTask?->id,
             'follow_up_id' => $createdFollowUp?->id,
         ], implode(' · ', $parts) . '.');
+    }
+
+    /**
+     * PATCH /api/v1/huddle/appointments/{id}/instruction
+     * Today's Patient Flow popup (2026-07-06 web parity) — saves notes,
+     * amount to collect, prep item, and chairside assistant in one call.
+     * Mirrors Modules/Huddle/Controllers/HuddleController::updateInstruction():
+     * `amount_to_collect` is ignored (defensively) for walk-in appointments,
+     * even if the client sends it.
+     */
+    public function updateInstruction(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'staff_instruction'      => ['nullable', 'string', 'max:1000'],
+            'amount_to_collect'      => ['nullable', 'numeric', 'min:0'],
+            'prep_item'              => ['nullable', 'string', 'max:255'],
+            'chairside_assistant_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+
+        $appointment = DB::table('appointments')
+            ->where('id', $id)
+            ->where('branch_id', $request->user()->branch_id)
+            ->first(['id', 'is_walkin']);
+
+        if (! $appointment) {
+            return $this->error('Appointment not found.', [], 404);
+        }
+
+        $update = [
+            'staff_instruction'      => $request->input('staff_instruction'),
+            'prep_item'              => $request->input('prep_item'),
+            'chairside_assistant_id' => $request->input('chairside_assistant_id'),
+        ];
+
+        if (! $appointment->is_walkin) {
+            $update['amount_to_collect'] = $request->input('amount_to_collect');
+        }
+
+        DB::table('appointments')->where('id', $id)->update($update);
+
+        return $this->success(null, 'Saved.');
     }
 
     /**

@@ -43,9 +43,11 @@
                 <span>Execution</span>
             </li>
 
-            {{-- Communication Manager --}}
+            {{-- Today's Calls — was "Communication Manager", pointing at the retired
+                 PRM-style list screen. Renamed + repointed to PRE's Today's Actions
+                 2026-07-06 (Sumit's call). --}}
             <li class="comm-sidebar__nav-item">
-                <a href="{{ route('communication.manager.index') }}"
+                <a href="{{ route('relationship.today') }}"
                    class="comm-sidebar__nav-link {{ $activeNav === 'manager' ? 'is-active' : '' }}"
                    aria-current="{{ $activeNav === 'manager' ? 'page' : 'false' }}">
                     <span class="comm-sidebar__nav-icon" aria-hidden="true">
@@ -53,7 +55,7 @@
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                         </svg>
                     </span>
-                    <span class="comm-sidebar__nav-label">Communication Manager</span>
+                    <span class="comm-sidebar__nav-label">Today's Calls</span>
                     @if(($navBadges['overdue_count'] ?? 0) > 0)
                         <span class="comm-sidebar__nav-badge comm-sidebar__nav-badge--urgent"
                               aria-label="{{ $navBadges['overdue_count'] }} overdue">
@@ -118,9 +120,9 @@
                 <span>Intelligence</span>
             </li>
 
-            {{-- Opportunity Engine --}}
+            {{-- Opportunity Engine — retired 2026-07-06, now the PRE Opportunity Pipeline --}}
             <li class="comm-sidebar__nav-item">
-                <a href="{{ route('communication.opportunities.index') }}"
+                <a href="{{ route('relationship.opportunities') }}"
                    class="comm-sidebar__nav-link {{ $activeNav === 'opportunities' ? 'is-active' : '' }}"
                    aria-current="{{ $activeNav === 'opportunities' ? 'page' : 'false' }}">
                     <span class="comm-sidebar__nav-icon" aria-hidden="true">

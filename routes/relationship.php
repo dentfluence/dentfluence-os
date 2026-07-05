@@ -150,13 +150,34 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
         ->whereNumber('id')
         ->name('pipeline.log-reply');  // relationship.pipeline.log-reply
 
-    // ── PRE Opportunity + Recall pipelines (Phase 1 · Workstream D, slice 3) ─
-    // Read-only, relationship-centric boards, additive alongside the legacy
-    // Communication / Opportunity surfaces (which are left untouched).
+    // ── PRE Opportunity Pipeline (Phase 1 · Workstream D, slice 3;
+    // full read/write board 2026-07-06 — replaces the legacy Communication
+    // "Opportunity Engine", which now redirects here.) ────────────────────
     // Static segments — must stay above the /{id} wildcard below.
     Route::get('/opportunities', [OpportunityPipelineController::class, 'index'])
         ->name('opportunities');  // relationship.opportunities
 
+    Route::post('/opportunities', [OpportunityPipelineController::class, 'store'])
+        ->name('opportunities.store');  // relationship.opportunities.store
+
+    Route::get('/opportunities/patient-search', [OpportunityPipelineController::class, 'patientSearch'])
+        ->name('opportunities.patient-search');  // relationship.opportunities.patient-search
+
+    Route::get('/opportunities/{id}/modal', [OpportunityPipelineController::class, 'detailModal'])
+        ->whereNumber('id')
+        ->name('opportunities.detail-modal');  // relationship.opportunities.detail-modal
+
+    Route::patch('/opportunities/{id}/stage', [OpportunityPipelineController::class, 'updateStage'])
+        ->whereNumber('id')
+        ->name('opportunities.update-stage');  // relationship.opportunities.update-stage
+
+    Route::post('/opportunities/{id}/convert', [OpportunityPipelineController::class, 'convertToLead'])
+        ->whereNumber('id')
+        ->name('opportunities.convert');  // relationship.opportunities.convert
+
+    // ── PRE Recall pipeline (Phase 1 · Workstream D, slice 3) ────────────────
+    // Read-only, relationship-centric board, additive alongside the legacy
+    // Communication / Recall surfaces (which are left untouched).
     Route::get('/recalls', [RecallPipelineController::class, 'index'])
         ->name('recalls');  // relationship.recalls
 
