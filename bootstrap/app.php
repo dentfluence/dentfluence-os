@@ -71,4 +71,54 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 401);
             }
         });
+
+        // ── Never leak Laravel/routing internals to staff or the mobile app ──
+        // Before this, a bad/renamed route (or a client hitting a stale
+        // deployment) surfaced Laravel's raw exception message, e.g.
+        // "The route api/v1/relationships/pipelines/leads could not be
+        // found." straight to reception staff / the Flutter app. Every api/*
+        // request now gets the same clean envelope; the real exception is
+        // still logged for developers (PRE mobile rollout, 2026-07-05).
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, $request) {
+            if ($request->is('api/*')) {
+                \Illuminate\Support\Facades\Log::warning('API route not found', [
+                    'uri'    => $request->path(),
+                    'method' => $request->method(),
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unable to load data. Please try again.',
+                    'errors'  => [],
+                ], 404);
+            }
+        });
+
+        $exceptions->render(function (\Illuminate\Database\Eloquent\ModelNotFoundException $e, $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The record you requested could not be found.',
+                    'errors'  => [],
+                ], 404);
+            }
+        });
+
+        $exceptions->render(function (\Throwable $e, $request) {
+            if ($request->is('api/*')) {
+                \Illuminate\Support\Facades\Log::error('Unhandled API exception', [
+                    'uri'       => $request->path(),
+                    'method'    => $request->method(),
+                    'exception' => get_class($e),
+                    'message'   => $e->getMessage(),
+                    'trace'     => $e->getTraceAsString(),
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Something went wrong on our end. Please try again.',
+                    'errors'  => [],
+                ], 500);
+            }
+        });
     })->create();

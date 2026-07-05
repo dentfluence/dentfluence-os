@@ -95,6 +95,11 @@ class Patient extends Model
         'last_visit_date',
         'recall_no_visit_queued_at',   // recall-engine cooldown stamp
         'recall_birthday_queued_at',   // recall-engine cooldown stamp
+        // PRE call-outcome automation flags (2026-07-05)
+        'contact_invalid_at',
+        'contact_invalid_reason',
+        'automations_disabled_at',
+        'automations_disabled_reason',
         // Relations
         'branch_id',
         'created_by',
@@ -116,6 +121,8 @@ class Patient extends Model
         'dob_unknown'           => 'boolean',
         'abha_linked_at'        => 'datetime',
         'is_active'             => 'boolean',
+        'contact_invalid_at'      => 'datetime',
+        'automations_disabled_at' => 'datetime',
         'habits'                => 'array',
         'habit_frequency'       => 'array',
         'total_billed'          => 'decimal:2',
@@ -421,6 +428,37 @@ class Patient extends Model
             return 'expired';
         }
         return $this->membership_status ?? 'not_enrolled';
+    }
+
+    // ── PRE call-outcome automation flags (2026-07-05) ──────────────────────
+
+    /** Excludes patients flagged deceased/opted-out from ANY automation query. */
+    public function scopeAutomationsEnabled($query)
+    {
+        return $query->whereNull('automations_disabled_at');
+    }
+
+    /**
+     * "Wrong Number" / "Invalid Number" outcome — stop future recall attempts
+     * without touching the phone field itself (front desk can still see/fix it).
+     */
+    public function markContactInvalid(string $reason = 'Marked invalid from a recall call outcome'): void
+    {
+        $this->contact_invalid_at     = now();
+        $this->contact_invalid_reason = $reason;
+        $this->save();
+    }
+
+    /**
+     * "Deceased" outcome — permanent, global stop for every automated trigger
+     * (recall, birthday). Distinct from the per-trigger cooldown
+     * stamps, which are temporary and only pause one specific trigger.
+     */
+    public function disableAutomations(string $reason = 'Marked deceased from a recall call outcome'): void
+    {
+        $this->automations_disabled_at     = now();
+        $this->automations_disabled_reason = $reason;
+        $this->save();
     }
 
     // ── Legacy aliases ────────────────────────────────────────────────────────

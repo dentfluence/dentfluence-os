@@ -4,15 +4,19 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Inventory\InventoryItem;
+use App\Models\Inventory\InventoryLocation;
 use App\Models\Inventory\InventoryVendor;
 use App\Models\Inventory\PurchaseOrder;
 use App\Models\Inventory\ImplantCatalog;
 use App\Models\Inventory\ImplantPlacement;
+use App\Models\Inventory\ReusableAsset;
+use App\Models\Inventory\StockMovement;
 use App\Models\User;
 use App\Services\Inventory\InventoryService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * InventoryController (API v1)
@@ -25,6 +29,7 @@ use Illuminate\Http\Request;
  * Writes are role-gated in routes/api.php via 'api.role:...'.
  *
  *   GET   /inventory/meta                         dropdown data for all forms
+ *   GET   /inventory/dashboard                    KPIs/health/lists for mobile dashboard
  *   GET   /inventory/items                        stock-by-location list
  *   GET   /inventory/products                     product master (search/filter)
  *   GET   /inventory/items/{item}                 one item (detail)
@@ -146,11 +151,250 @@ class InventoryController extends ApiController
         ], 'Inventory alerts');
     }
 
+    /**
+     * GET /api/v1/inventory/dashboard
+     *
+     * Mobile-shaped version of the web Inventory Dashboard (see the private
+     * buildKpis()/buildStockStatus()/buildHealthScore()/buildExtraKpis()/
+     * buildCriticalItems()/buildExpiringSoon()/buildRecentMovements()/
+     * buildFooterStats()/buildAssistantActionItems() methods on the web
+     * App\Http\Controllers\InventoryController — same thresholds/logic,
+     * but flat data (no SVG icon paths / hex colors, no chart series).
+     * Mobile picks its own icons/colors and skips value-trend + category
+     * charts entirely (V1 mobile is simpler than the web dashboard).
+     */
+    public function dashboard(Request $request): JsonResponse
+    {
+        /* ── KPIs ── */
+        $totalValue = DB::table('inventory_stocks')
+            ->join('inventory_items', 'inventory_stocks.inventory_item_id', '=', 'inventory_items.id')
+            ->where('inventory_items.is_active', true)
+            ->sum(DB::raw('inventory_stocks.available_qty * inventory_items.average_purchase_price'));
+
+        $totalItems = InventoryItem::where('is_active', true)->count();
+
+        $lowStockCount = DB::table('inventory_items as i')
+            ->join('inventory_stocks as s', 'i.id', '=', 's.inventory_item_id')
+            ->where('i.is_active', true)
+            ->whereRaw('s.available_qty > 0')
+            ->whereRaw('s.available_qty <= i.minimum_qty')
+            ->distinct('i.id')
+            ->count('i.id');
+
+        $outOfStockCount = InventoryItem::where('is_active', true)
+            ->whereDoesntHave('stocks', fn ($q) => $q->where('available_qty', '>', 0))
+            ->count();
+
+        $expiringSoonCount = StockMovement::whereNotNull('expiry_date')
+            ->where('expiry_date', '>=', today())
+            ->where('expiry_date', '<=', today()->addDays(90))
+            ->distinct('inventory_item_id')
+            ->count('inventory_item_id');
+
+        $assetsDue = ReusableAsset::whereNotNull('retirement_threshold')
+            ->whereRaw('current_usage_count >= retirement_threshold')
+            ->count();
+
+        /* ── Stock status donut buckets ── */
+        $items = InventoryItem::where('is_active', true)->with('stocks')->get();
+        $healthy = $low = $critical = $out = 0;
+        foreach ($items as $item) {
+            $qty = $item->stocks->sum('available_qty');
+            if ($qty <= 0) {
+                $out++;
+            } elseif ($item->minimum_qty > 0 && $qty <= $item->minimum_qty) {
+                $critical++;
+            } elseif ($item->minimum_qty > 0 && $qty <= $item->minimum_qty * 1.5) {
+                $low++;
+            } else {
+                $healthy++;
+            }
+        }
+
+        /* ── Health score (0-100) ── */
+        $totalActive = $totalItems ?: 1;
+
+        $lowForScore = $lowStockCount; // qty>0 but <= minimum_qty (same query as KPI)
+
+        $critExpiry = StockMovement::whereNotNull('expiry_date')
+            ->where('expiry_date', '>=', today())
+            ->where('expiry_date', '<=', today()->addDays(30))
+            ->where('qty', '>', 0)
+            ->distinct('inventory_item_id')
+            ->count('inventory_item_id');
+
+        $deadCount = DB::table('inventory_items as i')
+            ->join('inventory_stocks as s', 'i.id', '=', 's.inventory_item_id')
+            ->where('i.is_active', true)
+            ->where('s.available_qty', '>', 0)
+            ->whereNotExists(function ($q) {
+                $q->from('stock_movements')
+                    ->whereColumn('stock_movements.inventory_item_id', 'i.id')
+                    ->where('stock_movements.created_at', '>=', now()->subDays(90));
+            })
+            ->distinct('i.id')
+            ->count('i.id');
+
+        $score = 100;
+        $score -= min(35, (int) round(($outOfStockCount / $totalActive) * 100 * 0.35));
+        $score -= min(25, (int) round(($lowForScore / $totalActive) * 100 * 0.25));
+        $score -= min(20, (int) round(($critExpiry / $totalActive) * 100 * 0.20));
+        $score -= min(10, (int) round(($deadCount / $totalActive) * 100 * 0.10));
+        $score  = max(0, $score);
+
+        if ($score >= 90) {
+            $grade = 'Excellent';
+        } elseif ($score >= 70) {
+            $grade = 'Good';
+        } elseif ($score >= 50) {
+            $grade = 'Needs Attention';
+        } else {
+            $grade = 'Critical';
+        }
+
+        /* ── Critical items (qty <= minimum_qty), lowest stock first, top 8 ── */
+        $criticalItems = InventoryItem::where('is_active', true)
+            ->with(['stocks', 'category'])
+            ->get()
+            ->filter(fn ($item) => $item->total_stock <= $item->minimum_qty)
+            ->sortBy('total_stock')
+            ->take(8)
+            ->values()
+            ->map(fn ($item) => [
+                'item_id'       => $item->id,
+                'product_name'  => $item->product_name,
+                'available_qty' => (float) $item->total_stock,
+                'minimum_qty'   => (float) $item->minimum_qty,
+                'category_name' => $item->category?->name,
+            ]);
+
+        /* ── Expiring soon (next 90 days), soonest first, top 8 ── */
+        $expiringSoon = StockMovement::with('item')
+            ->whereNotNull('expiry_date')
+            ->where('expiry_date', '>=', today())
+            ->where('expiry_date', '<=', today()->addDays(90))
+            ->whereIn('movement_type', ['stock_in', 'opening_stock'])
+            ->orderBy('expiry_date')
+            ->take(8)
+            ->get()
+            ->map(fn ($m) => [
+                'item_id'      => $m->inventory_item_id,
+                'product_name' => $m->item?->product_name,
+                'qty'          => (float) $m->qty,
+                'expiry_date'  => $m->expiry_date?->format('Y-m-d'),
+                'batch_no'     => $m->batch_no,
+            ]);
+
+        /* ── Recent movements feed, latest 12 ── */
+        $recentMovements = StockMovement::with(['item', 'createdBy', 'fromLocation', 'toLocation'])
+            ->latest()
+            ->take(12)
+            ->get()
+            ->map(fn ($m) => [
+                'id'            => $m->id,
+                'product_name'  => $m->item?->product_name,
+                'movement_type' => $m->movement_type,
+                'qty'           => (float) $m->qty,
+                'location'      => $m->toLocation?->name ?? $m->fromLocation?->name,
+                'created_at'    => $m->created_at?->toIso8601String(),
+                'created_by'    => $m->createdBy?->name,
+            ]);
+
+        /* ── Footer stats ── */
+        $footerStats = [
+            'locations'       => InventoryLocation::where('is_active', true)->count(),
+            'vendors'         => InventoryVendor::where('is_active', true)->count(),
+            'pending_pos'     => PurchaseOrder::whereIn('status', ['draft', 'ordered', 'partially_received'])->count(),
+            'grn_pending'     => PurchaseOrder::whereIn('status', ['ordered', 'partially_received'])->count(),
+            'stock_out_today' => StockMovement::where('movement_type', 'stock_out')->whereDate('created_at', today())->count(),
+            'reusable_assets' => ReusableAsset::count(),
+        ];
+
+        /* ── Action items (plain text, no routes/icons) ── */
+        $actionItems = [];
+
+        $todayPOs = PurchaseOrder::with('vendor')
+            ->whereIn('status', ['ordered', 'partially_received'])
+            ->whereDate('expected_date', today())
+            ->get();
+        foreach ($todayPOs as $po) {
+            $actionItems[] = [
+                'priority' => 'high',
+                'text'     => 'Receive delivery from ' . ($po->vendor?->vendor_name ?? 'vendor'),
+                'sub'      => 'Order #' . ($po->order_no ?? $po->id) . ' expected today',
+            ];
+        }
+
+        $urgentExpiry = StockMovement::with('item')
+            ->whereNotNull('expiry_date')
+            ->where('expiry_date', '>=', today())
+            ->where('expiry_date', '<=', today()->addDays(14))
+            ->where('qty', '>', 0)
+            ->orderBy('expiry_date')
+            ->take(3)
+            ->get();
+        foreach ($urgentExpiry as $exp) {
+            $days = today()->diffInDays($exp->expiry_date);
+            $actionItems[] = [
+                'priority' => 'medium',
+                'text'     => 'Use ' . ($exp->item?->product_name ?? 'item') . ' before expiry',
+                'sub'      => 'Expires in ' . $days . ' day' . ($days === 1 ? '' : 's'),
+            ];
+        }
+
+        $oosItems = InventoryItem::where('is_active', true)
+            ->whereDoesntHave('stocks', fn ($q) => $q->where('available_qty', '>', 0))
+            ->take(3)
+            ->get();
+        foreach ($oosItems as $item) {
+            $actionItems[] = [
+                'priority' => 'high',
+                'text'     => $item->product_name . ' is out of stock',
+                'sub'      => 'Notify manager to reorder',
+            ];
+        }
+
+        $actionItems = array_slice($actionItems, 0, 5);
+
+        return $this->success([
+            'kpis' => [
+                'inventory_value' => (float) $totalValue,
+                'total_items'     => $totalItems,
+                'low_stock'       => $lowStockCount,
+                'critical_oos'    => $outOfStockCount,
+                'expiring_soon'   => $expiringSoonCount,
+                'assets_due'      => $assetsDue,
+            ],
+            'stock_status' => [
+                'healthy'  => $healthy,
+                'low'      => $low,
+                'critical' => $critical,
+                'out'      => $out,
+            ],
+            'health_score' => [
+                'score'     => $score,
+                'grade'     => $grade,
+                'penalties' => [
+                    'oos'    => $outOfStockCount,
+                    'low'    => $lowForScore,
+                    'expiry' => $critExpiry,
+                    'dead'   => $deadCount,
+                ],
+            ],
+            'critical_items'   => $criticalItems,
+            'expiring_soon'    => $expiringSoon,
+            'recent_movements' => $recentMovements,
+            'footer_stats'     => $footerStats,
+            'action_items'     => $actionItems,
+            'generated_at'     => now()->toIso8601String(),
+        ], '');
+    }
+
     /* ─────────── ITEMS / STOCK ─────────── */
 
     public function items(Request $request): JsonResponse
     {
-        $query = $this->inventory->itemsStockQuery($request->only(['category_id', 'location_id', 'search', 'sort', 'dir']));
+        $query = $this->inventory->itemsStockQuery($request->only(['category_id', 'location_id', 'search', 'sort', 'dir', 'stock_status']));
         $page  = $this->paginate($query, $request);
 
         return $this->respond($page, fn ($r) => [
@@ -199,7 +443,18 @@ class InventoryController extends ApiController
             'gst_rate'           => 'nullable|numeric|min:0|max:100',
             'description'        => 'nullable|string|max:2000',
             'inventory_behavior' => 'nullable|in:consumable,reusable,semi_reusable',
+            // Mobile-only convenience: snap a photo of the product straight
+            // from the phone. Web's "Add New Product" modal has a Product
+            // Image uploader too, but it isn't wired to the `image` column
+            // yet (its storeItem()/updateItem() validate() doesn't include
+            // it) — this is the first place that column actually gets used.
+            'photo'              => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
+
+        if ($request->hasFile('photo')) {
+            $data['image'] = $request->file('photo')->store('inventory/products', 'public');
+        }
+        unset($data['photo']);
 
         $data['created_by']          = $request->user()->id;
         $data['inventory_behavior']  = $data['inventory_behavior'] ?? 'consumable';
@@ -584,6 +839,7 @@ class InventoryController extends ApiController
             'is_reusable'         => (bool) $i->is_reusable,
             'total_qty'           => (float) ($i->total_qty ?? 0),
             'is_active'           => (bool) $i->is_active,
+            'image_url'           => $i->image ? \Illuminate\Support\Facades\Storage::url($i->image) : null,
         ];
 
         if ($withStocks && $i->relationLoaded('stocks')) {

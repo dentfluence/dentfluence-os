@@ -1,9 +1,12 @@
-@extends('layouts.communication')
-@section('page-title', 'Template Editor')
-@section('communication-content')
-<div style="padding:28px;font-family:'Inter',sans-serif;">
-    <h1 style="font-family:'Cormorant Garamond',serif;font-size:26px;color:#1a0320;margin:0 0 4px;">Template Editor</h1>
-    <p style="color:#9a7aaa;font-size:13px;">Create or edit a message template.</p>
-    {{-- TODO: template editor form --}}
-</div>
-@endsection
+{{--
+SUPERSEDED 2026-07-06 — Message Template editor moved to
+resources/views/relationship/templates/editor.blade.php.
+Original archived at
+under_review/pre_consolidation_2026_07_06/templates-editor.blade.php.
+
+This view is no longer rendered by any route — routes/communication.php's
+`communication.templates.create/.edit/.store/.update/.destroy` all redirect
+straight to the relationship.templates.* equivalents before ever reaching a
+controller/view that would render this. Left as an inert stub (not deleted)
+per this project's archive convention.
+--}}

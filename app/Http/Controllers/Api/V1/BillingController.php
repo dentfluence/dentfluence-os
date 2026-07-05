@@ -3,6 +3,10 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Models\BillingAuditLog;
+use App\Models\BillingPrompt;
+use App\Models\CouponCode;
+use App\Models\EmiSchedule;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\InvoicePayment;
@@ -10,12 +14,22 @@ use App\Models\Receipt;
 use App\Models\EmiProvider;
 use App\Models\AppSetting;
 use App\Models\Patient;
+use App\Models\RoleBillingPermission;
 use App\Models\Finance\FinanceBankAccount;
+use App\Models\Finance\FinanceTransaction;
+use App\Models\TreatmentVisitItem;
+use App\Models\Wallet;
+use App\Models\WalletTransaction;
+use App\Services\Billing\EmiScheduleService;
 use App\Services\Billing\InvoicePaymentService;
+use App\Services\Billing\ManualDiscountService;
+use App\Services\CouponService;
+use App\Services\MembershipBenefitService;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * BillingController (API v1)
@@ -42,8 +56,10 @@ class BillingController extends ApiController
 
     private const EMI_TENURES = [3, 6, 9, 12, 18, 24, 36, 48, 60];
 
-    public function __construct(private InvoicePaymentService $payments)
-    {
+    public function __construct(
+        private InvoicePaymentService $payments,
+        private EmiScheduleService $emiSchedules,
+    ) {
     }
 
     /* =========================================================================
@@ -208,6 +224,167 @@ class BillingController extends ApiController
     }
 
     /* =========================================================================
+     | Direct-EMI instalment schedule — read + receivables "mark paid".
+     |
+     | Pure follow-up bookkeeping: does NOT touch invoice totals or the
+     | Finance ledger (see EmiScheduleService docblock) — the full principal
+     | was already booked as revenue when the Direct EMI payment was first
+     | recorded, because "direct" EMI means the clinic itself finances the
+     | patient and collects instalments outside the software.
+     |=========================================================================*/
+    public function emiSchedule(Request $request, $invoice, $payment): JsonResponse
+    {
+        $inv = $this->findInvoice($request, $invoice);
+        if ($inv instanceof JsonResponse) return $inv;
+
+        $pmt = InvoicePayment::where('invoice_id', $inv->id)->whereKey($payment)->first();
+        if (! $pmt) {
+            return $this->error('Payment not found.', [], 404);
+        }
+        if ($pmt->emi_type !== 'direct') {
+            return $this->error('This is not a Direct EMI payment.', [], 422);
+        }
+
+        $rows = $this->emiSchedules->listForPayment($pmt);
+
+        return $this->success([
+            'invoice_number'    => $inv->invoice_number,
+            'emi_provider'      => $pmt->emi_provider,
+            'emi_tenure'        => $pmt->emi_tenure,
+            'emi_interest_rate' => (float) $pmt->emi_interest_rate,
+            'schedule'          => $rows->map(fn ($r) => $this->emiRowPayload($r))->values(),
+        ], '');
+    }
+
+    public function markEmiInstallmentPaid(Request $request, $invoice, $payment, $schedule): JsonResponse
+    {
+        $inv = $this->findInvoice($request, $invoice);
+        if ($inv instanceof JsonResponse) return $inv;
+
+        $pmt = InvoicePayment::where('invoice_id', $inv->id)->whereKey($payment)->first();
+        if (! $pmt || $pmt->emi_type !== 'direct') {
+            return $this->error('Direct EMI payment not found.', [], 404);
+        }
+
+        $row = EmiSchedule::where('invoice_payment_id', $pmt->id)->whereKey($schedule)->first();
+        if (! $row) {
+            return $this->error('Instalment not found.', [], 404);
+        }
+
+        $data = $request->validate([
+            'paid_date'         => 'required|date',
+            'payment_reference' => 'nullable|string|max:100',
+            'notes'             => 'nullable|string|max:300',
+        ]);
+
+        try {
+            $row = $this->emiSchedules->markPaid(
+                $row,
+                $data['paid_date'],
+                $data['payment_reference'] ?? null,
+                $data['notes'] ?? null,
+                $request->user()->id,
+            );
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), [], 422);
+        }
+
+        return $this->success($this->emiRowPayload($row), 'Instalment #' . $row->instalment_no . ' marked as collected.');
+    }
+
+    /* =========================================================================
+     | Refund from wallet back to patient (cash/UPI/etc OUT) — mirrors web
+     | Finance\WalletController::refund() exactly: capped at the permanent
+     | balance, same WALLET_REFUND permission gate (admin bypasses), same
+     | Finance mirror (type=refund/direction=debit) + audit log entry.
+     | POST /api/v1/patients/{patient}/wallet/refund
+     |=========================================================================*/
+    public function refundWalletCredit(Request $request, $patient): JsonResponse
+    {
+        $pt = Patient::where('branch_id', $request->user()->branch_id)
+            ->whereKey($patient)->first();
+        if (! $pt) {
+            return $this->error('Patient not found.', [], 404);
+        }
+
+        $user = $request->user();
+        if (! $user->isAdminRole()) {
+            $role = $user->roleModel;
+            if (! $role || ! $role->billingCan(RoleBillingPermission::WALLET_REFUND)) {
+                return $this->error('You do not have permission for this wallet action.', [], 403);
+            }
+        }
+
+        $data = $request->validate([
+            'amount'       => 'required|numeric|min:1',
+            'payment_mode' => 'required|in:cash,upi,bank_transfer,cheque,other',
+            'refund_date'  => 'required|date',
+            'reason'       => 'required|string|min:3|max:300',
+        ]);
+
+        $wallet = Wallet::forPatient($pt->id);
+        if ((float) $data['amount'] > (float) $wallet->balance_permanent) {
+            return $this->error(
+                'Refund exceeds available wallet balance of Rs. ' . number_format($wallet->balance_permanent, 2) . '.',
+                [], 422
+            );
+        }
+
+        $withdrawn = 0.0;
+
+        DB::transaction(function () use ($data, $pt, $request, &$withdrawn) {
+            $withdrawn = (new WalletService())->withdraw(
+                patientId:   $pt->id,
+                amount:      (float) $data['amount'],
+                paymentMode: $data['payment_mode'],
+                notes:       'Refund: ' . $data['reason'],
+                createdBy:   $request->user()->id,
+            );
+
+            if ($withdrawn <= 0) {
+                return;
+            }
+
+            $tx = WalletTransaction::where('patient_id', $pt->id)
+                ->where('source', 'withdrawal')->latest()->first();
+
+            FinanceTransaction::create([
+                'type'             => 'refund',
+                'direction'        => 'debit',
+                'source_type'      => WalletTransaction::class,
+                'source_id'        => $tx?->id,
+                'amount'           => $withdrawn,
+                'net_amount'       => $withdrawn,
+                'payment_mode'     => $data['payment_mode'],
+                'patient_id'       => $pt->id,
+                'status'           => 'active',
+                'transaction_date' => $data['refund_date'],
+                'notes'            => 'Wallet refund — ' . $data['reason'],
+                'created_by'       => $request->user()->id,
+            ]);
+
+            if ($tx) {
+                BillingAuditLog::record('wallet_refund', $tx,
+                    'Refund Rs. ' . number_format($withdrawn, 2) . ' (' . $data['payment_mode'] . '). ' . $data['reason'],
+                    $request->user()->id, 'Wallet · ' . $pt->name);
+            }
+        });
+
+        if ($withdrawn <= 0) {
+            return $this->error('Refund could not be applied (amount may exceed balance).', [], 422);
+        }
+
+        $wallet->refresh();
+
+        return $this->success([
+            'patient_id'      => $pt->id,
+            'patient_name'    => $pt->name,
+            'amount_refunded' => $withdrawn,
+            'wallet_balance'  => (float) $wallet->balance_total,
+        ], '₹' . number_format($withdrawn, 0) . ' refunded from ' . $pt->name . "'s wallet.", 201);
+    }
+
+    /* =========================================================================
      | Receipt detail (for the printable receipt PDF — mirrors receipt.blade)
      |=========================================================================*/
     public function receipt(Request $request, $invoice, $receipt): JsonResponse
@@ -364,9 +541,13 @@ class BillingController extends ApiController
 
     /* =========================================================================
      | Create invoice  POST /api/v1/invoices
-     | Mirrors web BillingController::store(). Simplified: no coupon/wallet/
-     | membership layers on mobile (those can be applied on web). Returns the
-     | new invoice summary + id so the mobile can proceed to record payment.
+     | Full parity with web BillingController::store() — coupon, wallet,
+     | membership and manual discount all stack exactly like the web (same
+     | order: coupon -> membership -> wallet -> manual, each on top of the
+     | previous via Invoice::recalculate()). One deliberate improvement over
+     | web: coupon discount and membership discount are RECOMPUTED server-side
+     | here instead of trusting a client-submitted rupee amount — web's hidden
+     | form field pattern is a client-trust gap not worth reproducing on an API.
      |=========================================================================*/
     public function createInvoice(Request $request): JsonResponse
     {
@@ -383,6 +564,21 @@ class BillingController extends ApiController
             'items.*.disc_pct'     => 'nullable|numeric|min:0|max:100',
             'items.*.gst_pct'      => 'nullable|numeric|min:0|max:100',
             'items.*.tooth_number' => 'nullable|string|max:20',
+            'items.*.treatment_id' => 'nullable|integer|exists:treatments,id',
+            // Discount layers (all optional, all stack)
+            'coupon_code'                => 'nullable|string|max:50',
+            'wallet_applied'             => 'nullable|numeric|min:0',
+            'wallet_treatment_ids'       => 'nullable|array',
+            'wallet_treatment_ids.*'     => 'integer',
+            'apply_membership_discount' => 'nullable|boolean',
+            'manual_discount_type'       => 'nullable|in:flat,percentage',
+            'manual_discount_value'      => 'nullable|numeric|min:0.01',
+            'manual_discount_reason'     => 'nullable|required_with:manual_discount_value|string|min:3|max:500',
+            // Optional links back to the source that prompted this invoice
+            'prompt_ids'                 => 'nullable|array',
+            'prompt_ids.*'               => 'integer|exists:billing_prompts,id',
+            'visit_item_ids'             => 'nullable|array',
+            'visit_item_ids.*'           => 'integer',
         ]);
 
         // Verify the patient belongs to this user's branch.
@@ -394,10 +590,10 @@ class BillingController extends ApiController
 
         $invoiceId = null;
 
-        DB::transaction(function () use ($request, &$invoiceId) {
+        DB::transaction(function () use ($request, $patient, &$invoiceId) {
             $invoice = Invoice::create([
                 'invoice_number' => Invoice::nextNumber(),
-                'patient_id'     => $request->patient_id,
+                'patient_id'     => $patient->id,
                 'invoice_date'   => $request->invoice_date,
                 'due_date'       => $request->due_date,
                 'discount_pct'   => $request->discount_pct ?? 0,
@@ -409,6 +605,7 @@ class BillingController extends ApiController
             foreach ($request->items as $i => $row) {
                 $item = new InvoiceItem([
                     'invoice_id'   => $invoice->id,
+                    'treatment_id' => $row['treatment_id'] ?? null,
                     'description'  => $row['description'],
                     'tooth_number' => $row['tooth_number'] ?? null,
                     'unit_price'   => $row['unit_price'],
@@ -421,13 +618,366 @@ class BillingController extends ApiController
                 $item->save();
             }
 
+            // Subtotal now reflects the real saved items — every discount below
+            // is computed against this, never a client-submitted number.
             $invoice->recalculate();
+
+            // ── Coupon ────────────────────────────────────────────────────────
+            $couponId = null;
+            if ($request->filled('coupon_code')) {
+                $coupon = CouponCode::active()
+                    ->where('code', strtoupper(trim($request->coupon_code)))
+                    ->first();
+                if (! $coupon) {
+                    throw ValidationException::withMessages(['coupon_code' => 'Invalid or expired coupon code.']);
+                }
+                if (! $coupon->canBeUsedByPatient($patient->id)) {
+                    throw ValidationException::withMessages(['coupon_code' => 'This coupon has already been used the maximum number of times for this patient.']);
+                }
+                if ((float) $invoice->subtotal < (float) $coupon->min_invoice_amount) {
+                    throw ValidationException::withMessages(['coupon_code' => 'Minimum invoice amount for this coupon is Rs. ' . number_format($coupon->min_invoice_amount, 0) . '.']);
+                }
+                $couponDiscount = $coupon->calculateDiscount((float) $invoice->subtotal);
+                if ($couponDiscount > 0) {
+                    $invoice->update(['coupon_id' => $coupon->id, 'coupon_discount' => $couponDiscount]);
+                    $couponId = $coupon->id;
+                }
+            }
+
+            // ── Membership discount (recomputed server-side; staff opts in) ────
+            $membershipBenefit = null;
+            if ($request->boolean('apply_membership_discount')) {
+                $invoice->refresh();
+                $lineItems = $invoice->items->map(fn ($it) => [
+                    'name'   => $it->description,
+                    'amount' => (float) $it->unit_price,
+                    'qty'    => (int) $it->qty,
+                ])->all();
+                $membershipBenefit = MembershipBenefitService::forPatient($patient->id, $lineItems, (float) $invoice->subtotal);
+                if (($membershipBenefit['active'] ?? false) && ($membershipBenefit['discount'] ?? 0) > 0) {
+                    $invoice->update([
+                        'membership_id'       => $membershipBenefit['membership_id'],
+                        'membership_discount' => $membershipBenefit['discount'],
+                    ]);
+                }
+            }
+
+            $invoice->recalculate();
+
+            // ── Wallet (capped server-side — never trust a client rupee amount) ─
+            if ($request->filled('wallet_applied') && (float) $request->wallet_applied > 0) {
+                $invoice->refresh();
+                $wallet    = Wallet::forPatient($patient->id);
+                $requested = (float) $request->wallet_applied;
+                $cap       = min($requested, (float) $wallet->balance_total, (float) $invoice->balance_due);
+                if ($cap > 0) {
+                    $debited = (new WalletService())->debit(
+                        patientId:    $patient->id,
+                        amount:       $cap,
+                        invoiceId:    $invoice->id,
+                        createdBy:    $request->user()->id,
+                        treatmentIds: array_map('intval', (array) $request->input('wallet_treatment_ids', [])),
+                    );
+                    if ($debited > 0) {
+                        $invoice->update(['wallet_applied' => $debited]);
+                    }
+                }
+            }
+
+            $invoice->recalculate();
+
+            // ── Mark billing prompts / visit items as invoiced ──────────────────
+            if ($request->filled('prompt_ids')) {
+                BillingPrompt::whereIn('id', $request->prompt_ids)
+                    ->where('patient_id', $patient->id)
+                    ->where('status', 'pending')
+                    ->each(fn ($p) => $p->markInvoiced($invoice, $request->user()->id));
+            }
+            if ($request->filled('visit_item_ids')) {
+                TreatmentVisitItem::whereIn('id', $request->visit_item_ids)
+                    ->where('patient_id', $patient->id)
+                    ->update(['billing_status' => 'invoiced']);
+            }
+
+            // ── Manual discount — applied last, own authorization + audit trail ─
+            // Throws ValidationException on a permission/limit violation, which
+            // rolls back this entire transaction (nothing partially saved).
+            if ($request->filled('manual_discount_value') && (float) $request->manual_discount_value > 0) {
+                (new ManualDiscountService())->apply(
+                    $invoice->fresh(),
+                    $request->manual_discount_type ?? 'flat',
+                    (float) $request->manual_discount_value,
+                    (string) $request->manual_discount_reason,
+                    $request->user(),
+                );
+            }
+
+            // ── Coupon usage + membership benefit log — recorded once final ─────
+            if ($couponId) {
+                $invoice->refresh();
+                (new CouponService())->apply(
+                    couponId:       $couponId,
+                    patientId:      $patient->id,
+                    invoiceId:      $invoice->id,
+                    discountAmount: (float) $invoice->coupon_discount,
+                    createdBy:      $request->user()->id,
+                );
+            }
+            if ($membershipBenefit) {
+                MembershipBenefitService::logFromResult($membershipBenefit, $invoice->id);
+            }
+
             $invoiceId = $invoice->id;
         });
 
         $inv = Invoice::with('patient:id,branch_id,name,patient_id,phone')->find($invoiceId);
 
         return $this->success($this->invoiceSummary($inv), 'Invoice created.', 201);
+    }
+
+    /* =========================================================================
+     | Validate a coupon code live (before creating the invoice)
+     | GET /api/v1/coupons/validate?code=..&patient_id=..&subtotal=..
+     |=========================================================================*/
+    public function validateCoupon(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'code'       => 'required|string|max:50',
+            'patient_id' => 'required|integer|exists:patients,id',
+            'subtotal'   => 'required|numeric|min:0',
+        ]);
+
+        $result = (new CouponService())->validate($data['code'], (int) $data['patient_id'], (float) $data['subtotal']);
+
+        return $this->success($result, '');
+    }
+
+    /* =========================================================================
+     | Preview membership benefit for a patient + running line items — read-only,
+     | so mobile can show "Apply membership discount (Rs. X)" before committing.
+     | GET /api/v1/patients/{patient}/membership-benefit-preview
+     |=========================================================================*/
+    public function membershipBenefitPreview(Request $request, $patient): JsonResponse
+    {
+        $pt = Patient::where('branch_id', $request->user()->branch_id)->whereKey($patient)->first();
+        if (! $pt) {
+            return $this->error('Patient not found.', [], 404);
+        }
+
+        $data = $request->validate([
+            'items'          => 'nullable|array',
+            'items.*.name'   => 'required_with:items|string',
+            'items.*.amount' => 'required_with:items|numeric|min:0',
+            'items.*.qty'    => 'nullable|integer|min:1',
+            'subtotal'       => 'nullable|numeric|min:0',
+        ]);
+
+        $lineItems = collect($data['items'] ?? [])->map(fn ($i) => [
+            'name'   => $i['name'],
+            'amount' => (float) $i['amount'],
+            'qty'    => (int) ($i['qty'] ?? 1),
+        ])->all();
+
+        $benefit = MembershipBenefitService::forPatient($pt->id, $lineItems, (float) ($data['subtotal'] ?? 0));
+
+        return $this->success($benefit, '');
+    }
+
+    /* =========================================================================
+     | Manual discount on an EXISTING (already-created) invoice — apply / remove.
+     | Permission + role limit enforced inside ManualDiscountService; a violation
+     | throws ValidationException -> standard 422 envelope.
+     |=========================================================================*/
+    public function applyManualDiscount(Request $request, $invoice): JsonResponse
+    {
+        $inv = $this->findInvoice($request, $invoice);
+        if ($inv instanceof JsonResponse) return $inv;
+
+        $data = $request->validate([
+            'manual_discount_type'   => 'required|in:flat,percentage',
+            'manual_discount_value'  => 'required|numeric|min:0.01',
+            'manual_discount_reason' => 'required|string|min:3|max:500',
+        ]);
+
+        (new ManualDiscountService())->apply(
+            $inv,
+            $data['manual_discount_type'],
+            (float) $data['manual_discount_value'],
+            $data['manual_discount_reason'],
+            $request->user(),
+        );
+
+        return $this->success($this->invoiceSummary($inv->fresh()), 'Manual discount applied.');
+    }
+
+    public function removeManualDiscount(Request $request, $invoice): JsonResponse
+    {
+        $inv = $this->findInvoice($request, $invoice);
+        if ($inv instanceof JsonResponse) return $inv;
+
+        $data = $request->validate(['reason' => 'nullable|string|max:500']);
+
+        (new ManualDiscountService())->remove($inv, $request->user(), $data['reason'] ?? 'Manual discount removed');
+
+        return $this->success($this->invoiceSummary($inv->fresh()), 'Manual discount removed.');
+    }
+
+    /* =========================================================================
+     | Cancel invoice / void a receipt — admin-only, full refund handling.
+     | Mirrors web BillingController::cancelInvoice()/voidReceipt() exactly,
+     | including the 2.5% card-refund charge and FinalBill auto-invalidation.
+     |=========================================================================*/
+    public function cancelInvoice(Request $request, $invoice): JsonResponse
+    {
+        $inv = $this->findInvoice($request, $invoice);
+        if ($inv instanceof JsonResponse) return $inv;
+
+        if (! $request->user()->isAdminRole()) {
+            return $this->error('Only admins can cancel invoices.', [], 403);
+        }
+
+        $data = $request->validate([
+            'cancelled_reason'     => 'required|string|min:5|max:500',
+            'cancel_refund_method' => 'required|in:wallet,cash,bank_transfer,no_refund',
+        ]);
+
+        DB::transaction(function () use ($request, $inv, $data) {
+            BillingAuditLog::record(
+                'cancel_invoice', $inv,
+                $data['cancelled_reason'] . ' [refund: ' . $data['cancel_refund_method'] . ']',
+                $request->user()->id, $inv->invoice_number,
+            );
+
+            foreach ($inv->receipts()->whereNull('deleted_at')->get() as $receipt) {
+                $this->refundReceipt($receipt, $inv, $data['cancel_refund_method'],
+                    'Invoice ' . $inv->invoice_number . ' cancelled. Reason: ' . $data['cancelled_reason'],
+                    $request->user()->id, $data['cancelled_reason']);
+            }
+
+            if ($inv->finalBill) {
+                $inv->finalBill->update([
+                    'deleted_reason' => 'Invoice ' . $inv->invoice_number . ' cancelled. Reason: ' . $data['cancelled_reason'],
+                    'deleted_by'     => $request->user()->id,
+                ]);
+                $inv->finalBill->delete();
+            }
+
+            $inv->update([
+                'status'           => 'cancelled',
+                'cancelled_reason' => $data['cancelled_reason'],
+                'cancelled_by'     => $request->user()->id,
+            ]);
+            $inv->delete(); // soft-delete, matches web (moves to Trash)
+        });
+
+        return $this->success(null, 'Invoice ' . $inv->invoice_number . ' cancelled.');
+    }
+
+    public function voidReceipt(Request $request, $invoice, $receipt): JsonResponse
+    {
+        $inv = $this->findInvoice($request, $invoice);
+        if ($inv instanceof JsonResponse) return $inv;
+
+        if (! $request->user()->isAdminRole()) {
+            return $this->error('Only admins can void receipts.', [], 403);
+        }
+
+        $rcpt = Receipt::where('invoice_id', $inv->id)->whereKey($receipt)->first();
+        if (! $rcpt) {
+            return $this->error('Receipt not found.', [], 404);
+        }
+
+        $data = $request->validate([
+            'void_reason'        => 'required|string|min:5|max:500',
+            'void_refund_method' => 'required|in:wallet,cash,bank_transfer,no_refund',
+        ]);
+
+        DB::transaction(function () use ($request, $inv, $rcpt, $data) {
+            BillingAuditLog::record(
+                'void_receipt', $rcpt,
+                $data['void_reason'] . ' [refund: ' . $data['void_refund_method'] . ']',
+                $request->user()->id, $rcpt->receipt_number,
+            );
+
+            $this->refundReceipt($rcpt, $inv, $data['void_refund_method'],
+                'Voided receipt ' . $rcpt->receipt_number . '. Reason: ' . $data['void_reason'],
+                $request->user()->id, $data['void_reason']);
+
+            $inv->refresh();
+            $inv->recalculate();
+            $inv->refresh();
+            if ($inv->status !== 'paid' && $inv->finalBill) {
+                $inv->finalBill->update([
+                    'deleted_reason' => 'Auto-invalidated: linked receipt ' . $rcpt->receipt_number . ' was voided. Reason: ' . $data['void_reason'],
+                    'deleted_by'     => $request->user()->id,
+                ]);
+                $inv->finalBill->delete();
+            }
+        });
+
+        return $this->success($this->invoiceSummary($inv->fresh()), 'Receipt ' . $rcpt->receipt_number . ' voided.');
+    }
+
+    /* =========================================================================
+     | Billing Prompts — auto-raised when a treatment visit item is saved
+     | (TreatmentVisitService), consumed here to pre-fill/create an invoice.
+     |=========================================================================*/
+    public function pendingBillingPrompts(Request $request, $patient): JsonResponse
+    {
+        $pt = Patient::where('branch_id', $request->user()->branch_id)->whereKey($patient)->first();
+        if (! $pt) {
+            return $this->error('Patient not found.', [], 404);
+        }
+
+        $rows = BillingPrompt::where('patient_id', $pt->id)
+            ->where('status', 'pending')
+            ->latest()
+            ->get()
+            ->map(fn ($p) => [
+                'id'          => $p->id,
+                'trigger_type' => $p->trigger_type,
+                'trigger_id'   => $p->trigger_id,
+                'description'  => $p->description,
+                'created_at'   => $p->created_at,
+            ]);
+
+        return $this->success($rows->values(), '');
+    }
+
+    /** Pending (not-yet-invoiced) visit items for a prompt's triggering visit. */
+    public function billingPromptFormOptions(Request $request, $prompt): JsonResponse
+    {
+        $p = BillingPrompt::where('status', 'pending')->whereKey($prompt)->first();
+        if (! $p) {
+            return $this->error('Billing prompt not found or already resolved.', [], 404);
+        }
+
+        $items = TreatmentVisitItem::where('treatment_visit_id', $p->trigger_id)
+            ->where('billing_status', 'pending')
+            ->get()
+            ->map(fn ($it) => [
+                'id'             => $it->id,
+                'treatment_name' => $it->treatment_name,
+                'tooth_number'   => $it->tooth_number,
+                'suggested_price'=> (float) ($it->suggested_price ?? 0),
+            ]);
+
+        return $this->success([
+            'prompt'      => ['id' => $p->id, 'patient_id' => $p->patient_id, 'description' => $p->description],
+            'visit_items' => $items->values(),
+        ], '');
+    }
+
+    public function dismissBillingPrompt(Request $request, $prompt): JsonResponse
+    {
+        $p = BillingPrompt::where('status', 'pending')->whereKey($prompt)->first();
+        if (! $p) {
+            return $this->error('Billing prompt not found or already resolved.', [], 404);
+        }
+
+        $p->dismiss($request->user()->id);
+
+        return $this->success(null, 'Billing prompt dismissed.');
     }
 
     /* =========================================================================
@@ -498,6 +1048,105 @@ class BillingController extends ApiController
                 'name'  => $i->patient->name,
                 'phone' => $i->patient->phone,
             ] : null,
+        ];
+    }
+
+    /** Card/debit-card refunds via bank_transfer attract a 2.5% clinic charge. */
+    private function refundChargeRate(string $paymentMode): float
+    {
+        return match ($paymentMode) {
+            'card', 'debit_card' => 2.5,
+            default              => 0.0,
+        };
+    }
+
+    /**
+     * Shared refund/void logic for one receipt — soft-deletes the Receipt +
+     * its InvoicePayment (with void audit fields), reverses the original
+     * FinanceTransaction, and creates the refund-side FinanceTransaction per
+     * the chosen method. Used by both cancelInvoice() (loops every receipt)
+     * and voidReceipt() (single receipt). Mirrors web exactly.
+     */
+    private function refundReceipt(Receipt $receipt, Invoice $invoice, string $method, string $notes, int $userId, string $reason): void
+    {
+        $amount    = (float) $receipt->amount;
+        $patientId = $invoice->patient_id;
+
+        $chargeRate     = $method === 'bank_transfer' ? $this->refundChargeRate($receipt->payment_mode) : 0.0;
+        $chargeDeducted = round($amount * $chargeRate / 100, 2);
+        $refundAmount   = $amount - $chargeDeducted;
+
+        if ($receipt->invoice_payment_id) {
+            $payment = InvoicePayment::find($receipt->invoice_payment_id);
+            if ($payment) {
+                $payment->update([
+                    'void_reason'          => $reason,
+                    'voided_by'            => $userId,
+                    'void_refund_method'   => $method,
+                    'void_refund_amount'   => $refundAmount,
+                    'void_charge_deducted' => $chargeDeducted,
+                ]);
+                FinanceTransaction::where('source_type', InvoicePayment::class)
+                    ->where('source_id', $payment->id)
+                    ->where('status', 'active')
+                    ->update(['status' => 'voided']);
+                $payment->delete();
+            }
+        }
+
+        $receipt->delete();
+
+        if ($method === 'no_refund') {
+            FinanceTransaction::create([
+                'type' => 'refund', 'direction' => 'debit', 'source_type' => Receipt::class,
+                'source_id' => $receipt->id, 'amount' => $amount, 'net_amount' => 0,
+                'payment_mode' => $receipt->payment_mode, 'patient_id' => $patientId,
+                'status' => 'active', 'transaction_date' => now()->toDateString(),
+                'notes' => 'No refund issued — ' . $notes, 'created_by' => $userId,
+            ]);
+            return;
+        }
+
+        if ($method === 'wallet') {
+            (new WalletService())->credit(
+                patientId: $patientId, amount: $amount, creditType: 'permanent',
+                notes: 'Wallet credit — ' . $notes, createdBy: $userId,
+            );
+        }
+
+        $paymentModeOut = $method === 'cash' ? 'cash' : $receipt->payment_mode;
+        $notePrefix = match ($method) {
+            'wallet' => 'Wallet credit',
+            'cash'   => 'Cash refund',
+            'bank_transfer' => $chargeDeducted > 0
+                ? 'Bank transfer refund (Rs. ' . number_format($refundAmount, 2) . ' to patient, Rs. ' . number_format($chargeDeducted, 2) . ' clinic charge)'
+                : 'Bank transfer refund (no charge)',
+            default => ucfirst($method) . ' refund',
+        };
+
+        FinanceTransaction::create([
+            'type' => 'refund', 'direction' => 'debit', 'source_type' => Receipt::class,
+            'source_id' => $receipt->id, 'amount' => $amount,
+            'net_amount' => $method === 'bank_transfer' ? $refundAmount : $amount,
+            'payment_mode' => $paymentModeOut, 'patient_id' => $patientId,
+            'status' => 'active', 'transaction_date' => now()->toDateString(),
+            'notes' => $notePrefix . ' — ' . $notes, 'created_by' => $userId,
+        ]);
+    }
+
+    private function emiRowPayload(EmiSchedule $r): array
+    {
+        return [
+            'id'                => $r->id,
+            'instalment_no'     => $r->instalment_no,
+            'due_date'          => $r->due_date,
+            'principal'         => (float) $r->principal,
+            'interest'          => (float) $r->interest,
+            'emi_amount'        => (float) $r->emi_amount,
+            'status'            => $r->status,
+            'paid_date'         => $r->paid_date,
+            'payment_reference' => $r->payment_reference,
+            'notes'             => $r->notes,
         ];
     }
 

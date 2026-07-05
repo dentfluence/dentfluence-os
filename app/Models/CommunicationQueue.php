@@ -49,6 +49,11 @@ class CommunicationQueue extends Model
         'patient_id',
         'created_by',
         'last_modified_by',
+        // Missed Calls full list (2026-07-05) — soft ignore / bulk dismiss audit
+        'ignored_at',
+        'ignored_by',
+        'dismissed_at',
+        'dismissed_by',
         // Phase 1 — attempt tracking + SLA + outcome
         'source_engine',
         'opportunity_value',
@@ -75,6 +80,8 @@ class CommunicationQueue extends Model
         'last_attempt_at' => 'datetime',
         'sla_deadline'    => 'datetime',
         'opportunity_value' => 'decimal:2',
+        'ignored_at'      => 'datetime',
+        'dismissed_at'    => 'datetime',
     ];
 
     // ── Lookup Tables ────────────────────────────────────────────────────
@@ -113,6 +120,10 @@ class CommunicationQueue extends Model
         'payment'           => 'Payment',
         'general_query'     => 'General Query',
         'other'             => 'Other',
+        // "Not Interested" outcome closes the current recall but keeps the
+        // patient in a long-horizon preventive cycle instead of the normal
+        // 6-month no-visit cadence (OutcomeAutomationService, 2026-07-05).
+        'recall_long_term'  => 'Long-term Recall',
     ];
 
     public const NEXT_ACTIONS = [
@@ -206,6 +217,66 @@ class CommunicationQueue extends Model
     ];
 
     /**
+     * Recall Call Outcomes — PRE mobile Activity Completion Bottom Sheet
+     * (2026-07-05). This is a richer, grouped vocabulary specifically for
+     * the recall call-logging workflow (web + mobile). It EXTENDS rather
+     * than replaces OUTCOMES above: `outcome` is a plain string column
+     * (see 2026_06_13_200001 migration), so both vocabularies coexist
+     * safely and nothing that reads the old OUTCOMES list breaks.
+     * See OutcomeAutomationService for the trigger -> action mapping.
+     */
+    public const CALL_OUTCOMES_CONNECTED = [
+        'appointment_booked'         => 'Appointment Booked',
+        'will_call_back'             => 'Will Call Back',
+        'wants_appt_next_week'       => 'Wants Appointment Next Week',
+        'wants_appt_next_month'      => 'Wants Appointment Next Month',
+        'will_visit_later'           => 'Will Visit Later',
+        'under_treatment_elsewhere'  => 'Under Treatment Elsewhere',
+        'treatment_done_elsewhere'   => 'Treatment Done Elsewhere',
+        'financial_constraint'       => 'Financial Constraint',
+        'family_will_decide'         => 'Family Will Decide',
+        'busy_right_now'             => 'Busy Right Now',
+        'not_interested'             => 'Not Interested',
+        'shifted'                    => 'Shifted',
+        'deceased'                   => 'Deceased',
+        'other'                      => 'Other',
+    ];
+
+    public const CALL_OUTCOMES_NOT_CONNECTED = [
+        'no_answer'       => 'No Answer',
+        'busy'            => 'Busy',
+        'switched_off'    => 'Switched Off',
+        'out_of_coverage' => 'Out of Coverage',
+        'rejected'        => 'Rejected',
+        'wrong_number'    => 'Wrong Number',
+        'invalid_number'  => 'Invalid Number',
+    ];
+
+    public const CALL_OUTCOMES_COMMUNICATION = [
+        'whatsapp_sent' => 'WhatsApp Sent',
+        'sms_sent'      => 'SMS Sent',
+        'email_sent'    => 'Email Sent',
+    ];
+
+    /** All recall call outcomes, grouped for the mobile picker UI. */
+    public static function callOutcomeGroups(): array
+    {
+        return [
+            'Connected'     => self::CALL_OUTCOMES_CONNECTED,
+            'Not Connected' => self::CALL_OUTCOMES_NOT_CONNECTED,
+            'Communication' => self::CALL_OUTCOMES_COMMUNICATION,
+        ];
+    }
+
+    /** Flat lookup (key => label) across all three call-outcome groups. */
+    public static function allCallOutcomes(): array
+    {
+        return self::CALL_OUTCOMES_CONNECTED
+            + self::CALL_OUTCOMES_NOT_CONNECTED
+            + self::CALL_OUTCOMES_COMMUNICATION;
+    }
+
+    /**
      * SLA minutes per scenario.
      * inbound: 30 min (per architecture — high-value leads must be called fast)
      * high priority: 60 min
@@ -268,6 +339,22 @@ class CommunicationQueue extends Model
     public function scopeByOwner($query, ?string $owner)
     {
         return $owner ? $query->where('assigned_to', $owner) : $query;
+    }
+
+    /**
+     * Excludes items a staff member has chosen to "Ignore" (soft, reversible
+     * hide — see ignored_at/ignored_by). Applied by default everywhere the
+     * missed-calls queue is read (dashboard preview + full list) unless the
+     * caller explicitly asks to include ignored items.
+     */
+    public function scopeNotIgnored($query)
+    {
+        return $query->whereNull('ignored_at');
+    }
+
+    public function scopeOnlyIgnored($query)
+    {
+        return $query->whereNotNull('ignored_at');
     }
 
     // ── Computed Accessors ───────────────────────────────────────────────
@@ -491,6 +578,61 @@ class CommunicationQueue extends Model
             "Auto-closed: {$reason}",
             ['outcome' => $outcome]
         );
+    }
+
+    // ── Missed Calls: Ignore / Dismiss (2026-07-05) ─────────────────────────
+
+    /**
+     * Soft, reversible exclude — this specific queue item never reappears in
+     * the missed-calls queue (dashboard preview or full list) until unignored.
+     * Does NOT touch `status`: the underlying call is still "pending" if it
+     * was pending; ignoring is a display-layer decision, not a lifecycle one.
+     */
+    public function ignore(?int $userId = null): void
+    {
+        $this->ignored_at = now();
+        $this->ignored_by = $userId ?? auth()->id();
+        $this->save();
+
+        CommActivityLog::log($this->id, 'ignored', 'Excluded from missed-calls queue');
+    }
+
+    public function unignore(): void
+    {
+        $this->ignored_at = null;
+        $this->ignored_by = null;
+        $this->save();
+
+        CommActivityLog::log($this->id, 'unignored', 'Restored to missed-calls queue');
+    }
+
+    /**
+     * Bulk Dismiss — marks the item handled (status=closed, matching the
+     * existing "closed" lifecycle state) and stamps who/when for audit,
+     * distinct from a normal close so it's traceable back to this action.
+     */
+    public function dismiss(?int $userId = null, string $reason = 'Bulk dismissed from missed-calls queue'): void
+    {
+        $actorId = $userId ?? auth()->id();
+
+        $this->status        = 'closed';
+        $this->is_overdue     = false;
+        $this->dismissed_at  = now();
+        $this->dismissed_by  = $actorId;
+        $this->last_modified_by = $actorId;
+        $this->save();
+
+        CommActivityLog::log($this->id, 'closed', $reason);
+    }
+
+    public function ignoredByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'ignored_by');
+    }
+
+    public function dismissedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'dismissed_by');
     }
 
     // ── Relationships ─────────────────────────────────────────────────────

@@ -9,7 +9,11 @@
 | (custom inline confirm bar instead of window.confirm() — a native confirm
 | dialog was found to freeze the page and block Chrome DevTools commands).
 |
-| Variables from Relationship\SettingsController@index: $featureFlags, $flagGroups
+| Variables from Relationship\SettingsController@index: $featureFlags,
+| $flagGroups, $referralRewardEnabled, $referralRewardAmount,
+| $recallEffectiveFrom, $recallGeneralDays, $recallChannels,
+| $recallTreatmentTypes, $birthdayEnabled, $birthdayWindowDays,
+| $recallTemplate, $birthdayTemplate, $flagHelp
 |==========================================================================
 --}}
 @extends('relationship.layouts.app')
@@ -111,8 +115,39 @@
         </form>
     </div>
 
-    <div style="background:#fff;border:1px solid #eceef2;border-radius:10px;padding:18px 20px;margin-bottom:24px;">
-        <div style="font-size:14px;font-weight:700;color:#1f2937;margin-bottom:4px;">
+    {{-- ══════════════════════ RECALL ══════════════════════
+         One organized "Recall" area — merges what used to be two separate
+         recall-ish blocks: the Go-Live Date (below) plus General/Treatment-
+         wise/Birthday settings (moved from Communication OS's
+         standalone Recall & Birthday Settings page, 2026-07-06 — see
+         under_review/pre_consolidation_2026_07_06/ for the archived original).
+         Same AppSetting keys throughout, so RecallEngineService /
+         RecallAutomationRunner behaviour is unchanged — only the settings UI
+         moved and got tidier. --}}
+    <div style="font-size:11px;font-weight:700;color:#9a7aaa;letter-spacing:0.08em;text-transform:uppercase;margin:4px 0 10px;">Recall</div>
+
+    <style>
+        .rs-card { background:#fff; border:1px solid #eceef2; border-radius:10px; padding:18px 20px; margin-bottom:24px; }
+        .rs-card__title { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:700; color:#1f2937; margin-bottom:4px; }
+        .rs-card__desc { font-size:12.5px; color:#7a6884; margin-bottom:14px; }
+        .rs-gear {
+            display:inline-flex; align-items:center; justify-content:center;
+            width:26px; height:26px; border-radius:6px; background:#f5f0f8; color:#6a0f70;
+            text-decoration:none; flex-shrink:0;
+        }
+        .rs-gear:hover { background:#ede0f3; }
+        .rs-input { padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; width:110px; }
+        .rs-save-btn { padding:7px 16px; background:#6a0f70; color:#fff; border:none; border-radius:6px; font-size:12.5px; font-weight:600; cursor:pointer; }
+        .rs-configured-hint { font-size:11px; color:#1a7a45; margin-left:6px; }
+        .rs-unconfigured-hint { font-size:11px; color:#b5842a; margin-left:6px; }
+        .rs-table { width:100%; border-collapse:collapse; }
+        .rs-table th { text-align:left; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#9a7aaa; padding:8px 10px; border-bottom:1px solid #eceef2; }
+        .rs-table td { padding:8px 10px; border-bottom:1px solid #f5f0f8; font-size:13px; color:#1a0320; }
+    </style>
+
+    {{-- ── Recall Automation Go-Live Date ── --}}
+    <div class="rs-card">
+        <div class="rs-card__title">
             Recall Automation Go-Live Date
             <div class="help-hint" tabindex="0">
                 <span class="help-icon">?</span>
@@ -123,7 +158,7 @@
                 </div>
             </div>
         </div>
-        <div style="font-size:12.5px;color:#7a6884;margin-bottom:14px;">
+        <div class="rs-card__desc">
             Leave blank for the old, unrestricted behaviour. Historical patients excluded here aren't lost — they can still
             be called from a manual list; this only controls what the automation queues by itself.
         </div>
@@ -136,12 +171,128 @@
                 <input type="date" name="effective_from" value="{{ $recallEffectiveFrom }}"
                        style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
             </label>
-            <button type="submit" style="padding:7px 16px;background:#6a0f70;color:#fff;border:none;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;">
-                Save
-            </button>
+            <button type="submit" class="rs-save-btn">Save</button>
             @if($recallEffectiveFrom)
             <span style="font-size:12px;color:#9ca3af;">Currently active — clear the date and save to remove.</span>
             @endif
+        </form>
+    </div>
+
+    {{-- ── General Recall ── --}}
+    <div class="rs-card">
+        <div class="rs-card__title">
+            General Recall
+            <a href="{{ route('relationship.templates.forType', 'recall') }}" class="rs-gear" title="Edit the Recall message template">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+            </a>
+            @if($recallTemplate)
+                <span class="rs-configured-hint">Template configured</span>
+            @else
+                <span class="rs-unconfigured-hint">Using default message</span>
+            @endif
+        </div>
+        <div class="rs-card__desc">
+            How many days of inactivity before a patient is queued for a general recall, and which
+            channels the Recall Engine is allowed to use. (Channels here only gate the engine's own
+            behaviour — sending itself is still a manual staff action from the Recall queue today.)
+        </div>
+
+        <form action="{{ route('relationship.settings.recall-general') }}" method="POST" style="display:flex;flex-wrap:wrap;align-items:center;gap:20px;">
+            @csrf
+            <label style="font-size:13px;color:#1a0a24;display:flex;align-items:center;gap:8px;">
+                Recall after
+                <input type="number" name="general_days" value="{{ $recallGeneralDays }}" min="1" max="3650" class="rs-input" style="width:80px;">
+                days
+            </label>
+
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#1a0a24;">
+                <input type="checkbox" name="channel_whatsapp" value="1" {{ $recallChannels['whatsapp'] ? 'checked' : '' }} style="width:15px;height:15px;">
+                WhatsApp
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#1a0a24;">
+                <input type="checkbox" name="channel_sms" value="1" {{ $recallChannels['sms'] ? 'checked' : '' }} style="width:15px;height:15px;">
+                SMS
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#1a0a24;">
+                <input type="checkbox" name="channel_email" value="1" {{ $recallChannels['email'] ? 'checked' : '' }} style="width:15px;height:15px;">
+                Email
+            </label>
+
+            <button type="submit" class="rs-save-btn">Save</button>
+        </form>
+    </div>
+
+    {{-- ── Treatment-wise Recall ── --}}
+    <div class="rs-card">
+        <div class="rs-card__title">Treatment-wise Recall</div>
+        <div class="rs-card__desc">
+            Override the recall periodicity for specific treatment types (e.g. cleanings every 180
+            days, implants every 365 days). Leave blank to use the General Recall periodicity above.
+            All treatment types share the same Recall message template (edit it via the gear icon
+            above) — only the timing differs per treatment, to avoid a template per treatment type.
+        </div>
+
+        @if($recallTreatmentTypes->isEmpty())
+            <div style="font-size:12.5px;color:#9a7aaa;">No treatment types configured yet.</div>
+        @else
+        <table class="rs-table">
+            <thead>
+                <tr>
+                    <th>Treatment</th>
+                    <th style="width:200px;">Recall after (days)</th>
+                    <th style="width:90px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($recallTreatmentTypes as $tt)
+                <tr>
+                    <form action="{{ route('relationship.settings.recall-treatment', $tt->id) }}" method="POST">
+                        @csrf
+                        <td>{{ $tt->name }}</td>
+                        <td>
+                            <input type="number" name="recall_after_days" value="{{ $tt->recall_after_days }}"
+                                   min="1" max="3650" placeholder="{{ $recallGeneralDays }} (default)" class="rs-input">
+                        </td>
+                        <td><button type="submit" class="rs-save-btn">Save</button></td>
+                    </form>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+        @endif
+    </div>
+
+    {{-- ── Birthday Reminder ── --}}
+    <div class="rs-card">
+        <div class="rs-card__title">
+            Birthday Reminder
+            <a href="{{ route('relationship.templates.forType', 'birthday') }}" class="rs-gear" title="Edit the Birthday message template">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+            </a>
+            @if($birthdayTemplate)
+                <span class="rs-configured-hint">Template configured</span>
+            @else
+                <span class="rs-unconfigured-hint">Using default message</span>
+            @endif
+        </div>
+        <div class="rs-card__desc">
+            Queues a recall (and shows on Today's Actions) when a patient's birthday falls within
+            the window below. Turning this off hides birthdays from both the Recall Engine and
+            Today's Actions.
+        </div>
+
+        <form action="{{ route('relationship.settings.recall-birthday') }}" method="POST" style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+            @csrf
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#1a0a24;">
+                <input type="checkbox" name="enabled" value="1" {{ $birthdayEnabled ? 'checked' : '' }} style="width:16px;height:16px;">
+                Enabled
+            </label>
+            <label style="font-size:13px;color:#1a0a24;display:flex;align-items:center;gap:8px;">
+                Window
+                <input type="number" name="window_days" value="{{ $birthdayWindowDays }}" min="0" max="30" class="rs-input" style="width:70px;">
+                day(s) before/after
+            </label>
+            <button type="submit" class="rs-save-btn">Save</button>
         </form>
     </div>
 

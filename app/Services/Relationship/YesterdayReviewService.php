@@ -4,6 +4,7 @@ namespace App\Services\Relationship;
 
 use App\Models\Appointment;
 use App\Models\CommunicationQueue;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -35,6 +36,42 @@ class YesterdayReviewService
             'missed_appointments' => $this->missedAppointments(),
             'missed_calls'        => $this->missedCalls(),
         ];
+    }
+
+    // ── Full-list support (Missed Calls page) ──────────────────────────────
+
+    /**
+     * The base query for "missed calls" — due yesterday-or-earlier and still
+     * pending. Shared by the dashboard preview (missedCalls(), ->limit()'d)
+     * and the full paginated Missed Calls list page, so both surfaces stay
+     * in lock-step with a single source of truth.
+     *
+     * Unlike missedCalls() (fixed to exactly "yesterday"), this widens to
+     * "yesterday or earlier" so the full list page functions as the true
+     * backlog view (badges like "910" mean there's a backlog older than
+     * one day — the dashboard card only ever samples yesterday's slice).
+     *
+     * @param bool $includeIgnored  pass true to also show ignored items
+     *                              (used by the list page's "Show ignored" toggle).
+     */
+    public function missedCallsQuery(bool $includeIgnored = false): Builder
+    {
+        $yesterday = Carbon::yesterday()->endOfDay();
+
+        $query = CommunicationQueue::with('patient:id,name,phone,relationship_id')
+            ->where(function ($q) use ($yesterday) {
+                $q->where('follow_up_date', '<=', $yesterday->toDateString())
+                  ->orWhere('due_at', '<=', $yesterday);
+            })
+            ->where('status', 'pending')
+            ->orderByDesc('priority')
+            ->orderBy('follow_up_date');
+
+        if (! $includeIgnored) {
+            $query->notIgnored();
+        }
+
+        return $query;
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -98,6 +135,7 @@ class YesterdayReviewService
                       ->orWhereDate('due_at', $yesterday->toDateString());
                 })
                 ->where('status', 'pending')
+                ->notIgnored() // Missed Calls (2026-07-05): honour per-item Ignore
                 ->orderByDesc('priority')
                 ->get()
                 ->map(function (CommunicationQueue $item) {

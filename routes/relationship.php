@@ -3,6 +3,7 @@
 use App\Http\Controllers\Relationship\AnalyticsController as RelationshipAnalyticsController;
 use App\Http\Controllers\Relationship\DashboardController as RelationshipDashboardController;
 use App\Http\Controllers\Relationship\LeadPipelineController;
+use App\Http\Controllers\Relationship\MissedCallsController;
 use App\Http\Controllers\Relationship\OpportunityPipelineController;
 use App\Http\Controllers\Relationship\RecallPipelineController;
 use App\Http\Controllers\Relationship\ReceptionController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\Relationship\NotificationController as RelationshipNoti
 use App\Http\Controllers\Relationship\ProfileController;
 use App\Http\Controllers\Relationship\ReferralRewardController;
 use App\Http\Controllers\Relationship\SettingsController as RelationshipSettingsController;
+use App\Http\Controllers\Relationship\TemplateController as RelationshipTemplateController;
 use App\Http\Controllers\Relationship\TodayController;
 use Illuminate\Support\Facades\Route;
 
@@ -32,9 +34,35 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     Route::post('/today/action', [TodayController::class, 'logAction'])
         ->name('today.action');
 
+    // Birthday Wishes — one-click WhatsApp send (2026-07-06), replacing the
+    // Call Workflow drawer for this category only. See TodayController.
+    Route::post('/today/birthday-whatsapp', [TodayController::class, 'sendBirthdayWhatsapp'])
+        ->name('today.birthday-whatsapp');
+
     // Shared projection summary (JSON) — consumed by the Daily Huddle (slice E4).
     Route::get('/today/summary', [TodayController::class, 'summary'])
         ->name('today.summary');
+
+    // ── Missed Calls — full paginated backlog list (2026-07-05) ────────────
+    // The dashboard widget only samples ~50 rows for "yesterday"; this page
+    // is the full backlog behind badges like "910". Static segments — all
+    // declared before the /{id} wildcard at the bottom of this file.
+    Route::get('/today/missed-calls', [MissedCallsController::class, 'index'])
+        ->name('today.missed-calls');
+
+    Route::post('/today/missed-calls/bulk-whatsapp', [MissedCallsController::class, 'bulkWhatsapp'])
+        ->name('today.missed-calls.bulk-whatsapp');
+
+    Route::post('/today/missed-calls/bulk-dismiss', [MissedCallsController::class, 'bulkDismiss'])
+        ->name('today.missed-calls.bulk-dismiss');
+
+    Route::post('/today/missed-calls/{missedCall}/ignore', [MissedCallsController::class, 'ignore'])
+        ->whereNumber('missedCall')
+        ->name('today.missed-calls.ignore');
+
+    Route::post('/today/missed-calls/{missedCall}/unignore', [MissedCallsController::class, 'unignore'])
+        ->whereNumber('missedCall')
+        ->name('today.missed-calls.unignore');
 
     // ── In-App Notifications (Phase 6) ─────────────────────────────────────
     // Note: mark-all must come BEFORE /{id}/read to avoid wildcard conflict.
@@ -162,6 +190,39 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
 
     Route::post('/settings/recall-effective-from', [RelationshipSettingsController::class, 'saveRecallEffectiveFrom'])
         ->name('settings.recall-effective-from');  // relationship.settings.recall-effective-from
+
+    // ── Recall / Birthday settings (moved from Communication OS
+    // 2026-07-06) — periodicities, channel toggles, and enable/window settings
+    // for RecallEngineService + the Birthday trigger. Folded into
+    // the same relationship.settings page (see SettingsController@index) —
+    // these are POST-only handlers, not separate pages. Static segments —
+    // before /{id} below.
+    Route::post('/settings/recall-general', [RelationshipSettingsController::class, 'saveRecallGeneral'])
+        ->name('settings.recall-general');  // relationship.settings.recall-general
+
+    Route::post('/settings/recall-treatment/{treatmentType}', [RelationshipSettingsController::class, 'saveTreatmentRecall'])
+        ->whereNumber('treatmentType')
+        ->name('settings.recall-treatment');  // relationship.settings.recall-treatment
+
+    Route::post('/settings/recall-birthday', [RelationshipSettingsController::class, 'saveBirthday'])
+        ->name('settings.recall-birthday');  // relationship.settings.recall-birthday
+
+    // ── Templates (moved from Communication OS 2026-07-06) ─────────────────
+    // Generic, reusable Message Template editor — any PRE feature (Recall,
+    // Birthday, ...) points its Settings "gear" icon at
+    // relationship.templates.forType for a given type. Deliberately NOT a tab
+    // in the PRE tab-strip — deep-link only. Static segments — before /{id}.
+    Route::prefix('templates')->name('templates.')->group(function () {
+        Route::get('/',            [RelationshipTemplateController::class, 'index'])->name('index');
+        Route::get('/create',      [RelationshipTemplateController::class, 'create'])->name('create');
+        Route::post('/',           [RelationshipTemplateController::class, 'store'])->name('store');
+        // Deep-link by type (Settings gear icons) — must come before the
+        // `/{id}` wildcard below since "for-type" isn't numeric.
+        Route::get('/for-type/{type}', [RelationshipTemplateController::class, 'forType'])->name('forType');
+        Route::get('/{id}',        [RelationshipTemplateController::class, 'edit'])->name('edit');
+        Route::put('/{id}',        [RelationshipTemplateController::class, 'update'])->name('update');
+        Route::delete('/{id}',     [RelationshipTemplateController::class, 'destroy'])->name('destroy');
+    });
 
     // ── Referral rewards (business config lives in Settings above) ─────────
     // Two-segment static route — no conflict with the /{id} wildcard below.

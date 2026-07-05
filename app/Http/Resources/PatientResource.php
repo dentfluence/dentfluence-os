@@ -54,6 +54,19 @@ class PatientResource extends JsonResource
             'dental_conditions'   => $this->dental_conditions,
             'current_medications' => $this->current_medications,
             'chief_complaint'     => $this->chief_complaint,
+            'occupation'          => $this->occupation,
+            'habits'              => $this->habits,
+            'allergies'           => $this->allergies,
+            'family_notes'        => $this->family_notes,
+
+            // Source & referral (mobile Edit screen needs these to prefill)
+            'source'               => $this->source,
+            'referral_type'        => $this->referral_type,
+            'referred_patient_id'  => $this->referred_patient_id,
+            'referrer_name'        => $this->referrer_name,
+            'referrer_mobile'      => $this->referrer_mobile,
+            'referrer_type'        => $this->referrer_type,
+            'referrer_notes'       => $this->referrer_notes,
 
             // Membership & follow-up
             'membership_status'     => $this->membership_status,
@@ -73,6 +86,12 @@ class PatientResource extends JsonResource
                 'id'   => $t->id,
                 'name' => $t->name,
             ])->values()),
+            'referred_patient' => $this->whenLoaded('referredPatient', fn () => $this->referredPatient ? [
+                'id'         => $this->referredPatient->id,
+                'name'       => $this->referredPatient->name,
+                'patient_id' => $this->referredPatient->patient_id,
+                'phone'      => $this->referredPatient->phone,
+            ] : null),
 
             'created_at' => optional($this->created_at)->toIso8601String(),
             'updated_at' => optional($this->updated_at)->toIso8601String(),

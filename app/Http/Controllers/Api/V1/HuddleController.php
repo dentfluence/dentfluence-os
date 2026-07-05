@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Models\FollowUp;
 use App\Models\Task;
 use App\Services\Huddle\HuddleBoardApiService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -250,6 +252,88 @@ class HuddleController extends ApiController
         }
 
         return $this->success(['created' => $created], $created . ' item(s) added to the communication list.');
+    }
+
+    /**
+     * POST /api/v1/huddle/yesterday-flow/log
+     * Mirrors the web huddle's "Yesterday's Flow" quick-action modal
+     * (resources/views/partials/yesterday-followup-card.blade.php ->
+     * huddle.yesterday-flow.log): logs a task and/or books a follow-up call
+     * for a patient from yesterday's flow, assigned to a chosen staff
+     * member, instead of navigating straight to their profile.
+     *
+     * At least one of `task` or `book_followup_call` must be provided.
+     */
+    public function logYesterdayFollowUp(Request $request): JsonResponse
+    {
+        $request->validate([
+            'patient_id'         => ['required', 'integer', 'exists:patients,id'],
+            'task'               => ['nullable', 'string', 'max:255'],
+            'book_followup_call' => ['required', 'boolean'],
+            'date'               => ['required_if:book_followup_call,1', 'nullable', 'date'],
+            'reason'             => ['nullable', 'string', 'max:500'],
+            'assigned_to'        => ['required', 'integer', 'exists:users,id'],
+        ]);
+
+        $task   = trim((string) $request->input('task', ''));
+        $bookIt = $request->boolean('book_followup_call');
+
+        if ($task === '' && ! $bookIt) {
+            return $this->error("Add a task or tick 'Book Follow-up call' before saving.", [], 422);
+        }
+
+        $user       = $request->user();
+        $assignedTo = (int) $request->input('assigned_to');
+        $date       = $request->input('date') ?: now()->toDateString();
+        $reason     = $request->input('reason');
+
+        [$createdTask, $createdFollowUp] = DB::transaction(function () use ($request, $task, $bookIt, $user, $assignedTo, $date, $reason) {
+            $createdTask     = null;
+            $createdFollowUp = null;
+
+            if ($task !== '') {
+                $createdTask = Task::create([
+                    'title'       => $task,
+                    'description' => $reason,
+                    'assigned_to' => $assignedTo,
+                    'created_by'  => $user->id,
+                    'branch_id'   => $user->branch_id,
+                    'patient_id'  => (int) $request->input('patient_id'),
+                    'due_date'    => $date,
+                    'priority'    => 'medium',
+                    'category'    => 'follow_up',
+                    'task_type'   => 'human',
+                    'status'      => 'pending',
+                ]);
+            }
+
+            if ($bookIt) {
+                $createdFollowUp = FollowUp::create([
+                    'patient_id'   => (int) $request->input('patient_id'),
+                    'label'        => "Follow-up call — logged from Yesterday's Flow",
+                    'due_date'     => $date,
+                    'due_time'     => '10:00',
+                    'channel'      => 'call',
+                    'priority'     => 'medium',
+                    'note'         => $reason,
+                    'trigger_type' => 'manual',
+                    'auto_created' => false,
+                    'assigned_to'  => $assignedTo,
+                    'status'       => 'pending',
+                ]);
+            }
+
+            return [$createdTask, $createdFollowUp];
+        });
+
+        $parts = [];
+        if ($createdTask)     $parts[] = 'Task assigned';
+        if ($createdFollowUp) $parts[] = 'Follow-up call scheduled';
+
+        return $this->success([
+            'task_id'      => $createdTask?->id,
+            'follow_up_id' => $createdFollowUp?->id,
+        ], implode(' · ', $parts) . '.');
     }
 
     /**

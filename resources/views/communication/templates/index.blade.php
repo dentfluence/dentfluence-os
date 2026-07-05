@@ -1,11 +1,11 @@
-@extends('layouts.communication')
-@section('page-title', 'Message Templates')
-@section('communication-content')
-{{-- Aligned to the Communication OS design system: DM Sans + module tokens
-     (was an off-system serif/Inter header with #1a0320). 2026-06-26 --}}
-<div style="padding:28px;font-family:var(--comm-font);">
-    <h1 style="font-size:22px;font-weight:600;color:var(--c-text-primary);margin:0 0 4px;">Message Templates</h1>
-    <p style="color:var(--comm-muted);font-size:13px;margin:0;">Manage WhatsApp, SMS, and Email templates.</p>
-    {{-- TODO: templates list --}}
-</div>
-@endsection
+{{--
+SUPERSEDED 2026-07-06 — Message Templates moved to
+resources/views/relationship/templates/index.blade.php.
+Original archived at
+under_review/pre_consolidation_2026_07_06/templates-index.blade.php.
+
+This view is no longer rendered by any route — routes/communication.php's
+`communication.templates.index` now redirects straight to
+relationship.templates.index before ever reaching a controller/view. Left as
+an inert stub (not deleted) per this project's archive convention.
+--}}

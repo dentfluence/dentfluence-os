@@ -138,6 +138,41 @@ class InventoryService
             });
         }
 
+        // Stock-status filter — same buckets as the mobile StockRow.stockStatus
+        // getter and the web dashboard thresholds: out (<=0), critical
+        // (<= minimum_qty/2), low (<= minimum_qty), healthy (everything else).
+        // available_qty comes from a LEFT JOIN so a missing stock row reads as
+        // NULL, which we treat as 0 via COALESCE. Accepts a comma-separated
+        // list (e.g. "low,critical") so the mobile "needs attention" default
+        // view can combine buckets in one request.
+        if (! empty($filters['stock_status'])) {
+            $qtyExpr  = 'COALESCE(s.available_qty, 0)';
+            $statuses = array_filter(array_map('trim', explode(',', $filters['stock_status'])));
+
+            $query->where(function ($outer) use ($statuses, $qtyExpr) {
+                foreach ($statuses as $status) {
+                    $outer->orWhere(function ($q) use ($status, $qtyExpr) {
+                        match ($status) {
+                            'out'      => $q->whereRaw("{$qtyExpr} <= 0"),
+                            'critical' => $q->whereRaw("{$qtyExpr} > 0")
+                                             ->where('i.minimum_qty', '>', 0)
+                                             ->whereRaw("{$qtyExpr} <= i.minimum_qty / 2"),
+                            'low'      => $q->whereRaw("{$qtyExpr} > 0")
+                                             ->where('i.minimum_qty', '>', 0)
+                                             ->whereRaw("{$qtyExpr} > i.minimum_qty / 2")
+                                             ->whereRaw("{$qtyExpr} <= i.minimum_qty"),
+                            'healthy'  => $q->whereRaw("{$qtyExpr} > 0")
+                                             ->where(function ($hq) use ($qtyExpr) {
+                                                 $hq->whereRaw("{$qtyExpr} > i.minimum_qty")
+                                                    ->orWhere('i.minimum_qty', '<=', 0);
+                                             }),
+                            default    => $q->whereRaw('1 = 0'), // unknown bucket matches nothing
+                        };
+                    });
+                }
+            });
+        }
+
         if ($sort === 'location_name') {
             $query->orderBy('l.name', $dir)->orderBy('i.product_name', 'asc');
         } elseif ($sort === 'available_qty') {

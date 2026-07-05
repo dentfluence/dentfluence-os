@@ -57,10 +57,11 @@ class RecallController extends Controller
             ->count();
 
         $triggerLabels = self::triggerLabels();
+        $activeNav     = 'recall';
 
         return view('communication.recall.index', compact(
             'items', 'stats', 'openTotal',
-            'triggerFilter', 'statusFilter', 'triggerLabels'
+            'triggerFilter', 'statusFilter', 'triggerLabels', 'activeNav'
         ));
     }
 
@@ -88,7 +89,7 @@ class RecallController extends Controller
             'recall_post_op'       => 'Post-Op Follow-Up',
             'recall_lab_received'  => 'Lab Ready, No Appt',
             'recall_7day_followup' => '7-Day Follow-Up',
-            'recall_birthday'      => 'Birthday / Anniversary',
+            'recall_birthday'      => 'Birthday',
         ];
     }
 }

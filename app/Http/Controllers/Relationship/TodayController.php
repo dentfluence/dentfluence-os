@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\Relationship;
 
 use App\Http\Controllers\Controller;
+use App\Models\AppSetting;
+use App\Models\MessageTemplate;
+use App\Models\Patient;
 use App\Services\Relationship\ActivityEngine;
 use App\Services\Relationship\TodayActionsEngine;
 use App\Services\Relationship\TodayActionsProjector;
+use App\Services\Whatsapp\OutboundMessageService;
 use App\Support\Features\Feature;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -290,6 +294,89 @@ class TodayController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Could not log action. Please try again.',
+            ], 500);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // POST /relationship/today/birthday-whatsapp  (AJAX)
+    //
+    // One-click WhatsApp send for a Birthday Wishes row — replaces the Call
+    // Workflow drawer for this category only (Sumit's call, 2026-07-06:
+    // a birthday doesn't need a logged phone call). Reuses the exact same
+    // template + token-building approach as RecallEngineService::composeMessage()
+    // and the exact same send path (OutboundMessageService::sendText(), DPDP
+    // consent-gated) as MissedCallsController::bulkWhatsapp(). No outcome
+    // logging/checklist — send, and the row is marked done.
+    // ─────────────────────────────────────────────────────────────────────
+
+    public function sendBirthdayWhatsapp(Request $request, OutboundMessageService $outbound): JsonResponse
+    {
+        $validated = $request->validate([
+            'patient_id' => ['required', 'integer'],
+        ]);
+
+        $patient = Patient::find($validated['patient_id']);
+
+        if (! $patient || ! $patient->phone) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Patient not found or has no phone number on file.',
+            ], 404);
+        }
+
+        try {
+            // Same token set RecallEngineService::composeMessage('birthday', ...) builds,
+            // so the wording matches whatever staff already see in the Recall Pipeline.
+            $tokens = [
+                'PatientName'      => $patient->name,
+                'PatientFirstName' => explode(' ', trim($patient->name))[0] ?? $patient->name,
+                'ContactNumber'    => $patient->phone,
+                'Age'              => (string) ($patient->date_of_birth?->age ?? ''),
+                'ClinicName'       => AppSetting::get('clinic_name', config('clinic.name', 'the clinic')),
+            ];
+
+            $template = MessageTemplate::query()->ofType('birthday')->active()->first();
+            $body = $template
+                ? $template->renderBody($tokens)
+                : "Happy Birthday, {$tokens['PatientFirstName']}! Wishing you a wonderful year ahead from all of us at {$tokens['ClinicName']}.";
+
+            $result = $outbound->sendText($patient->phone, $body, [
+                'category'     => 'service',
+                'patient_id'   => $patient->id,
+                'contact_name' => $patient->name,
+            ]);
+
+            if (! $result['ok']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['reason'] ?? 'Could not send WhatsApp message (consent not granted or send failed).',
+                ], 422);
+            }
+
+            $this->activityEngine->log(
+                subject       : $patient,
+                event         : 'whatsapp.sent',
+                actor         : auth()->user(),
+                metadata      : [
+                    'category' => 'birthdays',
+                    'purpose'  => 'birthday_greeting',
+                    'source'   => 'today_actions',
+                ],
+                relationshipId: $patient->relationship_id ?? null,
+                description   : 'Birthday WhatsApp greeting sent from Today\'s Actions',
+            );
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            Log::error('TodayController::sendBirthdayWhatsapp failed', [
+                'patient_id' => $validated['patient_id'],
+                'error'      => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not send WhatsApp message. Please try again.',
             ], 500);
         }
     }

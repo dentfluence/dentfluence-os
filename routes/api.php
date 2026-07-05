@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\PatientController;
 use App\Http\Controllers\Api\V1\PatientProfileController;
 use App\Http\Controllers\Api\V1\ConsultationController;
+use App\Http\Controllers\Api\V1\CohaController;
 use App\Http\Controllers\Api\V1\TreatmentPlanController;
 use App\Http\Controllers\Api\V1\PrescriptionController;
 use App\Http\Controllers\Api\V1\MembershipController;
@@ -14,10 +15,17 @@ use App\Http\Controllers\Api\V1\TreatmentVisitController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\HuddleController;
 use App\Http\Controllers\Api\V1\InventoryController;
+use App\Http\Controllers\Api\V1\StockCountController;
+use App\Http\Controllers\Api\V1\ReusableAssetController;
+use App\Http\Controllers\Api\V1\VendorInvoiceController;
+use App\Http\Controllers\Api\V1\InventorySettingsController;
 use App\Http\Controllers\Api\V1\BillingController;
 use App\Http\Controllers\Api\V1\LabController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\RelationshipController;
+use App\Http\Controllers\Api\V1\RelationshipMissedCallsController;
+use App\Http\Controllers\Api\V1\RelationshipRecallSettingsController;
+use App\Http\Controllers\Api\V1\TemplateController;
 use App\Http\Controllers\Webhooks\WebsiteLeadController;
 use App\Http\Controllers\Webhooks\MetaLeadController;
 use App\Http\Controllers\Webhooks\WhatsAppLeadController;
@@ -114,12 +122,17 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
 
         // Consultation create — 4 workflows (mirrors web)
         Route::get('/patients/{patient}/consultations/same-issue-context', [ConsultationController::class, 'sameIssueContext']);
+        // COHA (Comprehensive Oral Health Assessment) — separate workflow from the
+        // patient page, mirrors web's dedicated coha.* routes/controller.
+        Route::get('/coha/{consultation}', [CohaController::class, 'show']);
         // Clinical writes — doctors only (admin always passes). Phase A role-gating.
         Route::middleware('api.role:doctor,resident_dentist,associate_dentist,visiting_consultant')->group(function () {
             Route::post('/patients/{patient}/consultations',             [ConsultationController::class, 'storeNew']);
             Route::post('/patients/{patient}/consultations/same-issue',  [ConsultationController::class, 'storeSameIssue']);
             Route::post('/patients/{patient}/consultations/minor-visit', [ConsultationController::class, 'storeMinorVisit']);
             Route::post('/patients/{patient}/consultations/emergency',   [ConsultationController::class, 'storeEmergency']);
+            Route::post('/patients/{patient}/coha', [CohaController::class, 'store']);
+            Route::put('/coha/{consultation}',      [CohaController::class, 'update']);
         });
 
         // Treatment plans
@@ -132,6 +145,9 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::post('/treatment-plans/{plan}/accept',      [TreatmentPlanController::class, 'accept'])
             ->middleware('api.role:admin,front_desk');
         Route::post('/treatment-plans/{plan}/revert',      [TreatmentPlanController::class, 'revert'])
+            ->middleware('api.role:admin,front_desk');
+        Route::get('/treatment-plans/{plan}/billable-teeth', [TreatmentPlanController::class, 'billableTeeth']);
+        Route::post('/treatment-plans/{plan}/bill',           [TreatmentPlanController::class, 'bill'])
             ->middleware('api.role:admin,front_desk');
 
         /*
@@ -206,11 +222,14 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
 
         // Reports / analytics (mobile Reports module). Read-only.
         Route::get('/reports/overview', [ReportController::class, 'overview']);
+        Route::get('/reports/outstanding', [ReportController::class, 'outstandingByPatient']);
 
-        // ── Relationship Engine (Phase 7) ──────────────────────────────────────
+        // ── Relationship Engine / PRE (Phase 7, extended for full mobile parity) ──
         // All endpoints use the same Sanctum auth as the rest of /api/v1/.
-        // Static segments (today, search) MUST come before /{id} to avoid
-        // the wildcard swallowing them.
+        // PRM no longer exists anywhere in this codebase (hard-deleted
+        // 2026-07-04) — PRE is the only lead/relationship engine on web and
+        // mobile. Static segments (today, search, pipelines, recalls) MUST
+        // come before /{id} to avoid the wildcard swallowing them.
         Route::prefix('relationships')->name('api.relationships.')->group(function () {
             // Today's actions — mobile equivalent of /relationship/today
             Route::get('/today',           [RelationshipController::class, 'today'])
@@ -220,7 +239,37 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             Route::get('/search',          [RelationshipController::class, 'search'])
                 ->name('search');
 
-            // Profile summary
+            // Searchable/filterable/paginated browse — mobile equiv. of /relationship/list
+            Route::get('/',                [RelationshipController::class, 'list'])
+                ->name('list');
+
+            // Pipelines — mobile equivalents of /relationship/pipeline, /opportunities, /recalls
+            Route::prefix('pipelines')->name('pipelines.')->group(function () {
+                Route::get('/leads',          [RelationshipController::class, 'pipelineLeads'])
+                    ->name('leads');
+                Route::get('/opportunities',  [RelationshipController::class, 'pipelineOpportunities'])
+                    ->name('opportunities');
+                Route::get('/recalls',        [RelationshipController::class, 'pipelineRecalls'])
+                    ->name('recalls');
+            });
+
+            // Manually add a recall for a patient
+            Route::post('/recalls',        [RelationshipController::class, 'recallStore'])
+                ->name('recalls.store');
+
+            // Grouped call-outcome vocabulary for the Activity Completion
+            // Bottom Sheet (mobile + web). Static ref data — before /{id}.
+            Route::get('/call-outcomes',   [RelationshipController::class, 'callOutcomes'])
+                ->name('call-outcomes');
+
+            // Complete a recall: outcome + notes + next follow-up -> runs
+            // OutcomeAutomationService (create appointment / close recall /
+            // schedule follow-up / mark invalid contact / etc.).
+            Route::post('/recalls/{queueId}/complete', [RelationshipController::class, 'recallComplete'])
+                ->whereNumber('queueId')
+                ->name('recalls.complete');
+
+            // Profile summary (+ household)
             Route::get('/{id}',            [RelationshipController::class, 'show'])
                 ->whereNumber('id')
                 ->name('show');
@@ -241,6 +290,79 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
                 ->name('activity.log');
         });
 
+        // ── Lead lifecycle writes (mobile face of the lead pipeline board) ───────
+        // Same effect as the web PRE pipeline's writes — no role gating here
+        // either, matching web (front desk/doctor/admin all use these).
+        Route::prefix('leads')->name('api.leads.')->group(function () {
+            Route::post('/quick-add',      [RelationshipController::class, 'leadQuickAdd'])
+                ->name('quick-add');
+            Route::post('/{lead}/move',    [RelationshipController::class, 'leadMoveStage'])
+                ->whereNumber('lead')
+                ->name('move');
+            Route::post('/{lead}/activity',[RelationshipController::class, 'leadLogActivity'])
+                ->whereNumber('lead')
+                ->name('activity');
+            Route::post('/{lead}/convert', [RelationshipController::class, 'leadConvert'])
+                ->whereNumber('lead')
+                ->name('convert');
+        });
+
+        // ── Missed Calls (mobile face of the PRE "Missed Calls" backlog page) ────
+        // Same YesterdayReviewService::missedCallsQuery() source of truth + the
+        // same CommunicationQueue ignore()/unignore()/dismiss() helpers and
+        // OutboundMessageService::sendText() loop as the web MissedCallsController.
+        // Static segments (bulk-whatsapp, bulk-dismiss) before /{id} below.
+        Route::prefix('relationship/missed-calls')->name('api.relationship.missed-calls.')->group(function () {
+            Route::get('/',                  [RelationshipMissedCallsController::class, 'index'])
+                ->name('index');
+            Route::post('/bulk-whatsapp',    [RelationshipMissedCallsController::class, 'bulkWhatsapp'])
+                ->name('bulk-whatsapp');
+            Route::post('/bulk-dismiss',     [RelationshipMissedCallsController::class, 'bulkDismiss'])
+                ->name('bulk-dismiss');
+            Route::post('/{missedCall}/ignore',   [RelationshipMissedCallsController::class, 'ignore'])
+                ->whereNumber('missedCall')
+                ->name('ignore');
+            Route::post('/{missedCall}/unignore', [RelationshipMissedCallsController::class, 'unignore'])
+                ->whereNumber('missedCall')
+                ->name('unignore');
+        });
+
+        // ── Recall / Birthday Settings (mobile face of the PRE Settings page's
+        //    Recall/Birthday section) — same AppSetting keys, same TreatmentType
+        //    column as SettingsController::saveRecallGeneral()/saveTreatmentRecall()/
+        //    saveBirthday(). Static segments before the /treatment/{treatmentType} route.
+        Route::prefix('relationship/recall-settings')->name('api.relationship.recall-settings.')->group(function () {
+            Route::get('/',                             [RelationshipRecallSettingsController::class, 'index'])
+                ->name('index');
+            Route::post('/general',                     [RelationshipRecallSettingsController::class, 'saveGeneral'])
+                ->name('general');
+            Route::post('/treatment/{treatmentType}',   [RelationshipRecallSettingsController::class, 'saveTreatment'])
+                ->whereNumber('treatmentType')
+                ->name('treatment');
+            Route::post('/birthday',                    [RelationshipRecallSettingsController::class, 'saveBirthday'])
+                ->name('birthday');
+        });
+
+        // ── Message Templates (mobile face of the PRE Template editor) ──────────
+        // "for-type/{type}" must stay before "/{id}" so it isn't swallowed as an id.
+        Route::prefix('templates')->name('api.templates.')->group(function () {
+            Route::get('/',               [TemplateController::class, 'index'])
+                ->name('index');
+            Route::get('/for-type/{type}', [TemplateController::class, 'forType'])
+                ->name('for-type');
+            Route::get('/{id}',           [TemplateController::class, 'show'])
+                ->whereNumber('id')
+                ->name('show');
+            Route::post('/',              [TemplateController::class, 'store'])
+                ->name('store');
+            Route::put('/{id}',           [TemplateController::class, 'update'])
+                ->whereNumber('id')
+                ->name('update');
+            Route::delete('/{id}',        [TemplateController::class, 'destroy'])
+                ->whereNumber('id')
+                ->name('destroy');
+        });
+
         Route::get('/patients/{patient}/open-invoices',         [BillingController::class, 'openInvoices']);
         Route::post('/patients/{patient}/wallet/credit',        [BillingController::class, 'addWalletCredit']); // advance / wallet top-up
         Route::post('/invoices',                                [BillingController::class, 'createInvoice']);   // create invoice (mobile)
@@ -251,6 +373,36 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             ->middleware('api.role:admin,front_desk');
         Route::post('/invoices/{invoice}/payments/{payment}/mark-provider-paid', [BillingController::class, 'markProviderPaid'])
             ->middleware('api.role:admin,front_desk');
+
+        // Direct-EMI instalment schedule — read + receivables "mark paid" (no
+        // invoice/finance side effects; see EmiScheduleService).
+        Route::get('/invoices/{invoice}/payments/{payment}/emi-schedule', [BillingController::class, 'emiSchedule']);
+        Route::post('/invoices/{invoice}/payments/{payment}/emi-schedule/{schedule}/mark-paid', [BillingController::class, 'markEmiInstallmentPaid'])
+            ->middleware('api.role:admin,front_desk');
+
+        // Wallet refund (money OUT, back to patient) — same WALLET_REFUND
+        // permission gate as web, enforced inside the controller.
+        Route::post('/patients/{patient}/wallet/refund', [BillingController::class, 'refundWalletCredit'])
+            ->middleware('api.role:admin,front_desk');
+
+        // Discount layers — coupon / membership preview / manual discount.
+        Route::get('/coupons/validate',                              [BillingController::class, 'validateCoupon']);
+        Route::get('/patients/{patient}/membership-benefit-preview', [BillingController::class, 'membershipBenefitPreview']);
+        Route::post('/invoices/{invoice}/manual-discount',            [BillingController::class, 'applyManualDiscount'])
+            ->middleware('api.role:admin,front_desk');
+        Route::delete('/invoices/{invoice}/manual-discount',          [BillingController::class, 'removeManualDiscount'])
+            ->middleware('api.role:admin,front_desk');
+
+        // Cancel / void — admin-only (enforced again inside the controller).
+        Route::post('/invoices/{invoice}/cancel',                     [BillingController::class, 'cancelInvoice'])
+            ->middleware('api.role:admin');
+        Route::post('/invoices/{invoice}/receipts/{receipt}/void',    [BillingController::class, 'voidReceipt'])
+            ->middleware('api.role:admin');
+
+        // Billing prompts — auto-raised after a treatment visit completes.
+        Route::get('/patients/{patient}/billing-prompts',             [BillingController::class, 'pendingBillingPrompts']);
+        Route::get('/billing-prompts/{prompt}/form-options',          [BillingController::class, 'billingPromptFormOptions']);
+        Route::post('/billing-prompts/{prompt}/dismiss',              [BillingController::class, 'dismissBillingPrompt']);
 
         /*
          | -------- Dashboard (mobile home screen) --------
@@ -306,6 +458,12 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::patch('/huddle/tasks/{task}/assign', [HuddleController::class, 'assignTask'])
             ->middleware('api.role:admin,front_desk');
 
+        // "Yesterday's Flow" quick-action — mirrors the web huddle modal:
+        // logs a task and/or books a follow-up call for a patient instead of
+        // navigating straight to their profile.
+        Route::post('/huddle/yesterday-flow/log', [HuddleController::class, 'logYesterdayFollowUp'])
+            ->middleware('api.role:admin,front_desk,doctor');
+
         /*
          | -------- Inventory (Core-6: items/stock, stock-in/out, PO+GRN,
          |          vendors, implants) --------
@@ -317,6 +475,7 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
          */
         Route::get('/inventory/meta',     [InventoryController::class, 'meta']);
         Route::get('/inventory/alerts',   [InventoryController::class, 'alerts']);
+        Route::get('/inventory/dashboard', [InventoryController::class, 'dashboard']);
         Route::get('/inventory/items',    [InventoryController::class, 'items']);
         Route::get('/inventory/products',  [InventoryController::class, 'products']);
         Route::post('/inventory/products', [InventoryController::class, 'storeProduct']);
@@ -356,5 +515,111 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             ->middleware('api.role:admin,front_desk');
         Route::post('/inventory/purchase-orders/{po}/receive', [InventoryController::class, 'receivePurchaseOrder'])
             ->middleware('api.role:admin,front_desk');
+
+        // Implant catalog + placements — writes (mobile Add Component / Add
+        // Placement screens already call these paths; only the routes were
+        // missing). Web has no role gate here, but every other inventory
+        // write in this file is admin,front_desk, so we match that for
+        // consistency. PUT with a photo arrives as POST+_method=PUT
+        // (Laravel method spoofing), which still matches these PUT routes.
+        Route::post('/inventory/implants/catalog', [InventoryController::class, 'storeCatalogItem'])
+            ->middleware('api.role:admin,front_desk');
+        Route::put('/inventory/implants/catalog/{catalogItem}', [InventoryController::class, 'updateCatalogItem'])
+            ->middleware('api.role:admin,front_desk');
+        Route::post('/inventory/implants/placements', [InventoryController::class, 'storePlacement'])
+            ->middleware('api.role:admin,front_desk');
+        Route::put('/inventory/implants/placements/{placement}', [InventoryController::class, 'updatePlacement'])
+            ->middleware('api.role:admin,front_desk');
+
+        /*
+         | -------- Stock Count (15-day physical count cycle) --------
+         | Same StockCountSession/StockCountLine logic as the web pages.
+         | Reads open to any logged-in staff; writes (start/save/complete)
+         | role-gated the same as every other inventory write above.
+         */
+        Route::prefix('inventory/stock-count')->group(function () {
+            Route::get('/',                     [StockCountController::class, 'index']);
+            Route::post('/',                    [StockCountController::class, 'start'])
+                ->middleware('api.role:admin,front_desk');
+            Route::get('/{session}',            [StockCountController::class, 'sheet']);
+            Route::post('/{session}/save',      [StockCountController::class, 'save'])
+                ->middleware('api.role:admin,front_desk');
+            Route::post('/{session}/complete',  [StockCountController::class, 'complete'])
+                ->middleware('api.role:admin,front_desk');
+        });
+
+        /*
+         | -------- Reusable Assets (individual physical instrument tracking) --------
+         | Same ReusableAsset "brain" the web reusable-assets page uses — usage
+         | count, sterilization history, maintenance schedule, retirement
+         | threshold per physical unit. Reads open to any logged-in staff;
+         | writes role-gated the same as every other inventory write above.
+         */
+        Route::prefix('inventory/reusable-assets')->group(function () {
+            Route::get('/',  [ReusableAssetController::class, 'index']);
+            Route::post('/', [ReusableAssetController::class, 'store'])
+                ->middleware('api.role:admin,front_desk');
+            Route::put('/{asset}', [ReusableAssetController::class, 'update'])
+                ->middleware('api.role:admin,front_desk');
+            Route::post('/{asset}/status', [ReusableAssetController::class, 'updateStatus'])
+                ->middleware('api.role:admin,front_desk');
+        });
+
+        /*
+         | -------- Vendor Invoices (Procurement Phase 1 — Accounts Payable) --------
+         | Same VendorInvoice "brain" the web vendor-invoices page uses — creating
+         | an invoice auto-creates a FinanceExpense (AP entry), updates the PO's
+         | invoice_status, and bumps FinanceVendor.outstanding_amount. Finance stays
+         | the single source of truth for payment status. Reads open to any logged-in
+         | staff; writes role-gated the same as every other inventory write above.
+         | NOTE: /form-options must stay BEFORE /{vendorInvoice} so it isn't swallowed
+         | by the id route.
+         */
+        Route::prefix('inventory/vendor-invoices')->group(function () {
+            Route::get('/',               [VendorInvoiceController::class, 'index']);
+            Route::get('/form-options',   [VendorInvoiceController::class, 'formOptions']);
+            Route::get('/{vendorInvoice}', [VendorInvoiceController::class, 'show']);
+            Route::post('/',              [VendorInvoiceController::class, 'store'])
+                ->middleware('api.role:admin,front_desk');
+            Route::delete('/{vendorInvoice}', [VendorInvoiceController::class, 'destroy'])
+                ->middleware('api.role:admin');
+        });
+
+        /*
+         | -------- Inventory Settings (Category/Location/Sub-type/Variant CRUD
+         |          + global key/value settings) — ADMIN ONLY --------
+         | Same InventoryController@settings()/updateSettings()/store.../update...
+         | /destroy... "brain" the web inventory settings page uses. Whole prefix
+         | is admin-gated at the group level (simpler than repeating the
+         | middleware per route — every single route here is a write or an
+         | admin-only read).
+         */
+        Route::prefix('inventory/settings')->middleware('api.role:admin')->group(function () {
+            Route::get('/',  [InventorySettingsController::class, 'index']);
+            Route::post('/', [InventorySettingsController::class, 'updateSettings']);
+
+            Route::post('/categories',        [InventorySettingsController::class, 'storeCategory']);
+            Route::put('/categories/{cat}',   [InventorySettingsController::class, 'updateCategory']);
+            Route::delete('/categories/{cat}', [InventorySettingsController::class, 'destroyCategory']);
+
+            Route::post('/sub-types',       [InventorySettingsController::class, 'storeSubType']);
+            Route::put('/sub-types/{st}',   [InventorySettingsController::class, 'updateSubType']);
+            Route::delete('/sub-types/{st}', [InventorySettingsController::class, 'destroySubType']);
+
+            Route::post('/variants',            [InventorySettingsController::class, 'storeVariant']);
+            Route::put('/variants/{variant}',   [InventorySettingsController::class, 'updateVariant']);
+            Route::delete('/variants/{variant}', [InventorySettingsController::class, 'destroyVariant']);
+
+            Route::post('/locations',       [InventorySettingsController::class, 'storeLocation']);
+            Route::put('/locations/{loc}',  [InventorySettingsController::class, 'updateLocation']);
+            Route::delete('/locations/{loc}', [InventorySettingsController::class, 'destroyLocation']);
+        });
+
+        // Vendor edit — sits outside the /inventory/settings prefix since
+        // /inventory/vendors (GET, list) is already declared earlier in this
+        // file with no prefix; this PUT doesn't collide with it (different
+        // HTTP verb + different path shape: /inventory/vendors/{vendor}).
+        Route::put('/inventory/vendors/{vendor}', [InventorySettingsController::class, 'updateVendor'])
+            ->middleware('api.role:admin');
     });
 });

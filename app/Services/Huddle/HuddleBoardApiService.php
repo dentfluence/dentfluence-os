@@ -6,9 +6,12 @@ namespace App\Services\Huddle;
 
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Relationship\TodayActionsEngine;
+use App\Services\Relationship\TodayActionsProjector;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * HuddleBoardApiService
@@ -25,18 +28,25 @@ use Illuminate\Support\Facades\DB;
  *
  * Returned shape (all keys always present):
  *   [
- *     'date'         => '2026-06-26',
- *     'date_label'   => 'Friday, 26 June 2026',
- *     'kpis'         => [...],
- *     'schedule'     => [...],   // today's appointments
- *     'yesterday'    => [...],   // yesterday's flow + visit-logged flags
- *     'alerts'       => [...],   // critical patient + inventory alerts
- *     'notes'        => [...],   // today's huddle notes
- *     'tasks'        => [...],   // branch tasks due today / overdue
+ *     'date'              => '2026-06-26',
+ *     'date_label'        => 'Friday, 26 June 2026',
+ *     'kpis'              => [...],
+ *     'schedule'          => [...],   // today's appointments
+ *     'yesterday'         => [...],   // yesterday's flow + visit-logged flags
+ *     'alerts'            => [...],   // critical patient + inventory alerts
+ *     'notes'             => [...],   // today's huddle notes
+ *     'tasks'             => [...],   // branch tasks due today / overdue
+ *     'today_snapshot'    => [...],   // PRE Today's Actions projection summary
+ *     'relationship_items'=> [...],   // recall/lead/missed-yesterday/membership items
  *   ]
  */
 class HuddleBoardApiService
 {
+    public function __construct(
+        private readonly TodayActionsEngine    $todayActionsEngine,
+        private readonly TodayActionsProjector $todayActionsProjector,
+    ) {}
+
     /**
      * Assemble the full mobile huddle board for a branch on a given date.
      */
@@ -52,6 +62,8 @@ class HuddleBoardApiService
         $notes     = $this->safe(fn () => $this->notes($branchId, $today), collect());
         $labs      = $this->safe(fn () => $this->labs($branchId, $today), $this->emptyLabs());
         $comms     = $this->safe(fn () => $this->comms($branchId, $today, $yesterday), collect());
+        $snapshot  = $this->safe(fn () => $this->todaySnapshot(), $this->emptySnapshot());
+        $relItems  = $this->safe(fn () => $this->relationshipItems(), collect());
 
         return [
             'date'       => $today->toDateString(),
@@ -64,7 +76,73 @@ class HuddleBoardApiService
             'tasks'      => $tasks->values()->all(),
             'labs'       => $labs,
             'comms'      => $comms->values()->all(),
+            'today_snapshot'     => $snapshot,
+            'relationship_items' => $relItems->values()->all(),
         ];
+    }
+
+    /* ===================================================================== */
+    /*  PRE — Today's Actions snapshot + relationship items                  */
+    /*  Same source the web huddle uses (Phase 7 / HuddleAggregationService, */
+    /*  Modules/Huddle/Services/HuddleAggregationService.php), reshaped as   */
+    /*  plain arrays for JSON instead of HuddleCardDTO objects.              */
+    /* ===================================================================== */
+
+    /** Empty snapshot shape so the key is always present even if the
+     *  projection hasn't been built yet (today.projection flag / cron). */
+    private function emptySnapshot(): array
+    {
+        return ['total' => 0, 'by_category' => [], 'by_priority' => [], 'generated_at' => null];
+    }
+
+    private function todaySnapshot(): array
+    {
+        return $this->todayActionsProjector->summary();
+    }
+
+    /**
+     * The same focused subset of TodayActionsEngine categories the web
+     * huddle surfaces (Modules/Huddle/Services/HuddleAggregationService.php
+     * getRelationshipItems()), reshaped as plain arrays.
+     *
+     * @return Collection<int, array>
+     */
+    private function relationshipItems(): Collection
+    {
+        $categories = [
+            'recall_calls',
+            'missed_appointments_yesterday',
+            'lead_followups',
+            'membership_renewals',
+        ];
+
+        try {
+            $all = $this->todayActionsEngine->generate();
+        } catch (\Throwable $e) {
+            Log::warning('HuddleBoardApiService: TodayActionsEngine failed', [
+                'error' => $e->getMessage(),
+            ]);
+            return collect();
+        }
+
+        $items = collect();
+
+        foreach ($categories as $category) {
+            foreach (($all[$category] ?? []) as $item) {
+                $items->push([
+                    'category'        => $category,
+                    'category_label'  => ucwords(str_replace('_', ' ', $category)),
+                    'patient_id'      => $item['patient_id'] ?? null,
+                    'patient_name'    => $item['patient_name'] ?? 'Unknown',
+                    'phone'           => $item['meta']['phone'] ?? null,
+                    'priority'        => $item['priority'] ?? 'medium',
+                    'reason'          => $item['reason'] ?? null,
+                    'suggested_action'=> $item['suggested_action'] ?? null,
+                ]);
+            }
+        }
+
+        return $items;
     }
 
     /* ===================================================================== */

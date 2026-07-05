@@ -650,6 +650,13 @@
                 <div class="ta-card-icon"><i class="ti {{ $group['icon'] }}"></i></div>
                 <span class="ta-card-label">{{ $group['label'] }}</span>
                 <span class="ta-card-count">{{ $group['count'] }}</span>
+                @if($catKey === 'missed_calls_yesterday' && $mode === 'today')
+                    {{-- This card only samples up to max_per_category rows — the full backlog lives here. --}}
+                    <a href="{{ route('relationship.today.missed-calls') }}" title="View full missed-calls list"
+                       style="font-size:11px;color:#6a0f70;text-decoration:none;flex-shrink:0;margin-left:2px;">
+                        <i class="ti ti-arrows-maximize"></i>
+                    </a>
+                @endif
             </div>
             <div class="ta-card-list">
                 @foreach($group['items'] as $idx => $item)
@@ -674,6 +681,22 @@
                                 title="{{ $outcome ? ucwords(str_replace('_', ' ', $outcome)) : 'Completed' }}"
                                 style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:#ede4f7;color:#6a0f70;white-space:nowrap;"
                             >{{ $outcome ? ucwords(str_replace('_', ' ', $outcome)) : 'Completed' }}</span>
+                        @elseif(($item['primary_action'] ?? null) === 'whatsapp')
+                            {{-- Birthday Wishes only: one-click WhatsApp send, no call drawer --}}
+                            <template x-if="!actioned['{{ $itemId }}']">
+                                <button
+                                    class="ta-row-btn-call"
+                                    title="Send WhatsApp birthday greeting"
+                                    :disabled="sendingWhatsapp['{{ $itemId }}']"
+                                    @click="sendBirthdayWhatsapp({{ json_encode($item) }}, '{{ $itemId }}')"
+                                >
+                                    <i class="ti" :class="sendingWhatsapp['{{ $itemId }}'] ? 'ti-loader-2' : 'ti-brand-whatsapp'" :style="sendingWhatsapp['{{ $itemId }}'] ? 'animation:spin 1s linear infinite;' : ''"></i>
+                                </button>
+                            </template>
+
+                            <template x-if="actioned['{{ $itemId }}']">
+                                <span class="ta-row-btn-done" title="Sent"><i class="ti ti-check"></i></span>
+                            </template>
                         @else
                             <template x-if="!actioned['{{ $itemId }}']">
                                 <button
@@ -941,6 +964,10 @@ function todayActions() {
         // ── Per-item actioned tracker (itemId → bool) ───────────────────
         actioned: {},
 
+        // ── Birthday WhatsApp send state (itemId → bool / message) ──────
+        sendingWhatsapp: {},
+        whatsappError:   {},
+
         // ── Submission state ────────────────────────────────────────────
         submitting:  false,
         submitError: '',
@@ -972,6 +999,42 @@ function todayActions() {
         closeDrawer() {
             this.drawer.open = false;
             this.drawer.item = null;
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // Birthday Wishes only — one-click WhatsApp send, no drawer/checklist.
+        // Marks the row actioned (same convention as a logged call) on success.
+        // ─────────────────────────────────────────────────────────────────
+        async sendBirthdayWhatsapp(item, itemId) {
+            if (this.sendingWhatsapp[itemId]) return;
+
+            this.sendingWhatsapp[itemId] = true;
+            this.whatsappError[itemId]   = '';
+
+            try {
+                const res = await fetch('{{ route('relationship.today.birthday-whatsapp') }}', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body:    JSON.stringify({
+                        _token:     document.querySelector('meta[name="csrf-token"]').content,
+                        patient_id: item.patient_id,
+                    }),
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    this.actioned[itemId] = true;
+                } else {
+                    this.whatsappError[itemId] = data.message || 'Could not send. Please try again.';
+                    alert(this.whatsappError[itemId]);
+                }
+            } catch (err) {
+                this.whatsappError[itemId] = 'Network error. Please check your connection.';
+                alert(this.whatsappError[itemId]);
+            } finally {
+                this.sendingWhatsapp[itemId] = false;
+            }
         },
 
         // ─────────────────────────────────────────────────────────────────

@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Log;
  * The most important page in Dentfluence: everything reception
  * needs to do today, generated automatically from live data.
  *
- * 12 categories, each returning a flat array of action items.
+ * 11 categories, each returning a flat array of action items.
  * Every item shares the same shape so the view is uniform.
  *
  * Item shape:
@@ -33,6 +33,9 @@ use Illuminate\Support\Facades\Log;
  *   'reason'           => string,      // one-line why they appear today
  *   'priority'         => 'high'|'medium'|'low',
  *   'suggested_action' => string,
+ *   'primary_action'   => string|null, // optional; 'whatsapp' = one-click send
+ *                                      // button instead of the Call drawer.
+ *                                      // Absent/null = default 'call' behaviour.
  *   'link'             => string,      // route to open the record
  *   'meta'             => array,       // extra context for the drawer
  * ]
@@ -56,7 +59,7 @@ class TodayActionsEngine
     {
         $groups = [];
 
-        // Run all 12 categories — each is fault-tolerant (errors return [])
+        // Run all 11 categories — each is fault-tolerant (errors return [])
         $categories = [
             'new_enquiries'                => fn () => $this->newEnquiries(),
             'lead_followups'               => fn () => $this->leadFollowups(),
@@ -405,7 +408,22 @@ class TodayActionsEngine
 
     private function birthdays(): array
     {
-        $window = (int) config('relationship_rules.today_actions.birthday_window_days', 1);
+        // Recall & Birthday Settings (2026-07-05) — AppSetting override, falling
+        // back to the original config default so clinics that never open the
+        // settings page keep today's exact behaviour. Disabling the trigger here
+        // only hides it from Today's Actions; it does NOT affect
+        // RecallEngineService::recallBirthday(), which has its own identical
+        // flag/window pair (recall.birthday_enabled / recall.birthday_window_days)
+        // — same AppSetting keys are intentionally shared so one Settings field
+        // controls both surfaces consistently.
+        if (\App\Models\AppSetting::get('recall.birthday_enabled', '1') !== '1') {
+            return [];
+        }
+
+        $window = (int) \App\Models\AppSetting::get(
+            'recall.birthday_window_days',
+            config('relationship_rules.today_actions.birthday_window_days', 1)
+        );
 
         $items = [];
 
@@ -438,7 +456,13 @@ class TodayActionsEngine
                     'relationship_id' => $patient->relationship_id ?? null,
                     'reason'          => $label,
                     'priority'        => $offset === 0 ? 'high' : 'low',
-                    'suggested_action'=> 'Call to wish a happy birthday and check in',
+                    'suggested_action'=> 'Send a WhatsApp birthday greeting',
+                    // Birthdays don't need a staff phone call — a WhatsApp send is the
+                    // whole action here (2026-07-06, Sumit's call: don't add birthdays
+                    // to the call backlog). 'primary_action' tells the view to render
+                    // a one-click Send WhatsApp button instead of the Call drawer.
+                    // Every other category is untouched and implicitly still 'call'.
+                    'primary_action'  => 'whatsapp',
                     'link'            => route('patients.show', $patient->id),
                     'meta'            => [
                         'phone'         => $patient->phone,
@@ -844,7 +868,9 @@ class TodayActionsEngine
                 'relationship_id' => $patient->relationship_id ?? null,
                 'reason'          => 'Birthday on ' . $date->format('d M Y'),
                 'priority'        => 'low',
-                'suggested_action'=> 'Call to wish a happy birthday and check in',
+                'suggested_action'=> 'Send a WhatsApp birthday greeting',
+                // Same one-click WhatsApp action as birthdays() above — see comment there.
+                'primary_action'  => 'whatsapp',
                 'link'            => route('patients.show', $patient->id),
                 'meta'            => [
                     'phone'         => $patient->phone,

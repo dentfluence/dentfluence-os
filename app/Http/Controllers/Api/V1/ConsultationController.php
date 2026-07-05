@@ -46,6 +46,9 @@ class ConsultationController extends ApiController
             // web reads (chart_data, cast to array on the model).
             'chart_data'             => ['nullable', 'array'],
             'investigations'         => ['nullable', 'array'],
+            // e.g. { "_notes": "IOPA of 36 before RCT" } — mirrors the web's
+            // investigations partial notes textarea.
+            'investigation_details'  => ['nullable', 'array'],
             'accepted_specialties'   => ['nullable', 'array'],
             'specialty_modules'                 => ['nullable', 'array'],
             'specialty_modules.*.specialty_tag' => ['required_with:specialty_modules', 'string', 'max:50'],
@@ -193,6 +196,7 @@ class ConsultationController extends ApiController
             'emergency_treatment_rendered' => $c->emergency_treatment_rendered,
             'clinical_data'          => $c->clinical_data,
             'investigations'         => $c->investigations,
+            'investigation_details'  => $c->investigation_details,
             'chart_data'             => $c->chart_data,
             'specialty_modules'      => $c->specialtyModules->map(fn ($m) => [
                 'tag'      => $m->specialty_tag,
@@ -232,6 +236,7 @@ class ConsultationController extends ApiController
             'clinical_data'                => ['nullable', 'array'],
             'chart_data'                   => ['nullable', 'array'],
             'investigations'               => ['nullable', 'array'],
+            'investigation_details'        => ['nullable', 'array'],
             'accepted_specialties'         => ['nullable', 'array'],
             'specialty_modules'                 => ['nullable', 'array'],
             'specialty_modules.*.specialty_tag' => ['required_with:specialty_modules', 'string', 'max:50'],

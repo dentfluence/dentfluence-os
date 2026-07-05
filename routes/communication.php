@@ -87,6 +87,24 @@ Route::prefix('communication')
             Route::post('/run-now', [\App\Http\Controllers\Communication\RecallController::class, 'runNow'])->name('run-now');
         });
 
+        // ── Recall + Birthday/Anniversary Settings — RETIRED, redirects only ──
+        // Moved to the Relationship/PRE module 2026-07-06 (Sumit's call — these
+        // are PRE concerns, not Communication OS). Controller/view archived at
+        // under_review/pre_consolidation_2026_07_06/. Route *names* are kept
+        // identical so any old in-app links or bookmarks that still reference
+        // communication.recall-settings.* don't hard-error — they land on the
+        // equivalent relationship.settings.* destination instead. Any in-app
+        // links have been repointed directly at relationship.* (see
+        // resources/views/communication/recall/index.blade.php's Settings
+        // button) — these redirects are a safety net for stale bookmarks only.
+        Route::prefix('recall-settings')->name('recall-settings.')->group(function () {
+            Route::get('/', fn () => redirect()->route('relationship.settings'))->name('index');
+            Route::post('/general', fn () => redirect()->route('relationship.settings'))->name('general');
+            Route::post('/treatment/{treatmentType}', fn () => redirect()->route('relationship.settings'))->name('treatment')->whereNumber('treatmentType');
+            Route::post('/birthday', fn () => redirect()->route('relationship.settings'))->name('birthday');
+            Route::post('/anniversary', fn () => redirect()->route('relationship.settings'))->name('anniversary');
+        });
+
         // ── Opportunity Engine ───────────────────────────────────────────
         Route::prefix('opportunities')->name('opportunities.')->group(function () {
             Route::get('/',                    [\App\Http\Controllers\Communication\OpportunityController::class, 'index'])->name('index');
@@ -107,10 +125,28 @@ Route::prefix('communication')
             Route::get('/alerts',   [\App\Http\Controllers\Communication\HuddleController::class, 'alerts'])->name('alerts');
         });
 
-        // ── Templates (Session 12) ────────────────────────────────────────
+        // ── Templates — RETIRED, redirects only ───────────────────────────
+        // Moved to the Relationship/PRE module 2026-07-06 (Sumit's call —
+        // Templates is a PRE concern: Recall/Birthday/Anniversary copy).
+        // Controller/views archived at
+        // under_review/pre_consolidation_2026_07_06/. Route *names* are kept
+        // identical so old in-app links/bookmarks referencing
+        // communication.templates.* don't hard-error. Any in-app links have
+        // been repointed directly at relationship.templates.* (see the
+        // Communication sidebar partial, where the "Templates" nav item was
+        // removed entirely) — these redirects are a safety net only. The
+        // {id}-based routes forward the id through so an old bookmarked
+        // edit link still opens the right template.
         Route::prefix('templates')->name('templates.')->group(function () {
-            Route::get('/',     [\App\Http\Controllers\Communication\TemplateController::class, 'index'])->name('index');
-            Route::get('/{id}', [\App\Http\Controllers\Communication\TemplateController::class, 'edit'])->name('edit');
+            Route::get('/', fn () => redirect()->route('relationship.templates.index'))->name('index');
+            Route::get('/create', fn () => redirect()->route('relationship.templates.create'))->name('create');
+            Route::post('/', fn () => redirect()->route('relationship.templates.index'))->name('store');
+            // Deep-link by type (Recall/Birthday/Anniversary Settings gear icons) — must
+            // come before the `/{id}` wildcard below since "for-type" isn't numeric.
+            Route::get('/for-type/{type}', fn (string $type) => redirect()->route('relationship.templates.forType', $type))->name('forType');
+            Route::get('/{id}', fn (int $id) => redirect()->route('relationship.templates.edit', $id))->name('edit');
+            Route::put('/{id}', fn (int $id) => redirect()->route('relationship.templates.edit', $id))->name('update');
+            Route::delete('/{id}', fn () => redirect()->route('relationship.templates.index'))->name('destroy');
         });
 
         // ── Phase 4: B2B Comm Module ──────────────────────────────────────

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Relationship;
 
 use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
+use App\Models\MessageTemplate;
+use App\Models\TreatmentType;
 use App\Support\Features\FeatureFlagService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -26,6 +28,12 @@ use Illuminate\View\View;
  *
  * Route: GET  /relationship/settings          [relationship.settings]
  *        POST /relationship/settings/toggle    [relationship.settings.toggle]
+ *
+ * Also now hosts Recall/Birthday settings (moved from
+ * Communication OS 2026-07-06 — see saveRecallGeneral/saveTreatmentRecall/
+ * saveBirthday below) and the Templates module routes
+ * (see routes/relationship.php's `templates.*` group + Relationship\
+ * TemplateController) — both are PRE concerns now, not Communication OS.
  */
 class SettingsController extends Controller
 {
@@ -56,6 +64,34 @@ class SettingsController extends Controller
         // for what this actually gates. Null/blank = legacy behaviour (unrestricted).
         $recallEffectiveFrom = AppSetting::get('recall.effective_from');
 
+        // ── Recall / Birthday settings (moved from Communication
+        // OS 2026-07-06 — was Communication\RecallSettingsController@index,
+        // archived at under_review/pre_consolidation_2026_07_06/). Same
+        // AppSetting keys, same TreatmentType column — no behaviour change,
+        // only relocated into this page's "Recall" section. Message *copy* is
+        // still NOT edited here — gear icons deep-link to
+        // relationship.templates.forType.
+        $recallGeneralDays = (int) AppSetting::get('recall.general_days', 180); // matches legacy 6-month default
+        $recallChannels = [
+            'whatsapp' => AppSetting::get('recall.channel_whatsapp', '1') === '1',
+            'sms'      => AppSetting::get('recall.channel_sms', '0') === '1',
+            'email'    => AppSetting::get('recall.channel_email', '0') === '1',
+        ];
+
+        $recallTreatmentTypes = TreatmentType::query()->active()->get(['id', 'name', 'recall_after_days']);
+
+        $birthdayEnabled = AppSetting::get('recall.birthday_enabled', '1') === '1';
+        $birthdayWindowDays = (int) AppSetting::get(
+            'recall.birthday_window_days',
+            config('relationship_rules.today_actions.birthday_window_days', 1)
+        );
+
+        // Template ids (if any already exist) — used only to show a "configured"
+        // hint on the gear icon; the gear link itself uses forType and doesn't
+        // need the id up front.
+        $recallTemplate      = MessageTemplate::query()->ofType('recall')->active()->first();
+        $birthdayTemplate    = MessageTemplate::query()->ofType('birthday')->active()->first();
+
         $flagHelp = $this->flagHelp();
 
         return view('relationship.settings.index', compact(
@@ -64,6 +100,13 @@ class SettingsController extends Controller
             'referralRewardEnabled',
             'referralRewardAmount',
             'recallEffectiveFrom',
+            'recallGeneralDays',
+            'recallChannels',
+            'recallTreatmentTypes',
+            'birthdayEnabled',
+            'birthdayWindowDays',
+            'recallTemplate',
+            'birthdayTemplate',
             'flagHelp'
         ));
     }
@@ -170,6 +213,64 @@ class SettingsController extends Controller
         AppSetting::set('recall.effective_from', $data['effective_from'], 'automation');
 
         return back()->with('success', 'Recall automation go-live date saved.');
+    }
+
+    /**
+     * Save General Recall periodicity + per-channel enable flags.
+     *
+     * Moved from Communication\RecallSettingsController@saveGeneral
+     * (2026-07-06) — same AppSetting keys, same validation, no behaviour
+     * change.
+     */
+    public function saveRecallGeneral(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'general_days' => ['required', 'integer', 'min:1', 'max:3650'],
+        ]);
+
+        AppSetting::set('recall.general_days', (string) $data['general_days'], 'recall');
+        AppSetting::set('recall.channel_whatsapp', $request->boolean('channel_whatsapp') ? '1' : '0', 'recall');
+        AppSetting::set('recall.channel_sms', $request->boolean('channel_sms') ? '1' : '0', 'recall');
+        AppSetting::set('recall.channel_email', $request->boolean('channel_email') ? '1' : '0', 'recall');
+
+        return back()->with('success', 'General recall settings saved.');
+    }
+
+    /**
+     * Save one treatment type's "recall after N days" override.
+     *
+     * Moved from Communication\RecallSettingsController@saveTreatmentRecall
+     * (2026-07-06) — same behaviour, only the route parameter name changed
+     * (treatmentType, matching this file's whereNumber binding).
+     */
+    public function saveTreatmentRecall(Request $request, int $treatmentType): RedirectResponse
+    {
+        $data = $request->validate([
+            'recall_after_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
+        ]);
+
+        $type = TreatmentType::findOrFail($treatmentType);
+        $type->update(['recall_after_days' => $data['recall_after_days'] ?? null]);
+
+        return back()->with('success', "Recall periodicity saved for {$type->name}.");
+    }
+
+    /**
+     * Save Birthday reminder enable + window (days before/after).
+     *
+     * Moved from Communication\RecallSettingsController@saveBirthday
+     * (2026-07-06) — same AppSetting keys, no behaviour change.
+     */
+    public function saveBirthday(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'window_days' => ['required', 'integer', 'min:0', 'max:30'],
+        ]);
+
+        AppSetting::set('recall.birthday_enabled', $request->boolean('enabled') ? '1' : '0', 'recall');
+        AppSetting::set('recall.birthday_window_days', (string) $data['window_days'], 'recall');
+
+        return back()->with('success', 'Birthday reminder settings saved.');
     }
 
     // Toggle one PRE flag globally. Whitelist-checked against config/features.php

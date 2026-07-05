@@ -63,7 +63,10 @@
                 </a>
             </li>
 
-            {{-- PRM Pipeline (now backed by the PRE lead pipeline — routes/prm.php was retired in Phase 8) --}}
+            {{-- Lead Pipeline (PRE) — label fixed 2026-07-06; this has been the PRE
+                 lead pipeline since Phase 8 retired the old PRM board, it just kept
+                 the old "PRM" name tag until now. $activeNav key left as 'prm' so
+                 any controller already passing activeNav('prm') still highlights it. --}}
             <li class="comm-sidebar__nav-item">
                 <a href="{{ route('relationship.pipeline') }}"
                    class="comm-sidebar__nav-link {{ $activeNav === 'prm' ? 'is-active' : '' }}"
@@ -73,7 +76,7 @@
                             <rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="12"/><rect x="17" y="3" width="5" height="8"/>
                         </svg>
                     </span>
-                    <span class="comm-sidebar__nav-label">PRM Pipeline</span>
+                    <span class="comm-sidebar__nav-label">Lead Pipeline</span>
                 </a>
             </li>
 
@@ -94,6 +97,20 @@
                             {{ $navBadges['followup_overdue_count'] }}
                         </span>
                     @endif
+                </a>
+            </li>
+
+            {{-- Recall Engine (2026-07-05 — was previously reachable by URL only, no nav link) --}}
+            <li class="comm-sidebar__nav-item">
+                <a href="{{ route('communication.recall.index') }}"
+                   class="comm-sidebar__nav-link {{ $activeNav === 'recall' ? 'is-active' : '' }}"
+                   aria-current="{{ $activeNav === 'recall' ? 'page' : 'false' }}">
+                    <span class="comm-sidebar__nav-icon" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 2v6h6"/><path d="M3 13a9 9 0 1 0 3-6.7L3 8"/>
+                        </svg>
+                    </span>
+                    <span class="comm-sidebar__nav-label">Recall Engine</span>
                 </a>
             </li>
 
@@ -199,19 +216,10 @@
                 </a>
             </li>
 
-            {{-- Templates --}}
-            <li class="comm-sidebar__nav-item">
-                <a href="{{ route('communication.templates.index') }}"
-                   class="comm-sidebar__nav-link {{ $activeNav === 'templates' ? 'is-active' : '' }}"
-                   aria-current="{{ $activeNav === 'templates' ? 'page' : 'false' }}">
-                    <span class="comm-sidebar__nav-icon" aria-hidden="true">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-                        </svg>
-                    </span>
-                    <span class="comm-sidebar__nav-label">Templates</span>
-                </a>
-            </li>
+            {{-- Templates nav item removed 2026-07-06 — Templates moved to the
+                 Relationship/PRE module (relationship.templates.*). It's now a
+                 deep-link-only destination (reached via Settings gear icons),
+                 not a standalone Communication OS nav item. --}}
 
         </ul>
     </nav>

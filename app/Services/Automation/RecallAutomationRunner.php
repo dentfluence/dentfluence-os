@@ -4,6 +4,7 @@ namespace App\Services\Automation;
 
 use App\Models\AppSetting;
 use App\Models\CommunicationQueue;
+use App\Models\MessageTemplate;
 use App\Models\Patient;
 use App\Services\Relationship\ActivityEngine;
 use Carbon\Carbon;
@@ -68,6 +69,10 @@ class RecallAutomationRunner
 
         Patient::query()
             ->whereNotNull('phone')
+            // Skip patients marked deceased/opted-out (2026-07-05 outcome
+            // automations) and patients whose number was flagged invalid.
+            ->automationsEnabled()
+            ->whereNull('contact_invalid_at')
             ->where(function ($q) use ($cutoff, $effectiveFrom) {
                 if ($effectiveFrom) {
                     $q->whereDate('last_visit_date', '>=', $effectiveFrom)
@@ -99,6 +104,11 @@ class RecallAutomationRunner
                         ? Carbon::parse($patient->last_visit_date)->format('d M Y')
                         : 'never';
 
+                    // Mirrors RecallEngineService::composeMessage() — kept in parity so
+                    // both paths show the same note text regardless of which is active.
+                    $note = $this->composeMessage($patient, "no visit since {$lastVisit}")
+                        ?? "Patient has not visited since {$lastVisit}. Recall after 6 months of no activity.";
+
                     $this->createQueueItem([
                         'patient_id'      => $patient->id,
                         'person_name'     => $patient->name,
@@ -107,7 +117,7 @@ class RecallAutomationRunner
                         'purpose'         => self::PURPOSE,
                         'comm_type'       => 'existing_patient',
                         'priority'        => 'medium',
-                        'note'            => "Patient has not visited since {$lastVisit}. Recall after 6 months of no activity.",
+                        'note'            => $note,
                         'source_engine'   => 'recall',
                         'tags'            => ['recall', 'no_visit_6m'],
                     ]);
@@ -130,6 +140,24 @@ class RecallAutomationRunner
     }
 
     // ── Helpers (mirror RecallEngineService) ─────────────────────────────────
+
+    /** See RecallEngineService::composeMessage() doc-comment for full context. */
+    private function composeMessage(Patient $patient, string $recallReason): ?string
+    {
+        $template = MessageTemplate::query()->ofType('recall')->active()->first();
+
+        if (!$template) {
+            return null;
+        }
+
+        return $template->renderBody([
+            'PatientName'      => $patient->name,
+            'PatientFirstName' => explode(' ', trim($patient->name))[0] ?? $patient->name,
+            'ContactNumber'    => $patient->phone,
+            'RecallReason'     => $recallReason,
+            'ClinicName'       => AppSetting::get('clinic_name', config('clinic.name', 'the clinic')),
+        ]);
+    }
 
     private function hasOpenQueueItem(int $patientId): bool
     {

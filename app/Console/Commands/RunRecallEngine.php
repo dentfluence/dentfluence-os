@@ -48,7 +48,7 @@ class RunRecallEngine extends Command
             'post_op_followup'    => 'Post-op follow-up (14 days)',
             'lab_received_no_appt' => 'Lab received, no appointment',
             'recent_tx_followup'  => '7-day treatment follow-up',
-            'birthday_anniversary' => 'Birthday / anniversary',
+            'birthday'            => 'Birthday',
         ];
 
         $rows = [];

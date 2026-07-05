@@ -81,7 +81,7 @@ class PatientController extends ApiController
             'auditable_id'   => $model->id,
         ]);
 
-        return $this->success(new PatientResource($model->load('tags')), '');
+        return $this->success(new PatientResource($model->load(['tags', 'referredPatient'])), '');
     }
 
     /** Create a patient. */
@@ -104,7 +104,7 @@ class PatientController extends ApiController
         $model = $this->patients->updateFromInput($model, $request->validated());
 
         return $this->success(
-            new PatientResource($model->load('tags')),
+            new PatientResource($model->load(['tags', 'referredPatient'])),
             'Patient updated.'
         );
     }

@@ -104,4 +104,47 @@ class ReportController extends ApiController
             'generated_at'   => now()->toIso8601String(),
         ], '');
     }
+
+    /**
+     * Outstanding-balance follow-up list, sorted highest balance first — the
+     * one "report" front-desk staff actually work from daily (who to call for
+     * collections). Deliberately a single focused drill-down rather than a
+     * 1:1 port of every web report tab (most of those are desk-bound
+     * finance/audit views with low mobile-usage frequency).
+     *
+     *   GET /api/v1/reports/outstanding
+     */
+    public function outstandingByPatient(Request $request): JsonResponse
+    {
+        $bid = $request->user()->branch_id;
+
+        $rows = Invoice::with('patient:id,branch_id,name,patient_id,phone')
+            ->whereHas('patient', fn ($q) => $q->where('branch_id', $bid))
+            ->where('status', '!=', 'cancelled')
+            ->where('balance_due', '>', 0)
+            ->orderByDesc('balance_due')
+            ->limit(200)
+            ->get()
+            ->filter(fn ($inv) => $inv->patient !== null)
+            ->map(fn ($inv) => [
+                'invoice_id'   => $inv->id,
+                'number'       => $inv->invoice_number,
+                'date'         => $inv->invoice_date,
+                'patient'      => [
+                    'id'    => $inv->patient->id,
+                    'name'  => $inv->patient->name,
+                    'phone' => $inv->patient->phone,
+                ],
+                'total_amount' => (float) $inv->total_amount,
+                'paid_amount'  => (float) $inv->paid_amount,
+                'balance_due'  => (float) $inv->balance_due,
+            ])
+            ->values();
+
+        return $this->success([
+            'total_outstanding' => (float) $rows->sum('balance_due'),
+            'invoice_count'     => $rows->count(),
+            'invoices'          => $rows,
+        ], '');
+    }
 }

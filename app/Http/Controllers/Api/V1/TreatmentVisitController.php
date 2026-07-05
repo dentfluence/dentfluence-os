@@ -68,7 +68,7 @@ class TreatmentVisitController extends ApiController
     public function show(Request $request, $visit): JsonResponse
     {
         $v = $this->findVisit($request, $visit);
-        $v->load(['doctor', 'visitItems']);
+        $v->load(['doctor', 'visitItems', 'patient']);
 
         $out = $this->service->format($v);
         $out += [
@@ -82,6 +82,46 @@ class TreatmentVisitController extends ApiController
             'weight'           => $v->weight,
             'vitals_notes'     => $v->vitals_notes,
         ];
+
+        // Print-only extras (clinic letterhead + patient + doctor block) —
+        // same settings keys / shape as TreatmentPlanController::payload(),
+        // so the mobile visit case-sheet PDF mirrors the web print exactly.
+        $clinic = \App\Models\AppSetting::where('group', 'clinic')->pluck('value', 'key');
+        $print  = \App\Models\AppSetting::where('group', 'print')->pluck('value', 'key');
+        $headerType = $print->get('print_header_type') ?? 'plain';
+        $showClinic = $headerType !== 'plain';
+
+        $out['clinic'] = [
+            'name'           => $clinic->get('clinic_name') ?? config('app.name'),
+            'phone'          => $clinic->get('clinic_phone'),
+            'address'        => $clinic->get('clinic_address'),
+            'header_type'    => $headerType,
+            'show_identity'  => $showClinic,
+            'logo_url'       => ($headerType === 'logo' && $clinic->get('clinic_logo'))
+                ? \Illuminate\Support\Facades\Storage::url($clinic->get('clinic_logo'))
+                : null,
+            'letterhead_url' => ($headerType === 'letterhead' && $print->get('print_letterhead'))
+                ? \Illuminate\Support\Facades\Storage::url($print->get('print_letterhead'))
+                : null,
+        ];
+
+        $p = $v->patient;
+        $out['patient'] = $p ? [
+            'name'       => $p->name,
+            'patient_id' => $p->patient_id,
+            'phone'      => $p->phone,
+            'gender'     => $p->gender,
+            'age'        => $p->age_years,
+            'address'    => trim(implode(', ', array_filter([
+                $p->address ?? null, $p->area ?? null, $p->city ?? null,
+            ])), ', '),
+        ] : null;
+
+        $out['doctor'] = $v->doctor ? [
+            'name'                => $v->doctor->doctor_name,
+            'designation'         => $v->doctor->designation,
+            'registration_number' => $v->doctor->registration_number,
+        ] : null;
 
         return $this->success($out, '');
     }
@@ -107,7 +147,11 @@ class TreatmentVisitController extends ApiController
             ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])
             ->values();
 
+        // Only ACCEPTED plans (patient said yes -> accepted_at is set) should
+        // surface in the visit form — same rule as web's treatment-visits-tab.
+        // Pending/un-accepted options stay hidden here.
         $plans = $p->treatmentPlans()
+            ->whereNotNull('accepted_at')
             ->with('items')
             ->latest()
             ->get()
@@ -132,15 +176,69 @@ class TreatmentVisitController extends ApiController
             ->map(fn ($v) => ['id' => $v->id, 'name' => $v->name])
             ->values();
 
+        // Appointments: upcoming + last 30 days, for the "Link Appointment"
+        // dropdown — matches web's $appointmentsJson exactly.
+        $appointments = $p->appointments()
+            ->where('appointment_date', '>=', now()->subDays(30))
+            ->with('treatmentCategory:id,name')
+            ->orderByDesc('appointment_date')
+            ->get()
+            ->map(fn ($a) => [
+                'id'         => $a->id,
+                'date'       => $a->appointment_date?->format('Y-m-d'),
+                'label'      => trim(
+                    ($a->appointment_date?->format('d M Y') ?? '') .
+                    ($a->appointment_time ? ' - ' . \Carbon\Carbon::parse($a->appointment_time)->format('h:i A') : '') .
+                    ($a->treatmentCategory ? ' - ' . $a->treatmentCategory->name : '')
+                ),
+                'doctor_id'  => (string) ($a->doctor_id ?? ''),
+                'status'     => $a->status,
+            ])
+            ->values();
+
+        // Treatment -> lab work-category map, only for treatments flagged
+        // needs_lab. Drives the "Lab Case Required" prompt's auto-detect —
+        // matches web's TV_LAB_TREATMENTS.
+        $labColsExist = \Illuminate\Support\Facades\Schema::hasColumn('treatments', 'needs_lab');
+        $labTreatments = $labColsExist
+            ? Treatment::where('is_active', true)->where('needs_lab', true)
+                ->get(['name', 'lab_work_category'])
+                ->keyBy('name')
+                ->map(fn ($t) => ['work_category' => $t->lab_work_category ?? ''])
+            : (object) [];
+
+        // Implant catalog — stock-linked fixture/component picker for the
+        // Implant specialty sub-form. Selecting one deducts real inventory.
+        $implantCatalog = \App\Models\Inventory\ImplantCatalog::active()
+            ->with('inventoryItem.stocks')
+            ->orderBy('brand')
+            ->get();
+        $implantFixtures = $implantCatalog->where('component_type', 'fixture')
+            ->map(fn ($c) => [
+                'id'    => $c->id,
+                'label' => $c->getFullName(),
+                'stock' => $c->inventoryItem ? (float) $c->inventoryItem->total_stock : null,
+            ])->values();
+        $implantAccessories = $implantCatalog->where('component_type', '!=', 'fixture')
+            ->map(fn ($c) => [
+                'id'    => $c->id,
+                'label' => $c->getComponentTypeLabel() . ' — ' . $c->brand,
+                'stock' => $c->inventoryItem ? (float) $c->inventoryItem->total_stock : null,
+            ])->values();
+
         return $this->success([
             'current_doctor_id'  => $request->user()->id,
             'doctors'            => $doctors,
             'treatment_plans'    => $plans,
             'lab_vendors'        => $labVendors,
+            'appointments'       => $appointments,
             // Treatment names for the autocomplete, plus the per-treatment stage maps.
             'treatments'         => Treatment::orderBy('name')->pluck('name')->values(),
             'stages'             => TreatmentVisit::allStagesFromDb(),
             'lab_work_categories'=> LabCase::WORK_CATEGORIES,
+            'lab_treatments'     => $labTreatments,
+            'implant_fixtures'    => $implantFixtures,
+            'implant_accessories' => $implantAccessories,
         ], '');
     }
 

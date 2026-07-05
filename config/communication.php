@@ -186,13 +186,10 @@ return [
             'route' => 'communication.timeline.index',
             'badge' => null,
         ],
-        [
-            'key'   => 'templates',
-            'label' => 'Templates',
-            'icon'  => 'template',
-            'route' => 'communication.templates.index',
-            'badge' => null,
-        ],
+        // 'templates' tile removed 2026-07-06 — Message Templates moved to the
+        // Relationship/PRE module (relationship.templates.*), reached via gear
+        // icons on Recall/Birthday/Anniversary settings, not a Communication OS
+        // dashboard tile anymore.
     ],
 
     /*

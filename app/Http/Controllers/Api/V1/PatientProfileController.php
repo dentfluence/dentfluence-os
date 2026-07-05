@@ -50,6 +50,11 @@ class PatientProfileController extends ApiController
                 'id'              => $c->id,
                 'date'            => $c->consultation_date,
                 'status'          => $c->status,
+                // consultation_type ('new'/'same_issue'/'minor_visit'/'emergency'/'coha')
+                // — the mobile list/edit flow branches on this to know which
+                // screen (and which API, for COHA) to open. visit_type is the
+                // older legacy column, kept for backward compat.
+                'type'            => $c->consultation_type,
                 'visit_type'      => $c->visit_type,
                 'chief_complaint' => $c->chief_complaint,
                 'diagnosis'       => $c->provisional_diagnosis ?: $c->primary_diagnosis,
@@ -364,7 +369,7 @@ class PatientProfileController extends ApiController
     {
         $inv = Invoice::with([
                 'items' => fn ($q) => $q->orderBy('sort_order'),
-                'receipts',
+                'receipts.payment',
                 'patient:id,branch_id,name,patient_id,phone',
             ])
             ->whereKey($invoice)
@@ -398,10 +403,17 @@ class PatientProfileController extends ApiController
             'discount_amount' => $inv->discount_amount,
             'gst_amount'      => $inv->gst_amount,
             'wallet_applied'  => $inv->wallet_applied,
+            'coupon_discount' => $inv->coupon_discount,
+            'membership_discount' => $inv->membership_discount,
+            'manual_discount_type'   => $inv->manual_discount_type,
+            'manual_discount_value'  => $inv->manual_discount_value,
+            'manual_discount_amount' => $inv->manual_discount_amount,
+            'manual_discount_reason' => $inv->manual_discount_reason,
             'total_amount'    => $inv->total_amount,
             'paid_amount'     => $inv->paid_amount,
             'balance_due'     => $inv->balance_due,
             'notes'           => $inv->notes,
+            'cancelled_reason' => $inv->cancelled_reason,
             'items'           => $inv->items->map(fn ($it) => [
                 'description'  => $it->description,
                 'tooth_number' => $it->tooth_number,
@@ -410,11 +422,19 @@ class PatientProfileController extends ApiController
                 'total'        => $it->total,
             ])->values(),
             'receipts'        => $inv->receipts->map(fn ($r) => [
-                'number'    => $r->receipt_number,
-                'amount'    => $r->amount,
-                'mode'      => $r->payment_mode,
-                'date'      => $r->receipt_date,
-                'reference' => $r->reference_no,
+                'id'         => $r->id,
+                'number'     => $r->receipt_number,
+                'amount'     => $r->amount,
+                'mode'       => $r->payment_mode,
+                'date'       => $r->receipt_date,
+                'reference'  => $r->reference_no,
+                // EMI settlement tracking — only present when this receipt's
+                // payment is a Provider EMI, so mobile can show a "Mark as
+                // Received" action for the still-pending settlement.
+                'payment_id'         => $r->payment?->id,
+                'emi_type'           => $r->payment?->emi_type,
+                'provider_paid_at'   => $r->payment?->provider_paid_at,
+                'clinic_net_amount'  => $r->payment?->clinic_net_amount,
             ])->values(),
         ], '');
     }

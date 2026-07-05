@@ -6,6 +6,7 @@ use App\Models\AppSetting;
 use App\Models\Appointment;
 use App\Models\CommunicationQueue;
 use App\Models\LabCase;
+use App\Models\MessageTemplate;
 use App\Models\Patient;
 use App\Models\TreatmentPlanItem;
 use App\Models\TreatmentVisit;
@@ -26,12 +27,22 @@ use Illuminate\Support\Facades\Log;
  *   3. post_op_followup      — post-op check-up due (14 days after surgery visit)
  *   4. lab_received_no_appt  — lab case received but patient appointment not booked
  *   5. recent_tx_followup    — 7-day follow-up after treatment visit
- *   6. birthday_anniversary  — birthday or anniversary re-engagement
+ *   6. birthday              — birthday re-engagement
  *
  * Deduplication:
  *   Each trigger checks for an existing OPEN comm_queue item with the same
  *   patient_id + purpose combo before inserting. Also uses recall_queued_at
  *   timestamps on source records as a secondary cooldown gate.
+ *
+ * Message copy (2026-07-05 — Recall/Birthday Settings):
+ *   The `note` field on each queued item is staff-facing guidance (this
+ *   queue has no automatic send pipeline — see composeMessage() doc-comment
+ *   for why). Where a matching, active MessageTemplate exists
+ *   (type=recall|birthday), its rendered body is used as the
+ *   note instead of the old hardcoded sentence, so staff read/copy the
+ *   exact same wording that will eventually go out. If no template is
+ *   configured, the original hardcoded sentence is used — existing clinics
+ *   see zero behaviour change until they set up a template.
  *
  * Returns a summary array for logging/display.
  */
@@ -42,9 +53,6 @@ class RecallEngineService
 
     /** Birthday window: queue recall from 3 days before to birthday */
     private const BIRTHDAY_DAYS_AHEAD = 3;
-
-    /** Anniversary window: queue 7 days ahead */
-    private const ANNIVERSARY_DAYS_AHEAD = 7;
 
     /** Post-op: queue recall 14 days after a surgical visit */
     private const POST_OP_DAYS_AFTER = 14;
@@ -83,7 +91,7 @@ class RecallEngineService
         $this->recallPostOpFollowUp();
         $this->recallLabReceivedNoAppointment();
         $this->recallRecentTreatmentFollowUp();
-        $this->recallBirthdayAnniversary();
+        $this->recallBirthday();
 
         $total = array_sum($this->summary);
 
@@ -97,6 +105,18 @@ class RecallEngineService
     /**
      * Patients whose last_visit_date is 6+ months ago (or who have never visited).
      * Skips if already queued within cooldown window.
+     *
+     * NOTE (2026-07-05, Recall Settings): the "General Recall periodicity"
+     * field on the new Settings page (AppSetting `recall.general_days`,
+     * default 180) is currently DISPLAY-ONLY for this trigger — it does not
+     * yet change the 6-month cutoff below. The cutoff is duplicated
+     * verbatim in RecallAutomationRunner::runNoVisit() and is covered by an
+     * explicit shadow-parity contract (`automation:parity recall`); changing
+     * one without the other — or changing the const to a runtime value that
+     * could silently drift between the two paths — would break that parity
+     * guarantee. Wiring general_days into the actual cutoff needs a
+     * follow-up change to both files plus a fresh parity run, deliberately
+     * left out of this settings-UI slice.
      */
     private function recallNoVisit6Months(): void
     {
@@ -135,6 +155,13 @@ class RecallEngineService
                         ? Carbon::parse($patient->last_visit_date)->format('d M Y')
                         : 'never';
 
+                    $note = $this->composeMessage('recall', [
+                        'PatientName'      => $patient->name,
+                        'PatientFirstName' => explode(' ', trim($patient->name))[0] ?? $patient->name,
+                        'ContactNumber'    => $patient->phone,
+                        'RecallReason'     => "no visit since {$lastVisit}",
+                    ]) ?? "Patient has not visited since {$lastVisit}. Recall after 6 months of no activity.";
+
                     $this->createQueueItem([
                         'patient_id'    => $patient->id,
                         'person_name'   => $patient->name,
@@ -143,7 +170,7 @@ class RecallEngineService
                         'purpose'       => 'recall_no_visit',
                         'comm_type'     => 'existing_patient',
                         'priority'      => 'medium',
-                        'note'          => "Patient has not visited since {$lastVisit}. Recall after 6 months of no activity.",
+                        'note'          => $note,
                         'source_engine' => 'recall',
                         'tags'          => ['recall', 'no_visit_6m'],
                     ]);
@@ -396,20 +423,33 @@ class RecallEngineService
         $this->summary['recent_tx_followup'] = $count;
     }
 
-    // ── Trigger 6: Birthday / Anniversary ────────────────────────────────────
+    // ── Trigger 6: Birthday ──────────────────────────────────────────────────
 
     /**
-     * Patients whose birthday or anniversary (via patient notes) falls within
-     * the next N days. Queues a re-engagement recall.
-     * Cooldown: once per calendar year (tracked via recall_birthday_queued_at).
+     * Patients whose birthday falls within the next N days. Queues a
+     * re-engagement recall. Cooldown: once per calendar year (tracked via
+     * recall_birthday_queued_at).
+     *
+     * Gated by AppSetting `recall.birthday_enabled` (default ON, matching
+     * pre-2026-07-05 behaviour — this trigger always ran unconditionally
+     * before Birthday Settings existed). Window is now configurable via
+     * `recall.birthday_window_days` (falls back to the BIRTHDAY_DAYS_AHEAD
+     * const, which itself mirrors the still-separate
+     * relationship_rules.today_actions.birthday_window_days used by the
+     * Today's Actions display widget).
      */
-    private function recallBirthdayAnniversary(): void
+    private function recallBirthday(): void
     {
-        $count   = 0;
-        $today   = now();
+        if (AppSetting::get('recall.birthday_enabled', '1') !== '1') {
+            $this->summary['birthday'] = 0;
+            return;
+        }
 
-        // Birthday window: today + BIRTHDAY_DAYS_AHEAD days
-        $birthdayDates = collect(range(0, self::BIRTHDAY_DAYS_AHEAD))->map(
+        $count      = 0;
+        $today      = now();
+        $windowDays = (int) AppSetting::get('recall.birthday_window_days', self::BIRTHDAY_DAYS_AHEAD);
+
+        $birthdayDates = collect(range(0, $windowDays))->map(
             fn($d) => $today->copy()->addDays($d)->format('m-d')
         );
 
@@ -417,8 +457,8 @@ class RecallEngineService
             ->whereNotNull('phone')
             ->whereNotNull('date_of_birth')
             ->where(function ($q) use ($birthdayDates) {
+                // Match month-day regardless of year
                 foreach ($birthdayDates as $md) {
-                    // Match month-day regardless of year
                     $q->orWhereRaw("DATE_FORMAT(date_of_birth, '%m-%d') = ?", [$md]);
                 }
             })
@@ -437,6 +477,14 @@ class RecallEngineService
                     $birthdayStr = $dob->format('d M');
                     $age         = $dob->age;
 
+                    $note = $this->composeMessage('birthday', [
+                        'PatientName'      => $patient->name,
+                        'PatientFirstName' => explode(' ', trim($patient->name))[0] ?? $patient->name,
+                        'ContactNumber'    => $patient->phone,
+                        'Age'              => (string) $age,
+                    ]) ?? "Birthday recall — {$patient->name} turns {$age} on {$birthdayStr}. " .
+                           "Great opportunity for re-engagement.";
+
                     $this->createQueueItem([
                         'patient_id'      => $patient->id,
                         'person_name'     => $patient->name,
@@ -445,20 +493,19 @@ class RecallEngineService
                         'purpose'         => 'recall_birthday',
                         'comm_type'       => 'existing_patient',
                         'priority'        => 'low',
-                        'note'            => "Birthday recall — {$patient->name} turns {$age} on {$birthdayStr}. " .
-                                            "Great opportunity for re-engagement.",
+                        'note'            => $note,
                         'source_engine'   => 'recall',
                         'tags'            => ['recall', 'birthday'],
                     ]);
 
-                    $this->logRecallActivity($patient, 'birthday_anniversary');
+                    $this->logRecallActivity($patient, 'birthday');
 
                     $patient->update(['recall_birthday_queued_at' => now()]);
                     $count++;
                 }
             });
 
-        $this->summary['birthday_anniversary'] = $count;
+        $this->summary['birthday'] = $count;
     }
 
     // ── Manual entry point (staff-initiated, via PRE Recall Pipeline "+ Add Recall") ─
@@ -494,6 +541,37 @@ class RecallEngineService
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Render the active MessageTemplate for a given type (recall/birthday),
+     * filling in the tokens it declares support for. Returns
+     * null if no active template is configured for that type, so callers
+     * can `?? '<hardcoded fallback>'` without changing behaviour for
+     * clinics that haven't set one up yet.
+     *
+     * IMPORTANT: `communication_queue.note` (the only place this text is
+     * used today) is staff-facing guidance, not an auto-sent message — this
+     * app has no automatic WhatsApp/SMS send wired to the recall queue yet
+     * (confirmed: channel defaults to 'call', no OutboundMessageService
+     * call exists anywhere in this pipeline). Rendering the real template
+     * here means staff see/copy the exact wording that will be used once a
+     * send action is built, rather than a generic hardcoded sentence.
+     *
+     * @param  string  $type    MessageTemplate type: recall|birthday
+     * @param  array   $tokens  Token values keyed by token name (no delimiters)
+     */
+    private function composeMessage(string $type, array $tokens): ?string
+    {
+        $template = MessageTemplate::query()->ofType($type)->active()->first();
+
+        if (!$template) {
+            return null;
+        }
+
+        $tokens['ClinicName'] ??= AppSetting::get('clinic_name', config('clinic.name', 'the clinic'));
+
+        return $template->renderBody($tokens);
+    }
 
     /**
      * Check if an open (non-closed) queue item already exists for this

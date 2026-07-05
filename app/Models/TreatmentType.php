@@ -17,11 +17,13 @@ class TreatmentType extends Model
         'color',
         'is_active',
         'sort_order',
+        'recall_after_days', // Recall Settings — treatment-wise periodicity override
     ];
 
     protected $casts = [
-        'base_price' => 'decimal:2',
-        'is_active'  => 'boolean',
+        'base_price'        => 'decimal:2',
+        'is_active'         => 'boolean',
+        'recall_after_days' => 'integer',
     ];
 
     public function scopeActive($query)

@@ -8,7 +8,10 @@
 @endpush
 
 @section('content')
-    {{-- ── Back to PRM Dashboard (hidden on the dashboard itself) ── --}}
+    {{-- ── Back to Communication OS Dashboard (hidden on the dashboard itself) ──
+         Was "PRM Dashboard" — stale leftover from before the PRM board was
+         retired (Phase 8). This module is Communication OS, not PRM; fixed
+         2026-07-06. --}}
     @unless(request()->routeIs('communication.index'))
     <div style="padding:10px 24px 0; display:flex; align-items:center;">
         <a href="{{ route('communication.index') }}"
@@ -16,7 +19,7 @@
            onmouseover="this.style.background='#6a0f70';this.style.color='#fff';"
            onmouseout="this.style.background='#fdf4ff';this.style.color='#6a0f70';">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            PRM Dashboard
+            Back to Dashboard
         </a>
     </div>
     @endunless
