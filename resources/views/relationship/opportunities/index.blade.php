@@ -325,12 +325,18 @@
                 <h3 style="margin:0;font-size:17px;font-weight:700;color:#1f2937;font-family:'Cormorant Garamond',serif;">Convert to Lead</h3>
                 <button type="button" onclick="opCloseConvert()" style="border:none;background:none;font-size:18px;color:#9ca3af;cursor:pointer;line-height:1;">&times;</button>
             </div>
-            <p style="color:#6b7280;font-size:13px;margin:0 0 16px;">Moves this opportunity into the Lead Pipeline and marks it Converted.</p>
+            {{-- 2026-07-06: copy + default option updated alongside the
+                 convertToLead() bug fix (it no longer marks the opportunity
+                 "Converted" — see OpportunityPipelineController::convertToLead())
+                 and the Lead Pipeline's Appointment/Consultation stage merge
+                 (see LeadPipelineController::STAGES) — 'consultation' is no
+                 longer a valid Lead stage. --}}
+            <p style="color:#6b7280;font-size:13px;margin:0 0 16px;">Creates a new lead in the Lead Pipeline from this opportunity. This opportunity's own stage is left as-is — move or decline it separately if you want it off the open pipeline.</p>
             <label style="display:block;font-size:13px;font-weight:600;color:#1f2937;margin-bottom:6px;">Initial Pipeline Stage</label>
             <select id="opConvertStage" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;background:#fff;margin-bottom:18px;">
                 <option value="new_lead">New Lead</option>
                 <option value="contacted">Contacted</option>
-                <option value="consultation" selected>Consultation Booked</option>
+                <option value="appointment" selected>Appointment / Consultation Booked</option>
             </select>
             <div style="display:flex;gap:8px;">
                 <button type="button" id="opConvertSubmit" onclick="opSubmitConvert()"

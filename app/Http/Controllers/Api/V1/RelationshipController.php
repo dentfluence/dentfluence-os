@@ -67,11 +67,13 @@ class RelationshipController extends ApiController
      * never reaches into a web controller, matching this codebase's existing
      * "self-contained pipeline controller" convention.
      */
+    // 2026-07-06: 'consultation' merged into 'appointment' — see
+    // LeadPipelineController::STAGES (web) for the full reasoning; kept in
+    // sync here for mobile parity.
     private const LEAD_STAGES = [
         'new_lead'     => ['label' => 'New Lead',     'color' => '#534AB7', 'bg' => '#EEEDFE'],
         'contacted'    => ['label' => 'Contacted',    'color' => '#0F6E56', 'bg' => '#E1F5EE'],
-        'appointment'  => ['label' => 'Appointment',  'color' => '#854F0B', 'bg' => '#FAEEDA'],
-        'consultation' => ['label' => 'Consultation', 'color' => '#185FA5', 'bg' => '#E6F1FB'],
+        'appointment'  => ['label' => 'Appointment / Consultation', 'color' => '#854F0B', 'bg' => '#FAEEDA'],
         'plan_given'   => ['label' => 'Plan Given',   'color' => '#993556', 'bg' => '#FBEAF0'],
         'converted'    => ['label' => 'Converted',    'color' => '#3B6D11', 'bg' => '#EAF3DE'],
         'lost'         => ['label' => 'Lost',         'color' => '#8A1F1F', 'bg' => '#FDECEC'],
@@ -677,7 +679,19 @@ class RelationshipController extends ApiController
         $opp = TreatmentOpportunity::with(['patient', 'assignedStaff'])->findOrFail($id);
 
         $leadId = DB::transaction(function () use ($opp, $request) {
-            $opp->update(['status' => 'completed']);
+            // 2026-07-06 bug fix — see OpportunityPipelineController::convertToLead()
+            // for the full reasoning: don't overload 'completed'/Converted with
+            // "sent to a Lead instead" — that's a different real event and it was
+            // corrupting the Converted (MTD) figure. Stage is left untouched;
+            // the conversion is logged to the Timeline instead.
+            app(ActivityEngine::class)->log(
+                subject       : $opp,
+                event         : 'opportunity.sent_to_lead',
+                actor         : $request->user(),
+                metadata      : ['opportunity_id' => $opp->id],
+                relationshipId: $opp->relationship_id,
+                description   : "Opportunity #{$opp->id} sent to Lead Pipeline as a new lead (stage left unchanged).",
+            );
 
             $assignedName = $request->filled('assigned_to')
                 ? User::find($request->input('assigned_to'))?->name

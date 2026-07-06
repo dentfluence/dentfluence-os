@@ -89,11 +89,19 @@ class LeadPipelineController extends Controller
      * PRE board shows the full picture. Kept local (self-contained) so this
      * slice never reaches into the PRM controller.
      */
+    // 2026-07-06: 'consultation' merged into 'appointment' at Sumit's/staff's
+    // call — for a lead, booking the appointment already means booking the
+    // consultation, so tracking them as two separate manual stages was asking
+    // staff to do the same bookkeeping twice for one real event. Existing
+    // leads sitting at 'consultation' are backfilled to 'appointment' by
+    // database/migrations/2026_07_06_100003_merge_lead_consultation_stage.php.
+    // See docs/feature-specs/ discussion for the fuller reasoning, incl. the
+    // known trade-off: this drops the narrow "consultation happened but no
+    // plan drafted yet" signal — accepted deliberately, not an oversight.
     private const STAGES = [
         'new_lead'     => ['label' => 'New Lead',     'color' => '#534AB7', 'bg' => '#EEEDFE'],
         'contacted'    => ['label' => 'Contacted',    'color' => '#0F6E56', 'bg' => '#E1F5EE'],
-        'appointment'  => ['label' => 'Appointment',  'color' => '#854F0B', 'bg' => '#FAEEDA'],
-        'consultation' => ['label' => 'Consultation', 'color' => '#185FA5', 'bg' => '#E6F1FB'],
+        'appointment'  => ['label' => 'Appointment / Consultation', 'color' => '#854F0B', 'bg' => '#FAEEDA'],
         'plan_given'   => ['label' => 'Plan Given',   'color' => '#993556', 'bg' => '#FBEAF0'],
         'converted'    => ['label' => 'Converted',    'color' => '#3B6D11', 'bg' => '#EAF3DE'],
         'lost'         => ['label' => 'Lost',         'color' => '#8A1F1F', 'bg' => '#FDECEC'],

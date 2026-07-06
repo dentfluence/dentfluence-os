@@ -358,6 +358,18 @@ return [
 
         // ── PRM live stage keys (match Lead pipeline stages) ──────────────────
         // These keys mirror the actual PRM stages so stage changes fire rules.
+        //
+        // 2026-07-06: 'consultation' was merged into 'appointment' (see
+        // LeadPipelineController::STAGES) — staff felt booking the appointment
+        // already meant booking the consultation, so a second manual stage for
+        // the same real-world event was just extra bookkeeping. Its old
+        // "Post-Consultation Follow-up" rule (day+1, gauge interest) is
+        // deliberately NOT carried forward: with only one stage entered at
+        // booking time, there's no clean event left to hang a post-visit
+        // reminder on. The "Plan Given" rule below already covers pushing a
+        // stalled decision. Known, accepted gap: a consultation that happens
+        // but never gets a plan drafted (doctor stalls) no longer has its own
+        // nudge — revisit only if that proves to be a real, recurring problem.
         'appointment' => [
             [
                 'label'       => 'Appointment Reminder',
@@ -365,17 +377,6 @@ return [
                 'channel'     => 'call',
                 'priority'    => 'high',
                 'note'        => 'Confirm the upcoming appointment with the lead.',
-                'appears_in'  => ['communication_manager', 'daily_huddle'],
-            ],
-        ],
-
-        'consultation' => [
-            [
-                'label'       => 'Post-Consultation Follow-up',
-                'day_offset'  => 1,
-                'channel'     => 'call',
-                'priority'    => 'high',
-                'note'        => 'Follow up after consultation — gauge interest and next step.',
                 'appears_in'  => ['communication_manager', 'daily_huddle'],
             ],
         ],

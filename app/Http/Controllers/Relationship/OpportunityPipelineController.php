@@ -265,7 +265,27 @@ class OpportunityPipelineController extends Controller
         $opp = TreatmentOpportunity::with(['patient', 'assignedStaff'])->findOrFail($id);
 
         DB::transaction(function () use ($opp, $request) {
-            $opp->update(['status' => 'completed']);
+            // 2026-07-06 bug fix: this used to set status => 'completed', which
+            // shares the "Converted" label/column with treatments that actually
+            // got delivered — silently inflating the "Converted (MTD)" dashboard
+            // number with opportunities that were merely routed to a Lead, not
+            // sold. "Sent to a Lead" and "treatment delivered" are different real
+            // events and must not share one status value. Rather than add a new
+            // enum value (treatment_opportunities.status is a DB-level ENUM —
+            // that needs its own migration + a call on whether it gets its own
+            // board column), this leaves the opportunity's stage untouched: it
+            // stays visible wherever it was, and staff can manually move it to
+            // Declined (with a reason) once the Lead is the active record if they
+            // want it off the open pipeline. The conversion itself is logged to
+            // the Timeline below so it's never silently lost.
+            app(ActivityEngine::class)->log(
+                subject       : $opp,
+                event         : 'opportunity.sent_to_lead',
+                actor         : Auth::user(),
+                metadata      : ['opportunity_id' => $opp->id],
+                relationshipId: $opp->relationship_id,
+                description   : "Opportunity #{$opp->id} sent to Lead Pipeline as a new lead (stage left unchanged).",
+            );
 
             // Lead::assigned_to is a plain staff-name string (unlike TreatmentOpportunity's
             // FK column of the same name) — resolve to a name before saving.
