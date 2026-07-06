@@ -14,6 +14,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visit — {{ $visit->patient->name ?? 'Patient' }}</title>
+    @php $pm = \App\Models\AppSetting::printMargins(['top' => '16mm', 'bottom' => '16mm', 'left' => '14mm', 'right' => '14mm']); @endphp
 
     {{-- ── Apply personalisation colour scheme (same source as the app) ── --}}
     <script>
@@ -171,7 +172,7 @@
             /* Margin is baked into the body padding (not @page) so the browser's
                "Margins" dropdown — even "None" — can't strip the top/bottom space. */
             @page { size: A4; margin: 0; }
-            body { padding: 16mm 14mm; max-width: none; margin: 0; }
+            body { padding: {{ $pm['top'] }} {{ $pm['right'] }} {{ $pm['bottom'] }} {{ $pm['left'] }}; max-width: none; margin: 0; }
             .cp-section { page-break-inside: avoid; }
             .cp-chip, .cp-pill, .cp-section-title, .cp-table th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }

@@ -94,11 +94,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/',                              [PrescriptionController::class, 'index'])->name('index');
         Route::get('/create',                        [PrescriptionController::class, 'create'])->name('create');
         Route::post('/',                             [PrescriptionController::class, 'store'])->name('store');
-        Route::post('/quick',                        [PrescriptionController::class, 'storeQuick'])->name('quick');
         Route::get('/{prescription}',                [PrescriptionController::class, 'show'])->name('show');
         Route::get('/{prescription}/edit',           [PrescriptionController::class, 'edit'])->name('edit');
         Route::put('/{prescription}',                [PrescriptionController::class, 'update'])->name('update');
-        Route::post('/{prescription}/finalize',      [PrescriptionController::class, 'finalize'])->name('finalize');
         Route::post('/{prescription}/repeat',        [PrescriptionController::class, 'repeat'])->name('repeat');
         Route::get('/{prescription}/print',          [PrescriptionController::class, 'printView'])->name('print');
         Route::get('/{prescription}/pdf',            [PrescriptionController::class, 'downloadPdf'])->name('pdf');

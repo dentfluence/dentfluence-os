@@ -7,6 +7,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Treatment Plan — {{ $patient->name ?? 'Patient' }}</title>
+    @php $pm = \App\Models\AppSetting::printMargins(['top' => '14mm', 'bottom' => '14mm', 'left' => '14mm', 'right' => '14mm']); @endphp
 
     {{-- ── Apply personalisation colour scheme (same source as the app: localStorage df_prefs) ── --}}
     <script>
@@ -213,8 +214,8 @@
         /* ── Print media ── */
         @media print {
             .no-print { display: none !important; }
-            body { padding: 16px; }
-            @page { size: A4; margin: 14mm; }
+            body { padding: {{ $pm['top'] }} {{ $pm['right'] }} {{ $pm['bottom'] }} {{ $pm['left'] }}; }
+            @page { size: A4; margin: 0; }
             .opt-block { page-break-inside: avoid; }
             table.tx-table th,
             tr.tx-total td,

@@ -1331,6 +1331,19 @@ window.__APPT_DATA = {
     <div style="background:#fff;border-radius:10px;width:380px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25);">
         <h3 style="font-size:15px;font-weight:700;color:#1e293b;margin:0 0 4px;">Cancel Appointment</h3>
         <p style="font-size:12px;color:#64748b;margin:0 0 16px;" id="crm-patient-name">—</p>
+
+        <label style="font-size:11.5px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Cancelled by *</label>
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+            <button type="button" id="crm-party-patient" onclick="setCancelParty('patient')"
+                    style="flex:1;padding:8px;border:1.5px solid #d1d5db;background:#fff;border-radius:6px;font-size:12.5px;font-weight:600;color:#374151;cursor:pointer;">
+                Patient
+            </button>
+            <button type="button" id="crm-party-clinic" onclick="setCancelParty('clinic')"
+                    style="flex:1;padding:8px;border:1.5px solid #d1d5db;background:#fff;border-radius:6px;font-size:12.5px;font-weight:600;color:#374151;cursor:pointer;">
+                Clinic
+            </button>
+        </div>
+
         <label style="font-size:11.5px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Reason for cancellation *</label>
         <textarea id="crm-reason" rows="3" placeholder="e.g. Patient requested reschedule, Doctor unavailable…"
                   style="width:100%;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:6px;font-size:13px;resize:none;outline:none;box-sizing:border-box;font-family:inherit;"
@@ -1851,12 +1864,29 @@ function qvcEdit() {
 
 // ── Cancel with reason ───────────────────────────────────────────
 let _cancelAptId = null;
+let _cancelParty = null;
+
+function _styleCancelPartyBtn(btn, active) {
+    btn.style.borderColor = active ? '#6a0f70' : '#d1d5db';
+    btn.style.background  = active ? '#f5eefb' : '#fff';
+    btn.style.color       = active ? '#6a0f70' : '#374151';
+}
+
+function setCancelParty(party) {
+    _cancelParty = party;
+    _styleCancelPartyBtn(document.getElementById('crm-party-patient'), party === 'patient');
+    _styleCancelPartyBtn(document.getElementById('crm-party-clinic'), party === 'clinic');
+    document.getElementById('crm-error').style.display = 'none';
+}
+
 function qvcCancel() {
     if (!qvcCurrentApt) return;
     _cancelAptId = qvcCurrentApt.id;
+    _cancelParty = null;
     document.getElementById('crm-patient-name').textContent = qvcCurrentApt.patient_name + ' — ' + qvcCurrentApt.appointment_time;
     document.getElementById('crm-reason').value = '';
     document.getElementById('crm-error').style.display = 'none';
+    setCancelParty(null); // reset button styling
     hideQuickView();
     const modal = document.getElementById('cancel-reason-modal');
     modal.style.display = 'flex';
@@ -1865,11 +1895,13 @@ function qvcCancel() {
 function closeCancelModal() {
     document.getElementById('cancel-reason-modal').style.display = 'none';
     _cancelAptId = null;
+    _cancelParty = null;
 }
 
 async function submitCancel() {
     const reason = document.getElementById('crm-reason').value.trim();
     const errEl  = document.getElementById('crm-error');
+    if (!_cancelParty) { errEl.textContent = 'Please select who cancelled — Patient or Clinic.'; errEl.style.display = 'block'; return; }
     if (!reason) { errEl.textContent = 'Please enter a reason.'; errEl.style.display = 'block'; return; }
     errEl.style.display = 'none';
 
@@ -1878,14 +1910,14 @@ async function submitCancel() {
         const r = await fetch(url, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken },
-            body: JSON.stringify({ cancel_reason: reason }),
+            body: JSON.stringify({ cancel_reason: reason, cancelled_party: _cancelParty }),
         });
         const data = await r.json();
         if (data.ok) {
             closeCancelModal();
             // Update in-memory + calendar
             const apt = window.__APPT_DATA.appointments.find(a => a.id === _cancelAptId);
-            if (apt) { apt.status = 'cancelled'; apt.cancel_reason = reason; }
+            if (apt) { apt.status = 'cancelled'; apt.cancel_reason = reason; apt.cancelled_party = data.appointment?.cancelled_party; }
             if (window.calendar) window.calendar.refetchEvents();
             if (window._apptApp) { window._apptApp.refreshQueue(); window._apptApp.refreshCounts(); }
         } else {

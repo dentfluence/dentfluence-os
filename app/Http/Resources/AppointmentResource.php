@@ -60,6 +60,7 @@ class AppointmentResource extends JsonResource
             'notes'                 => $this->notes,
             'chief_complaint'       => $this->chief_complaint,
             'cancel_reason'         => $this->cancel_reason,
+            'cancelled_party'       => $this->cancelled_party,
 
             // Lifecycle timestamps (HH:MM, today-friendly)
             'checked_in_at'         => $this->checked_in_at?->format('H:i'),

@@ -111,6 +111,13 @@
             <span class="text-gray-700 font-medium">Patient Profile</span>
         </div>
         <div class="flex gap-2">
+            {{-- Relationship Profile (PRE) — Timeline, Journeys, Communication, Tasks --}}
+            @if($patient->relationship_id)
+            <a href="{{ route('relationship.profile', $patient->relationship_id) }}"
+               class="px-4 py-2 text-sm border border-gray-300 text-gray-700 hover:border-[#6a0f70] hover:text-[#6a0f70] transition-colors bg-white font-medium">
+                Relationship Profile
+            </a>
+            @endif
             {{-- Print patient profile --}}
             <a href="{{ route('patients.print', $patient) }}" target="_blank"
                class="px-4 py-2 text-sm border border-gray-300 text-gray-700 hover:border-[#6a0f70] hover:text-[#6a0f70] transition-colors bg-white font-medium">
@@ -1396,15 +1403,15 @@
      PRESCRIPTIONS TAB
 ════════════════════════════════════ --}}
 <div x-show="activeTab === 'prescriptions'" style="display:none" class="w-full px-6 py-5">
-    <div class="max-w-4xl mx-auto" x-data="{ showNewRx: false }">
+    <div class="max-w-4xl mx-auto" x-data="{ activeForm: null }">
 
         {{-- ── Tab header ── --}}
         <div class="flex items-center justify-between mb-4">
             <h2 class="text-base font-semibold text-gray-800">Prescriptions</h2>
-            <button @click="showNewRx = !showNewRx"
+            <button @click="activeForm = (activeForm === 'new' ? null : 'new')"
                     dusk="rx-new-toggle"
                     class="text-sm px-3 py-1.5 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition"
-                    x-text="showNewRx ? 'Cancel' : '+ New Prescription'">
+                    x-text="activeForm === 'new' ? 'Cancel' : '+ New Prescription'">
             </button>
         </div>
 
@@ -1417,55 +1424,18 @@
         @endif
 
         {{-- ── Inline Quick Prescription Form ── --}}
-        <div x-show="showNewRx" x-cloak
+        <div x-show="activeForm === 'new'" x-cloak
              x-transition:enter="transition ease-out duration-150"
              x-transition:enter-start="opacity-0 -translate-y-1"
              x-transition:enter-end="opacity-100 translate-y-0"
              class="mb-5">
-
-            <form method="POST" action="{{ route('patients.prescriptions.quick', $patient) }}">
-                @csrf
-
-                {{-- Quick context: complaint + diagnosis --}}
-                <div class="grid grid-cols-2 gap-3 mb-3">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Chief Complaint <span class="text-gray-400 font-normal">(optional)</span></label>
-                        <input type="text" name="chief_complaint"
-                               value="{{ old('chief_complaint') }}"
-                               placeholder="e.g. Post-extraction pain"
-                               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-300 bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Diagnosis <span class="text-gray-400 font-normal">(optional)</span></label>
-                        <input type="text" name="diagnosis"
-                               value="{{ old('diagnosis') }}"
-                               placeholder="e.g. Acute pulpitis"
-                               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-300 bg-white">
-                    </div>
-                </div>
-
-                {{-- Universal prescription panel --}}
-                <x-prescription-panel
-                    prefix="prescriptions_data"
-                    note-field="prescription_notes"
-                    instruct-field="instructions_data"
-                    :collapsible="false"
-                    :start-open="true"
-                />
-
-                {{-- Save button --}}
-                <div class="mt-3 flex justify-end gap-2">
-                    <button type="button" @click="showNewRx = false"
-                            class="text-sm px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition">
-                        Cancel
-                    </button>
-                    <button type="submit"
-                            dusk="rx-save"
-                            class="text-sm px-5 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition">
-                        Save Prescription
-                    </button>
-                </div>
-            </form>
+            @include('prescriptions.partials.quick-form', [
+                'patient'      => $patient,
+                'prescription' => null,
+                'formAction'   => route('patients.prescriptions.store', $patient),
+                'formMethod'   => 'POST',
+                'cancelUrl'    => null,
+            ])
         </div>
 
         {{-- ── Past Prescriptions List ── --}}
@@ -1569,15 +1539,33 @@
                         View
                     </a>
 
-                    {{-- Edit (draft only) --}}
-                    @if($rx->isDraft())
-                    <a href="{{ route('patients.prescriptions.edit', [$patient, $rx]) }}"
-                       class="text-xs px-2.5 py-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition">
-                        Edit
-                    </a>
+                    {{-- Edit (always available unless cancelled) — toggles the same inline form used for New Prescription --}}
+                    @if(!$rx->isCancelled())
+                    <button type="button"
+                            @click="activeForm = (activeForm === {{ $rx->id }} ? null : {{ $rx->id }})"
+                            class="text-xs px-2.5 py-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition"
+                            x-text="activeForm === {{ $rx->id }} ? 'Cancel' : 'Edit'">
+                    </button>
                     @endif
                 </div>
             </div>
+
+            {{-- Inline edit form for this Rx — same component as "+ New Prescription" --}}
+            @if(!$rx->isCancelled())
+            <div x-show="activeForm === {{ $rx->id }}" x-cloak
+                 x-transition:enter="transition ease-out duration-150"
+                 x-transition:enter-start="opacity-0 -translate-y-1"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 class="bg-white border border-red-100 rounded-xl p-4 -mt-1">
+                @include('prescriptions.partials.quick-form', [
+                    'patient'      => $patient,
+                    'prescription' => $rx,
+                    'formAction'   => route('patients.prescriptions.update', [$patient, $rx]),
+                    'formMethod'   => 'PUT',
+                    'cancelUrl'    => null,
+                ])
+            </div>
+            @endif
             @endforeach
         </div>
 
@@ -1592,7 +1580,7 @@
         <div class="text-center py-12 text-gray-400">
             <p class="text-3xl mb-2"></p>
             <p class="text-sm font-medium">No prescriptions yet</p>
-            <button @click="showNewRx = true"
+            <button @click="activeForm = 'new'"
                     class="mt-3 inline-block text-sm text-red-600 hover:underline">
                 Write the first prescription →
             </button>

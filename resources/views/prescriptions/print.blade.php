@@ -7,6 +7,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ $prescription->prescription_number }} — {{ $patient->name }}</title>
+    @php $pm = \App\Models\AppSetting::printMargins(['top' => '10mm', 'bottom' => '10mm', 'left' => '12mm', 'right' => '12mm']); @endphp
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -176,7 +177,7 @@
         /* ── Print media ── */
         @media print {
             .screen-toolbar { display: none !important; }
-            body { padding: 10mm 12mm; }
+            body { padding: {{ $pm['top'] }} {{ $pm['right'] }} {{ $pm['bottom'] }} {{ $pm['left'] }}; }
             @page { margin: 0; }
         }
     </style>
@@ -311,14 +312,17 @@
             <tr>
                 <td style="color:#94a3b8;">{{ $i + 1 }}.</td>
                 <td>
+                    @php
+                        $form = $item->dosage_form ?: ($item->drug?->dosage_form ?? '');
+                        $name = $item->drug_name ?: ($item->drug?->brand_name ?? '—');
+                    @endphp
                     <span class="drug-name">
-                        {{ $item->drug_name ?: ($item->drug?->brand_name ?? '—') }}
+                        {{ $form ? $form.' ' : '' }}{{ $name }}
                     </span>
-                    @if($item->generic_name)
-                        <div class="drug-sub">({{ $item->generic_name }})</div>
-                    @endif
-                    @if($item->strength)
-                        <div class="drug-sub">{{ $item->strength }}{{ $item->dosage_form ? ' · '.$item->dosage_form : '' }}</div>
+                    @if($item->generic_name || $item->strength)
+                        <div class="drug-sub">
+                            {{ $item->generic_name }}{{ $item->generic_name && $item->strength ? ' · ' : '' }}{{ $item->strength }}
+                        </div>
                     @endif
                     @if($item->food_advice || $item->instructions)
                         <div class="drug-sub" style="margin-top:2px;">
@@ -356,8 +360,8 @@
     {{-- Footer --}}
     <div class="rx-footer">
         <div class="follow-up">
-            @if($prescription->follow_up_date)
-                Follow-up: <strong>{{ \Carbon\Carbon::parse($prescription->follow_up_date)->format('d M Y') }}</strong>
+            @if($prescription->follow_up_date || $prescription->follow_up_after_days)
+                Follow-up: <strong>{{ $prescription->followUpLabel() }}</strong>
             @else
                 Follow-up as advised
             @endif

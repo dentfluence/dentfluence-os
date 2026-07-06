@@ -8,10 +8,20 @@ use App\Models\Patient;
 use App\Models\User;
 use App\Models\TreatmentVisit;
 use App\Models\Consultation;
+use App\Traits\Auditable;
 
 class Prescription extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, Auditable;
+
+    /**
+     * Tag audit-log entries for this model with the "prescriptions" module.
+     * Note: this is complementary to, not a replacement for, the existing
+     * prescription_audit_logs table (see auditLogs() below) — that one narrates
+     * business events (issued/repeated/whatsapp_sent), this one is the generic
+     * forensic diff (who changed which field, from what device/IP).
+     */
+    protected $auditModule = 'prescriptions';
 
     protected $table = 'prescriptions';
 
@@ -35,7 +45,7 @@ class Prescription extends Model
         'prescription_number',
         'patient_id', 'visit_id', 'consultation_id',
         'prescribed_by',
-        'diagnosis', 'chief_complaint', 'follow_up_date',
+        'diagnosis', 'chief_complaint', 'follow_up_date', 'follow_up_after_days',
         'general_instructions', 'language',
         'source', 'status',
         'printed_at', 'print_count',
@@ -120,6 +130,24 @@ class Prescription extends Model
             self::SOURCE_POST_OP      => 'Post-Op',
             default                   => ucfirst(str_replace('_', ' ', $this->source ?? '—')),
         };
+    }
+
+    /**
+     * Human-readable follow-up line for print/WhatsApp.
+     * Prefers an exact date; falls back to the informal "after N days" note;
+     * otherwise the generic default. This is a note only — no appointment/reminder is created.
+     */
+    public function followUpLabel(): string
+    {
+        if ($this->follow_up_date) {
+            return \Carbon\Carbon::parse($this->follow_up_date)->format('d M Y');
+        }
+
+        if ($this->follow_up_after_days) {
+            return 'After ' . $this->follow_up_after_days . ' day' . ($this->follow_up_after_days > 1 ? 's' : '');
+        }
+
+        return 'As advised';
     }
 
     // ── Number generation ─────────────────────────────────────────────────────

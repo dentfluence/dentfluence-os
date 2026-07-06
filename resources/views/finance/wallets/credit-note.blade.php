@@ -7,6 +7,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Credit Note — {{ $patient->name }}</title>
+    @php $pm = \App\Models\AppSetting::printMargins(['top' => '24px', 'bottom' => '24px', 'left' => '32px', 'right' => '32px']); @endphp
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -202,7 +203,8 @@
         @media print {
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none !important; }
-            .page { padding: 24px 32px; }
+            .page { padding: {{ $pm['top'] }} {{ $pm['right'] }} {{ $pm['bottom'] }} {{ $pm['left'] }}; }
+            @page { size: A4; margin: 0; }
         }
     </style>
 </head>

@@ -7,6 +7,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Final Bill {{ $finalBill->bill_number }}</title>
+    @php $pm = \App\Models\AppSetting::printMargins(['top' => '12mm', 'bottom' => '12mm', 'left' => '12mm', 'right' => '12mm']); @endphp
     {{-- Apply the user's personalisation colour scheme (saved client-side in localStorage) --}}
     <script>
     (function () {
@@ -192,9 +193,9 @@
         }
 
         @media print {
-            body { padding: 16px; }
+            body { padding: {{ $pm['top'] }} {{ $pm['right'] }} {{ $pm['bottom'] }} {{ $pm['left'] }}; }
             .print-actions { display: none !important; }
-            @page { margin: 12mm; }
+            @page { margin: 0; }
         }
     </style>
 </head>

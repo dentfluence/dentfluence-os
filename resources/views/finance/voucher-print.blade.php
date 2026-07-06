@@ -7,6 +7,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voucher {{ $voucher->voucher_number }}</title>
+    @php $pm = \App\Models\AppSetting::printMargins(['top' => '15mm', 'bottom' => '15mm', 'left' => '12mm', 'right' => '12mm']); @endphp
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -97,11 +98,11 @@
         .btn-close { background: #e5e7eb; color: #333; }
         @page {
             size: A4 portrait;
-            margin: 15mm 12mm;
+            margin: 0;
         }
         @media print {
             .print-actions { display: none; }
-            body { padding: 0; background: #fff; }
+            body { padding: {{ $pm['top'] }} {{ $pm['right'] }} {{ $pm['bottom'] }} {{ $pm['left'] }}; background: #fff; }
             .voucher {
                 max-width: 100%;
                 width: 100%;

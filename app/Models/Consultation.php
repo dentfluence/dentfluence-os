@@ -9,7 +9,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Consultation extends Model
 {
-    use HasFactory, SoftDeletes, \App\Traits\BelongsToBranch;
+    use HasFactory, SoftDeletes, \App\Traits\BelongsToBranch, \App\Traits\Auditable;
+
+    /** Tag audit-log entries for this model with the "consultations" module. */
+    protected $auditModule = 'consultations';
 
     // ──────────────────────────────────────────────────────────────────────────
     // ↓↓↓  MERGE YOUR EXISTING $fillable / $casts / scopes / accessors BELOW ↓↓↓

@@ -6,6 +6,7 @@ use App\Models\Appointment;
 use App\Models\DoctorBlockedSlot;
 use App\Models\Patient;
 use App\Models\User;
+use App\Services\Relationship\AppointmentActivityLogger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
@@ -26,6 +27,8 @@ class AppointmentService
 {
     /** The eager-loads every appointment payload needs. */
     private const WITH = ['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'];
+
+    public function __construct(private AppointmentActivityLogger $activityLogger) {}
 
     /**
      * Branch-scoped, filtered, ordered appointment query.
@@ -116,6 +119,8 @@ class AppointmentService
             'chief_complaint'       => $in['chief_complaint'] ?? null,
         ]);
 
+        $this->activityLogger->booked($appointment, $actor);
+
         return $appointment->load(self::WITH);
     }
 
@@ -123,7 +128,7 @@ class AppointmentService
      * Move an appointment through its status lifecycle, stamping the relevant
      * time field. Saves the old status so the web "revert" button still works.
      */
-    public function updateStatus(Appointment $appointment, string $status): Appointment
+    public function updateStatus(Appointment $appointment, string $status, ?User $actor = null): Appointment
     {
         $update = [
             'previous_status' => $appointment->status,
@@ -139,17 +144,26 @@ class AppointmentService
 
         $appointment->update($update);
 
+        match ($status) {
+            'checkin' => $this->activityLogger->checkedIn($appointment, $actor),
+            'done'    => $this->activityLogger->completed($appointment, $actor),
+            default   => null,
+        };
+
         return $appointment->fresh()->load(self::WITH);
     }
 
-    /** Cancel an appointment, recording the reason. */
-    public function cancel(Appointment $appointment, string $reason): Appointment
+    /** Cancel an appointment, recording the reason and who initiated it. */
+    public function cancel(Appointment $appointment, string $reason, ?string $cancelledParty = null, ?User $actor = null): Appointment
     {
         $appointment->update([
             'previous_status' => $appointment->status,
             'status'          => 'cancelled',
             'cancel_reason'   => $reason,
+            'cancelled_party' => $cancelledParty,
         ]);
+
+        $this->activityLogger->cancelled($appointment, $actor, $reason, $cancelledParty);
 
         return $appointment->fresh()->load(self::WITH);
     }
@@ -196,6 +210,8 @@ class AppointmentService
             'operatory_id'          => $in['operatory_id'] ?? null,
             'notes'                 => $in['notes'] ?? 'Walk-in',
         ]);
+
+        $this->activityLogger->booked($appointment, $actor);
 
         return $appointment->load(self::WITH);
     }

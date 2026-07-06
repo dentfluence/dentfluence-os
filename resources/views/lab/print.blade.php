@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lab Case — {{ $labCase->case_number }}</title>
+    @php $pm = \App\Models\AppSetting::printMargins(['top' => '14mm', 'bottom' => '14mm', 'left' => '14mm', 'right' => '14mm']); @endphp
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #1e0a2c; background: #fff; padding: 32px; }
@@ -45,7 +46,8 @@
         .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #ede4f3; font-size: 10.5px; color: #bbb; text-align: center; }
 
         @media print {
-            body { padding: 16px; }
+            body { padding: {{ $pm['top'] }} {{ $pm['right'] }} {{ $pm['bottom'] }} {{ $pm['left'] }}; }
+            @page { size: A4; margin: 0; }
             .no-print { display: none !important; }
         }
     </style>

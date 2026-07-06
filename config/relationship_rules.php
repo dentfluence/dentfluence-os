@@ -251,6 +251,17 @@ return [
         /*
          * 4. Appointment reminder call — 1 day before a booked appointment.
          *    Reduces no-shows. Complement to AppointmentReminderEngine bulk job.
+         *
+         *    PAUSED 2026-07-06: 'appointment.booked' was never actually dispatched
+         *    until today (see AppointmentActivityLogger) — this rule has been
+         *    silently dormant. Left disabled rather than let it activate
+         *    unreviewed, because: (1) resolveDueDate() reads $context['event_date'],
+         *    but the metadata this event ships is keyed 'appointment_date' — as
+         *    wired today this rule would compute due_date from today() instead of
+         *    the appointment date, i.e. "1 day before" becomes "yesterday" for
+         *    every booking; (2) it may duplicate the existing bulk
+         *    AppointmentReminderEngine reminders. Fix the context key and confirm
+         *    no duplication with Sumit before flipping this back on.
          */
         'appointment_reminder' => [
             'trigger'       => 'appointment.booked',
@@ -263,7 +274,7 @@ return [
                 'days_after' => -1,   // negative = days BEFORE the event date
             ],
             'cooldown_days' => 1,
-            'enabled'       => true,
+            'enabled'       => false,
         ],
 
         /*

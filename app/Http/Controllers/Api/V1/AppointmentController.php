@@ -111,7 +111,7 @@ class AppointmentController extends ApiController
             'status' => ['required', 'in:scheduled,checkin,in_chair,checkout,done,cancelled,no_show'],
         ]);
 
-        $updated = $this->appointments->updateStatus($model, $data['status']);
+        $updated = $this->appointments->updateStatus($model, $data['status'], $request->user());
 
         return $this->success(
             new AppointmentResource($updated),
@@ -127,10 +127,11 @@ class AppointmentController extends ApiController
         $model = $this->findInBranch($request, $appointment);
 
         $data = $request->validate([
-            'cancel_reason' => ['required', 'string', 'max:500'],
+            'cancel_reason'   => ['required', 'string', 'max:500'],
+            'cancelled_party' => ['required', 'in:patient,clinic'],
         ]);
 
-        $cancelled = $this->appointments->cancel($model, $data['cancel_reason']);
+        $cancelled = $this->appointments->cancel($model, $data['cancel_reason'], $data['cancelled_party'], $request->user());
 
         return $this->success(new AppointmentResource($cancelled), 'Appointment cancelled.');
     }

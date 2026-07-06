@@ -115,6 +115,9 @@ class OutcomeAutomationService
     {
         if ($patient && !empty($options['doctor_id']) && !empty($options['appointment_date']) && !empty($options['appointment_time'])) {
             try {
+                // Note: AppointmentService::create() already logs 'appointment.booked'
+                // to the ActivityEngine (2026-07-06) — do not log it again here, or
+                // every recall-outcome booking would show twice on the Timeline.
                 $appointment = $this->appointmentService->create([
                     'patient_id'       => $patient->id,
                     'doctor_id'        => $options['doctor_id'],
@@ -122,15 +125,6 @@ class OutcomeAutomationService
                     'appointment_time' => $options['appointment_time'],
                     'notes'            => 'Booked from recall call outcome (PRE).',
                 ], $actor);
-
-                $this->activityEngine->log(
-                    subject:        $patient,
-                    event:          'appointment.booked',
-                    actor:          $actor,
-                    metadata:       ['appointment_id' => $appointment->id, 'source' => 'recall_outcome'],
-                    relationshipId: $patient->relationship_id,
-                    description:    'Appointment booked from recall call.',
-                );
 
                 $result['actions'][] = 'appointment_created:' . $appointment->id;
             } catch (\Throwable $e) {

@@ -10,7 +10,10 @@ use Illuminate\Database\Eloquent\Builder;
 
 class Task extends Model
 {
-    use SoftDeletes, \App\Traits\BelongsToBranch;
+    use SoftDeletes, \App\Traits\BelongsToBranch, \App\Traits\Auditable;
+
+    /** Tag audit-log entries for this model with the "tasks" module. */
+    protected $auditModule = 'tasks';
 
     protected $fillable = [
         'title',

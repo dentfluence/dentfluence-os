@@ -9,12 +9,15 @@ use App\Models\Operatory;
 use App\Models\Patient;
 use App\Models\TreatmentCategory;
 use App\Models\User;
+use App\Services\Relationship\AppointmentActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 
 class AppointmentController extends Controller
 {
+    public function __construct(private AppointmentActivityLogger $activityLogger) {}
+
     // ── Index / Calendar view ────────────────────────────────────
     public function index(Request $request)
     {
@@ -158,6 +161,8 @@ class AppointmentController extends Controller
                 'checked_in_at'        => now(),
             ]);
 
+            $this->activityLogger->booked($appointment, Auth::user());
+
             if ($request->expectsJson()) {
                 return response()->json([
                     'success'      => true,
@@ -209,6 +214,8 @@ class AppointmentController extends Controller
                 'checked_in_at'        => now(),
             ]);
 
+            $this->activityLogger->booked($appointment, Auth::user());
+
             if ($request->expectsJson()) {
                 return response()->json([
                     'success'     => true,
@@ -252,6 +259,8 @@ class AppointmentController extends Controller
 
         $appointment = Appointment::create($data);
 
+        $this->activityLogger->booked($appointment, Auth::user());
+
         $date = $appointment->appointment_date instanceof Carbon
             ? $appointment->appointment_date->format('Y-m-d')
             : substr($appointment->appointment_date, 0, 10);
@@ -291,6 +300,15 @@ class AppointmentController extends Controller
 
         $appointment->update($update);
 
+        match ($request->status) {
+            'checkin' => $this->activityLogger->checkedIn($appointment, Auth::user()),
+            'done'    => $this->activityLogger->completed($appointment, Auth::user()),
+            // Direct cancel via the status dropdown (no reason captured) — the
+            // calendar's "Cancel Appointment" modal uses cancelWithReason() below instead.
+            'cancelled' => $this->activityLogger->cancelled($appointment, Auth::user()),
+            default   => null,
+        };
+
         $fresh = $appointment->fresh()->load(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory']);
 
         return response()->json([
@@ -305,14 +323,18 @@ class AppointmentController extends Controller
     public function cancelWithReason(Request $request, Appointment $appointment)
     {
         $request->validate([
-            'cancel_reason' => 'required|string|max:500',
+            'cancel_reason'   => 'required|string|max:500',
+            'cancelled_party' => 'required|in:patient,clinic',
         ]);
 
         $appointment->update([
             'previous_status' => $appointment->status,
             'status'          => 'cancelled',
             'cancel_reason'   => $request->cancel_reason,
+            'cancelled_party' => $request->cancelled_party,
         ]);
+
+        $this->activityLogger->cancelled($appointment, Auth::user(), $request->cancel_reason, $request->cancelled_party);
 
         $fresh = $appointment->fresh()->load(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory']);
 
@@ -336,6 +358,7 @@ class AppointmentController extends Controller
             'status'          => $prev,
             'previous_status' => null,
             'cancel_reason'   => null,
+            'cancelled_party' => null,
         ];
 
         $appointment->update($update);
@@ -740,6 +763,7 @@ class AppointmentController extends Controller
             'in_chair_at'          => $a->in_chair_at?->format('H:i'),
             'completed_at'         => $a->completed_at?->format('H:i'),
             'cancel_reason'        => $a->cancel_reason,
+            'cancelled_party'      => $a->cancelled_party,
             'previous_status'      => $a->previous_status,
             // Colors for calendar display
             'treatment_color'      => $a->treatmentCategory?->color ?? null,

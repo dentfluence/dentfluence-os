@@ -231,6 +231,9 @@
         'Data' => [
             ['id'=>'data',            'label'=>'Import / Export',   'icon'=>'<polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/>'],
         ],
+        'Security' => [
+            ['id'=>'activity-log-link', 'label'=>'Activity Log', 'icon'=>'<path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/>', 'href' => 'settings.activity-log'],
+        ],
     ];
     @endphp
 

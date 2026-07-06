@@ -11,13 +11,7 @@ use App\Models\Prescription\{
     Prescription,
     PrescriptionItem,
     PrescriptionAuditLog,
-    PrescriptionOverride,
     RxDrug,
-    RxDrugCategory,
-    RxTemplate,
-    RxFoodInstruction,
-    RxDoseTemplate,
-    RxDurationTemplate,
 };
 use App\Services\Prescription\PrescriptionAlertService;
 use App\Services\Relationship\CommunicationGuard;
@@ -88,143 +82,40 @@ class PrescriptionController extends Controller
 
     // ─────────────────────────────────────────────────────────────────────────
     // CREATE  GET /patients/{patient}/prescriptions/create
+    //   Thin wrapper page around the same quick-form partial used in the
+    //   patient's Prescriptions tab — only needed here for entry points that
+    //   aren't already inside that tab (e.g. "Write Prescription", or writing
+    //   one from a Treatment Visit).
     // ─────────────────────────────────────────────────────────────────────────
 
     public function create(Request $request, Patient $patient)
     {
-        // Pre-load helpers for the form dropdowns
-        $foodInstructions  = RxFoodInstruction::orderBy('label')->get();
-        $doseTemplates     = RxDoseTemplate::orderBy('name')->get();      // column is 'name'
-        $durationTemplates = RxDurationTemplate::orderBy('label')->get(); // column is 'label'
-        $templates         = RxTemplate::where('is_active', true)->orderBy('name')->get();
-
-        // Optional: load from a visit or consultation
-        $visitId        = $request->query('visit_id');
-        $consultationId = $request->query('consultation_id');
-
-        // Pre-fill diagnosis/complaint from patient record
         $prescription = new Prescription([
-            'patient_id'       => $patient->id,
-            'visit_id'         => $visitId,
-            'consultation_id'  => $consultationId,
-            'chief_complaint'  => $patient->chief_complaint,
-            'language'         => 'en',
-            'status'           => 'draft',
+            'patient_id'      => $patient->id,
+            'visit_id'        => $request->query('visit_id'),
+            'consultation_id' => $request->query('consultation_id'),
+            'chief_complaint' => $patient->chief_complaint,
+            'language'        => 'en',
         ]);
 
-        return view('prescriptions.form', compact(
-            'patient', 'prescription',
-            'foodInstructions', 'doseTemplates', 'durationTemplates', 'templates',
-        ));
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // STORE QUICK  POST /patients/{patient}/prescriptions/quick
-    // Accepts JSON from the universal <x-prescription-panel> component.
-    // Maps {drug, sos, morn, noon, night, duration, unit} → PrescriptionItem.
-    // ─────────────────────────────────────────────────────────────────────────
-
-    public function storeQuick(Request $request, Patient $patient)
-    {
-        $drugs  = json_decode($request->input('prescriptions_data', '[]'), true) ?: [];
-        $instrs = json_decode($request->input('instructions_data',  '[]'), true) ?: [];
-
-        // Build general_instructions from selected chips + free-text note
-        $instrText = implode('; ', array_filter((array) $instrs));
-        $noteText  = trim($request->input('prescription_notes', ''));
-        $general   = implode("\n", array_filter([$instrText, $noteText]));
-
-        DB::transaction(function () use ($drugs, $general, $request, $patient, &$prescription) {
-            $prescription = Prescription::create([
-                'prescription_number'  => Prescription::generateNumber(),
-                'patient_id'           => $patient->id,
-                'prescribed_by'        => Auth::id(),
-                'chief_complaint'      => $request->input('chief_complaint'),
-                'diagnosis'            => $request->input('diagnosis'),
-                'general_instructions' => $general ?: null,
-                'language'             => 'en',
-                'source'               => $request->input('source', Prescription::SOURCE_VISIT),
-                'status'               => Prescription::STATUS_DRAFT,
-            ]);
-
-            foreach ($drugs as $i => $row) {
-                if (empty($row['drug'])) continue;
-
-                $item = new PrescriptionItem([
-                    'prescription_id' => $prescription->id,
-                    'drug_name'       => $row['drug'],
-                    'morning'         => !empty($row['morn'])  ? 1.0 : 0.0,
-                    'afternoon'       => !empty($row['noon'])  ? 1.0 : 0.0,
-                    'night'           => !empty($row['night']) ? 1.0 : 0.0,
-                    'is_sos'          => !empty($row['sos']),
-                    'duration'        => (int) ($row['duration'] ?? 0),
-                    'duration_unit'   => $row['unit'] ?? 'days',
-                    'sort_order'      => $i,
-                ]);
-                $item->quantity = $item->calculateQuantity();
-                $item->save();
-            }
-
-            $this->audit($prescription, 'created', 'Quick prescription from patient profile');
-        });
-
-        return redirect()
-            ->route('patients.show', $patient)
-            ->with('success', 'Prescription saved: ' . ($prescription->prescription_number ?? ''))
-            ->with('active_tab', 'prescriptions');
+        return view('prescriptions.form', compact('patient', 'prescription'));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // STORE  POST /patients/{patient}/prescriptions
+    //   Accepts the JSON payload from <x-prescription-panel> (used by both the
+    //   inline tab form and the standalone create page). A prescription is
+    //   live the moment it's saved — no draft/finalize step. It can always be
+    //   edited again afterwards via update().
     // ─────────────────────────────────────────────────────────────────────────
 
     public function store(Request $request, Patient $patient)
     {
-        $validated = $this->validatePrescription($request);
-
-        DB::transaction(function () use ($validated, $patient, $request, &$prescription) {
-            // 1. Create header
-            $prescription = Prescription::create([
-                'prescription_number'  => Prescription::generateNumber(),
-                'patient_id'           => $patient->id,
-                'visit_id'             => $validated['visit_id'] ?? null,
-                'consultation_id'      => $validated['consultation_id'] ?? null,
-                'prescribed_by'        => Auth::id(),
-                'diagnosis'            => $validated['diagnosis'] ?? null,
-                'chief_complaint'      => $validated['chief_complaint'] ?? null,
-                'follow_up_date'       => $validated['follow_up_date'] ?? null,
-                'general_instructions' => $validated['general_instructions'] ?? null,
-                'language'             => $validated['language'] ?? 'en',
-                'source'               => $validated['source'] ?? Prescription::SOURCE_CONSULTATION,
-                'status'               => Prescription::STATUS_DRAFT,
-            ]);
-
-            // 2. Save items
-            $this->syncItems($prescription, $validated['items'] ?? []);
-
-            // 3. Save any CDSS overrides the user acknowledged
-            $rawOverrides = $request->input('overrides', []);
-            if (is_string($rawOverrides)) {
-                $rawOverrides = json_decode($rawOverrides, true) ?? [];
-            }
-            $this->syncOverrides($prescription, $rawOverrides);
-
-            // 4. Audit
-            $this->audit($prescription, 'created');
-
-            // 5. Auto-finalize if requested
-            if ($request->boolean('finalize')) {
-                $this->doFinalize($prescription);
-            }
-        });
-
-        $msg = isset($prescription) && $prescription->isLocked()
-            ? 'Prescription issued: ' . $prescription->prescription_number
-            : 'Draft saved: ' . $prescription->prescription_number;
+        $prescription = $this->saveQuickPrescription($request, $patient);
 
         return redirect()
             ->route('patients.show', $patient)
-            ->with('success', $msg)
+            ->with('success', 'Prescription saved: ' . $prescription->prescription_number)
             ->with('active_tab', 'prescriptions');
     }
 
@@ -250,140 +141,46 @@ class PrescriptionController extends Controller
 
     public function edit(Patient $patient, Prescription $prescription)
     {
-        // Cancelled prescriptions cannot be edited at all
         abort_if($prescription->isCancelled(), 403, 'Cancelled prescriptions cannot be edited.');
 
         $prescription->load('items.drug');
 
-        $foodInstructions  = RxFoodInstruction::orderBy('label')->get();
-        $doseTemplates     = RxDoseTemplate::orderBy('name')->get();
-        $durationTemplates = RxDurationTemplate::orderBy('label')->get();
-        $templates         = RxTemplate::where('is_active', true)->orderBy('name')->get();
-
-        return view('prescriptions.form', compact(
-            'patient', 'prescription',
-            'foodInstructions', 'doseTemplates', 'durationTemplates', 'templates',
-        ));
+        return view('prescriptions.form', compact('patient', 'prescription'));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // UPDATE  PUT /patients/{patient}/prescriptions/{prescription}
+    //   Always edits in place — no version-branching for already-issued/sent
+    //   prescriptions. Editing is always available (until cancelled), so
+    //   there's no separate "revise" workflow to maintain.
     // ─────────────────────────────────────────────────────────────────────────
 
     public function update(Request $request, Patient $patient, Prescription $prescription)
     {
         abort_if($prescription->isCancelled(), 403, 'Cancelled prescriptions cannot be edited.');
 
-        $validated = $this->validatePrescription($request);
+        DB::transaction(function () use ($request, $prescription) {
+            $this->fillQuickHeader($prescription, $request);
+            $prescription->status = Prescription::STATUS_ISSUED;
+            $prescription->save();
 
-        $target = null; // will point to the prescription being saved (original or new version)
+            $prescription->items()->delete();
+            $this->createQuickItems($prescription, $request);
 
-        DB::transaction(function () use ($validated, $prescription, $request, &$target) {
-
-            if ($prescription->isLocked()) {
-                // ── Version control path ──────────────────────────────────────
-                // The original is already issued/printed/sent — create a new version
-                // and mark the original as 'revised' so it's archived but traceable.
-
-                $rootId = $prescription->parent_id ?? $prescription->id;
-
-                $newVersion = $prescription->replicate([
-                    'prescription_number', 'status',
-                    'printed_at', 'print_count',
-                    'whatsapp_sent_at',
-                    'email_sent_at', 'email_sent_count',
-                ]);
-                $newVersion->prescription_number = Prescription::generateNumber();
-                $newVersion->status              = Prescription::STATUS_DRAFT;
-                $newVersion->version             = $prescription->version + 1;
-                $newVersion->parent_id           = $rootId;
-
-                // Apply the submitted edits to the new version
-                $newVersion->visit_id             = $validated['visit_id'] ?? null;
-                $newVersion->consultation_id      = $validated['consultation_id'] ?? null;
-                $newVersion->diagnosis            = $validated['diagnosis'] ?? null;
-                $newVersion->chief_complaint      = $validated['chief_complaint'] ?? null;
-                $newVersion->follow_up_date       = $validated['follow_up_date'] ?? null;
-                $newVersion->general_instructions = $validated['general_instructions'] ?? null;
-                $newVersion->language             = $validated['language'] ?? 'en';
-                $newVersion->source               = $validated['source'] ?? $prescription->source;
-                $newVersion->save();
-
-                $this->syncItems($newVersion, $validated['items'] ?? []);
-                $rawOv = $request->input('overrides', []);
-                if (is_string($rawOv)) { $rawOv = json_decode($rawOv, true) ?? []; }
-                $this->syncOverrides($newVersion, $rawOv);
-
-                // Archive the original
-                $prescription->update(['status' => Prescription::STATUS_REVISED]);
-                $this->audit($prescription, 'edited', 'Superseded by ' . $newVersion->prescription_number);
-                $this->audit($newVersion, 'created', 'Version ' . $newVersion->version . ' of ' . $prescription->prescription_number);
-
-                if ($request->boolean('finalize')) {
-                    $this->doFinalize($newVersion);
-                }
-
-                $target = $newVersion;
-
-            } else {
-                // ── Draft in-place edit path ──────────────────────────────────
-                $prescription->update([
-                    'visit_id'             => $validated['visit_id'] ?? null,
-                    'consultation_id'      => $validated['consultation_id'] ?? null,
-                    'diagnosis'            => $validated['diagnosis'] ?? null,
-                    'chief_complaint'      => $validated['chief_complaint'] ?? null,
-                    'follow_up_date'       => $validated['follow_up_date'] ?? null,
-                    'general_instructions' => $validated['general_instructions'] ?? null,
-                    'language'             => $validated['language'] ?? 'en',
-                    'source'               => $validated['source'] ?? $prescription->source,
-                ]);
-
-                $prescription->items()->delete();
-                $this->syncItems($prescription, $validated['items'] ?? []);
-                $rawOv2 = $request->input('overrides', []);
-                if (is_string($rawOv2)) { $rawOv2 = json_decode($rawOv2, true) ?? []; }
-                $this->syncOverrides($prescription, $rawOv2);
-                $this->audit($prescription, 'edited');
-
-                if ($request->boolean('finalize')) {
-                    $this->doFinalize($prescription);
-                }
-
-                $target = $prescription;
-            }
+            $this->audit($prescription, 'edited');
         });
 
-        $msg = ($target && $target->isLocked())
-            ? 'Prescription issued: ' . $target->prescription_number
-            : 'Prescription updated: ' . ($target->prescription_number ?? '');
-
         return redirect()
             ->route('patients.show', $patient)
-            ->with('success', $msg)
-            ->with('active_tab', 'prescriptions');
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // FINALIZE  POST /patients/{patient}/prescriptions/{prescription}/finalize
-    // ─────────────────────────────────────────────────────────────────────────
-
-    public function finalize(Patient $patient, Prescription $prescription)
-    {
-        abort_if($prescription->isLocked(),    422, 'Already issued.');
-        abort_if($prescription->isCancelled(), 422, 'Cannot issue a cancelled prescription.');
-        abort_if($prescription->items()->count() === 0, 422, 'Cannot issue an empty prescription.');
-
-        $this->doFinalize($prescription);
-
-        return redirect()
-            ->route('patients.show', $patient)
-            ->with('success', 'Prescription issued: ' . $prescription->prescription_number)
+            ->with('success', 'Prescription updated: ' . $prescription->prescription_number)
             ->with('active_tab', 'prescriptions');
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // REPEAT  POST /patients/{patient}/prescriptions/{prescription}/repeat
-    //   Clones a finalized prescription back to draft so it can be tweaked.
+    //   Clones a prescription so it can be tweaked for a new visit without
+    //   retyping everything. Lands on the same Edit screen; saving it there
+    //   makes it live immediately (see UPDATE above).
     // ─────────────────────────────────────────────────────────────────────────
 
     public function repeat(Patient $patient, Prescription $prescription)
@@ -419,7 +216,7 @@ class PrescriptionController extends Controller
 
         return redirect()
             ->route('patients.prescriptions.edit', [$patient, $clone])
-            ->with('success', 'Draft copy created from ' . $prescription->prescription_number);
+            ->with('success', 'Copy created from ' . $prescription->prescription_number . ' — review and save.');
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -683,9 +480,9 @@ class PrescriptionController extends Controller
             $lines[] = $prescription->general_instructions;
         }
 
-        if ($prescription->follow_up_date) {
+        if ($prescription->follow_up_date || $prescription->follow_up_after_days) {
             $lines[] = '';
-            $lines[] = '📅 *Follow-up:* ' . \Carbon\Carbon::parse($prescription->follow_up_date)->format('d M Y');
+            $lines[] = '📅 *Follow-up:* ' . $prescription->followUpLabel();
         }
 
         $lines[] = '';
@@ -744,113 +541,94 @@ class PrescriptionController extends Controller
     // PRIVATE HELPERS
     // ─────────────────────────────────────────────────────────────────────────
 
-    private function validatePrescription(Request $request): array
+    /**
+     * Build + persist a brand-new Prescription (header + items) from the
+     * quick form's POST payload. Status goes straight to ISSUED — there is
+     * no draft/finalize step; it's live the moment it's saved, and can be
+     * opened again in Edit at any time.
+     */
+    private function saveQuickPrescription(Request $request, Patient $patient): Prescription
     {
-        return $request->validate([
-            'visit_id'             => 'nullable|integer',
-            'consultation_id'      => 'nullable|integer',
-            'source'               => 'nullable|in:consultation,visit,emergency_consultation,review_visit,post_operative_visit',
-            'diagnosis'            => 'nullable|string|max:255',
-            'chief_complaint'      => 'nullable|string|max:255',
-            'follow_up_date'       => 'nullable|date',
-            'general_instructions' => 'nullable|string|max:1000',
-            'language'             => 'nullable|in:en,mr,hi',
-            // Items array
-            'items'                         => 'nullable|array',
-            'items.*.drug_id'               => 'nullable|integer|exists:rx_drugs,id',
-            'items.*.drug_name'             => 'required_with:items.*|string|max:255',
-            'items.*.generic_name'          => 'nullable|string|max:255',
-            'items.*.strength'              => 'nullable|string|max:100',
-            'items.*.dosage_form'           => 'nullable|string|max:100',
-            'items.*.route'                 => 'nullable|string|max:100',
-            'items.*.dispensing_type'       => 'nullable|in:unit,pack,manual,volume',
-            'items.*.unit_label'            => 'nullable|string|max:50',
-            'items.*.morning'               => 'nullable|numeric|min:0',
-            'items.*.afternoon'             => 'nullable|numeric|min:0',
-            'items.*.night'                 => 'nullable|numeric|min:0',
-            'items.*.is_sos'                => 'nullable|boolean',
-            'items.*.duration'              => 'nullable|integer|min:1',
-            'items.*.duration_unit'         => 'nullable|in:days,weeks,months',
-            'items.*.quantity'              => 'nullable|integer|min:0',
-            'items.*.quantity_manual'       => 'nullable|boolean',
-            'items.*.food_advice'           => 'nullable|string|max:255',
-            'items.*.instructions'          => 'nullable|string|max:500',
-            'items.*.sort_order'            => 'nullable|integer',
-        ]);
+        $prescription = null;
+
+        DB::transaction(function () use ($request, $patient, &$prescription) {
+            $prescription = new Prescription([
+                'prescription_number' => Prescription::generateNumber(),
+                'patient_id'          => $patient->id,
+                'visit_id'            => $request->input('visit_id') ?: null,
+                'consultation_id'     => $request->input('consultation_id') ?: null,
+                'prescribed_by'       => Auth::id(),
+                'language'            => 'en',
+                'source'              => $request->input('source', $request->filled('visit_id')
+                    ? Prescription::SOURCE_VISIT
+                    : Prescription::SOURCE_CONSULTATION),
+                'status'              => Prescription::STATUS_ISSUED,
+            ]);
+            $this->fillQuickHeader($prescription, $request);
+            $prescription->save();
+
+            $this->createQuickItems($prescription, $request);
+
+            $this->audit($prescription, 'created');
+        });
+
+        return $prescription;
     }
 
     /**
-     * Create PrescriptionItem rows from the validated items array.
+     * Apply the clinical-context fields shared by the create/edit quick form:
+     * chief complaint, diagnosis, follow-up (date or "after N days" note),
+     * and general instructions (built from the selected chips + free-text note).
      */
-    private function syncItems(Prescription $prescription, array $items): void
+    private function fillQuickHeader(Prescription $prescription, Request $request): void
     {
-        foreach ($items as $i => $data) {
-            // ── Snapshot dispensing info from drug master ─────────────────────
-            // If the form passed a drug_id, pull the dispensing_type and
-            // unit_label from the master so the snapshot is always accurate.
-            $dispensingType = $data['dispensing_type'] ?? RxDrug::DISPENSING_UNIT;
-            $unitLabel      = $data['unit_label'] ?? null;
+        $instrs   = json_decode($request->input('instructions_data', '[]'), true) ?: [];
+        $instrTxt = implode('; ', array_filter((array) $instrs));
+        $note     = trim($request->input('prescription_notes', ''));
 
-            if (!empty($data['drug_id'])) {
-                $drug = RxDrug::find($data['drug_id']);
-                if ($drug) {
-                    $dispensingType = $drug->dispensing_type ?? RxDrug::DISPENSING_UNIT;
-                    $unitLabel      = $drug->unit_label;
-                }
-            }
+        $prescription->chief_complaint      = $request->input('chief_complaint') ?: null;
+        $prescription->diagnosis            = $request->input('diagnosis') ?: null;
+        $prescription->follow_up_date       = $request->input('follow_up_date') ?: null;
+        $prescription->follow_up_after_days = $request->input('follow_up_after_days') ?: null;
+        $prescription->general_instructions = implode("\n", array_filter([$instrTxt, $note])) ?: null;
+    }
 
-            $item = new PrescriptionItem(array_merge($data, [
+    /**
+     * Decode the <x-prescription-panel> JSON payload and create PrescriptionItem
+     * rows. The panel only sends the combined drug label, a form type, and
+     * dosing — when a drug_id is present we look it up against the RxDrug
+     * master so generic name, strength, and dosage form are snapshotted too
+     * (used by the print view's "Tablet Flexon / composition" formatting).
+     */
+    private function createQuickItems(Prescription $prescription, Request $request): void
+    {
+        $rows = json_decode($request->input('prescriptions_data', '[]'), true) ?: [];
+
+        foreach ($rows as $i => $row) {
+            if (empty($row['drug'])) continue;
+
+            $drug = !empty($row['drug_id']) ? RxDrug::find($row['drug_id']) : null;
+
+            $item = new PrescriptionItem([
                 'prescription_id' => $prescription->id,
-                'sort_order'      => $data['sort_order'] ?? $i,
-                'morning'         => (float)($data['morning'] ?? 0),
-                'afternoon'       => (float)($data['afternoon'] ?? 0),
-                'night'           => (float)($data['night'] ?? 0),
-                'is_sos'          => (bool)($data['is_sos'] ?? false),
-                'quantity_manual' => (bool)($data['quantity_manual'] ?? false),
-                'dispensing_type' => $dispensingType,
-                'unit_label'      => $unitLabel,
-            ]));
-
-            // Auto-calculate quantity based on dispensing type,
-            // unless the dentist has manually entered a value.
-            if (!$item->quantity_manual || !$item->quantity) {
-                $item->quantity = $item->calculateQuantity();
-            }
-
+                'drug_id'         => $drug?->id,
+                'drug_name'       => $row['drug'],
+                'generic_name'    => $drug?->generic?->name,
+                'strength'        => $drug?->strength,
+                'dosage_form'     => $drug?->dosage_form ?? ($row['form_type'] ?? null),
+                'morning'         => !empty($row['morn'])  ? 1.0 : 0.0,
+                'afternoon'       => !empty($row['noon'])  ? 1.0 : 0.0,
+                'night'           => !empty($row['night']) ? 1.0 : 0.0,
+                'is_sos'          => !empty($row['sos']),
+                'duration'        => (int) ($row['duration'] ?? 0),
+                'duration_unit'   => $row['unit'] ?? 'days',
+                'dispensing_type' => $drug?->dispensing_type ?? RxDrug::DISPENSING_UNIT,
+                'unit_label'      => $drug?->unit_label,
+                'sort_order'      => $i,
+            ]);
+            $item->quantity = $item->calculateQuantity();
             $item->save();
         }
-    }
-
-    /**
-     * Save CDSS override acknowledgements posted from the form.
-     * Expected format: [{ drug_id, alert_type, alert_code, alert_message, override_reason }]
-     */
-    private function syncOverrides(Prescription $prescription, array $overrides): void
-    {
-        // Remove old overrides for this prescription (re-save fresh)
-        PrescriptionOverride::where('prescription_id', $prescription->id)->delete();
-
-        foreach ($overrides as $ov) {
-            PrescriptionOverride::create([
-                'prescription_id' => $prescription->id,
-                'user_id'         => Auth::id(),
-                'drug_id'         => $ov['drug_id'] ?? null,
-                'alert_type'      => $ov['alert_type'],
-                'alert_code'      => $ov['alert_code'] ?? null,
-                'alert_message'   => $ov['alert_message'],
-                'override_reason' => $ov['override_reason'] ?? null,
-            ]);
-        }
-
-        if (count($overrides)) {
-            $this->audit($prescription, 'override', 'Override acknowledged for ' . count($overrides) . ' alert(s).');
-        }
-    }
-
-    private function doFinalize(Prescription $prescription): void
-    {
-        $prescription->update(['status' => Prescription::STATUS_ISSUED]);
-        $this->audit($prescription, 'finalized'); // 'finalized' kept in audit log for medicolegal history
     }
 
     private function audit(Prescription $prescription, string $action, ?string $notes = null): void

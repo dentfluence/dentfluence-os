@@ -38,21 +38,12 @@
 
         {{-- Action buttons --}}
         <div class="flex gap-2 flex-wrap shrink-0">
-            @if($prescription->isDraft())
+            @if(!$prescription->isCancelled())
                 <a href="{{ route('patients.prescriptions.edit', [$patient, $prescription]) }}"
                    class="px-3 py-1.5 text-sm border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition">
                     ✏️ Edit
                 </a>
-                <form method="POST" action="{{ route('patients.prescriptions.finalize', [$patient, $prescription]) }}" class="inline">
-                    @csrf
-                    <button type="submit"
-                            class="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-xl hover:bg-brand-700 transition">
-                        Finalize
-                    </button>
-                </form>
-            @endif
 
-            @if($prescription->isFinalized())
                 <form method="POST" action="{{ route('patients.prescriptions.repeat', [$patient, $prescription]) }}" class="inline">
                     @csrf
                     <button type="submit"
@@ -60,20 +51,16 @@
                         Repeat Rx
                     </button>
                 </form>
-            @endif
 
-            {{-- Print / PDF --}}
-            @if($prescription->isFinalized())
+                {{-- Print / PDF --}}
                 <a href="{{ route('patients.prescriptions.print', [$patient, $prescription]) }}"
                    target="_blank"
                    class="px-3 py-1.5 text-sm border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition"
                    title="Open print / PDF view">
                     Print / PDF
                 </a>
-            @endif
 
-            {{-- WhatsApp Send --}}
-            @if($prescription->isFinalized())
+                {{-- WhatsApp Send --}}
                 @php $hasPhone = !empty($patient->phone); @endphp
                 <button
                     id="wa-send-btn"
@@ -111,7 +98,7 @@
         <div class="lg:col-span-2 space-y-4">
 
             {{-- Clinical context --}}
-            @if($prescription->chief_complaint || $prescription->diagnosis || $prescription->follow_up_date)
+            @if($prescription->chief_complaint || $prescription->diagnosis || $prescription->follow_up_date || $prescription->follow_up_after_days)
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
                 <h2 class="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b border-gray-100">Clinical Context</h2>
                 <dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
@@ -127,10 +114,10 @@
                             <dd class="text-gray-800">{{ $prescription->diagnosis }}</dd>
                         </div>
                     @endif
-                    @if($prescription->follow_up_date)
+                    @if($prescription->follow_up_date || $prescription->follow_up_after_days)
                         <div>
                             <dt class="text-xs text-gray-400 font-medium">Follow-up</dt>
-                            <dd class="text-gray-800">{{ $prescription->follow_up_date }}</dd>
+                            <dd class="text-gray-800">{{ $prescription->followUpLabel() }}</dd>
                         </div>
                     @endif
                     @if($prescription->language && $prescription->language !== 'en')

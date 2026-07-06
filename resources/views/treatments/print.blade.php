@@ -7,6 +7,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ $config['title'] }} — {{ $treatment->name }}</title>
+    @php $pm = \App\Models\AppSetting::printMargins(['top' => '24px', 'bottom' => '24px', 'left' => '24px', 'right' => '24px']); @endphp
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -141,7 +142,8 @@
         .btn-bar { display: flex; gap: 8px; align-items: center; }
         @media print {
             .no-print-bar { display: none !important; }
-            body { padding: 24px; }
+            body { padding: {{ $pm['top'] }} {{ $pm['right'] }} {{ $pm['bottom'] }} {{ $pm['left'] }}; }
+            @page { size: A4; margin: 0; }
         }
     </style>
 </head>

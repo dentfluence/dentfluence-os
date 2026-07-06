@@ -89,7 +89,7 @@
                            class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
                             View
                         </a>
-                        @if($rx->status === 'draft')
+                        @if($rx->status !== 'cancelled')
                             <a href="{{ route('patients.prescriptions.edit', [$patient, $rx]) }}"
                                class="text-xs px-3 py-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition">
                                 Edit

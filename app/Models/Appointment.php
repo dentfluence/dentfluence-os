@@ -28,6 +28,7 @@ class Appointment extends Model
         'status',
         'previous_status', // for the "revert" (undo) button on the day sheet
         'cancel_reason',   // reason captured when an appointment is cancelled
+        'cancelled_party', // who initiated the cancellation: patient | clinic
         'notes',
         'chief_complaint',
         'staff_instruction',

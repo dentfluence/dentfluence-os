@@ -8,10 +8,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use App\Traits\Auditable;
 
 class TreatmentPlan extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, Auditable;
+
+    /** Tag audit-log entries for this model with the "treatment_plans" module. */
+    protected $auditModule = 'treatment_plans';
 
     protected $fillable = [
         'plan_uuid',          // stable public identifier

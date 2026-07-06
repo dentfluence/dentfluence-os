@@ -42,4 +42,31 @@ class AppSetting extends Model
     {
         return static::where('group', $group)->pluck('value', 'key')->toArray();
     }
+
+    /**
+     * Resolve the four print margins configured in Settings → Printing
+     * ("Use Printed Stationery — Leave Space") into ready-to-use CSS lengths.
+     * Falls back per-side to the document's own default when not configured,
+     * so nothing changes visually until a clinic actually sets a margin.
+     *
+     * Usage inside a standalone print view (before the closing </style>):
+     *   @php $pm = \App\Models\AppSetting::printMargins(['top'=>'16mm','bottom'=>'16mm','left'=>'14mm','right'=>'14mm']); @endphp
+     *   body { padding: {{ $pm['top'] }} {{ $pm['right'] }} {{ $pm['bottom'] }} {{ $pm['left'] }}; }
+     *   @page { margin: 0; }   -- must stay 0, otherwise Chrome's own margin dropdown wins
+     */
+    public static function printMargins(array $defaults = []): array
+    {
+        $settings = static::group('print');
+        $sides    = ['top', 'bottom', 'left', 'right'];
+        $result   = [];
+
+        foreach ($sides as $side) {
+            $configured = $settings["print_margin_{$side}"] ?? null;
+            $result[$side] = !empty($configured)
+                ? $configured . 'in'
+                : ($defaults[$side] ?? '14mm');
+        }
+
+        return $result;
+    }
 }

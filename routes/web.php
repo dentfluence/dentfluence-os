@@ -304,6 +304,7 @@ Route::middleware('auth')->group(function () {
         // Banking is a Finance/Settings admin page (not a Finance tab)
         Route::get('/settings/banking',               [\App\Http\Controllers\Finance\FinanceController::class, 'banking'])->name('settings.banking');
         Route::get('/settings/clinical-library',      [\App\Http\Controllers\Settings\SettingsController::class, 'clinicalLibrary'])->name('settings.clinical-library');
+        Route::get('/settings/activity-log',          [\App\Http\Controllers\Settings\ActivityLogController::class, 'index'])->name('settings.activity-log');
 
         // ── Data: Import / Export ──
         Route::prefix('settings/data')->name('settings.data.')->group(function () {
