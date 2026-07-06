@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\LabCase;
 use App\Models\Lead;
 use App\Models\Patient;
+use App\Models\TodayActionDismissal;
 use App\Models\TreatmentOpportunity;
 use App\Models\TreatmentVisit;
 use App\Models\Finance\FinancePatientMembership;
@@ -198,6 +199,7 @@ class TodayActionsEngine
             ->whereNotNull('follow_up_date')
             ->where('follow_up_date', '<=', Carbon::today())
             ->whereNotIn('status', ['completed', 'declined'])
+            ->whereNotIn('id', $this->dismissedIds('opportunities', TreatmentOpportunity::class))
             ->orderBy('follow_up_date')
             ->limit($this->limit())
             ->get()
@@ -214,6 +216,7 @@ class TodayActionsEngine
                 'suggested_action'=> 'Call and confirm if patient wants to proceed',
                 'link'            => route('patients.show', $opp->patient_id),
                 'meta'            => [
+                    'id'             => $opp->id,
                     'phone'          => $opp->patient?->phone,
                     'treatment'      => $opp->label ?? null,
                     'status'         => $opp->status,
@@ -404,6 +407,7 @@ class TodayActionsEngine
             ->whereDate('appointment_date', '<=', $cutoff)
             ->whereDate('appointment_date', '>=', Carbon::today()->toDateString())
             ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->whereNotIn('id', $this->dismissedIds('appointment_reminders', Appointment::class))
             ->orderBy('appointment_date')
             ->limit($this->limit())
             ->get()
@@ -422,6 +426,7 @@ class TodayActionsEngine
                     ? route('patients.show', $appt->patient_id)
                     : '#',
                 'meta'            => [
+                    'id'               => $appt->id,
                     'phone'            => $appt->patient?->phone,
                     'appointment_date' => $appt->appointment_date->format('d M Y'),
                     'time'             => $appt->appointment_time ?? null,
@@ -443,6 +448,7 @@ class TodayActionsEngine
             ->where('status', 'quoted')
             ->whereNotNull('follow_up_date')
             ->where('follow_up_date', '<', Carbon::today())
+            ->whereNotIn('id', $this->dismissedIds('pending_estimates', TreatmentOpportunity::class))
             ->orderBy('follow_up_date')
             ->limit($this->limit())
             ->get()
@@ -458,6 +464,7 @@ class TodayActionsEngine
                 'suggested_action'=> 'Call to check if they have reviewed the estimate',
                 'link'            => route('patients.show', $opp->patient_id),
                 'meta'            => [
+                    'id'             => $opp->id,
                     'phone'          => $opp->patient?->phone,
                     'treatment'      => $opp->label ?? null,
                     'value'          => $opp->estimated_value ?? null,
@@ -480,6 +487,7 @@ class TodayActionsEngine
         return FinancePatientMembership::with('patient:id,name,phone,relationship_id')
             ->where('status', 'active')
             ->whereBetween('end_date', [Carbon::today(), $cutoff])
+            ->whereNotIn('id', $this->dismissedIds('membership_renewals', FinancePatientMembership::class))
             ->orderBy('end_date')
             ->limit($this->limit())
             ->get()
@@ -495,6 +503,7 @@ class TodayActionsEngine
                 'suggested_action'=> 'Call to renew membership before expiry',
                 'link'            => route('patients.show', $m->patient_id),
                 'meta'            => [
+                    'id'       => $m->id,
                     'phone'    => $m->patient?->phone,
                     'end_date' => $m->end_date->format('d M Y'),
                     'plan'     => $m->plan?->name ?? null,
@@ -530,6 +539,9 @@ class TodayActionsEngine
 
         $items = [];
 
+        // Dismissed today — patient ids to leave out of every offset bucket below.
+        $dismissedPatientIds = $this->dismissedIds('birthdays', Patient::class);
+
         // Build date window: today ± $window days as MM-DD strings for matching
         for ($offset = -$window; $offset <= $window; $offset++) {
             $date  = Carbon::today()->addDays($offset);
@@ -538,6 +550,7 @@ class TodayActionsEngine
             $patients = Patient::query()
                 ->where('dob_unknown', false)
                 ->whereRaw("DATE_FORMAT(date_of_birth, '%m-%d') = ?", [$mmdd])
+                ->whereNotIn('id', $dismissedPatientIds)
                 ->limit($this->limit())
                 ->get();
 
@@ -606,6 +619,7 @@ class TodayActionsEngine
             ->whereIn('status', $readyStatuses)
             ->whereNotNull('patient_id')
             ->whereNotIn('patient_id', $patientsWithAppt)
+            ->whereNotIn('id', $this->dismissedIds('lab_ready', LabCase::class))
             ->orderBy('updated_at')
             ->limit($this->limit())
             ->get()
@@ -620,6 +634,7 @@ class TodayActionsEngine
                 'suggested_action'=> 'Call to schedule fitting/delivery appointment',
                 'link'            => route('patients.show', $case->patient_id),
                 'meta'            => [
+                    'id'            => $case->id,
                     'phone'         => $case->patient?->phone,
                     'lab_case_id'   => $case->id,
                     'work_category' => $case->work_category,
@@ -644,6 +659,7 @@ class TodayActionsEngine
             ->where('balance_due', '>', $threshold)
             ->whereNotIn('status', ['paid', 'cancelled'])
             ->whereNotNull('patient_id')
+            ->whereNotIn('id', $this->dismissedIds('payment_reminders', Invoice::class))
             ->orderByDesc('balance_due')
             ->limit($this->limit())
             ->get()
@@ -659,6 +675,7 @@ class TodayActionsEngine
                 'suggested_action'=> 'Call to arrange payment',
                 'link'            => route('patients.show', $inv->patient_id),
                 'meta'            => [
+                    'id'          => $inv->id,
                     'phone'       => $inv->patient?->phone,
                     'invoice_no'  => $inv->invoice_number ?? $inv->id,
                     'balance_due' => $inv->balance_due,
@@ -682,6 +699,7 @@ class TodayActionsEngine
             ->where('status', 'completed')
             ->whereDate('visit_date', Carbon::yesterday())
             ->whereNotNull('patient_id')
+            ->whereNotIn('id', $this->dismissedIds('wellness_check_yesterday', TreatmentVisit::class))
             ->orderBy('visit_date')
             ->limit($this->limit())
             ->get()
@@ -700,6 +718,7 @@ class TodayActionsEngine
                     ? route('patients.show', $visit->patient_id)
                     : '#',
                 'meta'            => [
+                    'id'             => $visit->id,
                     'phone'          => $visit->patient?->phone,
                     'treatment_name' => $visit->treatment_name,
                     'procedure'      => $visit->procedure,
@@ -990,5 +1009,17 @@ class TodayActionsEngine
     private function limit(): int
     {
         return (int) config('relationship_rules.today_actions.max_per_category', 50);
+    }
+
+    /**
+     * Row ids to exclude from a live-computed category's query — anything
+     * dismissed "for today" via the Action Board drawer. Only applies to
+     * categories with no CommunicationQueue row of their own (recall_calls /
+     * missed_calls_yesterday use CommunicationQueue's own ignore()/dismiss()
+     * instead — see docs/feature-specs/feature-spec-action-board-dismiss.md).
+     */
+    private function dismissedIds(string $category, string $modelClass): array
+    {
+        return TodayActionDismissal::dismissedIdsFor($category, $modelClass, Carbon::today());
     }
 }

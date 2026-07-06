@@ -3,15 +3,19 @@
 namespace App\Http\Controllers\Relationship;
 
 use App\Http\Controllers\Controller;
+use App\Models\Activity;
 use App\Models\Lead;
 use App\Models\Patient;
 use App\Models\RelationshipJourney;
 use App\Models\TreatmentOpportunity;
 use App\Models\User;
+use App\Services\Relationship\ActivityEngine;
 use App\Support\Features\Feature;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 /**
@@ -171,7 +175,55 @@ class OpportunityPipelineController extends Controller
         $opportunity = TreatmentOpportunity::with(['patient', 'assignedStaff', 'author', 'treatmentPlan'])
             ->findOrFail($id);
 
-        return view('relationship.opportunities._detail-card', compact('opportunity'));
+        $notes = $this->notesFor($opportunity);
+
+        return view('relationship.opportunities._detail-card', compact('opportunity', 'notes'));
+    }
+
+    /**
+     * Timestamped notes for this opportunity — Suggestion (staff observation)
+     * or Response (what the patient said), newest first. Reuses the existing
+     * ActivityEngine/Activity ledger instead of a new table — see
+     * docs/feature-specs/feature-spec-stage-notes.md.
+     */
+    private function notesFor(TreatmentOpportunity $opportunity)
+    {
+        return Activity::query()
+            ->with('actor')
+            ->where('subject_type', TreatmentOpportunity::class)
+            ->where('subject_id', $opportunity->id)
+            ->ofEvent('opportunity.note_added')
+            ->recent()
+            ->get();
+    }
+
+    // ── Add a timestamped note (Suggestion / Patient Response) ────────────────
+
+    public function addNote(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'note_type' => ['required', 'in:suggestion,response'],
+            'text'      => ['required', 'string', 'max:1000'],
+        ]);
+
+        $opportunity = TreatmentOpportunity::with('patient')->findOrFail($id);
+
+        $label = $data['note_type'] === 'suggestion' ? 'Suggestion' : 'Patient response';
+
+        app(ActivityEngine::class)->log(
+            subject       : $opportunity,
+            event         : 'opportunity.note_added',
+            actor         : Auth::user(),
+            metadata      : [
+                'note_type'     => $data['note_type'],
+                'text'          => $data['text'],
+                'stage_at_time' => $opportunity->status,
+            ],
+            relationshipId: $opportunity->relationship_id,
+            description   : "{$label} added on Opportunity #{$opportunity->id}: " . Str::limit($data['text'], 80),
+        );
+
+        return response()->json(['success' => true]);
     }
 
     // ── Update Stage — drag-drop / Move-to dropdown ────────────────────────────

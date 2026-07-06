@@ -18,6 +18,7 @@ use App\Models\Finance\FinanceExpense;
 use App\Models\Finance\FinanceExpenseCategory;
 use App\Models\AppSetting;
 use App\Models\Procurement\GoodsReceiptNote;
+use Illuminate\Support\Str;
 use Carbon\Carbon;
 
 class InventoryController extends Controller
@@ -1512,6 +1513,12 @@ class InventoryController extends Controller
             'description' => 'nullable|string|max:255',
         ]);
 
+        // `code` is NOT NULL + unique at the DB level, but the form marks it "optional" —
+        // auto-generate one from the name so a blank field never hits a NULL insert.
+        if (empty($data['code'])) {
+            $data['code'] = $this->generateUniqueLocationCode($data['name']);
+        }
+
         $data['sort_order'] = InventoryLocation::max('sort_order') + 1;
         $data['is_active']  = true;
 
@@ -1531,9 +1538,37 @@ class InventoryController extends Controller
             'is_active'   => 'boolean',
         ]);
 
+        if (empty($data['code'])) {
+            $data['code'] = $this->generateUniqueLocationCode($data['name'], $loc->id);
+        }
+
         $data['is_active'] = $request->boolean('is_active');
         $loc->update($data);
         return back()->with('success', 'Location updated.');
+    }
+
+    /**
+     * Build a short, unique location code from a name (e.g. "Main Store" -> "MAIN-STORE").
+     * Falls back to a numeric suffix if the base slug is already taken.
+     */
+    private function generateUniqueLocationCode(string $name, ?int $ignoreId = null): string
+    {
+        $base = strtoupper(Str::slug($name, '-'));
+        $base = substr($base, 0, 16) ?: 'LOC';
+
+        $code = $base;
+        $suffix = 1;
+
+        while (
+            InventoryLocation::where('code', $code)
+                ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+                ->exists()
+        ) {
+            $suffix++;
+            $code = substr($base, 0, 20 - strlen("-{$suffix}")) . "-{$suffix}";
+        }
+
+        return $code;
     }
 
     public function destroyLocation(InventoryLocation $loc)

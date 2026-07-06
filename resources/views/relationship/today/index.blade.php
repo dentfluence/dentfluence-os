@@ -858,11 +858,14 @@
                         </div>
 
                         <div class="ta-form-group">
-                            <label class="ta-form-label">Notes (optional)</label>
+                            <label class="ta-form-label">
+                                <span x-text="requiresNotes ? 'Notes (required for this outcome)' : 'Notes (optional)'"></span>
+                            </label>
                             <textarea
                                 class="ta-form-textarea"
                                 placeholder="Any notes from this call..."
                                 x-model="form.notes"
+                                :style="requiresNotes && !form.notes ? 'border-color:#e0a0a0;' : ''"
                             ></textarea>
                         </div>
                     </div>
@@ -886,13 +889,58 @@
 
                 </div>{{-- /drawer-body --}}
 
+                {{-- Dismiss panel — replaces the footer while active. Requires a
+                     reason so a row can't be cleared with a fake call outcome.
+                     See docs/feature-specs/feature-spec-action-board-dismiss.md. --}}
+                <div x-show="dismissMode" x-cloak style="padding:14px 24px;border-top:1px solid #f3f4f6;background:#fafafa;">
+                    <div class="ta-form-group">
+                        <label class="ta-form-label">Dismiss reason</label>
+                        <select class="ta-form-select" x-model="dismissReason">
+                            <option value="">— Select a reason —</option>
+                            <template x-for="r in dismissReasons" :key="r.key">
+                                <option :value="r.key" x-text="r.label"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="ta-form-group" x-show="dismissReason">
+                        <label class="ta-form-label">
+                            <span x-text="dismissRequiresNotes ? 'Notes (required for this reason)' : 'Notes (optional)'"></span>
+                        </label>
+                        <textarea class="ta-form-textarea" placeholder="Why is this being dismissed?" x-model="dismissNotes"></textarea>
+                    </div>
+                    <template x-if="dismissError">
+                        <div style="background:#fdeaea;border:1px solid #f5a0a0;border-radius:8px;padding:8px 12px;font-size:12.5px;color:#b52020;margin-bottom:8px;">
+                            <span x-text="dismissError"></span>
+                        </div>
+                    </template>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;">
+                        <button class="ta-btn-cancel" @click="dismissMode = false" :disabled="dismissing">Back</button>
+                        <button
+                            class="ta-btn-submit"
+                            style="background:#8a5a5a;"
+                            @click="confirmDismiss()"
+                            :disabled="!dismissReason || dismissing || (dismissRequiresNotes && !dismissNotes)"
+                        >
+                            <span x-show="!dismissing">Dismiss</span>
+                            <span x-show="dismissing">Dismissing…</span>
+                        </button>
+                    </div>
+                </div>
+
                 {{-- Drawer Footer --}}
-                <div class="ta-drawer-footer">
+                <div class="ta-drawer-footer" x-show="!dismissMode">
                     <button class="ta-btn-cancel" @click="closeDrawer()">Cancel</button>
+                    <button
+                        type="button"
+                        @click="dismissMode = true"
+                        style="background:none;border:none;color:#9a7aaa;font-size:12.5px;cursor:pointer;text-decoration:underline;margin-right:auto;margin-left:10px;"
+                    >
+                        Dismiss instead
+                    </button>
                     <button
                         class="ta-btn-submit"
                         @click="submitLog()"
-                        :disabled="!form.response || submitting"
+                        :disabled="!form.response || submitting || (requiresNotes && !form.notes)"
                     >
                         <span x-show="!submitting"><i class="ti ti-check"></i> Log & Close</span>
                         <span x-show="submitting"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite;"></i> Saving...</span>
@@ -917,6 +965,7 @@
 const CHECKLISTS    = @json($checklists);
 const RESPONSE_OPTS = @json($responseOpts);
 const NEXT_ACTIONS  = @json($nextActions);
+const REQUIRES_NOTES = @json($requiresNotesMap ?? []);
 
 // Category labels (mirroring controller constant)
 const CATEGORY_LABELS = {
@@ -963,6 +1012,17 @@ function todayActions() {
         // ── Derived next action label ───────────────────────────────────
         nextActionLabel: '',
 
+        // ── Whether the currently-selected outcome requires a note ───────
+        requiresNotes: false,
+
+        // ── Dismiss sub-state (clears a row without a call outcome) ─────
+        dismissMode:   false,
+        dismissReason: '',
+        dismissNotes:  '',
+        dismissing:    false,
+        dismissError:  '',
+        dismissReasons: @json($dismissReasons ?? []),
+
         // ── Per-item actioned tracker (itemId → bool) ───────────────────
         actioned: {},
 
@@ -994,7 +1054,75 @@ function todayActions() {
             // Reset form
             this.form = { response: '', next_action: '', notes: '' };
             this.nextActionLabel = '';
+            this.requiresNotes   = false;
             this.submitError     = '';
+
+            // Reset dismiss sub-state
+            this.dismissMode   = false;
+            this.dismissReason = '';
+            this.dismissNotes  = '';
+            this.dismissError  = '';
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // Whether the current outcome-required-note applies to the chosen
+        // dismiss reason (mirrors requiresNotes, but for DISMISS_REASONS).
+        // ─────────────────────────────────────────────────────────────────
+        get dismissRequiresNotes() {
+            const r = this.dismissReasons.find(r => r.key === this.dismissReason);
+            return !!(r && r.requires_notes);
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // Submit a Dismiss instead of a logged call outcome.
+        // ─────────────────────────────────────────────────────────────────
+        async confirmDismiss() {
+            if (!this.dismissReason || this.dismissing) return;
+            if (this.dismissRequiresNotes && !this.dismissNotes) return;
+
+            this.dismissing   = true;
+            this.dismissError = '';
+
+            const item   = this.drawer.item;
+            const itemId = this.drawer.itemId;
+
+            const isQueueBacked = (item.category === 'recall_calls' || item.category === 'missed_calls_yesterday');
+            const subjectId = isQueueBacked ? item.meta?.comm_queue_id : item.meta?.id;
+
+            if (!subjectId) {
+                this.dismissError = 'This item cannot be dismissed (missing reference id).';
+                this.dismissing = false;
+                return;
+            }
+
+            try {
+                const res = await fetch('{{ route('relationship.today.dismiss') }}', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body:    JSON.stringify({
+                        _token:          document.querySelector('meta[name="csrf-token"]').content,
+                        category:        item.category,
+                        subject_id:      subjectId,
+                        reason_key:      this.dismissReason,
+                        notes:           this.dismissNotes,
+                        patient_id:      item.patient_id,
+                        relationship_id: item.relationship_id,
+                    }),
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    this.actioned[itemId] = true;
+                    this.closeDrawer();
+                } else {
+                    this.dismissError = data.message || 'Could not dismiss. Please try again.';
+                }
+            } catch (err) {
+                this.dismissError = 'Network error. Please check your connection.';
+            } finally {
+                this.dismissing = false;
+            }
         },
 
         // ─────────────────────────────────────────────────────────────────
@@ -1045,6 +1173,9 @@ function todayActions() {
         updateNextAction() {
             this.nextActionLabel = NEXT_ACTIONS[this.form.response] || '';
             this.form.next_action = this.nextActionLabel;
+
+            const cat = this.drawer.item?.category;
+            this.requiresNotes = !!((REQUIRES_NOTES[cat] || {})[this.form.response]);
         },
 
         // ─────────────────────────────────────────────────────────────────

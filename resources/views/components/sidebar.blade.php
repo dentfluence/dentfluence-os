@@ -9,14 +9,12 @@
     <div class="df-sidebar-brand"
          style="flex-shrink:0;display:flex;align-items:center;gap:11px;padding:0 16px;height:64px;border-bottom:1px solid rgba(185,92,183,0.10);overflow:hidden;"
          aria-label="Dentfluence OS - Home">
-        <div style="width:32px;height:32px;flex-shrink:0;background:rgba(106,15,112,0.55);border:1px solid rgba(185,92,183,0.35);display:flex;align-items:center;justify-content:center;" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(215,185,235,0.85)" stroke-width="1.50" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 22 C12 22 5 17 5 11 C5 7 7.5 4 12 4 C16.5 4 19 7 19 11 C19 17 12 22 12 22Z"/>
-            </svg>
+        <div style="width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center;" aria-hidden="true">
+            <img src="{{ asset('images/logo-mark-white.png') }}" alt="" style="max-width:100%;max-height:100%;object-fit:contain;">
         </div>
         <div class="df-nav-label df-sidebar-brand-sub" style="overflow:hidden;min-width:0;">
-            <div style="font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;letter-spacing:0.08em;color:rgba(240,225,250,0.92);white-space:nowrap;">DENTFLUENCE</div>
-            <div style="font-size:9px;font-weight:400;letter-spacing:0.28em;text-transform:uppercase;color:rgba(185,150,210,0.48);margin-top:1px;white-space:nowrap;">Infinity OS</div>
+            <img src="{{ asset('images/logo-wordmark-white.png') }}" alt="Dentfluence" style="height:14px;width:auto;display:block;">
+            <div style="font-size:9px;font-weight:400;letter-spacing:0.28em;text-transform:uppercase;color:rgba(185,150,210,0.48);margin-top:3px;white-space:nowrap;">Infinity OS</div>
         </div>
     </div>
 

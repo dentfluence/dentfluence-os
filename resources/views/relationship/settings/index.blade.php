@@ -296,6 +296,116 @@
         </form>
     </div>
 
+    {{-- ══════════════════════ CALL OUTCOMES & DISMISS REASONS (2026-07-06) ══════════════════════
+         See docs/feature-specs/feature-spec-custom-call-outcomes.md and
+         feature-spec-action-board-dismiss.md. Each category's outcome set
+         feeds the "Call outcome" dropdown in the Today's Actions drawer for
+         that category; if a category has zero active rows here, the drawer
+         falls back to the built-in default set (config/relationship_rules.php)
+         — nothing breaks if you don't touch this section. --}}
+    <div style="font-size:11px;font-weight:700;color:#9a7aaa;letter-spacing:0.08em;text-transform:uppercase;margin:4px 0 10px;">Call Outcomes</div>
+
+    @php $categoryLabels = \App\Http\Controllers\Relationship\SettingsController::callOutcomeCategoryLabels(); @endphp
+
+    @foreach($categoryLabels as $catKey => $catLabel)
+    @php $rows = $callOutcomeCategories[$catKey] ?? collect(); @endphp
+    <div class="rs-card">
+        <div class="rs-card__title">{{ $catLabel }}</div>
+        <div class="rs-card__desc">
+            @if($rows->isEmpty())
+                No custom outcomes configured yet — the drawer is using the built-in default set for this category.
+            @else
+                Shown in this order in the "Call outcome" dropdown. Untick Active to hide an option without losing its history.
+            @endif
+        </div>
+
+        @if($rows->isNotEmpty())
+        <table class="rs-table">
+            <thead>
+                <tr>
+                    <th>Label</th>
+                    <th style="width:80px;">Order</th>
+                    <th style="width:90px;">Requires note</th>
+                    <th style="width:70px;">Active</th>
+                    <th style="width:70px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($rows as $opt)
+                <tr>
+                    <form action="{{ route('relationship.settings.call-outcomes.save', $opt->id) }}" method="POST">
+                        @csrf
+                        <td><input type="text" name="label" value="{{ $opt->label }}" class="rs-input" style="width:100%;"></td>
+                        <td><input type="number" name="sort_order" value="{{ $opt->sort_order }}" min="0" class="rs-input" style="width:60px;"></td>
+                        <td style="text-align:center;"><input type="checkbox" name="requires_notes" value="1" {{ $opt->requires_notes ? 'checked' : '' }}></td>
+                        <td style="text-align:center;"><input type="checkbox" name="is_active" value="1" {{ $opt->is_active ? 'checked' : '' }}></td>
+                        <td><button type="submit" class="rs-save-btn">Save</button></td>
+                    </form>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+        @endif
+
+        <form action="{{ route('relationship.settings.call-outcomes.add', $catKey) }}" method="POST"
+              style="display:flex;align-items:center;gap:10px;margin-top:12px;">
+            @csrf
+            <input type="text" name="label" placeholder="Add a new outcome for this category…" required
+                   class="rs-input" style="width:280px;">
+            <button type="submit" class="rs-save-btn" style="background:#fff;color:#6a0f70;border:1px solid #6a0f70;">+ Add</button>
+        </form>
+    </div>
+    @endforeach
+
+    {{-- ── Dismiss Reasons — shared across every Action Board category ── --}}
+    <div class="rs-card">
+        <div class="rs-card__title">
+            Dismiss Reasons
+            <div class="help-hint" tabindex="0">
+                <span class="help-icon">?</span>
+                <div class="help-card">
+                    <strong>What this does</strong>
+                    <p style="margin:6px 0 0;">When staff clear a Today's Actions row without logging a call outcome (e.g. a duplicate, or the patient was already handled elsewhere), they must pick one of these reasons — so the outcome data above stays honest and rows aren't cleared with a fake call result.</p>
+                </div>
+            </div>
+        </div>
+        <div class="rs-card__desc">Same list shown for every category on the Action Board — one shared set, not per-category.</div>
+
+        <table class="rs-table">
+            <thead>
+                <tr>
+                    <th>Label</th>
+                    <th style="width:80px;">Order</th>
+                    <th style="width:90px;">Requires note</th>
+                    <th style="width:70px;">Active</th>
+                    <th style="width:70px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($dismissReasonOptions as $opt)
+                <tr>
+                    <form action="{{ route('relationship.settings.dismiss-reasons.save', $opt->id) }}" method="POST">
+                        @csrf
+                        <td><input type="text" name="label" value="{{ $opt->label }}" class="rs-input" style="width:100%;"></td>
+                        <td><input type="number" name="sort_order" value="{{ $opt->sort_order }}" min="0" class="rs-input" style="width:60px;"></td>
+                        <td style="text-align:center;"><input type="checkbox" name="requires_notes" value="1" {{ $opt->requires_notes ? 'checked' : '' }}></td>
+                        <td style="text-align:center;"><input type="checkbox" name="is_active" value="1" {{ $opt->is_active ? 'checked' : '' }}></td>
+                        <td><button type="submit" class="rs-save-btn">Save</button></td>
+                    </form>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+
+        <form action="{{ route('relationship.settings.dismiss-reasons.add') }}" method="POST"
+              style="display:flex;align-items:center;gap:10px;margin-top:12px;">
+            @csrf
+            <input type="text" name="label" placeholder="Add a new dismiss reason…" required
+                   class="rs-input" style="width:280px;">
+            <button type="submit" class="rs-save-btn" style="background:#fff;color:#6a0f70;border:1px solid #6a0f70;">+ Add</button>
+        </form>
+    </div>
+
     {{-- ── Advanced / Engineering — collapsed by default ── --}}
     <button type="button" @click="advancedOpen = !advancedOpen"
             style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#faf7fb;border:1px solid #eceef2;border-radius:10px;padding:14px 18px;cursor:pointer;margin-bottom:2px;">

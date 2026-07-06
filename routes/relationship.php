@@ -39,6 +39,11 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     Route::post('/today/birthday-whatsapp', [TodayController::class, 'sendBirthdayWhatsapp'])
         ->name('today.birthday-whatsapp');
 
+    // Dismiss — clear a row without logging a call outcome (requires a reason).
+    // See docs/feature-specs/feature-spec-action-board-dismiss.md.
+    Route::post('/today/dismiss', [TodayController::class, 'dismiss'])
+        ->name('today.dismiss');
+
     // Shared projection summary (JSON) — consumed by the Daily Huddle (slice E4).
     Route::get('/today/summary', [TodayController::class, 'summary'])
         ->name('today.summary');
@@ -175,6 +180,11 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
         ->whereNumber('id')
         ->name('opportunities.convert');  // relationship.opportunities.convert
 
+    // Stage notes (2026-07-06) — see docs/feature-specs/feature-spec-stage-notes.md
+    Route::post('/opportunities/{id}/notes', [OpportunityPipelineController::class, 'addNote'])
+        ->whereNumber('id')
+        ->name('opportunities.notes.add');  // relationship.opportunities.notes.add
+
     // ── PRE Recalls (Phase 1 · Workstream D, slice 3; rebuilt 2026-07-06) ────
     // Filterable, actionable list — additive alongside the legacy
     // Communication / Recall surfaces (which are left untouched). Static
@@ -243,6 +253,23 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
 
     Route::post('/settings/recall-birthday', [RelationshipSettingsController::class, 'saveBirthday'])
         ->name('settings.recall-birthday');  // relationship.settings.recall-birthday
+
+    // ── Call Outcomes + Dismiss Reasons (2026-07-06) ────────────────────────
+    // See docs/feature-specs/feature-spec-custom-call-outcomes.md and
+    // feature-spec-action-board-dismiss.md. Static segments — before /{id}.
+    Route::post('/settings/call-outcomes/{category}/add', [RelationshipSettingsController::class, 'addCallOutcome'])
+        ->name('settings.call-outcomes.add');  // relationship.settings.call-outcomes.add
+
+    Route::post('/settings/call-outcomes/{option}', [RelationshipSettingsController::class, 'saveCallOutcome'])
+        ->whereNumber('option')
+        ->name('settings.call-outcomes.save');  // relationship.settings.call-outcomes.save
+
+    Route::post('/settings/dismiss-reasons/add', [RelationshipSettingsController::class, 'addDismissReason'])
+        ->name('settings.dismiss-reasons.add');  // relationship.settings.dismiss-reasons.add
+
+    Route::post('/settings/dismiss-reasons/{option}', [RelationshipSettingsController::class, 'saveDismissReason'])
+        ->whereNumber('option')
+        ->name('settings.dismiss-reasons.save');  // relationship.settings.dismiss-reasons.save
 
     // ── Templates (moved from Communication OS 2026-07-06) ─────────────────
     // Generic, reusable Message Template editor — any PRE feature (Recall,

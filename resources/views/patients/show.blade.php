@@ -1401,7 +1401,11 @@
         {{-- ── Tab header ── --}}
         <div class="flex items-center justify-between mb-4">
             <h2 class="text-base font-semibold text-gray-800">Prescriptions</h2>
-            {{-- Quick Prescription button removed per request --}}
+            <button @click="showNewRx = !showNewRx"
+                    dusk="rx-new-toggle"
+                    class="text-sm px-3 py-1.5 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition"
+                    x-text="showNewRx ? 'Cancel' : '+ New Prescription'">
+            </button>
         </div>
 
         {{-- Medical alert banner --}}

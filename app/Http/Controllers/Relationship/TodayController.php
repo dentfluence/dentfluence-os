@@ -3,9 +3,18 @@
 namespace App\Http\Controllers\Relationship;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActionOptionList;
+use App\Models\Appointment;
 use App\Models\AppSetting;
+use App\Models\CommunicationQueue;
+use App\Models\Finance\FinancePatientMembership;
+use App\Models\Invoice;
+use App\Models\LabCase;
 use App\Models\MessageTemplate;
 use App\Models\Patient;
+use App\Models\TodayActionDismissal;
+use App\Models\TreatmentOpportunity;
+use App\Models\TreatmentVisit;
 use App\Services\Relationship\ActivityEngine;
 use App\Services\Relationship\TodayActionsEngine;
 use App\Services\Relationship\TodayActionsProjector;
@@ -214,8 +223,10 @@ class TodayController extends Controller
 
         $totalCount    = array_sum(array_column($groups, 'count'));
         $checklists    = config('relationship_rules.call_checklists', []);
-        $responseOpts  = config('relationship_rules.response_options', []);
-        $nextActions   = config('relationship_rules.next_actions', []);
+        $responseOpts  = $this->buildResponseOptions();
+        $nextActions   = $this->buildNextActions();
+        $requiresNotesMap = $this->buildRequiresNotesMap();
+        $dismissReasons = ActionOptionList::query()->dismissReasons()->get()->values();
 
         return view('relationship.today.index', compact(
             'groups',
@@ -223,10 +234,81 @@ class TodayController extends Controller
             'checklists',
             'responseOpts',
             'nextActions',
+            'requiresNotesMap',
+            'dismissReasons',
             'selectedDate',
             'mode',
             'today',
         ));
+    }
+
+    /**
+     * Build the category => [key => label] call-outcome map for the drawer.
+     *
+     * Starts from config('relationship_rules.response_options') (the
+     * long-standing fallback — always present even for a brand-new install
+     * with an empty action_option_lists table), then overrides any category
+     * that has active DB rows configured from Settings > Call Outcomes.
+     * See docs/feature-specs/feature-spec-custom-call-outcomes.md.
+     */
+    private function buildResponseOptions(): array
+    {
+        $merged = config('relationship_rules.response_options', []);
+
+        $dbRows = ActionOptionList::query()
+            ->where('option_type', 'call_outcome')
+            ->active()
+            ->get()
+            ->groupBy('action_category');
+
+        foreach ($dbRows as $category => $rows) {
+            $merged[$category] = ActionOptionList::labelMap($rows);
+        }
+
+        return $merged;
+    }
+
+    /**
+     * Build the response-key => next-action-label map, same shape as
+     * config('relationship_rules.next_actions'). DB rows may set
+     * `next_action_key` as a literal override label for their outcome key —
+     * if a category-specific outcome has no override and no matching config
+     * entry, the "Suggested Next Action" box simply stays empty, which is
+     * correct for outcomes like "Confirmed attendance" that need no follow-up.
+     */
+    private function buildNextActions(): array
+    {
+        $overrides = ActionOptionList::query()
+            ->where('option_type', 'call_outcome')
+            ->whereNotNull('next_action_key')
+            ->active()
+            ->pluck('next_action_key', 'key')
+            ->toArray();
+
+        return array_merge(config('relationship_rules.next_actions', []), $overrides);
+    }
+
+    /**
+     * category => [key => true] for every outcome that requires a note before
+     * submit. Only rows with requires_notes = true are included, so the
+     * client-side payload stays small. Mirrors the server-side check in
+     * logAction() — this is UX only (disables the submit button early), the
+     * real gate is server-side.
+     */
+    private function buildRequiresNotesMap(): array
+    {
+        $rows = ActionOptionList::query()
+            ->where('option_type', 'call_outcome')
+            ->where('requires_notes', true)
+            ->active()
+            ->get(['action_category', 'key']);
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row->action_category][$row->key] = true;
+        }
+
+        return $map;
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -255,6 +337,27 @@ class TodayController extends Controller
             'next_action'     => ['nullable', 'string'],
             'notes'           => ['nullable', 'string', 'max:500'],
         ]);
+
+        // If this outcome is configured (Settings > Call Outcomes) to require a
+        // note, enforce it server-side too — the drawer disables submit client-
+        // side, but this is the real gate. See feature-spec-custom-call-outcomes.md.
+        $optionRow = ActionOptionList::query()
+            ->where('option_type', 'call_outcome')
+            ->where('key', $validated['response'])
+            ->where(function ($q) use ($validated) {
+                $q->where('action_category', $validated['category'])
+                  ->orWhere('action_category', 'default');
+            })
+            ->active()
+            ->orderByRaw("action_category = ? desc", [$validated['category']])
+            ->first();
+
+        if ($optionRow?->requires_notes && blank($validated['notes'] ?? null)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This outcome requires a note before it can be logged.',
+            ], 422);
+        }
 
         try {
             // Resolve the subject model — prefer Patient, fall back to Lead
@@ -300,6 +403,124 @@ class TodayController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Could not log action. Please try again.',
+            ], 500);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // POST /relationship/today/dismiss  (AJAX)
+    //
+    // Clears a row without logging a call outcome — requires a reason so
+    // outcome data (and anything built on it) stays honest. Two paths:
+    //  - recall_calls / missed_calls_yesterday are backed by CommunicationQueue
+    //    rows, so this just calls its existing dismiss() method (same one used
+    //    by Missed Calls / Recall Pipeline bulk-dismiss).
+    //  - everything else is computed live with no row to flag, so a
+    //    TodayActionDismissal suppression row is written for "today only" —
+    //    see docs/feature-specs/feature-spec-action-board-dismiss.md.
+    // ─────────────────────────────────────────────────────────────────────
+
+    /** category => model class, for the live-computed categories that use TodayActionDismissal. */
+    private const DISMISSIBLE_MODELS = [
+        'opportunities'            => TreatmentOpportunity::class,
+        'appointment_reminders'    => Appointment::class,
+        'pending_estimates'        => TreatmentOpportunity::class,
+        'membership_renewals'      => FinancePatientMembership::class,
+        'birthdays'                => Patient::class,
+        'lab_ready'                => LabCase::class,
+        'payment_reminders'        => Invoice::class,
+        'wellness_check_yesterday' => TreatmentVisit::class,
+    ];
+
+    public function dismiss(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'category'        => ['required', 'string'],
+            'subject_id'      => ['required', 'integer'],
+            'reason_key'      => ['required', 'string'],
+            'notes'           => ['nullable', 'string', 'max:500'],
+            'patient_id'      => ['nullable', 'integer'],
+            'relationship_id' => ['nullable', 'integer'],
+        ]);
+
+        $reason = ActionOptionList::query()
+            ->where('option_type', 'dismiss_reason')
+            ->where('key', $validated['reason_key'])
+            ->active()
+            ->first();
+
+        if (! $reason) {
+            return response()->json(['success' => false, 'message' => 'Unknown dismiss reason.'], 422);
+        }
+
+        if ($reason->requires_notes && blank($validated['notes'] ?? null)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This reason requires a note before it can be dismissed.',
+            ], 422);
+        }
+
+        try {
+            // CommunicationQueue-backed categories — reuse the existing, already-
+            // proven ignore/dismiss path (Missed Calls / Recall Pipeline).
+            if ($validated['category'] === 'recall_calls' || $validated['category'] === 'missed_calls_yesterday') {
+                $queueItem = CommunicationQueue::find($validated['subject_id']);
+                if (! $queueItem) {
+                    return response()->json(['success' => false, 'message' => 'Item not found — it may already be handled.'], 404);
+                }
+                $queueItem->dismiss(auth()->id(), $reason->label . ($validated['notes'] ?? '' ? ' — ' . $validated['notes'] : ''));
+            } else {
+                $modelClass = self::DISMISSIBLE_MODELS[$validated['category']] ?? null;
+                if (! $modelClass) {
+                    return response()->json(['success' => false, 'message' => 'This category cannot be dismissed.'], 422);
+                }
+
+                TodayActionDismissal::updateOrCreate(
+                    [
+                        'category'            => $validated['category'],
+                        'subject_type'        => $modelClass,
+                        'subject_id'          => $validated['subject_id'],
+                        'dismissed_for_date'  => \Illuminate\Support\Carbon::today()->toDateString(),
+                    ],
+                    [
+                        'reason_key'   => $reason->key,
+                        'notes'        => $validated['notes'] ?? null,
+                        'dismissed_by' => auth()->id(),
+                    ]
+                );
+            }
+
+            // Log to the Timeline too, same as every other action on this board.
+            $subject = null;
+            if ($request->filled('patient_id')) {
+                $subject = Patient::find($request->integer('patient_id'));
+            }
+            if ($subject) {
+                $this->activityEngine->log(
+                    subject       : $subject,
+                    event         : 'today_action.dismissed',
+                    actor         : auth()->user(),
+                    metadata      : [
+                        'category'   => $validated['category'],
+                        'reason'     => $reason->label,
+                        'notes'      => $validated['notes'] ?? null,
+                        'source'     => 'today_actions',
+                    ],
+                    relationshipId: $request->integer('relationship_id') ?: null,
+                    description   : 'Dismissed from Today\'s Actions: ' . $reason->label,
+                );
+            }
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            Log::error('TodayController::dismiss failed', [
+                'data'  => $validated,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not dismiss. Please try again.',
             ], 500);
         }
     }

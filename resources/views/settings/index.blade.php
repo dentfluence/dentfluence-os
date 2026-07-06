@@ -1648,12 +1648,12 @@
     ════════════════════════════════════════════ --}}
     <div x-show="activeTab==='inventory'" x-cloak>
 
-        {{-- ── Categories + Sub-types ── --}}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;max-width:960px;margin-left:auto;margin-right:auto;">
+        {{-- ── Categories + Sub-types + Locations — squeezed into one row, like the Huddle board columns ── --}}
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:24px;max-width:1360px;margin-left:auto;margin-right:auto;">
 
             {{-- Categories --}}
-            <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;overflow:hidden;">
-                <div style="padding:16px 20px;border-bottom:1px solid #ede4f3;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#f9f3fa,#f3e8f7);">
+            <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;">
+                <div style="padding:14px 20px;border-bottom:1px solid #ede4f3;display:flex;align-items:center;justify-content:space-between;background:#faf6fc;">
                     <div>
                         <h3 class="settings-section-title" style="margin:0 0 2px;">Item Categories</h3>
                         <p style="font-size:12px;color:#9a7aaa;margin:0;">{{ $invCategories->count() }} categories</p>
@@ -1663,9 +1663,13 @@
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add
                     </button>
                 </div>
-                <div>
+                <div style="padding:10px 20px;border-bottom:1px solid #f5f0f8;">
+                    <input type="text" id="inv-cat-filter" oninput="invFilterCategories()"
+                           placeholder="Filter categories…" class="settings-input" style="font-size:12.5px;padding:7px 10px;">
+                </div>
+                <div id="inv-cat-list" style="max-height:420px;overflow-y:auto;">
                     @forelse($invCategories as $cat)
-                    <div style="display:flex;align-items:center;gap:12px;padding:11px 20px;border-bottom:1px solid #f5f0f8;{{ !$cat->is_active ? 'opacity:0.5;' : '' }}">
+                    <div data-name="{{ strtolower($cat->name) }}" style="display:flex;align-items:center;gap:12px;padding:11px 20px;border-bottom:1px solid #f5f0f8;{{ !$cat->is_active ? 'opacity:0.5;' : '' }}">
                         <span style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:{{ $cat->color ?: '#ccc' }};border:1px solid rgba(0,0,0,0.08);"></span>
                         <div style="flex:1;min-width:0;">
                             <div style="font-size:13px;font-weight:500;color:#1a0320;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
@@ -1691,8 +1695,8 @@
             </div>
 
             {{-- Sub-types --}}
-            <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;overflow:hidden;">
-                <div style="padding:16px 20px;border-bottom:1px solid #e8f7ee;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#f5fbf7,#e8f7ee);">
+            <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;">
+                <div style="padding:14px 20px;border-bottom:1px solid #e8f7ee;display:flex;align-items:center;justify-content:space-between;background:#f5fbf8;">
                     <div>
                         <h3 class="settings-section-title" style="margin:0 0 2px;color:#1a7a45;">Sub-types</h3>
                         <p style="font-size:12px;color:#5a9a6a;margin:0;">Product sub-types per category</p>
@@ -1700,13 +1704,21 @@
                     <button onclick="document.getElementById('inv-modal-add-subtype').style.display='flex'"
                             style="background:#1a7a45;color:#fff;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:500;cursor:pointer;">+ Add</button>
                 </div>
-                <div style="padding:16px 20px;">
+                <div style="padding:10px 20px;border-bottom:1px solid #f5f0f8;">
+                    <input type="text" id="inv-sub-filter" oninput="invFilterSubTypes()"
+                           placeholder="Filter sub-types…" class="settings-input" style="font-size:12.5px;padding:7px 10px;">
+                </div>
+                <div id="inv-sub-list" style="max-height:420px;overflow-y:auto;padding:10px 20px;">
                     @forelse($invSubTypes->groupBy(fn($st) => $st->category?->name ?? 'Uncategorised') as $catName => $group)
-                    <div style="margin-bottom:16px;">
-                        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#1a7a45;margin-bottom:8px;">{{ $catName }}</div>
-                        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                    <details data-name="{{ strtolower($catName) }}" style="margin-bottom:6px;">
+                        <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#1a7a45;padding:6px 0;list-style:none;display:flex;align-items:center;gap:6px;">
+                            <span style="display:inline-block;width:0;height:0;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:5px solid #5a9a6a;transition:transform .12s;"></span>
+                            {{ $catName }}
+                            <span style="font-weight:400;color:#9a7aaa;">({{ $group->count() }})</span>
+                        </summary>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;padding:4px 0 10px 11px;">
                             @foreach($group as $st)
-                            <div style="display:inline-flex;align-items:center;gap:6px;background:{{ $st->is_active ? '#e8f7ee' : '#f5f5f5' }};border:1px solid {{ $st->is_active ? '#a3d9b8' : '#ddd' }};border-radius:20px;padding:4px 10px 4px 12px;font-size:12.5px;color:{{ $st->is_active ? '#1a7a45' : '#888' }};">
+                            <div data-tag="{{ strtolower($st->name) }}" style="display:inline-flex;align-items:center;gap:6px;background:{{ $st->is_active ? '#e8f7ee' : '#f5f5f5' }};border:1px solid {{ $st->is_active ? '#a3d9b8' : '#ddd' }};border-radius:20px;padding:4px 10px 4px 12px;font-size:12.5px;color:{{ $st->is_active ? '#1a7a45' : '#888' }};">
                                 {{ $st->name }}
                                 <button onclick="invOpenEditSubType({{ $st->id }}, '{{ addslashes($st->name) }}', {{ $st->category_id }}, {{ $st->is_active ? 'true' : 'false' }})" style="background:none;border:none;cursor:pointer;font-size:11px;color:#888;padding:0;line-height:1;" title="Edit">✎</button>
                                 <form method="POST" action="{{ route('inventory.settings.sub-types.destroy', $st) }}" style="display:inline;" onsubmit="return confirm('Delete?')">
@@ -1716,64 +1728,53 @@
                             </div>
                             @endforeach
                         </div>
-                    </div>
+                    </details>
                     @empty
                     <div style="padding:24px;text-align:center;font-size:13px;color:#9a7aaa;">No sub-types yet.</div>
                     @endforelse
                 </div>
             </div>
 
-        </div>
+            {{-- Locations — third column in the same row --}}
+            <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;">
+                <div style="padding:14px 20px;border-bottom:1px solid #ede4f3;display:flex;align-items:center;justify-content:space-between;background:#faf6fc;">
+                    <div>
+                        <h3 class="settings-section-title" style="margin:0 0 2px;">Storage Locations</h3>
+                        <p style="font-size:12px;color:#9a7aaa;margin:0;">{{ $invLocations->count() }} locations</p>
+                    </div>
+                    <button onclick="document.getElementById('inv-modal-add-location').style.display='flex'"
+                            style="background:#6a0f70;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add
+                    </button>
+                </div>
+                <div style="max-height:420px;overflow-y:auto;">
+                    @forelse($invLocations as $loc)
+                    <div style="display:flex;align-items:center;gap:10px;padding:11px 20px;border-bottom:1px solid #f5f0f8;{{ !$loc->is_active ? 'opacity:0.5;' : '' }}">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:13px;font-weight:500;color:#1a0320;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ $loc->name }}@if(!$loc->is_active)<span style="font-size:10px;color:#9a7aaa;margin-left:4px;">(inactive)</span>@endif</div>
+                            <div style="font-size:11px;color:#9a7aaa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ $loc->getTypeLabel() }}@if($loc->code) · <code style="font-size:11px;">{{ $loc->code }}</code>@endif</div>
+                        </div>
+                        <div style="display:flex;gap:4px;flex-shrink:0;">
+                            <button onclick='invOpenEditLocation({{ $loc->toJson() }})' style="background:#f5f0f8;border:none;border-radius:4px;padding:5px 9px;cursor:pointer;font-size:11px;color:#6a0f70;">Edit</button>
+                            <form method="POST" action="{{ route('inventory.settings.locations.destroy', $loc) }}" onsubmit="return confirm('Deactivate \'{{ $loc->name }}\'?')">
+                                @csrf @method('DELETE')
+                                <button type="submit" style="background:#fdeaea;border:none;border-radius:4px;padding:5px 9px;cursor:pointer;font-size:11px;color:#b52020;">✕</button>
+                            </form>
+                        </div>
+                    </div>
+                    @empty
+                    <div style="padding:32px;text-align:center;font-size:13px;color:#9a7aaa;">No locations yet.</div>
+                    @endforelse
+                </div>
+            </div>
 
-        {{-- Locations --}}
-        <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;overflow:hidden;max-width:640px;margin:0 auto;">
-            <div style="padding:16px 20px;border-bottom:1px solid #ede4f3;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#f9f3fa,#f3e8f7);">
-                <div>
-                    <h3 class="settings-section-title" style="margin:0 0 2px;">Storage Locations</h3>
-                    <p style="font-size:12px;color:#9a7aaa;margin:0;">{{ $invLocations->count() }} locations</p>
-                </div>
-                <button onclick="document.getElementById('inv-modal-add-location').style.display='flex'"
-                        style="background:#6a0f70;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add
-                </button>
-            </div>
-            <div>
-                @forelse($invLocations as $loc)
-                <div style="display:flex;align-items:center;gap:12px;padding:11px 20px;border-bottom:1px solid #f5f0f8;{{ !$loc->is_active ? 'opacity:0.5;' : '' }}">
-                    <span style="font-size:14px;flex-shrink:0;">
-                        @switch($loc->type)
-                            @case('main_store') @break
-                            @case('operatory') @break
-                            @case('sterilization') @break
-                            @case('lab') @break
-                            @case('implant_drawer') @break
-                            @case('storage') @break
-                            @default
-                        @endswitch
-                    </span>
-                    <div style="flex:1;min-width:0;">
-                        <div style="font-size:13px;font-weight:500;color:#1a0320;">{{ $loc->name }}@if(!$loc->is_active)<span style="font-size:10px;color:#9a7aaa;margin-left:4px;">(inactive)</span>@endif</div>
-                        <div style="font-size:11px;color:#9a7aaa;">{{ $loc->getTypeLabel() }}@if($loc->code) · <code style="font-size:11px;">{{ $loc->code }}</code>@endif</div>
-                    </div>
-                    <div style="display:flex;gap:4px;flex-shrink:0;">
-                        <button onclick='invOpenEditLocation({{ $loc->toJson() }})' style="background:#f5f0f8;border:none;border-radius:4px;padding:5px 9px;cursor:pointer;font-size:11px;color:#6a0f70;">Edit</button>
-                        <form method="POST" action="{{ route('inventory.settings.locations.destroy', $loc) }}" onsubmit="return confirm('Deactivate \'{{ $loc->name }}\'?')">
-                            @csrf @method('DELETE')
-                            <button type="submit" style="background:#fdeaea;border:none;border-radius:4px;padding:5px 9px;cursor:pointer;font-size:11px;color:#b52020;">✕</button>
-                        </form>
-                    </div>
-                </div>
-                @empty
-                <div style="padding:32px;text-align:center;font-size:13px;color:#9a7aaa;">No locations yet.</div>
-                @endforelse
-            </div>
         </div>
 
         {{-- ── Procurement Controls ── --}}
         @php $grnWindow = (int) \App\Models\AppSetting::get('grn_correction_window_hours', 0); @endphp
         <div style="max-width:960px;margin:24px auto 0;">
             <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;overflow:hidden;">
-                <div style="padding:16px 20px;border-bottom:1px solid #ede4f3;background:linear-gradient(135deg,#fdf9f0,#faf3e0);">
+                <div style="padding:16px 20px;border-bottom:1px solid #ede4f3;background:#fdf9f0;">
                     <h3 class="settings-section-title" style="margin:0 0 2px;color:#7a4500;">Procurement Controls</h3>
                     <p style="font-size:12px;color:#9a7a50;margin:0;">Time window to allow staff to undo an accidental GRN (goods receipt). After this period the receipt is locked.</p>
                 </div>
@@ -2003,6 +2004,32 @@
             document.getElementById('inv-form-edit-subtype').action = `/inventory/settings/sub-types/${id}`;
             document.getElementById('inv-modal-edit-subtype').style.display = 'flex';
         }
+
+        // ── Quick client-side filters (Categories / Sub-types) ──
+        function invFilterCategories() {
+            const q = document.getElementById('inv-cat-filter').value.trim().toLowerCase();
+            document.querySelectorAll('#inv-cat-list [data-name]').forEach(row => {
+                row.style.display = (!q || row.dataset.name.includes(q)) ? '' : 'none';
+            });
+        }
+        function invFilterSubTypes() {
+            const q = document.getElementById('inv-sub-filter').value.trim().toLowerCase();
+            document.querySelectorAll('#inv-sub-list details').forEach(det => {
+                const catMatch = det.dataset.name.includes(q);
+                const tags = det.querySelectorAll('[data-tag]');
+                let anyTagMatch = false;
+                tags.forEach(t => {
+                    const show = !q || t.dataset.tag.includes(q);
+                    t.style.display = show ? '' : 'none';
+                    if (show && q) anyTagMatch = true;
+                });
+                const show = !q || catMatch || anyTagMatch;
+                det.style.display = show ? '' : 'none';
+                if (q) { det.open = show; }
+                else { det.open = false; tags.forEach(t => t.style.display = ''); }
+            });
+        }
+
         ['inv-modal-add-category','inv-modal-edit-category','inv-modal-add-location',
          'inv-modal-edit-location','inv-modal-add-subtype','inv-modal-edit-subtype'].forEach(id => {
             const el = document.getElementById(id);

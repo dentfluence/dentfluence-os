@@ -37,6 +37,11 @@
 
     <title>@yield('page-title', 'Dashboard') — Dentfluence OS</title>
 
+    {{-- ── Favicon ── --}}
+    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" href="{{ asset('images/logo-mark-purple-square.png') }}" type="image/png">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
+
     {{-- Alpine.js — collapse plugin MUST come before Alpine so it registers in time --}}
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>

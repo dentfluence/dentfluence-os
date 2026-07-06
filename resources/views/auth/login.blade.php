@@ -13,6 +13,10 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Login — Dentfluence Infinity</title>
 
+    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" href="{{ asset('images/logo-mark-purple-square.png') }}" type="image/png">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -126,7 +130,20 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            margin-top: 30px;
         }
+
+        .brand-site-link {
+            margin-top: 16px;
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 400;
+            letter-spacing: 0.16em;
+            color: rgba(215, 165, 240, 0.65);
+            text-decoration: none;
+            transition: color .15s;
+        }
+        .brand-site-link:hover { color: rgba(230, 190, 250, 0.9); }
 
         /* "DENTFLUENCE" — pure text, no SVG */
         .brand-wordmark {
@@ -741,12 +758,10 @@
 
             <!-- Top: Brand logo -->
             <div class="brand-block al d1">
-                <picture>
-                    <source srcset="{{ asset('images/logo.webp') }}" type="image/webp">
-                    <img src="{{ asset('images/logo.png') }}"
-                         alt="Dentfluence — Influence, Grow Beyond Limits"
-                         style="width:320px;max-width:90%;height:auto;filter:drop-shadow(0 0 28px rgba(150,40,200,0.30));">
-                </picture>
+                <img src="{{ asset('images/logo-full-white.png') }}"
+                     alt="Dentfluence — Influence, Grow Beyond Limits"
+                     style="width:320px;max-width:90%;height:auto;filter:drop-shadow(0 0 28px rgba(150,40,200,0.30));">
+                <a href="https://dentfluence.in" target="_blank" rel="noopener" class="brand-site-link">dentfluence.in</a>
             </div>
 
             <!-- Middle: tagline -->

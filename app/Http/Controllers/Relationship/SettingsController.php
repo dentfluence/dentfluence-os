@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Relationship;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActionOptionList;
 use App\Models\AppSetting;
 use App\Models\MessageTemplate;
 use App\Models\TreatmentType;
@@ -94,6 +95,23 @@ class SettingsController extends Controller
 
         $flagHelp = $this->flagHelp();
 
+        // ── Call Outcomes + Dismiss Reasons (2026-07-06) ────────────────────
+        // See docs/feature-specs/feature-spec-custom-call-outcomes.md. Shows
+        // ALL rows (not just active) so staff can re-activate a disabled one —
+        // "delete" isn't offered since old Activity rows may still reference a
+        // key by value.
+        $callOutcomeCategories = ActionOptionList::query()
+            ->where('option_type', 'call_outcome')
+            ->orderBy('action_category')
+            ->orderBy('sort_order')
+            ->get()
+            ->groupBy('action_category');
+
+        $dismissReasonOptions = ActionOptionList::query()
+            ->where('option_type', 'dismiss_reason')
+            ->orderBy('sort_order')
+            ->get();
+
         return view('relationship.settings.index', compact(
             'featureFlags',
             'flagGroups',
@@ -107,8 +125,27 @@ class SettingsController extends Controller
             'birthdayWindowDays',
             'recallTemplate',
             'birthdayTemplate',
-            'flagHelp'
+            'flagHelp',
+            'callOutcomeCategories',
+            'dismissReasonOptions',
         ));
+    }
+
+    /** Plain labels for the call-outcome category tables (fewer than the full Action Board categories — only those that get a custom outcome set). */
+    public static function callOutcomeCategoryLabels(): array
+    {
+        return [
+            'default'               => 'New Enquiries / Lead Follow-ups (default set)',
+            'appointment_reminders' => 'Appointment Reminders',
+            'follow_up_calls'       => 'Follow-up Calls',
+            'recall_calls'          => 'Recall Calls',
+            'opportunities'         => 'Treatment Opportunities',
+            'pending_estimates'     => 'Pending Estimates',
+            'membership_renewals'   => 'Membership Renewals',
+            'lab_ready'             => 'Lab Work Ready',
+            'birthday'              => 'Birthday Wishes',
+            'payment_reminders'     => 'Payment Reminders',
+        ];
     }
 
     /**
@@ -271,6 +308,112 @@ class SettingsController extends Controller
         AppSetting::set('recall.birthday_window_days', (string) $data['window_days'], 'recall');
 
         return back()->with('success', 'Birthday reminder settings saved.');
+    }
+
+    /**
+     * Update one call-outcome option (label / requires_notes / active / order).
+     * See docs/feature-specs/feature-spec-custom-call-outcomes.md.
+     */
+    public function saveCallOutcome(Request $request, ActionOptionList $option): RedirectResponse
+    {
+        abort_unless($option->option_type === 'call_outcome', 404);
+
+        $data = $request->validate([
+            'label'          => ['required', 'string', 'max:150'],
+            'sort_order'     => ['required', 'integer', 'min:0'],
+            'requires_notes' => ['nullable', 'boolean'],
+            'is_active'      => ['nullable', 'boolean'],
+        ]);
+
+        $option->update([
+            'label'          => $data['label'],
+            'sort_order'     => $data['sort_order'],
+            'requires_notes' => $request->boolean('requires_notes'),
+            'is_active'      => $request->boolean('is_active'),
+        ]);
+
+        return back()->with('success', "Call outcome \"{$option->label}\" saved.");
+    }
+
+    /** Add a new call-outcome option to a category. */
+    public function addCallOutcome(Request $request, string $category): RedirectResponse
+    {
+        $data = $request->validate([
+            'label' => ['required', 'string', 'max:150'],
+        ]);
+
+        $key = \Illuminate\Support\Str::slug($data['label'], '_');
+
+        if (ActionOptionList::query()->where('option_type', 'call_outcome')
+            ->where('action_category', $category)->where('key', $key)->exists()) {
+            return back()->with('error', 'An outcome with a matching key already exists in this category — use a slightly different label.');
+        }
+
+        $nextOrder = (int) ActionOptionList::query()
+            ->where('option_type', 'call_outcome')
+            ->where('action_category', $category)
+            ->max('sort_order') + 1;
+
+        ActionOptionList::create([
+            'option_type'     => 'call_outcome',
+            'action_category' => $category,
+            'key'             => $key,
+            'label'           => $data['label'],
+            'sort_order'      => $nextOrder,
+            'is_active'       => true,
+        ]);
+
+        return back()->with('success', "Added \"{$data['label']}\".");
+    }
+
+    /** Update one dismiss-reason option. */
+    public function saveDismissReason(Request $request, ActionOptionList $option): RedirectResponse
+    {
+        abort_unless($option->option_type === 'dismiss_reason', 404);
+
+        $data = $request->validate([
+            'label'          => ['required', 'string', 'max:150'],
+            'sort_order'     => ['required', 'integer', 'min:0'],
+            'requires_notes' => ['nullable', 'boolean'],
+            'is_active'      => ['nullable', 'boolean'],
+        ]);
+
+        $option->update([
+            'label'          => $data['label'],
+            'sort_order'     => $data['sort_order'],
+            'requires_notes' => $request->boolean('requires_notes'),
+            'is_active'      => $request->boolean('is_active'),
+        ]);
+
+        return back()->with('success', "Dismiss reason \"{$option->label}\" saved.");
+    }
+
+    /** Add a new dismiss-reason option (shared across all categories). */
+    public function addDismissReason(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'label' => ['required', 'string', 'max:150'],
+        ]);
+
+        $key = \Illuminate\Support\Str::slug($data['label'], '_');
+
+        if (ActionOptionList::query()->where('option_type', 'dismiss_reason')->where('key', $key)->exists()) {
+            return back()->with('error', 'A dismiss reason with a matching key already exists — use a slightly different label.');
+        }
+
+        $nextOrder = (int) ActionOptionList::query()
+            ->where('option_type', 'dismiss_reason')
+            ->max('sort_order') + 1;
+
+        ActionOptionList::create([
+            'option_type' => 'dismiss_reason',
+            'key'         => $key,
+            'label'       => $data['label'],
+            'sort_order'  => $nextOrder,
+            'is_active'   => true,
+        ]);
+
+        return back()->with('success', "Added \"{$data['label']}\".");
     }
 
     // Toggle one PRE flag globally. Whitelist-checked against config/features.php

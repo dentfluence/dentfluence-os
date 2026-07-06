@@ -88,13 +88,74 @@
     @endforeach
 </div>
 
-{{-- Notes --}}
+{{-- Original note — set when the opportunity was created; kept as a static
+     "why this exists" summary, distinct from the ongoing note log below. --}}
 @if($opportunity->notes)
 <div style="padding:20px 24px;border-top:1px solid #f3f4f6">
-    <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Notes</div>
+    <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Original Note</div>
     <p style="font-size:14px;color:#374151;line-height:1.6;margin:0">{{ $opportunity->notes }}</p>
 </div>
 @endif
+
+{{-- Stage notes (2026-07-06) — timestamped, attributed log of staff
+     observations and patient responses, tied to this opportunity. Reuses
+     ActivityEngine/Activity (event: opportunity.note_added) instead of a new
+     table. See docs/feature-specs/feature-spec-stage-notes.md and
+     OpportunityPipelineController::addNote()/notesFor(). --}}
+<div style="padding:20px 24px;border-top:1px solid #f3f4f6" x-data="{ noteType: 'suggestion', noteText: '', saving: false, error: '' }">
+    <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Notes</div>
+
+    @forelse(($notes ?? []) as $note)
+    <div style="display:flex;gap:10px;margin-bottom:12px;">
+        <span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;height:fit-content;
+            {{ ($note->metadata['note_type'] ?? '') === 'response' ? 'background:#eef6ee;color:#2f7a3d;' : 'background:#f0eefc;color:#534AB7;' }}">
+            {{ ($note->metadata['note_type'] ?? '') === 'response' ? 'Patient Response' : 'Suggestion' }}
+        </span>
+        <div style="flex:1;min-width:0;">
+            <p style="font-size:13.5px;color:#374151;line-height:1.5;margin:0;">{{ $note->metadata['text'] ?? $note->description }}</p>
+            <div style="font-size:11px;color:#9ca3af;margin-top:3px;">
+                {{ $note->actor?->name ?? 'Staff' }} · {{ $note->occurred_at?->format('d M Y, g:i A') }}
+            </div>
+        </div>
+    </div>
+    @empty
+    <p style="font-size:13px;color:#9ca3af;margin:0 0 12px;">No notes logged yet.</p>
+    @endforelse
+
+    <div style="display:flex;gap:8px;align-items:flex-start;margin-top:8px;">
+        <select x-model="noteType" style="padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-size:12.5px;flex-shrink:0;">
+            <option value="suggestion">Suggestion</option>
+            <option value="response">Patient Response</option>
+        </select>
+        <textarea x-model="noteText" rows="2" placeholder="Add a note…"
+                  style="flex:1;padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;resize:vertical;"></textarea>
+    </div>
+    <template x-if="error">
+        <div style="font-size:12px;color:#b52020;margin-top:6px;" x-text="error"></div>
+    </template>
+    <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+        <button type="button"
+                :disabled="!noteText.trim() || saving"
+                @click="
+                    saving = true; error = '';
+                    fetch('{{ route('relationship.opportunities.notes.add', $opportunity->id) }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json' },
+                        body: JSON.stringify({ note_type: noteType, text: noteText.trim() }),
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) { opOpenDetail({{ $opportunity->id }}); }
+                        else { error = data.message || 'Could not save this note.'; saving = false; }
+                    })
+                    .catch(() => { error = 'Network error. Please try again.'; saving = false; })
+                "
+                style="padding:7px 16px;border:none;border-radius:8px;background:#534AB7;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;opacity:1;">
+            <span x-show="!saving">Add Note</span>
+            <span x-show="saving">Saving…</span>
+        </button>
+    </div>
+</div>
 
 {{-- Decline reason --}}
 @if($opportunity->status === 'declined')

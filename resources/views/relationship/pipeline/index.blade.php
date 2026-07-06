@@ -209,6 +209,12 @@
             <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Type</label>
             <select id="ppActType" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;margin-bottom:12px;">
                 <option value="note">Note</option>
+                {{-- Suggestion / Patient Response (2026-07-06) — same Log Activity
+                     flow, just two more type values so a staff observation can be
+                     told apart from what the patient actually said. See
+                     docs/feature-specs/feature-spec-stage-notes.md. --}}
+                <option value="suggestion">Suggestion (staff observation)</option>
+                <option value="response">Patient Response</option>
                 <option value="call">Call</option>
                 <option value="whatsapp">WhatsApp</option>
                 <option value="sms">SMS</option>
@@ -610,7 +616,7 @@ function ppSubmitActivity() {
 
     const type  = document.getElementById('ppActType').value;
     const note  = document.getElementById('ppActNote').value.trim();
-    const labelMap = { note: 'Note added', call: 'Call logged', whatsapp: 'WhatsApp sent', sms: 'SMS sent', email: 'Email sent' };
+    const labelMap = { note: 'Note added', suggestion: 'Suggestion added', response: 'Patient response logged', call: 'Call logged', whatsapp: 'WhatsApp sent', sms: 'SMS sent', email: 'Email sent' };
 
     if (!note) {
         alert('Please add a note before saving.');
