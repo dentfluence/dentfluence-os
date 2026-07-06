@@ -8,6 +8,7 @@ use App\Models\HrShift;
 use App\Models\HrStaffDocument;
 use App\Models\HrStaffProfile;
 use App\Models\HrStaffShift;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -89,6 +90,7 @@ class HrStaffController extends Controller
             'assistant'           => 'Assistant',
             'front_desk'          => 'Front Desk',
             'accounts'            => 'Accounts',
+            'manager'             => 'Manager',
             'admin'               => 'Admin',
         ];
 
@@ -104,7 +106,7 @@ class HrStaffController extends Controller
             'name'        => 'required|string|max:255',
             'email'       => 'required|email|unique:users,email',
             'phone'       => 'nullable|string|max:20',
-            'role'        => 'required|in:admin,doctor,resident_dentist,associate_dentist,visiting_consultant,front_desk,assistant,accounts',
+            'role'        => 'required|in:admin,manager,doctor,resident_dentist,associate_dentist,visiting_consultant,front_desk,assistant,accounts',
             'designation' => 'nullable|string|max:255',
             'password'    => ['required', 'string', \Illuminate\Validation\Rules\Password::defaults()],
 
@@ -134,11 +136,16 @@ class HrStaffController extends Controller
         ]);
 
         // 1. Create user account
+        // role_id drives real module permissions (Roles & Permissions screen);
+        // `role` stays for legacy doctor-detection/notification-routing lookups.
+        $roleId = Role::where('slug', Role::slugForLegacyRoleString($request->role))->value('id');
+
         $user = User::create([
             'name'        => $request->name,
             'email'       => $request->email,
             'phone'       => $request->phone,
             'role'        => $request->role,
+            'role_id'     => $roleId,
             'designation' => $request->designation,
             'password'    => Hash::make($request->password),
             'is_active'   => true,
@@ -236,6 +243,7 @@ class HrStaffController extends Controller
             'assistant'           => 'Assistant',
             'front_desk'          => 'Front Desk',
             'accounts'            => 'Accounts',
+            'manager'             => 'Manager',
             'admin'               => 'Admin',
         ];
 
@@ -250,7 +258,7 @@ class HrStaffController extends Controller
             'name'        => 'required|string|max:255',
             'email'       => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'phone'       => 'nullable|string|max:20',
-            'role'        => 'required|in:admin,doctor,resident_dentist,associate_dentist,visiting_consultant,front_desk,assistant,accounts',
+            'role'        => 'required|in:admin,manager,doctor,resident_dentist,associate_dentist,visiting_consultant,front_desk,assistant,accounts',
             'designation' => 'nullable|string|max:255',
 
             'department_id'               => 'nullable|exists:hr_departments,id',
@@ -293,6 +301,16 @@ class HrStaffController extends Controller
             'role'        => $request->role,
             'designation' => $request->designation,
         ]);
+
+        // Keep role_id (real module permissions) in sync with the legacy role
+        // string whenever it changes, and backfill it if it was never set —
+        // but don't clobber a custom role_id someone deliberately assigned
+        // via Settings > Staff if the legacy role string itself is untouched.
+        if ($user->wasChanged('role') || is_null($user->role_id)) {
+            $user->update([
+                'role_id' => Role::where('slug', Role::slugForLegacyRoleString($user->role))->value('id'),
+            ]);
+        }
 
         // Admin-only password reset: only touch the password if a new one was submitted.
         if ($request->filled('new_password') && auth()->user()?->role === 'admin') {

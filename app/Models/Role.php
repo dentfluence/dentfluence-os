@@ -118,4 +118,27 @@ class Role extends Model
     /* ── Role categories ── */
     const CATEGORY_DOCTOR = 'doctor';
     const CATEGORY_STAFF  = 'staff';
+
+    /**
+     * Map the legacy `users.role` string (still used for doctor detection,
+     * notification routing, etc. throughout the app) to the Role slug that
+     * governs actual module permissions in the new role_id system.
+     *
+     * Several legacy strings are all "doctor" sub-types for scheduling/
+     * designation purposes but share one permission role.
+     */
+    public static function slugForLegacyRoleString(?string $role): string
+    {
+        return match ($role) {
+            self::ADMIN                    => self::ADMIN,
+            self::MANAGER                  => self::MANAGER,
+            'doctor', 'resident_dentist',
+            'associate_dentist',
+            'visiting_consultant'          => self::DOCTOR,
+            self::ASSISTANT                => self::ASSISTANT,
+            self::FRONT_DESK               => self::FRONT_DESK,
+            self::ACCOUNTS                 => self::ACCOUNTS,
+            default                        => self::ASSISTANT, // safest minimal-access fallback
+        };
+    }
 }

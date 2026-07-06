@@ -39,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'module'               => \App\Http\Middleware\CheckModulePermission::class,
             'marketing.active'     => \App\Http\Middleware\EnsureMarketingActive::class,
             'api.role'             => \App\Http\Middleware\EnsureApiRole::class,   // API role gate (mobile/Tulip)
+            'admin.only'           => \App\Http\Middleware\EnsureAdminRole::class, // hard admin-only gate (e.g. Roles & Permissions)
         ]);
 
         // Add standard security headers to every API response.

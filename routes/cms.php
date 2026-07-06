@@ -33,7 +33,7 @@ Route::middleware(['auth', 'module:cms'])->prefix('clinical-library')->name('cms
     Route::put('/files/{file}/reject',  [ClinicalLibraryController::class, 'rejectFile'])->name('files.reject');
 });
 
-Route::middleware(['auth'])->prefix('content-management')->name('cms.')->group(function () {
+Route::middleware(['auth', 'module:cms'])->prefix('content-management')->name('cms.')->group(function () {
 
     // Main Clinical Library index (Patient Clinical Data tab)
     Route::get('/', [ClinicalLibraryController::class, 'index'])->name('index');

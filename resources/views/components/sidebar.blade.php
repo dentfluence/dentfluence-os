@@ -85,19 +85,21 @@
         </div>
         @endif
 
-        {{-- Communication — hide if no prm or marketing access --}}
-        @if($user->canAccess('prm') || $user->canAccess('marketing'))
+        {{-- Communication --}}
         <div style="padding:12px 0 4px;">
             <div class="df-nav-section-label" style="font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.20em;text-transform:uppercase;color:rgba(185,130,210,0.38);padding:0 16px 5px;">Communication</div>
-            @if($user->canAccess('prm'))
-                {{-- PRM board hard-deleted 2026-07-04 — Relationships (PRE) is the only
-                     entry now, no nav.pre_primary flag/fallback left to check. --}}
-                @include('components.sidebar-item', [
-                    'href'  => route('relationship.dashboard'),
-                    'label' => 'Relationships',
-                    'icon'  => '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-                ])
-            @endif
+            {{-- Relationships (PRE, routes/relationship.php) is explicitly an
+                 ungated "core feature" on the backend (auth only, no module
+                 check), so it's always shown here to match real access.
+                 It used to check canAccess('prm') — a leftover from before
+                 PRM was retired (2026-07-04) — but that module row was
+                 removed 2026-07-06, which would have silently hidden this
+                 for everyone. --}}
+            @include('components.sidebar-item', [
+                'href'  => route('relationship.dashboard'),
+                'label' => 'Relationships',
+                'icon'  => '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+            ])
             @if($user->canAccess('marketing'))
                 @include('components.sidebar-item', [
                     'href'  => route('marketing.overview'),
@@ -106,7 +108,6 @@
                 ])
             @endif
         </div>
-        @endif
 
         {{-- Operations — hide if no ops access --}}
         @if($user->canAccess('finance') || $user->canAccess('inventory') || $user->canAccess('lab') || $user->canAccess('tasks'))

@@ -16,6 +16,9 @@ use App\Models\Finance\FinanceTransaction;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\InvoicePayment;
+use App\Models\Inventory\InventoryItem;
+use App\Models\Inventory\InventoryLocation;
+use App\Models\Inventory\StockMovement;
 use App\Models\Patient;
 use App\Models\Receipt;
 use App\Models\Treatment;
@@ -72,6 +75,8 @@ class BillingController extends Controller
     {
         $patients        = Patient::orderBy('name')->get(['id', 'name', 'phone']);
         $treatments      = Treatment::where('is_active', true)->orderBy('name')->get(['id', 'name', 'default_price', 'gst_pct', 'unit_basis']);
+        $sellableProducts = InventoryItem::sellable()->orderBy('product_name')
+            ->get(['id', 'product_name', 'mrp', 'gst_rate']);
         $invoice         = null;
         $selectedPatient = $request->filled('patient_id') ? Patient::find($request->patient_id) : null;
         $preloadedItems  = collect();
@@ -91,7 +96,7 @@ class BillingController extends Controller
         }
 
         return view('billing.form', compact(
-            'patients', 'treatments', 'invoice', 'selectedPatient',
+            'patients', 'treatments', 'sellableProducts', 'invoice', 'selectedPatient',
             'preloadedItems', 'pendingPrompts', 'wallet', 'membershipInfo'
         ));
     }
@@ -132,6 +137,8 @@ class BillingController extends Controller
 
         $patients   = Patient::orderBy('name')->get(['id', 'name', 'phone']);
         $treatments = Treatment::where('is_active', true)->orderBy('name')->get(['id', 'name', 'default_price', 'gst_pct', 'unit_basis']);
+        $sellableProducts = InventoryItem::sellable()->orderBy('product_name')
+            ->get(['id', 'product_name', 'mrp', 'gst_rate']);
         $invoice    = null;
 
         // All pending prompts for this patient (so the form can show context)
@@ -146,7 +153,7 @@ class BillingController extends Controller
         $selectedPatient = $patient;
 
         return view('billing.form', compact(
-            'patients', 'treatments', 'invoice',
+            'patients', 'treatments', 'sellableProducts', 'invoice',
             'selectedPatient', 'preloadedItems', 'pendingPrompts',
             'wallet', 'prompt', 'membershipInfo'
         ));
@@ -297,6 +304,7 @@ class BillingController extends Controller
             'items.*.gst_pct'       => 'nullable|numeric|min:0|max:100',
             'items.*.tooth_number'  => 'nullable|string|max:100',
             'items.*.treatment_id'  => 'nullable|integer|exists:treatments,id',
+            'items.*.inventory_item_id' => 'nullable|integer|exists:inventory_items,id',
             // Discount layers
             'coupon_code'           => 'nullable|string|max:50',
             'wallet_applied'        => 'nullable|numeric|min:0',
@@ -349,21 +357,23 @@ class BillingController extends Controller
             // ── Save line items ──────────────────────────────────────────────
             foreach ($request->items as $i => $row) {
                 $item = new InvoiceItem([
-                    'invoice_id'   => $invoice->id,
-                    'treatment_id' => $row['treatment_id'] ?? null,   // link to Treatment master
-                    'description'  => $row['description'],
-                    'tooth_number' => $row['tooth_number'] ?? null,
-                    'unit_price'   => $row['unit_price'],
-                    'qty'          => $row['qty'],
-                    'disc_pct'     => $row['disc_pct'] ?? 0,
-                    'gst_pct'      => $row['gst_pct'] ?? 0,
-                    'sort_order'   => $i,
+                    'invoice_id'         => $invoice->id,
+                    'treatment_id'       => $row['treatment_id'] ?? null,   // link to Treatment master
+                    'inventory_item_id'  => $row['inventory_item_id'] ?? null, // link to retail product sold
+                    'description'        => $row['description'],
+                    'tooth_number'       => $row['tooth_number'] ?? null,
+                    'unit_price'         => $row['unit_price'],
+                    'qty'                => $row['qty'],
+                    'disc_pct'           => $row['disc_pct'] ?? 0,
+                    'gst_pct'            => $row['gst_pct'] ?? 0,
+                    'sort_order'         => $i,
                 ]);
                 $item->compute();
                 $item->save();
             }
 
             $invoice->recalculate();
+            $this->applyRetailStockMovements($invoice);
             $invoiceId = $invoice->id;
 
             // ── Record coupon usage ──────────────────────────────────────────
@@ -454,9 +464,11 @@ class BillingController extends Controller
         $invoice->load('items');
         $patients        = Patient::orderBy('name')->get(['id', 'name', 'phone']);
         $treatments      = Treatment::where('is_active', true)->orderBy('name')->get(['id', 'name', 'default_price', 'gst_pct', 'unit_basis']);
+        $sellableProducts = InventoryItem::sellable()->orderBy('product_name')
+            ->get(['id', 'product_name', 'mrp', 'gst_rate']);
         $selectedPatient = $invoice->patient;
 
-        return view('billing.form', compact('invoice', 'patients', 'treatments', 'selectedPatient'));
+        return view('billing.form', compact('invoice', 'patients', 'treatments', 'sellableProducts', 'selectedPatient'));
     }
 
     // ── Update ───────────────────────────────────────────────────────────────
@@ -481,6 +493,7 @@ class BillingController extends Controller
             'items.*.gst_pct'     => 'nullable|numeric|min:0|max:100',
             'items.*.tooth_number'=> 'nullable|string|max:100',
             'items.*.treatment_id'=> 'nullable|integer|exists:treatments,id',
+            'items.*.inventory_item_id' => 'nullable|integer|exists:inventory_items,id',
             'manual_discount_type'  => 'nullable|in:flat,percentage',
             'manual_discount_value' => 'nullable|numeric|min:0',
             'manual_discount_reason'=> 'nullable|string|max:500',
@@ -496,19 +509,25 @@ class BillingController extends Controller
                 'updated_by'   => auth()->id(),
             ]);
 
+            // Invoice items are wholesale deleted + recreated below (not diffed),
+            // so reverse whatever this invoice previously deducted from stock
+            // before recreating the lines, then re-deduct fresh for the new set.
+            $this->reverseRetailStockMovements($invoice);
+
             $invoice->items()->delete();
 
             foreach ($request->items as $i => $row) {
                 $item = new InvoiceItem([
-                    'invoice_id'   => $invoice->id,
-                    'treatment_id' => $row['treatment_id'] ?? null,   // link to Treatment master
-                    'description'  => $row['description'],
-                    'tooth_number' => $row['tooth_number'] ?? null,
-                    'unit_price'   => $row['unit_price'],
-                    'qty'          => $row['qty'],
-                    'disc_pct'     => $row['disc_pct'] ?? 0,
-                    'gst_pct'      => $row['gst_pct'] ?? 0,
-                    'sort_order'   => $i,
+                    'invoice_id'        => $invoice->id,
+                    'treatment_id'      => $row['treatment_id'] ?? null,   // link to Treatment master
+                    'inventory_item_id' => $row['inventory_item_id'] ?? null, // link to retail product sold
+                    'description'       => $row['description'],
+                    'tooth_number'      => $row['tooth_number'] ?? null,
+                    'unit_price'        => $row['unit_price'],
+                    'qty'               => $row['qty'],
+                    'disc_pct'          => $row['disc_pct'] ?? 0,
+                    'gst_pct'           => $row['gst_pct'] ?? 0,
+                    'sort_order'        => $i,
                 ]);
                 $item->compute();
                 $item->save();
@@ -516,6 +535,7 @@ class BillingController extends Controller
 
             $invoice->recalculate();
             $invoice->refresh();
+            $this->applyRetailStockMovements($invoice);
 
             // Manual discount: apply if provided, otherwise clear any existing one.
             $mdVal = (float) $request->input('manual_discount_value', 0);
@@ -535,6 +555,83 @@ class BillingController extends Controller
 
         return redirect()->route('billing.show', $invoice)
             ->with('success', 'Invoice updated successfully.');
+    }
+
+    // ── Retail stock sync ────────────────────────────────────────────────────
+    // A patient invoice can carry retail product lines (toothpaste, brushes,
+    // OTC medicines — is_sellable items). Selling one auto-deducts stock the
+    // same way TreatmentVisitService already does for implants: a StockMovement
+    // row, not a direct decrement, so the change is auditable and feeds the
+    // existing low-stock alerts automatically.
+
+    /**
+     * Deduct stock for every sellable-product line currently on this invoice.
+     * Call after items are (re)created. Safe to call on an invoice with no
+     * product lines — it simply does nothing.
+     */
+    private function applyRetailStockMovements(Invoice $invoice): void
+    {
+        $lines = $invoice->items()->whereNotNull('inventory_item_id')->get();
+        if ($lines->isEmpty()) {
+            return;
+        }
+
+        $location = InventoryLocation::where('type', 'main_store')->where('is_active', true)->first()
+            ?? InventoryLocation::where('is_active', true)->first();
+        if (!$location) {
+            return; // no location configured yet — never block the billing save on this
+        }
+
+        foreach ($lines as $line) {
+            $item = InventoryItem::find($line->inventory_item_id);
+            if (!$item || !$item->is_sellable) {
+                continue; // item was deleted or un-marked sellable since the line was added
+            }
+
+            StockMovement::create([
+                'inventory_item_id' => $item->id,
+                'movement_type'     => 'retail_sale',
+                'qty'               => -$line->qty,
+                'from_location_id'  => $location->id,
+                'unit_cost'         => $item->average_purchase_price,
+                'total_cost'        => round($item->average_purchase_price * $line->qty, 2),
+                'reference_type'    => Invoice::class,
+                'reference_id'      => $invoice->id,
+                'notes'             => 'Retail sale — invoice ' . $invoice->invoice_number,
+                'created_by'        => auth()->id(),
+            ]);
+        }
+    }
+
+    /**
+     * Reverse every retail-sale deduction previously recorded against this
+     * invoice, by creating compensating stock-in entries (never deleting the
+     * original movement rows — the ledger stays a full audit trail of "sold,
+     * then reversed" rather than pretending the sale never happened).
+     * Call before invoice_items are deleted/recreated on edit, and before an
+     * invoice is cancelled/deleted.
+     */
+    private function reverseRetailStockMovements(Invoice $invoice): void
+    {
+        $priorSales = StockMovement::where('reference_type', Invoice::class)
+            ->where('reference_id', $invoice->id)
+            ->where('movement_type', 'retail_sale')
+            ->get();
+
+        foreach ($priorSales as $movement) {
+            StockMovement::create([
+                'inventory_item_id' => $movement->inventory_item_id,
+                'movement_type'     => 'stock_in',
+                'qty'               => abs($movement->qty),
+                'to_location_id'    => $movement->from_location_id,
+                'unit_cost'         => $movement->unit_cost,
+                'total_cost'        => $movement->total_cost,
+                'reference_type'    => Invoice::class,
+                'reference_id'      => $invoice->id,
+                'notes'             => 'Reversal — invoice ' . $invoice->invoice_number . ' edited/cancelled',
+                'created_by'        => auth()->id(),
+            ]);
+        }
     }
 
     // ── Destroy ──────────────────────────────────────────────────────────────
@@ -566,6 +663,8 @@ class BillingController extends Controller
             $invoice->invoice_number
         );
 
+        $this->reverseRetailStockMovements($invoice);
+
         $invoice->update([
             'status'           => 'cancelled',
             'cancelled_reason' => $request->cancelled_reason,
@@ -580,6 +679,7 @@ class BillingController extends Controller
 
     public function cancel(Invoice $invoice)
     {
+        $this->reverseRetailStockMovements($invoice);
         $invoice->update(['status' => 'cancelled']);
         return back()->with('success', 'Invoice cancelled.');
     }
@@ -1335,7 +1435,10 @@ class BillingController extends Controller
                 $invoice->finalBill->delete();
             }
 
-            // 4. Mark invoice as cancelled + save audit
+            // 4. Reverse any retail-product stock deductions this invoice made
+            $this->reverseRetailStockMovements($invoice);
+
+            // 5. Mark invoice as cancelled + save audit
             $invoice->update([
                 'status'           => 'cancelled',
                 'cancelled_reason' => $request->cancelled_reason,

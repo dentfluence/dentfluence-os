@@ -1109,6 +1109,7 @@
     window.__DF_CSRF    = '{{ csrf_token() }}';
     window.__DF_DOCTORS = {!! json_encode(\App\Models\User::where('branch_id', auth()->user()->branch_id)->where('is_active', true)->where(fn($q) => $q->whereIn('role', \App\Models\User::DOCTOR_ROLES)->orWhere('name', 'like', 'Dr.%'))->orderBy('name')->get(['id','name'])) !!};
 </script>
+@include('partials.access-denied-modal')
 @include('partials.appointment-modal-global')
 @include('partials.create-task-modal')
 @include('partials.yesterday-followup-card')

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Middleware\Concerns\RespondsWithAccessDenied;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,6 +17,8 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class CheckModulePermission
 {
+    use RespondsWithAccessDenied;
+
     public function handle(Request $request, Closure $next, string $module, string $action = 'view'): Response
     {
         $user = $request->user();
@@ -25,11 +28,7 @@ class CheckModulePermission
         }
 
         if (! $user->canAccess($module, $action)) {
-            if ($request->expectsJson()) {
-                return response()->json(['message' => 'Access denied.'], 403);
-            }
-
-            abort(403, 'You do not have permission to access this section.');
+            return $this->denyAccess($request, 'You do not have permission to access this section.');
         }
 
         return $next($request);

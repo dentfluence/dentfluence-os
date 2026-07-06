@@ -144,8 +144,8 @@
                         {{ ucfirst($section) }}
                     </div>
                     @foreach($sectionModules as $module)
-                    <div style="display:grid; grid-template-columns:1fr 90px 90px 90px; padding:11px 20px; border-bottom:1px solid #f5f0f8; align-items:center;"
-                         :style="permissions['{{ $module->slug }}']?.view ? '' : 'opacity:.55;'">
+                    <div class="perm-row" :class="permissions['{{ $module->slug }}']?.view ? '' : 'perm-row-dim'"
+                         style="display:grid; grid-template-columns:1fr 90px 90px 90px; padding:11px 20px; border-bottom:1px solid #f5f0f8; align-items:center;">
                         <div style="display:flex; align-items:center; gap:8px;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9a7aaa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                                 {!! $module->icon !!}
@@ -162,8 +162,8 @@
                         </div>
                         {{-- Edit --}}
                         <div style="text-align:center;">
-                            <label class="df-toggle" :class="permissions['{{ $module->slug }}']?.edit ? 'on' : ''"
-                                   :style="!permissions['{{ $module->slug }}']?.view ? 'pointer-events:none;opacity:.3;' : ''">
+                            <label class="df-toggle"
+                                   :class="[permissions['{{ $module->slug }}']?.edit ? 'on' : '', !permissions['{{ $module->slug }}']?.view ? 'df-toggle-locked' : '']">
                                 <input type="checkbox" :checked="permissions['{{ $module->slug }}']?.edit"
                                        @change="toggle('{{ $module->slug }}', 'edit', $event.target.checked)"
                                        :disabled="!permissions['{{ $module->slug }}']?.view" style="display:none;">
@@ -172,8 +172,8 @@
                         </div>
                         {{-- Delete --}}
                         <div style="text-align:center;">
-                            <label class="df-toggle" :class="permissions['{{ $module->slug }}']?.delete ? 'on' : ''"
-                                   :style="!permissions['{{ $module->slug }}']?.edit ? 'pointer-events:none;opacity:.3;' : ''">
+                            <label class="df-toggle"
+                                   :class="[permissions['{{ $module->slug }}']?.delete ? 'on' : '', !permissions['{{ $module->slug }}']?.edit ? 'df-toggle-locked' : '']">
                                 <input type="checkbox" :checked="permissions['{{ $module->slug }}']?.delete"
                                        @change="toggle('{{ $module->slug }}', 'delete', $event.target.checked)"
                                        :disabled="!permissions['{{ $module->slug }}']?.edit" style="display:none;">
@@ -260,6 +260,8 @@
     .df-toggle-track::after { content:''; position:absolute; top:3px; left:3px; width:14px; height:14px; border-radius:50%; background:#fff; transition:transform 180ms, background 180ms; box-shadow:0 1px 3px rgba(0,0,0,.18); }
     .df-toggle.on .df-toggle-track { background:#6a0f70; }
     .df-toggle.on .df-toggle-track::after { transform:translateX(16px); }
+    .perm-row-dim { opacity:.55; }
+    .df-toggle-locked { pointer-events:none; opacity:.3; }
 </style>
 
 <script>
@@ -308,7 +310,7 @@ function rolesManager() {
         async savePermissions() {
             this.saving = true;
             try {
-                const res = await fetch(`/settings/roles/${this.selectedRoleId}`, {
+                const res = await fetch(`/hr/roles/${this.selectedRoleId}`, {
                     method:  'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
                     body: JSON.stringify({ permissions: this.permissions }),
@@ -330,7 +332,7 @@ function rolesManager() {
 
             this.deleting = true;
             try {
-                const res = await fetch(`/settings/roles/${this.selectedRoleId}`, {
+                const res = await fetch(`/hr/roles/${this.selectedRoleId}`, {
                     method:  'DELETE',
                     headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
                 });
@@ -348,7 +350,7 @@ function rolesManager() {
         async createRole() {
             if (!this.newRole.name) return;
             try {
-                const res  = await fetch('/settings/roles', {
+                const res  = await fetch('/hr/roles', {
                     method:  'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
                     body: JSON.stringify(this.newRole),

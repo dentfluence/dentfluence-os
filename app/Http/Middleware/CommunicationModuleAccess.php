@@ -2,21 +2,22 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Middleware\Concerns\RespondsWithAccessDenied;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class CommunicationModuleAccess
 {
+    use RespondsWithAccessDenied;
+
     /**
      * Handle an incoming request.
      *
      * Enforces that the Communication OS module is:
      * 1. Enabled in config
-     * 2. Accessible by the authenticated user's role
-     *
-     * Role-based granularity is expanded in Session 11 with Policies.
-     * For now: any authenticated user can access the module.
+     * 2. Accessible by the authenticated user's role (via the 'communication'
+     *    module row in Roles & Permissions)
      */
     public function handle(Request $request, Closure $next): Response
     {
@@ -31,8 +32,9 @@ class CommunicationModuleAccess
                 ->with('intended', $request->fullUrl());
         }
 
-        // Future: role-based checks via Gate / Policy
-        // Gate::authorize('access-communication-module');
+        if (! auth()->user()->canAccess('communication')) {
+            return $this->denyAccess($request, 'You do not have permission to access Communication OS.');
+        }
 
         return $next($request);
     }

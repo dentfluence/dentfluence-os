@@ -129,6 +129,24 @@
                                 class="px-3 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">Add</button>
                     </div>
 
+                    {{-- Quick-add: retail product (toothpaste, brushes, OTC medicines — auto-deducts stock) --}}
+                    @if(isset($sellableProducts) && $sellableProducts->isNotEmpty())
+                    <div class="flex gap-2">
+                        <select id="productPicker"
+                                class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">— Quick-add product —</option>
+                            @foreach($sellableProducts as $p)
+                                <option value="{{ $p->id }}" data-name="{{ $p->product_name }}" data-price="{{ $p->mrp ?? 0 }}"
+                                        data-gst="{{ $p->gst_rate ?? 0 }}">
+                                    {{ $p->product_name }} — Rs. {{ number_format($p->mrp ?? 0, 0) }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <button type="button" onclick="addFromProduct()"
+                                class="px-3 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">Add</button>
+                    </div>
+                    @endif
+
                     {{-- Item rows --}}
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm" id="itemsTable">
@@ -153,6 +171,7 @@
                                                class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                                                oninput="recalcTotals()">
                                         <input type="hidden" name="items[{{ $idx }}][treatment_id]" value="{{ $item['treatment_id'] ?? '' }}">
+                                        <input type="hidden" name="items[{{ $idx }}][inventory_item_id]" value="{{ $item['inventory_item_id'] ?? '' }}">
                                     </td>
                                     <td class="py-2 pr-2">
                                         {{-- Click to open the FDI tooth-chart modal (single / multiple select) --}}
@@ -567,7 +586,7 @@ function calcMembershipDiscount(subtotal) {
     return Math.round(discount * 100) / 100;
 }
 
-function addRow(desc = '', price = 0, tooth = '', visitItemId = null, treatmentId = null, gst = 0, basis = 'per_tooth') {
+function addRow(desc = '', price = 0, tooth = '', visitItemId = null, treatmentId = null, gst = 0, basis = 'per_tooth', inventoryItemId = null) {
     document.getElementById('emptyMsg')?.remove();
     const idx = rowIdx++;
     const tbody = document.getElementById('itemRows');
@@ -583,6 +602,7 @@ function addRow(desc = '', price = 0, tooth = '', visitItemId = null, treatmentI
                    class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                    oninput="recalcTotals()">
             <input type="hidden" name="items[${idx}][treatment_id]" value="${treatmentId || ''}">
+            <input type="hidden" name="items[${idx}][inventory_item_id]" value="${inventoryItemId || ''}">
         </td>
         <td class="py-2 pr-2">
             <input type="text" name="items[${idx}][tooth_number]" value="${tooth}" placeholder="Select" readonly
@@ -620,6 +640,17 @@ function addFromTreatment() {
     // Pull full detail from the Treatment master: price, GST and unit basis.
     addRow(opt.dataset.name, opt.dataset.price, '', null, parseInt(opt.value),
            parseFloat(opt.dataset.gst) || 0, opt.dataset.basis || 'per_tooth');
+    sel.selectedIndex = 0;
+}
+
+// Retail product line (toothpaste, brushes, OTC medicines) — no tooth number,
+// no treatment_id, but carries inventory_item_id so the sale auto-deducts stock.
+function addFromProduct() {
+    const sel = document.getElementById('productPicker');
+    const opt = sel.options[sel.selectedIndex];
+    if (!opt.value) return;
+    addRow(opt.dataset.name, opt.dataset.price, '', null, null,
+           parseFloat(opt.dataset.gst) || 0, 'per_visit', parseInt(opt.value));
     sel.selectedIndex = 0;
 }
 

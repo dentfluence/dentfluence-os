@@ -613,12 +613,11 @@ class InventoryController extends Controller
         $brands     = InventoryItem::where('is_active', true)->whereNotNull('brand')
                         ->where('brand', '!=', '')->distinct()->orderBy('brand')->pluck('brand');
         $locations  = InventoryLocation::active()->orderBy('name')->get(['id', 'name']);
-        $vendors    = InventoryVendor::where('is_active', true)->orderBy('vendor_name')->get(['id', 'vendor_name']);
 
         return view('inventory.products', compact(
             'products', 'search', 'catId', 'subTypeId', 'brandFilter',
             'locationId', 'stockLevel', 'perPage',
-            'categories', 'subTypes', 'variants', 'brands', 'locations', 'vendors'
+            'categories', 'subTypes', 'variants', 'brands', 'locations'
         ));
     }
 
@@ -812,62 +811,230 @@ class InventoryController extends Controller
        ITEMS — store + update
     ═══════════════════════════════════════════════════════════ */
 
+    /**
+     * Shared validation for the Add/Edit Product modal (products.blade.php).
+     * The modal collects packaging-centric fields (packaging_type,
+     * qty_in_packaging, packaging_unit_label, usage_type, ...) rather than
+     * the legacy purchase_unit/consumption_unit/inventory_behavior/
+     * pieces_per_unit/minimum_order_qty columns. Those legacy columns are
+     * still read by Purchase, Stock-In, Reports and Alerts, so they're kept
+     * and derived from the newer fields below instead of being requested
+     * twice from the user.
+     */
+    private function validateProductForm(Request $request): array
+    {
+        return $request->validate([
+            'product_name'           => 'required|string|max:255',
+            'generic_name'           => 'nullable|string|max:255',
+            'brand'                  => 'nullable|string|max:255',
+            'category_id'            => 'nullable|exists:inventory_categories,id',
+            'sub_type_id'            => 'nullable|exists:inventory_sub_types,id',
+            'variant_id'             => 'nullable|exists:inventory_variants,id',
+            'usage_type'             => 'nullable|in:single_use,multiple_use',
+            'max_usage_count'        => 'nullable|integer|min:1',
+            'description'            => 'nullable|string|max:2000',
+            'packaging_type'         => 'required|string|max:60',
+            'qty_in_packaging'       => 'required|numeric|min:0.01',
+            'packaging_unit_label'   => 'required|string|max:20',
+            'company_name'           => 'nullable|string|max:100',
+            'photo'                  => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'last_purchase_price'    => 'nullable|numeric|min:0',
+            'mrp'                    => 'nullable|numeric|min:0',
+            'gst_rate'               => 'nullable|numeric|min:0|max:100',
+            'primary_location_id'    => 'nullable|exists:inventory_locations,id',
+            'minimum_qty'            => 'required|numeric|min:0',
+            'reorder_level'          => 'nullable|numeric|min:0',
+            'alternative_brands'     => 'nullable|array',
+            'alternative_brands.*'   => 'string|max:255',
+            'primary_vendor_id'      => 'nullable|exists:inventory_vendors,id',
+            'alternate_vendor_ids'   => 'nullable|array',
+            'alternate_vendor_ids.*' => 'exists:inventory_vendors,id',
+            'treatment_tags'         => 'nullable|array',
+            'treatment_tags.*'       => 'string|max:100',
+            'product_notes'          => 'nullable|string|max:2000',
+            'is_active'              => 'boolean',
+        ]);
+    }
+
+    /**
+     * Fold packaging fields into the legacy unit/behavior columns, pull out
+     * the fields that don't map 1:1 to an inventory_items column, and handle
+     * the photo upload. Returns [$data, $primaryLocationId, $primaryVendorId,
+     * $alternateVendorIds].
+     */
+    private function prepareProductData(Request $request, array $data): array
+    {
+        $primaryLocationId  = $data['primary_location_id'] ?? null;
+        $primaryVendorId    = $data['primary_vendor_id'] ?? null;
+        $alternateVendorIds = $data['alternate_vendor_ids'] ?? [];
+        unset($data['primary_location_id'], $data['primary_vendor_id'], $data['alternate_vendor_ids']);
+
+        if ($request->hasFile('photo')) {
+            $data['image'] = $request->file('photo')->store('inventory/products', 'public');
+        }
+        unset($data['photo']);
+
+        $data['usage_type']         = $data['usage_type'] ?? 'multiple_use';
+        $data['inventory_behavior'] = $data['usage_type'] === 'single_use' ? 'consumable' : 'reusable';
+        $data['purchase_unit']      = $data['packaging_type'];
+        $data['consumption_unit']   = $data['packaging_unit_label'];
+        $data['pieces_per_unit']    = max(1, (int) round($data['qty_in_packaging']));
+        $data['minimum_order_qty']  = 1; // not collected by this form yet — matches mobile API default
+        $data['is_reusable']        = $data['usage_type'] !== 'single_use';
+        // These columns are NOT NULL with a DB default of 0, but their form
+        // fields are optional — an empty field submits as null, which the DB
+        // rejects outright (same class of bug as cost_per_usage below).
+        // Default each to 0 rather than crash the save.
+        $data['last_purchase_price'] = $data['last_purchase_price'] ?? 0;
+        $data['gst_rate']            = $data['gst_rate'] ?? 0;
+        $data['reorder_level']       = $data['reorder_level'] ?? 0;
+        // has_expiry is no longer editable from this general product-master
+        // form (shelf_life_months field removed 2026-07-06 — expiry is a
+        // batch/lot-level concept captured at GRN/stock-in, not a master
+        // attribute). Leave any existing has_expiry value on the record
+        // untouched rather than forcing it here.
+        // Checkbox defaults checked in the DOM for both Add and Edit, so an
+        // unchecked box always reflects a deliberate user action (deactivate).
+        $data['is_active']          = $request->boolean('is_active');
+        // Clinical products never appear on the billing product picker — that's
+        // what the Saleable/FMCG tab is for. The checkbox that used to let a
+        // clinical item opt into billing was removed once that tab shipped.
+        $data['is_sellable']        = false;
+
+        return [$data, $primaryLocationId, $primaryVendorId, $alternateVendorIds];
+    }
+
+    /** Create the initial stock row and vendor links a product was submitted with. */
+    private function attachProductRelations(InventoryItem $item, ?int $primaryLocationId, ?int $primaryVendorId, array $alternateVendorIds): void
+    {
+        if ($primaryLocationId) {
+            InventoryStock::firstOrCreate(
+                ['inventory_item_id' => $item->id, 'location_id' => $primaryLocationId],
+                ['available_qty' => 0, 'reserved_qty' => 0]
+            );
+        }
+
+        if ($primaryVendorId) {
+            $item->dealers()->syncWithoutDetaching([$primaryVendorId => ['is_primary' => true]]);
+        }
+        foreach ($alternateVendorIds as $vendorId) {
+            if ($vendorId != $primaryVendorId) {
+                $item->dealers()->syncWithoutDetaching([$vendorId => ['is_alternate' => true]]);
+            }
+        }
+    }
+
+    /**
+     * Cost per individual use — cost per piece (avg price ÷ qty in packaging)
+     * divided by how many times a multi-use piece gets reused before
+     * replacement. This is the number that actually feeds treatment costing;
+     * "₹800 a box" doesn't tell you if a procedure is profitable, "₹2 a use" does.
+     */
+    private function calculateCostPerUsage(array $data): float
+    {
+        // Column is NOT NULL (default 0), so uncomputable cases resolve to
+        // 0 rather than null — the blade view already treats 0 as "hide this row".
+        $qty = (float) ($data['qty_in_packaging'] ?? 0);
+        if ($qty <= 0 || empty($data['average_purchase_price'])) {
+            return 0.0;
+        }
+        $costPerPiece = $data['average_purchase_price'] / $qty;
+        $uses = ($data['usage_type'] === 'multiple_use' && !empty($data['max_usage_count']))
+            ? (int) $data['max_usage_count']
+            : 1;
+
+        return round($costPerPiece / max(1, $uses), 4);
+    }
+
     public function storeItem(Request $request)
     {
-        $data = $request->validate([
-            'product_name'       => 'required|string|max:255',
-            'generic_name'       => 'nullable|string|max:255',
-            'brand'              => 'nullable|string|max:255',
-            'category_id'        => 'nullable|exists:inventory_categories,id',
-            'inventory_behavior' => 'required|in:consumable,reusable,semi_reusable',
-            'purchase_unit'      => 'required|string|max:40',
-            'consumption_unit'   => 'required|string|max:40',
-            'pieces_per_unit'    => 'required|integer|min:1',
-            'minimum_qty'        => 'required|numeric|min:0',
-            'minimum_order_qty'  => 'required|numeric|min:1',
-            'last_purchase_price'=> 'nullable|numeric|min:0',
-            'gst_rate'           => 'nullable|numeric|min:0|max:100',
-            'has_expiry'         => 'boolean',
-            'is_reusable'        => 'boolean',
-        ]);
+        [$data, $primaryLocationId, $primaryVendorId, $alternateVendorIds] = $request->input('product_kind') === 'saleable'
+            ? $this->prepareSaleableProductData($request, $this->validateSaleableProductForm($request))
+            : $this->prepareProductData($request, $this->validateProductForm($request));
 
-        // Auto-generate item code
-        $data['item_code'] = 'ITEM-' . str_pad(InventoryItem::count() + 1, 4, '0', STR_PAD_LEFT);
+        $data['item_code']              = 'ITEM-' . str_pad(InventoryItem::count() + 1, 4, '0', STR_PAD_LEFT);
         $data['average_purchase_price'] = $data['last_purchase_price'] ?? 0;
-        $data['has_expiry']  = $request->boolean('has_expiry');
-        $data['is_reusable'] = $request->boolean('is_reusable');
-        $data['created_by']  = auth()->id();
+        $data['cost_per_usage']         = $this->calculateCostPerUsage($data);
+        $data['created_by']             = auth()->id();
 
-        InventoryItem::create($data);
+        $item = InventoryItem::create($data);
+        $this->attachProductRelations($item, $primaryLocationId, $primaryVendorId, $alternateVendorIds);
 
         return back()->with('success', 'Item "' . $data['product_name'] . '" added to catalogue.');
     }
 
     public function updateItem(Request $request, InventoryItem $item)
     {
-        $data = $request->validate([
-            'product_name'        => 'required|string|max:255',
-            'generic_name'        => 'nullable|string|max:255',
-            'brand'               => 'nullable|string|max:255',
-            'category_id'         => 'nullable|exists:inventory_categories,id',
-            'inventory_behavior'  => 'required|in:consumable,reusable,semi_reusable',
-            'purchase_unit'       => 'required|string|max:40',
-            'consumption_unit'    => 'required|string|max:40',
-            'pieces_per_unit'     => 'required|integer|min:1',
-            'minimum_qty'         => 'required|numeric|min:0',
-            'minimum_order_qty'   => 'required|numeric|min:1',
-            'last_purchase_price' => 'nullable|numeric|min:0',
-            'gst_rate'            => 'nullable|numeric|min:0|max:100',
-            'has_expiry'          => 'boolean',
-            'is_reusable'         => 'boolean',
-        ]);
+        [$data, $primaryLocationId, $primaryVendorId, $alternateVendorIds] = $request->input('product_kind') === 'saleable'
+            ? $this->prepareSaleableProductData($request, $this->validateSaleableProductForm($request))
+            : $this->prepareProductData($request, $this->validateProductForm($request));
 
-        $data['has_expiry']  = $request->boolean('has_expiry');
-        $data['is_reusable'] = $request->boolean('is_reusable');
+        $data['average_purchase_price'] = $data['last_purchase_price'] ?? $item->average_purchase_price;
+        $data['cost_per_usage']         = $this->calculateCostPerUsage($data);
 
         $item->update($data);
+        $this->attachProductRelations($item, $primaryLocationId, $primaryVendorId, $alternateVendorIds);
 
         return back()->with('success', 'Item updated successfully.');
+    }
+
+    /**
+     * Validation for the Saleable / FMCG tab — deliberately minimal per
+     * Sumit's spec: Type, Brand Name, MRP, Expiry, Min Qty only. No
+     * category/packaging/cost fields are collected here at all.
+     */
+    private function validateSaleableProductForm(Request $request): array
+    {
+        return $request->validate([
+            'product_name'       => 'required|string|max:255',
+            'retail_type'        => 'required|string|max:40',
+            'brand'              => 'required|string|max:255',
+            'mrp'                => 'required|numeric|min:0',
+            'retail_expiry_date' => 'nullable|date',
+            'minimum_qty'        => 'required|numeric|min:0',
+            'is_active'          => 'boolean',
+        ]);
+    }
+
+    /**
+     * Fills in every column the Saleable tab doesn't ask about, so it can
+     * share the same InventoryItem table/create-flow as clinical products.
+     * Returns the same [$data, $primaryLocationId, $primaryVendorId,
+     * $alternateVendorIds] shape as prepareProductData() — no location/vendor
+     * linking happens from this tab, hence the trailing nulls/[] below.
+     */
+    private function prepareSaleableProductData(Request $request, array $data): array
+    {
+        // Retail products are always sold to patients, always active, and
+        // don't use the clinical Category/Sub Type/Variant taxonomy at all.
+        $data['is_sellable']         = true;
+        $data['is_active']           = true;
+        $data['category_id']         = null;
+        $data['sub_type_id']         = null;
+        $data['variant_id']          = null;
+
+        // Single piece, single use per sale — a tube of toothpaste isn't
+        // "packaged" in the clinical sense, so these are silently defaulted
+        // rather than shown as fields (per Sumit's decision to hide them).
+        $data['usage_type']          = 'multiple_use';
+        $data['inventory_behavior']  = 'reusable';
+        $data['is_reusable']         = true;
+        $data['packaging_type']      = 'Piece';
+        $data['qty_in_packaging']    = 1;
+        $data['packaging_unit_label'] = 'units';
+        $data['purchase_unit']       = 'Piece';
+        $data['consumption_unit']    = 'units';
+        $data['pieces_per_unit']     = 1;
+        $data['minimum_order_qty']   = 1;
+
+        // Same NOT-NULL-with-DB-default-0 columns flagged in prepareProductData()
+        // — this tab never collects Purchase Price/GST/Reorder Level, so they
+        // must be defaulted here too or the insert crashes.
+        $data['last_purchase_price'] = 0;
+        $data['gst_rate']            = 0;
+        $data['reorder_level']       = 0;
+
+        return [$data, null, null, []];
     }
 
     /* ═══════════════════════════════════════════════════════════

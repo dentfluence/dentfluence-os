@@ -10,6 +10,7 @@ class InvoiceItem extends Model
         'invoice_id',
         'treatment_id',            // link to Treatment master (single source of truth)
         'treatment_plan_item_id',  // link back to the plan item that produced this line
+        'inventory_item_id',       // link to a retail product sold on this line (nullable)
         'description',
         'tooth_number',
         'unit_price',
@@ -48,6 +49,12 @@ class InvoiceItem extends Model
     public function planItem()
     {
         return $this->belongsTo(TreatmentPlanItem::class, 'treatment_plan_item_id');
+    }
+
+    /** Retail product this line sold, if any (toothpaste, brushes, OTC medicines). */
+    public function inventoryItem()
+    {
+        return $this->belongsTo(\App\Models\Inventory\InventoryItem::class, 'inventory_item_id');
     }
 
     /** Calculate and set all derived fields from unit_price, qty, disc_pct, gst_pct. */

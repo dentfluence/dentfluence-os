@@ -56,7 +56,7 @@ class StockMovement extends Model
         $addTypes = ['stock_in', 'opening_stock'];
 
         // Movements that REMOVE stock somewhere
-        $removeTypes = ['stock_out', 'expired', 'damaged', 'treatment_usage'];
+        $removeTypes = ['stock_out', 'expired', 'damaged', 'treatment_usage', 'retail_sale'];
 
         if (in_array($type, $addTypes)) {
             $this->adjustStock($itemId, $this->to_location_id, +$qty);
@@ -130,6 +130,7 @@ class StockMovement extends Model
             'sterilization'    => 'Sterilization',
             'maintenance'      => 'Maintenance',
             'opening_stock'    => 'Opening Stock',
+            'retail_sale'      => 'Retail Sale',
             default            => ucfirst($this->movement_type),
         };
     }
@@ -138,7 +139,7 @@ class StockMovement extends Model
     {
         return match($this->movement_type) {
             'stock_in', 'opening_stock' => '#1a7a45',
-            'stock_out', 'treatment_usage' => '#6a0f70',
+            'stock_out', 'treatment_usage', 'retail_sale' => '#6a0f70',
             'transfer'                  => '#1a5ea8',
             'adjustment'                => '#a05c00',
             'expired', 'damaged'        => '#b52020',

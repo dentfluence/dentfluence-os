@@ -379,15 +379,11 @@ Route::middleware('auth')->group(function () {
             Route::delete('/message-templates/{id}',  [$c, 'destroyMessageTemplate'])->name('message_templates.destroy');
         });
 
-        // Roles & Permissions API
-        Route::prefix('settings/roles')->name('settings.roles.')->group(function () {
-            Route::post('/',                    [\App\Http\Controllers\Settings\RolePermissionController::class, 'store'])->name('store');
-            Route::get('/{role}',               [\App\Http\Controllers\Settings\RolePermissionController::class, 'show'])->name('show');
-            Route::post('/{role}',              [\App\Http\Controllers\Settings\RolePermissionController::class, 'update'])->name('update');
-            Route::delete('/{role}',            [\App\Http\Controllers\Settings\RolePermissionController::class, 'destroy'])->name('destroy');
-            Route::get('/{role}/permissions',   [\App\Http\Controllers\Settings\RolePermissionController::class, 'permissions'])->name('permissions');
-            Route::post('/{role}/permissions',  [\App\Http\Controllers\Settings\RolePermissionController::class, 'update'])->name('permissions.update');
-        });
+        // Roles & Permissions API moved to hr.roles.* (admin.only-gated) —
+        // see routes/web.php's `hr` group. This duplicate `/settings/roles`
+        // registration was removed 2026-07-06; the roles page's own JS used
+        // to call it directly instead of the hr.roles.* routes it should
+        // have used after the page moved into HR.
 
         // Tags
         Route::prefix('settings/tags')->name('settings.tags.')->group(function () {
@@ -833,7 +829,7 @@ Route::middleware('auth')->group(function () {
     }); // end finance group
 
     // HR Module
-    Route::prefix('hr')->name('hr.')->group(function () {
+    Route::middleware('module:hr')->prefix('hr')->name('hr.')->group(function () {
 
         // Dashboard
         Route::get('/', [\App\Http\Controllers\HR\HrDashboardController::class, 'index'])
@@ -866,8 +862,10 @@ Route::middleware('auth')->group(function () {
             Route::post('/mark-bulk', [\App\Http\Controllers\HR\HrAttendanceController::class, 'markBulk'])->name('mark-bulk');
         });
 
-        // Roles & Permissions (moved here from Settings)
-        Route::prefix('roles')->name('roles.')->group(function () {
+        // Roles & Permissions (moved here from Settings). Admin-only, hard
+        // rule — not toggleable via the hr module permission, since whoever
+        // can reach this could otherwise grant themselves Admin.
+        Route::middleware('admin.only')->prefix('roles')->name('roles.')->group(function () {
             Route::get('/',                   [\App\Http\Controllers\HR\HrRoleController::class, 'index'])->name('index');
             Route::post('/',                  [\App\Http\Controllers\Settings\RolePermissionController::class, 'store'])->name('store');
             Route::get('/{role}',             [\App\Http\Controllers\Settings\RolePermissionController::class, 'show'])->name('show');

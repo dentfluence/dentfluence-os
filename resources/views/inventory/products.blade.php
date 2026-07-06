@@ -542,201 +542,169 @@ document.addEventListener('click', closeDotMenus);
               enctype="multipart/form-data" style="padding:24px 28px;">
             @csrf
             <input type="hidden" id="fp-method" name="_method" value="POST">
+            <input type="hidden" id="fp-product_kind" name="product_kind" value="clinical">
+
+            {{-- ── Product identity (shared by both tabs) ── --}}
+            <div style="margin-bottom:16px;">
+                <label class="pml-label">Product Name *</label>
+                <input type="text" name="product_name" id="fp-product_name" required
+                       placeholder="e.g. Filtek Z250 XT or Colgate Total Advanced"
+                       style="width:100%;max-width:420px;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;box-sizing:border-box;">
+            </div>
+
+            {{-- ── Tabs: Clinical Product / Saleable Product (FMCG) ── --}}
+            <div style="display:flex;gap:6px;margin-bottom:18px;border-bottom:2px solid #f0e8f4;">
+                <button type="button" id="tab-btn-clinical" onclick="switchProductTab('clinical')"
+                        class="pml-tab-btn pml-tab-active">Clinical Product</button>
+                <button type="button" id="tab-btn-saleable" onclick="switchProductTab('saleable')"
+                        class="pml-tab-btn">Saleable Product (FMCG)</button>
+            </div>
+
+            <div id="fp-clinical-fields">
 
             {{-- ── 3-column grid ── --}}
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;align-items:start;">
 
-                {{-- COL 1: Basic Information --}}
-                <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
-                                padding-bottom:12px;border-bottom:1px solid #f5f0f8;">
-                        <div style="width:28px;height:28px;border-radius:6px;background:#f0e8f4;
-                                    display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                            </svg>
-                        </div>
-                        <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
-                                     color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;">
-                            Basic Information
-                        </span>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:11px;">
-                        <div>
-                            <label class="pml-label">Product Generic Name *</label>
-                            <input type="text" name="product_name" id="fp-product_name" required
-                                   style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;box-sizing:border-box;">
-                        </div>
-                        <div>
-                            <label class="pml-label">Category *</label>
-                            <select name="category_id" id="fp-category_id" required
-                                    onchange="loadSubTypes(this.value)"
-                                    style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;">
-                                <option value="">— Select category —</option>
-                                @foreach($categories as $cat)
-                                <option value="{{ $cat->id }}">{{ $cat->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="pml-label">Sub Type</label>
-                            <select name="sub_type_id" id="fp-sub_type_id"
-                                    onchange="loadVariants(this.value)"
-                                    style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;">
-                                <option value="">— Select sub type —</option>
-                                @foreach($subTypes as $st)
-                                <option value="{{ $st->id }}" data-cat="{{ $st->category_id }}">{{ $st->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
-                                <label class="pml-label" style="margin-bottom:0;">Variant / Size / Shade</label>
-                                <button type="button" id="fp-variant-add-btn"
-                                        onclick="toggleVariantInline()"
-                                        disabled
-                                        style="background:none;border:none;cursor:pointer;
-                                               font-size:11px;font-family:'DM Sans',sans-serif;
-                                               color:#6a0f70;font-weight:600;padding:0;
-                                               opacity:0.4;">
-                                    + Add new
-                                </button>
+                {{-- COL 1: Basic Information + Pricing --}}
+                <div style="display:flex;flex-direction:column;gap:20px;">
+                    <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
+                                    padding-bottom:12px;border-bottom:1px solid #f5f0f8;">
+                            <div style="width:28px;height:28px;border-radius:6px;background:#f0e8f4;
+                                        display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                                </svg>
                             </div>
-                            <select name="variant_id" id="fp-variant_id"
-                                    style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;">
-                                <option value="">— Select variant —</option>
-                            </select>
-                            {{-- Inline add-variant row (hidden until "+ Add new" clicked) --}}
-                            <div id="fp-variant-inline"
-                                 style="display:none;margin-top:6px;
-                                        background:#f9f3fa;border:1px solid #d8c8e4;
-                                        border-radius:6px;padding:8px 10px;">
-                                <div style="font-size:11px;font-weight:600;color:#6a0f70;
-                                            font-family:'DM Sans',sans-serif;margin-bottom:6px;
-                                            text-transform:uppercase;letter-spacing:.04em;">
-                                    New variant for: <span id="fp-variant-inline-label" style="font-style:italic;"></span>
-                                </div>
-                                <div style="display:flex;gap:6px;">
-                                    <input type="text" id="fp-variant-new-name"
-                                           placeholder="e.g. #10, #15, Shade A1"
-                                           style="flex:1;padding:7px 9px;border:1px solid #d8c8e4;
-                                                  border-radius:5px;font-size:12px;
-                                                  font-family:'DM Sans',sans-serif;box-sizing:border-box;">
-                                    <button type="button" onclick="saveInlineVariant()"
-                                            style="background:#6a0f70;color:#fff;border:none;
-                                                   border-radius:5px;padding:7px 12px;font-size:12px;
-                                                   font-family:'DM Sans',sans-serif;cursor:pointer;
-                                                   white-space:nowrap;font-weight:500;">
-                                        Save
-                                    </button>
-                                    <button type="button" onclick="toggleVariantInline()"
-                                            style="background:#f0e8f4;color:#6a0f70;border:none;
-                                                   border-radius:5px;padding:7px 10px;font-size:12px;
-                                                   font-family:'DM Sans',sans-serif;cursor:pointer;">
-                                        ✕
-                                    </button>
-                                </div>
-                                <div id="fp-variant-inline-msg"
-                                     style="font-size:11px;font-family:'DM Sans',sans-serif;
-                                            margin-top:5px;display:none;"></div>
-                            </div>
-                            <span id="fp-variant-hint"
-                                  style="font-size:11px;color:#9070a0;font-family:'DM Sans',sans-serif;
-                                         display:block;margin-top:3px;">
-                                Select a sub-type first
+                            <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
+                                         color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;">
+                                Basic Information
                             </span>
                         </div>
-                        <div>
-                            <label class="pml-label">Usage</label>
-                            <div style="display:flex;gap:16px;margin-top:4px;">
-                                <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;">
-                                    <input type="radio" name="usage_type" id="fp-usage-single" value="single_use"
-                                           onchange="toggleUsageCount(this.value)">
-                                    Single Use
-                                </label>
-                                <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;">
-                                    <input type="radio" name="usage_type" id="fp-usage-multiple" value="multiple_use" checked
-                                           onchange="toggleUsageCount(this.value)">
-                                    Multiple Use
-                                </label>
-                            </div>
-                            {{-- Shown only when Multiple Use is selected --}}
-                            <div id="fp-usage-count-row" style="margin-top:8px;">
-                                <label class="pml-label" style="margin-bottom:4px;">No. of Usages</label>
-                                <div style="display:flex;align-items:center;gap:8px;">
-                                    <input type="number" name="max_usage_count" id="fp-max_usage_count"
-                                           min="1" step="1" placeholder="e.g. 5"
-                                           style="width:100px;padding:7px 10px;border:1px solid #d8c8e4;
-                                                  border-radius:5px;font-size:13px;
-                                                  font-family:'DM Mono',monospace;box-sizing:border-box;">
-                                    <span style="font-size:12px;color:#9070a0;font-family:'DM Sans',sans-serif;">
-                                        times per item
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="pml-label">Description (Optional)</label>
-                            <textarea name="description" id="fp-description" rows="3"
-                                      style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;box-sizing:border-box;resize:vertical;"></textarea>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- COL 2: Packaging Details --}}
-                <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
-                                padding-bottom:12px;border-bottom:1px solid #f5f0f8;">
-                        <div style="width:28px;height:28px;border-radius:6px;background:#f0e8f4;
-                                    display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2">
-                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                            </svg>
-                        </div>
-                        <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
-                                     color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;">
-                            Packaging Details
-                        </span>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:11px;">
-                        <div>
-                            <label class="pml-label">Packaging Type *</label>
-                            <select name="packaging_type" id="fp-packaging_type"
-                                    style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;">
-                                <option value="">— Select —</option>
-                                @foreach(['Piece','Box','Bottle','Tube','Jar','Vial','Cartridge','Syringe','Strip','Blister Pack','Capsule','Sachet','Kit','Pack','Pouch','Bag','Roll','Can','Spray Bottle','Ampoule','Set','Refill Pack','Coil','Wire Spool','Disc Pack','Wheel','Sheet','Block'] as $pt)
-                                <option value="{{ $pt }}">{{ $pt }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="pml-label">Qty in Packaging *</label>
-                            <div style="display:flex;gap:6px;">
-                                <input type="number" name="qty_in_packaging" id="fp-qty_in_packaging"
-                                       min="0" step="0.01" placeholder="e.g. 4"
-                                       style="flex:1;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;"
-                                       oninput="calcCostPerUnit()">
-                                <select name="packaging_unit_label" id="fp-packaging_unit_label"
-                                        style="width:70px;padding:8px 6px;border:1px solid #d8c8e4;border-radius:5px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;">
-                                    @foreach(['g','ml','pcs','mg','L','kg','units'] as $u)
-                                    <option value="{{ $u }}">{{ $u }}</option>
+                        <div style="display:flex;flex-direction:column;gap:11px;">
+                            <div>
+                                <label class="pml-label">Category *</label>
+                                <select name="category_id" id="fp-category_id" required
+                                        onchange="loadSubTypes(this.value)"
+                                        style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;">
+                                    <option value="">— Select category —</option>
+                                    @foreach($categories as $cat)
+                                    <option value="{{ $cat->id }}">{{ $cat->name }}</option>
                                     @endforeach
                                 </select>
                             </div>
                         </div>
-                        <div>
-                            <label class="pml-label">Pack Size</label>
-                            <input type="text" name="pack_size_label" id="fp-pack_size_label"
-                                   placeholder="e.g. 1 Syringe, 10 Strips of 10"
-                                   style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;box-sizing:border-box;">
+                    </div>
+
+                    {{-- Pricing & Cost --}}
+                    <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
+                                    padding-bottom:12px;border-bottom:1px solid #f5f0f8;">
+                            <div style="width:28px;height:28px;border-radius:6px;background:#f0e8f4;
+                                        display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2">
+                                    <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                </svg>
+                            </div>
+                            <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
+                                         color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;">
+                                Pricing & Cost
+                            </span>
                         </div>
-                        <div>
-                            <label class="pml-label">Shelf Life (Optional)</label>
-                            <div style="display:flex;gap:6px;align-items:center;">
-                                <input type="number" name="shelf_life_months" id="fp-shelf_life_months"
-                                       min="0" placeholder="e.g. 36"
-                                       style="flex:1;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
-                                <span style="font-size:12px;color:#9a85aa;white-space:nowrap;">Months</span>
+                        <div style="display:flex;flex-direction:column;gap:11px;">
+                            <div>
+                                <label class="pml-label">Purchase Price (₹) *</label>
+                                <input type="number" name="last_purchase_price" id="fp-purchase_price"
+                                       min="0" step="0.01" placeholder="0.00"
+                                       style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- COL 2: Packaging Details + Stock Alert --}}
+                <div style="display:flex;flex-direction:column;gap:20px;">
+                    <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
+                                    padding-bottom:12px;border-bottom:1px solid #f5f0f8;">
+                            <div style="width:28px;height:28px;border-radius:6px;background:#f0e8f4;
+                                        display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2">
+                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                </svg>
+                            </div>
+                            <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
+                                         color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;">
+                                Packaging Details
+                            </span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:11px;">
+                            <div>
+                                <label class="pml-label">Packaging Type *</label>
+                                <select name="packaging_type" id="fp-packaging_type" required
+                                        style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;">
+                                    <option value="">— Select —</option>
+                                    @foreach(['Piece','Box','Bottle','Tube','Jar','Vial','Cartridge','Syringe','Strip','Blister Pack','Capsule','Sachet','Kit','Pack','Pouch','Bag','Roll','Can','Spray Bottle','Ampoule','Set','Refill Pack','Coil','Wire Spool','Disc Pack','Wheel','Sheet','Block'] as $pt)
+                                    <option value="{{ $pt }}">{{ $pt }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="pml-label">Qty in Packaging *</label>
+                                <div style="display:flex;gap:6px;">
+                                    <input type="number" name="qty_in_packaging" id="fp-qty_in_packaging" required
+                                           min="0.01" step="0.01" placeholder="e.g. 4"
+                                           style="flex:1;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
+                                    <select name="packaging_unit_label" id="fp-packaging_unit_label"
+                                            style="width:70px;padding:8px 6px;border:1px solid #d8c8e4;border-radius:5px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;">
+                                        @foreach(['g','ml','pcs','mg','L','kg','units'] as $u)
+                                        <option value="{{ $u }}">{{ $u }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Stock Alert --}}
+                    <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
+                                    padding-bottom:12px;border-bottom:1px solid #f5f0f8;">
+                            <div style="width:28px;height:28px;border-radius:6px;background:#f0e8f4;
+                                        display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                                </svg>
+                            </div>
+                            <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
+                                         color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;">
+                                Stock Alert
+                            </span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:11px;">
+                            <div>
+                                <label class="pml-label">Minimum Stock (Alert) *</label>
+                                <div style="display:flex;gap:6px;">
+                                    <input type="number" name="minimum_qty" id="fp-minimum_qty" required
+                                           min="0" step="0.01" placeholder="0"
+                                           style="flex:1;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
+                                    <div id="fp-unit-label"
+                                         style="padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;
+                                                font-size:12px;color:#9a85aa;background:#f5f0f8;white-space:nowrap;">
+                                        units
+                                    </div>
+                                </div>
+                                <span style="font-size:11px;color:#9070a0;font-family:'DM Sans',sans-serif;display:block;margin-top:4px;">
+                                    You'll get a low-stock alert once quantity on hand drops to this level.
+                                </span>
+                            </div>
+                            <div>
+                                <label style="display:flex;align-items:center;gap:8px;font-size:13px;
+                                              font-family:'DM Sans',sans-serif;cursor:pointer;">
+                                    <input type="checkbox" name="is_active" id="fp-is_active" value="1" checked
+                                           style="width:14px;height:14px;accent-color:#1a7a45;">
+                                    <span style="color:#444;">Mark as Active</span>
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -771,19 +739,6 @@ document.addEventListener('click', closeDotMenus);
                                        placeholder="e.g. Filtek Z250 XT"
                                        style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;box-sizing:border-box;">
                             </div>
-                            <div>
-                                <label class="pml-label">Alternative Brands (Optional)</label>
-                                <div id="alt-brands-list" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px;"></div>
-                                <div style="display:flex;gap:6px;">
-                                    <input type="text" id="alt-brand-input"
-                                           placeholder="Type and press Enter…"
-                                           style="flex:1;padding:7px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:12px;font-family:'DM Sans',sans-serif;box-sizing:border-box;"
-                                           onkeydown="if(event.key==='Enter'){event.preventDefault();addAltBrand();}">
-                                    <button type="button" onclick="addAltBrand()"
-                                            style="padding:7px 12px;background:#f5e8d0;border:1px solid #d8c8e4;border-radius:5px;font-size:12px;cursor:pointer;color:#a05c00;">+</button>
-                                </div>
-                                <div id="alt-brands-hidden"></div>
-                            </div>
                         </div>
                     </div>
 
@@ -813,235 +768,266 @@ document.addEventListener('click', closeDotMenus);
                 </div>
             </div>
 
-            {{-- ── Row 2: Pricing | Location & Stock | Dealer/Supplier ── --}}
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-top:20px;">
+            {{-- ── More Details (optional, collapsed by default) ── --}}
+            <div style="margin-top:20px;">
+                <button type="button" onclick="toggleMoreDetails()" id="fp-more-toggle"
+                        style="background:none;border:none;cursor:pointer;padding:0;
+                               font-size:12px;font-family:'DM Sans',sans-serif;font-weight:600;
+                               color:#6a0f70;display:flex;align-items:center;gap:5px;">
+                    <span id="fp-more-toggle-icon">▸</span> More details (optional)
+                </button>
 
-                {{-- Pricing & Cost --}}
-                <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
-                                padding-bottom:12px;border-bottom:1px solid #f5f0f8;">
-                        <div style="width:28px;height:28px;border-radius:6px;background:#f0e8f4;
-                                    display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2">
-                                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                            </svg>
-                        </div>
-                        <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
-                                     color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;">
-                            Pricing & Cost
-                        </span>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:11px;">
-                        <div>
-                            <label class="pml-label">Purchase Price (₹) *</label>
-                            <input type="number" name="last_purchase_price" id="fp-purchase_price"
-                                   min="0" step="0.01" placeholder="0.00"
-                                   style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;"
-                                   oninput="calcCostPerUnit()">
-                        </div>
-                        <div>
-                            <label class="pml-label">MRP (₹) (Optional)</label>
-                            <input type="number" name="mrp" id="fp-mrp"
-                                   min="0" step="0.01" placeholder="0.00"
-                                   style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
-                        </div>
-                        <div>
-                            <label class="pml-label">Cost per Unit (Auto)</label>
-                            <div id="fp-cost-per-unit"
-                                 style="padding:8px 10px;background:#f0f0f0;border:1px solid #e0e0e0;
-                                        border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;
-                                        color:#555;min-height:36px;">
-                                —
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <div id="fp-more-details" style="display:none;margin-top:14px;">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;align-items:start;">
 
-                {{-- Location & Stock --}}
-                <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
-                                padding-bottom:12px;border-bottom:1px solid #f5f0f8;">
-                        <div style="width:28px;height:28px;border-radius:6px;background:#f0e8f4;
-                                    display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2">
-                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-                            </svg>
-                        </div>
-                        <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
-                                     color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;">
-                            Location & Stock
-                        </span>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:11px;">
-                        <div>
-                            <label class="pml-label">Primary Location *</label>
-                            <select name="primary_location_id" id="fp-location"
-                                    style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;">
-                                <option value="">— Select location —</option>
-                                @foreach($locations as $loc)
-                                <option value="{{ $loc->id }}">{{ $loc->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="pml-label">Minimum Stock (Alert)</label>
-                            <div style="display:flex;gap:6px;">
-                                <input type="number" name="minimum_qty" id="fp-minimum_qty"
-                                       min="0" step="0.01" placeholder="0"
-                                       style="flex:1;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
-                                <div id="fp-unit-label"
-                                     style="padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;
-                                            font-size:12px;color:#9a85aa;background:#f5f0f8;white-space:nowrap;">
-                                    units
+                        {{-- Classification --}}
+                        <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
+                            <div style="display:flex;flex-direction:column;gap:11px;">
+                                <div>
+                                    <label class="pml-label">Sub Type</label>
+                                    <select name="sub_type_id" id="fp-sub_type_id"
+                                            onchange="loadVariants(this.value)"
+                                            style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;">
+                                        <option value="">— Select sub type —</option>
+                                        @foreach($subTypes as $st)
+                                        <option value="{{ $st->id }}" data-cat="{{ $st->category_id }}">{{ $st->name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div>
+                                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+                                        <label class="pml-label" style="margin-bottom:0;">Variant / Size / Shade</label>
+                                        <button type="button" id="fp-variant-add-btn"
+                                                onclick="toggleVariantInline()"
+                                                disabled
+                                                style="background:none;border:none;cursor:pointer;
+                                                       font-size:11px;font-family:'DM Sans',sans-serif;
+                                                       color:#6a0f70;font-weight:600;padding:0;
+                                                       opacity:0.4;">
+                                            + Add new
+                                        </button>
+                                    </div>
+                                    <select name="variant_id" id="fp-variant_id"
+                                            style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;">
+                                        <option value="">— Select variant —</option>
+                                    </select>
+                                    {{-- Inline add-variant row (hidden until "+ Add new" clicked) --}}
+                                    <div id="fp-variant-inline"
+                                         style="display:none;margin-top:6px;
+                                                background:#f9f3fa;border:1px solid #d8c8e4;
+                                                border-radius:6px;padding:8px 10px;">
+                                        <div style="font-size:11px;font-weight:600;color:#6a0f70;
+                                                    font-family:'DM Sans',sans-serif;margin-bottom:6px;
+                                                    text-transform:uppercase;letter-spacing:.04em;">
+                                            New variant for: <span id="fp-variant-inline-label" style="font-style:italic;"></span>
+                                        </div>
+                                        <div style="display:flex;gap:6px;">
+                                            <input type="text" id="fp-variant-new-name"
+                                                   placeholder="e.g. #10, #15, Shade A1"
+                                                   style="flex:1;padding:7px 9px;border:1px solid #d8c8e4;
+                                                          border-radius:5px;font-size:12px;
+                                                          font-family:'DM Sans',sans-serif;box-sizing:border-box;">
+                                            <button type="button" onclick="saveInlineVariant()"
+                                                    style="background:#6a0f70;color:#fff;border:none;
+                                                           border-radius:5px;padding:7px 12px;font-size:12px;
+                                                           font-family:'DM Sans',sans-serif;cursor:pointer;
+                                                           white-space:nowrap;font-weight:500;">
+                                                Save
+                                            </button>
+                                            <button type="button" onclick="toggleVariantInline()"
+                                                    style="background:#f0e8f4;color:#6a0f70;border:none;
+                                                           border-radius:5px;padding:7px 10px;font-size:12px;
+                                                           font-family:'DM Sans',sans-serif;cursor:pointer;">
+                                                ✕
+                                            </button>
+                                        </div>
+                                        <div id="fp-variant-inline-msg"
+                                             style="font-size:11px;font-family:'DM Sans',sans-serif;
+                                                    margin-top:5px;display:none;"></div>
+                                    </div>
+                                    <span id="fp-variant-hint"
+                                          style="font-size:11px;color:#9070a0;font-family:'DM Sans',sans-serif;
+                                                 display:block;margin-top:3px;">
+                                        Select a sub-type first
+                                    </span>
+                                </div>
+                                <div>
+                                    <label class="pml-label">Usage</label>
+                                    <div style="display:flex;gap:16px;margin-top:4px;">
+                                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;">
+                                            <input type="radio" name="usage_type" id="fp-usage-single" value="single_use"
+                                                   onchange="toggleUsageCount(this.value)">
+                                            Single Use
+                                        </label>
+                                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;">
+                                            <input type="radio" name="usage_type" id="fp-usage-multiple" value="multiple_use" checked
+                                                   onchange="toggleUsageCount(this.value)">
+                                            Multiple Use
+                                        </label>
+                                    </div>
+                                    {{-- Shown only when Multiple Use is selected --}}
+                                    <div id="fp-usage-count-row" style="margin-top:8px;">
+                                        <label class="pml-label" style="margin-bottom:4px;">No. of Usages</label>
+                                        <div style="display:flex;align-items:center;gap:8px;">
+                                            <input type="number" name="max_usage_count" id="fp-max_usage_count"
+                                                   min="1" step="1" placeholder="e.g. 5"
+                                                   style="width:100px;padding:7px 10px;border:1px solid #d8c8e4;
+                                                          border-radius:5px;font-size:13px;
+                                                          font-family:'DM Mono',monospace;box-sizing:border-box;">
+                                            <span style="font-size:12px;color:#9070a0;font-family:'DM Sans',sans-serif;">
+                                                times per item
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div>
-                            <label class="pml-label">Reorder Level</label>
-                            <input type="number" name="reorder_level" id="fp-reorder_level"
-                                   min="0" step="0.01" placeholder="0"
-                                   style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
-                        </div>
-                        <div>
-                            <label class="pml-label">Preferred Brand</label>
-                            <input type="text" name="preferred_brand" id="fp-preferred_brand"
-                                   style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;box-sizing:border-box;">
-                        </div>
-                        <div>
-                            <label class="pml-label">Last Purchase Date</label>
-                            <input type="date" name="last_purchase_date" id="fp-last_purchase_date"
-                                   style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;box-sizing:border-box;">
-                        </div>
-                    </div>
-                </div>
 
-                {{-- Dealer / Supplier --}}
-                <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
-                                padding-bottom:12px;border-bottom:1px solid #f5f0f8;">
-                        <div style="width:28px;height:28px;border-radius:6px;background:#f0e8f4;
-                                    display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2">
-                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-                            </svg>
+                        {{-- More brand / cost / stock detail --}}
+                        <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
+                            <div style="display:flex;flex-direction:column;gap:11px;">
+                                <div>
+                                    <label class="pml-label">Description</label>
+                                    <textarea name="description" id="fp-description" rows="3"
+                                              style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;box-sizing:border-box;resize:vertical;"></textarea>
+                                </div>
+                                <div>
+                                    <label class="pml-label">Alternative Brands</label>
+                                    <div id="alt-brands-list" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px;"></div>
+                                    <div style="display:flex;gap:6px;">
+                                        <input type="text" id="alt-brand-input"
+                                               placeholder="Type and press Enter…"
+                                               style="flex:1;padding:7px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:12px;font-family:'DM Sans',sans-serif;box-sizing:border-box;"
+                                               onkeydown="if(event.key==='Enter'){event.preventDefault();addAltBrand();}">
+                                        <button type="button" onclick="addAltBrand()"
+                                                style="padding:7px 12px;background:#f5e8d0;border:1px solid #d8c8e4;border-radius:5px;font-size:12px;cursor:pointer;color:#a05c00;">+</button>
+                                    </div>
+                                    <div id="alt-brands-hidden"></div>
+                                </div>
+                                <div>
+                                    <label class="pml-label">MRP (₹)</label>
+                                    <input type="number" name="mrp" id="fp-mrp"
+                                           min="0" step="0.01" placeholder="0.00"
+                                           style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
+                                </div>
+                                <div>
+                                    <label class="pml-label">Reorder Level</label>
+                                    <input type="number" name="reorder_level" id="fp-reorder_level"
+                                           min="0" step="0.01" placeholder="0"
+                                           style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
+                                </div>
+                            </div>
                         </div>
-                        <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
-                                     color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;">
-                            Dealer / Supplier
-                        </span>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:11px;">
-                        <div>
-                            <label class="pml-label">Dealer / Supplier *</label>
-                            <select name="primary_vendor_id" id="fp-primary_vendor"
-                                    style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;">
-                                <option value="">— Select dealer —</option>
-                                @foreach($vendors as $v)
-                                <option value="{{ $v->id }}">{{ $v->vendor_name }}</option>
+
+                        {{-- Treatment Tags --}}
+                        <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
+                            <div style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
+                                        color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">
+                                Treatment Tags
+                                <span style="font-weight:400;color:#9a85aa;font-size:11px;margin-left:4px;text-transform:none;letter-spacing:0;">(select all that apply)</span>
+                            </div>
+                            @php
+                            $allTags = [
+                                'Composite Filling','Posterior Restorations','Anterior Restorations',
+                                'Indirect Restorations','Aesthetic Dentistry','Veneer','Core Build-up',
+                                'Pediatric Dentistry','Class V Restoration','Sealant',
+                                'RCT','Endodontics','Pulp Therapy',
+                                'Scaling','Periodontics','Flap Surgery',
+                                'Implant Placement','Bone Grafting','Sinus Lift',
+                                'Impression','Crown','Bridge','Prosthodontics',
+                                'Extraction','Oral Surgery','Surgical Extraction',
+                                'Orthodontics','Cementation','Whitening',
+                            ];
+                            @endphp
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;" id="treatment-tags-container">
+                                @foreach($allTags as $tag)
+                                <label style="display:inline-flex;align-items:center;gap:5px;
+                                              padding:4px 10px;border:1px solid #d8c8e4;border-radius:12px;
+                                              font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;
+                                              background:#fff;transition:all 100ms;"
+                                       class="tag-chip">
+                                    <input type="checkbox" name="treatment_tags[]" value="{{ $tag }}"
+                                           style="width:12px;height:12px;accent-color:#6a0f70;"
+                                           onchange="this.closest('label').style.background=this.checked?'#f0e8f4':'#fff';
+                                                     this.closest('label').style.borderColor=this.checked?'#6a0f70':'#d8c8e4';
+                                                     this.closest('label').style.color=this.checked?'#6a0f70':'inherit';">
+                                    {{ $tag }}
+                                </label>
                                 @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="pml-label">Alternate Dealers (Optional)</label>
-                            <select name="alternate_vendor_ids[]" id="fp-alt_vendors" multiple
-                                    style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;height:80px;">
-                                @foreach($vendors as $v)
-                                <option value="{{ $v->id }}">{{ $v->vendor_name }}</option>
-                                @endforeach
-                            </select>
-                            <div style="font-size:10.5px;color:#c08080;margin-top:3px;">Hold Ctrl/Cmd to select multiple</div>
+                            </div>
+                            <div style="margin-top:10px;display:flex;gap:7px;align-items:center;">
+                                <input type="text" id="custom-tag-input" placeholder="+ Add Custom Tag"
+                                       style="padding:6px 10px;border:1px dashed #d8c8e4;border-radius:5px;
+                                              font-size:12px;font-family:'DM Sans',sans-serif;width:200px;"
+                                       onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomTag();}">
+                                <button type="button" onclick="addCustomTag()"
+                                        style="padding:6px 12px;background:#f0e8f4;border:1px solid #d8c8e4;
+                                               border-radius:5px;font-size:12px;cursor:pointer;color:#6a0f70;">Add</button>
+                            </div>
+                            <div style="margin-top:14px;">
+                                <label class="pml-label">Notes</label>
+                                <textarea name="product_notes" id="fp-product_notes" rows="3"
+                                          placeholder="e.g. Preferred shade range A1-A4 stocked."
+                                          style="width:100%;padding:8px 10px;border:1px solid #e0e0e0;
+                                                 border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;
+                                                 box-sizing:border-box;resize:vertical;"></textarea>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {{-- ── Row 3: Treatment Tags | Notes ── --}}
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-top:20px;">
+            </div>{{-- /#fp-clinical-fields --}}
 
-                {{-- Treatment Tags --}}
-                <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
+            {{-- ── Saleable / FMCG fields (Type, Brand, MRP, Expiry, Min Qty only) ── --}}
+            <div id="fp-saleable-fields" style="display:none;">
+                <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;max-width:520px;">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
                                 padding-bottom:12px;border-bottom:1px solid #f5f0f8;">
-                        <div style="width:28px;height:28px;border-radius:6px;background:#f0e8f4;
-                                    display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2">
-                                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>
-                            </svg>
-                        </div>
                         <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
                                      color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;">
-                            Treatment Tags
-                            <span style="font-weight:400;color:#9a85aa;font-size:11px;margin-left:4px;text-transform:none;letter-spacing:0;">(select all that apply)</span>
+                            Retail Product Details
                         </span>
                     </div>
-                    @php
-                    $allTags = [
-                        'Composite Filling','Posterior Restorations','Anterior Restorations',
-                        'Indirect Restorations','Aesthetic Dentistry','Veneer','Core Build-up',
-                        'Pediatric Dentistry','Class V Restoration','Sealant',
-                        'RCT','Endodontics','Pulp Therapy',
-                        'Scaling','Periodontics','Flap Surgery',
-                        'Implant Placement','Bone Grafting','Sinus Lift',
-                        'Impression','Crown','Bridge','Prosthodontics',
-                        'Extraction','Oral Surgery','Surgical Extraction',
-                        'Orthodontics','Cementation','Whitening',
-                    ];
-                    @endphp
-                    <div style="display:flex;flex-wrap:wrap;gap:6px;" id="treatment-tags-container">
-                        @foreach($allTags as $tag)
-                        <label style="display:inline-flex;align-items:center;gap:5px;
-                                      padding:4px 10px;border:1px solid #d8c8e4;border-radius:12px;
-                                      font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;
-                                      background:#fff;transition:all 100ms;"
-                               class="tag-chip">
-                            <input type="checkbox" name="treatment_tags[]" value="{{ $tag }}"
-                                   style="width:12px;height:12px;accent-color:#6a0f70;"
-                                   onchange="this.closest('label').style.background=this.checked?'#f0e8f4':'#fff';
-                                             this.closest('label').style.borderColor=this.checked?'#6a0f70':'#d8c8e4';
-                                             this.closest('label').style.color=this.checked?'#6a0f70':'inherit';">
-                            {{ $tag }}
-                        </label>
-                        @endforeach
-                    </div>
-                    <div style="margin-top:10px;display:flex;gap:7px;align-items:center;">
-                        <input type="text" id="custom-tag-input" placeholder="+ Add Custom Tag"
-                               style="padding:6px 10px;border:1px dashed #d8c8e4;border-radius:5px;
-                                      font-size:12px;font-family:'DM Sans',sans-serif;width:200px;"
-                               onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomTag();}">
-                        <button type="button" onclick="addCustomTag()"
-                                style="padding:6px 12px;background:#f0e8f4;border:1px solid #d8c8e4;
-                                       border-radius:5px;font-size:12px;cursor:pointer;color:#6a0f70;">Add</button>
-                    </div>
-                </div>
-
-                {{-- Notes --}}
-                <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;
-                            display:flex;flex-direction:column;">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
-                                padding-bottom:12px;border-bottom:1px solid #f5f0f8;">
-                        <div style="width:28px;height:28px;border-radius:6px;background:#f0e8f4;
-                                    display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                            </svg>
+                    <div style="display:flex;flex-direction:column;gap:11px;">
+                        <div>
+                            <label class="pml-label">Type *</label>
+                            <select name="retail_type" id="fp-retail_type" required
+                                    style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;">
+                                <option value="">— Select type —</option>
+                                @foreach(['Toothpaste','Mouthwash','Toothbrush','Dental Floss','OTC Medicine','Other'] as $rt)
+                                <option value="{{ $rt }}">{{ $rt }}</option>
+                                @endforeach
+                            </select>
                         </div>
-                        <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
-                                     color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;">
-                            Notes (Optional)
-                        </span>
-                    </div>
-                    <textarea name="product_notes" id="fp-product_notes" rows="5"
-                              placeholder="e.g. Preferred shade range A1-A4 stocked."
-                              style="flex:1;width:100%;padding:8px 10px;border:1px solid #e0e0e0;
-                                     border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;
-                                     box-sizing:border-box;resize:vertical;"></textarea>
-                    <div style="margin-top:12px;">
-                        <label style="display:flex;align-items:center;gap:8px;font-size:13px;
-                                      font-family:'DM Sans',sans-serif;cursor:pointer;">
-                            <input type="checkbox" name="is_active" id="fp-is_active" value="1" checked
-                                   style="width:14px;height:14px;accent-color:#1a7a45;">
-                            <span style="color:#444;">Mark as Active</span>
-                        </label>
+                        <div>
+                            <label class="pml-label">Brand Name *</label>
+                            <input type="text" name="brand" id="fp-brand-saleable" required
+                                   placeholder="e.g. Colgate Total Advanced Whitening"
+                                   style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;box-sizing:border-box;">
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;">
+                            <div>
+                                <label class="pml-label">MRP (₹) *</label>
+                                <input type="number" name="mrp" id="fp-mrp-saleable" required
+                                       min="0" step="0.01" placeholder="0.00"
+                                       style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
+                            </div>
+                            <div>
+                                <label class="pml-label">Expiry Date</label>
+                                <input type="date" name="retail_expiry_date" id="fp-retail_expiry_date"
+                                       style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;box-sizing:border-box;">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="pml-label">Minimum Stock (Alert) *</label>
+                            <input type="number" name="minimum_qty" id="fp-minimum_qty-saleable" required
+                                   min="0" step="0.01" placeholder="0"
+                                   style="width:160px;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
+                            <span style="font-size:11px;color:#9070a0;font-family:'DM Sans',sans-serif;display:block;margin-top:4px;">
+                                Low-stock alert once quantity on hand drops to this level.
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1076,6 +1062,14 @@ document.addEventListener('click', closeDotMenus);
     letter-spacing:.04em;
     text-transform:uppercase;
     margin-bottom:5px;
+}
+.pml-tab-btn {
+    background:none;border:none;cursor:pointer;padding:10px 4px;margin-bottom:-2px;
+    font-size:13px;font-family:'DM Sans',sans-serif;font-weight:600;color:#9070a0;
+    border-bottom:2px solid transparent;margin-right:14px;
+}
+.pml-tab-btn.pml-tab-active {
+    color:#6a0f70;border-bottom-color:#6a0f70;
 }
 #modal-product input[type="text"],
 #modal-product input[type="number"],
@@ -1197,20 +1191,6 @@ function toggleUsageCount(value) {
     row.style.display = value === 'multiple_use' ? 'block' : 'none';
 }
 
-// ── Cost per unit auto-calc ────────────────────────────────────
-function calcCostPerUnit() {
-    const price = parseFloat(document.getElementById('fp-purchase_price').value);
-    const qty   = parseFloat(document.getElementById('fp-qty_in_packaging').value);
-    const unit  = document.getElementById('fp-packaging_unit_label').value;
-    const el    = document.getElementById('fp-cost-per-unit');
-    if (price > 0 && qty > 0) {
-        el.textContent = '₹' + (price / qty).toFixed(2) + ' / ' + (unit || 'unit');
-        el.style.color = '#1a7a45';
-    } else {
-        el.textContent = '—'; el.style.color = '#555';
-    }
-}
-
 // ── Alternative brands tag chips ──────────────────────────────
 let altBrands = [];
 function addAltBrand() {
@@ -1270,6 +1250,29 @@ function previewProductImage(input) {
     }
 }
 
+// ── Clinical / Saleable tab toggle ──────────────────────────────
+// Disabled inputs are excluded from both HTML5 required-validation and
+// form submission, so switching tabs both hides the other tab's fields
+// AND stops them from blocking submit or overwriting shared field names
+// (brand / mrp / minimum_qty are reused by both tabs, disabling the
+// inactive copy avoids any duplicate-name conflict on submit).
+function setFieldsDisabled(container, disabled) {
+    container.querySelectorAll('input, select, textarea').forEach(el => el.disabled = disabled);
+}
+
+function switchProductTab(kind) {
+    document.getElementById('fp-product_kind').value = kind;
+    const clinicalDiv = document.getElementById('fp-clinical-fields');
+    const saleableDiv = document.getElementById('fp-saleable-fields');
+    const showClinical = kind === 'clinical';
+    clinicalDiv.style.display = showClinical ? '' : 'none';
+    saleableDiv.style.display = showClinical ? 'none' : '';
+    setFieldsDisabled(clinicalDiv, !showClinical);
+    setFieldsDisabled(saleableDiv, showClinical);
+    document.getElementById('tab-btn-clinical').classList.toggle('pml-tab-active', showClinical);
+    document.getElementById('tab-btn-saleable').classList.toggle('pml-tab-active', !showClinical);
+}
+
 // ── Open Add modal ─────────────────────────────────────────────
 function openAddProduct() {
     document.getElementById('modal-product-title').textContent = 'Add New Product';
@@ -1277,13 +1280,12 @@ function openAddProduct() {
     document.getElementById('form-product').action = '{{ route("inventory.products.store") }}';
     document.getElementById('fp-method').value = 'POST';
     document.getElementById('form-product').reset();
+    switchProductTab('clinical');
     // Reset alt brands
     altBrands = []; renderAltBrands();
     // Reset image preview
     document.getElementById('product-img-tag').style.display = 'none';
     document.getElementById('product-img-placeholder').style.display = 'block';
-    // Reset cost/unit display
-    document.getElementById('fp-cost-per-unit').textContent = '—';
     // Reset checkboxes style
     document.querySelectorAll('.tag-chip').forEach(l => {
         l.style.background = '#fff'; l.style.borderColor = '#d8c8e4'; l.style.color = '';
@@ -1291,6 +1293,7 @@ function openAddProduct() {
     // Reset variant + usage count
     loadVariants('');
     toggleUsageCount('multiple_use');
+    collapseMoreDetails();
     document.getElementById('modal-product').style.display = 'flex';
 }
 
@@ -1302,23 +1305,26 @@ function openEditProduct(p) {
     document.getElementById('fp-method').value = 'PUT';
 
     // Fill basic fields
+    document.getElementById('fp-product_name').value    = p.product_name    || '';
     document.getElementById('fp-description').value     = p.description     || '';
     document.getElementById('fp-company_name').value    = p.company_name    || '';
     document.getElementById('fp-brand').value           = p.brand           || '';
     document.getElementById('fp-packaging_type').value  = p.packaging_type  || '';
     document.getElementById('fp-qty_in_packaging').value= p.qty_in_packaging|| '';
-    document.getElementById('fp-pack_size_label').value = p.pack_size_label || '';
-    document.getElementById('fp-shelf_life_months').value = p.shelf_life_months || '';
     document.getElementById('fp-purchase_price').value  = p.last_purchase_price || '';
     document.getElementById('fp-mrp').value             = p.mrp             || '';
     document.getElementById('fp-minimum_qty').value     = p.minimum_qty     || '';
     document.getElementById('fp-reorder_level').value   = p.reorder_level   || '';
-    document.getElementById('fp-preferred_brand').value = p.preferred_brand || '';
     document.getElementById('fp-product_notes').value   = p.product_notes   || '';
     document.getElementById('fp-is_active').checked     = p.is_active;
-    if (p.last_purchase_date) {
-        document.getElementById('fp-last_purchase_date').value = p.last_purchase_date.substring(0, 10);
-    }
+
+    // Saleable/FMCG tab mirror fields (kept in sync so switching tabs mid-edit shows correct values)
+    document.getElementById('fp-brand-saleable').value        = p.brand              || '';
+    document.getElementById('fp-mrp-saleable').value          = p.mrp                || '';
+    document.getElementById('fp-minimum_qty-saleable').value  = p.minimum_qty        || '';
+    document.getElementById('fp-retail_type').value           = p.retail_type        || '';
+    document.getElementById('fp-retail_expiry_date').value    = p.retail_expiry_date ? p.retail_expiry_date.substring(0, 10) : '';
+    switchProductTab(p.retail_type ? 'saleable' : 'clinical');
 
     // Packaging unit
     const pul = document.getElementById('fp-packaging_unit_label');
@@ -1361,15 +1367,6 @@ function openEditProduct(p) {
         lbl.style.color          = inp.checked ? '#6a0f70' : '';
     });
 
-    // Dealers
-    const primarySel = document.getElementById('fp-primary_vendor');
-    const primary = (p.dealers || []).find(d => d.pivot && d.pivot.is_primary);
-    if (primary) primarySel.value = primary.id;
-
-    const altSel = document.getElementById('fp-alt_vendors');
-    const altIds = (p.dealers || []).filter(d => d.pivot && d.pivot.is_alternate).map(d => d.id);
-    Array.from(altSel.options).forEach(o => { o.selected = altIds.includes(parseInt(o.value)); });
-
     // Image preview
     if (p.image) {
         document.getElementById('product-img-tag').src = `/storage/${p.image}`;
@@ -1380,12 +1377,26 @@ function openEditProduct(p) {
         document.getElementById('product-img-placeholder').style.display = 'block';
     }
 
-    calcCostPerUnit();
+    collapseMoreDetails();
     document.getElementById('modal-product').style.display = 'flex';
 }
 
 function closeProductModal() {
     document.getElementById('modal-product').style.display = 'none';
+}
+
+// ── More Details toggle ─────────────────────────────────────────
+function collapseMoreDetails() {
+    document.getElementById('fp-more-details').style.display = 'none';
+    document.getElementById('fp-more-toggle-icon').textContent = '▸';
+}
+
+function toggleMoreDetails() {
+    const panel = document.getElementById('fp-more-details');
+    const icon  = document.getElementById('fp-more-toggle-icon');
+    const open  = panel.style.display !== 'none';
+    panel.style.display = open ? 'none' : 'block';
+    icon.textContent     = open ? '▸' : '▾';
 }
 
 // Close on backdrop click

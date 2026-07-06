@@ -21,7 +21,7 @@ class InventoryItem extends Model
         'last_purchase_price', 'average_purchase_price', 'cost_per_usage', 'mrp', 'gst_rate',
         'minimum_qty', 'minimum_order_qty',
         'has_expiry', 'expiry_alert_days',
-        'is_reusable', 'tracking_type', 'max_usage_count', 'sterilization_required',
+        'is_reusable', 'is_sellable', 'retail_type', 'retail_expiry_date', 'tracking_type', 'max_usage_count', 'sterilization_required',
         'usage_mode_changed_by', 'usage_mode_changed_at',
         'is_active', 'created_by',
         // Product Master fields
@@ -38,6 +38,7 @@ class InventoryItem extends Model
     protected $casts = [
         'has_expiry'             => 'boolean',
         'is_reusable'            => 'boolean',
+        'is_sellable'            => 'boolean',
         'is_active'              => 'boolean',
         'sterilization_required' => 'boolean',
         'last_purchase_price'    => 'float',
@@ -52,6 +53,7 @@ class InventoryItem extends Model
         'alternative_brands'     => 'array',
         'treatment_tags'         => 'array',
         'last_purchase_date'     => 'date',
+        'retail_expiry_date'     => 'date',
         'usage_mode_changed_at'  => 'datetime',
     ];
 
@@ -130,6 +132,12 @@ class InventoryItem extends Model
         });
     }
 
+    /** Products that can appear on a patient invoice (toothpaste, brushes, OTC medicines). */
+    public function scopeSellable($query)
+    {
+        return $query->where('is_sellable', true)->where('is_active', true);
+    }
+
     /* ── Computed helpers ── */
 
     /**
@@ -162,20 +170,6 @@ class InventoryItem extends Model
     public function getTotalValueAttribute(): float
     {
         return round($this->total_stock * $this->average_purchase_price, 2);
-    }
-
-    /**
-     * Cost per unit — purchase price divided by qty_in_packaging.
-     * e.g. ₹1850 / 4g = ₹462.50/g
-     */
-    public function getCostPerUnitAttribute(): ?string
-    {
-        if ($this->last_purchase_price && $this->qty_in_packaging && $this->qty_in_packaging > 0) {
-            $val  = round($this->last_purchase_price / $this->qty_in_packaging, 2);
-            $unit = $this->packaging_unit_label ?? 'unit';
-            return '₹' . number_format($val, 2) . ' / ' . $unit;
-        }
-        return null;
     }
 
     /**

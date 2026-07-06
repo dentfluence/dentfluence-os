@@ -189,6 +189,18 @@
                     <span style="color:#1e0a2c;text-align:right;">{{ $item->company_name }}</span>
                 </div>
                 @endif
+                @if($item->retail_type)
+                <div style="display:flex;justify-content:space-between;gap:8px;">
+                    <span style="color:#9a85aa;">Retail Type</span>
+                    <span style="color:#1e0a2c;text-align:right;">{{ $item->retail_type }}</span>
+                </div>
+                @endif
+                @if($item->retail_expiry_date)
+                <div style="display:flex;justify-content:space-between;gap:8px;">
+                    <span style="color:#9a85aa;">Expiry Date</span>
+                    <span style="color:#1e0a2c;text-align:right;">{{ $item->retail_expiry_date->format('d M Y') }}</span>
+                </div>
+                @endif
                 @if($item->packaging_type)
                 <div style="display:flex;justify-content:space-between;gap:8px;">
                     <span style="color:#9a85aa;">Packaging</span>
@@ -213,6 +225,12 @@
                 <div style="display:flex;justify-content:space-between;gap:8px;">
                     <span style="color:#9a85aa;">Avg Price</span>
                     <span style="color:#1e0a2c;">₹{{ number_format($item->average_purchase_price, 2) }}</span>
+                </div>
+                @endif
+                @if($item->cost_per_usage)
+                <div style="display:flex;justify-content:space-between;gap:8px;">
+                    <span style="color:#9a85aa;">Price / Use</span>
+                    <span style="color:#1e0a2c;">₹{{ number_format($item->cost_per_usage, 2) }}{{ ($item->usage_type === 'multiple_use' && $item->max_usage_count) ? ' (over '.$item->max_usage_count.' uses)' : '' }}</span>
                 </div>
                 @endif
                 @if($item->gst_rate)
