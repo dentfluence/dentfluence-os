@@ -136,7 +136,9 @@
                                 class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <option value="">— Quick-add product —</option>
                             @foreach($sellableProducts as $p)
-                                @php($stock = $p->stocks_sum_available_qty ?? 0)
+                                @php
+                                    $stock = $p->stocks_sum_available_qty ?? 0;
+                                @endphp
                                 <option value="{{ $p->id }}" data-name="{{ $p->product_name }}" data-price="{{ $p->mrp ?? 0 }}"
                                         data-gst="{{ $p->gst_rate ?? 0 }}" data-stock="{{ $stock }}">
                                     {{ $p->product_name }} — Rs. {{ number_format($p->mrp ?? 0, 0) }}{{ $stock <= 0 ? ' (Out of stock)' : '' }}
