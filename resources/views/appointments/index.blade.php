@@ -257,7 +257,7 @@
     color: #64748b;
 }
 
-/* ─── Queue + Reminders side-by-side layout ─────────────────── */
+/* ─── Queue layout (full width — Notes panel removed) ────────── */
 .sb-lower {
     flex: 1;
     display: flex;
@@ -266,7 +266,7 @@
     min-height: 0;
 }
 
-/* Queue column: takes remaining width minus reminders */
+/* Queue column: now takes full width of sb-lower (Notes panel removed) */
 .sb-queue-col {
     flex: 1;
     display: flex;
@@ -283,116 +283,6 @@
 
 .sb-queue-scroll::-webkit-scrollbar { width: 3px; }
 .sb-queue-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-
-/* Reminders column: fixed narrow width */
-.sb-reminders-col {
-    width: 106px;
-    flex-shrink: 0;
-    border-left: 1px solid #f1f5f9;
-    background: #fafbfc;
-    display: flex;
-    flex-direction: column;
-    padding: 8px 8px 8px 7px;
-    overflow: hidden;
-}
-
-.sb-reminders-title {
-    font-size: 9.5px;
-    font-weight: 700;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: #94a3b8;
-    margin-bottom: 6px;
-    white-space: nowrap;
-}
-
-.reminder-list {
-    flex: 1;
-    overflow-y: auto;
-    margin-bottom: 6px;
-}
-
-.reminder-list::-webkit-scrollbar { width: 2px; }
-.reminder-list::-webkit-scrollbar-thumb { background: #cbd5e1; }
-
-.reminder-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 4px;
-    margin-bottom: 5px;
-}
-
-.reminder-item input[type=checkbox] {
-    accent-color: #3b82f6;
-    cursor: pointer;
-    margin-top: 2px;
-    flex-shrink: 0;
-    width: 11px;
-    height: 11px;
-}
-
-.reminder-item label {
-    font-size: 10px;
-    color: #475569;
-    cursor: pointer;
-    flex: 1;
-    line-height: 1.3;
-    word-break: break-word;
-}
-
-.reminder-item.done label {
-    text-decoration: line-through;
-    color: #94a3b8;
-}
-
-.reminder-del {
-    border: none;
-    background: none;
-    color: #cbd5e1;
-    cursor: pointer;
-    font-size: 10px;
-    line-height: 1;
-    padding: 0;
-    flex-shrink: 0;
-}
-
-.reminder-del:hover { color: #ef4444; }
-
-.reminder-add-area {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    border-top: 1px solid #f1f5f9;
-    padding-top: 6px;
-}
-
-.reminder-add-input {
-    width: 100%;
-    font-size: 10px;
-    padding: 4px 6px;
-    border: 1px solid #e2e8f0;
-    border-radius: 5px;
-    outline: none;
-    background: #fff;
-    color: #1e293b;
-    box-sizing: border-box;
-}
-
-.reminder-add-input:focus { border-color: #3b82f6; }
-
-.reminder-add-btn {
-    font-size: 10px;
-    font-weight: 700;
-    padding: 3px 6px;
-    background: #3b82f6;
-    color: #fff;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    width: 100%;
-}
-
-.reminder-add-btn:hover { background: #2563eb; }
 
 /* ─── Queue Card ────────────────────────────────────────────── */
 .q-card {
@@ -1135,7 +1025,7 @@ window.__APPT_DATA = {
                 <span style="font-size:10.5px;color:#94a3b8;font-weight:600;" x-text="queueList.length + ' in queue'"></span>
             </div>
 
-            {{-- ── LOWER: Queue + Reminders side-by-side ────── --}}
+            {{-- ── LOWER: Queue (full width) ────── --}}
             <div class="sb-lower">
 
                 {{-- Queue column --}}
@@ -1230,30 +1120,6 @@ window.__APPT_DATA = {
                                 </div>
                             </div>
                         </template>
-                    </div>
-                </div>
-
-                {{-- Reminders column --}}
-                <div class="sb-reminders-col">
-                    <div class="sb-reminders-title">Notes</div>
-
-                    <div class="reminder-list">
-                        <template x-for="(r, i) in reminders" :key="i">
-                            <div class="reminder-item" :class="{ done: r.done }">
-                                <input type="checkbox" :id="`rem-${i}`" x-model="r.done" @change="saveReminders()">
-                                <label :for="`rem-${i}`" x-text="r.text"></label>
-                                <button class="reminder-del" @click="reminders.splice(i,1); saveReminders()">✕</button>
-                            </div>
-                        </template>
-                    </div>
-
-                    <div class="reminder-add-area">
-                        <input class="reminder-add-input"
-                               type="text"
-                               placeholder="Add note…"
-                               x-model="newReminder"
-                               @keydown.enter="addReminder()">
-                        <button class="reminder-add-btn" @click="addReminder()">+ Add</button>
                     </div>
                 </div>
 
@@ -2182,11 +2048,6 @@ function appointmentApp() {
         activeStatusFilter: '',
         queueList:          [],
         counts:             {},
-        newReminder:        '',
-        reminders: [
-            { text: 'Call lab for implant kit', done: false },
-            { text: 'Patient payment follow-up', done: false },
-        ],
 
         // Operatory list (pre-loaded from server)
         operatories: window.__APPT_DATA.operatories ?? [],
@@ -2217,12 +2078,6 @@ function appointmentApp() {
 
             this.counts    = window.__APPT_DATA.statusCounts;
             this.queueList = this.sortQueue([...window.__APPT_DATA.todayQueue]);
-
-            // Load persisted reminders from localStorage
-            try {
-                const saved = localStorage.getItem('dentfluence_reminders');
-                if (saved) this.reminders = JSON.parse(saved);
-            } catch(e) {}
 
             initCalendar(window.__APPT_DATA.appointments);
 
@@ -2363,20 +2218,6 @@ function appointmentApp() {
             const clean = phone.replace(/\D/g, '');
             const num   = clean.startsWith('91') ? clean : '91' + clean;
             window.open(`https://wa.me/${num}`, '_blank');
-        },
-
-        addReminder() {
-            const t = this.newReminder.trim();
-            if (!t) return;
-            this.reminders.push({ text: t, done: false });
-            this.newReminder = '';
-            this.saveReminders();
-        },
-
-        saveReminders() {
-            try {
-                localStorage.setItem('dentfluence_reminders', JSON.stringify(this.reminders));
-            } catch(e) {}
         },
 
         openOperatoryPicker(apt) {

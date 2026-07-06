@@ -537,7 +537,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/products/{item}',     [InventoryController::class, 'showProduct'])->name('products.show');
         Route::post('/products',           [InventoryController::class, 'storeProduct'])->name('products.store');
         Route::put('/products/{item}',     [InventoryController::class, 'updateProduct'])->name('products.update');
-        Route::delete('/products/{item}',  [InventoryController::class, 'destroyProduct'])->name('products.destroy');
+        // Delete is Admin-only regardless of what a role's Inventory permission grid says —
+        // deleting a product hides its whole movement/audit history, not a routine edit.
+        Route::delete('/products/{item}',  [InventoryController::class, 'destroyProduct'])->name('products.destroy')->middleware('admin.only');
 
         // Stock movements
         Route::get('/stock-in',       [InventoryController::class, 'stockIn'])->name('stock-in');

@@ -75,7 +75,10 @@ class BillingController extends Controller
     {
         $patients        = Patient::orderBy('name')->get(['id', 'name', 'phone']);
         $treatments      = Treatment::where('is_active', true)->orderBy('name')->get(['id', 'name', 'default_price', 'gst_pct', 'unit_basis']);
+        // withSum so the picker can warn/block on out-of-stock items client-side
+        // rather than silently letting stock go negative at invoice save time.
         $sellableProducts = InventoryItem::sellable()->orderBy('product_name')
+            ->withSum('stocks', 'available_qty')
             ->get(['id', 'product_name', 'mrp', 'gst_rate']);
         $invoice         = null;
         $selectedPatient = $request->filled('patient_id') ? Patient::find($request->patient_id) : null;
@@ -137,7 +140,10 @@ class BillingController extends Controller
 
         $patients   = Patient::orderBy('name')->get(['id', 'name', 'phone']);
         $treatments = Treatment::where('is_active', true)->orderBy('name')->get(['id', 'name', 'default_price', 'gst_pct', 'unit_basis']);
+        // withSum so the picker can warn/block on out-of-stock items client-side
+        // rather than silently letting stock go negative at invoice save time.
         $sellableProducts = InventoryItem::sellable()->orderBy('product_name')
+            ->withSum('stocks', 'available_qty')
             ->get(['id', 'product_name', 'mrp', 'gst_rate']);
         $invoice    = null;
 
@@ -464,7 +470,10 @@ class BillingController extends Controller
         $invoice->load('items');
         $patients        = Patient::orderBy('name')->get(['id', 'name', 'phone']);
         $treatments      = Treatment::where('is_active', true)->orderBy('name')->get(['id', 'name', 'default_price', 'gst_pct', 'unit_basis']);
+        // withSum so the picker can warn/block on out-of-stock items client-side
+        // rather than silently letting stock go negative at invoice save time.
         $sellableProducts = InventoryItem::sellable()->orderBy('product_name')
+            ->withSum('stocks', 'available_qty')
             ->get(['id', 'product_name', 'mrp', 'gst_rate']);
         $selectedPatient = $invoice->patient;
 

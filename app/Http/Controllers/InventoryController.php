@@ -1054,7 +1054,7 @@ class InventoryController extends Controller
             'inventory_item_id' => 'required|exists:inventory_items,id',
             'to_location_id'    => 'required|exists:inventory_locations,id',
             'qty'               => 'required|numeric|min:0.01',
-            'unit_cost'         => 'nullable|numeric|min:0',
+            'unit_cost'         => 'required|numeric|min:0.01',
             'batch_no'          => 'nullable|string|max:80',
             'expiry_date'       => 'nullable|date|after:today',
             'manufacturing_date'=> 'nullable|date',
@@ -1062,7 +1062,7 @@ class InventoryController extends Controller
         ]);
 
         $qty      = (float) $data['qty'];
-        $unitCost = (float) ($data['unit_cost'] ?? 0);
+        $unitCost = (float) $data['unit_cost'];
 
         $movement = StockMovement::create([
             'inventory_item_id' => $data['inventory_item_id'],

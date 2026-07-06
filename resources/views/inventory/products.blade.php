@@ -356,7 +356,7 @@
                                 onmouseout="this.style.background='none'">
                             ✏️ Edit
                         </button>
-                        @if(auth()->user()?->role === 'admin')
+                        @if(auth()->user()?->isAdminRole())
                         <form method="POST" action="{{ route('inventory.products.destroy', $product->id) }}"
                               onsubmit="return confirm('Delete {{ addslashes($product->product_name) }}? This cannot be undone.')">
                             @csrf @method('DELETE')

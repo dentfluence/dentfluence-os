@@ -62,8 +62,8 @@
                             </div>
                         </div>
                         <div>
-                            <label style="display:block;font-size:12px;font-weight:500;color:#4e2060;margin-bottom:6px;">Unit Cost (Rs. )</label>
-                            <input type="number" name="unit_cost" id="stockin-price" min="0" step="0.01" placeholder="0.00"
+                            <label style="display:block;font-size:12px;font-weight:500;color:#4e2060;margin-bottom:6px;">Unit Cost (Rs. ) *</label>
+                            <input type="number" name="unit_cost" id="stockin-price" required min="0.01" step="0.01" placeholder="0.00"
                                 style="width:100%;padding:9px 12px;border:1px solid rgba(185,92,183,0.25);border-radius:3px;font-size:13px;font-family:'Inter', sans-serif;outline:none;box-sizing:border-box;">
                         </div>
                     </div>
@@ -144,5 +144,4 @@ document.getElementById('stockin-item').addEventListener('change', function() {
     document.getElementById('stockin-unit').textContent  = opt.dataset.unit  || 'units';
     document.getElementById('stockin-price').value       = opt.dataset.price || '';
 });
-</script>
-@endpush
+</scrip
