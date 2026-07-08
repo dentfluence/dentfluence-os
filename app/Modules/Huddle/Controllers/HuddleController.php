@@ -562,7 +562,36 @@ class HuddleController extends Controller
                 'selected'     => true,
             ]);
 
-        // Section 3 — Pending PRM Communication Queue items (due today or overdue)
+        // Section 3 — Follow-up calls booked directly against the FollowUp model
+        // (Yesterday's Flow "Book Follow-up call?" toggle, PRM lead follow-ups,
+        // any other manual booking) — due today or overdue. Grouped under the
+        // same "Follow-ups" bucket as Section 2 (comm_type = 'follow_up') since
+        // both are "call this patient today" items; Section 2's own anti-join
+        // already steps aside once a real row like this exists for that patient.
+        $bookedFollowUps = \App\Models\FollowUp::with(['patient:id,name,phone,branch_id', 'lead:id,name,phone'])
+            ->where('status', 'pending')
+            ->whereDate('due_date', '<=', $today->toDateString())
+            ->where(function ($q) use ($branchId) {
+                $q->whereHas('patient', fn ($qq) => $qq->where('branch_id', $branchId))
+                  ->orWhereNull('patient_id');
+            })
+            ->orderBy('due_date')
+            ->get()
+            ->map(fn ($f) => [
+                'id'           => 'flw_' . $f->id,
+                'source_id'    => $f->id,
+                'source_type'  => 'follow_up',
+                'comm_type'    => 'follow_up',
+                'patient_id'   => $f->patient_id,
+                'patient_name' => $f->subjectName(),
+                'phone'        => $f->subjectPhone() ?? '—',
+                'label'        => 'Follow-up Call',
+                'note'         => ($f->note ?: $f->label)
+                                  . ($f->due_date->isToday() ? '' : ' — overdue since ' . $f->due_date->format('d M')),
+                'selected'     => true,
+            ]);
+
+        // Section 4 — Pending PRM Communication Queue items (due today or overdue)
         $prmComms = CommunicationQueue::query()
             ->where('status', '!=', 'closed')
             ->where(function ($q) use ($today) {
@@ -586,8 +615,8 @@ class HuddleController extends Controller
                 'selected'     => false,  // not pre-checked — staff picks which to action
             ]);
 
-        // Reminders first, then follow-ups, then PRM comms
-        $commList = $reminders->concat($followUps)->concat($prmComms);
+        // Reminders first, then follow-ups (synthetic + booked), then PRM comms
+        $commList = $reminders->concat($followUps)->concat($bookedFollowUps)->concat($prmComms);
 
         // ── Staff list for task quick-add ────────────────────────────────────
         $staff = User::where('branch_id', $branchId)

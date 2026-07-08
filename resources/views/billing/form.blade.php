@@ -570,21 +570,29 @@ function getFreeTriggers() {
     return t;
 }
 
-function calcMembershipDiscount(subtotal) {
+function calcMembershipDiscount() {
     if (!memBenefits) return 0;
     const triggers = getFreeTriggers();
     let discount = 0;
+    let eligibleSubtotal = 0; // treatment/procedure rows only — FMCG excluded below
     document.querySelectorAll('.item-row').forEach(row => {
+        // FMCG/retail product rows (carry an inventory_item_id) never receive AOCP
+        // membership benefits — any discount on those rows is manual, entered
+        // directly on the invoice row. Skip them entirely here.
+        const invItemId = row.querySelector('[name*="[inventory_item_id]"]')?.value || '';
+        if (invItemId) return;
         const name  = (row.querySelector('[name*="[description]"]')?.value || '').toLowerCase();
         const price = parseFloat(row.querySelector('.row-price')?.value) || 0;
         const qty   = parseInt(row.querySelector('.row-qty')?.value) || 1;
+        const net   = price * qty;
+        eligibleSubtotal += net;
         if (triggers.some(t => name.includes(t))) {
-            discount += price * qty;
+            discount += net;
         }
     });
     const pct = parseFloat(memBenefits.discount_percent || 0);
     if (pct > 0) {
-        discount += Math.round(Math.max(0, subtotal - discount) * (pct / 100) * 100) / 100;
+        discount += Math.round(Math.max(0, eligibleSubtotal - discount) * (pct / 100) * 100) / 100;
     }
     return Math.round(discount * 100) / 100;
 }
@@ -725,7 +733,7 @@ function recalcTotals() {
     });
 
     // Auto-calculate membership discount
-    const memDisc   = calcMembershipDiscount(subtotal);
+    const memDisc   = calcMembershipDiscount();
     const couponDisc = parseFloat(document.getElementById('couponDiscountInput')?.value) || 0;
     const wallet     = parseFloat(document.getElementById('walletApplied')?.value) || 0;
 

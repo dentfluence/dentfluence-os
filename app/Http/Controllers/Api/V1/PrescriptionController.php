@@ -237,6 +237,7 @@ class PrescriptionController extends ApiController
                 'diagnosis'            => $validated['diagnosis'] ?? null,
                 'chief_complaint'      => $validated['chief_complaint'] ?? null,
                 'follow_up_date'       => $validated['follow_up_date'] ?? null,
+                'follow_up_after_days' => $validated['follow_up_after_days'] ?? null,
                 'general_instructions' => $validated['general_instructions'] ?? null,
                 'language'             => $validated['language'] ?? 'en',
                 'source'               => $validated['source'] ?? Prescription::SOURCE_CONSULTATION,
@@ -292,6 +293,7 @@ class PrescriptionController extends ApiController
                 $newVersion->diagnosis           = $validated['diagnosis'] ?? null;
                 $newVersion->chief_complaint     = $validated['chief_complaint'] ?? null;
                 $newVersion->follow_up_date      = $validated['follow_up_date'] ?? null;
+                $newVersion->follow_up_after_days = $validated['follow_up_after_days'] ?? null;
                 $newVersion->general_instructions = $validated['general_instructions'] ?? null;
                 $newVersion->language            = $validated['language'] ?? 'en';
                 $newVersion->source              = $validated['source'] ?? $rx->source;
@@ -316,6 +318,7 @@ class PrescriptionController extends ApiController
                     'diagnosis'            => $validated['diagnosis'] ?? null,
                     'chief_complaint'      => $validated['chief_complaint'] ?? null,
                     'follow_up_date'       => $validated['follow_up_date'] ?? null,
+                    'follow_up_after_days' => $validated['follow_up_after_days'] ?? null,
                     'general_instructions' => $validated['general_instructions'] ?? null,
                     'language'             => $validated['language'] ?? 'en',
                     'source'               => $validated['source'] ?? $rx->source,
@@ -433,6 +436,10 @@ class PrescriptionController extends ApiController
             'diagnosis'            => 'nullable|string|max:255',
             'chief_complaint'      => 'nullable|string|max:255',
             'follow_up_date'       => 'nullable|date',
+            // Alternative to a fixed follow_up_date — "come back in N days"
+            // (2026-07-06 web parity). Both may be set; Prescription::followUpLabel()
+            // prefers the fixed date when present.
+            'follow_up_after_days' => 'nullable|integer|min:1|max:365',
             'general_instructions' => 'nullable|string|max:1000',
             'language'             => 'nullable|in:en,mr,hi',
             'items'                   => 'nullable|array',
@@ -590,6 +597,8 @@ class PrescriptionController extends ApiController
             'chief_complaint'      => $rx->chief_complaint,
             'general_instructions' => $rx->general_instructions,
             'follow_up_date'       => $rx->follow_up_date,
+            'follow_up_after_days' => $rx->follow_up_after_days,
+            'follow_up_label'      => $rx->followUpLabel(),
             'language'             => $rx->language ?? 'en',
             'doctor'               => $rx->prescribedBy?->name,
             'doctor_name'          => $rx->prescribedBy?->doctor_name ?? $rx->prescribedBy?->name,

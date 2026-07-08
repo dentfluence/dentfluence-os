@@ -416,7 +416,7 @@ class InventoryController extends ApiController
     public function products(Request $request): JsonResponse
     {
         $query = $this->inventory->productsQuery(
-            $request->only(['search', 'category_id', 'sub_type_id', 'brand', 'location_id', 'stock_level'])
+            $request->only(['search', 'category_id', 'sub_type_id', 'brand', 'location_id', 'stock_level', 'sellable_only'])
         );
         $page = $this->paginate($query, $request);
 
@@ -425,49 +425,137 @@ class InventoryController extends ApiController
 
     /**
      * POST /api/v1/inventory/products
-     * Create a new product in the inventory product master.
-     * Minimal required field: product_name.
+     * Create a new product in the inventory product master — full parity
+     * with the web Add Product modal (2026-07-07), including the Clinical /
+     * Saleable(FMCG) split. `product_kind` = 'saleable' routes to the
+     * minimal retail form; anything else (including absent) is Clinical.
+     * Mirrors InventoryController::storeItem()/prepareProductData()/
+     * prepareSaleableProductData()/attachProductRelations() on web exactly —
+     * see that class for the canonical version this follows.
      */
     public function storeProduct(Request $request): JsonResponse
     {
-        $data = $request->validate([
-            'product_name'       => 'required|string|max:255',
-            'generic_name'       => 'nullable|string|max:255',
-            'category_id'        => 'nullable|exists:inventory_categories,id',
-            'brand'              => 'nullable|string|max:255',
-            'purchase_unit'      => 'nullable|string|max:40',
-            'consumption_unit'   => 'nullable|string|max:40',
-            'pieces_per_unit'    => 'nullable|integer|min:1',
-            'minimum_qty'        => 'nullable|numeric|min:0',
-            'last_purchase_price'=> 'nullable|numeric|min:0',
-            'gst_rate'           => 'nullable|numeric|min:0|max:100',
-            'description'        => 'nullable|string|max:2000',
-            'inventory_behavior' => 'nullable|in:consumable,reusable,semi_reusable',
-            // Mobile-only convenience: snap a photo of the product straight
-            // from the phone. Web's "Add New Product" modal has a Product
-            // Image uploader too, but it isn't wired to the `image` column
-            // yet (its storeItem()/updateItem() validate() doesn't include
-            // it) — this is the first place that column actually gets used.
-            'photo'              => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+        [$data, $primaryVendorId, $alternateVendorIds] = $request->input('product_kind') === 'saleable'
+            ? $this->prepareSaleableProductData($this->validateSaleableProductForm($request))
+            : $this->prepareClinicalProductData($request, $this->validateClinicalProductForm($request));
+
+        $data['item_code']              = 'ITEM-' . str_pad(InventoryItem::count() + 1, 4, '0', STR_PAD_LEFT);
+        $data['average_purchase_price'] = $data['last_purchase_price'] ?? 0;
+        $data['created_by']             = $request->user()->id;
+
+        $item = InventoryItem::create($data);
+
+        if ($primaryVendorId) {
+            $item->dealers()->syncWithoutDetaching([$primaryVendorId => ['is_primary' => true]]);
+        }
+        foreach ($alternateVendorIds as $vendorId) {
+            if ($vendorId != $primaryVendorId) {
+                $item->dealers()->syncWithoutDetaching([$vendorId => ['is_alternate' => true]]);
+            }
+        }
+
+        return $this->success($this->mapProduct($item), 'Product created.', 201);
+    }
+
+    /** Validation for the Clinical product form — mirrors web's validateProductForm(). */
+    private function validateClinicalProductForm(Request $request): array
+    {
+        return $request->validate([
+            'product_name'           => 'required|string|max:255',
+            'brand'                  => 'nullable|string|max:255',
+            'category_id'            => 'nullable|exists:inventory_categories,id',
+            'sub_type_id'            => 'nullable|exists:inventory_sub_types,id',
+            'variant_id'             => 'nullable|exists:inventory_variants,id',
+            'usage_type'             => 'nullable|in:single_use,multiple_use',
+            'max_usage_count'        => 'nullable|integer|min:1',
+            'description'            => 'nullable|string|max:2000',
+            'packaging_type'         => 'required|string|max:60',
+            'qty_in_packaging'       => 'required|numeric|min:0.01',
+            'packaging_unit_label'   => 'required|string|max:20',
+            'company_name'           => 'nullable|string|max:100',
+            'photo'                  => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'last_purchase_price'    => 'nullable|numeric|min:0',
+            'mrp'                    => 'nullable|numeric|min:0',
+            'minimum_qty'            => 'required|numeric|min:0',
+            'reorder_level'          => 'nullable|numeric|min:0',
+            'alternative_brands'     => 'nullable|array',
+            'alternative_brands.*'   => 'string|max:255',
+            'primary_vendor_id'      => 'nullable|exists:inventory_vendors,id',
+            'alternate_vendor_ids'   => 'nullable|array',
+            'alternate_vendor_ids.*' => 'exists:inventory_vendors,id',
+            'treatment_tags'         => 'nullable|array',
+            'treatment_tags.*'       => 'string|max:100',
+            'product_notes'          => 'nullable|string|max:2000',
+            'is_active'              => 'boolean',
         ]);
+    }
+
+    /** Validation for the Saleable/FMCG form — mirrors web's validateSaleableProductForm(). */
+    private function validateSaleableProductForm(Request $request): array
+    {
+        return $request->validate([
+            'product_name'       => 'required|string|max:255',
+            'retail_type'        => 'required|string|max:40',
+            'brand'              => 'required|string|max:255',
+            'mrp'                => 'required|numeric|min:0',
+            'retail_expiry_date' => 'nullable|date',
+            'minimum_qty'        => 'required|numeric|min:0',
+        ]);
+    }
+
+    /**
+     * Fold Clinical form data into InventoryItem columns. Returns
+     * [$data, $primaryVendorId, $alternateVendorIds] — mirrors web's
+     * prepareProductData() (photo upload + packaging -> legacy unit columns).
+     */
+    private function prepareClinicalProductData(Request $request, array $data): array
+    {
+        $primaryVendorId    = $data['primary_vendor_id'] ?? null;
+        $alternateVendorIds = $data['alternate_vendor_ids'] ?? [];
+        unset($data['primary_vendor_id'], $data['alternate_vendor_ids']);
 
         if ($request->hasFile('photo')) {
             $data['image'] = $request->file('photo')->store('inventory/products', 'public');
         }
         unset($data['photo']);
 
-        $data['created_by']          = $request->user()->id;
-        $data['inventory_behavior']  = $data['inventory_behavior'] ?? 'consumable';
-        $data['purchase_unit']       = $data['purchase_unit'] ?? 'unit';
-        $data['consumption_unit']    = $data['consumption_unit'] ?? 'unit';
-        $data['pieces_per_unit']     = $data['pieces_per_unit'] ?? 1;
-        $data['minimum_qty']         = $data['minimum_qty'] ?? 0;
-        $data['minimum_order_qty']   = 1;
+        $data['usage_type']         = $data['usage_type'] ?? 'multiple_use';
+        $data['inventory_behavior'] = $data['usage_type'] === 'single_use' ? 'consumable' : 'reusable';
+        $data['purchase_unit']      = $data['packaging_type'];
+        $data['consumption_unit']   = $data['packaging_unit_label'];
+        $data['pieces_per_unit']    = max(1, (int) round($data['qty_in_packaging']));
+        $data['minimum_order_qty']  = 1;
+        $data['is_reusable']        = $data['usage_type'] !== 'single_use';
+        $data['last_purchase_price'] = $data['last_purchase_price'] ?? 0;
+        $data['reorder_level']       = $data['reorder_level'] ?? 0;
+        $data['is_active']          = $request->boolean('is_active', true);
+        $data['is_sellable']        = false;
+
+        return [$data, $primaryVendorId, $alternateVendorIds];
+    }
+
+    /**
+     * Fills in every column the Saleable tab doesn't ask about. Mirrors
+     * web's prepareSaleableProductData() — no vendor linking from this tab.
+     */
+    private function prepareSaleableProductData(array $data): array
+    {
+        $data['is_sellable']         = true;
         $data['is_active']           = true;
+        $data['usage_type']          = 'multiple_use';
+        $data['inventory_behavior']  = 'reusable';
+        $data['is_reusable']         = true;
+        $data['packaging_type']      = 'Piece';
+        $data['qty_in_packaging']    = 1;
+        $data['packaging_unit_label'] = 'units';
+        $data['purchase_unit']       = 'Piece';
+        $data['consumption_unit']    = 'units';
+        $data['pieces_per_unit']     = 1;
+        $data['minimum_order_qty']   = 1;
+        $data['last_purchase_price'] = 0;
+        $data['reorder_level']       = 0;
 
-        $item = InventoryItem::create($data);
-
-        return $this->success($this->mapProduct($item), 'Product created.');
+        return [$data, null, []];
     }
 
     public function showItem(InventoryItem $item): JsonResponse
@@ -823,8 +911,20 @@ class InventoryController extends ApiController
             'company_name'        => $i->company_name,
             'category_id'         => $i->category_id,
             'category_name'       => $i->category?->name,
+            'sub_type_id'         => $i->sub_type_id,
             'sub_type_name'       => $i->subType?->name,
+            'variant_id'          => $i->variant_id,
             'variant_name'        => $i->variant?->name,
+            // Clinical form extras (2026-07-07 mobile parity)
+            'usage_type'          => $i->usage_type,
+            'max_usage_count'     => $i->max_usage_count,
+            'description'         => $i->description,
+            'alternative_brands'  => $i->alternative_brands ?? [],
+            'treatment_tags'      => $i->treatment_tags ?? [],
+            'product_notes'       => $i->product_notes,
+            // Saleable/FMCG extras
+            'retail_type'         => $i->retail_type,
+            'retail_expiry_date'  => $i->retail_expiry_date?->format('Y-m-d'),
             'inventory_behavior'  => $i->inventory_behavior,
             'purchase_unit'       => $i->purchase_unit,
             'consumption_unit'    => $i->consumption_unit,
@@ -835,6 +935,9 @@ class InventoryController extends ApiController
             'last_purchase_price' => (float) $i->last_purchase_price,
             'mrp'                 => $i->mrp !== null ? (float) $i->mrp : null,
             'gst_rate'            => (float) $i->gst_rate,
+            // Retail/FMCG billing flag (2026-07-06 web parity) — items with
+            // this true can be added as a sold-product line on an invoice.
+            'is_sellable'         => (bool) $i->is_sellable,
             'has_expiry'          => (bool) $i->has_expiry,
             'is_reusable'         => (bool) $i->is_reusable,
             'total_qty'           => (float) ($i->total_qty ?? 0),

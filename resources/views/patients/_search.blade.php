@@ -17,6 +17,7 @@
         </span>
         <input
             type="text"
+            name="df_global_search_nofill"
             x-model="query"
             @input.debounce.300ms="search()"
             @keydown.escape="close()"
@@ -27,6 +28,10 @@
             class="w-full pl-9 pr-4 py-2.5 text-sm border border-purple-200 bg-white focus:outline-none focus:border-purple-500"
             style="font-family:'DM Sans',sans-serif;color:#1a0020;"
             autocomplete="off"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-bwignore="true"
+            data-form-type="other"
         />
         {{-- Spinner --}}
         <span x-show="loading" class="absolute inset-y-0 right-3 flex items-center">

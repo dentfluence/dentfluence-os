@@ -128,6 +128,14 @@
         /* ── Reset ── */
         *, *::before, *::after { box-sizing: border-box; }
 
+        /* ── Alpine x-cloak (must be global — layout includes several
+               shared modals: appointment-modal-global, create-task-modal,
+               yesterday-followup-card, today-flow-card, tulip-assistant.
+               Without this rule, x-cloak on those partials does nothing,
+               so they flash visible for a moment on every page load until
+               Alpine finishes initializing and evaluates x-show="open". ── */
+        [x-cloak] { display: none !important; }
+
         /* ── Root ── */
         html, body {
             height: 100%;

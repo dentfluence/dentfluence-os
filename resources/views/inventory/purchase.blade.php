@@ -8,6 +8,11 @@
         <div class="df-page-subtitle">Purchase Orders · {{ $orders->total() }} orders</div>
     </div>
     <div class="df-page-actions">
+        <a href="{{ route('inventory.vendors') }}"
+            style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#fff;color:#6a0f70;border:1px solid rgba(106,15,112,0.25);border-radius:3px;font-size:13px;font-weight:500;text-decoration:none;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Manage Vendors
+        </a>
         <button onclick="document.getElementById('modal-create-po').style.display='flex'"
             style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#6a0f70;color:#fff;border-radius:3px;font-size:13px;font-weight:500;border:none;cursor:pointer;">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>

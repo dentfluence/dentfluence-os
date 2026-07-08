@@ -671,7 +671,39 @@ class HuddleBoardApiService
                 'selected'     => true,
             ]);
 
-        // 3 — Pending PRM communication-queue items (due today or overdue)
+        // 3 — Follow-up calls booked directly against the FollowUp model
+        // (Yesterday's Flow "Book Follow-up call?" toggle, PRM lead follow-ups,
+        // etc.) — due today or overdue. Same comm_type as #2 above so they sit
+        // in the same "Follow-ups" bucket on the mobile screen. Mirrors the
+        // web HuddleController@index Section 3 — keep both in sync.
+        $bookedFollowUps = collect();
+        try {
+            $bookedFollowUps = \App\Models\FollowUp::with(['patient:id,name,phone,branch_id', 'lead:id,name,phone'])
+                ->where('status', 'pending')
+                ->whereDate('due_date', '<=', $todayStr)
+                ->where(function ($q) use ($branchId) {
+                    $q->whereHas('patient', fn ($qq) => $qq->where('branch_id', $branchId))
+                      ->orWhereNull('patient_id');
+                })
+                ->orderBy('due_date')
+                ->get()
+                ->map(fn ($f) => [
+                    'id'           => 'flw_' . $f->id,
+                    'source_id'    => $f->id,
+                    'comm_type'    => 'follow_up',
+                    'patient_id'   => $f->patient_id,
+                    'patient_name' => $f->subjectName(),
+                    'phone'        => $f->subjectPhone() ?? '—',
+                    'label'        => 'Follow-up Call',
+                    'note'         => ($f->note ?: $f->label)
+                                      . ($f->due_date->isToday() ? '' : ' — overdue since ' . $f->due_date->format('d M')),
+                    'selected'     => true,
+                ]);
+        } catch (\Throwable $e) {
+            $bookedFollowUps = collect();
+        }
+
+        // 4 — Pending PRM communication-queue items (due today or overdue)
         $prm = collect();
         try {
             $prm = \App\Models\CommunicationQueue::query()
@@ -700,7 +732,7 @@ class HuddleBoardApiService
             $prm = collect();
         }
 
-        return $reminders->concat($followUps)->concat($prm);
+        return $reminders->concat($followUps)->concat($bookedFollowUps)->concat($prm);
     }
 
     /* ===================================================================== */

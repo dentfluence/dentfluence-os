@@ -589,7 +589,11 @@ function amAutoFill() {
 }
 
 // ── Conflict check ─────────────────────────────────────────────
-async function checkConflict(doctorId, date, time, duration) {
+// Returns the raw { has_conflict, conflicts[] } payload — used both for the
+// passive banner (on category/date change) and to gate submission with a
+// confirm prompt (the doctor may still be double-booked on purpose, e.g.
+// a second chair, so we warn rather than hard-block).
+async function fetchConflictData(doctorId, date, time, duration) {
     try {
         const url = new URL(window.__APPT_DATA.routes.checkConflict);
         url.searchParams.set('doctor_id',         doctorId);
@@ -597,21 +601,42 @@ async function checkConflict(doctorId, date, time, duration) {
         url.searchParams.set('appointment_time',  time);
         url.searchParams.set('duration_minutes',  duration);
 
-        const res  = await fetch(url, {
+        const res = await fetch(url, {
             headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken }
         });
-        const data = await res.json();
-        const warn = document.getElementById('am-conflict-warn');
+        return await res.json();
+    } catch {
+        return null;
+    }
+}
 
-        if (data.has_conflict) {
-            const c = data.conflicts[0];
-            document.getElementById('am-conflict-text').textContent =
-                `Conflict: ${c.patient_name} at ${c.time} (${c.duration} min)`;
-            warn.style.display = 'flex';
-        } else {
-            warn.style.display = 'none';
-        }
-    } catch {}
+async function checkConflict(doctorId, date, time, duration) {
+    const data = await fetchConflictData(doctorId, date, time, duration);
+    const warn = document.getElementById('am-conflict-warn');
+    if (!data) return;
+
+    if (data.has_conflict) {
+        const c = data.conflicts[0];
+        document.getElementById('am-conflict-text').textContent =
+            `Conflict: ${c.patient_name} at ${c.time} (${c.duration} min)`;
+        warn.style.display = 'flex';
+    } else {
+        warn.style.display = 'none';
+    }
+}
+
+// Ask the user to confirm before double-booking a doctor. Returns true when
+// it's safe to proceed (no conflict, or user confirmed anyway).
+async function confirmIfDoubleBooked(doctorId, doctorName, date, time, duration) {
+    if (!doctorId || !date || !time) return true;
+    const data = await fetchConflictData(doctorId, date, time, duration);
+    if (!data || !data.has_conflict || !data.conflicts.length) return true;
+
+    const c = data.conflicts[0];
+    return confirm(
+        `Dr. ${doctorName} already has an appointment with ${c.patient_name} at ${c.time} ` +
+        `(${c.duration} min). Book this appointment for the same doctor anyway?`
+    );
 }
 
 // ── Modal open / close / tab switch ───────────────────────────
@@ -669,6 +694,11 @@ async function submitApptModal() {
         return;
     }
 
+    const duration   = parseInt(document.getElementById('am-duration').value) || 30;
+    const doctorName = document.getElementById('am-doctor').selectedOptions[0]?.text || 'This doctor';
+    const okToBook   = await confirmIfDoubleBooked(doctor, doctorName, date, time, duration);
+    if (!okToBook) return;
+
     const btn = document.getElementById('am-submit-btn');
     btn.textContent = 'Booking…';
     btn.disabled    = true;
@@ -721,6 +751,16 @@ async function submitWalkin() {
     if (!first || !last || !mobile) {
         alert('Please fill in First Name, Last Name, and Mobile.');
         return;
+    }
+
+    const wiDoctorId  = document.getElementById('wi-doctor').value;
+    const wiCatSel    = document.getElementById('wi-category');
+    const wiDuration  = autoDurationFromName(wiCatSel.options[wiCatSel.selectedIndex]?.text);
+    const today0      = new Date().toISOString().split('T')[0];
+    if (wiDoctorId) {
+        const wiDoctorName = document.getElementById('wi-doctor').selectedOptions[0]?.text || 'This doctor';
+        const okToBook = await confirmIfDoubleBooked(wiDoctorId, wiDoctorName, today0, time, wiDuration);
+        if (!okToBook) return;
     }
 
     const btn = document.getElementById('wi-submit-btn');

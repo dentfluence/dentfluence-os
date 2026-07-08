@@ -1505,6 +1505,7 @@ function initCalendar(appointments) {
         allDaySlot:     false,
         nowIndicator:   true,
         height:         '100%',
+        slotEventOverlap: false, // side-by-side columns for concurrent appointments instead of cascaded overlap
         events:         buildCalendarEvents(appointments),
         eventContent:   renderEvent,
         eventClick:     onEventClick,
@@ -1573,7 +1574,7 @@ function renderEvent(info) {
         bg = '#f0fdf4'; borderColor = '#86efac';
     } else if (cardStyle === 'filled') {
         // Filled: solid tinted background + accent left border
-        bg = primaryColor + '33'; // ~20% opacity — visible but readable
+        bg = primaryColor + '66'; // ~40% opacity — richer, less washed-out
         borderColor = accentColor;
     } else {
         // Strip: white background + bold accent left border

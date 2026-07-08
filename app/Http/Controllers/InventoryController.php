@@ -613,11 +613,12 @@ class InventoryController extends Controller
         $brands     = InventoryItem::where('is_active', true)->whereNotNull('brand')
                         ->where('brand', '!=', '')->distinct()->orderBy('brand')->pluck('brand');
         $locations  = InventoryLocation::active()->orderBy('name')->get(['id', 'name']);
+        $vendors    = InventoryVendor::active()->get(['id', 'vendor_name']);
 
         return view('inventory.products', compact(
             'products', 'search', 'catId', 'subTypeId', 'brandFilter',
             'locationId', 'stockLevel', 'perPage',
-            'categories', 'subTypes', 'variants', 'brands', 'locations'
+            'categories', 'subTypes', 'variants', 'brands', 'locations', 'vendors'
         ));
     }
 
@@ -914,14 +915,19 @@ class InventoryController extends Controller
             );
         }
 
+        // Full replace, not additive: the product form always submits the
+        // complete supplier selection, so a dropped vendor must actually be
+        // detached here — otherwise stale/duplicate tags pile up on every edit.
+        $dealerSync = [];
         if ($primaryVendorId) {
-            $item->dealers()->syncWithoutDetaching([$primaryVendorId => ['is_primary' => true]]);
+            $dealerSync[$primaryVendorId] = ['is_primary' => true, 'is_alternate' => false];
         }
         foreach ($alternateVendorIds as $vendorId) {
             if ($vendorId != $primaryVendorId) {
-                $item->dealers()->syncWithoutDetaching([$vendorId => ['is_alternate' => true]]);
+                $dealerSync[$vendorId] = ['is_primary' => false, 'is_alternate' => true];
             }
         }
+        $item->dealers()->sync($dealerSync);
     }
 
     /**
@@ -2426,6 +2432,7 @@ class InventoryController extends Controller
             'qty'         => 'required|integer|min:1',
             'location_id' => 'required|exists:inventory_locations,id',
             'note'        => 'nullable|string|max:255',
+            'unit_price'  => 'nullable|numeric|min:0',
         ]);
 
         $qty = (float) $data['qty'];
@@ -2440,6 +2447,19 @@ class InventoryController extends Controller
             }
         }
 
+        // Price only ever moves with stock coming IN. If a fresh unit price was
+        // given, it becomes the item's new purchase price (same simple-overwrite
+        // convention already used by GRN receiving — see updateCatalogItem()).
+        // Leaving it blank keeps the last known price untouched, so a routine
+        // "add stock" for an item whose price hasn't changed stays one field.
+        $unitCost = (float) $item->average_purchase_price;
+        if ($data['type'] === 'add' && !empty($data['unit_price'])) {
+            $unitCost = (float) $data['unit_price'];
+            $item->last_purchase_price    = $unitCost;
+            $item->average_purchase_price = $unitCost;
+            $item->save();
+        }
+
         // StockMovement::booted() → updateLiveStock() handles inventory_stocks update automatically.
         StockMovement::create([
             'inventory_item_id' => $item->id,
@@ -2447,6 +2467,8 @@ class InventoryController extends Controller
             'from_location_id'  => $data['type'] === 'remove' ? $data['location_id'] : null,
             'movement_type'     => $data['type'] === 'add' ? 'stock_in' : 'stock_out',
             'qty'               => $qty,
+            'unit_cost'         => $unitCost,
+            'total_cost'        => round($qty * $unitCost, 2),
             'notes'             => $data['note'] ?? 'Manual adjustment',
             'reference_type'    => 'manual_adjustment',
             'reference_id'      => null,
@@ -2454,6 +2476,93 @@ class InventoryController extends Controller
         ]);
 
         return back()->with('success', 'Stock updated.');
+    }
+
+    /**
+     * Recent stock movement log for one product — powers the "Stock History"
+     * panel from the products table's ⋯ menu. Sumit flagged that there was no
+     * log view at all, which is what made "fix a mistake" impossible to reason
+     * about; this is that log, plus which entries can still be reversed.
+     */
+    public function stockHistory(InventoryItem $item)
+    {
+        $movements = StockMovement::where('inventory_item_id', $item->id)
+            ->with(['toLocation:id,name', 'fromLocation:id,name', 'createdBy:id,name', 'reversedBy:id,name'])
+            ->latest()
+            ->take(25)
+            ->get()
+            ->map(fn (StockMovement $m) => [
+                'id'          => $m->id,
+                'date'        => $m->created_at->format('d M Y, h:i A'),
+                'type'        => $m->getMovementLabel(),
+                'color'       => $m->getMovementColor(),
+                'is_add'      => $m->movement_type === 'stock_in',
+                'qty'         => (float) $m->qty,
+                'unit_cost'   => (float) $m->unit_cost,
+                'total_cost'  => (float) $m->total_cost,
+                'location'    => $m->toLocation?->name ?? $m->fromLocation?->name ?? '—',
+                'note'        => $m->notes,
+                'created_by'  => $m->createdBy?->name ?? '—',
+                'is_reversal' => (bool) $m->reversal_of_id,
+                'reversed'    => (bool) $m->reversed_at,
+                'reversed_meta' => $m->reversed_at
+                    ? ($m->reversed_at->format('d M Y, h:i A') . ' by ' . ($m->reversedBy?->name ?? '—'))
+                    : null,
+                'can_reverse' => $m->isReversible() && (auth()->user()?->isAdminRole() ?? false),
+            ]);
+
+        return response()->json(['movements' => $movements]);
+    }
+
+    /**
+     * Reverse a manual quick-adjustment. This never edits or deletes the
+     * original row — it creates a compensating movement (same pattern as
+     * reverseLastGrn()) and stamps the original as reversed so it can't be
+     * reversed twice. Admin-only, same gate as deleting a product.
+     */
+    public function reverseAdjustment(StockMovement $movement)
+    {
+        if (!$movement->isReversible()) {
+            return back()->withErrors(['reverse' => 'This entry can no longer be reversed.']);
+        }
+
+        $isAdd = $movement->movement_type === 'stock_in';
+
+        // Reversing an "add" removes stock again — make sure it's still there
+        // (it may have since been consumed, transferred, or sold).
+        if ($isAdd) {
+            $stock = InventoryStock::where('inventory_item_id', $movement->inventory_item_id)
+                ->where('location_id', $movement->to_location_id)
+                ->first();
+
+            if (!$stock || $stock->available_qty < $movement->qty) {
+                return back()->withErrors(['reverse' => 'Cannot reverse — only ' . ($stock->available_qty ?? 0) . ' left at that location (some of this stock has already moved).']);
+            }
+        }
+
+        DB::transaction(function () use ($movement, $isAdd) {
+            StockMovement::create([
+                'inventory_item_id' => $movement->inventory_item_id,
+                'to_location_id'    => $isAdd ? null : $movement->from_location_id,
+                'from_location_id'  => $isAdd ? $movement->to_location_id : null,
+                'movement_type'     => $isAdd ? 'stock_out' : 'stock_in',
+                'qty'               => $movement->qty,
+                'unit_cost'         => $movement->unit_cost,
+                'total_cost'        => $movement->total_cost,
+                'reference_type'    => 'manual_adjustment_reversal',
+                'reference_id'      => $movement->id,
+                'reversal_of_id'    => $movement->id,
+                'notes'             => 'Reversal of #' . $movement->id . ($movement->notes ? ' — ' . $movement->notes : ''),
+                'created_by'        => auth()->id(),
+            ]);
+
+            $movement->update([
+                'reversed_at' => now(),
+                'reversed_by' => auth()->id(),
+            ]);
+        });
+
+        return back()->with('success', 'Adjustment reversed.');
     }
 
 }

@@ -4,6 +4,7 @@ namespace App\Services\Relationship;
 
 use App\Models\Appointment;
 use App\Models\CommunicationQueue;
+use App\Models\TodayActionDismissal;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -84,9 +85,19 @@ class YesterdayReviewService
         try {
             $yesterday = Carbon::yesterday()->toDateString();
 
+            // Excludes anything already handled today via Today's Actions
+            // "Log & Close" or Dismiss — same TodayActionDismissal suppression
+            // every other live-computed category uses. Fixed 2026-07-08: this
+            // category previously had no such filter at all, so a logged call
+            // always reappeared on refresh.
+            $dismissedIds = TodayActionDismissal::dismissedIdsFor(
+                'missed_appointments_yesterday', Appointment::class, Carbon::today()
+            );
+
             return Appointment::with('patient:id,name,phone,relationship_id')
                 ->whereDate('appointment_date', $yesterday)
                 ->whereIn('status', ['no_show', 'cancelled'])
+                ->whereNotIn('id', $dismissedIds)
                 ->orderBy('appointment_date')
                 ->get()
                 ->map(function (Appointment $appt) {
@@ -105,6 +116,7 @@ class YesterdayReviewService
                             ? route('patients.show', $appt->patient_id)
                             : '#',
                         'meta'            => [
+                            'id'               => $appt->id,
                             'appointment_date' => $appt->appointment_date?->format('d M Y'),
                             'status'           => $appt->status,
                             'phone'            => $patient?->phone,

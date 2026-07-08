@@ -15,8 +15,8 @@ class StockMovement extends Model
         'from_location_id', 'to_location_id',
         'batch_no', 'expiry_date', 'manufacturing_date',
         'unit_cost', 'total_cost',
-        'reference_type', 'reference_id',
-        'notes', 'created_by',
+        'reference_type', 'reference_id', 'reversal_of_id',
+        'notes', 'created_by', 'reversed_at', 'reversed_by',
     ];
 
     protected $casts = [
@@ -25,6 +25,7 @@ class StockMovement extends Model
         'total_cost'   => 'float',
         'expiry_date'  => 'date',
         'manufacturing_date' => 'date',
+        'reversed_at'  => 'datetime',
     ];
 
     /* ── Boot: update live stock table after every movement ── */
@@ -113,6 +114,31 @@ class StockMovement extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** The original entry this movement was created to cancel out (if it's a reversal). */
+    public function reversalOf(): BelongsTo
+    {
+        return $this->belongsTo(StockMovement::class, 'reversal_of_id');
+    }
+
+    /** The compensating entry that cancelled this movement out (if it was reversed). */
+    public function reversalEntry(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(StockMovement::class, 'reversal_of_id');
+    }
+
+    public function reversedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reversed_by');
+    }
+
+    /** Only manual quick-adjustments can be reversed — GRN/consumption etc. have their own flows. */
+    public function isReversible(): bool
+    {
+        return $this->reference_type === 'manual_adjustment'
+            && is_null($this->reversed_at)
+            && is_null($this->reversal_of_id);
     }
 
     /* ── Helpers ── */

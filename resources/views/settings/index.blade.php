@@ -2727,7 +2727,7 @@
                     } else if (isDone) {
                         bg = '#f0fdf4'; border = '#86efac';
                     } else if (this.cardStyle === 'filled') {
-                        bg = primaryColor + '20';
+                        bg = primaryColor + '66';
                         border = accentColor;
                     } else {
                         // strip — white bg, accent left border

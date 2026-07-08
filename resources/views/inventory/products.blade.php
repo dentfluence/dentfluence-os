@@ -87,6 +87,14 @@
         <span style="font-size:12px;color:#9a85aa;font-family:'Inter',sans-serif;margin-left:8px;">{{ $products->total() }} products</span>
     </div>
     @if(auth()->user()?->role === 'admin')
+    <a href="{{ route('inventory.products.import') }}"
+            style="background:#fff;color:#6a0f70;border:1px solid #d8c8e4;border-radius:6px;padding:9px 16px;
+                   font-size:13px;font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;
+                   display:flex;align-items:center;gap:6px;white-space:nowrap;text-decoration:none;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>Import
+    </a>
     <button onclick="openAddProduct()"
             style="background:#6a0f70;color:#fff;border:none;border-radius:6px;padding:9px 16px;
                    font-size:13px;font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;
@@ -210,6 +218,8 @@
                 <th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;">Brand</th>
                 <th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;">Location(s)</th>
                 <th style="padding:10px 12px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;">Stock</th>
+                <th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;">Last Purchase Price</th>
+                <th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;">Inventory Value</th>
                 <th style="padding:10px 12px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;">Status</th>
                 <th style="padding:10px 12px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;">Adjust</th>
                 <th style="padding:10px 16px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9a85aa;width:44px;"></th>
@@ -299,6 +309,22 @@
                     </span>
                 </td>
 
+                {{-- Last Purchase Price --}}
+                <td style="padding:10px 12px;text-align:right;font-size:12.5px;color:#4e2060;
+                           font-family:'DM Mono',monospace;white-space:nowrap;">
+                    {{ $product->last_purchase_price > 0 ? '₹'.number_format($product->last_purchase_price, 2) : '—' }}
+                </td>
+
+                {{-- Inventory Value = current qty × average purchase price --}}
+                <td style="padding:10px 12px;text-align:right;font-size:12.5px;font-weight:600;color:#1e0a2c;
+                           font-family:'DM Mono',monospace;white-space:nowrap;">
+                    @if($qty > 0 && $product->average_purchase_price > 0)
+                        ₹{{ number_format($qty * $product->average_purchase_price, 2) }}
+                    @else
+                        —
+                    @endif
+                </td>
+
                 {{-- Status badge --}}
                 <td style="padding:10px 12px;text-align:center;">
                     @if($product->is_active)
@@ -315,7 +341,7 @@
                     <div style="display:flex;gap:5px;justify-content:center;">
                         <button onclick="openAdjust({{ $product->id }}, {{ $firstLocId }},
                                          '{{ addslashes($product->product_name) }}',
-                                         '{{ addslashes($firstLocNm) }}', 'add')"
+                                         '{{ addslashes($firstLocNm) }}', 'add', {{ (float) $product->average_purchase_price }})"
                                 title="Add stock"
                                 style="width:30px;height:30px;border-radius:5px;border:1.5px solid #a3d9b8;
                                        background:#e8f7ee;color:#1a7a45;font-size:18px;font-weight:700;
@@ -325,7 +351,7 @@
                                 onmouseout="this.style.background='#e8f7ee'">+</button>
                         <button onclick="openAdjust({{ $product->id }}, {{ $firstLocId }},
                                          '{{ addslashes($product->product_name) }}',
-                                         '{{ addslashes($firstLocNm) }}', 'remove')"
+                                         '{{ addslashes($firstLocNm) }}', 'remove', {{ (float) $product->average_purchase_price }})"
                                 title="Remove stock"
                                 style="width:30px;height:30px;border-radius:5px;border:1.5px solid #f5c6c6;
                                        background:#fdeaea;color:#b52020;font-size:18px;font-weight:700;
@@ -356,6 +382,13 @@
                                 onmouseout="this.style.background='none'">
                             ✏️ Edit
                         </button>
+                        <button onclick="closeDotMenus();openHistory({{ $product->id }}, '{{ addslashes($product->product_name) }}')"
+                                style="width:100%;padding:8px 14px;border:none;background:none;text-align:left;
+                                       font-size:13px;font-family:'DM Sans',sans-serif;color:#1e0a2c;cursor:pointer;"
+                                onmouseover="this.style.background='#faf5fb'"
+                                onmouseout="this.style.background='none'">
+                            📜 Stock History
+                        </button>
                         @if(auth()->user()?->isAdminRole())
                         <form method="POST" action="{{ route('inventory.products.destroy', $product->id) }}"
                               onsubmit="return confirm('Delete {{ addslashes($product->product_name) }}? This cannot be undone.')">
@@ -374,7 +407,7 @@
             </tr>
             @empty
             <tr>
-                <td colspan="8" style="padding:60px;text-align:center;">
+                <td colspan="10" style="padding:60px;text-align:center;">
                     <div style="font-size:36px;margin-bottom:12px;">📦</div>
                     <div style="font-family:'DM Sans',sans-serif;font-size:14px;color:#9070a0;">
                         No products found.
@@ -435,6 +468,16 @@
                               font-size:22px;font-family:'DM Mono',monospace;box-sizing:border-box;
                               text-align:center;outline:none;">
             </div>
+            <div id="adj-price-wrap" style="margin-bottom:14px;display:none;">
+                <label style="display:block;font-family:'DM Sans',sans-serif;font-size:11.5px;
+                              font-weight:600;color:#666;text-transform:uppercase;
+                              letter-spacing:.05em;margin-bottom:6px;">Unit Price (optional)</label>
+                <input type="number" name="unit_price" id="adj-price"
+                       min="0" step="0.01" placeholder="Leave blank to keep current price"
+                       style="width:100%;padding:9px 12px;border:1px solid #d8c8e4;border-radius:6px;
+                              font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
+                <p id="adj-price-hint" style="margin:5px 0 0;font-size:11px;color:#9a85aa;font-family:'DM Sans',sans-serif;"></p>
+            </div>
             <div style="margin-bottom:20px;">
                 <label style="display:block;font-family:'DM Sans',sans-serif;font-size:11.5px;
                               font-weight:600;color:#666;text-transform:uppercase;
@@ -458,9 +501,28 @@
     </div>
 </div>
 
+{{-- ═══════════════════════════════════════════════════════════
+     MODAL — Stock History (per product movement log + reverse)
+════════════════════════════════════════════════════════════ --}}
+<div id="modal-history"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);
+            z-index:1100;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:8px;width:100%;max-width:820px;max-height:80vh;
+                display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,0.18);margin:20px;">
+        <div style="padding:16px 22px;border-bottom:1px solid #f0e8f4;border-radius:8px 8px 0 0;
+                    background:#faf5fb;display:flex;justify-content:space-between;align-items:center;">
+            <h3 id="history-title"
+                style="font-family:'DM Sans',sans-serif;font-size:16px;font-weight:600;color:#1e0a2c;margin:0;"></h3>
+            <button onclick="closeHistory()"
+                    style="border:none;background:none;font-size:20px;color:#9a85aa;cursor:pointer;line-height:1;">×</button>
+        </div>
+        <div id="history-body" style="overflow-y:auto;flex:1;"></div>
+    </div>
+</div>
+
 <script>
 // ── Quick Adjust modal ──────────────────────────────────────────────────────
-function openAdjust(itemId, locationId, productName, locationName, type) {
+function openAdjust(itemId, locationId, productName, locationName, type, currentPrice) {
     const isAdd   = type === 'add';
     const color   = isAdd ? '#1a7a45' : '#b52020';
     const bgColor = isAdd ? '#e8f7ee' : '#fdeaea';
@@ -474,6 +536,20 @@ function openAdjust(itemId, locationId, productName, locationName, type) {
     document.getElementById('adj-submit').style.background = color;
     document.getElementById('adj-submit').textContent      = isAdd ? 'Add Stock' : 'Remove Stock';
     document.getElementById('form-adjust').action          = `/inventory/items/${itemId}/adjust`;
+
+    // Price only applies to stock coming IN — removing stock never touches cost.
+    const priceWrap = document.getElementById('adj-price-wrap');
+    const priceInput = document.getElementById('adj-price');
+    priceInput.value = '';
+    if (isAdd) {
+        priceWrap.style.display = 'block';
+        const price = Number(currentPrice) || 0;
+        priceInput.placeholder = price > 0 ? `Leave blank to keep ₹${price.toFixed(2)}` : 'Enter this batch\'s unit price';
+        document.getElementById('adj-price-hint').textContent = 'Only fill this in if the price has changed — it updates Last Purchase Price / Inventory Value.';
+    } else {
+        priceWrap.style.display = 'none';
+    }
+
     document.getElementById('modal-adjust').style.display  = 'flex';
     setTimeout(() => document.getElementById('adj-qty').focus(), 80);
 }
@@ -482,6 +558,95 @@ function closeAdjust() {
 }
 document.getElementById('modal-adjust').addEventListener('click', function(e) {
     if (e.target === this) closeAdjust();
+});
+
+// ── Stock History modal ─────────────────────────────────────────────────────
+const CAN_REVERSE_ADJUSTMENTS = @json(auth()->user()?->isAdminRole() ?? false);
+
+function openHistory(itemId, productName) {
+    document.getElementById('history-title').textContent = 'Stock History — ' + productName;
+    document.getElementById('history-body').innerHTML = '<p style="padding:20px;text-align:center;color:#9a85aa;font-family:\'DM Sans\',sans-serif;font-size:13px;">Loading…</p>';
+    document.getElementById('modal-history').style.display = 'flex';
+
+    fetch(`/inventory/items/${itemId}/history`, { headers: { 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(data => renderHistory(itemId, productName, data.movements || []))
+        .catch(() => {
+            document.getElementById('history-body').innerHTML = '<p style="padding:20px;text-align:center;color:#b52020;font-family:\'DM Sans\',sans-serif;font-size:13px;">Couldn\'t load history.</p>';
+        });
+}
+
+function renderHistory(itemId, productName, movements) {
+    if (!movements.length) {
+        document.getElementById('history-body').innerHTML = '<p style="padding:30px;text-align:center;color:#9a85aa;font-family:\'DM Sans\',sans-serif;font-size:13px;">No stock movements recorded yet.</p>';
+        return;
+    }
+    const rows = movements.map(m => {
+        const sign = m.is_add ? '+' : '−';
+        let statusHtml;
+        if (m.reversed) {
+            statusHtml = `<span style="font-size:10.5px;color:#9a85aa;">Reversed — ${m.reversed_meta}</span>`;
+        } else if (m.is_reversal) {
+            statusHtml = `<span style="font-size:10.5px;color:#9a85aa;">Reversal entry</span>`;
+        } else if (m.can_reverse && CAN_REVERSE_ADJUSTMENTS) {
+            statusHtml = `<button onclick="reverseMovement(${m.id})"
+                            style="padding:4px 10px;border:1px solid #f5c6c6;border-radius:5px;background:#fdeaea;
+                                   color:#b52020;font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;">Reverse</button>`;
+        } else {
+            statusHtml = '';
+        }
+        return `
+            <tr style="border-bottom:1px solid rgba(185,92,183,0.06);">
+                <td style="padding:8px 10px;font-size:12px;color:#4e2060;white-space:nowrap;">${m.date}</td>
+                <td style="padding:8px 10px;font-size:11.5px;">
+                    <span style="color:${m.color};font-weight:600;">${m.type}</span>
+                </td>
+                <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:12.5px;
+                           color:${m.is_add ? '#1a7a45' : '#b52020'};white-space:nowrap;">${sign}${m.qty}</td>
+                <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:#4e2060;white-space:nowrap;">
+                    ${m.unit_cost > 0 ? '₹' + Number(m.unit_cost).toFixed(2) : '—'}
+                </td>
+                <td style="padding:8px 10px;font-size:12px;color:#7a6884;white-space:nowrap;">${m.location}</td>
+                <td style="padding:8px 10px;font-size:11.5px;color:#9a85aa;max-width:160px;">${m.note || ''}</td>
+                <td style="padding:8px 10px;font-size:11px;color:#9a85aa;white-space:nowrap;">${m.created_by}</td>
+                <td style="padding:8px 10px;text-align:center;white-space:nowrap;">${statusHtml}</td>
+            </tr>`;
+    }).join('');
+
+    document.getElementById('history-body').innerHTML = `
+        <table style="width:100%;border-collapse:collapse;">
+            <thead>
+                <tr style="background:#faf5fb;border-bottom:1px solid rgba(185,92,183,0.10);">
+                    <th style="padding:8px 10px;text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9a85aa;">Date</th>
+                    <th style="padding:8px 10px;text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9a85aa;">Type</th>
+                    <th style="padding:8px 10px;text-align:right;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9a85aa;">Qty</th>
+                    <th style="padding:8px 10px;text-align:right;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9a85aa;">Unit Price</th>
+                    <th style="padding:8px 10px;text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9a85aa;">Location</th>
+                    <th style="padding:8px 10px;text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9a85aa;">Note</th>
+                    <th style="padding:8px 10px;text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9a85aa;">By</th>
+                    <th style="padding:8px 10px;text-align:center;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9a85aa;"></th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+}
+
+function reverseMovement(movementId) {
+    if (!confirm('Reverse this stock entry? This creates an offsetting entry — it will not delete or edit the original record.')) return;
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/inventory/movements/${movementId}/reverse`;
+    form.innerHTML = `<input type="hidden" name="_token" value="{{ csrf_token() }}">`;
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function closeHistory() {
+    document.getElementById('modal-history').style.display = 'none';
+}
+document.getElementById('modal-history').addEventListener('click', function(e) {
+    if (e.target === this) closeHistory();
 });
 
 // ── Three-dot menus ─────────────────────────────────────────────────────────
@@ -620,6 +785,30 @@ document.addEventListener('click', closeDotMenus);
                             </div>
                         </div>
                     </div>
+
+                    {{-- Product Image (moved here from COL 3 to fill the dead space under Pricing) --}}
+                    <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:14px;">
+                        <div style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
+                                    color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">
+                            Product Image
+                        </div>
+                        <div id="product-img-preview"
+                             style="width:100%;height:90px;border-radius:6px;background:#fff;
+                                    border:1px solid #e8e8e8;margin-bottom:10px;overflow:hidden;
+                                    display:flex;align-items:center;justify-content:center;">
+                            <img id="product-img-tag" src="" alt=""
+                                 style="max-width:100%;max-height:90px;object-fit:contain;display:none;">
+                            <span id="product-img-placeholder" style="color:#ccc;font-size:28px;">🖼️</span>
+                        </div>
+                        <label style="display:block;text-align:center;padding:8px;border:2px dashed #d0d0d0;
+                                      border-radius:6px;cursor:pointer;font-size:12px;color:#888;
+                                      font-family:'DM Sans',sans-serif;">
+                            <input type="file" name="photo" id="fp-photo" accept="image/*"
+                                   style="display:none;" onchange="previewProductImage(this)">
+                            Drag & drop or click to upload<br>
+                            <span style="font-size:10.5px;color:#bbb;">JPG, PNG up to 5MB</span>
+                        </label>
+                    </div>
                 </div>
 
                 {{-- COL 2: Packaging Details + Stock Alert --}}
@@ -710,7 +899,7 @@ document.addEventListener('click', closeDotMenus);
                     </div>
                 </div>
 
-                {{-- COL 3: Company & Brand + Product Image --}}
+                {{-- COL 3: Company & Brand + Supplier --}}
                 <div style="display:flex;flex-direction:column;gap:14px;">
                     <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;flex:1;">
                         <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
@@ -742,28 +931,48 @@ document.addEventListener('click', closeDotMenus);
                         </div>
                     </div>
 
-                    {{-- Product Image --}}
-                    <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:14px;">
-                        <div style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
-                                    color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">
-                            Product Image
+                    {{-- Supplier (who this product is bought from — separate from the manufacturer above) --}}
+                    <div style="background:#fff;border:1px solid #e8ddf2;border-radius:8px;padding:18px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:16px;
+                                    padding-bottom:12px;border-bottom:1px solid #f5f0f8;">
+                            <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;
+                                         color:#6a0f70;text-transform:uppercase;letter-spacing:.06em;">
+                                Supplier
+                            </span>
+                            <a href="{{ route('inventory.vendors') }}" target="_blank"
+                               style="font-size:11px;color:#6a0f70;text-decoration:none;font-weight:600;">+ Add new vendor</a>
                         </div>
-                        <div id="product-img-preview"
-                             style="width:100%;height:90px;border-radius:6px;background:#fff;
-                                    border:1px solid #e8e8e8;margin-bottom:10px;overflow:hidden;
-                                    display:flex;align-items:center;justify-content:center;">
-                            <img id="product-img-tag" src="" alt=""
-                                 style="max-width:100%;max-height:90px;object-fit:contain;display:none;">
-                            <span id="product-img-placeholder" style="color:#ccc;font-size:28px;">🖼️</span>
+                        <div style="display:flex;flex-direction:column;gap:11px;">
+                            <div>
+                                <label class="pml-label">Primary Supplier</label>
+                                <select name="primary_vendor_id" id="fp-primary_vendor_id"
+                                        style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;">
+                                    <option value="">— None selected —</option>
+                                    @foreach($vendors as $v)
+                                    <option value="{{ $v->id }}">{{ $v->vendor_name }}</option>
+                                    @endforeach
+                                </select>
+                                <span style="font-size:11px;color:#9070a0;font-family:'DM Sans',sans-serif;display:block;margin-top:4px;">
+                                    Who you usually reorder this from.
+                                </span>
+                            </div>
+                            <div>
+                                <label class="pml-label">Alternate Suppliers</label>
+                                <div id="alt-vendors-list" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px;"></div>
+                                <div style="display:flex;gap:6px;">
+                                    <select id="alt-vendor-select"
+                                            style="flex:1;padding:7px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box;">
+                                        <option value="">— Select a backup supplier —</option>
+                                        @foreach($vendors as $v)
+                                        <option value="{{ $v->id }}">{{ $v->vendor_name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <button type="button" onclick="addAltVendor()"
+                                            style="padding:7px 12px;background:#f0e8f4;border:1px solid #d8c8e4;border-radius:5px;font-size:12px;cursor:pointer;color:#6a0f70;">+</button>
+                                </div>
+                                <div id="alt-vendors-hidden"></div>
+                            </div>
                         </div>
-                        <label style="display:block;text-align:center;padding:8px;border:2px dashed #d0d0d0;
-                                      border-radius:6px;cursor:pointer;font-size:12px;color:#888;
-                                      font-family:'DM Sans',sans-serif;">
-                            <input type="file" name="photo" id="fp-photo" accept="image/*"
-                                   style="display:none;" onchange="previewProductImage(this)">
-                            Drag & drop or click to upload<br>
-                            <span style="font-size:10.5px;color:#bbb;">JPG, PNG up to 5MB</span>
-                        </label>
                     </div>
                 </div>
             </div>
@@ -1192,6 +1401,42 @@ function toggleUsageCount(value) {
 }
 
 // ── Alternative brands tag chips ──────────────────────────────
+// ── Alternate Suppliers (mirrors the Alt Brands chip pattern above) ──
+let altVendors = []; // [{id, name}]
+function addAltVendor() {
+    const sel = document.getElementById('alt-vendor-select');
+    const id = sel.value;
+    if (!id) return;
+    const name = sel.options[sel.selectedIndex].text;
+    const primaryId = document.getElementById('fp-primary_vendor_id').value;
+    if (id === primaryId) { alert('This vendor is already set as the Primary Supplier.'); return; }
+    if (altVendors.some(v => v.id === id)) { sel.value = ''; return; }
+    altVendors.push({ id, name });
+    renderAltVendors();
+    sel.value = '';
+}
+function removeAltVendor(id) {
+    altVendors = altVendors.filter(v => v.id !== id);
+    renderAltVendors();
+}
+function renderAltVendors() {
+    const list = document.getElementById('alt-vendors-list');
+    list.innerHTML = altVendors.map(v => `
+        <span style="display:inline-flex;align-items:center;gap:4px;background:#e8f0f7;
+                     color:#1a5ea8;padding:3px 8px;border-radius:10px;font-size:11.5px;
+                     font-family:'DM Sans',sans-serif;">
+            ${v.name}
+            <button type="button" onclick="removeAltVendor('${v.id}')"
+                    style="background:none;border:none;cursor:pointer;color:#1a5ea8;font-size:13px;
+                           line-height:1;padding:0;margin-left:2px;">&times;</button>
+        </span>
+    `).join('');
+    const hidden = document.getElementById('alt-vendors-hidden');
+    hidden.innerHTML = altVendors.map(v =>
+        `<input type="hidden" name="alternate_vendor_ids[]" value="${v.id}">`
+    ).join('');
+}
+
 let altBrands = [];
 function addAltBrand() {
     const input = document.getElementById('alt-brand-input');
@@ -1283,6 +1528,9 @@ function openAddProduct() {
     switchProductTab('clinical');
     // Reset alt brands
     altBrands = []; renderAltBrands();
+    // Reset supplier fields
+    document.getElementById('fp-primary_vendor_id').value = '';
+    altVendors = []; renderAltVendors();
     // Reset image preview
     document.getElementById('product-img-tag').style.display = 'none';
     document.getElementById('product-img-placeholder').style.display = 'block';
@@ -1355,6 +1603,15 @@ function openEditProduct(p) {
     // Alt brands
     altBrands = Array.isArray(p.alternative_brands) ? [...p.alternative_brands] : [];
     renderAltBrands();
+
+    // Suppliers (p.dealers loaded via ->load('dealers') on the edit-button JSON)
+    const dealers = Array.isArray(p.dealers) ? p.dealers : [];
+    const primaryDealer = dealers.find(d => d.pivot && d.pivot.is_primary);
+    document.getElementById('fp-primary_vendor_id').value = primaryDealer ? primaryDealer.id : '';
+    altVendors = dealers
+        .filter(d => d.pivot && d.pivot.is_alternate)
+        .map(d => ({ id: String(d.id), name: d.vendor_name }));
+    renderAltVendors();
 
     // Treatment tags
     const tagInputs = document.querySelectorAll('input[name="treatment_tags[]"]');

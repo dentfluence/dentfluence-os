@@ -113,7 +113,14 @@ class RecallPipelineController extends Controller
             $query->where('assigned_to', $filters['assigned_to']);
         }
 
+        // Sort: open items before closed (closed calls were surfacing at the
+        // top because the old sort was pure follow_up_date ASC — a closed
+        // recall with an old due date still sorted above an open, due-today
+        // one). Within each bucket, High → Medium → Low priority, then the
+        // most overdue/earliest follow-up date first. Fixed 2026-07-08.
         return $query
+            ->orderByRaw("status = 'closed'")
+            ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
             ->orderByRaw('follow_up_date IS NULL, follow_up_date ASC')
             ->orderByDesc('id');
     }

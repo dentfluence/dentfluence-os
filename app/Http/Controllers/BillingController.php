@@ -1704,24 +1704,32 @@ class BillingController extends Controller
     {
         $request->validate(['patient_id' => 'required|integer|exists:patients,id']);
 
-        // Parse line items from request if provided (for accurate free-item matching)
+        // Parse line items from request if provided (for accurate free-item matching).
+        // FMCG/retail product rows (carrying inventory_item_id) never receive AOCP
+        // membership benefits — any discount on those rows is manual, entered
+        // directly on the invoice line. Only treatment/procedure rows count here.
         $lineItems = [];
+        $eligibleSubtotal = 0.0;
         foreach ($request->input('items', []) as $row) {
+            if (!empty($row['inventory_item_id'])) {
+                continue;
+            }
             if (!empty($row['description'])) {
+                $amount = (float) ($row['unit_price'] ?? 0);
+                $qty    = (int) ($row['qty'] ?? 1);
                 $lineItems[] = [
                     'name'   => $row['description'],
-                    'amount' => (float) ($row['unit_price'] ?? 0),
-                    'qty'    => (int) ($row['qty'] ?? 1),
+                    'amount' => $amount,
+                    'qty'    => $qty,
                 ];
+                $eligibleSubtotal += $amount * $qty;
             }
         }
-
-        $subtotal = (float) $request->input('subtotal', 0);
 
         $result = MembershipBenefitService::forPatient(
             (int) $request->patient_id,
             $lineItems,
-            $subtotal
+            $eligibleSubtotal
         );
 
         return response()->json($result);

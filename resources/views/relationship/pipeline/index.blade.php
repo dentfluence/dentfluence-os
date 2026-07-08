@@ -166,7 +166,7 @@
                                        style="flex:1;text-align:center;font-size:11px;padding:5px 6px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;color:#4b5563;text-decoration:none;">
                                         Edit
                                     </a>
-                                    <button type="button" onclick="ppOpenActivity({{ $lead->id }})"
+                                    <button type="button" onclick="ppOpenDetail({{ $lead->id }})"
                                             style="flex:1;font-size:11px;padding:5px 6px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;color:#4b5563;cursor:pointer;">
                                         + Activity
                                     </button>
@@ -202,29 +202,20 @@
         @endif
     </p>
 
-    {{-- Phase 8 · Slice 1 — Log Activity modal (kept dead simple: type + note). --}}
-    <div id="ppActivityModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;align-items:center;justify-content:center;">
-        <div style="background:#fff;border-radius:12px;padding:20px;width:320px;max-width:92vw;">
-            <h3 style="margin:0 0 12px;font-size:15px;color:#1f2937;">Log Activity</h3>
-            <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Type</label>
-            <select id="ppActType" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;margin-bottom:12px;">
-                <option value="note">Note</option>
-                {{-- Suggestion / Patient Response (2026-07-06) — same Log Activity
-                     flow, just two more type values so a staff observation can be
-                     told apart from what the patient actually said. See
-                     docs/feature-specs/feature-spec-stage-notes.md. --}}
-                <option value="suggestion">Suggestion (staff observation)</option>
-                <option value="response">Patient Response</option>
-                <option value="call">Call</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="sms">SMS</option>
-                <option value="email">Email</option>
-            </select>
-            <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Note</label>
-            <textarea id="ppActNote" rows="3" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;margin-bottom:14px;resize:vertical;" placeholder="What happened?"></textarea>
-            <div style="display:flex;gap:8px;justify-content:flex-end;">
-                <button type="button" onclick="ppCloseActivity()" style="padding:8px 14px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;">Cancel</button>
-                <button type="button" onclick="ppSubmitActivity()" style="padding:8px 14px;border:none;border-radius:8px;background:#534AB7;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">Save</button>
+    {{-- Lead Detail modal (2026-07-08) — replaces the old "blind" Log Activity
+         modal. Same Log Activity form, but now shown alongside the full,
+         attributed activity history (who logged what, and when) instead of
+         firing into the void. Mirrors the Opportunity Pipeline's
+         "Opportunity Detail" modal (relationship/opportunities/index.blade.php).
+    --}}
+    <div id="ppDetailModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:#fff;border-radius:12px;width:640px;max-width:100%;max-height:88vh;overflow-y:auto;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px 0;">
+                <h3 style="margin:0;font-size:17px;font-weight:700;color:#1f2937;font-family:'Cormorant Garamond',serif;">Lead Detail</h3>
+                <button type="button" onclick="ppCloseDetail()" style="border:none;background:none;font-size:18px;color:#9ca3af;cursor:pointer;line-height:1;">&times;</button>
+            </div>
+            <div id="ppDetailModalBody" style="padding-top:8px;">
+                <div style="padding:48px 24px;text-align:center;color:#9ca3af;font-size:13px;">Loading…</div>
             </div>
         </div>
     </div>
@@ -597,47 +588,28 @@ function ppDrop(e, toStage, zoneEl) {
     ppSubmitMoveStage(leadId, toStage);
 }
 
-let ppActiveLeadId = null;
+// ── Lead Detail modal — shows the attributed activity log (who/when),
+// replacing the old blind Log Activity modal. Mirrors the Opportunity
+// Pipeline's opOpenDetail()/opCloseDetail().
+function ppOpenDetail(leadId) {
+    const modal = document.getElementById('ppDetailModal');
+    const body  = document.getElementById('ppDetailModalBody');
+    if (!modal || !body) return;
 
-function ppOpenActivity(leadId) {
-    ppActiveLeadId = leadId;
-    document.getElementById('ppActNote').value = '';
-    document.getElementById('ppActType').value = 'note';
-    document.getElementById('ppActivityModal').style.display = 'flex';
+    body.innerHTML = '<div style="padding:48px 24px;text-align:center;color:#9ca3af;font-size:13px;">Loading…</div>';
+    modal.style.display = 'flex';
+
+    fetch(ppBaseUrl + '/' + leadId + '/modal')
+        .then(r => r.text())
+        .then(html => { body.innerHTML = html; })
+        .catch(() => {
+            body.innerHTML = '<div style="padding:48px 24px;text-align:center;color:#e74c3c;font-size:13px;">Could not load this lead. Please try again.</div>';
+        });
 }
 
-function ppCloseActivity() {
-    document.getElementById('ppActivityModal').style.display = 'none';
-    ppActiveLeadId = null;
-}
-
-function ppSubmitActivity() {
-    if (!ppActiveLeadId) return;
-
-    const type  = document.getElementById('ppActType').value;
-    const note  = document.getElementById('ppActNote').value.trim();
-    const labelMap = { note: 'Note added', suggestion: 'Suggestion added', response: 'Patient response logged', call: 'Call logged', whatsapp: 'WhatsApp sent', sms: 'SMS sent', email: 'Email sent' };
-
-    if (!note) {
-        alert('Please add a note before saving.');
-        return;
-    }
-
-    fetch(ppBaseUrl + '/' + ppActiveLeadId + '/activity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': ppCsrf(), 'Accept': 'application/json' },
-        body: JSON.stringify({ type: type, label: labelMap[type] || 'Note added', note: note }),
-    })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                ppCloseActivity();
-                window.location.reload();
-            } else {
-                alert(data.message || 'Could not log the activity. Please try again.');
-            }
-        })
-        .catch(() => alert('Network error. Please try again.'));
+function ppCloseDetail() {
+    const modal = document.getElementById('ppDetailModal');
+    if (modal) modal.style.display = 'none';
 }
 
 function ppOpenQuickAdd() {
@@ -657,13 +629,14 @@ function ppSwitchToNewLead() {
     ppOpenNewLead();
 }
 
-// Close on Escape / backdrop click — same convenience as the Activity modal.
+// Close on Escape / backdrop click.
 document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     ppCloseQuickAdd();
     ppCloseNewLead();
+    ppCloseDetail();
 });
-['ppQuickAddModal', 'ppNewLeadModal'].forEach(function (id) {
+['ppQuickAddModal', 'ppNewLeadModal', 'ppDetailModal'].forEach(function (id) {
     const el = document.getElementById(id);
     if (el) el.addEventListener('click', function (e) { if (e.target === el) el.style.display = 'none'; });
 });

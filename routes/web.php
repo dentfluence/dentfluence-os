@@ -18,6 +18,7 @@ use App\Http\Controllers\PatientCommunicationController;
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\TreatmentCategoryController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\InventoryProductImportController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\ConsentController;
 use App\Http\Controllers\DataRequestController;
@@ -522,6 +523,10 @@ Route::middleware('auth')->group(function () {
         // Stock view (current qty + quick +/- adjust)
         Route::get('/items',               [InventoryController::class, 'items'])->name('items');
         Route::post('/items/{item}/adjust',[InventoryController::class, 'adjustStock'])->name('items.adjust');
+        Route::get('/items/{item}/history',[InventoryController::class, 'stockHistory'])->name('items.history');
+        // Reversing a manual adjustment is Admin-only (same gate as deleting a product) —
+        // it's a correction to the audit ledger, not a routine action.
+        Route::post('/movements/{movement}/reverse',[InventoryController::class, 'reverseAdjustment'])->name('movements.reverse')->middleware('admin.only');
 
         // Stock Count — 15-day physical count cycle
         Route::prefix('stock-count')->name('stock-count.')->group(function () {
@@ -534,6 +539,15 @@ Route::middleware('auth')->group(function () {
 
         // Product Master — card catalogue + detail view + CRUD
         Route::get('/products',            [InventoryController::class, 'products'])->name('products');
+
+        // Bulk Excel/CSV import (2026-07-07) — Clinical products only, MVP
+        // scope. Static segments declared BEFORE /products/{item} below so
+        // "import" is never mistaken for an item ID.
+        Route::get('/products/import',           [InventoryProductImportController::class, 'importForm'])->name('products.import');
+        Route::get('/products/import/template',  [InventoryProductImportController::class, 'downloadTemplate'])->name('products.import.template');
+        Route::post('/products/import/preview',  [InventoryProductImportController::class, 'preview'])->name('products.import.preview');
+        Route::post('/products/import/store',    [InventoryProductImportController::class, 'store'])->name('products.import.store');
+
         Route::get('/products/{item}',     [InventoryController::class, 'showProduct'])->name('products.show');
         Route::post('/products',           [InventoryController::class, 'storeProduct'])->name('products.store');
         Route::put('/products/{item}',     [InventoryController::class, 'updateProduct'])->name('products.update');

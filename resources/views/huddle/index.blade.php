@@ -1566,7 +1566,7 @@ document.addEventListener('alpine:init', () => {
                 'missed_appointments_yesterday' => ['⚠️',  '#fef2f2', '#991b1b', 'Missed Yesterday'],
                 'lead_followups'                => ['👤', '#f5f3ff', '#5b21b6', 'Lead Follow-ups'],
                 'membership_renewals'           => ['🏅', '#fffbeb', '#854d0e', 'Membership Renewals'],
-                'logged_communications'         => ['📞', '#f0fdf4', '#166534', 'Logged Communications'],
+                'logged_communications'         => ['📞', '#f0fdf4', '#166534', 'Other Calls'],
             ];
         @endphp
 

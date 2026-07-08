@@ -4,12 +4,19 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Activity;
+use App\Models\ActionOptionList;
+use App\Models\Appointment;
 use App\Models\CommunicationQueue;
+use App\Models\Finance\FinancePatientMembership;
+use App\Models\Invoice;
+use App\Models\LabCase;
 use App\Models\Lead;
 use App\Models\Patient;
 use App\Models\Relationship;
 use App\Models\Scopes\BranchScope;
+use App\Models\TodayActionDismissal;
 use App\Models\TreatmentOpportunity;
+use App\Models\TreatmentVisit;
 use App\Models\User;
 use App\Services\Prm\LeadFollowUpService;
 use App\Services\Prm\PrmRelationshipAdapter;
@@ -22,6 +29,7 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * RelationshipController (API v1)
@@ -36,7 +44,9 @@ use Illuminate\Support\Facades\DB;
  * lead/relationship engine, on web and now on mobile.
  *
  *   GET  /api/v1/relationships                       → List/search/filter (mobile equiv. of /relationship/list)
- *   GET  /api/v1/relationships/today                  → TodayActionsEngine grouped output
+ *   GET  /api/v1/relationships/today                  → TodayActionsEngine grouped output (+ call-outcome/dismiss-reason options in meta)
+ *   POST /api/v1/relationships/today/action            → Log a call outcome (mobile equiv. of TodayController::logAction, 2026-07-06 web parity)
+ *   POST /api/v1/relationships/today/dismiss           → Dismiss a Today's Actions row with a reason (mobile equiv. of TodayController::dismiss, 2026-07-06 web parity)
  *   GET  /api/v1/relationships/search?q=               → Universal person search
  *   GET  /api/v1/relationships/pipelines/leads         → Lead pipeline, grouped by stage
  *   GET  /api/v1/relationships/pipelines/opportunities → Opportunity pipeline, grouped by status
@@ -200,11 +210,265 @@ class RelationshipController extends ApiController
             '',
             200,
             [
-                'totals'      => $totals,
-                'grand_total' => $grandTotal,
-                'as_of'       => now()->toIso8601String(),
+                'totals'            => $totals,
+                'grand_total'       => $grandTotal,
+                'as_of'             => now()->toIso8601String(),
+                // Call-outcome / dismiss-reason config, same source the web
+                // Action Board drawer reads (Settings > Call Outcomes),
+                // added 2026-07-06 for mobile parity — see logAction()/dismiss().
+                'response_options'    => $this->buildResponseOptions(),
+                'next_actions'        => $this->buildNextActions(),
+                'requires_notes_map'  => $this->buildRequiresNotesMap(),
+                'dismiss_reasons'     => ActionOptionList::query()->dismissReasons()->get()
+                    ->map(fn (ActionOptionList $r) => [
+                        'key'            => $r->key,
+                        'label'          => $r->label,
+                        'requires_notes' => (bool) $r->requires_notes,
+                    ])->values(),
             ]
         );
+    }
+
+    /**
+     * category => [key => label] call-outcome map. Mirrors
+     * TodayController::buildResponseOptions() exactly (web parity) — starts
+     * from config('relationship_rules.response_options'), then overrides any
+     * category with active Settings > Call Outcomes rows.
+     */
+    private function buildResponseOptions(): array
+    {
+        $merged = config('relationship_rules.response_options', []);
+
+        $dbRows = ActionOptionList::query()
+            ->where('option_type', 'call_outcome')
+            ->active()
+            ->get()
+            ->groupBy('action_category');
+
+        foreach ($dbRows as $category => $rows) {
+            $merged[$category] = ActionOptionList::labelMap($rows);
+        }
+
+        return $merged;
+    }
+
+    /** Mirrors TodayController::buildNextActions() exactly. */
+    private function buildNextActions(): array
+    {
+        $overrides = ActionOptionList::query()
+            ->where('option_type', 'call_outcome')
+            ->whereNotNull('next_action_key')
+            ->active()
+            ->pluck('next_action_key', 'key')
+            ->toArray();
+
+        return array_merge(config('relationship_rules.next_actions', []), $overrides);
+    }
+
+    /** Mirrors TodayController::buildRequiresNotesMap() exactly. */
+    private function buildRequiresNotesMap(): array
+    {
+        $rows = ActionOptionList::query()
+            ->where('option_type', 'call_outcome')
+            ->where('requires_notes', true)
+            ->active()
+            ->get(['action_category', 'key']);
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row->action_category][$row->key] = true;
+        }
+
+        return $map;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/v1/relationships/today/action
+    // Mobile equivalent of TodayController::logAction() — same validation,
+    // same ActionOptionList gate, same ActivityEngine write. 2026-07-06 parity.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function todayLogAction(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'category'        => ['required', 'string'],
+            'patient_id'      => ['nullable', 'integer'],
+            'lead_id'         => ['nullable', 'integer'],
+            'relationship_id' => ['nullable', 'integer'],
+            'response'        => ['required', 'string'],
+            'next_action'     => ['nullable', 'string'],
+            'notes'           => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $optionRow = ActionOptionList::query()
+            ->where('option_type', 'call_outcome')
+            ->where('key', $validated['response'])
+            ->where(function ($q) use ($validated) {
+                $q->where('action_category', $validated['category'])
+                  ->orWhere('action_category', 'default');
+            })
+            ->active()
+            ->orderByRaw('action_category = ? desc', [$validated['category']])
+            ->first();
+
+        if ($optionRow?->requires_notes && blank($validated['notes'] ?? null)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This outcome requires a note before it can be logged.',
+            ], 422);
+        }
+
+        try {
+            $subject = null;
+            if ($validated['patient_id']) {
+                $subject = Patient::find($validated['patient_id']);
+            } elseif ($validated['lead_id']) {
+                $subject = Lead::find($validated['lead_id']);
+            }
+
+            if ($subject) {
+                $this->activityEngine->log(
+                    subject       : $subject,
+                    event         : 'call.logged',
+                    actor         : $request->user(),
+                    metadata      : [
+                        'category'    => $validated['category'],
+                        'response'    => $validated['response'],
+                        'next_action' => $validated['next_action'] ?? null,
+                        'notes'       => $validated['notes'] ?? null,
+                        'source'      => 'today_actions_mobile',
+                    ],
+                    relationshipId: $validated['relationship_id'] ?? null,
+                    description   : 'Call logged from Today\'s Actions: ' . $validated['response'],
+                );
+            }
+
+            $nextActionLabel = config('relationship_rules.next_actions.' . $validated['response'])
+                ?? $validated['next_action']
+                ?? 'No next action set';
+
+            return response()->json([
+                'success'           => true,
+                'next_action_label' => $nextActionLabel,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Api/V1/RelationshipController::todayLogAction failed', [
+                'data'  => $validated,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not log action. Please try again.',
+            ], 500);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/v1/relationships/today/dismiss
+    // Mobile equivalent of TodayController::dismiss(). 2026-07-06 parity.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** category => model class, for the live-computed categories that use TodayActionDismissal. */
+    private const DISMISSIBLE_MODELS = [
+        'opportunities'            => TreatmentOpportunity::class,
+        'appointment_reminders'    => Appointment::class,
+        'pending_estimates'        => TreatmentOpportunity::class,
+        'membership_renewals'      => FinancePatientMembership::class,
+        'birthdays'                => Patient::class,
+        'lab_ready'                => LabCase::class,
+        'payment_reminders'        => Invoice::class,
+        'wellness_check_yesterday' => TreatmentVisit::class,
+    ];
+
+    public function todayDismiss(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'category'        => ['required', 'string'],
+            'subject_id'      => ['required', 'integer'],
+            'reason_key'      => ['required', 'string'],
+            'notes'           => ['nullable', 'string', 'max:500'],
+            'patient_id'      => ['nullable', 'integer'],
+            'relationship_id' => ['nullable', 'integer'],
+        ]);
+
+        $reason = ActionOptionList::query()
+            ->where('option_type', 'dismiss_reason')
+            ->where('key', $validated['reason_key'])
+            ->active()
+            ->first();
+
+        if (! $reason) {
+            return response()->json(['success' => false, 'message' => 'Unknown dismiss reason.'], 422);
+        }
+
+        if ($reason->requires_notes && blank($validated['notes'] ?? null)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This reason requires a note before it can be dismissed.',
+            ], 422);
+        }
+
+        try {
+            if ($validated['category'] === 'recall_calls' || $validated['category'] === 'missed_calls_yesterday') {
+                $queueItem = CommunicationQueue::find($validated['subject_id']);
+                if (! $queueItem) {
+                    return response()->json(['success' => false, 'message' => 'Item not found — it may already be handled.'], 404);
+                }
+                $queueItem->dismiss($request->user()->id, $reason->label . ($validated['notes'] ?? '' ? ' — ' . $validated['notes'] : ''));
+            } else {
+                $modelClass = self::DISMISSIBLE_MODELS[$validated['category']] ?? null;
+                if (! $modelClass) {
+                    return response()->json(['success' => false, 'message' => 'This category cannot be dismissed.'], 422);
+                }
+
+                TodayActionDismissal::updateOrCreate(
+                    [
+                        'category'           => $validated['category'],
+                        'subject_type'       => $modelClass,
+                        'subject_id'         => $validated['subject_id'],
+                        'dismissed_for_date' => \Illuminate\Support\Carbon::today()->toDateString(),
+                    ],
+                    [
+                        'reason_key'   => $reason->key,
+                        'notes'        => $validated['notes'] ?? null,
+                        'dismissed_by' => $request->user()->id,
+                    ]
+                );
+            }
+
+            $subject = null;
+            if ($request->filled('patient_id')) {
+                $subject = Patient::find($request->integer('patient_id'));
+            }
+            if ($subject) {
+                $this->activityEngine->log(
+                    subject       : $subject,
+                    event         : 'today_action.dismissed',
+                    actor         : $request->user(),
+                    metadata      : [
+                        'category' => $validated['category'],
+                        'reason'   => $reason->label,
+                        'notes'    => $validated['notes'] ?? null,
+                        'source'   => 'today_actions_mobile',
+                    ],
+                    relationshipId: $request->integer('relationship_id') ?: null,
+                    description   : 'Dismissed from Today\'s Actions: ' . $reason->label,
+                );
+            }
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            Log::error('Api/V1/RelationshipController::todayDismiss failed', [
+                'data'  => $validated,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not dismiss item. Please try again.',
+            ], 500);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

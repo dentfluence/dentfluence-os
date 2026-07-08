@@ -44,6 +44,23 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     Route::post('/today/dismiss', [TodayController::class, 'dismiss'])
         ->name('today.dismiss');
 
+    // Close — explicit "done with this one" action, separate from Log
+    // (2026-07-08: Log used to auto-close the row per outcome, which meant
+    // "No answer" silently removed the row instead of leaving it open for
+    // a retry). No outcome required.
+    Route::post('/today/close', [TodayController::class, 'closeAction'])
+        ->name('today.close');
+
+    // Notes — same Suggestion/Patient-Response log already live on Lead &
+    // Opportunity Pipeline (see OpportunityPipelineController::addNote()),
+    // ported to the Action Board drawer. See
+    // docs/feature-specs/feature-spec-action-board-instruction-log.md.
+    Route::get('/today/notes', [TodayController::class, 'notes'])
+        ->name('today.notes.index');
+
+    Route::post('/today/notes', [TodayController::class, 'addNote'])
+        ->name('today.notes.add');
+
     // Shared projection summary (JSON) — consumed by the Daily Huddle (slice E4).
     Route::get('/today/summary', [TodayController::class, 'summary'])
         ->name('today.summary');
@@ -114,6 +131,13 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     Route::post('/pipeline/{id}/convert', [LeadPipelineController::class, 'convertToPatient'])
         ->whereNumber('id')
         ->name('pipeline.convert');  // relationship.pipeline.convert
+
+    // Lead Detail modal (2026-07-08) — shows the logged activity history
+    // (who logged what, and when) for one lead. Mirrors the Opportunity
+    // Pipeline's "Opportunity Detail" modal (relationship.opportunities.detail-modal).
+    Route::get('/pipeline/{id}/modal', [LeadPipelineController::class, 'detailModal'])
+        ->whereNumber('id')
+        ->name('pipeline.detail-modal');  // relationship.pipeline.detail-modal
 
     // ── PRE Lead create + edit (Phase 8 · Slice 2 — PRM Retirement) ─────────
     // Ported alongside (not instead of) prm.add-lead / prm.store-lead /

@@ -235,6 +235,14 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             Route::get('/today',           [RelationshipController::class, 'today'])
                 ->name('today');
 
+            // Action Board writes (2026-07-06 web parity) — call outcomes + dismiss.
+            // Static segments, declared with /today above, before the generic
+            // /{id} wildcard further down this group.
+            Route::post('/today/action',   [RelationshipController::class, 'todayLogAction'])
+                ->name('today.action');
+            Route::post('/today/dismiss',  [RelationshipController::class, 'todayDismiss'])
+                ->name('today.dismiss');
+
             // Universal search — name, phone, email
             Route::get('/search',          [RelationshipController::class, 'search'])
                 ->name('search');

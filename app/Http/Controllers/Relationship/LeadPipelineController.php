@@ -338,6 +338,23 @@ class LeadPipelineController extends Controller
         ]);
     }
 
+    /**
+     * Lead Detail modal (2026-07-08) — shows the full logged-activity history
+     * for one lead (who logged it, when, what type/outcome/note), the same
+     * gap the "Opportunity Detail" modal already closed for Treatment
+     * Opportunities (OpportunityPipelineController::detailModal()). Previously
+     * "+ Activity" only ever wrote a log entry — there was no way to see it
+     * again from the board. Reads straight off `LeadActivity` (the `by` column
+     * already stores who logged it) rather than the relationship spine, so
+     * this works even for leads with no relationship_id.
+     */
+    public function detailModal($id): View
+    {
+        $lead = Lead::with('activities')->findOrFail($id);
+
+        return view('relationship.pipeline._detail-card', compact('lead'));
+    }
+
     // ── Phase 8 · Slice 2 — lead create + edit ────────────────────────────────
 
     /** Quick-add form (4 fields). Ported from PrmController::quickAdd(). */

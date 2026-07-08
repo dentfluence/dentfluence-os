@@ -608,6 +608,19 @@
                        style="padding:6px 10px;border:1px solid #dfc5e1;border-radius:8px;font-size:12px;color:#4e0a53;background:#fff;">
             </div>
 
+            {{-- + Add Call (2026-07-08) — opens the same global Create Task
+                 modal used by Huddle, pre-set to the Call category, so a
+                 manually-added treatment follow-up or vendor/lab/doctor call
+                 lands on this same board. See
+                 docs/feature-specs/feature-spec-manual-add-call.md. --}}
+            <button
+                type="button"
+                onclick="window.dispatchEvent(new CustomEvent('open-create-task', { detail: { category: 'call' } }))"
+                style="padding:6px 12px;border:1px solid #6a0f70;border-radius:8px;background:#6a0f70;color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;"
+            >
+                <i class="ti ti-plus"></i> Add Call
+            </button>
+
             <button
                 onclick="window.location.reload()"
                 style="padding:6px 12px;border:1px solid #dfc5e1;border-radius:8px;background:#fff;color:#6a0f70;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;"
@@ -821,7 +834,58 @@
                         </template>
                     </div>
 
-                    {{-- 2. Dynamic Checklist --}}
+                    {{-- 2. Notes — same Suggestion / Patient-Response log already live on
+                         Lead & Opportunity Pipeline, ported here as-is. Reuses
+                         ActivityEngine (event: today_action.note_added), no new table.
+                         See docs/feature-specs/feature-spec-action-board-instruction-log.md. --}}
+                    <div class="ta-drawer-section">
+                        <div class="ta-drawer-section-label">Notes</div>
+
+                        <template x-if="notesLoading">
+                            <p style="font-size:13px;color:#9ca3af;margin:0 0 12px;">Loading notes…</p>
+                        </template>
+
+                        <template x-if="!notesLoading && notes.length === 0">
+                            <p style="font-size:13px;color:#9ca3af;margin:0 0 12px;">No notes logged yet.</p>
+                        </template>
+
+                        <template x-for="(note, i) in notes" :key="i">
+                            <div style="display:flex;gap:10px;margin-bottom:12px;">
+                                <span :style="(note.note_type === 'response'
+                                        ? 'background:#eef6ee;color:#2f7a3d;'
+                                        : 'background:#f0eefc;color:#534AB7;') +
+                                        'font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;height:fit-content;'"
+                                      x-text="note.note_type === 'response' ? 'Patient Response' : 'Suggestion'"></span>
+                                <div style="flex:1;min-width:0;">
+                                    <p style="font-size:13.5px;color:#374151;line-height:1.5;margin:0;" x-text="note.text"></p>
+                                    <div style="font-size:11px;color:#9ca3af;margin-top:3px;">
+                                        <span x-text="note.author"></span> · <span x-text="note.occurred_at"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <div style="display:flex;gap:8px;align-items:flex-start;margin-top:8px;">
+                            <select class="ta-form-select" x-model="noteType" style="flex-shrink:0;width:auto;">
+                                <option value="suggestion">Suggestion</option>
+                                <option value="response">Patient Response</option>
+                            </select>
+                            <textarea class="ta-form-textarea" x-model="noteText" rows="2"
+                                      placeholder="Add a note…" style="flex:1;margin:0;"></textarea>
+                        </div>
+                        <template x-if="notesError">
+                            <div style="font-size:12px;color:#b52020;margin-top:6px;" x-text="notesError"></div>
+                        </template>
+                        <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+                            <button type="button" @click="addNote()" :disabled="!noteText.trim() || notesSaving"
+                                    style="padding:7px 16px;border:none;border-radius:8px;background:#534AB7;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;">
+                                <span x-show="!notesSaving">Add Note</span>
+                                <span x-show="notesSaving">Saving…</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {{-- 3. Dynamic Checklist --}}
                     <div class="ta-drawer-section" x-show="checklist.length > 0">
                         <div class="ta-drawer-section-label">Call Checklist</div>
                         <ul class="ta-checklist">
@@ -839,53 +903,103 @@
                         </ul>
                     </div>
 
-                    {{-- 3. Log Response --}}
-                    <div class="ta-drawer-section">
-                        <div class="ta-drawer-section-label">Log Response</div>
-
-                        <div class="ta-form-group">
-                            <label class="ta-form-label">Call outcome</label>
-                            <select
-                                class="ta-form-select"
-                                x-model="form.response"
-                                @change="updateNextAction()"
-                            >
-                                <option value="">— Select outcome —</option>
-                                <template x-for="(label, key) in responseOptions" :key="key">
-                                    <option :value="key" x-text="label"></option>
-                                </template>
-                            </select>
-                        </div>
-
-                        <div class="ta-form-group">
-                            <label class="ta-form-label">
-                                <span x-text="requiresNotes ? 'Notes (required for this outcome)' : 'Notes (optional)'"></span>
-                            </label>
-                            <textarea
-                                class="ta-form-textarea"
-                                placeholder="Any notes from this call..."
-                                x-model="form.notes"
-                                :style="requiresNotes && !form.notes ? 'border-color:#e0a0a0;' : ''"
-                            ></textarea>
-                        </div>
+                    {{-- Log / Close tabs (2026-07-08) — previously one combined
+                         "Log & Close" button, which force-closed the row for
+                         every outcome (including "No answer"/"Not connected"),
+                         so a failed attempt vanished instead of staying open
+                         for a retry. Log now only records an outcome; Close is
+                         a separate, explicit action. --}}
+                    <div style="display:flex;gap:22px;padding:0 24px;border-bottom:1px solid #f0ebf5;">
+                        <button type="button" @click="activeTab = 'log'"
+                                :style="activeTab === 'log'
+                                    ? 'color:#534AB7;font-weight:700;border-bottom-color:#534AB7;'
+                                    : 'color:#b3a6bf;font-weight:600;border-bottom-color:transparent;'"
+                                style="background:none;border:none;border-bottom:2.5px solid transparent;margin-bottom:-1px;padding:9px 2px;font-size:13px;letter-spacing:.01em;cursor:pointer;transition:color .15s ease;">
+                            Log
+                        </button>
+                        <button type="button" @click="activeTab = 'close'"
+                                :style="activeTab === 'close'
+                                    ? 'color:#534AB7;font-weight:700;border-bottom-color:#534AB7;'
+                                    : 'color:#b3a6bf;font-weight:600;border-bottom-color:transparent;'"
+                                style="background:none;border:none;border-bottom:2.5px solid transparent;margin-bottom:-1px;padding:9px 2px;font-size:13px;letter-spacing:.01em;cursor:pointer;transition:color .15s ease;">
+                            Close
+                        </button>
                     </div>
 
-                    {{-- 4. Next Action (auto-suggested) --}}
-                    <div class="ta-drawer-section" x-show="nextActionLabel">
-                        <div class="ta-drawer-section-label">Suggested Next Action</div>
-                        <div class="ta-next-action-box">
-                            <i class="ti ti-arrow-right" style="margin-top:1px;flex-shrink:0;"></i>
-                            <span x-text="nextActionLabel"></span>
+                    {{-- 4. Log tab — records a call outcome, never closes the row --}}
+                    <div x-show="activeTab === 'log'" style="padding-top:16px;">
+                        <div class="ta-drawer-section">
+                            <div class="ta-drawer-section-label">Log Response</div>
+
+                            <div class="ta-form-group">
+                                <label class="ta-form-label">Call outcome</label>
+                                <select
+                                    class="ta-form-select"
+                                    x-model="form.response"
+                                    @change="updateNextAction()"
+                                >
+                                    <option value="">— Select outcome —</option>
+                                    <template x-for="(label, key) in responseOptions" :key="key">
+                                        <option :value="key" x-text="label"></option>
+                                    </template>
+                                </select>
+                            </div>
+
+                            <div class="ta-form-group">
+                                <label class="ta-form-label">
+                                    <span x-text="requiresNotes ? 'Notes (required for this outcome)' : 'Notes (optional)'"></span>
+                                </label>
+                                <textarea
+                                    class="ta-form-textarea"
+                                    placeholder="Any notes from this call..."
+                                    x-model="form.notes"
+                                    :style="requiresNotes && !form.notes ? 'border-color:#e0a0a0;' : ''"
+                                ></textarea>
+                            </div>
                         </div>
+
+                        {{-- Next Action (auto-suggested) --}}
+                        <div class="ta-drawer-section" x-show="nextActionLabel">
+                            <div class="ta-drawer-section-label">Suggested Next Action</div>
+                            <div class="ta-next-action-box">
+                                <i class="ti ti-arrow-right" style="margin-top:1px;flex-shrink:0;"></i>
+                                <span x-text="nextActionLabel"></span>
+                            </div>
+                        </div>
+
+                        <template x-if="submitError">
+                            <div style="background:#fdeaea;border:1px solid #f5a0a0;border-radius:8px;padding:10px 14px;font-size:13px;color:#b52020;margin:0 24px 8px;">
+                                <i class="ti ti-alert-circle"></i>
+                                <span x-text="submitError"></span>
+                            </div>
+                        </template>
                     </div>
 
-                    {{-- Error message --}}
-                    <template x-if="submitError">
-                        <div style="background:#fdeaea;border:1px solid #f5a0a0;border-radius:8px;padding:10px 14px;font-size:13px;color:#b52020;margin-top:8px;">
-                            <i class="ti ti-alert-circle"></i>
-                            <span x-text="submitError"></span>
+                    {{-- Close tab — explicit "done with this one," no outcome required --}}
+                    <div x-show="activeTab === 'close'" x-cloak style="padding-top:16px;">
+                        <div class="ta-drawer-section">
+                            <div class="ta-drawer-section-label">Close this item</div>
+                            <p style="font-size:13px;color:#6b7280;margin:0 0 10px;">
+                                Removes it from today's list. Use this once you're done — after a call went
+                                through, or after enough retry attempts. It does not require a call outcome.
+                            </p>
+                            <div class="ta-form-group">
+                                <label class="ta-form-label">Notes (optional)</label>
+                                <textarea
+                                    class="ta-form-textarea"
+                                    placeholder="Why is this being closed?"
+                                    x-model="closeNotes"
+                                ></textarea>
+                            </div>
                         </div>
-                    </template>
+
+                        <template x-if="closeError">
+                            <div style="background:#fdeaea;border:1px solid #f5a0a0;border-radius:8px;padding:10px 14px;font-size:13px;color:#b52020;margin:0 24px 8px;">
+                                <i class="ti ti-alert-circle"></i>
+                                <span x-text="closeError"></span>
+                            </div>
+                        </template>
+                    </div>
 
                 </div>{{-- /drawer-body --}}
 
@@ -927,7 +1041,10 @@
                     </div>
                 </div>
 
-                {{-- Drawer Footer --}}
+                {{-- Drawer Footer — Log/Close button swaps with the active tab
+                     (2026-07-08). "Dismiss instead" stays available from either
+                     tab: for rows that shouldn't have been on the list at all,
+                     not ones where a real attempt (logged or closed) happened. --}}
                 <div class="ta-drawer-footer" x-show="!dismissMode">
                     <button class="ta-btn-cancel" @click="closeDrawer()">Cancel</button>
                     <button
@@ -938,12 +1055,23 @@
                         Dismiss instead
                     </button>
                     <button
+                        x-show="activeTab === 'log'"
                         class="ta-btn-submit"
                         @click="submitLog()"
                         :disabled="!form.response || submitting || (requiresNotes && !form.notes)"
                     >
-                        <span x-show="!submitting"><i class="ti ti-check"></i> Log & Close</span>
+                        <span x-show="!submitting"><i class="ti ti-check"></i> Log</span>
                         <span x-show="submitting"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite;"></i> Saving...</span>
+                    </button>
+                    <button
+                        x-show="activeTab === 'close'"
+                        class="ta-btn-submit"
+                        style="background:#4a7a5a;"
+                        @click="confirmClose()"
+                        :disabled="closing"
+                    >
+                        <span x-show="!closing"><i class="ti ti-check"></i> Close</span>
+                        <span x-show="closing"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite;"></i> Closing...</span>
                     </button>
                 </div>
 
@@ -982,7 +1110,7 @@ const CATEGORY_LABELS = {
     birthdays:                     'Birthday Wishes',
     lab_ready:                     'Lab Work Ready',
     payment_reminders:             'Payment Reminders',
-    logged_communications:         'Logged Communications',
+    logged_communications:         'Other Calls',
 };
 
 function todayActions() {
@@ -994,6 +1122,16 @@ function todayActions() {
             item: null,
             itemId: null,
         },
+
+        // ── Active tab: 'log' (record an outcome, never closes) or 'close'
+        // (explicit "done with this one", no outcome required) — split
+        // 2026-07-08, see closeAction() in TodayController. ─────────────
+        activeTab: 'log',
+
+        // ── Close tab state ──────────────────────────────────────────────
+        closeNotes: '',
+        closing:    false,
+        closeError: '',
 
         // ── Checklist ───────────────────────────────────────────────────
         checklist: [],
@@ -1023,6 +1161,16 @@ function todayActions() {
         dismissError:  '',
         dismissReasons: @json($dismissReasons ?? []),
 
+        // ── Notes sub-state (Suggestion / Patient Response log) ─────────
+        // Same log already live on Lead & Opportunity Pipeline, ported here.
+        // See docs/feature-specs/feature-spec-action-board-instruction-log.md.
+        notes:        [],
+        notesLoading: false,
+        notesSaving:  false,
+        notesError:   '',
+        noteType:     'suggestion',
+        noteText:     '',
+
         // ── Per-item actioned tracker (itemId → bool) ───────────────────
         actioned: {},
 
@@ -1044,6 +1192,12 @@ function todayActions() {
             this.drawer.itemId = itemId;
             this.drawer.open   = true;
 
+            // Reset Log/Close tab state
+            this.activeTab  = 'log';
+            this.closeNotes = '';
+            this.closing    = false;
+            this.closeError = '';
+
             // Load checklist for this category (fall back to empty)
             this.checklist = CHECKLISTS[cat] || [];
             this.checks    = new Array(this.checklist.length).fill(false);
@@ -1062,6 +1216,81 @@ function todayActions() {
             this.dismissReason = '';
             this.dismissNotes  = '';
             this.dismissError  = '';
+
+            // Reset Notes sub-state and load this item's note log
+            this.notes        = [];
+            this.notesError   = '';
+            this.noteType     = 'suggestion';
+            this.noteText     = '';
+            this.fetchNotes();
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // Load the Suggestion / Patient Response note log for this item.
+        // ─────────────────────────────────────────────────────────────────
+        async fetchNotes() {
+            const item = this.drawer.item;
+            if (!item?.patient_id && !item?.lead_id) {
+                this.notes = [];
+                return;
+            }
+
+            this.notesLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    patient_id: item.patient_id ?? '',
+                    lead_id:    item.lead_id ?? '',
+                });
+                const res = await fetch('{{ route('relationship.today.notes.index') }}?' + params.toString(), {
+                    headers: { 'Accept': 'application/json' },
+                });
+                const data = await res.json();
+                this.notes = data.notes || [];
+            } catch (err) {
+                // Silent — the note list just stays empty; not worth blocking the drawer for.
+            } finally {
+                this.notesLoading = false;
+            }
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // Add a Suggestion / Patient Response note to the currently open item.
+        // ─────────────────────────────────────────────────────────────────
+        async addNote() {
+            if (!this.noteText.trim() || this.notesSaving) return;
+
+            const item = this.drawer.item;
+            this.notesSaving = true;
+            this.notesError  = '';
+
+            try {
+                const res = await fetch('{{ route('relationship.today.notes.add') }}', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body:    JSON.stringify({
+                        _token:          document.querySelector('meta[name="csrf-token"]').content,
+                        note_type:       this.noteType,
+                        text:            this.noteText.trim(),
+                        category:        item.category,
+                        patient_id:      item.patient_id,
+                        lead_id:         item.lead_id,
+                        relationship_id: item.relationship_id,
+                    }),
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    this.noteText = '';
+                    await this.fetchNotes();
+                } else {
+                    this.notesError = data.message || 'Could not save this note.';
+                }
+            } catch (err) {
+                this.notesError = 'Network error. Please try again.';
+            } finally {
+                this.notesSaving = false;
+            }
         },
 
         // ─────────────────────────────────────────────────────────────────
@@ -1197,12 +1426,26 @@ function todayActions() {
             const item   = this.drawer.item;
             const itemId = this.drawer.itemId;
 
+            // subject_id identifies which record this row is backed by.
+            // Log itself no longer closes/suppresses anything (2026-07-08 —
+            // see closeAction()/the Close tab instead); kept here since the
+            // server still records it on the Timeline entry and a future
+            // per-category auto-close could reuse it. Mirrors confirmClose()'s
+            // identical subject resolution just below.
+            const isQueueBacked = (item.category === 'recall_calls' || item.category === 'missed_calls_yesterday' || item.category === 'logged_communications');
+            const subjectId = isQueueBacked
+                ? (item.meta?.comm_queue_id ?? null)
+                : (item.category === 'follow_up_calls'
+                    ? (item.meta?.follow_up_id ?? null)
+                    : (item.meta?.id ?? null));
+
             const payload = {
                 _token:          document.querySelector('meta[name="csrf-token"]').content,
                 category:        item.category,
                 patient_id:      item.patient_id,
                 lead_id:         item.lead_id,
                 relationship_id: item.relationship_id,
+                subject_id:      subjectId,
                 response:        this.form.response,
                 next_action:     this.form.next_action,
                 notes:           this.form.notes,
@@ -1218,8 +1461,9 @@ function todayActions() {
                 const data = await res.json();
 
                 if (data.success) {
-                    // Mark item as actioned in the UI
-                    this.actioned[itemId] = true;
+                    // Logging no longer closes/fades the row (2026-07-08) —
+                    // it stays on the list so staff can retry or Close it
+                    // explicitly once they're actually done with it.
                     this.closeDrawer();
                 } else {
                     this.submitError = data.message || 'Could not save. Please try again.';
@@ -1228,6 +1472,58 @@ function todayActions() {
                 this.submitError = 'Network error. Please check your connection.';
             } finally {
                 this.submitting = false;
+            }
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // Close tab — explicit "done with this one," no outcome required.
+        // Reuses the exact same per-category subject resolution submitLog()
+        // uses (mirrors confirmDismiss() too) so the server's
+        // closeUnderlyingRecord() can suppress/close the right record.
+        // ─────────────────────────────────────────────────────────────────
+        async confirmClose() {
+            if (this.closing) return;
+
+            this.closing    = true;
+            this.closeError = '';
+
+            const item   = this.drawer.item;
+            const itemId = this.drawer.itemId;
+
+            const isQueueBacked = (item.category === 'recall_calls' || item.category === 'missed_calls_yesterday' || item.category === 'logged_communications');
+            const subjectId = isQueueBacked
+                ? (item.meta?.comm_queue_id ?? null)
+                : (item.category === 'follow_up_calls'
+                    ? (item.meta?.follow_up_id ?? null)
+                    : (item.meta?.id ?? null));
+
+            try {
+                const res = await fetch('{{ route('relationship.today.close') }}', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body:    JSON.stringify({
+                        _token:          document.querySelector('meta[name="csrf-token"]').content,
+                        category:        item.category,
+                        patient_id:      item.patient_id,
+                        lead_id:         item.lead_id,
+                        relationship_id: item.relationship_id,
+                        subject_id:      subjectId,
+                        notes:           this.closeNotes,
+                    }),
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    this.actioned[itemId] = true;
+                    this.closeDrawer();
+                } else {
+                    this.closeError = data.message || 'Could not close. Please try again.';
+                }
+            } catch (err) {
+                this.closeError = 'Network error. Please check your connection.';
+            } finally {
+                this.closing = false;
             }
         },
 

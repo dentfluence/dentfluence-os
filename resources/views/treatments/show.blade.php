@@ -1517,4 +1517,78 @@
 
                 {{-- Patient search --}}
                 <div class="relative">
-                    <label class="block text-xs
+                    <label class="block text-xs text-gray-500 uppercase tracking-wider font-[DM_Sans] mb-1">Patient</label>
+                    <input type="text"
+                           x-model="patientSearch"
+                           @input="searchPatients()"
+                           @focus="if (selectedPatient) { selectedPatient = null; patientSearch = ''; }"
+                           autocomplete="off"
+                           placeholder="Search by name, phone, or email…"
+                           class="w-full border border-[#e8d5f0] px-3 py-2 text-sm font-[DM_Sans] focus:outline-none focus:border-[#6a0f70]">
+
+                    {{-- Results dropdown --}}
+                    <div x-show="patientResults.length > 0"
+                         x-cloak
+                         class="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-[#e8d5f0] shadow-lg max-h-56 overflow-y-auto">
+                        <template x-for="p in patientResults" :key="p.id">
+                            <button type="button"
+                                    @click="selectPatient(p)"
+                                    class="w-full text-left px-3 py-2 text-sm font-[DM_Sans] hover:bg-[#f3e8f9] border-b border-[#f5eef9] last:border-0">
+                                <span class="block text-gray-800" x-text="p.name"></span>
+                                <span class="block text-xs text-gray-400" x-text="[p.phone, p.email].filter(Boolean).join(' · ') || 'No contact details'"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
+                {{-- Selected patient --}}
+                <div x-show="selectedPatient" x-cloak
+                     class="flex items-center justify-between bg-[#faf5ff] border border-[#e8d5f0] px-3 py-2">
+                    <div>
+                        <p class="text-sm font-medium text-gray-800 font-[DM_Sans]" x-text="selectedPatient?.name"></p>
+                        <p class="text-xs text-gray-400 font-[DM_Sans]" x-text="[selectedPatient?.phone, selectedPatient?.email].filter(Boolean).join(' · ')"></p>
+                    </div>
+                    <button type="button" @click="selectedPatient=null; patientSearch=''"
+                            class="text-xs text-gray-400 hover:text-red-500 font-[DM_Sans]">Change</button>
+                </div>
+
+                {{-- Message preview (editable) --}}
+                <div>
+                    <label class="block text-xs text-gray-500 uppercase tracking-wider font-[DM_Sans] mb-1">Message</label>
+                    <textarea x-model="shareText" rows="5"
+                              class="w-full border border-[#e8d5f0] px-3 py-2 text-sm font-[DM_Sans] focus:outline-none focus:border-[#6a0f70] resize-none"></textarea>
+                    <p class="text-xs text-gray-400 font-[DM_Sans] mt-1" x-show="sharePdfUrl" x-cloak>
+                        A document link will be appended to the message.
+                    </p>
+                </div>
+
+                {{-- Send actions --}}
+                <div class="flex items-center gap-3">
+                    <a :href="selectedPatient ? whatsappUrl() : null"
+                       target="_blank"
+                       :class="selectedPatient && selectedPatient.phone
+                            ? 'bg-green-600 hover:bg-green-700 text-white cursor-pointer'
+                            : 'bg-gray-100 text-gray-400 pointer-events-none cursor-not-allowed'"
+                       class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-[DM_Sans] transition">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12.017 2C6.5 2 2.017 6.483 2.017 12c0 1.86.505 3.65 1.462 5.212L2 22l4.905-1.44A9.94 9.94 0 0012.017 22C17.535 22 22.017 17.518 22.017 12S17.535 2 12.017 2z"/></svg>
+                        WhatsApp
+                    </a>
+                    <a :href="selectedPatient ? emailUrl() : null"
+                       :class="selectedPatient && selectedPatient.email
+                            ? 'border border-[#6a0f70] text-[#6a0f70] hover:bg-[#f3e8f9] cursor-pointer'
+                            : 'border border-gray-200 text-gray-300 pointer-events-none cursor-not-allowed'"
+                       class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-[DM_Sans] transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M4 4h16v16H4z" opacity="0"/><path d="M22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6zm-2 0l-8 5-8-5h16zm0 12H4V8l8 5 8-5v10z"/></svg>
+                        Email
+                    </a>
+                </div>
+                <p class="text-xs text-gray-400 font-[DM_Sans]" x-show="selectedPatient && !selectedPatient.phone && !selectedPatient.email" x-cloak>
+                    This patient has no phone or email on file.
+                </p>
+
+            </div>
+        </div>
+    </div>
+
+</div>
+@endsection

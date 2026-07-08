@@ -9,6 +9,8 @@ use App\Models\Inventory\InventoryStock;
 use App\Models\Inventory\StockMovement;
 use App\Models\Inventory\PurchaseOrder;
 use App\Models\Inventory\InventoryVendor;
+use App\Models\Inventory\InventorySubType;
+use App\Models\Inventory\InventoryVariant;
 use App\Models\Inventory\ImplantCatalog;
 use App\Models\Inventory\ImplantPlacement;
 use App\Models\Finance\FinanceExpense;
@@ -64,10 +66,19 @@ class InventoryService
             ->orderBy('vendor_name')
             ->get(['id', 'vendor_name', 'contact_person', 'phone', 'whatsapp', 'email']);
 
+        // Sub-types/variants (2026-07-07 mobile parity) — full lists like the
+        // web Add Product modal loads, so mobile can do the same client-side
+        // category -> sub-type -> variant filtering instead of a round-trip
+        // per keystroke. Both tables are small (dozens of rows, not thousands).
+        $subTypes = InventorySubType::orderBy('name')->get(['id', 'name', 'category_id']);
+        $variants = InventoryVariant::orderBy('name')->get(['id', 'name', 'sub_type_id']);
+
         return [
             'categories' => $categories,
             'locations'  => $locations,
             'vendors'    => $vendors,
+            'sub_types'  => $subTypes,
+            'variants'   => $variants,
             // Static enums used by the mobile forms (kept in sync with web validation rules)
             'stock_out_movement_types' => [
                 'stock_out', 'treatment_usage', 'damaged', 'expired', 'adjustment',
@@ -207,6 +218,9 @@ class InventoryService
         if (! empty($filters['category_id'])) $query->where('category_id', $filters['category_id']);
         if (! empty($filters['sub_type_id'])) $query->where('sub_type_id', $filters['sub_type_id']);
         if (! empty($filters['brand']))       $query->where('brand', $filters['brand']);
+        // Retail/FMCG product picker (mobile billing, 2026-07-06 web parity) —
+        // only items marked sellable via the Inventory > Saleable/FMCG tab.
+        if (! empty($filters['sellable_only'])) $query->where('is_sellable', true);
         if (! empty($filters['location_id'])) {
             $query->whereHas('stocks', fn ($q) => $q->where('location_id', $filters['location_id']));
         }

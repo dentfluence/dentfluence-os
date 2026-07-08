@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Communication;
 
 use App\Models\AppNotification;
+use App\Models\CommunicationQueue;
+use App\Models\FollowUp;
 use App\Models\Patient;
 use App\Models\Task;
 use App\Models\User;
@@ -10,6 +12,7 @@ use App\Modules\Huddle\Models\HuddleTaskLog;
 use App\Modules\Huddle\Repositories\HuddleBoardRepository;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
 
 class TaskController extends Controller
@@ -76,6 +79,10 @@ class TaskController extends Controller
             'priority'            => 'required|in:urgent,high,medium,low',
             'category'            => 'required|in:clinical,admin,lab,follow_up,call,whatsapp,maintenance,other',
             'patient_id'          => 'nullable|exists:patients,id',
+            // Communication categories with no linked patient — vendor/lab/
+            // doctor/other contact instead. See feature-spec-manual-add-call.md.
+            'contact_name'        => 'nullable|string|max:255',
+            'contact_type'        => 'nullable|in:vendor,lab,consultant,other',
             // Maintenance / recurring fields
             'maintenance_type'    => 'nullable|in:ac_service,pest_control,deep_cleaning,autoclave,dental_chair,xray_machine,water_purifier,fire_safety,generator,other',
             'is_recurring'        => 'boolean',
@@ -91,12 +98,67 @@ class TaskController extends Controller
             $data['maintenance_type']    = null;
         }
 
+        // contact_name/contact_type aren't Task columns — they're only used
+        // below to create the CommunicationQueue row for a Call/WhatsApp task
+        // with no linked patient. Pull them out before Task::create().
+        $contactName = $data['contact_name'] ?? null;
+        $contactType = $data['contact_type'] ?? null;
+        unset($data['contact_name'], $data['contact_type']);
+
         $task = Task::create([
             ...$data,
             'branch_id'  => Auth::user()->branch_id,
             'created_by' => Auth::id(),
             'status'     => 'pending',
         ]);
+
+        // ── Communication categories → also create the record Today's
+        // Actions actually reads (2026-07-08). A Task row alone never showed
+        // up on the Action Board; Call/WhatsApp/Follow-up now additionally
+        // create a FollowUp (patient linked) or CommunicationQueue (no
+        // patient — vendor/lab/doctor/other) row, so "+ Add Call" on Today's
+        // Actions and a Communication-category Task are the same action.
+        // See docs/feature-specs/feature-spec-manual-add-call.md.
+        if (in_array($task->category, Task::COMM_CATEGORIES, true)) {
+            try {
+                if ($task->patient_id) {
+                    FollowUp::create([
+                        'patient_id'   => $task->patient_id,
+                        'label'        => $task->title,
+                        'note'         => $task->description,
+                        'trigger_type' => 'manual',
+                        'due_date'     => $task->due_date,
+                        'due_time'     => $task->due_time,
+                        'channel'      => $task->category === 'whatsapp' ? 'whatsapp' : 'call',
+                        'priority'     => $task->priority,
+                        'status'       => 'pending',
+                        'assigned_to'  => $task->assigned_to,
+                        'auto_created' => false,
+                    ]);
+                } elseif ($task->category !== 'follow_up' && $contactName) {
+                    // Follow-up is inherently about a specific patient — no
+                    // contact-name fallback for that category (see spec).
+                    CommunicationQueue::create([
+                        'person_name'    => $contactName,
+                        'phone'          => '',
+                        'channel'        => $task->category === 'whatsapp' ? 'whatsapp' : 'call',
+                        'comm_type'      => $contactType === 'consultant' ? 'doctor' : ($contactType ?? 'other'),
+                        'contact_type'   => $contactType ?? 'other',
+                        'source_engine'  => 'manual',
+                        'status'         => 'pending',
+                        'priority'       => $task->priority,
+                        'note'           => $task->description,
+                        'follow_up_date' => $task->due_date,
+                        'assigned_to'    => optional(User::find($task->assigned_to))->name,
+                        'created_by'     => Auth::id(),
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Task-to-CommunicationQueue/FollowUp sync failed: ' . $e->getMessage(), [
+                    'task_id' => $task->id,
+                ]);
+            }
+        }
 
         // ── Wire to Daily Huddle board ──────────────────────────────────────
         try {

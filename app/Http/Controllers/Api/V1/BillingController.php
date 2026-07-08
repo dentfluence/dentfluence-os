@@ -13,6 +13,9 @@ use App\Models\InvoicePayment;
 use App\Models\Receipt;
 use App\Models\EmiProvider;
 use App\Models\AppSetting;
+use App\Models\Inventory\InventoryItem;
+use App\Models\Inventory\InventoryLocation;
+use App\Models\Inventory\StockMovement;
 use App\Models\Patient;
 use App\Models\RoleBillingPermission;
 use App\Models\Finance\FinanceBankAccount;
@@ -565,6 +568,10 @@ class BillingController extends ApiController
             'items.*.gst_pct'      => 'nullable|numeric|min:0|max:100',
             'items.*.tooth_number' => 'nullable|string|max:20',
             'items.*.treatment_id' => 'nullable|integer|exists:treatments,id',
+            // Retail/FMCG product line (2026-07-06 web parity) — links a sold
+            // is_sellable InventoryItem so applyRetailStockMovements() below
+            // can auto-deduct stock the same way web billing does.
+            'items.*.inventory_item_id' => 'nullable|integer|exists:inventory_items,id',
             // Discount layers (all optional, all stack)
             'coupon_code'                => 'nullable|string|max:50',
             'wallet_applied'             => 'nullable|numeric|min:0',
@@ -604,8 +611,9 @@ class BillingController extends ApiController
 
             foreach ($request->items as $i => $row) {
                 $item = new InvoiceItem([
-                    'invoice_id'   => $invoice->id,
-                    'treatment_id' => $row['treatment_id'] ?? null,
+                    'invoice_id'        => $invoice->id,
+                    'treatment_id'      => $row['treatment_id'] ?? null,
+                    'inventory_item_id' => $row['inventory_item_id'] ?? null,
                     'description'  => $row['description'],
                     'tooth_number' => $row['tooth_number'] ?? null,
                     'unit_price'   => $row['unit_price'],
@@ -621,6 +629,10 @@ class BillingController extends ApiController
             // Subtotal now reflects the real saved items — every discount below
             // is computed against this, never a client-submitted number.
             $invoice->recalculate();
+
+            // Deduct stock for any retail/FMCG product lines (2026-07-06 web
+            // parity) — no-op if none of the items carry inventory_item_id.
+            $this->applyRetailStockMovements($invoice);
 
             // ── Coupon ────────────────────────────────────────────────────────
             $couponId = null;
@@ -648,12 +660,17 @@ class BillingController extends ApiController
             $membershipBenefit = null;
             if ($request->boolean('apply_membership_discount')) {
                 $invoice->refresh();
-                $lineItems = $invoice->items->map(fn ($it) => [
+                // FMCG/retail product lines (inventory_item_id set) never receive AOCP
+                // membership benefits — any discount on those is manual, entered
+                // directly on the invoice line. Only treatment/procedure lines count.
+                $eligibleItems = $invoice->items->whereNull('inventory_item_id');
+                $lineItems = $eligibleItems->map(fn ($it) => [
                     'name'   => $it->description,
                     'amount' => (float) $it->unit_price,
                     'qty'    => (int) $it->qty,
                 ])->all();
-                $membershipBenefit = MembershipBenefitService::forPatient($patient->id, $lineItems, (float) $invoice->subtotal);
+                $eligibleSubtotal = (float) $eligibleItems->sum(fn ($it) => (float) $it->unit_price * (int) $it->qty);
+                $membershipBenefit = MembershipBenefitService::forPatient($patient->id, $lineItems, $eligibleSubtotal);
                 if (($membershipBenefit['active'] ?? false) && ($membershipBenefit['discount'] ?? 0) > 0) {
                     $invoice->update([
                         'membership_id'       => $membershipBenefit['membership_id'],
@@ -765,20 +782,30 @@ class BillingController extends ApiController
         }
 
         $data = $request->validate([
-            'items'          => 'nullable|array',
-            'items.*.name'   => 'required_with:items|string',
-            'items.*.amount' => 'required_with:items|numeric|min:0',
-            'items.*.qty'    => 'nullable|integer|min:1',
-            'subtotal'       => 'nullable|numeric|min:0',
+            'items'                      => 'nullable|array',
+            'items.*.name'               => 'required_with:items|string',
+            'items.*.amount'             => 'required_with:items|numeric|min:0',
+            'items.*.qty'                => 'nullable|integer|min:1',
+            'items.*.inventory_item_id'  => 'nullable|integer',
+            'subtotal'                   => 'nullable|numeric|min:0',
         ]);
 
-        $lineItems = collect($data['items'] ?? [])->map(fn ($i) => [
+        // FMCG/retail product rows (carry an inventory_item_id) never receive AOCP
+        // membership benefits — any discount on those is manual, entered directly
+        // on the invoice row. Only treatment/procedure rows count toward the preview.
+        $eligibleRows = collect($data['items'] ?? [])->reject(fn ($i) => !empty($i['inventory_item_id']));
+        $lineItems = $eligibleRows->map(fn ($i) => [
             'name'   => $i['name'],
             'amount' => (float) $i['amount'],
             'qty'    => (int) ($i['qty'] ?? 1),
         ])->all();
+        // Fall back to the client-supplied subtotal only when no items were sent at all
+        // (e.g. an initial "is membership active" check before any lines exist).
+        $eligibleSubtotal = $data['items'] ?? null
+            ? (float) $eligibleRows->sum(fn ($i) => (float) $i['amount'] * (int) ($i['qty'] ?? 1))
+            : (float) ($data['subtotal'] ?? 0);
 
-        $benefit = MembershipBenefitService::forPatient($pt->id, $lineItems, (float) ($data['subtotal'] ?? 0));
+        $benefit = MembershipBenefitService::forPatient($pt->id, $lineItems, $eligibleSubtotal);
 
         return $this->success($benefit, '');
     }
@@ -862,6 +889,10 @@ class BillingController extends ApiController
                 $inv->finalBill->delete();
             }
 
+            // Reverse any retail-sale stock deductions before the invoice is
+            // cancelled — mirrors web BillingController (2026-07-06 parity).
+            $this->reverseRetailStockMovements($inv);
+
             $inv->update([
                 'status'           => 'cancelled',
                 'cancelled_reason' => $data['cancelled_reason'],
@@ -871,6 +902,78 @@ class BillingController extends ApiController
         });
 
         return $this->success(null, 'Invoice ' . $inv->invoice_number . ' cancelled.');
+    }
+
+    // ── Retail stock sync (2026-07-06 web parity) ──────────────────────────────
+    // A patient invoice can carry retail product lines (toothpaste, brushes,
+    // OTC medicines — is_sellable items). Selling one auto-deducts stock via a
+    // StockMovement row, exactly like web BillingController — see that class
+    // for the canonical version this mirrors.
+
+    /**
+     * Deduct stock for every sellable-product line currently on this invoice.
+     * Safe to call on an invoice with no product lines — it simply does nothing.
+     */
+    private function applyRetailStockMovements(Invoice $invoice): void
+    {
+        $lines = $invoice->items()->whereNotNull('inventory_item_id')->get();
+        if ($lines->isEmpty()) {
+            return;
+        }
+
+        $location = InventoryLocation::where('type', 'main_store')->where('is_active', true)->first()
+            ?? InventoryLocation::where('is_active', true)->first();
+        if (! $location) {
+            return; // no location configured yet — never block the billing save on this
+        }
+
+        foreach ($lines as $line) {
+            $item = InventoryItem::find($line->inventory_item_id);
+            if (! $item || ! $item->is_sellable) {
+                continue; // item was deleted or un-marked sellable since the line was added
+            }
+
+            StockMovement::create([
+                'inventory_item_id' => $item->id,
+                'movement_type'     => 'retail_sale',
+                'qty'               => -$line->qty,
+                'from_location_id'  => $location->id,
+                'unit_cost'         => $item->average_purchase_price,
+                'total_cost'        => round($item->average_purchase_price * $line->qty, 2),
+                'reference_type'    => Invoice::class,
+                'reference_id'      => $invoice->id,
+                'notes'             => 'Retail sale — invoice ' . $invoice->invoice_number . ' (mobile)',
+                'created_by'        => auth()->id(),
+            ]);
+        }
+    }
+
+    /**
+     * Reverse every retail-sale deduction previously recorded against this
+     * invoice via compensating stock-in entries. Call before an invoice is
+     * cancelled.
+     */
+    private function reverseRetailStockMovements(Invoice $invoice): void
+    {
+        $priorSales = StockMovement::where('reference_type', Invoice::class)
+            ->where('reference_id', $invoice->id)
+            ->where('movement_type', 'retail_sale')
+            ->get();
+
+        foreach ($priorSales as $movement) {
+            StockMovement::create([
+                'inventory_item_id' => $movement->inventory_item_id,
+                'movement_type'     => 'stock_in',
+                'qty'               => abs($movement->qty),
+                'to_location_id'    => $movement->from_location_id,
+                'unit_cost'         => $movement->unit_cost,
+                'total_cost'        => $movement->total_cost,
+                'reference_type'    => Invoice::class,
+                'reference_id'      => $invoice->id,
+                'notes'             => 'Reversal — invoice ' . $invoice->invoice_number . ' cancelled (mobile)',
+                'created_by'        => auth()->id(),
+            ]);
+        }
     }
 
     public function voidReceipt(Request $request, $invoice, $receipt): JsonResponse

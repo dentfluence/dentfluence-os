@@ -986,27 +986,52 @@ function dfAppointmentModal() {
         },
 
         // ── Conflict check ────────────────────────────────────────────
-        async checkConflict() {
-            const { doctorId, date, time, duration } = this.appt;
-            if (!doctorId || !date || !time) return;
+        // Raw fetch, shared by the passive banner (checkConflict) and the
+        // submit-time confirm prompt (confirmIfDoubleBooked below).
+        async fetchConflictData(doctorId, date, time, duration, excludeId = null) {
+            if (!doctorId || !date || !time) return null;
             try {
                 const url = new URL(_dfBaseUrl + '/appointments/check-conflict', location.origin);
                 url.searchParams.set('doctor_id',        doctorId);
                 url.searchParams.set('appointment_date', date);
                 url.searchParams.set('appointment_time', time);
                 url.searchParams.set('duration_minutes', duration);
+                if (excludeId) url.searchParams.set('exclude_id', excludeId);
                 const r = await fetch(url, {
                     headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': window.__DF_CSRF }
                 });
-                const data = await r.json();
-                if (data.has_conflict && data.conflicts.length) {
-                    const c = data.conflicts[0];
-                    this.conflictText = `Conflict with ${c.patient_name} at ${c.time} (${c.duration} min)`;
-                    this.conflict = true;
-                } else {
-                    this.conflict = false;
-                }
-            } catch {}
+                return await r.json();
+            } catch {
+                return null;
+            }
+        },
+
+        async checkConflict() {
+            const { doctorId, date, time, duration } = this.appt;
+            const excludeId = this.editMode ? this.editId : null;
+            const data = await this.fetchConflictData(doctorId, date, time, duration, excludeId);
+            if (!data) return;
+            if (data.has_conflict && data.conflicts.length) {
+                const c = data.conflicts[0];
+                this.conflictText = `Conflict with ${c.patient_name} at ${c.time} (${c.duration} min)`;
+                this.conflict = true;
+            } else {
+                this.conflict = false;
+            }
+        },
+
+        // Doctor may be double-booked on purpose (second chair, overlap
+        // consult) — warn and let the user decide rather than hard-blocking.
+        async confirmIfDoubleBooked(doctorId, date, time, duration, excludeId = null) {
+            const data = await this.fetchConflictData(doctorId, date, time, duration, excludeId);
+            if (!data || !data.has_conflict || !data.conflicts.length) return true;
+
+            const c = data.conflicts[0];
+            const doctorName = this.doctors.find(d => d.id == doctorId)?.name || 'This doctor';
+            return confirm(
+                `Dr. ${doctorName} already has an appointment with ${c.patient_name} at ${c.time} ` +
+                `(${c.duration} min). Book this appointment for the same doctor anyway?`
+            );
         },
 
         // ── Submit Appointment ────────────────────────────────────────
@@ -1016,6 +1041,12 @@ function dfAppointmentModal() {
             if (!this.appt.doctorId)  { this.errors.doctor_id  = 'Doctor is required'; return; }
             if (!this.appt.date)      { this.errors.appointment_date = 'Date is required'; return; }
             if (!this.appt.time)      { this.errors.appointment_time = 'Time is required'; return; }
+
+            const okToBook = await this.confirmIfDoubleBooked(
+                this.appt.doctorId, this.appt.date, this.appt.time, this.appt.duration,
+                this.editMode ? this.editId : null
+            );
+            if (!okToBook) return;
 
             this.submitting = true;
             const url    = this.editMode ? `${_dfBaseUrl}/appointments/${this.editId}` : `${_dfBaseUrl}/appointments`;
@@ -1091,6 +1122,13 @@ function dfAppointmentModal() {
                     return;
                 }
                 body.patient_id = this.wi.patientId;
+            }
+
+            if (this.wi.doctorId) {
+                const okToBook = await this.confirmIfDoubleBooked(
+                    this.wi.doctorId, today, body.appointment_time, 30
+                );
+                if (!okToBook) return;
             }
 
             this.submitting = true;

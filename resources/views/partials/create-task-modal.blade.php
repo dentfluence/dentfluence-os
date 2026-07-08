@@ -237,6 +237,28 @@
                         <span @click="ptClear()" style="cursor:pointer;color:#b52020;margin-left:4px;">✕</span>
                     </div>
                 </div>
+
+                {{-- Contact name/type — Call/WhatsApp with no patient linked
+                     (2026-07-08). Lets a Call/WhatsApp task be about a vendor,
+                     lab, or doctor instead of a patient — surfaces on Today's
+                     Actions as a "logged_communications" row. See
+                     docs/feature-specs/feature-spec-manual-add-call.md. --}}
+                <div x-show="!linkedPatient && (category === 'call' || category === 'whatsapp')" x-cloak style="margin-top:12px;">
+                    <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Contact</label>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                        <input type="text" name="contact_name"
+                               :required="!linkedPatient && (category === 'call' || category === 'whatsapp')"
+                               placeholder="e.g. ABC Dental Lab, Dr. Mehta"
+                               style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
+                        <select name="contact_type"
+                                style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
+                            <option value="vendor">Vendor</option>
+                            <option value="lab">Lab</option>
+                            <option value="consultant">Doctor</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
             </div>
 
             {{-- Submit --}}
