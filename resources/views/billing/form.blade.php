@@ -429,6 +429,15 @@
         border-color: var(--df-color-primary, #6a0f70);
         color: #fff; font-weight: 700;
     }
+    /* Adult/child (mixed dentition) per-position toggle */
+    .tm-tooth-slot { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .tm-dchip {
+        width: 22px; height: 14px; border: 1px solid #e0d4ea; border-radius: 4px;
+        font-size: 8px; font-weight: 800; line-height: 1; color: #9ca3af;
+        background: #fff; cursor: pointer; padding: 0;
+    }
+    .tm-dchip:hover { border-color: var(--df-color-primary, #6a0f70); color: var(--df-color-primary, #6a0f70); }
+    .tm-dchip.is-child { background: #fce7f3; border-color: #db2777; color: #db2777; }
     .tooth-modal-foot {
         display: flex; align-items: center; justify-content: space-between;
         padding: 14px 20px; border-top: 1px solid #eef0f3; background: #faf9fc;
@@ -447,7 +456,7 @@
         <div class="tooth-modal-head">
             <div>
                 <p class="text-sm font-semibold text-gray-800">Select Tooth / Teeth</p>
-                <p class="text-xs text-gray-400">FDI notation · tap to select one or more</p>
+                <p class="text-xs text-gray-400">FDI notation · tap to select one or more · small chip toggles primary (child) tooth</p>
             </div>
             <span class="text-xs font-semibold px-2.5 py-1 rounded-full"
                   style="background:var(--df-color-light,#f9f3fa);color:var(--df-color-primary,#6a0f70);"
@@ -472,10 +481,53 @@
 
 <script>
 // ── Tooth-chart modal ───────────────────────────────────────────────────────
+// FDI_UPPER/FDI_LOWER are always PERMANENT position codes — that's what
+// drives layout order. Mixed dentition (toothDentitionMode) lets any of the
+// 20 anterior/premolar slots display & select its primary (child) tooth
+// instead; molars (16-18 etc.) have no primary predecessor so never toggle —
+// see window.DentalNotation (partials.dental-notation, loaded globally).
 const FDI_UPPER = [18,17,16,15,14,13,12,11, null, 21,22,23,24,25,26,27,28];
 const FDI_LOWER = [48,47,46,45,44,43,42,41, null, 31,32,33,34,35,36,37,38];
 let toothTargetInput = null;          // the line-item input we write back to
-let toothSelected = new Set();        // currently selected FDI numbers (as strings)
+let toothSelected = new Set();        // currently selected tooth codes (as strings)
+let toothDentitionMode = {};          // { permanentPos: 'primary' } — absent/'permanent' = adult tooth
+
+function activeCode(slot) {
+    const pos = Number(slot.dataset.pos);
+    return window.DentalNotation.displayCode(pos, toothDentitionMode[pos] || 'permanent');
+}
+
+function refreshSlot(slot) {
+    const btn = slot.querySelector('.tm-tooth');
+    const code = activeCode(slot);
+    btn.textContent = code;
+    btn.dataset.tooth = code;
+    btn.classList.toggle('sel', toothSelected.has(String(code)));
+
+    const chip = slot.querySelector('.tm-dchip');
+    if (chip) {
+        const isChild = toothDentitionMode[Number(slot.dataset.pos)] === 'primary';
+        chip.textContent = isChild ? 'P' : 'A';
+        chip.classList.toggle('is-child', isChild);
+        chip.title = isChild ? 'Primary tooth — click for permanent' : 'Permanent tooth — click for primary (child)';
+    }
+}
+
+function toggleDentitionAt(slot) {
+    const pos = Number(slot.dataset.pos);
+    const oldCode = activeCode(slot);
+    const wasChild = toothDentitionMode[pos] === 'primary';
+    toothDentitionMode[pos] = wasChild ? 'permanent' : 'primary';
+    const newCode = activeCode(slot);
+    // Carry the selection over to the newly-shown code so toggling never
+    // silently drops what was picked.
+    if (toothSelected.has(String(oldCode))) {
+        toothSelected.delete(String(oldCode));
+        toothSelected.add(String(newCode));
+    }
+    refreshSlot(slot);
+    updateToothCount();
+}
 
 // Build the two arches once on load
 function buildToothArches() {
@@ -489,13 +541,26 @@ function buildToothArches() {
                 el.appendChild(mid);
                 return;
             }
+            const slot = document.createElement('div');
+            slot.className = 'tm-tooth-slot';
+            slot.dataset.pos = n;
+
             const b = document.createElement('button');
             b.type = 'button';
             b.className = 'tm-tooth';
-            b.textContent = n;
-            b.dataset.tooth = n;
-            b.onclick = () => toggleTooth(String(n), b);
-            el.appendChild(b);
+            b.onclick = () => toggleTooth(String(activeCode(slot)), b);
+            slot.appendChild(b);
+
+            if (window.DentalNotation.hasPrimary(n)) {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'tm-dchip';
+                chip.onclick = (e) => { e.stopPropagation(); toggleDentitionAt(slot); };
+                slot.appendChild(chip);
+            }
+
+            refreshSlot(slot);
+            el.appendChild(slot);
         });
     };
     render('archUpper', FDI_UPPER);
@@ -508,10 +573,16 @@ function openToothModal(input) {
     toothSelected = new Set(
         (input.value || '').split(',').map(s => s.trim()).filter(Boolean)
     );
-    // Reflect selection on buttons
-    document.querySelectorAll('#toothModal .tm-tooth').forEach(b => {
-        b.classList.toggle('sel', toothSelected.has(b.dataset.tooth));
+    // Rebuild dentition mode from the existing value so any previously-picked
+    // primary (child) teeth display correctly when re-opening the picker.
+    toothDentitionMode = {};
+    toothSelected.forEach(code => {
+        const num = Number(code);
+        if (window.DentalNotation.isPrimary(num)) {
+            toothDentitionMode[window.DentalNotation.D2P[num]] = 'primary';
+        }
     });
+    document.querySelectorAll('#toothModal .tm-tooth-slot').forEach(refreshSlot);
     updateToothCount();
     document.getElementById('toothModal').classList.add('open');
 }

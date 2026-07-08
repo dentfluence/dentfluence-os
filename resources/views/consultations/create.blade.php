@@ -252,6 +252,18 @@
     .tooth-row { display:flex; justify-content:center; gap:3px; }
     .tooth-midline { width:1px; background:#e5e7eb; margin:0 6px; flex-shrink:0; }
 
+    /* ── Adult/child (mixed dentition) per-tooth toggle ── */
+    .tooth-slot { display:flex; flex-direction:column; align-items:center; gap:2px; }
+    .tooth-dentition-toggle {
+        width:18px; height:12px; border:1px solid #e5e7eb; border-radius:3px;
+        font-size:7px; font-weight:800; line-height:1; color:#b0b0b8;
+        background:#fafafa; cursor:pointer; font-family:'Inter',sans-serif;
+        padding:0; display:inline-flex; align-items:center; justify-content:center;
+        letter-spacing:.02em;
+    }
+    .tooth-dentition-toggle:hover { border-color:#b95cb7; color:#6a0f70; }
+    .tooth-dentition-toggle.is-child { background:#fce7f3; border-color:#db2777; color:#db2777; }
+
     .aside-label {
         font-size:9px; font-weight:800; text-transform:uppercase;
         letter-spacing:.08em; color:#6a0f70; font-family:'Inter',sans-serif;
@@ -896,8 +908,8 @@
 
             {{-- 4. TOOTH CHART --}}
             <div class="c-card" x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak
-                 x-data="toothChart()">
-                <input type="hidden" name="teeth_chart_data" :value="JSON.stringify(toothData)">
+                 x-data="toothChart(@js($consultation?->chart_data ?? []))">
+                <input type="hidden" name="chart_data" :value="JSON.stringify(Object.keys(toothData).map(Number))">
 
                 <div class="c-card-head">
                     <span class="c-head-label">
@@ -912,7 +924,7 @@
                             Clear all
                         </button>
                         <span style="font-size:10px;color:#9ca3af;font-family:'Inter',sans-serif;">
-                            FDI notation · click tooth to mark
+                            FDI notation · click tooth to mark · A/P toggles child tooth
                         </span>
                     </div>
                 </div>
@@ -934,16 +946,30 @@
                     <div style="text-align:center;font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;
                                 letter-spacing:.07em;margin-bottom:5px;font-family:'Inter',sans-serif;">Upper</div>
                     <div class="tooth-row">
-                        <template x-for="t in [18,17,16,15,14,13,12,11]" :key="t">
-                            <button type="button" @click="clickTooth(t)" class="tooth-btn"
-                                    :style="toothData[t] ? `background:${condColor(t)};border-color:${condColor(t)};color:#fff;font-weight:700;` : ''"
-                                    x-text="t"></button>
+                        <template x-for="pos in [18,17,16,15,14,13,12,11]" :key="pos">
+                            <div class="tooth-slot">
+                                <button type="button" @click="clickTooth(pos)" class="tooth-btn"
+                                        :style="toothData[codeAt(pos)] ? `background:${condColor(codeAt(pos))};border-color:${condColor(codeAt(pos))};color:#fff;font-weight:700;` : ''"
+                                        x-text="codeAt(pos)"></button>
+                                <button type="button" x-show="canToggle(pos)" x-cloak
+                                        @click.stop="toggleDentition(pos)" class="tooth-dentition-toggle"
+                                        :class="isChild(pos) ? 'is-child' : ''"
+                                        :title="isChild(pos) ? 'Primary (child) tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                        x-text="isChild(pos) ? 'P' : 'A'"></button>
+                            </div>
                         </template>
                         <div class="tooth-midline"></div>
-                        <template x-for="t in [21,22,23,24,25,26,27,28]" :key="t">
-                            <button type="button" @click="clickTooth(t)" class="tooth-btn"
-                                    :style="toothData[t] ? `background:${condColor(t)};border-color:${condColor(t)};color:#fff;font-weight:700;` : ''"
-                                    x-text="t"></button>
+                        <template x-for="pos in [21,22,23,24,25,26,27,28]" :key="pos">
+                            <div class="tooth-slot">
+                                <button type="button" @click="clickTooth(pos)" class="tooth-btn"
+                                        :style="toothData[codeAt(pos)] ? `background:${condColor(codeAt(pos))};border-color:${condColor(codeAt(pos))};color:#fff;font-weight:700;` : ''"
+                                        x-text="codeAt(pos)"></button>
+                                <button type="button" x-show="canToggle(pos)" x-cloak
+                                        @click.stop="toggleDentition(pos)" class="tooth-dentition-toggle"
+                                        :class="isChild(pos) ? 'is-child' : ''"
+                                        :title="isChild(pos) ? 'Primary (child) tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                        x-text="isChild(pos) ? 'P' : 'A'"></button>
+                            </div>
                         </template>
                     </div>
 
@@ -952,16 +978,30 @@
 
                     {{-- Lower --}}
                     <div class="tooth-row">
-                        <template x-for="t in [48,47,46,45,44,43,42,41]" :key="t">
-                            <button type="button" @click="clickTooth(t)" class="tooth-btn"
-                                    :style="toothData[t] ? `background:${condColor(t)};border-color:${condColor(t)};color:#fff;font-weight:700;` : ''"
-                                    x-text="t"></button>
+                        <template x-for="pos in [48,47,46,45,44,43,42,41]" :key="pos">
+                            <div class="tooth-slot">
+                                <button type="button" @click="clickTooth(pos)" class="tooth-btn"
+                                        :style="toothData[codeAt(pos)] ? `background:${condColor(codeAt(pos))};border-color:${condColor(codeAt(pos))};color:#fff;font-weight:700;` : ''"
+                                        x-text="codeAt(pos)"></button>
+                                <button type="button" x-show="canToggle(pos)" x-cloak
+                                        @click.stop="toggleDentition(pos)" class="tooth-dentition-toggle"
+                                        :class="isChild(pos) ? 'is-child' : ''"
+                                        :title="isChild(pos) ? 'Primary (child) tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                        x-text="isChild(pos) ? 'P' : 'A'"></button>
+                            </div>
                         </template>
                         <div class="tooth-midline"></div>
-                        <template x-for="t in [31,32,33,34,35,36,37,38]" :key="t">
-                            <button type="button" @click="clickTooth(t)" class="tooth-btn"
-                                    :style="toothData[t] ? `background:${condColor(t)};border-color:${condColor(t)};color:#fff;font-weight:700;` : ''"
-                                    x-text="t"></button>
+                        <template x-for="pos in [31,32,33,34,35,36,37,38]" :key="pos">
+                            <div class="tooth-slot">
+                                <button type="button" @click="clickTooth(pos)" class="tooth-btn"
+                                        :style="toothData[codeAt(pos)] ? `background:${condColor(codeAt(pos))};border-color:${condColor(codeAt(pos))};color:#fff;font-weight:700;` : ''"
+                                        x-text="codeAt(pos)"></button>
+                                <button type="button" x-show="canToggle(pos)" x-cloak
+                                        @click.stop="toggleDentition(pos)" class="tooth-dentition-toggle"
+                                        :class="isChild(pos) ? 'is-child' : ''"
+                                        :title="isChild(pos) ? 'Primary (child) tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                        x-text="isChild(pos) ? 'P' : 'A'"></button>
+                            </div>
                         </template>
                     </div>
                     <div style="text-align:center;font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;
@@ -982,6 +1022,8 @@
                                             <span style="padding:1px 6px;background:#f9fafb;border:1px solid #e5e7eb;
                                                          border-radius:3px;font-size:11px;font-weight:600;
                                                          color:#374151;font-family:'Inter',sans-serif;"
+                                                  :style="isPrimaryCode(t) ? 'color:#db2777;border-color:#f9a8d4;background:#fdf2f8;' : ''"
+                                                  :title="isPrimaryCode(t) ? 'Primary (child) tooth' : ''"
                                                   x-text="t"></span>
                                         </template>
                                     </div>
@@ -1586,10 +1628,31 @@ function consultForm() {
 }
 
 // ── Tooth chart ───────────────────────────────────────────────────────────────
-function toothChart() {
+// Positions are always keyed by the PERMANENT (adult) FDI code — that's what
+// drives layout/ordering. `positionMode[pos] === 'primary'` means that slot is
+// currently showing/marking the child (primary) tooth instead, e.g. position
+// 11 displays & stores against code 51. Molars (16-18 etc.) have no primary
+// predecessor, so they never get a toggle — see DentalNotation.hasPrimary().
+// initialTeeth: flat array of previously-saved tooth codes (chart_data), e.g.
+// [11, 16, 55] — used to rehydrate an existing consultation when editing.
+// We only persist WHICH teeth were marked (see hidden input above), not the
+// per-tooth condition, so reloaded teeth show as generically "marked" (brand
+// colour) until the dentist re-opens one and picks a condition again.
+function toothChart(initialTeeth = []) {
+    const seedData = {};
+    const seedMode = {};
+    (initialTeeth || []).forEach((code) => {
+        code = Number(code);
+        seedData[code] = true;
+        if (window.DentalNotation.isPrimary(code)) {
+            seedMode[window.DentalNotation.D2P[code]] = 'primary';
+        }
+    });
+
     return {
-        toothData:   {},
-        activeTooth: null,
+        toothData:    seedData, // { code: conditionKey|true } — code is whichever (permanent|primary) is active
+        positionMode: seedMode, // { permanentPos: 'primary' } — absent/'permanent' = adult tooth
+        activeTooth:  null,
 
         conditions: [
             { key: 'crown',     label: 'Crown / Bridge',      color: '#d97706', bg: '#fef3c7' },
@@ -1608,7 +1671,39 @@ function toothChart() {
             return Object.keys(this.toothData).length;
         },
 
-        clickTooth(t)     { this.activeTooth = t; },
+        // ── Mixed dentition (adult/child per position) ──────────────────────
+        codeAt(pos) {
+            return window.DentalNotation.displayCode(pos, this.positionMode[pos] || 'permanent');
+        },
+
+        isChild(pos) {
+            return this.positionMode[pos] === 'primary';
+        },
+
+        canToggle(pos) {
+            return window.DentalNotation.hasPrimary(pos);
+        },
+
+        isPrimaryCode(code) {
+            return window.DentalNotation.isPrimary(code);
+        },
+
+        toggleDentition(pos) {
+            const oldCode = this.codeAt(pos);
+            this.positionMode = { ...this.positionMode, [pos]: this.isChild(pos) ? 'permanent' : 'primary' };
+            const newCode = this.codeAt(pos);
+            if (oldCode === newCode) return;
+            // Carry any existing marking over to the newly-shown code so
+            // flipping the toggle never silently drops a dentist's entry.
+            const d = { ...this.toothData };
+            if (Object.prototype.hasOwnProperty.call(d, oldCode)) {
+                d[newCode] = d[oldCode];
+                delete d[oldCode];
+            }
+            this.toothData = d;
+        },
+
+        clickTooth(pos)   { this.activeTooth = this.codeAt(pos); },
 
         setCondition(key) {
             this.toothData = { ...this.toothData, [this.activeTooth]: key };
@@ -1622,7 +1717,7 @@ function toothChart() {
             this.activeTooth = null;
         },
 
-        clearAll() { this.toothData = {}; },
+        clearAll() { this.toothData = {}; this.positionMode = {}; },
 
         condColor(t) {
             const c = this.conditions.find(c => c.key === this.toothData[t]);

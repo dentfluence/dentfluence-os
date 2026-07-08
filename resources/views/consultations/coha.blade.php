@@ -144,6 +144,16 @@
     .tooth-select:focus { outline:none; border-color:#0e7490; }
     .tooth-select.has-finding { background:#fff7ed; border-color:#f97316; }
 
+    /* Adult/child (mixed dentition) per-tooth toggle */
+    .tooth-dentition-toggle {
+        width:16px; height:11px; border:1px solid #d1d5db; border-radius:3px;
+        font-size:7px; font-weight:800; line-height:1; color:#9ca3af;
+        background:#f9fafb; cursor:pointer; font-family:'Inter',sans-serif;
+        padding:0; display:inline-flex; align-items:center; justify-content:center;
+    }
+    .tooth-dentition-toggle:hover { border-color:#0e7490; color:#0e7490; }
+    .tooth-dentition-toggle.is-child { background:#fce7f3; border-color:#db2777; color:#db2777; }
+
     .tooth-quadrant-label {
         font-size:10px; font-weight:700; color:#0e7490; font-family:'Inter',sans-serif;
         padding:4px 0 2px; text-align:center;
@@ -401,6 +411,17 @@
                 $upperLeft  = [21,22,23,24,25,26,27,28];
                 $lowerRight = [48,47,46,45,44,43,42,41];
                 $lowerLeft  = [31,32,33,34,35,36,37,38];
+
+                // Mixed dentition — molars (16-18 etc.) have no primary
+                // predecessor and are always permanent-only (no toggle below).
+                $primaryOf = config('dental_notation.permanent_to_primary');
+                $savedTeeth = $cohaReport->tooth_assessment ?? [];
+                // Which code (permanent or primary) each position should show on
+                // load: primary if that's the one with a saved finding, else adult.
+                $initialCode = function ($t) use ($primaryOf, $savedTeeth) {
+                    $child = $primaryOf[$t] ?? null;
+                    return ($child && array_key_exists($child, $savedTeeth)) ? $child : $t;
+                };
                 @endphp
 
                 {{-- Upper arch --}}
@@ -409,12 +430,20 @@
                         <div class="tooth-quadrant-label">Upper Right (1)</div>
                         <div class="tooth-grid">
                             @foreach($upperRight as $t)
-                            <div class="tooth-cell">
-                                <span class="tooth-num">{{ $t }}</span>
-                                <select name="tooth_assessment[{{ $t }}]" class="tooth-select"
+                            @php $child = $primaryOf[$t] ?? null; $savedValue = $savedTeeth[$initialCode($t)] ?? ''; @endphp
+                            <div class="tooth-cell" x-data="{ code: {{ $initialCode($t) }} }">
+                                <span class="tooth-num" x-text="code"></span>
+                                @if($child)
+                                <button type="button" class="tooth-dentition-toggle"
+                                        :class="code === {{ $child }} ? 'is-child' : ''"
+                                        @click="code = (code === {{ $t }} ? {{ $child }} : {{ $t }})"
+                                        :title="code === {{ $child }} ? 'Primary (child) tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                        x-text="code === {{ $child }} ? 'P' : 'A'"></button>
+                                @endif
+                                <select :name="'tooth_assessment[' + code + ']'" class="tooth-select"
                                         @change="toothChanged($event)">
                                     @foreach($toothStatus as $v=>$l)
-                                    <option value="{{ $v }}" {{ ($cohaReport->tooth_assessment[$t] ?? '') === $v ? 'selected' : '' }}>{{ $l }}</option>
+                                    <option value="{{ $v }}" {{ $savedValue === $v ? 'selected' : '' }}>{{ $l }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -425,12 +454,20 @@
                         <div class="tooth-quadrant-label">Upper Left (2)</div>
                         <div class="tooth-grid">
                             @foreach($upperLeft as $t)
-                            <div class="tooth-cell">
-                                <span class="tooth-num">{{ $t }}</span>
-                                <select name="tooth_assessment[{{ $t }}]" class="tooth-select"
+                            @php $child = $primaryOf[$t] ?? null; $savedValue = $savedTeeth[$initialCode($t)] ?? ''; @endphp
+                            <div class="tooth-cell" x-data="{ code: {{ $initialCode($t) }} }">
+                                <span class="tooth-num" x-text="code"></span>
+                                @if($child)
+                                <button type="button" class="tooth-dentition-toggle"
+                                        :class="code === {{ $child }} ? 'is-child' : ''"
+                                        @click="code = (code === {{ $t }} ? {{ $child }} : {{ $t }})"
+                                        :title="code === {{ $child }} ? 'Primary (child) tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                        x-text="code === {{ $child }} ? 'P' : 'A'"></button>
+                                @endif
+                                <select :name="'tooth_assessment[' + code + ']'" class="tooth-select"
                                         @change="toothChanged($event)">
                                     @foreach($toothStatus as $v=>$l)
-                                    <option value="{{ $v }}" {{ ($cohaReport->tooth_assessment[$t] ?? '') === $v ? 'selected' : '' }}>{{ $l }}</option>
+                                    <option value="{{ $v }}" {{ $savedValue === $v ? 'selected' : '' }}>{{ $l }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -447,12 +484,20 @@
                         <div class="tooth-quadrant-label">Lower Right (4)</div>
                         <div class="tooth-grid">
                             @foreach($lowerRight as $t)
-                            <div class="tooth-cell">
-                                <span class="tooth-num">{{ $t }}</span>
-                                <select name="tooth_assessment[{{ $t }}]" class="tooth-select"
+                            @php $child = $primaryOf[$t] ?? null; $savedValue = $savedTeeth[$initialCode($t)] ?? ''; @endphp
+                            <div class="tooth-cell" x-data="{ code: {{ $initialCode($t) }} }">
+                                <span class="tooth-num" x-text="code"></span>
+                                @if($child)
+                                <button type="button" class="tooth-dentition-toggle"
+                                        :class="code === {{ $child }} ? 'is-child' : ''"
+                                        @click="code = (code === {{ $t }} ? {{ $child }} : {{ $t }})"
+                                        :title="code === {{ $child }} ? 'Primary (child) tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                        x-text="code === {{ $child }} ? 'P' : 'A'"></button>
+                                @endif
+                                <select :name="'tooth_assessment[' + code + ']'" class="tooth-select"
                                         @change="toothChanged($event)">
                                     @foreach($toothStatus as $v=>$l)
-                                    <option value="{{ $v }}" {{ ($cohaReport->tooth_assessment[$t] ?? '') === $v ? 'selected' : '' }}>{{ $l }}</option>
+                                    <option value="{{ $v }}" {{ $savedValue === $v ? 'selected' : '' }}>{{ $l }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -463,12 +508,20 @@
                         <div class="tooth-quadrant-label">Lower Left (3)</div>
                         <div class="tooth-grid">
                             @foreach($lowerLeft as $t)
-                            <div class="tooth-cell">
-                                <span class="tooth-num">{{ $t }}</span>
-                                <select name="tooth_assessment[{{ $t }}]" class="tooth-select"
+                            @php $child = $primaryOf[$t] ?? null; $savedValue = $savedTeeth[$initialCode($t)] ?? ''; @endphp
+                            <div class="tooth-cell" x-data="{ code: {{ $initialCode($t) }} }">
+                                <span class="tooth-num" x-text="code"></span>
+                                @if($child)
+                                <button type="button" class="tooth-dentition-toggle"
+                                        :class="code === {{ $child }} ? 'is-child' : ''"
+                                        @click="code = (code === {{ $t }} ? {{ $child }} : {{ $t }})"
+                                        :title="code === {{ $child }} ? 'Primary (child) tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                        x-text="code === {{ $child }} ? 'P' : 'A'"></button>
+                                @endif
+                                <select :name="'tooth_assessment[' + code + ']'" class="tooth-select"
                                         @change="toothChanged($event)">
                                     @foreach($toothStatus as $v=>$l)
-                                    <option value="{{ $v }}" {{ ($cohaReport->tooth_assessment[$t] ?? '') === $v ? 'selected' : '' }}>{{ $l }}</option>
+                                    <option value="{{ $v }}" {{ $savedValue === $v ? 'selected' : '' }}>{{ $l }}</option>
                                     @endforeach
                                 </select>
                             </div>

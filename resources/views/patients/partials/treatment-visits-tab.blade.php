@@ -789,14 +789,27 @@ $appointmentsJson = ($patient->appointments ?? collect())
 
                                     {{-- Upper jaw --}}
                                     <div class="text-[9px] text-gray-400 text-center mb-1 uppercase tracking-wide">Upper (Maxilla)</div>
-                                    <div class="flex justify-center gap-0.5 mb-1">
+                                    <div class="flex justify-center items-end gap-0.5 mb-1">
                                         @foreach([18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28] as $t)
-                                        <button type="button"
-                                                @click="toggleTooth({{ $t }})"
-                                                :class="selectedTeeth.includes({{ $t }}) ? 'bg-[#6a0f70] text-white border-[#6a0f70]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#6a0f70] hover:text-[#6a0f70]'"
-                                                class="w-8 h-8 text-[10px] font-bold border rounded flex items-center justify-center transition-all">
-                                            {{ $t }}
-                                        </button>
+                                        @php $childCode = config('dental_notation.permanent_to_primary')[$t] ?? null; @endphp
+                                        <div class="flex flex-col items-center gap-0.5" x-data="{ code: {{ $t }} }">
+                                            <button type="button"
+                                                    @click="toggleTooth(code)"
+                                                    :class="selectedTeeth.includes(code) ? 'bg-[#6a0f70] text-white border-[#6a0f70]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#6a0f70] hover:text-[#6a0f70]'"
+                                                    class="w-8 h-8 text-[10px] font-bold border rounded flex items-center justify-center transition-all"
+                                                    x-text="code"></button>
+                                            @if($childCode)
+                                            <button type="button"
+                                                    @click.stop="const nc = (code === {{ $t }} ? {{ $childCode }} : {{ $t }});
+                                                        const idx = selectedTeeth.indexOf(code);
+                                                        if (idx >= 0) { selectedTeeth.splice(idx, 1); selectedTeeth.push(nc); form.tooth_number = selectedTeeth.slice().sort((a,b)=>a-b).join(', '); }
+                                                        code = nc;"
+                                                    :class="code === {{ $childCode }} ? 'bg-pink-100 text-pink-600 border-pink-300' : 'bg-white text-gray-400 border-gray-200 hover:border-[#6a0f70]/60'"
+                                                    :title="code === {{ $childCode }} ? 'Primary tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                                    class="w-8 h-3 text-[8px] font-bold border rounded flex items-center justify-center"
+                                                    x-text="code === {{ $childCode }} ? 'P' : 'A'"></button>
+                                            @endif
+                                        </div>
                                         @endforeach
                                     </div>
 
@@ -804,14 +817,27 @@ $appointmentsJson = ($patient->appointments ?? collect())
                                     <div class="border-t border-dashed border-gray-200 my-1.5"></div>
 
                                     {{-- Lower jaw --}}
-                                    <div class="flex justify-center gap-0.5 mb-1">
+                                    <div class="flex justify-center items-start gap-0.5 mb-1">
                                         @foreach([48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38] as $t)
-                                        <button type="button"
-                                                @click="toggleTooth({{ $t }})"
-                                                :class="selectedTeeth.includes({{ $t }}) ? 'bg-[#6a0f70] text-white border-[#6a0f70]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#6a0f70] hover:text-[#6a0f70]'"
-                                                class="w-8 h-8 text-[10px] font-bold border rounded flex items-center justify-center transition-all">
-                                            {{ $t }}
-                                        </button>
+                                        @php $childCode = config('dental_notation.permanent_to_primary')[$t] ?? null; @endphp
+                                        <div class="flex flex-col items-center gap-0.5" x-data="{ code: {{ $t }} }">
+                                            <button type="button"
+                                                    @click="toggleTooth(code)"
+                                                    :class="selectedTeeth.includes(code) ? 'bg-[#6a0f70] text-white border-[#6a0f70]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#6a0f70] hover:text-[#6a0f70]'"
+                                                    class="w-8 h-8 text-[10px] font-bold border rounded flex items-center justify-center transition-all"
+                                                    x-text="code"></button>
+                                            @if($childCode)
+                                            <button type="button"
+                                                    @click.stop="const nc = (code === {{ $t }} ? {{ $childCode }} : {{ $t }});
+                                                        const idx = selectedTeeth.indexOf(code);
+                                                        if (idx >= 0) { selectedTeeth.splice(idx, 1); selectedTeeth.push(nc); form.tooth_number = selectedTeeth.slice().sort((a,b)=>a-b).join(', '); }
+                                                        code = nc;"
+                                                    :class="code === {{ $childCode }} ? 'bg-pink-100 text-pink-600 border-pink-300' : 'bg-white text-gray-400 border-gray-200 hover:border-[#6a0f70]/60'"
+                                                    :title="code === {{ $childCode }} ? 'Primary tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                                    class="w-8 h-3 text-[8px] font-bold border rounded flex items-center justify-center"
+                                                    x-text="code === {{ $childCode }} ? 'P' : 'A'"></button>
+                                            @endif
+                                        </div>
                                         @endforeach
                                     </div>
                                     <div class="text-[9px] text-gray-400 text-center mt-1 uppercase tracking-wide">Lower (Mandible)</div>

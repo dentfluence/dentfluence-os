@@ -71,6 +71,11 @@
 
     // Helper: format a snake_case key into readable text
     $fmt = fn($v) => ucwords(str_replace(['_','-'], ' ', $v ?? ''));
+
+    // Mixed dentition — permanent -> primary (child) tooth map. A position
+    // prints its primary code instead of the adult one when that's the code
+    // the chart actually has a finding under (i.e. the dentist toggled it).
+    $primaryOf = config('dental_notation.permanent_to_primary');
 @endphp
 
 <style>
@@ -273,6 +278,14 @@
 <div class="rpt-section">
     <div class="rpt-section-title">3. Tooth Assessment</div>
     @foreach($quads as $quadName => $teeth)
+    @php
+        // Which code each position actually prints — primary if that's the
+        // one the chart has a finding under, permanent otherwise.
+        $effectiveTeeth = array_map(function ($t) use ($primaryOf, $toothData) {
+            $child = $primaryOf[$t] ?? null;
+            return ($child && array_key_exists($child, $toothData)) ? $child : $t;
+        }, $teeth);
+    @endphp
     <div style="margin-bottom:8px;">
         <div style="font-size:9px;font-weight:700;color:#6b7280;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px;">
             {{ $quadName }}
@@ -280,14 +293,14 @@
         <table class="tooth-chart-table">
             <thead>
                 <tr>
-                    @foreach($teeth as $t)
+                    @foreach($effectiveTeeth as $t)
                     <th>{{ $t }}</th>
                     @endforeach
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    @foreach($teeth as $t)
+                    @foreach($effectiveTeeth as $t)
                     @php
                         $status = $toothData[$t] ?? '';
                         $statusClass = match($status) {

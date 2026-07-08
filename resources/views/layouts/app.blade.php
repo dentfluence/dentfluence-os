@@ -1108,6 +1108,9 @@
 })();
 </script>
 
+{{-- ── Shared FDI tooth notation (adult/child) — used by every tooth chart ── --}}
+@include('partials.dental-notation')
+
 {{-- ── Page-specific scripts injected by child views ── --}}
 @stack('scripts')
 

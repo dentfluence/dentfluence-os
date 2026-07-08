@@ -415,33 +415,61 @@
                         <div class="flex justify-center items-center gap-0.5 mb-0.5">
                             {{-- Upper right: 18 → 11 --}}
                             @foreach([18,17,16,15,14,13,12,11] as $t)
-                            <button type="button"
-                                    @click="uploadSelectedTeeth.includes({{ $t }})
-                                        ? uploadSelectedTeeth = uploadSelectedTeeth.filter(n => n !== {{ $t }})
-                                        : uploadSelectedTeeth.push({{ $t }})"
-                                    :class="uploadSelectedTeeth.includes({{ $t }})
-                                        ? 'bg-[#6a0f70] text-white border-[#6a0f70]'
-                                        : 'bg-white text-gray-500 border-gray-200 hover:border-[#6a0f70]/60 hover:text-[#6a0f70]'"
-                                    class="w-[26px] h-[26px] text-[9px] font-bold border rounded
-                                           transition-colors flex-shrink-0 flex items-center justify-center">
-                                {{ $t }}
-                            </button>
+                            @php $childCode = config('dental_notation.permanent_to_primary')[$t] ?? null; @endphp
+                            <div class="flex flex-col items-center gap-0.5" x-data="{ code: {{ $t }} }">
+                                <button type="button"
+                                        @click="uploadSelectedTeeth.includes(code)
+                                            ? uploadSelectedTeeth = uploadSelectedTeeth.filter(n => n !== code)
+                                            : uploadSelectedTeeth.push(code)"
+                                        :class="uploadSelectedTeeth.includes(code)
+                                            ? 'bg-[#6a0f70] text-white border-[#6a0f70]'
+                                            : 'bg-white text-gray-500 border-gray-200 hover:border-[#6a0f70]/60 hover:text-[#6a0f70]'"
+                                        class="w-[26px] h-[26px] text-[9px] font-bold border rounded
+                                               transition-colors flex-shrink-0 flex items-center justify-center"
+                                        x-text="code"></button>
+                                @if($childCode)
+                                <button type="button"
+                                        @click.stop="const nc = (code === {{ $t }} ? {{ $childCode }} : {{ $t }});
+                                            if (uploadSelectedTeeth.includes(code)) { uploadSelectedTeeth = uploadSelectedTeeth.filter(n => n !== code); uploadSelectedTeeth.push(nc); }
+                                            code = nc;"
+                                        :class="code === {{ $childCode }}
+                                            ? 'bg-pink-100 text-pink-600 border-pink-300'
+                                            : 'bg-white text-gray-400 border-gray-200 hover:border-[#6a0f70]/60'"
+                                        :title="code === {{ $childCode }} ? 'Primary tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                        class="w-[26px] h-[10px] text-[7px] font-bold border rounded flex items-center justify-center"
+                                        x-text="code === {{ $childCode }} ? 'P' : 'A'"></button>
+                                @endif
+                            </div>
                             @endforeach
                             {{-- midline --}}
                             <div class="w-px h-5 bg-gray-300 mx-1 flex-shrink-0"></div>
                             {{-- Upper left: 21 → 28 --}}
                             @foreach([21,22,23,24,25,26,27,28] as $t)
-                            <button type="button"
-                                    @click="uploadSelectedTeeth.includes({{ $t }})
-                                        ? uploadSelectedTeeth = uploadSelectedTeeth.filter(n => n !== {{ $t }})
-                                        : uploadSelectedTeeth.push({{ $t }})"
-                                    :class="uploadSelectedTeeth.includes({{ $t }})
-                                        ? 'bg-[#6a0f70] text-white border-[#6a0f70]'
-                                        : 'bg-white text-gray-500 border-gray-200 hover:border-[#6a0f70]/60 hover:text-[#6a0f70]'"
-                                    class="w-[26px] h-[26px] text-[9px] font-bold border rounded
-                                           transition-colors flex-shrink-0 flex items-center justify-center">
-                                {{ $t }}
-                            </button>
+                            @php $childCode = config('dental_notation.permanent_to_primary')[$t] ?? null; @endphp
+                            <div class="flex flex-col items-center gap-0.5" x-data="{ code: {{ $t }} }">
+                                <button type="button"
+                                        @click="uploadSelectedTeeth.includes(code)
+                                            ? uploadSelectedTeeth = uploadSelectedTeeth.filter(n => n !== code)
+                                            : uploadSelectedTeeth.push(code)"
+                                        :class="uploadSelectedTeeth.includes(code)
+                                            ? 'bg-[#6a0f70] text-white border-[#6a0f70]'
+                                            : 'bg-white text-gray-500 border-gray-200 hover:border-[#6a0f70]/60 hover:text-[#6a0f70]'"
+                                        class="w-[26px] h-[26px] text-[9px] font-bold border rounded
+                                               transition-colors flex-shrink-0 flex items-center justify-center"
+                                        x-text="code"></button>
+                                @if($childCode)
+                                <button type="button"
+                                        @click.stop="const nc = (code === {{ $t }} ? {{ $childCode }} : {{ $t }});
+                                            if (uploadSelectedTeeth.includes(code)) { uploadSelectedTeeth = uploadSelectedTeeth.filter(n => n !== code); uploadSelectedTeeth.push(nc); }
+                                            code = nc;"
+                                        :class="code === {{ $childCode }}
+                                            ? 'bg-pink-100 text-pink-600 border-pink-300'
+                                            : 'bg-white text-gray-400 border-gray-200 hover:border-[#6a0f70]/60'"
+                                        :title="code === {{ $childCode }} ? 'Primary tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                        class="w-[26px] h-[10px] text-[7px] font-bold border rounded flex items-center justify-center"
+                                        x-text="code === {{ $childCode }} ? 'P' : 'A'"></button>
+                                @endif
+                            </div>
                             @endforeach
                         </div>
 
@@ -452,33 +480,61 @@
                         <div class="flex justify-center items-center gap-0.5 mt-0.5">
                             {{-- Lower right: 48 → 41 --}}
                             @foreach([48,47,46,45,44,43,42,41] as $t)
-                            <button type="button"
-                                    @click="uploadSelectedTeeth.includes({{ $t }})
-                                        ? uploadSelectedTeeth = uploadSelectedTeeth.filter(n => n !== {{ $t }})
-                                        : uploadSelectedTeeth.push({{ $t }})"
-                                    :class="uploadSelectedTeeth.includes({{ $t }})
-                                        ? 'bg-[#6a0f70] text-white border-[#6a0f70]'
-                                        : 'bg-white text-gray-500 border-gray-200 hover:border-[#6a0f70]/60 hover:text-[#6a0f70]'"
-                                    class="w-[26px] h-[26px] text-[9px] font-bold border rounded
-                                           transition-colors flex-shrink-0 flex items-center justify-center">
-                                {{ $t }}
-                            </button>
+                            @php $childCode = config('dental_notation.permanent_to_primary')[$t] ?? null; @endphp
+                            <div class="flex flex-col items-center gap-0.5" x-data="{ code: {{ $t }} }">
+                                <button type="button"
+                                        @click="uploadSelectedTeeth.includes(code)
+                                            ? uploadSelectedTeeth = uploadSelectedTeeth.filter(n => n !== code)
+                                            : uploadSelectedTeeth.push(code)"
+                                        :class="uploadSelectedTeeth.includes(code)
+                                            ? 'bg-[#6a0f70] text-white border-[#6a0f70]'
+                                            : 'bg-white text-gray-500 border-gray-200 hover:border-[#6a0f70]/60 hover:text-[#6a0f70]'"
+                                        class="w-[26px] h-[26px] text-[9px] font-bold border rounded
+                                               transition-colors flex-shrink-0 flex items-center justify-center"
+                                        x-text="code"></button>
+                                @if($childCode)
+                                <button type="button"
+                                        @click.stop="const nc = (code === {{ $t }} ? {{ $childCode }} : {{ $t }});
+                                            if (uploadSelectedTeeth.includes(code)) { uploadSelectedTeeth = uploadSelectedTeeth.filter(n => n !== code); uploadSelectedTeeth.push(nc); }
+                                            code = nc;"
+                                        :class="code === {{ $childCode }}
+                                            ? 'bg-pink-100 text-pink-600 border-pink-300'
+                                            : 'bg-white text-gray-400 border-gray-200 hover:border-[#6a0f70]/60'"
+                                        :title="code === {{ $childCode }} ? 'Primary tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                        class="w-[26px] h-[10px] text-[7px] font-bold border rounded flex items-center justify-center"
+                                        x-text="code === {{ $childCode }} ? 'P' : 'A'"></button>
+                                @endif
+                            </div>
                             @endforeach
                             {{-- midline --}}
                             <div class="w-px h-5 bg-gray-300 mx-1 flex-shrink-0"></div>
                             {{-- Lower left: 31 → 38 --}}
                             @foreach([31,32,33,34,35,36,37,38] as $t)
-                            <button type="button"
-                                    @click="uploadSelectedTeeth.includes({{ $t }})
-                                        ? uploadSelectedTeeth = uploadSelectedTeeth.filter(n => n !== {{ $t }})
-                                        : uploadSelectedTeeth.push({{ $t }})"
-                                    :class="uploadSelectedTeeth.includes({{ $t }})
-                                        ? 'bg-[#6a0f70] text-white border-[#6a0f70]'
-                                        : 'bg-white text-gray-500 border-gray-200 hover:border-[#6a0f70]/60 hover:text-[#6a0f70]'"
-                                    class="w-[26px] h-[26px] text-[9px] font-bold border rounded
-                                           transition-colors flex-shrink-0 flex items-center justify-center">
-                                {{ $t }}
-                            </button>
+                            @php $childCode = config('dental_notation.permanent_to_primary')[$t] ?? null; @endphp
+                            <div class="flex flex-col items-center gap-0.5" x-data="{ code: {{ $t }} }">
+                                <button type="button"
+                                        @click="uploadSelectedTeeth.includes(code)
+                                            ? uploadSelectedTeeth = uploadSelectedTeeth.filter(n => n !== code)
+                                            : uploadSelectedTeeth.push(code)"
+                                        :class="uploadSelectedTeeth.includes(code)
+                                            ? 'bg-[#6a0f70] text-white border-[#6a0f70]'
+                                            : 'bg-white text-gray-500 border-gray-200 hover:border-[#6a0f70]/60 hover:text-[#6a0f70]'"
+                                        class="w-[26px] h-[26px] text-[9px] font-bold border rounded
+                                               transition-colors flex-shrink-0 flex items-center justify-center"
+                                        x-text="code"></button>
+                                @if($childCode)
+                                <button type="button"
+                                        @click.stop="const nc = (code === {{ $t }} ? {{ $childCode }} : {{ $t }});
+                                            if (uploadSelectedTeeth.includes(code)) { uploadSelectedTeeth = uploadSelectedTeeth.filter(n => n !== code); uploadSelectedTeeth.push(nc); }
+                                            code = nc;"
+                                        :class="code === {{ $childCode }}
+                                            ? 'bg-pink-100 text-pink-600 border-pink-300'
+                                            : 'bg-white text-gray-400 border-gray-200 hover:border-[#6a0f70]/60'"
+                                        :title="code === {{ $childCode }} ? 'Primary tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
+                                        class="w-[26px] h-[10px] text-[7px] font-bold border rounded flex items-center justify-center"
+                                        x-text="code === {{ $childCode }} ? 'P' : 'A'"></button>
+                                @endif
+                            </div>
                             @endforeach
                         </div>
 
