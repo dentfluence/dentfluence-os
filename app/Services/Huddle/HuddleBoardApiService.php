@@ -8,6 +8,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\Relationship\TodayActionsEngine;
 use App\Services\Relationship\TodayActionsProjector;
+use App\Support\Features\Feature;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -97,7 +98,13 @@ class HuddleBoardApiService
 
     private function todaySnapshot(): array
     {
-        return $this->todayActionsProjector->summary();
+        // 2026-07-08 fix: always followed the projection regardless of the
+        // `today.projection` flag, so the mobile Huddle could disagree with a
+        // live-read web Today's Actions page — see the matching fix in
+        // HuddleController::index(). Same flag, same fallback now.
+        return Feature::enabled('today.projection')
+            ? $this->todayActionsProjector->summary()
+            : $this->todayActionsProjector->liveSummary();
     }
 
     /**

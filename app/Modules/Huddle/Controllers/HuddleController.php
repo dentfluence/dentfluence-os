@@ -9,6 +9,8 @@ use App\Modules\Huddle\Resources\HuddleBoardResource;
 use App\Modules\Huddle\Services\HuddleAggregationService;
 use App\Models\CommunicationQueue;
 use App\Models\User;
+use App\Services\Relationship\TodayActionsProjector;
+use App\Support\Features\Feature;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -656,7 +658,15 @@ class HuddleController extends Controller
 
         // Slice E4 (Workstream E) — shared read: the Daily Huddle shows the
         // Today's Actions projection summary instead of running its own queries.
-        $todaySnapshot = app(\App\Services\Relationship\TodayActionsProjector::class)->summary();
+        // 2026-07-08 fix: this used to always read the projection regardless of
+        // the `today.projection` flag, so Huddle could silently disagree with a
+        // live-read Today's Actions page by up to one 15-min cron cycle (or
+        // indefinitely, if the scheduler wasn't running). Now it follows the
+        // same flag TodayController does, so both surfaces are always in sync.
+        $projector     = app(TodayActionsProjector::class);
+        $todaySnapshot = Feature::enabled('today.projection')
+            ? $projector->summary()
+            : $projector->liveSummary();
 
         // ── Comms List total, including PRE relationship items ────────────────
         // "Today's Calls" used to count only $commList (reminders + follow-ups +

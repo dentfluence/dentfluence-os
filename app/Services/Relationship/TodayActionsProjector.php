@@ -128,6 +128,43 @@ class TodayActionsProjector
     }
 
     /**
+     * Same shape as summary(), but computed directly from a fresh
+     * TodayActionsEngine read instead of the `today_actions` table — for
+     * callers (Daily Huddle) that must stay in sync with the live Today's
+     * Actions page when `today.projection` is OFF. See the 2026-07-08 fix
+     * note: Huddle previously always read summary() regardless of the flag,
+     * so it could silently disagree with the live-read Today's Actions page
+     * by up to one cron cycle (15 min) — or indefinitely, if the scheduler
+     * wasn't running. Callers should check Feature::enabled('today.projection')
+     * and use this method when it's OFF.
+     *
+     * @return array{total:int, by_category:array<string,int>, by_priority:array<string,int>, generated_at:?string}
+     */
+    public function liveSummary(): array
+    {
+        $groups = $this->engine->generate();
+
+        $byCategory = [];
+        $byPriority = [];
+
+        foreach ($groups as $category => $items) {
+            $byCategory[$category] = count($items);
+
+            foreach ($items as $item) {
+                $priority = $item['priority'] ?? 'medium';
+                $byPriority[$priority] = ($byPriority[$priority] ?? 0) + 1;
+            }
+        }
+
+        return [
+            'total'        => array_sum($byCategory),
+            'by_category'  => $byCategory,
+            'by_priority'  => $byPriority,
+            'generated_at' => now()->toDateTimeString(),
+        ];
+    }
+
+    /**
      * Compare the CURRENT projection against a fresh live read, per category.
      * Used to prove shadow parity before the E2 read cutover (mirrors the
      * timeline-parity harness). Does NOT rebuild — it checks what's stored now.
