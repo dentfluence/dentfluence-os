@@ -82,10 +82,21 @@
                                    font-family:'Inter',sans-serif;color:#6a0f70;cursor:pointer;">
                         Edit
                     </button>
+                    <form method="POST" action="{{ route('inventory.vendors.toggle', $vendor) }}" style="display:inline;"
+                          onsubmit="return confirm('{{ $vendor->is_active ? 'Deactivate' : 'Reactivate' }} {{ addslashes($vendor->vendor_name) }}? {{ $vendor->is_active ? 'They will no longer appear when creating new Purchase Orders.' : '' }}')">
+                        @csrf
+                        <button type="submit"
+                                style="background:{{ $vendor->is_active ? '#fef2f2' : '#e8f7ef' }};
+                                       border:1px solid {{ $vendor->is_active ? 'rgba(220,38,38,0.15)' : 'rgba(26,122,69,0.2)' }};
+                                       border-radius:4px;padding:5px 12px;font-size:12px;margin-left:6px;
+                                       font-family:'Inter',sans-serif;color:{{ $vendor->is_active ? '#dc2626' : '#1a7a45' }};cursor:pointer;">
+                            {{ $vendor->is_active ? 'Deactivate' : 'Reactivate' }}
+                        </button>
+                    </form>
                 </td>
             </tr>
             @empty
-            <tr><td colspan="6" style="padding:48px;text-align:center;color:#9a85aa;">
+            <tr><td colspan="7" style="padding:48px;text-align:center;color:#9a85aa;">
                 <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="rgba(106,15,112,0.2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 12px;display:block;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 No vendors yet. Add your first supplier.
             </td></tr>

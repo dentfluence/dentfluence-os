@@ -683,15 +683,23 @@ function toggleItemFilter() {
     });
 }
 
+// Distinguish items that share a base name (e.g. three "Gloves" rows for
+// different sub-type/size combos) — same "Category › SubType · Variant" style
+// used on the Products list, plus the item code.
+function itemLabel(it) {
+    let label = it.product_name;
+    const details = [];
+    if (it.sub_type?.name) details.push(it.sub_type.name);
+    if (it.variant?.name) details.push(it.variant.name);
+    if (details.length) label += ' (' + details.join(' · ') + ')';
+    return label;
+}
+
 function buildItemOptions() {
     const items = showAllItems ? ALL_ITEMS : ALL_ITEMS.filter(it => it._isLow);
-    if (items.length === 0) {
-        return ALL_ITEMS.map(it =>
-            `<option value="${it.id}" data-price="${it.last_purchase_price || 0}" data-unit="${it.purchase_unit || ''}">${it.product_name}</option>`
-        ).join('');
-    }
-    return items.map(it =>
-        `<option value="${it.id}" data-price="${it.last_purchase_price || 0}" data-unit="${it.purchase_unit || ''}">${it.product_name}${it._isLow ? '' : ''}</option>`
+    const list = items.length === 0 ? ALL_ITEMS : items;
+    return list.map(it =>
+        `<option value="${it.id}" data-price="${it.last_purchase_price || 0}" data-unit="${it.purchase_unit || ''}">${itemLabel(it)}</option>`
     ).join('');
 }
 

@@ -788,11 +788,14 @@ class InventoryController extends Controller
         $vendors = InventoryVendor::active()->get(['id','vendor_name','contact_person','phone','whatsapp','email']);
 
         // All items for the "show all" override toggle in Create PO modal
-        // Eager-load stocks so total_stock attribute works without N+1 queries
+        // Eager-load stocks (for total_stock) + category/subType/variant so the
+        // dropdown can distinguish items that share a base name (e.g. three
+        // "Gloves" rows for different sub-type/size combos).
         $allItems = InventoryItem::where('is_active', true)
-            ->with('stocks')
+            ->with(['stocks', 'category:id,name', 'subType:id,name', 'variant:id,name'])
             ->orderBy('product_name')
-            ->get(['id','product_name','purchase_unit','consumption_unit','last_purchase_price','minimum_qty','reorder_level']);
+            ->get(['id','product_name','category_id','sub_type_id','variant_id',
+                   'purchase_unit','consumption_unit','last_purchase_price','minimum_qty','reorder_level']);
 
         // Low/critical items: at or below reorder_level (or minimum_qty as fallback)
         // Only include items that actually have a threshold set (> 0)
@@ -1780,6 +1783,27 @@ class InventoryController extends Controller
         $vendor->refresh()->syncToFinance();
 
         return back()->with('success', 'Vendor "' . $vendor->vendor_name . '" updated.');
+    }
+
+    /**
+     * Deactivate/reactivate a vendor. Never a hard delete — vendors are
+     * referenced by historical Purchase Orders, so removing the row would
+     * either break that history or fail on the FK. Deactivating removes them
+     * from the PO "Vendor" dropdown (InventoryVendor::active()) without
+     * touching anything already ordered from them.
+     */
+    public function toggleVendor(InventoryVendor $vendor)
+    {
+        $vendor->update(['is_active' => ! $vendor->is_active]);
+
+        // Keep the Finance mirror in sync so it disappears from Finance too
+        if ($vendor->finance_vendor_id) {
+            $vendor->financeVendor?->update(['is_active' => $vendor->is_active]);
+        }
+
+        return back()->with('success', $vendor->is_active
+            ? "Vendor \"{$vendor->vendor_name}\" reactivated."
+            : "Vendor \"{$vendor->vendor_name}\" deactivated.");
     }
 
     /* ─────────────────────────────────────────────────────────

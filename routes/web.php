@@ -599,8 +599,9 @@ Route::middleware('auth')->group(function () {
         Route::put('/settings/variants/{variant}',   [InventoryController::class, 'updateVariant'])->name('settings.variants.update');
         Route::delete('/settings/variants/{variant}',[InventoryController::class, 'destroyVariant'])->name('settings.variants.destroy');
 
-        // Vendor update (edit modal)
+        // Vendor update (edit modal) + deactivate/reactivate (never a hard delete)
         Route::put('/vendors/{vendor}',              [InventoryController::class, 'updateVendor'])->name('vendors.update');
+        Route::post('/vendors/{vendor}/toggle',       [InventoryController::class, 'toggleVendor'])->name('vendors.toggle');
 
         // GRN — receive against PO
         Route::post('/purchase/{po}/receive',        [InventoryController::class, 'receivePO'])->name('purchase.receive');
