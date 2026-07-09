@@ -109,6 +109,10 @@ class PresentationController extends Controller
         $activeToken = $presentation->activeAccessToken();
         $activeTokenUrl = $activeToken ? app(PresentationLinkService::class)->url($activeToken) : null;
 
+        // Deterministic, no-AI narrative — the module's real default content
+        // source. Always available, always accurate (see PresentationNarrativeService).
+        $narrative = app(\App\Services\Presentations\PresentationNarrativeService::class)->build($presentation);
+
         return view('presentations.builder', [
             'presentation'     => $presentation,
             'costSummary'      => $presentation->currentCostSummary(),
@@ -119,6 +123,7 @@ class PresentationController extends Controller
             'activity'         => $activity,
             'activeToken'      => $activeToken,
             'activeTokenUrl'   => $activeTokenUrl,
+            'narrative'        => $narrative,
         ]);
     }
 
@@ -187,12 +192,17 @@ class PresentationController extends Controller
         $request->validate([
             'confirm_reviewed' => ['accepted'],
         ], [
-            'confirm_reviewed.accepted' => 'You must confirm you have reviewed the summary for clinical accuracy before finalizing.',
+            'confirm_reviewed.accepted' => 'You must confirm you have reviewed this presentation for accuracy before finalizing.',
         ]);
 
-        if (blank($presentation->ai_summary_text)) {
+        // No hard requirement on ai_summary_text — the deterministic narrative
+        // (complaint/diagnosis/treatment/cost, see PresentationNarrativeService)
+        // is always present as long as there's a diagnosis or plan items, and is
+        // what the patient sees by default. The free-text summary is optional
+        // polish, not a precondition to finalize.
+        if (blank($presentation->treatmentPlan?->items)) {
             return redirect()->route('presentations.builder', $presentation)
-                ->with('error', 'Add a summary (write your own or generate one) before finalizing.');
+                ->with('error', 'This treatment plan has no items yet — add treatments before finalizing.');
         }
 
         $presentation->update([
@@ -440,6 +450,7 @@ class PresentationController extends Controller
                 'total'          => (float) $i->total,
             ])->values()->all() ?? [],
             'cost'            => $presentation->currentCostSummary(),
+            'narrative'       => app(\App\Services\Presentations\PresentationNarrativeService::class)->build($presentation),
             'ai_summary_text' => $presentation->ai_summary_text,
             'doctor_message'  => $presentation->doctor_message,
             'included_media_ids' => $presentation->mediaItems()->where('included', true)->pluck('treatment_media_id')->all(),

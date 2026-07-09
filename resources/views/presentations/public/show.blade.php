@@ -18,19 +18,39 @@
     </div>
     @endif
 
-    {{-- ══ AI SUMMARY ══════════════════════════════════════════════════════ --}}
+    {{-- ══ CASE SUMMARY — deterministic, always accurate (no AI required) ═══ --}}
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-4 space-y-3">
+        @if($narrative['complaint'])
+        <p class="text-sm text-gray-700"><span class="text-gray-400">You came in because:</span> {{ $narrative['complaint'] }}</p>
+        @endif
+        @if($narrative['hopi'])
+        <p class="text-sm text-gray-700">{{ $narrative['hopi'] }}</p>
+        @endif
+        @if($narrative['diagnosis'])
+        <p class="text-sm text-gray-700"><span class="text-gray-400">What we found:</span> {{ $narrative['diagnosis'] }}</p>
+        @endif
+    </div>
+
+    {{-- ══ OPTIONAL OVERVIEW PARAGRAPH (AI-drafted or dentist-written) ══════ --}}
+    @if($presentation->ai_summary_text)
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-4">
         <p class="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{{ $presentation->ai_summary_text }}</p>
     </div>
+    @endif
 
     {{-- ══ TREATMENT + COST ════════════════════════════════════════════════ --}}
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-4">
         <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Your Treatment</div>
         <div class="divide-y divide-gray-50">
-            @foreach($presentation->treatmentPlan?->items ?? [] as $item)
-            <div class="flex items-center justify-between py-2 text-sm">
-                <span class="text-gray-700">{{ $item->treatment_name }}</span>
-                <span class="text-gray-400 font-medium">Rs. {{ number_format($item->total, 0) }}</span>
+            @foreach($narrative['treatment'] as $t)
+            <div class="py-2 text-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-700">{{ $t['treatment_name'] }}{{ $t['units'] > 1 ? ' × ' . $t['units'] : '' }}</span>
+                    <span class="text-gray-400 font-medium">Rs. {{ number_format($t['total'], 0) }}</span>
+                </div>
+                @if($t['tooth_phrase'])
+                <div class="text-xs text-gray-400">{{ ucfirst($t['tooth_phrase']) }}</div>
+                @endif
             </div>
             @endforeach
         </div>
@@ -39,6 +59,21 @@
             <span class="text-lg font-bold text-brand-600">Rs. {{ number_format($costSummary['total'], 0) }}</span>
         </div>
     </div>
+
+    {{-- ══ ALTERNATIVES (other options discussed for this consultation) ═══ --}}
+    @if(!empty($narrative['alternatives']))
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-4">
+        <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Other Options We Discussed</div>
+        <div class="space-y-2">
+            @foreach($narrative['alternatives'] as $alt)
+            <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-700">{{ $alt['plan_name'] }}</span>
+                <span class="text-gray-400 font-medium">Rs. {{ number_format($alt['total'], 0) }}</span>
+            </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
 
     {{-- ══ EDUCATION CONTENT ═══════════════════════════════════════════════ --}}
     @if($includedMedia->isNotEmpty())
@@ -79,6 +114,14 @@
     </div>
     @endif
 
-    <p class="text-center text-xs text-gray-300 mt-6">Sent securely by {{ \App\Models\AppSetting::get('clinic_name', 'your clinic') }}.</p>
+    <div class="text-center text-xs text-gray-300 mt-6 space-y-0.5">
+        <p>Sent securely by {{ $narrative['clinic']['name'] ?? 'your clinic' }}.</p>
+        @if($narrative['clinic']['phone'] ?? null)
+        <p>{{ $narrative['clinic']['phone'] }}</p>
+        @endif
+        @if($narrative['clinic']['address'] ?? null)
+        <p>{{ $narrative['clinic']['address'] }}</p>
+        @endif
+    </div>
 
 @endsection

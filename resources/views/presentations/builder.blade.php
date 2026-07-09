@@ -68,6 +68,49 @@
         </div>
     </div>
 
+    {{-- ══ CASE NARRATIVE — deterministic, no AI (PresentationNarrativeService) ═
+         This is what the patient sees by default. Every line traces to a real
+         field; tooth locations are computed (ToothLocationDescriber), never
+         guessed. The module works fully even with the local AI turned off. ═ --}}
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-3">
+        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Case Summary (auto, from record — no AI)</div>
+
+        @if($narrative['complaint'])
+        <div><span class="text-xs text-gray-400">Complaint: </span><span class="text-sm text-gray-700">{{ $narrative['complaint'] }}</span></div>
+        @endif
+        @if($narrative['hopi'])
+        <div><span class="text-xs text-gray-400">History: </span><span class="text-sm text-gray-700">{{ $narrative['hopi'] }}</span></div>
+        @endif
+        @if($narrative['diagnosis'])
+        <div><span class="text-xs text-gray-400">Diagnosis: </span><span class="text-sm text-gray-700">{{ $narrative['diagnosis'] }}</span></div>
+        @endif
+
+        @if(!empty($narrative['treatment']))
+        <div class="pt-2 border-t border-gray-50">
+            <span class="text-xs text-gray-400">Treatment:</span>
+            <ul class="mt-1 space-y-1">
+                @foreach($narrative['treatment'] as $t)
+                <li class="text-sm text-gray-700">
+                    {{ $t['treatment_name'] }}{{ $t['tooth_phrase'] ? ' — ' . $t['tooth_phrase'] : '' }}
+                    @if($t['units'] > 1)<span class="text-xs text-gray-400">&times; {{ $t['units'] }}</span>@endif
+                </li>
+                @endforeach
+            </ul>
+        </div>
+        @endif
+
+        @if(!empty($narrative['alternatives']))
+        <div class="pt-2 border-t border-gray-50">
+            <span class="text-xs text-gray-400">Other options discussed for this consultation:</span>
+            <ul class="mt-1 space-y-1">
+                @foreach($narrative['alternatives'] as $alt)
+                <li class="text-sm text-gray-700">{{ $alt['plan_name'] }} — {{ $alt['summary'] }} (Rs. {{ number_format($alt['total'], 0) }})</li>
+                @endforeach
+            </ul>
+        </div>
+        @endif
+    </div>
+
     @if(!$canAuthor)
     <div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm">
         You have view access to this presentation. Only a dentist can edit the summary, message, or finalize it.
@@ -81,7 +124,10 @@
 
             <div>
                 <div class="flex items-center justify-between mb-1.5">
-                    <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Patient-facing summary</label>
+                    <div>
+                        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Optional overview paragraph</label>
+                        <p class="text-xs text-gray-400">The Case Summary above is what's always shown — this is an optional extra, in your own words or AI-drafted, not required to finalize.</p>
+                    </div>
                     @if($canAuthor)
                     {{-- Separate, plain POST form — deliberately NOT nested inside the
                          PUT-spoofed update form below, so it can't accidentally submit
@@ -148,7 +194,7 @@
             <label class="flex items-start gap-2 text-sm text-gray-600">
                 <input type="checkbox" name="confirm_reviewed" value="1" required
                     class="mt-0.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500">
-                I have reviewed this summary for clinical accuracy and I'm ready to finalize it.
+                I have reviewed this presentation (case summary, treatment, and cost) for accuracy and I'm ready to finalize it.
             </label>
             <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg shadow-sm transition">
                 Finalize
@@ -160,19 +206,24 @@
     @else
 
         {{-- ══ FINALIZED — READ ONLY CONTENT ══════════════════════════════════ --}}
+        @if($presentation->ai_summary_text || $presentation->doctor_message)
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
-            <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Patient-facing summary</div>
+            @if($presentation->ai_summary_text)
+            <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Optional overview paragraph</div>
             <p class="text-sm text-gray-700 whitespace-pre-line">{{ $presentation->ai_summary_text }}</p>
+            @endif
             @if($presentation->doctor_message)
             <div class="pt-2 border-t border-gray-50">
                 <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Personal message</div>
                 <p class="text-sm text-gray-700">{{ $presentation->doctor_message }}</p>
             </div>
             @endif
-            <div class="text-xs text-gray-400 pt-2 border-t border-gray-50">
-                Reviewed & finalized {{ $presentation->reviewed_at?->format('d M Y, H:i') }} by
-                {{ $presentation->creator?->name ?? 'a dentist' }}.
-            </div>
+        </div>
+        @endif
+
+        <div class="text-xs text-gray-400 px-1">
+            Reviewed & finalized {{ $presentation->reviewed_at?->format('d M Y, H:i') }} by
+            {{ $presentation->creator?->name ?? 'a dentist' }}.
         </div>
 
         {{-- ══ SLICE C: SEND / RESEND (staff-operate — not author-only) ═══════ --}}

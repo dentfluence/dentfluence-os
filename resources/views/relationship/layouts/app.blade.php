@@ -58,6 +58,10 @@
                 ['route' => 'relationship.pipeline',      'label' => 'Pipeline',         'icon' => '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>'],
                 ['route' => 'relationship.opportunities', 'label' => 'Opportunities',    'icon' => '<path d="M12 2l3 7h7l-5.5 4.5L18.5 21 12 16.5 5.5 21 7.5 13.5 2 9h7z"/>'],
                 ['route' => 'relationship.recalls',       'label' => 'Recalls',          'icon' => '<path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>'],
+                // WhatsApp (2026-07-09) — PRE-native conversation list. Grouped with
+                // the other work-queue tabs, not with the structural pages below.
+                // Deliberately NOT a link to /communication/whatsapp (retired hub).
+                ['route' => 'relationship.whatsapp',       'label' => 'WhatsApp',        'icon' => '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'],
                 ['route' => 'relationship.list',          'label' => 'All Relationships','icon' => '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'],
                 ['route' => 'relationship.analytics',     'label' => 'Analytics',        'icon' => '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>'],
                 // Kept last — module-scoped settings so PRE can be sold/run standalone

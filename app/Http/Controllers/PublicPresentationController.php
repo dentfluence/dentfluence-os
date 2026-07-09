@@ -6,6 +6,7 @@ use App\Models\Presentation;
 use App\Models\PresentationAccessToken;
 use App\Models\TreatmentOpportunity;
 use App\Models\User;
+use App\Services\Presentations\PresentationNarrativeService;
 use App\Services\Relationship\ActivityEngine;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
@@ -63,10 +64,11 @@ class PublicPresentationController extends Controller
         }
 
         return view('presentations.public.show', [
-            'presentation' => $presentation,
-            'costSummary'  => $presentation->currentCostSummary(),
+            'presentation'  => $presentation,
+            'costSummary'   => $presentation->currentCostSummary(),
             'includedMedia' => $presentation->mediaItems->where('included', true)->pluck('treatmentMedia')->filter(),
-            'token'        => $token,
+            'narrative'     => app(PresentationNarrativeService::class)->build($presentation),
+            'token'         => $token,
         ]);
     }
 

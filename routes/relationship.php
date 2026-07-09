@@ -14,6 +14,7 @@ use App\Http\Controllers\Relationship\ReferralRewardController;
 use App\Http\Controllers\Relationship\SettingsController as RelationshipSettingsController;
 use App\Http\Controllers\Relationship\TemplateController as RelationshipTemplateController;
 use App\Http\Controllers\Relationship\TodayController;
+use App\Http\Controllers\Relationship\WhatsAppOverviewController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -236,6 +237,14 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     Route::post('/recalls/{recall}/convert', [RecallPipelineController::class, 'convertToOpportunity'])
         ->whereNumber('recall')
         ->name('recalls.convert');  // relationship.recalls.convert
+
+    // ── WhatsApp — PRE-native "all conversations" list (2026-07-09) ─────────
+    // Deliberately NOT the legacy /communication/whatsapp inbox. Lives in the
+    // PRE subnav (relationship.layouts.app $relTabs) so it's discoverable
+    // without a sidebar entry pointing at the retired Communication/PRM hub.
+    // Static segment — before the /{id} wildcard below.
+    Route::get('/whatsapp', [WhatsAppOverviewController::class, 'index'])
+        ->name('whatsapp');  // relationship.whatsapp
 
     // Reception dashboard removed 2026-07-06 (Sumit) — it read the exact same
     // Today's Actions projection with zero interactivity (no Call drawer, no

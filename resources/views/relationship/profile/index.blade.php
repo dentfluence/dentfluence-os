@@ -135,7 +135,16 @@
 @endpush
 
 @section('content')
-<div x-data="{ activeTab: 'timeline' }">
+<div x-data="{
+        activeTab: 'timeline',
+        init() {
+            // Deep-link support — e.g. the PRE WhatsApp list
+            // (relationship.whatsapp) links here with ?tab=communication so
+            // it opens straight on the chat instead of the Timeline default.
+            const tab = new URLSearchParams(window.location.search).get('tab');
+            if (tab) this.activeTab = tab;
+        },
+    }">
 
 {{-- ══════════════════════════════════════════════════════════
      STICKY HEADER
@@ -683,8 +692,6 @@
                     </form>
                 </details>
             @endif
-
-            <a href="{{ route('communication.whatsapp.show', $waThread) }}" style="display:inline-block;margin-top:10px;font-size:11px;color:#6a0f70;text-decoration:none;">Open in full inbox →</a>
         @endif
 
         @if($recentComms->isEmpty() && !$waThread)
