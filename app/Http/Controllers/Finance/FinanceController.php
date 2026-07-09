@@ -498,9 +498,12 @@ class FinanceController extends Controller
         // ── Voucher Register tab ──────────────────────────────────────────────
         $vouchers     = null;
         $voucherTotal = 0;
+        $showVoided   = $request->boolean('show_voided');
         if ($tab === 'vouchers') {
-            $vq = FinanceVoucher::with('vendor')
+            $vq = FinanceVoucher::with(['vendor', 'voidedBy'])
                 ->whereBetween('voucher_date', [$from, $to]);
+
+            if (! $showVoided) { $vq->active(); }
 
             $vendorFilter = $request->input('vendor_id');
             $modeFilter   = $request->input('vmode');
@@ -516,7 +519,8 @@ class FinanceController extends Controller
 
             $vouchers     = $vq->orderByDesc('voucher_date')->orderByDesc('id')
                                ->paginate(30)->withQueryString();
-            $voucherTotal = FinanceVoucher::whereBetween('voucher_date', [$from, $to])->sum('amount');
+            // Total always reflects real money paid out — voided vouchers never count
+            $voucherTotal = FinanceVoucher::whereBetween('voucher_date', [$from, $to])->active()->sum('amount');
         }
 
         $base = FinanceExpense::with(['category', 'vendor', 'voucher']); // Phase 2: voucher eager-loaded
@@ -567,7 +571,7 @@ class FinanceController extends Controller
             'from', 'to', 'cat', 'search', 'tab',
             'unpaidCount', 'unpaidAmount', 'overdueCount', 'recurringCount',
             'bankAccounts',
-            'vouchers', 'voucherTotal'
+            'vouchers', 'voucherTotal', 'showVoided'
         ));
     }
 
@@ -641,10 +645,11 @@ class FinanceController extends Controller
 
     public function expenseCreate()
     {
-        $categories = FinanceExpenseCategory::orderBy('name')->get();
-        $vendors    = FinanceVendor::where('is_active', true)->orderBy('vendor_name')->get(['id', 'vendor_name', 'company_name', 'vendor_type']);
-        $expense    = null;
-        return view('finance.expense-form', compact('categories', 'vendors', 'expense'));
+        $categories   = FinanceExpenseCategory::orderBy('name')->get();
+        $vendors      = FinanceVendor::where('is_active', true)->orderBy('vendor_name')->get(['id', 'vendor_name', 'company_name', 'vendor_type']);
+        $bankAccounts = FinanceBankAccount::where('is_active', true)->orderByDesc('is_primary')->orderBy('account_name')->get(['id', 'account_name', 'bank_name', 'account_type']);
+        $expense      = null;
+        return view('finance.expense-form', compact('categories', 'vendors', 'bankAccounts', 'expense'));
     }
 
     /**
@@ -670,8 +675,79 @@ class FinanceController extends Controller
         return response()->json(['id' => $category->id, 'name' => $category->name]);
     }
 
+    /**
+     * Inline "+ Add" quick-create from the Expense form's Vendor dropdown.
+     * Mirrors categoryStore() — minimal fields, JSON response, full vendor
+     * details (GSTIN, bank info, etc.) can be filled in later from the Vendors tab.
+     */
+    public function vendorQuickStore(Request $request)
+    {
+        $data = $request->validate([
+            'vendor_name' => 'required|string|max:150',
+        ]);
+
+        $vendor = FinanceVendor::create([
+            'vendor_name' => $data['vendor_name'],
+            'vendor_type' => 'other',
+            'is_active'   => true,
+            'created_by'  => auth()->id(),
+        ]);
+
+        return response()->json(['id' => $vendor->id, 'name' => $vendor->company_name ?: $vendor->vendor_name]);
+    }
+
+    /**
+     * clinic_account_id is required once the clinic has at least one active bank
+     * account configured — otherwise we'd block the core "record an expense"
+     * workflow entirely for clinics that haven't set up Banking yet.
+     */
+    private function clinicAccountRule(bool $wantsPaid): string
+    {
+        if ($wantsPaid && FinanceBankAccount::where('is_active', true)->exists()) {
+            return 'required|exists:finance_bank_accounts,id';
+        }
+        return 'nullable|exists:finance_bank_accounts,id';
+    }
+
+    /**
+     * Auto-generate a Payment Voucher for a paid expense. Shared by expenseStore(),
+     * expenseUpdate(), and expenseMarkPaid() so every paid expense — however it
+     * became paid — ends up with exactly one voucher (never duplicated).
+     */
+    private function createVoucherForExpense(FinanceExpense $expense, array $payment): void
+    {
+        if ($expense->voucher()->exists()) {
+            return;
+        }
+
+        $clinicAccount = isset($payment['clinic_account_id'])
+            ? FinanceBankAccount::find($payment['clinic_account_id'])
+            : null;
+
+        FinanceVoucher::create([
+            'voucher_number'      => FinanceVoucher::generateNumber(),
+            'expense_id'          => $expense->id,
+            'vendor_id'           => $expense->vendor_id,
+            'vendor_name'         => $expense->vendor?->vendor_name ?? $expense->vendor?->company_name,
+            'voucher_date'        => $payment['date'],
+            'amount'              => $payment['amount'],
+            'payment_mode'        => $payment['mode'],
+            'reference'           => $payment['reference'] ?? null,
+            'clinic_account_id'   => $clinicAccount?->id,
+            'clinic_account_name' => $clinicAccount?->account_name,
+            'cheque_number'       => $payment['cheque_number'] ?? null,
+            'purpose'             => $expense->title,
+            'notes'               => $payment['notes'] ?? $expense->notes,
+            'created_by'          => auth()->id(),
+            'source_type'         => $expense->source_type,
+            'source_id'           => $expense->source_id,
+        ]);
+    }
+
     public function expenseStore(Request $request)
     {
+        $wantsPaid = $request->input('payment_status', 'paid') === 'paid';
+
         $data = $request->validate([
             'title'             => 'required|string|max:200',
             'category_id'       => 'nullable|exists:finance_expense_categories,id',
@@ -682,6 +758,7 @@ class FinanceController extends Controller
             'gst_rate'          => 'nullable|numeric|min:0|max:28',
             'payment_mode'      => 'nullable|in:cash,upi,card,bank_transfer,cheque,emi,other',
             'payment_reference' => 'nullable|string|max:100',
+            'clinic_account_id' => $this->clinicAccountRule($wantsPaid),
             'description'       => 'nullable|string|max:1000',
             'notes'             => 'nullable|string|max:500',
             'is_recurring'      => 'nullable|boolean',
@@ -690,39 +767,63 @@ class FinanceController extends Controller
             'due_date'          => 'nullable|date',
         ]);
 
-        $paymentStatus = $data['payment_status'] ?? 'paid';
-        $gstApplicable = (bool) ($data['gst_applicable'] ?? false);
-        $gstRate       = $gstApplicable ? (float) ($data['gst_rate'] ?? 0) : 0;
-        $gstAmount     = round((float) $data['amount'] * $gstRate / 100, 2);
+        $paymentStatus  = $data['payment_status'] ?? 'paid';
+        $gstApplicable  = (bool) ($data['gst_applicable'] ?? false);
+        $gstRate        = $gstApplicable ? (float) ($data['gst_rate'] ?? 0) : 0;
+        $gstAmount      = round((float) $data['amount'] * $gstRate / 100, 2);
+        $paymentMode    = $paymentStatus === 'paid' ? ($data['payment_mode'] ?? 'cash') : null;
+        $clinicAccount  = $paymentStatus === 'paid' && !empty($data['clinic_account_id'])
+                            ? FinanceBankAccount::find($data['clinic_account_id']) : null;
 
-        FinanceExpense::create(array_merge($data, [
-            'gst_applicable' => $gstApplicable,
-            'gst_rate'       => $gstRate,
-            'gst_amount'     => $gstAmount,
-            'total_amount'   => (float) $data['amount'] + $gstAmount,
-            'payment_status' => $paymentStatus,
+        // clinic_account_id is a form-only field — the expense table's real
+        // column is paid_clinic_account_id (mapped below), so drop the raw key
+        // before mass-assignment rather than relying on the fillable guard.
+        unset($data['clinic_account_id']);
+
+        $expense = FinanceExpense::create(array_merge($data, [
+            'gst_applicable'           => $gstApplicable,
+            'gst_rate'                 => $gstRate,
+            'gst_amount'               => $gstAmount,
+            'total_amount'             => (float) $data['amount'] + $gstAmount,
+            'payment_status'           => $paymentStatus,
             // payment_mode is optional for unpaid bills
-            'payment_mode'   => $paymentStatus === 'paid' ? ($data['payment_mode'] ?? 'cash') : null,
-            'status'         => 'approved',
-            'created_by'     => auth()->id(),
+            'payment_mode'             => $paymentMode,
+            'paid_clinic_account_id'   => $clinicAccount?->id,
+            'paid_clinic_account_name' => $clinicAccount?->account_name,
+            'status'                   => 'approved',
+            'created_by'               => auth()->id(),
         ]));
+
+        if ($paymentStatus === 'paid') {
+            $this->createVoucherForExpense($expense, [
+                'date'              => $data['expense_date'],
+                'amount'            => (float) $data['amount'] + $gstAmount,
+                'mode'              => $paymentMode,
+                'reference'         => $data['payment_reference'] ?? null,
+                'clinic_account_id' => $clinicAccount?->id,
+                'notes'             => $data['notes'] ?? null,
+            ]);
+        }
 
         $msg = $paymentStatus === 'unpaid'
             ? 'Bill recorded as unpaid/pending.'
-            : 'Expense recorded successfully.';
+            : 'Expense recorded successfully. Voucher generated.';
 
         return redirect()->route('finance.expenses')->with('success', $msg);
     }
 
     public function expenseEdit(FinanceExpense $expense)
     {
-        $categories = FinanceExpenseCategory::orderBy('name')->get();
-        $vendors    = FinanceVendor::where('is_active', true)->orderBy('vendor_name')->get(['id', 'vendor_name', 'company_name', 'vendor_type']);
-        return view('finance.expense-form', compact('expense', 'categories', 'vendors'));
+        $categories   = FinanceExpenseCategory::orderBy('name')->get();
+        $vendors      = FinanceVendor::where('is_active', true)->orderBy('vendor_name')->get(['id', 'vendor_name', 'company_name', 'vendor_type']);
+        $bankAccounts = FinanceBankAccount::where('is_active', true)->orderByDesc('is_primary')->orderBy('account_name')->get(['id', 'account_name', 'bank_name', 'account_type']);
+        return view('finance.expense-form', compact('expense', 'categories', 'vendors', 'bankAccounts'));
     }
 
     public function expenseUpdate(Request $request, FinanceExpense $expense)
     {
+        $wantsPaid = $request->input('payment_status', 'paid') === 'paid';
+
         $data = $request->validate([
             'title'             => 'required|string|max:200',
             'category_id'       => 'nullable|exists:finance_expense_categories,id',
@@ -733,6 +834,7 @@ class FinanceController extends Controller
             'gst_rate'          => 'nullable|numeric|min:0|max:28',
             'payment_mode'      => 'nullable|in:cash,upi,card,bank_transfer,cheque,emi,other',
             'payment_reference' => 'nullable|string|max:100',
+            'clinic_account_id' => $this->clinicAccountRule($wantsPaid),
             'description'       => 'nullable|string|max:1000',
             'notes'             => 'nullable|string|max:500',
             'is_recurring'      => 'nullable|boolean',
@@ -741,17 +843,39 @@ class FinanceController extends Controller
             'due_date'          => 'nullable|date',
         ]);
 
-        $gstApplicable = (bool) ($data['gst_applicable'] ?? false);
-        $gstRate       = $gstApplicable ? (float) ($data['gst_rate'] ?? 0) : 0;
-        $gstAmount     = round((float) $data['amount'] * $gstRate / 100, 2);
+        $paymentStatus  = $data['payment_status'] ?? 'paid';
+        $gstApplicable  = (bool) ($data['gst_applicable'] ?? false);
+        $gstRate        = $gstApplicable ? (float) ($data['gst_rate'] ?? 0) : 0;
+        $gstAmount      = round((float) $data['amount'] * $gstRate / 100, 2);
+        $paymentMode    = $paymentStatus === 'paid' ? ($data['payment_mode'] ?? 'cash') : null;
+        $clinicAccount  = $paymentStatus === 'paid' && !empty($data['clinic_account_id'])
+                            ? FinanceBankAccount::find($data['clinic_account_id']) : null;
+
+        unset($data['clinic_account_id']);
 
         $expense->update(array_merge($data, [
-            'gst_applicable' => $gstApplicable,
-            'gst_rate'       => $gstRate,
-            'gst_amount'     => $gstAmount,
-            'total_amount'   => (float) $data['amount'] + $gstAmount,
-            'updated_by'     => auth()->id(),
+            'gst_applicable'           => $gstApplicable,
+            'gst_rate'                 => $gstRate,
+            'gst_amount'               => $gstAmount,
+            'total_amount'             => (float) $data['amount'] + $gstAmount,
+            'payment_mode'             => $paymentMode,
+            'paid_clinic_account_id'   => $clinicAccount?->id ?? $expense->paid_clinic_account_id,
+            'paid_clinic_account_name' => $clinicAccount?->account_name ?? $expense->paid_clinic_account_name,
+            'updated_by'               => auth()->id(),
         ]));
+
+        // Editing an unpaid bill straight to "Paid" here (rather than via the
+        // dedicated Mark as Paid flow) still needs a voucher — same rule applies.
+        if ($paymentStatus === 'paid') {
+            $this->createVoucherForExpense($expense, [
+                'date'              => $data['expense_date'],
+                'amount'            => (float) $data['amount'] + $gstAmount,
+                'mode'              => $paymentMode,
+                'reference'         => $data['payment_reference'] ?? null,
+                'clinic_account_id' => $clinicAccount?->id ?? $expense->paid_clinic_account_id,
+                'notes'             => $data['notes'] ?? null,
+            ]);
+        }
 
         return redirect()->route('finance.expenses')->with('success', 'Expense updated.');
     }
@@ -808,29 +932,16 @@ class FinanceController extends Controller
                 'updated_by'              => auth()->id(),
             ]);
 
-            // ── 2. Auto-generate Payment Voucher ──────────────────────────
-            // Only create if one doesn't already exist for this expense.
-            if (! $expense->voucher()->exists()) {
-                \App\Models\Finance\FinanceVoucher::create([
-                    'voucher_number'     => \App\Models\Finance\FinanceVoucher::generateNumber(),
-                    'expense_id'         => $expense->id,
-                    'vendor_id'          => $expense->vendor_id,
-                    'vendor_name'        => $expense->vendor?->vendor_name
-                                             ?? $expense->vendor?->company_name,
-                    'voucher_date'       => $data['paid_at'],
-                    'amount'             => $data['paid_amount'],
-                    'payment_mode'       => $data['paid_mode'],
-                    'reference'          => $data['paid_reference'] ?? null,
-                    'clinic_account_id'  => $data['paid_clinic_account'],
-                    'clinic_account_name'=> $clinicAccountName,
-                    'cheque_number'      => $data['paid_cheque_number'] ?? null,
-                    'purpose'            => $expense->title,
-                    'notes'              => $data['notes'] ?? $expense->notes,
-                    'created_by'         => auth()->id(),
-                    'source_type'        => $expense->source_type,
-                    'source_id'          => $expense->source_id,
-                ]);
-            }
+            // ── 2. Auto-generate Payment Voucher (shared helper — never duplicates) ──
+            $this->createVoucherForExpense($expense, [
+                'date'              => $data['paid_at'],
+                'amount'            => $data['paid_amount'],
+                'mode'              => $data['paid_mode'],
+                'reference'         => $data['paid_reference'] ?? null,
+                'clinic_account_id' => $data['paid_clinic_account'],
+                'cheque_number'     => $data['paid_cheque_number'] ?? null,
+                'notes'             => $data['notes'] ?? $expense->notes,
+            ]);
 
             // ── 3. Sync Lab Bill status if this expense came from Lab Reconciliation ──
             if ($expense->source_type === \App\Models\LabMonthlyReconciliation::class) {
@@ -1133,8 +1244,72 @@ class FinanceController extends Controller
 
     public function banking(Request $request)
     {
-        $accounts = FinanceBankAccount::orderBy('bank_name')->get();
+        $accounts = FinanceBankAccount::orderByDesc('is_primary')->orderBy('bank_name')->get();
         return view('finance.banking', compact('accounts'));
+    }
+
+    private function bankAccountRules(): array
+    {
+        return [
+            'account_name'    => 'required|string|max:150',
+            'bank_name'       => 'required|string|max:150',
+            'account_number'  => 'required|string|max:30',
+            'ifsc_code'       => 'nullable|string|max:15',
+            'branch'          => 'nullable|string|max:150',
+            'account_type'    => 'required|in:current,savings,od,cc',
+            'opening_balance' => 'nullable|numeric|min:0',
+            'upi_id'          => 'nullable|string|max:100',
+            'notes'           => 'nullable|string|max:500',
+            'is_primary'      => 'nullable|boolean',
+        ];
+    }
+
+    public function bankAccountStore(Request $request)
+    {
+        $data = $request->validate($this->bankAccountRules());
+        $isPrimary = $request->boolean('is_primary');
+
+        DB::transaction(function () use ($data, $isPrimary) {
+            if ($isPrimary) {
+                FinanceBankAccount::where('is_primary', true)->update(['is_primary' => false]);
+            }
+            FinanceBankAccount::create(array_merge($data, [
+                'clinic_id'       => 1,
+                'opening_balance' => $data['opening_balance'] ?? 0,
+                'current_balance' => $data['opening_balance'] ?? 0,
+                'is_primary'      => $isPrimary,
+                'is_active'       => true,
+                'created_by'      => auth()->id(),
+            ]));
+        });
+
+        return back()->with('success', 'Bank account added.');
+    }
+
+    public function bankAccountUpdate(Request $request, FinanceBankAccount $bankAccount)
+    {
+        $data = $request->validate($this->bankAccountRules());
+        $isPrimary = $request->boolean('is_primary');
+
+        DB::transaction(function () use ($data, $isPrimary, $bankAccount) {
+            if ($isPrimary) {
+                FinanceBankAccount::where('is_primary', true)
+                    ->where('id', '!=', $bankAccount->id)
+                    ->update(['is_primary' => false]);
+            }
+            // opening_balance is a historical fact — don't let editing it silently
+            // shift current_balance; only the seed value changes.
+            unset($data['opening_balance']);
+            $bankAccount->update(array_merge($data, ['is_primary' => $isPrimary]));
+        });
+
+        return back()->with('success', 'Bank account updated.');
+    }
+
+    public function bankAccountToggle(FinanceBankAccount $bankAccount)
+    {
+        $bankAccount->update(['is_active' => ! $bankAccount->is_active]);
+        return back()->with('success', $bankAccount->is_active ? 'Account reactivated.' : 'Account deactivated.');
     }
 
     // ── CA Export ──────────────────────────────────────────────────────────
@@ -1182,7 +1357,9 @@ class FinanceController extends Controller
         $expenses = FinanceExpense::with(['category', 'vendor'])
             ->whereBetween('expense_date', [$from, $to])->orderBy('expense_date')->get();
         $vouchers = FinanceVoucher::with('vendor')
-            ->whereBetween('voucher_date', [$from, $to])->orderBy('voucher_date')->get();
+            ->whereBetween('voucher_date', [$from, $to])
+            ->active() // voided vouchers are excluded from the CA-facing export
+            ->orderBy('voucher_date')->get();
 
         if ($format === 'csv') {
             return $this->caExportCsv($from, $to, $income, $expenses, $vouchers);

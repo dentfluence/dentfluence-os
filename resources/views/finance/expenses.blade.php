@@ -132,6 +132,11 @@
                 <label class="text-xs text-gray-500 uppercase tracking-wider block mb-1">Search</label>
                 <input type="text" name="search" value="{{ $search }}" placeholder="Voucher no, vendor, purpose..." class="w-full border border-gray-300 text-sm px-3 py-1.5 focus:outline-none focus:border-[#6a0f70]">
             </div>
+            <label class="flex items-center gap-2 text-xs text-gray-500 pb-1.5">
+                <input type="checkbox" name="show_voided" value="1" {{ $showVoided ? 'checked' : '' }}
+                       onchange="this.form.submit()">
+                Show voided
+            </label>
             <button type="submit" class="bg-[#6a0f70] text-white text-sm px-4 py-1.5 hover:bg-[#380740] transition-colors">Filter</button>
             <a href="{{ route('finance.expenses', ['tab' => 'vouchers']) }}" class="text-sm text-gray-500 hover:text-[#6a0f70] py-1.5">Reset</a>
         </div>
@@ -172,8 +177,13 @@
             </thead>
             <tbody class="divide-y divide-gray-100">
                 @foreach($vouchers as $vchr)
-                <tr class="hover:bg-[#fdf8ff]">
-                    <td class="px-4 py-3 font-mono text-xs text-[#6a0f70] font-semibold whitespace-nowrap">{{ $vchr->voucher_number }}</td>
+                <tr class="hover:bg-[#fdf8ff] {{ $vchr->isVoided() ? 'opacity-50' : '' }}">
+                    <td class="px-4 py-3 font-mono text-xs text-[#6a0f70] font-semibold whitespace-nowrap {{ $vchr->isVoided() ? 'line-through' : '' }}">
+                        {{ $vchr->voucher_number }}
+                        @if($vchr->isVoided())
+                        <span class="ml-1 text-xs px-1.5 py-0.5 bg-red-50 text-red-600 border border-red-200 font-normal">VOIDED</span>
+                        @endif
+                    </td>
                     <td class="px-4 py-3 text-gray-600 whitespace-nowrap">{{ $vchr->voucher_date->format('d M Y') }}</td>
                     <td class="px-4 py-3 text-gray-700">{{ $vchr->vendor_name ?? ($vchr->vendor?->vendor_name ?? '&mdash;') }}</td>
                     <td class="px-4 py-3 text-gray-600">{{ Str::limit($vchr->purpose ?? '', 45) }}</td>
@@ -184,6 +194,13 @@
                         <a href="{{ route('finance.vouchers.show', $vchr) }}" class="text-xs text-[#6a0f70] hover:underline mr-2">View</a>
                         <a href="{{ route('finance.vouchers.print', $vchr) }}" target="_blank" class="text-xs border border-gray-300 text-gray-600 px-2 py-0.5 hover:border-[#6a0f70] hover:text-[#6a0f70] transition-colors mr-1">Print</a>
                         <a href="{{ route('finance.vouchers.print', $vchr) }}?pdf=1" target="_blank" class="text-xs border border-gray-300 text-gray-600 px-2 py-0.5 hover:border-[#6a0f70] hover:text-[#6a0f70] transition-colors">PDF</a>
+                        @if(!$vchr->isVoided() && auth()->user()?->isAdmin())
+                        <form method="POST" action="{{ route('finance.vouchers.destroy', $vchr) }}" class="inline" onsubmit="return promptVoidReason(this)">
+                            @csrf @method('DELETE')
+                            <input type="hidden" name="void_reason">
+                            <button type="submit" class="text-xs text-red-500 hover:underline ml-1">Void</button>
+                        </form>
+                        @endif
                     </td>
                 </tr>
                 @endforeach
@@ -462,6 +479,13 @@ function onMpModeChange() {
 }
 document.addEventListener('DOMContentLoaded', onMpModeChange);
 document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeMarkPaid(); });
+
+function promptVoidReason(form) {
+    const reason = prompt('Why is this voucher being voided? (required — this stays on the record)');
+    if (!reason || !reason.trim()) return false;
+    form.querySelector('input[name="void_reason"]').value = reason.trim();
+    return true;
+}
 </script>
 @endpush
 @endsection

@@ -166,9 +166,49 @@
                 </div>
                 <p x-show="catErr" x-text="catErr" class="text-xs text-red-600 mt-1"></p>
             </div>
-            <div>
-                <label class="block text-xs font-medium text-gray-600 uppercase tracking-wider mb-1">Vendor</label>
-                <select name="vendor_id" class="w-full border border-gray-300 text-sm px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+            <div x-data="{
+                    addingVendor: false, newVendorName: '', savingVendor: false, vendorErr: '',
+                    async saveVendor() {
+                        if (!this.newVendorName.trim()) return;
+                        this.savingVendor = true; this.vendorErr = '';
+                        try {
+                            const res = await fetch('{{ route('finance.vendors.quick-store') }}', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json',
+                                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                                },
+                                body: JSON.stringify({ vendor_name: this.newVendorName.trim() })
+                            });
+                            const json = await res.json();
+                            if (!res.ok) {
+                                this.vendorErr = json.errors?.vendor_name?.[0] || json.message || 'Could not add vendor.';
+                                return;
+                            }
+                            const opt = document.createElement('option');
+                            opt.value = json.id;
+                            opt.textContent = json.name;
+                            this.$refs.vendorSelect.appendChild(opt);
+                            this.$refs.vendorSelect.value = json.id;
+                            this.newVendorName = '';
+                            this.addingVendor = false;
+                        } catch (e) {
+                            this.vendorErr = 'Network error — try again.';
+                        } finally {
+                            this.savingVendor = false;
+                        }
+                    }
+                 }">
+                <div class="flex items-center justify-between mb-1">
+                    <label class="block text-xs font-medium text-gray-600 uppercase tracking-wider">Vendor</label>
+                    <button type="button" x-show="!addingVendor"
+                            @click="addingVendor = true; $nextTick(() => $refs.newVendorInput.focus())"
+                            class="text-xs text-[#6a0f70] hover:underline">+ Add</button>
+                </div>
+
+                <select name="vendor_id" x-ref="vendorSelect" x-show="!addingVendor"
+                        class="w-full border border-gray-300 text-sm px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
                     <option value="">— Select —</option>
                     @php
                         $staffVendors = $vendors->where('vendor_type', 'staff');
@@ -193,6 +233,23 @@
                     </optgroup>
                     @endif
                 </select>
+
+                <div x-show="addingVendor" class="flex gap-1">
+                    <input type="text" x-ref="newVendorInput" x-model="newVendorName"
+                           @keydown.enter.prevent="saveVendor()"
+                           @keydown.escape.prevent="addingVendor = false; newVendorName = ''; vendorErr = ''"
+                           placeholder="New vendor name"
+                           class="w-full border border-gray-300 text-sm px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                    <button type="button" @click="saveVendor()" :disabled="savingVendor || !newVendorName.trim()"
+                            class="shrink-0 bg-[#6a0f70] text-white text-sm px-3 py-2 rounded disabled:opacity-50">
+                        <span x-show="!savingVendor">Save</span>
+                        <span x-show="savingVendor">…</span>
+                    </button>
+                    <button type="button" @click="addingVendor = false; newVendorName = ''; vendorErr = ''"
+                            class="shrink-0 text-sm px-2 py-2 text-gray-500 hover:text-gray-700">Cancel</button>
+                </div>
+                <p x-show="vendorErr" x-text="vendorErr" class="text-xs text-red-600 mt-1"></p>
+                <p class="text-xs text-gray-400 mt-1">Quick-add sets basic details only — add GSTIN/bank info later from the Vendors tab.</p>
             </div>
         </div>
 
@@ -267,6 +324,27 @@
                 <input type="text" name="payment_reference" value="{{ old('payment_reference', $expense?->payment_reference) }}"
                        class="w-full border border-gray-300 text-sm px-3 py-2 focus:outline-none focus:border-[#6a0f70]"
                        placeholder="Optional">
+            </div>
+            <div class="col-span-2">
+                <label class="block text-xs font-medium text-gray-600 uppercase tracking-wider mb-1">
+                    Paid From Account
+                    @if($bankAccounts->isNotEmpty())<span class="text-red-500">*</span>@endif
+                </label>
+                @if($bankAccounts->isEmpty())
+                <p class="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-2">
+                    No bank accounts configured yet — the voucher for this expense will be created without a linked account.
+                    <a href="{{ route('finance.banking') }}" class="underline" target="_blank">Add one in Settings → Banking</a>.
+                </p>
+                @else
+                <select name="clinic_account_id" class="w-full border border-gray-300 text-sm px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                    <option value="">-- Select Account --</option>
+                    @foreach($bankAccounts as $acc)
+                        <option value="{{ $acc->id }}" {{ old('clinic_account_id', $expense?->paid_clinic_account_id) == $acc->id ? 'selected' : '' }}>
+                            {{ $acc->account_name }} ({{ $acc->bank_name }})
+                        </option>
+                    @endforeach
+                </select>
+                @endif
             </div>
         </div>
 

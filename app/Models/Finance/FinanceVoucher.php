@@ -8,7 +8,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * FinanceVoucher — permanent payment record generated when an expense is paid.
  *
- * Vouchers are never soft-deleted — they are financial audit documents.
+ * Vouchers are never edited or hard-deleted — they are financial audit documents.
+ * To correct a mistake, void it (with a reason, via VoucherController::destroy())
+ * and issue a fresh one — the original stays visible with status='voided'.
  * Auto-number format: VCH-YYYY-NNNN
  */
 class FinanceVoucher extends Model
@@ -35,11 +37,17 @@ class FinanceVoucher extends Model
         'approved_at',
         'source_type',
         'source_id',
+        // Void (never hard-deleted — see migration 2026_07_09_000002)
+        'status',
+        'void_reason',
+        'voided_at',
+        'voided_by',
     ];
 
     protected $casts = [
         'voucher_date' => 'date',
         'approved_at'  => 'datetime',
+        'voided_at'    => 'datetime',
         'amount'       => 'decimal:2',
     ];
 
@@ -68,6 +76,23 @@ class FinanceVoucher extends Model
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(\App\Models\User::class, 'approved_by');
+    }
+
+    public function voidedBy(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\User::class, 'voided_by');
+    }
+
+    // ── Void state ────────────────────────────────────────────────────────
+
+    public function isVoided(): bool
+    {
+        return $this->status === 'voided';
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('status', 'active');
     }
 
     // ── Auto-numbering ────────────────────────────────────────────────────

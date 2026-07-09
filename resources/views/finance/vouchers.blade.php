@@ -83,6 +83,11 @@
                 <input type="text" name="search" value="{{ $search }}" placeholder="Voucher no / vendor / ref…"
                        class="border border-gray-300 text-sm px-3 py-1.5 focus:outline-none focus:border-[#6a0f70] w-52">
             </div>
+            <label class="flex items-center gap-2 text-xs text-gray-500 pb-1.5">
+                <input type="checkbox" name="show_voided" value="1" {{ $showVoided ? 'checked' : '' }}
+                       onchange="this.form.submit()">
+                Show voided
+            </label>
             <button type="submit"
                     class="bg-[#6a0f70] text-white text-sm px-4 py-1.5 hover:bg-[#380740] transition-colors">
                 Filter
@@ -109,12 +114,15 @@
             </thead>
             <tbody class="divide-y divide-gray-100">
                 @forelse($vouchers as $v)
-                <tr class="hover:bg-[#fdf8ff] transition-colors">
+                <tr class="hover:bg-[#fdf8ff] transition-colors {{ $v->isVoided() ? 'opacity-50' : '' }}">
                     <td class="px-4 py-3">
                         <a href="{{ route('finance.vouchers.show', $v) }}"
-                           class="font-mono text-[#6a0f70] hover:underline font-medium">
+                           class="font-mono text-[#6a0f70] hover:underline font-medium {{ $v->isVoided() ? 'line-through' : '' }}">
                             {{ $v->voucher_number }}
                         </a>
+                        @if($v->isVoided())
+                        <span class="ml-1 text-xs px-1.5 py-0.5 bg-red-50 text-red-600 border border-red-200">VOIDED</span>
+                        @endif
                     </td>
                     <td class="px-4 py-3 text-gray-600">{{ $v->voucher_date->format('d M Y') }}</td>
                     <td class="px-4 py-3 text-gray-700">
@@ -138,6 +146,14 @@
                             <a href="{{ route('finance.vouchers.print', $v) }}"
                                target="_blank"
                                class="text-gray-500 hover:text-[#6a0f70] text-xs">Print</a>
+                            @if(!$v->isVoided() && auth()->user()?->isAdmin())
+                            <form method="POST" action="{{ route('finance.vouchers.destroy', $v) }}"
+                                  onsubmit="return promptVoidReason(this)">
+                                @csrf @method('DELETE')
+                                <input type="hidden" name="void_reason">
+                                <button type="submit" class="text-red-500 hover:underline text-xs">Void</button>
+                            </form>
+                            @endif
                         </div>
                     </td>
                 </tr>
@@ -156,4 +172,13 @@
     <div>{{ $vouchers->withQueryString()->links() }}</div>
 
 </div>
+
+<script>
+function promptVoidReason(form) {
+    const reason = prompt('Why is this voucher being voided? (required — this stays on the record)');
+    if (!reason || !reason.trim()) return false;
+    form.querySelector('input[name="void_reason"]').value = reason.trim();
+    return true;
+}
+</script>
 @endsection

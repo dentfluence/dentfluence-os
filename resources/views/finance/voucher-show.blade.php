@@ -12,8 +12,23 @@
         &nbsp;/&nbsp; {{ $voucher->voucher_number }}
     </p>
 
+    @if(session('success'))
+    <div class="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-2">{{ session('success') }}</div>
+    @endif
+
+    {{-- VOIDED BANNER --}}
+    @if($voucher->isVoided())
+    <div class="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
+        <p class="font-semibold">This voucher has been voided.</p>
+        <p class="mt-0.5">{{ $voucher->void_reason }}</p>
+        <p class="text-xs text-red-500 mt-1">
+            Voided by {{ $voucher->voidedBy?->name ?? '—' }} on {{ $voucher->voided_at?->format('d M Y, h:i A') }}
+        </p>
+    </div>
+    @endif
+
     {{-- VOUCHER CARD --}}
-    <div class="bg-white border border-[#e8d5f0] shadow-sm">
+    <div class="bg-white border border-[#e8d5f0] shadow-sm {{ $voucher->isVoided() ? 'opacity-60' : '' }}">
 
         {{-- Header band --}}
         <div class="bg-[#6a0f70] text-white px-6 py-4 flex items-center justify-between">
@@ -149,8 +164,28 @@
                class="inline-flex items-center gap-2 border border-gray-300 text-gray-600 text-sm px-4 py-2 hover:border-[#6a0f70] hover:text-[#6a0f70] transition-colors">
                 ← Voucher Register
             </a>
+            @if(!$voucher->isVoided() && auth()->user()?->isAdmin())
+            <form method="POST" action="{{ route('finance.vouchers.destroy', $voucher) }}"
+                  onsubmit="return promptVoidReason(this)" class="ml-auto">
+                @csrf @method('DELETE')
+                <input type="hidden" name="void_reason">
+                <button type="submit"
+                        class="inline-flex items-center gap-2 border border-red-300 text-red-600 text-sm px-4 py-2 hover:bg-red-50 transition-colors">
+                    Void Voucher
+                </button>
+            </form>
+            @endif
         </div>
     </div>
 
 </div>
+
+<script>
+function promptVoidReason(form) {
+    const reason = prompt('Why is this voucher being voided? (required — this stays on the record)');
+    if (!reason || !reason.trim()) return false;
+    form.querySelector('input[name="void_reason"]').value = reason.trim();
+    return true;
+}
+</script>
 @endsection

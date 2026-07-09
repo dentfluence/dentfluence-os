@@ -742,6 +742,9 @@ Route::middleware('auth')->group(function () {
         // Expense Categories — inline quick-add from the Expense form
         Route::post('/expense-categories', [FinanceController::class, 'categoryStore'])->name('expense-categories.store');
 
+        // Vendor — inline quick-add from the Expense form
+        Route::post('/vendors/quick-store', [FinanceController::class, 'vendorQuickStore'])->name('vendors.quick-store');
+
         // Vendors
         Route::get('/vendors',              [FinanceController::class, 'vendors'])->name('vendors');
         Route::get('/vendors/create',       [FinanceController::class, 'vendorCreate'])->name('vendors.create');
@@ -758,6 +761,9 @@ Route::middleware('auth')->group(function () {
         // Cashbook & Banking
         Route::get('/cashbook',             [FinanceController::class, 'cashbook'])->name('cashbook');
         Route::get('/banking',              [FinanceController::class, 'banking'])->name('banking');
+        Route::post('/banking',             [FinanceController::class, 'bankAccountStore'])->name('banking.store');
+        Route::put('/banking/{bankAccount}', [FinanceController::class, 'bankAccountUpdate'])->name('banking.update');
+        Route::post('/banking/{bankAccount}/toggle', [FinanceController::class, 'bankAccountToggle'])->name('banking.toggle');
 
         // CA Export
         Route::get('/ca-export',            [FinanceController::class, 'caExport'])->name('ca-export');
@@ -776,6 +782,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/export',           [\App\Http\Controllers\Finance\VoucherController::class, 'export'])->name('export');
             Route::get('/{voucher}',        [\App\Http\Controllers\Finance\VoucherController::class, 'show'])->name('show');
             Route::get('/{voucher}/print',  [\App\Http\Controllers\Finance\VoucherController::class, 'printView'])->name('print');
+            Route::delete('/{voucher}',     [\App\Http\Controllers\Finance\VoucherController::class, 'destroy'])->name('destroy');
         });
 
         // Wallet (global views)

@@ -21,6 +21,28 @@
             max-width: 680px;
             margin: 0 auto;
             border: 2px solid #6a0f70;
+            position: relative;
+        }
+        .voided-stamp {
+            position: absolute;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-25deg);
+            font-size: 64px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            color: rgba(200, 30, 30, 0.25);
+            border: 6px solid rgba(200, 30, 30, 0.25);
+            padding: 8px 24px;
+            pointer-events: none;
+            z-index: 5;
+        }
+        .voided-banner {
+            background: #fee2e2;
+            color: #b91c1c;
+            padding: 10px 24px;
+            font-size: 12px;
+            border-bottom: 2px solid #6a0f70;
         }
         .header {
             background: #6a0f70;
@@ -126,6 +148,13 @@
 </div>
 
 <div class="voucher">
+    @if($voucher->isVoided())
+    <div class="voided-stamp">VOIDED</div>
+    <div class="voided-banner">
+        <strong>VOIDED</strong> — {{ $voucher->void_reason }}
+        (by {{ $voucher->voidedBy?->name ?? '—' }} on {{ $voucher->voided_at?->format('d M Y') }})
+    </div>
+    @endif
 
     {{-- Header --}}
     <div class="header">

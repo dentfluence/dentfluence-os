@@ -30,16 +30,21 @@ class VoucherController extends Controller
 
     public function index(Request $request)
     {
-        $from     = $request->filled('from') ? $request->from : today()->startOfMonth()->toDateString();
-        $to       = $request->filled('to')   ? $request->to   : today()->toDateString();
-        $search   = $request->input('search');
-        $vendorId = $request->input('vendor_id');
-        $mode     = $request->input('payment_mode');
+        $from        = $request->filled('from') ? $request->from : today()->startOfMonth()->toDateString();
+        $to          = $request->filled('to')   ? $request->to   : today()->toDateString();
+        $search      = $request->input('search');
+        $vendorId    = $request->input('vendor_id');
+        $mode        = $request->input('payment_mode');
+        $showVoided  = $request->boolean('show_voided');
 
-        $query = FinanceVoucher::with(['expense.category', 'vendor', 'createdBy'])
+        $query = FinanceVoucher::with(['expense.category', 'vendor', 'createdBy', 'voidedBy'])
             ->whereBetween('voucher_date', [$from, $to])
             ->orderByDesc('voucher_date')
             ->orderByDesc('id');
+
+        if (! $showVoided) {
+            $query->active();
+        }
 
         if ($search) {
             $query->where(fn($q) => $q
@@ -54,8 +59,9 @@ class VoucherController extends Controller
 
         $vouchers = $query->paginate(25)->withQueryString();
 
-        // Summary strip
+        // Summary strip — active vouchers only, voided ones don't count as paid out
         $summary = FinanceVoucher::whereBetween('voucher_date', [$from, $to])
+            ->active()
             ->selectRaw('SUM(amount) as total, COUNT(*) as cnt')
             ->first();
 
@@ -64,7 +70,7 @@ class VoucherController extends Controller
 
         return view('finance.vouchers', compact(
             'vouchers', 'summary', 'vendors', 'modes',
-            'from', 'to', 'search', 'vendorId', 'mode'
+            'from', 'to', 'search', 'vendorId', 'mode', 'showVoided'
         ));
     }
 
@@ -95,6 +101,7 @@ class VoucherController extends Controller
 
         $query = FinanceVoucher::with(['expense.category', 'vendor', 'createdBy'])
             ->whereBetween('voucher_date', [$from, $to])
+            ->active() // voided vouchers are excluded from the CA-facing export
             ->orderByDesc('voucher_date');
 
         if ($vendorId) { $query->where('vendor_id', $vendorId); }
@@ -166,5 +173,37 @@ class VoucherController extends Controller
     {
         // Redirect to print view — browser handles PDF via window.print()
         return redirect()->route('finance.vouchers.print', $voucher);
+    }
+
+    // ── VOID (admin only — never a hard delete) ────────────────────────────
+
+    /**
+     * Void a voucher. The row is never deleted — it's marked status='voided'
+     * with a required reason, so it stays visible in the register (struck
+     * through) and the CA export. To correct the underlying payment, void this
+     * one and record a fresh expense/payment, which generates a new voucher.
+     */
+    public function destroy(Request $request, FinanceVoucher $voucher)
+    {
+        if (! auth()->user()?->isAdmin()) {
+            abort(403, 'Only an admin can void a voucher.');
+        }
+
+        if ($voucher->isVoided()) {
+            return back()->with('success', 'Voucher is already voided.');
+        }
+
+        $data = $request->validate([
+            'void_reason' => 'required|string|max:500',
+        ]);
+
+        $voucher->update([
+            'status'      => 'voided',
+            'void_reason' => $data['void_reason'],
+            'voided_at'   => now(),
+            'voided_by'   => auth()->id(),
+        ]);
+
+        return back()->with('success', "Voucher {$voucher->voucher_number} voided.");
     }
 }
