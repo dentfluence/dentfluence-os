@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Marketing\Concerns\ResolvesClinicId;
 use App\Models\Marketing\MarketingPost;
 use App\Models\Marketing\PostSchedule;
 use App\Models\Marketing\Campaign;
@@ -14,14 +15,14 @@ use Carbon\Carbon;
 
 class CalendarController extends Controller
 {
-    private const CLINIC_ID = 1;
+    use ResolvesClinicId;
 
     // -------------------------------------------------------------------------
     // Index — calendar view for a given month
     // -------------------------------------------------------------------------
     public function index(Request $request): View
     {
-        $clinicId = self::CLINIC_ID;
+        $clinicId = $this->currentClinicId();
         $month    = (int) $request->get('month', now()->month);
         $year     = (int) $request->get('year',  now()->year);
 
@@ -117,7 +118,7 @@ class CalendarController extends Controller
     // -------------------------------------------------------------------------
     public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $clinicId = self::CLINIC_ID;
+        $clinicId = $this->currentClinicId();
         $month    = (int) $request->get('month', now()->month);
         $year     = (int) $request->get('year',  now()->year);
 

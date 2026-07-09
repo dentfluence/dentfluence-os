@@ -197,6 +197,7 @@
                 @endif
             </button>
             <button @click="activeTab='communication'"
+                    dusk="rp-tab-communication"
                     :class="activeTab==='communication' ? 'active' : ''"
                     class="rp-tab-btn">
                 Communication
@@ -419,78 +420,274 @@
 </div>
 
 {{-- ── TAB: COMMUNICATION ──────────────────────────────────────────────── --}}
-<div x-show="activeTab==='communication'" x-cloak>
+<div x-show="activeTab==='communication'" x-cloak
+    @if($patient)
+    x-data="{
+        comms: [],
+        loading: false,
+        loaded: false,
+        showForm: false,
+        form: { type: 'call', direction: 'outgoing', status: 'sent', subject: '', message: '', scheduled_at: '', sent_at: '' },
+        saving: false,
+        filterType: 'all',
+
+        init() {
+            this.$watch('activeTab', val => { if (val === 'communication' && !this.loaded) this.fetchComms(); });
+        },
+        fetchComms() {
+            this.loading = true;
+            fetch('{{ route('patients.communications.index', $patient) }}', { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(r => r.json())
+                .then(data => { this.comms = data; this.loaded = true; })
+                .catch(() => {})
+                .finally(() => this.loading = false);
+        },
+        get filteredComms() {
+            return this.filterType === 'all' ? this.comms : this.comms.filter(c => c.type === this.filterType);
+        },
+        saveComm() {
+            this.saving = true;
+            fetch('{{ route('patients.communications.store', $patient) }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
+                body: JSON.stringify(this.form)
+            })
+            .then(r => r.json())
+            .then(comm => {
+                this.comms.unshift(comm);
+                this.showForm = false;
+                this.form = { type: 'call', direction: 'outgoing', status: 'sent', subject: '', message: '', scheduled_at: '', sent_at: '' };
+            })
+            .catch(() => alert('Could not save. Please try again.'))
+            .finally(() => this.saving = false);
+        },
+        deleteComm(id) {
+            if (!confirm('Delete this communication record?')) return;
+            fetch(`{{ url('patients/' . $patient->id . '/communications') }}/${id}`, {
+                method: 'DELETE',
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content }
+            }).then(() => { this.comms = this.comms.filter(c => c.id !== id); });
+        },
+        formatDate(iso) {
+            if (!iso) return '—';
+            return new Date(iso).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+        },
+    }"
+    @endif
+>
     <div style="max-width:860px;">
 
-        {{-- Quick log call button --}}
-        <div style="margin-bottom:20px;display:flex;gap:10px;align-items:center;">
-            @if($patient)
-                <a href="{{ route('patients.show', $patient) }}#communication"
-                   style="padding:8px 16px;font-size:12px;font-weight:500;background:#6a0f70;color:#fff;border-radius:3px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.8 3.4 2 2 0 0 1 3.78 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                    Log Call
-                </a>
-            @endif
+        @if($patient)
+        {{-- Log Communication --}}
+        <div style="margin-bottom:16px;display:flex;gap:10px;align-items:center;">
+            <button @click="showForm = !showForm" type="button" dusk="comm-add"
+                style="padding:8px 16px;font-size:12px;font-weight:500;background:#6a0f70;color:#fff;border-radius:3px;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Log Communication
+            </button>
         </div>
 
-        {{-- Recent patient_communications --}}
-        @if($recentComms->count() > 0)
-            <div class="section-title">Recent Communications</div>
-            @foreach($recentComms as $comm)
+        {{-- Add form --}}
+        <div x-show="showForm" x-transition style="background:#fff;border:1px solid rgba(106,15,112,0.15);border-radius:6px;padding:18px;margin-bottom:18px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px;">
+                <div>
+                    <label style="display:block;font-size:11px;color:#9a7aaa;margin-bottom:4px;">Channel</label>
+                    <select x-model="form.type" style="width:100%;font-size:13px;border:1px solid #e5d8ea;padding:6px 8px;border-radius:3px;">
+                        <option value="call">Call</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="email">Email</option>
+                        <option value="sms">SMS</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display:block;font-size:11px;color:#9a7aaa;margin-bottom:4px;">Direction</label>
+                    <select x-model="form.direction" style="width:100%;font-size:13px;border:1px solid #e5d8ea;padding:6px 8px;border-radius:3px;">
+                        <option value="outgoing">Outgoing</option>
+                        <option value="incoming">Incoming</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display:block;font-size:11px;color:#9a7aaa;margin-bottom:4px;">Status</label>
+                    <select x-model="form.status" style="width:100%;font-size:13px;border:1px solid #e5d8ea;padding:6px 8px;border-radius:3px;">
+                        <option value="sent">Sent / Done</option>
+                        <option value="received">Received</option>
+                        <option value="scheduled">Scheduled (future)</option>
+                        <option value="failed">Failed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display:block;font-size:11px;color:#9a7aaa;margin-bottom:4px;" x-text="form.status === 'scheduled' ? 'Scheduled At' : 'Date / Time'"></label>
+                    <input x-model="form.status === 'scheduled' ? form.scheduled_at : form.sent_at" type="datetime-local"
+                        style="width:100%;font-size:13px;border:1px solid #e5d8ea;padding:6px 8px;border-radius:3px;">
+                </div>
+            </div>
+            <div x-show="form.type === 'email'" style="margin-bottom:12px;">
+                <label style="display:block;font-size:11px;color:#9a7aaa;margin-bottom:4px;">Subject</label>
+                <input type="text" x-model="form.subject" placeholder="Email subject…"
+                    style="width:100%;font-size:13px;border:1px solid #e5d8ea;padding:6px 10px;border-radius:3px;">
+            </div>
+            <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:11px;color:#9a7aaa;margin-bottom:4px;">Message / Notes</label>
+                <textarea x-model="form.message" rows="3" dusk="comm-message" placeholder="Conversation summary, message content, or notes…"
+                    style="width:100%;font-size:13px;border:1px solid #e5d8ea;padding:6px 10px;border-radius:3px;resize:vertical;"></textarea>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;">
+                <button @click="showForm = false" type="button"
+                    style="padding:7px 14px;font-size:12px;border:1px solid #e5d8ea;color:#7a6884;background:#fff;border-radius:3px;cursor:pointer;">
+                    Cancel
+                </button>
+                <button @click="saveComm()" :disabled="saving" type="button" dusk="comm-save"
+                    style="padding:7px 16px;font-size:12px;font-weight:600;background:#6a0f70;color:#fff;border:none;border-radius:3px;cursor:pointer;">
+                    <span x-text="saving ? 'Saving…' : 'Save'"></span>
+                </button>
+            </div>
+        </div>
+
+        {{-- Filters --}}
+        <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+            @foreach(['all'=>'All','call'=>'Calls','whatsapp'=>'WhatsApp','email'=>'Email','sms'=>'SMS'] as $val => $lbl)
+            <button @click="filterType='{{ $val }}'" type="button"
+                :style="filterType==='{{ $val }}' ? 'background:#6a0f70;color:#fff;border-color:#6a0f70;' : 'background:#fff;color:#7a6884;border-color:#e5d8ea;'"
+                style="padding:4px 12px;font-size:11px;font-weight:500;border-width:1px;border-style:solid;border-radius:99px;cursor:pointer;">
+                {{ $lbl }}
+            </button>
+            @endforeach
+        </div>
+
+        {{-- Loading --}}
+        <div x-show="loading" style="text-align:center;padding:30px 0;color:#9a7aaa;font-size:13px;">Loading…</div>
+
+        {{-- Empty --}}
+        <div x-show="!loading && filteredComms.length === 0" style="text-align:center;padding:40px 20px;color:#9a7aaa;">
+            <p style="font-size:14px;margin:0;">No communications logged yet.</p>
+        </div>
+
+        {{-- List (merges patient_communications + Communication List entries) --}}
+        <template x-for="comm in filteredComms" :key="comm.id">
             <div class="tl-entry">
-                <div class="tl-icon type-{{ $comm->type ?? 'call' }}" style="width:30px;height:30px;">
+                <div class="tl-icon" :class="'type-' + (comm.type === 'call' ? 'call' : (comm.type === 'whatsapp' ? 'whatsapp' : 'communication'))" style="width:30px;height:30px;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.8 3.4 2 2 0 0 1 3.78 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                 </div>
-                <div style="flex:1;">
+                <div style="flex:1;min-width:0;">
                     <p style="margin:0 0 2px;font-size:13px;font-weight:500;color:#1a0a24;">
-                        {{ ucfirst($comm->type ?? 'Communication') }}
-                        <span style="font-size:11px;font-weight:400;color:#9a7aaa;">· {{ $comm->direction ?? '' }}</span>
+                        <span x-text="comm.type ? comm.type.charAt(0).toUpperCase() + comm.type.slice(1) : 'Communication'"></span>
+                        <span style="font-size:11px;font-weight:400;color:#9a7aaa;" x-text="'· ' + (comm.direction === 'outgoing' ? 'Outgoing' : 'Incoming')"></span>
+                        <span x-show="comm.is_auto" style="font-size:10px;background:#eef2ff;color:#4f46e5;padding:1px 6px;border-radius:99px;margin-left:4px;">Auto</span>
                     </p>
-                    @if(!empty($comm->message))
-                        <p style="margin:0 0 4px;font-size:12px;color:#7a6884;">{{ Str::limit($comm->message, 100) }}</p>
-                    @endif
+                    <p x-show="comm.subject" x-text="comm.subject" style="margin:0 0 2px;font-size:12px;color:#7a6884;font-weight:500;"></p>
+                    <p x-show="comm.message" x-text="comm.message" style="margin:0 0 4px;font-size:12px;color:#7a6884;"></p>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                        @if(!empty($comm->staff_name))
-                            <span style="font-size:11px;color:#9a7aaa;">{{ $comm->staff_name }}</span>
-                        @endif
-                        <span style="font-size:11px;background:#f0e6f2;color:#6a0f70;padding:1px 6px;border-radius:99px;">
-                            {{ ucfirst($comm->status ?? '') }}
-                        </span>
-                        <span style="font-size:11px;color:#b0a4bc;">
-                            {{ \Carbon\Carbon::parse($comm->sent_at ?? $comm->created_at)->format('d M Y H:i') }}
-                        </span>
+                        <span style="font-size:11px;background:#f0e6f2;color:#6a0f70;padding:1px 6px;border-radius:99px;" x-text="comm.status ? (comm.status.charAt(0).toUpperCase() + comm.status.slice(1)) : ''"></span>
+                        <span x-show="comm.staff_name" style="font-size:11px;color:#9a7aaa;" x-text="comm.staff_name"></span>
+                        <span style="font-size:11px;color:#b0a4bc;" x-text="formatDate(comm.sent_at || comm.scheduled_at)"></span>
                     </div>
                 </div>
+                <button x-show="!comm.is_auto" @click="deleteComm(comm.id)" type="button"
+                    style="border:none;background:none;color:#d4c8dc;cursor:pointer;font-size:13px;flex-shrink:0;" title="Delete">✕</button>
             </div>
-            @endforeach
+        </template>
         @endif
 
-        {{-- WhatsApp messages --}}
-        @if($waMessages->count() > 0)
-            <div class="section-title" style="margin-top:24px;">WhatsApp Messages</div>
-            @foreach($waMessages as $wa)
-            <div class="tl-entry">
-                <div class="tl-icon type-whatsapp" style="width:30px;height:30px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                </div>
-                <div style="flex:1;">
-                    <p style="margin:0 0 2px;font-size:12px;font-weight:500;color:#1a0a24;">
-                        {{ Str::limit($wa->body ?? $wa->content ?? '', 100) }}
-                    </p>
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <span style="font-size:11px;background:#e8f7ef;color:#128c3d;padding:1px 6px;border-radius:99px;">
-                            {{ ucfirst($wa->direction ?? '') }}
-                        </span>
-                        <span style="font-size:11px;color:#b0a4bc;">
-                            {{ \Carbon\Carbon::parse($wa->created_at)->format('d M Y H:i') }}
-                        </span>
+        {{-- WhatsApp — inline chat, reuses the same send/consent logic as the standalone inbox --}}
+        @if($waThread)
+            <div class="section-title" style="margin-top:24px;display:flex;align-items:center;gap:8px;">
+                WhatsApp
+                @if($waThread->isWindowOpen())
+                    <span style="font-size:10px;font-weight:600;background:#DCFCE7;color:#166534;border:1px solid #BBF7D0;padding:1px 7px;border-radius:99px;">Window open</span>
+                @else
+                    <span style="font-size:10px;font-weight:600;background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:1px 7px;border-radius:99px;">Window closed</span>
+                @endif
+            </div>
+
+            @if(session('success'))
+                <div style="background:#DCFCE7;border:1px solid #BBF7D0;color:#166534;padding:8px 12px;border-radius:6px;font-size:12px;margin:8px 0;">{{ session('success') }}</div>
+            @endif
+            @if(session('error'))
+                <div style="background:#FEE2E2;border:1px solid #FECACA;color:#991B1B;padding:8px 12px;border-radius:6px;font-size:12px;margin:8px 0;">{{ session('error') }}</div>
+            @endif
+
+            <div style="background:#F0F2F5;border:1px solid #e5e7eb;border-radius:8px;padding:14px;max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:7px;">
+                @forelse($waMessages as $m)
+                    @php $out = $m->isOutbound(); @endphp
+                    <div style="display:flex;{{ $out ? 'justify-content:flex-end;' : 'justify-content:flex-start;' }}">
+                        <div style="max-width:75%;background:{{ $out ? '#DCF8C6' : '#fff' }};border:1px solid {{ $out ? '#bce5a0' : '#e5e7eb' }};border-radius:8px;padding:7px 10px;">
+                            <div style="font-size:13px;color:#1a0a24;white-space:pre-wrap;word-break:break-word;">{{ $m->body }}</div>
+                            <div style="font-size:10px;color:#9ca3af;text-align:right;margin-top:2px;">
+                                {{ optional($m->created_at)->format('d M, h:i A') }}
+                                @if($out && $m->status === 'failed')
+                                    <span style="color:#dc2626;"> · failed</span>
+                                @elseif($out && $m->status === 'dry_run')
+                                    <span style="color:#92400E;"> · dry-run</span>
+                                @endif
+                            </div>
+                        </div>
                     </div>
-                </div>
+                @empty
+                    <div style="text-align:center;color:#9ca3af;font-size:12px;margin:auto;">No WhatsApp messages yet.</div>
+                @endforelse
             </div>
-            @endforeach
+
+            <div style="margin-top:10px;">
+                @if($waGate['allowed'] ?? false)
+                    <form method="POST" action="{{ route('communication.whatsapp.reply', $waThread) }}" style="display:flex;gap:8px;align-items:flex-end;">
+                        @csrf
+                        <textarea name="body" rows="2" required maxlength="4000" placeholder="Type a reply…"
+                                  style="flex:1;resize:vertical;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;">{{ old('body') }}</textarea>
+                        <button type="submit" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;">Send</button>
+                    </form>
+                    @error('body')
+                        <div style="color:#dc2626;font-size:11px;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                    @if(config('whatsapp.dry_run'))
+                        <p style="font-size:10px;color:#92400E;margin:4px 2px 0;">Dry-run is on — message is recorded but not actually delivered.</p>
+                    @endif
+                @else
+                    <div style="background:#FEF3C7;border:1px solid #FDE68A;color:#92400E;padding:8px 12px;border-radius:6px;font-size:12px;">
+                        Reply blocked — {{ $waGate['reason'] ?? 'not currently allowed.' }}
+                    </div>
+                @endif
+            </div>
+
+            @if(($waTemplateGate['allowed'] ?? false) && !empty($waTemplates))
+                @php
+                    $tplForJs = collect($waTemplates)->map(fn ($t, $k) => [
+                        'key' => $k, 'label' => $t['label'] ?? $k, 'vars' => $t['body_vars'] ?? [], 'sample' => $t['sample'] ?? '',
+                    ])->values();
+                @endphp
+                <details style="margin-top:10px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:0 12px;">
+                    <summary style="cursor:pointer;padding:10px 0;font-size:12px;font-weight:600;color:#374151;">Send an approved template (works outside the 24h window)</summary>
+                    <form method="POST" action="{{ route('communication.whatsapp.template', $waThread) }}"
+                          x-data="{ templates: {{ \Illuminate\Support\Js::from($tplForJs) }}, selected: '', get current(){ return this.templates.find(t => t.key === this.selected) } }"
+                          style="padding-bottom:12px;">
+                        @csrf
+                        <input type="hidden" name="template" :value="selected">
+                        <select x-model="selected" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;margin-bottom:8px;">
+                            <option value="">— choose a template —</option>
+                            <template x-for="t in templates" :key="t.key">
+                                <option :value="t.key" x-text="t.label"></option>
+                            </template>
+                        </select>
+                        <template x-if="current">
+                            <div>
+                                <template x-for="v in current.vars" :key="v">
+                                    <div style="margin-bottom:6px;">
+                                        <label style="display:block;font-size:11px;color:#6b7280;margin-bottom:2px;text-transform:capitalize;" x-text="v"></label>
+                                        <input type="text" :name="'vars[' + v + ']'" required maxlength="500"
+                                               style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:7px 10px;font-size:13px;">
+                                    </div>
+                                </template>
+                                <button type="submit" style="background:#0F6E56;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">Send template</button>
+                            </div>
+                        </template>
+                    </form>
+                </details>
+            @endif
+
+            <a href="{{ route('communication.whatsapp.show', $waThread) }}" style="display:inline-block;margin-top:10px;font-size:11px;color:#6a0f70;text-decoration:none;">Open in full inbox →</a>
         @endif
 
-        @if($recentComms->isEmpty() && $waMessages->isEmpty())
+        @if($recentComms->isEmpty() && !$waThread)
             @if($lead && $lead->activities && $lead->activities->count() > 0)
                 <div class="section-title">Lead Activities (pre-conversion)</div>
                 @foreach($lead->activities as $la)

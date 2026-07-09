@@ -2,13 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\GenerateWatermark;
 use App\Models\ClinicalFile;
 use App\Models\Patient;
+use App\Services\ClinicalLibrary\ClinicalFileUploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 /**
@@ -82,6 +81,7 @@ class ClinicalFileController extends Controller
             'visit_id'                => ['nullable', 'integer', 'exists:treatment_visits,id'],
             'treatment_plan_item_id'  => ['nullable', 'integer', 'exists:treatment_plan_items,id'],
             'procedure'               => ['nullable', 'string', 'max:255'],
+            'treatment_category'      => ['nullable', Rule::in(array_keys(ClinicalFile::TREATMENT_CATEGORIES))],
             'tooth_number'            => ['nullable', 'string', 'max:50'],
             'stage'                   => ['nullable', Rule::in(ClinicalFile::STAGES)],
             'file_type'               => ['nullable', Rule::in(ClinicalFile::FILE_TYPES)],
@@ -101,30 +101,21 @@ class ClinicalFileController extends Controller
 
         $uploadedFile = $request->file('file');
 
-        // Auto-detect file type from MIME if not provided
-        $fileType = $request->input('file_type') ?? $this->detectFileType($uploadedFile);
-
-        // Store relative to disk root — NEVER store absolute Windows paths
-        $relativePath = $uploadedFile->store(
-            "patients/{$patient->id}/clinical-files",
-            'public'
-        );
-
-        $record = ClinicalFile::create([
+        // Storage, record creation, and watermark dispatch all live in
+        // ClinicalFileUploadService — shared with ConsultationController and any
+        // future upload path, so there is exactly one place that decides how a
+        // clinical file gets saved.
+        $record = app(ClinicalFileUploadService::class)->store($uploadedFile, [
             'patient_id'               => $patient->id,
             'visit_id'                 => $request->visit_id,
             'treatment_plan_item_id'   => $request->treatment_plan_item_id,
             'procedure'                => $request->procedure,
+            'treatment_category'       => $request->treatment_category, // null => auto-detected from procedure
             'tooth_number'             => $request->tooth_number,
             'stage'                    => $request->input('stage', 'general'),
-            'file_type'                => $fileType,
+            'file_type'                => $request->input('file_type'), // null => auto-detect from MIME
             'title'                    => $request->title,
             'notes'                    => $request->notes,
-            'disk'                     => 'public',
-            'path'                     => $relativePath,
-            'original_filename'        => $uploadedFile->getClientOriginalName(),
-            'mime_type'                => $uploadedFile->getMimeType(),
-            'file_size'                => $uploadedFile->getSize(),
             'captured_at'              => $request->captured_at ?? now(),
             'uploaded_by'              => Auth::id(),
             'tags'                     => $request->tags ?? [],
@@ -135,17 +126,9 @@ class ClinicalFileController extends Controller
             'is_case_library_eligible' => $request->boolean('is_case_library_eligible'),
             'consent_status'           => $request->input('consent_status', 'not_given'),
             'protocol_step_id'         => $request->protocol_step_id,
-            'sync_status'              => 'local_only',
         ]);
 
         $record->load(['visit.doctor', 'uploadedBy']);
-
-        // Phase 10 — dispatch watermark generation in the background.
-        // Only image types are watermarkable; non-images are silently skipped by the job.
-        // Original path ($record->path) is NEVER modified by the job.
-        if ($record->isImage()) {
-            GenerateWatermark::dispatch($record);
-        }
 
         return response()->json([
             'success' => true,
@@ -188,6 +171,7 @@ class ClinicalFileController extends Controller
         $request->validate([
             'visit_id'                 => ['nullable', 'integer', 'exists:treatment_visits,id'],
             'procedure'                => ['nullable', 'string', 'max:255'],
+            'treatment_category'       => ['nullable', Rule::in(array_keys(ClinicalFile::TREATMENT_CATEGORIES))],
             'tooth_number'             => ['nullable', 'string', 'max:50'],
             'stage'                    => ['nullable', Rule::in(ClinicalFile::STAGES)],
             'file_type'                => ['nullable', Rule::in(ClinicalFile::FILE_TYPES)],
@@ -207,7 +191,7 @@ class ClinicalFileController extends Controller
         ]);
 
         $file->update($request->only([
-            'visit_id', 'procedure', 'tooth_number', 'stage', 'file_type',
+            'visit_id', 'procedure', 'treatment_category', 'tooth_number', 'stage', 'file_type',
             'title', 'notes', 'captured_at', 'tags',
             'is_marketing_eligible', 'is_education_eligible',
             'is_teaching_eligible', 'is_research_eligible', 'is_case_library_eligible',
@@ -240,21 +224,8 @@ class ClinicalFileController extends Controller
     }
 
     // ── Private helpers ────────────────────────────────────────────────────────
-
-    /**
-     * Auto-detect file_type from MIME type when not explicitly provided.
-     */
-    private function detectFileType(\Illuminate\Http\UploadedFile $file): string
-    {
-        $mime = $file->getMimeType();
-
-        if (str_starts_with($mime, 'image/'))        return 'photo';
-        if (str_starts_with($mime, 'video/'))        return 'video';
-        if ($mime === 'application/pdf')              return 'pdf';
-        if ($mime === 'model/stl' || str_ends_with($file->getClientOriginalName(), '.stl')) return 'stl';
-
-        return 'other';
-    }
+    // (file-type auto-detection now lives in ClinicalFileUploadService, shared
+    // with every other upload path)
 
     /**
      * Serialize a ClinicalFile to array for JSON responses.
@@ -266,7 +237,9 @@ class ClinicalFileController extends Controller
             'id'               => $file->id,
             'patient_id'       => $file->patient_id,
             'visit_id'         => $file->visit_id,
-            'procedure'        => $file->procedure,
+            'procedure'                => $file->procedure,
+            'treatment_category'       => $file->treatment_category,
+            'treatment_category_label' => $file->treatment_category_label,
             'tooth_number'     => $file->tooth_number,
             'stage'            => $file->stage,
             'stage_label'      => $file->stage_label,

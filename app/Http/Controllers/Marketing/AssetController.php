@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Marketing\Concerns\ResolvesClinicId;
 use App\Models\Marketing\MarketingAsset;
 use App\Models\Marketing\AssetTag;
 use Illuminate\Http\Request;
@@ -12,9 +13,15 @@ use Illuminate\Support\Facades\Storage;
 
 class AssetController extends Controller
 {
-    private const CLINIC_ID  = 1;
+    use ResolvesClinicId;
+
     private const DISK       = 'public';
-    private const BASE_PATH  = 'marketing/assets/1'; // /1 = clinic_id
+
+    /** Per-clinic asset storage path — was hardcoded to clinic 1 before Slice V2. */
+    private function basePath(): string
+    {
+        return 'marketing/assets/' . $this->currentClinicId();
+    }
 
     // -------------------------------------------------------------------------
     // Upload — handle file upload from library page
@@ -29,7 +36,7 @@ class AssetController extends Controller
         ]);
 
         $file     = $request->file('file');
-        $path     = $file->store(self::BASE_PATH, self::DISK);
+        $path     = $file->store($this->basePath(), self::DISK);
         $mimeType = $file->getMimeType();
 
         // Determine asset_type from mime
@@ -47,7 +54,7 @@ class AssetController extends Controller
         }
 
         $asset = MarketingAsset::create([
-            'clinic_id'   => self::CLINIC_ID,
+            'clinic_id'   => $this->currentClinicId(),
             'folder_id'   => $validated['folder_id'] ?? null,
             'campaign_id' => $validated['campaign_id'] ?? null,
             'name'        => $validated['name'] ?: $file->getClientOriginalName(),
@@ -115,7 +122,7 @@ class AssetController extends Controller
         $validated = $request->validate(['tag' => 'required|string|max:100']);
 
         $tag = AssetTag::firstOrCreate(
-            ['clinic_id' => self::CLINIC_ID, 'name' => $validated['tag']],
+            ['clinic_id' => $this->currentClinicId(), 'name' => $validated['tag']],
             ['created_by' => auth()->id(), 'updated_by' => auth()->id()]
         );
 
@@ -141,7 +148,7 @@ class AssetController extends Controller
     // -------------------------------------------------------------------------
     public function storageUsage(): JsonResponse
     {
-        $bytes = MarketingAsset::where('clinic_id', self::CLINIC_ID)->sum('file_size');
+        $bytes = MarketingAsset::where('clinic_id', $this->currentClinicId())->sum('file_size');
         $mb    = round($bytes / 1024 / 1024, 1);
         $gb    = round($bytes / 1024 / 1024 / 1024, 2);
 

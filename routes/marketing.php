@@ -13,6 +13,7 @@ use App\Http\Controllers\Marketing\BrandKitController;
 use App\Http\Controllers\Marketing\IntegrationController;
 use App\Http\Controllers\Marketing\AnalyticsController;
 use App\Http\Controllers\Marketing\SettingsController;
+use App\Http\Controllers\Marketing\ReviewsController;
 
 Route::middleware(['marketing.active', 'module:marketing'])
     ->prefix('marketing')
@@ -37,6 +38,7 @@ Route::middleware(['marketing.active', 'module:marketing'])
         Route::delete('/ideas/{idea}', [IdeaController::class, 'destroy'])->name('ideas.destroy');
         Route::post('/ideas/{idea}/convert-post', [IdeaController::class, 'convertToPost'])->name('ideas.convert-post');
         Route::post('/ideas/{idea}/convert-campaign', [IdeaController::class, 'convertToCampaign'])->name('ideas.convert-campaign');
+        Route::post('/ideas/from-review/{review}', [IdeaController::class, 'createFromReview'])->name('ideas.from-review');
 
         Route::get('/campaigns', [CampaignController::class, 'index'])->name('campaigns.index');
         Route::post('/campaigns', [CampaignController::class, 'store'])->name('campaigns.store');
@@ -79,5 +81,11 @@ Route::middleware(['marketing.active', 'module:marketing'])
         Route::post('/integrations/{platform}/health-check', [IntegrationController::class, 'healthCheck'])->name('integrations.health-check');
 
         Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics');
+        // Native Reviews board (2026-07-09) — reuses Communication's ReviewService/
+        // Review model, just rendered under Marketing's own URL/layout instead of
+        // linking out to /communication/reviews. Send/reply actions still POST to
+        // the communication.reviews.* routes (see resources/views/communication/reviews/_content.blade.php).
+        Route::get('/reviews', [ReviewsController::class, 'index'])->name('reviews');
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
+        Route::post('/settings/integrated-mode', [SettingsController::class, 'toggleIntegratedMode'])->name('settings.integrated-mode');
     });

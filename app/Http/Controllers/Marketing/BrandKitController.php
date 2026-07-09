@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Marketing\Concerns\ResolvesClinicId;
 use App\Models\Marketing\BrandKit;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
@@ -12,16 +13,22 @@ use Illuminate\Support\Facades\Storage;
 
 class BrandKitController extends Controller
 {
-    private const CLINIC_ID  = 1;
+    use ResolvesClinicId;
+
     private const LOGO_DISK  = 'public';
-    private const LOGO_PATH  = 'marketing/logos/1';
+
+    /** Per-clinic logo storage path — was hardcoded to clinic 1 before Slice V2. */
+    private function logoPath(): string
+    {
+        return 'marketing/logos/' . $this->currentClinicId();
+    }
 
     // -------------------------------------------------------------------------
     // Show — load brand kit for the clinic
     // -------------------------------------------------------------------------
     public function index(): View
     {
-        $kit = BrandKit::forClinic(self::CLINIC_ID);
+        $kit = BrandKit::forClinic($this->currentClinicId());
 
         // Shape data to match what the Blade view expects
         $brandKit = [
@@ -64,7 +71,7 @@ class BrandKitController extends Controller
             'file'  => 'required|file|mimes:png,jpg,jpeg,svg+xml,svg|max:5120',
         ]);
 
-        $kit   = BrandKit::forClinic(self::CLINIC_ID);
+        $kit   = BrandKit::forClinic($this->currentClinicId());
         $field = $request->input('field');
 
         // Delete old file if exists
@@ -73,7 +80,7 @@ class BrandKitController extends Controller
         }
 
         // Store new file
-        $path = $request->file('file')->store(self::LOGO_PATH, self::LOGO_DISK);
+        $path = $request->file('file')->store($this->logoPath(), self::LOGO_DISK);
 
         $kit->update([$field => $path, 'updated_by' => auth()->id()]);
 
@@ -111,7 +118,7 @@ class BrandKitController extends Controller
             'logo_primary'       => 'nullable|file|image|max:5120',
         ]);
 
-        $kit = BrandKit::forClinic(self::CLINIC_ID);
+        $kit = BrandKit::forClinic($this->currentClinicId());
 
         // Handle logo upload
         if ($request->hasFile('logo_primary')) {
@@ -120,7 +127,7 @@ class BrandKitController extends Controller
                 Storage::disk(self::LOGO_DISK)->delete($kit->logo_primary);
             }
             $validated['logo_primary'] = $request->file('logo_primary')
-                ->store(self::LOGO_PATH, self::LOGO_DISK);
+                ->store($this->logoPath(), self::LOGO_DISK);
         } else {
             unset($validated['logo_primary']); // don't overwrite with null
         }

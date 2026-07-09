@@ -160,10 +160,6 @@ Route::middleware('auth')->group(function () {
         Route::post  ('/{patient}/communications',                        [PatientCommunicationController::class, 'store'])->name('communications.store');
         Route::delete('/{patient}/communications/{communication}',        [PatientCommunicationController::class, 'destroy'])->name('communications.destroy');
 
-        // Patient documents
-        Route::post('/{patient}/documents',                [\App\Http\Controllers\PatientDocumentController::class, 'store'])->name('documents.store');
-        Route::delete('/{patient}/documents/{document}',   [\App\Http\Controllers\PatientDocumentController::class, 'destroy'])->name('documents.destroy');
-
         // Tags
         Route::get('/{patient}/tags',          [TagController::class, 'forPatient'])->name('tags.index');
         Route::post('/{patient}/tags/attach',  [TagController::class, 'attach'])->name('tags.attach');
@@ -643,6 +639,64 @@ Route::middleware('auth')->group(function () {
         Route::post('/{task}/done',   [\App\Http\Controllers\Communication\TaskController::class, 'markDone'])->name('done');
         Route::post('/{task}/evidence', [\App\Http\Controllers\Communication\TaskController::class, 'uploadEvidence'])->name('evidence');
         Route::post('/{task}/escalate', [\App\Http\Controllers\Communication\TaskController::class, 'escalate'])->name('escalate');
+    });
+
+    /* ── Smart Treatment Presentation (new, independent module — Slice A+B) ──
+       Reads Patient/Consultation/TreatmentPlan/Billing/Clinical Library,
+       never writes to any of them. Slice C (send/share, secure links) and
+       Slice D (activity/follow-up) are not built yet.
+       See docs/plan-smart-treatment-presentation.md. ── */
+    Route::middleware('module:presentations')->prefix('presentations')->name('presentations.')->group(function () {
+        $pc = \App\Http\Controllers\PresentationController::class;
+
+        // Static routes MUST be before /{presentation} — same convention as
+        // TreatmentController's /price-list and TreatmentPlanController's /print.
+        Route::get('/links',                 [$pc, 'linksIndex'])->name('links');
+        Route::get('/settings',              [$pc, 'settingsShow'])->name('settings');
+
+        Route::get('/',                      [$pc, 'index'])->name('index');
+        Route::get('/{presentation}',         [$pc, 'builder'])->name('builder');
+    });
+
+    // Mixed group: SOME of these routes are author-only (Doctor/Admin —
+    // enforced a second time inside the controller via ensureAuthor(), since
+    // Front Desk also holds this module-level 'edit' flag for the operate
+    // actions below). send/resend/markDeclined/markFollowUp/link-revoke/
+    // link-regenerate are deliberately NOT author-gated — that's the "staff
+    // can operate" half of the permission split.
+    Route::middleware('module:presentations,edit')->prefix('presentations')->name('presentations.')->group(function () {
+        $pc = \App\Http\Controllers\PresentationController::class;
+
+        Route::get('/create-from-plan/{plan}', [$pc, 'createFromPlan'])->name('create-from-plan');
+        Route::put('/{presentation}',          [$pc, 'update'])->name('update');
+        Route::post('/{presentation}/generate-summary', [$pc, 'generateSummary'])->name('generate-summary');
+        Route::post('/{presentation}/finalize', [$pc, 'finalize'])->name('finalize');
+        Route::delete('/{presentation}',       [$pc, 'destroy'])->name('destroy');
+
+        // Slice C: Send/Resend (operate — not author-gated)
+        Route::post('/{presentation}/send',    [$pc, 'send'])->name('send');
+        Route::post('/{presentation}/resend',  [$pc, 'resend'])->name('resend');
+
+        // Slice D: Follow-up / Decline (operate — not author-gated)
+        Route::post('/{presentation}/decline',  [$pc, 'markDeclined'])->name('mark-declined');
+        Route::post('/{presentation}/follow-up', [$pc, 'markFollowUp'])->name('mark-follow-up');
+
+        // Slice E: Shared Links + Settings mutations
+        Route::post('/links/{link}/revoke',                [$pc, 'linkRevoke'])->name('links.revoke');
+        Route::post('/{presentation}/links/regenerate',    [$pc, 'linkRegenerate'])->name('links.regenerate');
+        Route::put('/settings',                            [$pc, 'settingsUpdate'])->name('settings.update');
+    });
+
+    // ── Public patient-facing page (no login) — mirrors the existing
+    // "token-based, no login" QR check-in pattern (see /hr/checkin/{token}
+    // below) but scoped under /present so it never collides with the
+    // authenticated /presentations/{id} routes above. ──
+    Route::withoutMiddleware('auth')->prefix('present')->name('presentations.public.')->group(function () {
+        $ppc = \App\Http\Controllers\PublicPresentationController::class;
+
+        Route::get('/{token}',           [$ppc, 'show'])->name('show');
+        Route::post('/{token}/accept',   [$ppc, 'accept'])->name('accept');
+        Route::post('/{token}/decline',  [$ppc, 'decline'])->name('decline');
     });
 
     /* ── Lab Module v2 ── */

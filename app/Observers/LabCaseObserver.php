@@ -2,9 +2,12 @@
 
 namespace App\Observers;
 
+use App\Models\Appointment;
 use App\Models\CommunicationQueue;
 use App\Models\CommActivityLog;
 use App\Models\LabCase;
+use App\Models\Patient;
+use App\Services\Relationship\ActivityEngine;
 
 /**
  * LabCaseObserver — Phase 4 Communication OS
@@ -72,6 +75,33 @@ class LabCaseObserver
             $comm->autoClose(
                 'case_received',
                 "Lab case #{$case->case_number} status: {$statusLabel}"
+            );
+        }
+
+        // ── 4. Patient-facing side (docs/backend-orchestration-plan.md §2.10) ──
+        // Everything above is vendor-facing (the B2B comm thread). This is the
+        // separate, currently-missing patient-facing signal: the finished work
+        // is back at the clinic and, if the patient has nothing booked yet,
+        // someone needs to call them in. Fires the already-enabled
+        // lab_ready_call rule (RulesEngine -> TaskEngine, dedup-guarded).
+        if ($newStatus === 'final_received' && $case->patient_id) {
+            $hasUpcomingAppointment = Appointment::where('patient_id', $case->patient_id)
+                ->whereDate('appointment_date', '>=', now()->toDateString())
+                ->whereNotIn('status', ['cancelled', 'no_show'])
+                ->exists();
+
+            $patient = Patient::find($case->patient_id);
+
+            app(ActivityEngine::class)->log(
+                subject:        $case,
+                event:          'lab.received',
+                actor:          null,
+                metadata:       [
+                    'patient_id'         => $case->patient_id,
+                    'appointment_booked' => $hasUpcomingAppointment,
+                ],
+                relationshipId: $patient?->relationship_id,
+                description:    "Lab case #{$case->case_number} — final work in",
             );
         }
     }

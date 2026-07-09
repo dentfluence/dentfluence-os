@@ -3,17 +3,19 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Marketing\Concerns\ResolvesClinicId;
 use App\Models\Marketing\Idea;
 use App\Models\Marketing\MarketingPost;
 use App\Models\Marketing\Campaign;
 use App\Models\Marketing\MarketingActivityLog;
+use App\Models\Review;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 
 class IdeaController extends Controller
 {
-    private const CLINIC_ID = 1;
+    use ResolvesClinicId;
 
     // -------------------------------------------------------------------------
     // Store — create a new idea (Quick Idea tab)
@@ -31,7 +33,7 @@ class IdeaController extends Controller
         ]);
 
         $idea = Idea::create(array_merge($validated, [
-            'clinic_id'      => self::CLINIC_ID,
+            'clinic_id'      => $this->currentClinicId(),
             'content_type'   => $validated['content_type'] ?? 'post',
             'status'         => 'idea',
             'is_ai_generated'=> false,
@@ -40,7 +42,7 @@ class IdeaController extends Controller
         ]));
 
         MarketingActivityLog::log(
-            self::CLINIC_ID,
+            $this->currentClinicId(),
             'idea_created',
             $idea,
             "New idea created: \"{$idea->title}\""
@@ -94,13 +96,50 @@ class IdeaController extends Controller
     }
 
     // -------------------------------------------------------------------------
+    // Create From Review — V4 automation: turn a happy review into a content
+    // idea in one click, instead of a dentist having to think of what to
+    // post. See docs/marketing-module-reengineering-plan.md V4. Deliberately
+    // one click, not silent/automatic — a human still decides whether to
+    // actually publish anything built from a patient's review.
+    // -------------------------------------------------------------------------
+    public function createFromReview(Review $review): RedirectResponse
+    {
+        $clinicId = $this->currentClinicId();
+
+        $idea = Idea::create([
+            'clinic_id'       => $clinicId,
+            'title'           => 'Patient review — ' . ($review->patient->name ?? 'a patient'),
+            'description'     => $review->comment ?: ($review->rating . '-star rating, no comment left'),
+            'content_type'    => 'post',
+            'tags'            => ['review', 'social-proof'],
+            'status'          => 'idea',
+            'is_ai_generated' => false,
+            // Notes carries a stable marker so the Dashboard can tell this
+            // review has already been turned into an idea and stop suggesting it.
+            'notes'           => "Sourced from review #{$review->id}.",
+            'created_by'      => auth()->id(),
+            'updated_by'      => auth()->id(),
+        ]);
+
+        MarketingActivityLog::log(
+            $clinicId,
+            'idea_created',
+            $idea,
+            "Idea created from a {$review->rating}-star review"
+        );
+
+        return redirect()->route('marketing.brainstorm')
+            ->with('success', 'Saved as a content idea — find it in the Idea Bank.');
+    }
+
+    // -------------------------------------------------------------------------
     // Convert to Post — creates an mkt_post and redirects to Publish
     // -------------------------------------------------------------------------
     public function convertToPost(Idea $idea): RedirectResponse
     {
         // Create the master post from the idea
         $post = MarketingPost::create([
-            'clinic_id'    => self::CLINIC_ID,
+            'clinic_id'    => $this->currentClinicId(),
             'campaign_id'  => $idea->campaign_id,
             'title'        => $idea->title,
             'caption'      => $idea->description ?? '',
@@ -121,7 +160,7 @@ class IdeaController extends Controller
         ]);
 
         MarketingActivityLog::log(
-            self::CLINIC_ID,
+            $this->currentClinicId(),
             'idea_converted',
             $idea,
             "Idea \"{$idea->title}\" converted to post"
@@ -137,7 +176,7 @@ class IdeaController extends Controller
     public function convertToCampaign(Idea $idea): RedirectResponse
     {
         $campaign = Campaign::create([
-            'clinic_id'  => self::CLINIC_ID,
+            'clinic_id'  => $this->currentClinicId(),
             'name'       => $idea->title,
             'description'=> $idea->description,
             'status'     => 'draft',
@@ -156,7 +195,7 @@ class IdeaController extends Controller
         ]);
 
         MarketingActivityLog::log(
-            self::CLINIC_ID,
+            $this->currentClinicId(),
             'idea_converted',
             $idea,
             "Idea \"{$idea->title}\" converted to campaign"

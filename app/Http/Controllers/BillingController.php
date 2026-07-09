@@ -29,6 +29,7 @@ use App\Models\Wallet;
 use App\Services\MembershipBenefitService;
 use App\Services\WalletService;
 use App\Services\CouponService;
+use App\Services\Relationship\ActivityEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -381,6 +382,17 @@ class BillingController extends Controller
             $invoice->recalculate();
             $this->applyRetailStockMovements($invoice);
             $invoiceId = $invoice->id;
+
+            // Additive Activity log (docs/backend-orchestration-plan.md §2.8) —
+            // no rule currently matches 'invoice.created', feeds Insights only.
+            app(ActivityEngine::class)->log(
+                subject:        $invoice,
+                event:          'invoice.created',
+                actor:          Auth::user(),
+                metadata:       ['patient_id' => (int) $request->patient_id],
+                relationshipId: Patient::find($request->patient_id)?->relationship_id,
+                description:    'Invoice created',
+            );
 
             // ── Record coupon usage ──────────────────────────────────────────
             if ($couponId) {
@@ -1005,6 +1017,21 @@ class BillingController extends Controller
                 'notes'             => $request->notes,
                 'created_by'        => auth()->id(),
             ]);
+
+            // Additive Activity log (docs/backend-orchestration-plan.md §2.9) —
+            // no rule currently matches 'payment.received', feeds Insights only.
+            // This web path does NOT call InvoicePaymentService (it has its own
+            // wallet-allocation logic the shared service lacks — see the note
+            // on the held-back "dedupe" slice), so the log call is duplicated
+            // here rather than merged, to avoid touching this live billing flow.
+            app(ActivityEngine::class)->log(
+                subject:        $payment,
+                event:          'payment.received',
+                actor:          Auth::user(),
+                metadata:       ['patient_id' => $invoice->patient_id, 'invoice_id' => $invoice->id, 'amount' => (float) $request->amount],
+                relationshipId: Patient::find($invoice->patient_id)?->relationship_id,
+                description:    'Payment recorded on invoice ' . $invoice->invoice_number,
+            );
         });
 
         // Build flash message

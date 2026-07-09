@@ -20,7 +20,7 @@
         <div style="font-size:15px; font-weight:700; color:#111827; display:flex; align-items:center; gap:7px;">
             <i class="ti ti-heart" style="color:#e11d48;"></i> Patient love — turn it into posts
         </div>
-        <a href="{{ url('/communication/reviews') }}" style="font-size:12.5px; color:#6b7280; text-decoration:none;">View all reviews →</a>
+        <a href="{{ route('marketing.reviews') }}" style="font-size:12.5px; color:#6b7280; text-decoration:none;">View all reviews →</a>
     </div>
 
     @if($happyReviews->isEmpty())

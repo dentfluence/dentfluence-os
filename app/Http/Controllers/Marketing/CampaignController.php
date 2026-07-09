@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Marketing\Concerns\ResolvesClinicId;
 use App\Models\Marketing\Campaign;
 use App\Models\Marketing\CampaignGoal;
 use App\Models\Marketing\MarketingPost;
@@ -16,14 +17,14 @@ use Illuminate\View\View;
 
 class CampaignController extends Controller
 {
-    private const CLINIC_ID = 1;
+    use ResolvesClinicId;
 
     // -------------------------------------------------------------------------
     // Index — campaign list
     // -------------------------------------------------------------------------
     public function index(): View
     {
-        $clinicId = self::CLINIC_ID;
+        $clinicId = $this->currentClinicId();
 
         $campaigns = Campaign::where('clinic_id', $clinicId)
             ->with(['goals', 'teamMembers'])
@@ -158,7 +159,7 @@ class CampaignController extends Controller
         ]);
 
         $campaign = Campaign::create(array_merge($validated, [
-            'clinic_id'  => self::CLINIC_ID,
+            'clinic_id'  => $this->currentClinicId(),
             'status'     => $validated['status'] ?? 'draft',
             'owner_id'   => $validated['owner_id'] ?? auth()->id(),
             'created_by' => auth()->id(),
@@ -166,7 +167,7 @@ class CampaignController extends Controller
         ]));
 
         MarketingActivityLog::log(
-            self::CLINIC_ID,
+            $this->currentClinicId(),
             'campaign_created',
             $campaign,
             "Campaign \"{$campaign->name}\" created"

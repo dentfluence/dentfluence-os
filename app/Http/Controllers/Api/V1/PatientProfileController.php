@@ -8,14 +8,15 @@ use App\Models\ClinicalFile;
 use App\Models\Finance\FinancePatientMembership;
 use App\Models\Invoice;
 use App\Models\Patient;
-use App\Models\PatientDocument;
 use App\Models\Prescription\Prescription;
 use App\Models\Wallet;
+use App\Services\ClinicalLibrary\ClinicalFileUploadService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 /**
  * PatientProfileController (API v1)
@@ -33,6 +34,8 @@ use Illuminate\Support\Facades\Storage;
  *   GET /api/v1/patients/{id}/invoices
  *   GET /api/v1/patients/{id}/wallet
  *   GET /api/v1/patients/{id}/documents
+ *   POST /api/v1/patients/{id}/documents      — upload (writes to clinical_files)
+ *   POST /api/v1/patients/{id}/clinical-files — mobile photo capture
  *   GET /api/v1/patients/{id}/notes
  *   GET /api/v1/patients/{id}/communications
  *   GET /api/v1/patients/{id}/memberships
@@ -211,13 +214,15 @@ class PatientProfileController extends ApiController
             ->limit(100)
             ->get()
             ->map(fn ($f) => [
-                'id'          => $f->id,
-                'title'       => $f->title,
-                'file_type'   => $f->file_type,
-                'procedure'   => $f->procedure,
-                'tooth'       => $f->tooth_number,
-                'captured_at' => $f->captured_at,
-                'filename'    => $f->original_filename,
+                'id'                        => $f->id,
+                'title'                     => $f->title,
+                'file_type'                 => $f->file_type,
+                'procedure'                 => $f->procedure,
+                'treatment_category'        => $f->treatment_category,
+                'treatment_category_label'  => $f->treatment_category_label,
+                'tooth'                     => $f->tooth_number,
+                'captured_at'               => $f->captured_at,
+                'filename'                  => $f->original_filename,
             ]);
 
         return $this->success($rows, '');
@@ -225,7 +230,12 @@ class PatientProfileController extends ApiController
 
     /**
      * POST /api/v1/patients/{patient}/documents
-     * Upload a document for a patient. Mirrors web PatientDocumentController::store().
+     * Upload a document for a patient (X-ray/Consent/Lab Report/etc from the
+     * mobile "Add Document" screen). Used to call $patient->documents(), a
+     * relation that was removed when clinical_files became the single source
+     * of truth — every call here would 500. Now writes through
+     * ClinicalFileUploadService, same as every other upload path in the app,
+     * so these files also show up in the web Clinical Library.
      * Multipart: file (required), category (required), title, notes.
      */
     public function storeDocument(Request $request, $patient): JsonResponse
@@ -239,21 +249,68 @@ class PatientProfileController extends ApiController
             'notes'    => 'nullable|string|max:2000',
         ]);
 
-        $file = $request->file('file');
-        $path = $file->store("patients/{$p->id}/documents", 'public');
+        $fileTypeMap = [
+            'X-Ray'         => 'xray',
+            'Photo'         => 'photo',
+            'Consent Form'  => 'consent',
+            'Lab Report'    => 'lab_slip',
+            'Invoice'       => 'invoice',
+        ];
 
-        $doc = $p->documents()->create([
-            'uploaded_by'   => Auth::id(),
-            'category'      => $request->category,
-            'title'         => $request->title,
-            'original_name' => $file->getClientOriginalName(),
-            'path'          => $path,
-            'mime_type'     => $file->getMimeType(),
-            'file_size'     => $file->getSize(),
-            'notes'         => $request->notes,
+        $record = app(ClinicalFileUploadService::class)->store($request->file('file'), [
+            'patient_id'  => $p->id,
+            'file_type'   => $fileTypeMap[$request->category] ?? 'other',
+            'title'       => $request->title,
+            'notes'       => $request->notes,
+            'tags'        => [$request->category],
+            'uploaded_by' => Auth::id(),
+            'source_type' => 'mobile_document',
         ]);
 
-        return $this->success(['document' => $doc], 'Document uploaded.');
+        return $this->success(['document' => [
+            'id'    => $record->id,
+            'title' => $record->title,
+        ]], 'Document uploaded.');
+    }
+
+    /**
+     * POST /api/v1/patients/{patient}/clinical-files
+     * Mobile clinical photo capture (camera or gallery). Writes through the
+     * same ClinicalFileUploadService the web app and consultations use, so a
+     * photo taken on the phone shows up in the Clinical Library immediately —
+     * not stuck in the phone's own gallery app.
+     * Multipart: file (required). Everything else optional — treatment_category
+     * is auto-detected server-side from `procedure` when not supplied.
+     */
+    public function storeClinicalFile(Request $request, $patient): JsonResponse
+    {
+        $p = $this->find($request, $patient);
+
+        $request->validate([
+            'file'               => 'required|file|max:51200|mimes:jpg,jpeg,png,heic,heif',
+            'procedure'          => 'nullable|string|max:255',
+            'treatment_category' => ['nullable', Rule::in(array_keys(ClinicalFile::TREATMENT_CATEGORIES))],
+            'stage'              => ['nullable', Rule::in(ClinicalFile::STAGES)],
+            'tooth_number'       => 'nullable|string|max:50',
+            'notes'              => 'nullable|string|max:2000',
+        ]);
+
+        $record = app(ClinicalFileUploadService::class)->store($request->file('file'), [
+            'patient_id'         => $p->id,
+            'procedure'          => $request->procedure,
+            'treatment_category' => $request->treatment_category,
+            'stage'              => $request->input('stage', 'general'),
+            'tooth_number'       => $request->tooth_number,
+            'notes'              => $request->notes,
+            'uploaded_by'        => Auth::id(),
+            'source_type'        => 'mobile_capture',
+        ]);
+
+        return $this->success([
+            'id'                        => $record->id,
+            'treatment_category'       => $record->treatment_category,
+            'treatment_category_label' => $record->treatment_category_label,
+        ], 'Photo saved.');
     }
 
     public function notes(Request $request, $patient): JsonResponse

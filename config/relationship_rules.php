@@ -249,33 +249,16 @@ return [
         ],
 
         /*
-         * 4. Appointment reminder call — 1 day before a booked appointment.
-         *    Reduces no-shows. Complement to AppointmentReminderEngine bulk job.
-         *
-         *    PAUSED 2026-07-06: 'appointment.booked' was never actually dispatched
-         *    until today (see AppointmentActivityLogger) — this rule has been
-         *    silently dormant. Left disabled rather than let it activate
-         *    unreviewed, because: (1) resolveDueDate() reads $context['event_date'],
-         *    but the metadata this event ships is keyed 'appointment_date' — as
-         *    wired today this rule would compute due_date from today() instead of
-         *    the appointment date, i.e. "1 day before" becomes "yesterday" for
-         *    every booking; (2) it may duplicate the existing bulk
-         *    AppointmentReminderEngine reminders. Fix the context key and confirm
-         *    no duplication with Sumit before flipping this back on.
+         * REMOVED 2026-07-09 (docs/backend-orchestration-plan.md §2.2 / §3.8):
+         * was 'appointment_reminder' — 1 day before a booked appointment. Left
+         * disabled since 2026-07-06 (metadata key bug + double-contact risk
+         * against the existing bulk AppointmentReminderEngine job, which
+         * already covers this ground daily). Removed rather than fixed:
+         * enabling it would create a second reminder task alongside the bulk
+         * job's, violating the "no duplicate tasks" rule for this phase. If
+         * Sumit wants a rule-engine-driven reminder later, it should REPLACE
+         * the bulk job, not run alongside it.
          */
-        'appointment_reminder' => [
-            'trigger'       => 'appointment.booked',
-            'conditions'    => [],
-            'action'        => 'create_task',
-            'action_config' => [
-                'category'   => 'call',
-                'title'      => 'Appointment reminder call',
-                'priority'   => 'high',
-                'days_after' => -1,   // negative = days BEFORE the event date
-            ],
-            'cooldown_days' => 1,
-            'enabled'       => false,
-        ],
 
         /*
          * 5. Membership renewal — when membership.expiring fires (engine fires at 30d mark).

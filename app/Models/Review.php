@@ -14,6 +14,7 @@ class Review extends Model
         'patient_id', 'appointment_id', 'token', 'channel', 'status',
         'rating', 'comment', 'routed_to_google',
         'requested_by_id', 'requested_at', 'responded_at',
+        'clinic_reply', 'replied_at', 'replied_by_id',
     ];
 
     protected $casts = [
@@ -21,6 +22,7 @@ class Review extends Model
         'routed_to_google' => 'boolean',
         'requested_at'     => 'datetime',
         'responded_at'     => 'datetime',
+        'replied_at'       => 'datetime',
     ];
 
     public function patient(): BelongsTo
@@ -31,6 +33,17 @@ class Review extends Model
     public function requestedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requested_by_id');
+    }
+
+    public function repliedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'replied_by_id');
+    }
+
+    /** Rated but no internal reply logged yet — this is what the Reply screen surfaces. */
+    public function needsReply(): bool
+    {
+        return $this->status === 'rated' && $this->clinic_reply === null;
     }
 
     /** A "happy" rating at or above the configured threshold. */

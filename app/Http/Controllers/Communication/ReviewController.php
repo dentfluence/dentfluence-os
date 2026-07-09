@@ -62,4 +62,19 @@ class ReviewController extends Controller
             ? 'Review request recorded (dry-run — nothing actually sent).'
             : 'Review request sent.');
     }
+
+    /**
+     * Log an internal reply/resolution note on a review. Internal only —
+     * nothing is sent to the patient or posted to Google (see ReviewService::recordReply()).
+     */
+    public function reply(Request $request, Review $review)
+    {
+        $data = $request->validate([
+            'clinic_reply' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $this->reviews->recordReply($review, $data['clinic_reply'], $request->user()?->id);
+
+        return back()->with('success', 'Reply saved.');
+    }
 }

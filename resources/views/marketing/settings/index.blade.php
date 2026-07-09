@@ -70,6 +70,53 @@
             <span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ $tab['label'] }}</span>
         </button>
         @endforeach
+
+        {{-- ── Setup + Advanced links ───────────────────────────────────
+             These are full existing pages (Brand Kit, Channels/Integrations,
+             Campaigns, Library) — folded in here instead of living as
+             top-level nav tabs, per the Marketing re-engineering plan.
+             Nothing below was removed or rebuilt, only relocated. --}}
+        <div style="padding:10px 16px 4px; font-family:'Inter',sans-serif; font-size:10px; font-weight:600; color:#9b6aad; text-transform:uppercase; letter-spacing:.5px; border-top:1px solid rgba(185,92,183,0.1); margin-top:4px;">
+            Setup
+        </div>
+        @foreach ([
+            ['route' => 'marketing.brand-kit',      'label' => 'Brand Kit'],
+            ['route' => 'marketing.integrations',    'label' => 'Channels'],
+        ] as $link)
+        <a href="{{ route($link['route']) }}" style="
+            width:100%; text-align:left; box-sizing:border-box;
+            display:flex; align-items:center; gap:10px;
+            padding:12px 16px;
+            font-family:'Inter',sans-serif; font-size:13px; color:#5a4868; font-weight:400;
+            text-decoration:none; border-bottom:1px solid rgba(185,92,183,0.07);
+        ">
+            <span style="flex:1;">{{ $link['label'] }}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; opacity:.5;">
+                <path d="M9 18l6-6-6-6"/>
+            </svg>
+        </a>
+        @endforeach
+
+        <div style="padding:10px 16px 4px; font-family:'Inter',sans-serif; font-size:10px; font-weight:600; color:#9b6aad; text-transform:uppercase; letter-spacing:.5px; border-top:1px solid rgba(185,92,183,0.1); margin-top:4px;">
+            Advanced
+        </div>
+        @foreach ([
+            ['route' => 'marketing.campaigns.index', 'label' => 'Campaigns'],
+            ['route' => 'marketing.library',          'label' => 'Asset Library'],
+        ] as $link)
+        <a href="{{ route($link['route']) }}" style="
+            width:100%; text-align:left; box-sizing:border-box;
+            display:flex; align-items:center; gap:10px;
+            padding:12px 16px;
+            font-family:'Inter',sans-serif; font-size:13px; color:#5a4868; font-weight:400;
+            text-decoration:none; border-bottom:1px solid rgba(185,92,183,0.07);
+        ">
+            <span style="flex:1;">{{ $link['label'] }}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; opacity:.5;">
+                <path d="M9 18l6-6-6-6"/>
+            </svg>
+        </a>
+        @endforeach
     </div>
 
     {{-- ── Right Panel ───────────────────────────────────────────────── --}}
@@ -85,6 +132,39 @@
             <p style="font-family:'Inter',sans-serif; font-size:12px; color:#7a6884; margin:0 0 24px;">Workspace-wide defaults that apply to all marketing activity.</p>
 
             <div style="display:flex; flex-direction:column; gap:24px;">
+
+                {{-- Data Mode — Standalone vs Integrated. Controls the provider
+                     bindings in App\Providers\MarketingServiceProvider (see
+                     docs/marketing-module-reengineering-plan.md V3). Standalone
+                     reads manually-entered numbers from Marketing Settings;
+                     Integrated reads real Revenue/Reviews/Media data from the
+                     rest of Dentfluence. This is a dev/QA toggle for now — no
+                     confirmation dialog on purpose, it's non-destructive and
+                     instantly reversible. --}}
+                <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:16px; background:{{ $integratedMode ? '#f4faf6' : '#faf7fc' }}; border-radius:10px; border:1px solid {{ $integratedMode ? 'rgba(22,163,74,0.25)' : 'rgba(185,92,183,0.15)' }};">
+                    <div style="flex:1 1 260px; min-width:0;">
+                        <p style="font-family:'Inter',sans-serif; font-size:13px; font-weight:600; color:#1e0a2c; margin:0 0 2px;">
+                            Data Mode: <span style="color:{{ $integratedMode ? '#16a34a' : '#6a0f70' }};">{{ $integratedMode ? 'Integrated' : 'Standalone' }}</span>
+                        </p>
+                        <p style="font-family:'Inter',sans-serif; font-size:11px; color:#7a6884; margin:0; overflow-wrap:break-word;">
+                            @if ($integratedMode)
+                                Revenue, Reviews, and Media are pulled automatically from the rest of Dentfluence (Billing, Communication, Clinical Digital Library).
+                            @else
+                                Revenue, Reviews, and Media use manually-entered values. Switch to Integrated once you're testing this clinic against real Dentfluence data.
+                            @endif
+                        </p>
+                    </div>
+                    <form method="POST" action="{{ route('marketing.settings.integrated-mode') }}" style="margin:0; flex-shrink:0;">
+                        @csrf
+                        <button type="submit" style="
+                            background:{{ $integratedMode ? '#fff' : 'linear-gradient(135deg, #7a1fa2, #6a0f70)' }};
+                            color:{{ $integratedMode ? '#6a0f70' : '#fff' }};
+                            border:1px solid {{ $integratedMode ? 'rgba(106,15,112,0.3)' : 'transparent' }};
+                            border-radius:8px; font-family:'Inter',sans-serif; font-size:12px; font-weight:600;
+                            padding:8px 16px; cursor:pointer; white-space:nowrap;
+                        ">{{ $integratedMode ? 'Switch to Standalone' : 'Switch to Integrated' }}</button>
+                    </form>
+                </div>
 
                 {{-- Timezone --}}
                 <div>

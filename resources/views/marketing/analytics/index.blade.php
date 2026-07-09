@@ -1,7 +1,16 @@
 {{--
 | Marketing — Analytics & ROI
 | File: resources/views/marketing/analytics/index.blade.php
-| Phase 6 — Intelligence Layer: real data, ROI engine, insights panel
+|
+| Re-metriced per docs/marketing-module-reengineering-plan.md (V2b):
+| ROI (revenue/leads/appointments/spend) leads the page instead of posting
+| volume — dentists care about what marketing produced, not how many posts
+| went out. Posting-volume detail is kept (nothing removed), just demoted
+| to a smaller secondary row. Note: this file was previously truncated
+| mid-markup (cut off inside an SVG tag with no closing sections) and the
+| campaign ROI table / trend / platform / insights panels — despite the
+| controller already computing all of them — were never actually rendered.
+| This rewrite completes it using the existing controller data untouched.
 --}}
 @extends('marketing.layouts.app')
 
@@ -12,7 +21,7 @@
 @section('marketing-content')
 
 {{-- ── Page Header ──────────────────────────────────────────────────── --}}
-<div class="df-page-header" style="margin-bottom:28px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+<div class="df-page-header" style="margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
     <div>
         <h1 class="df-page-title" style="display:inline-flex; align-items:center; gap:10px;">
             Analytics &amp; ROI
@@ -24,7 +33,7 @@
                 letter-spacing:.5px; padding:3px 10px; vertical-align:middle;
             ">LIVE</span>
         </h1>
-        <p class="df-page-subtitle">Posts, campaigns, leads, and ROI — all from real data.</p>
+        <p class="df-page-subtitle">What marketing produced — leads, appointments, revenue, and ROI.</p>
     </div>
 
     {{-- Marketing Score pill --}}
@@ -51,90 +60,191 @@
     </div>
 </div>
 
-{{-- ── KPI Cards (6 cards) ──────────────────────────────────────────── --}}
-<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:24px;">
+{{-- ══════════════════════════════════════════════════════════════
+     PRIMARY — ROI (leads the page, per re-engineering plan)
+═══════════════════════════════════════════════════════════════ --}}
+@php
+    // V4: contextual upgrade hints instead of a banner — see
+    // docs/marketing-module-reengineering-plan.md V4 / "Upgrade Strategy".
+    // Revenue/Appointments here still come from manually-entered Campaign
+    // Goals either way; the hint just names what connecting Dentfluence OS
+    // would remove, next to the exact field it affects.
+    $integrated = \App\Support\Features\Feature::enabled('marketing.integrated_providers');
 
-    {{-- Published This Month --}}
-    <div style="background:#fff; border:1px solid #f0eaf5; border-radius:12px; padding:22px 20px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
-            <span style="font-family:'Inter',sans-serif; font-size:12px; font-weight:500; color:#9ca3af;">Published This Month</span>
-            <div style="width:32px; height:32px; border-radius:8px; background:#fdf4ff; display:flex; align-items:center; justify-content:center;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7a1fa2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                </svg>
-            </div>
+    $roiCards = [
+        ['label' => 'Total Revenue',     'value' => 'Rs. ' . number_format($roiTotals['total_revenue'], 0),                                   'sub' => 'from campaign goals', 'color' => '#16a34a', 'bg' => '#f0fdf4', 'hint' => 'This can be calculated automatically using Dentfluence OS.'],
+        ['label' => 'Overall ROI',       'value' => $roiTotals['overall_roi'] !== null ? $roiTotals['overall_roi'] . '%' : '—',                'sub' => 'revenue vs. spend',   'color' => '#7a1fa2', 'bg' => '#fdf4ff'],
+        ['label' => 'Total Leads',       'value' => number_format($roiTotals['total_leads']),                                                  'sub' => 'from all campaigns',  'color' => '#ea580c', 'bg' => '#fff7ed'],
+        ['label' => 'Total Appointments','value' => number_format($roiTotals['total_appointments']),                                           'sub' => 'booked from campaigns','color' => '#2563eb', 'bg' => '#eff6ff', 'hint' => 'This becomes automatic once appointments are connected.'],
+        ['label' => 'Marketing Spend',   'value' => 'Rs. ' . number_format($roiTotals['total_spent'], 0),                                      'sub' => 'total utilised',      'color' => '#dc2626', 'bg' => '#fef2f2'],
+        ['label' => 'Cost per Lead',     'value' => $roiTotals['cost_per_lead'] !== null ? 'Rs. ' . number_format($roiTotals['cost_per_lead']) : '—', 'sub' => 'average',      'color' => '#9333ea', 'bg' => '#faf5ff'],
+    ];
+@endphp
+<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:20px;">
+    @foreach ($roiCards as $card)
+    <div style="background:#fff; border:1px solid #f0eaf5; border-radius:12px; padding:20px;">
+        <span style="font-family:'Inter',sans-serif; font-size:12px; font-weight:500; color:#9ca3af;">{{ $card['label'] }}</span>
+        <div style="font-family:'Inter',sans-serif; font-size:26px; font-weight:700; color:#1e0a2c; margin:8px 0 4px;">{{ $card['value'] }}</div>
+        <div style="font-family:'Inter',sans-serif; font-size:11px; color:#9ca3af;">{{ $card['sub'] }}</div>
+        @if (!$integrated && !empty($card['hint']))
+            <div style="font-family:'Inter',sans-serif; font-size:10.5px; color:#9333ea; margin-top:6px;">{{ $card['hint'] }}</div>
+        @endif
+    </div>
+    @endforeach
+</div>
+
+{{-- ══════════════════════════════════════════════════════════════
+     SECONDARY — Content activity (posting volume; demoted, not removed)
+═══════════════════════════════════════════════════════════════ --}}
+<div style="background:#fff; border:1px solid #f0eaf5; border-radius:12px; padding:14px 20px; margin-bottom:24px; display:flex; align-items:center; gap:32px; flex-wrap:wrap;">
+    <span style="font-family:'Inter',sans-serif; font-size:11px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px;">Content Activity</span>
+    <div style="display:flex; align-items:baseline; gap:6px;">
+        <span style="font-family:'Inter',sans-serif; font-size:18px; font-weight:700; color:#1e0a2c;">{{ $kpi['published'] }}</span>
+        <span style="font-family:'Inter',sans-serif; font-size:12px; color:#9ca3af;">published this month</span>
+        <span style="font-family:'Inter',sans-serif; font-size:11px; font-weight:600; color:{{ $kpi['trend_positive'] ? '#16a34a' : '#dc2626' }};">{{ $kpi['published_trend'] }}</span>
+    </div>
+    <div style="display:flex; align-items:baseline; gap:6px;">
+        <span style="font-family:'Inter',sans-serif; font-size:18px; font-weight:700; color:#1e0a2c;">{{ $kpi['scheduled'] }}</span>
+        <span style="font-family:'Inter',sans-serif; font-size:12px; color:#9ca3af;">scheduled</span>
+    </div>
+    <div style="display:flex; align-items:baseline; gap:6px;">
+        <span style="font-family:'Inter',sans-serif; font-size:18px; font-weight:700; color:#1e0a2c;">{{ $kpi['active_campaigns'] }}</span>
+        <span style="font-family:'Inter',sans-serif; font-size:12px; color:#9ca3af;">active campaigns</span>
+    </div>
+    <div style="display:flex; align-items:baseline; gap:6px;">
+        <span style="font-family:'Inter',sans-serif; font-size:18px; font-weight:700; color:#1e0a2c;">{{ $kpi['completion_rate'] }}%</span>
+        <span style="font-family:'Inter',sans-serif; font-size:12px; color:#9ca3af;">completion rate</span>
+    </div>
+</div>
+
+{{-- ══════════════════════════════════════════════════════════════
+     CAMPAIGN ROI TABLE
+═══════════════════════════════════════════════════════════════ --}}
+<div style="background:#fff; border:1px solid #f0eaf5; border-radius:12px; padding:20px; margin-bottom:24px;">
+    <h2 style="font-family:'Inter',sans-serif; font-size:14px; font-weight:600; color:#1e0a2c; margin:0 0 14px;">Campaign ROI</h2>
+
+    @if (empty($campaignRoi))
+        <p style="font-family:'Inter',sans-serif; font-size:13px; color:#7a6884; margin:0;">No active or completed campaigns yet.</p>
+    @else
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:12.5px;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left; padding:8px 10px; font-size:11px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.4px; border-bottom:2px solid #f0eaf5;">Campaign</th>
+                        <th style="text-align:right; padding:8px 10px; font-size:11px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.4px; border-bottom:2px solid #f0eaf5;">Spend</th>
+                        <th style="text-align:right; padding:8px 10px; font-size:11px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.4px; border-bottom:2px solid #f0eaf5;">Leads</th>
+                        <th style="text-align:right; padding:8px 10px; font-size:11px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.4px; border-bottom:2px solid #f0eaf5;">Appointments</th>
+                        <th style="text-align:right; padding:8px 10px; font-size:11px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.4px; border-bottom:2px solid #f0eaf5;">Revenue</th>
+                        <th style="text-align:right; padding:8px 10px; font-size:11px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.4px; border-bottom:2px solid #f0eaf5;">ROI</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($campaignRoi as $c)
+                    <tr>
+                        <td style="padding:10px; border-bottom:1px solid #f5f0f8;">
+                            <div style="font-weight:500; color:#1e0a2c;">{{ $c['name'] }}</div>
+                            <div style="font-size:11px; color:#9ca3af; text-transform:capitalize;">{{ $c['status'] }}</div>
+                        </td>
+                        <td style="text-align:right; padding:10px; border-bottom:1px solid #f5f0f8; color:#1e0a2c;">Rs. {{ number_format($c['budget_spent']) }}</td>
+                        <td style="text-align:right; padding:10px; border-bottom:1px solid #f5f0f8; color:#1e0a2c;">{{ $c['leads_actual'] }}</td>
+                        <td style="text-align:right; padding:10px; border-bottom:1px solid #f5f0f8; color:#1e0a2c;">{{ $c['appts_actual'] }}</td>
+                        <td style="text-align:right; padding:10px; border-bottom:1px solid #f5f0f8; color:#1e0a2c;">Rs. {{ number_format($c['revenue_actual']) }}</td>
+                        <td style="text-align:right; padding:10px; border-bottom:1px solid #f5f0f8; font-weight:600; color:{{ $c['roi_pct'] === null ? '#9ca3af' : ($c['roi_pct'] >= 0 ? '#16a34a' : '#dc2626') }};">
+                            {{ $c['roi_pct'] !== null ? $c['roi_pct'] . '%' : '—' }}
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
         </div>
-        <div style="font-family:'Inter',sans-serif; font-size:28px; font-weight:700; color:#1e0a2c; margin-bottom:6px;">{{ $kpi['published'] }}</div>
-        <div style="display:flex; align-items:center; gap:5px;">
-            <span style="
-                font-family:'Inter',sans-serif; font-size:11px; font-weight:600;
-                color:{{ $kpi['trend_positive'] ? '#16a34a' : '#dc2626' }};
-            ">{{ $kpi['published_trend'] }}</span>
-            <span style="font-family:'Inter',sans-serif; font-size:11px; color:#9ca3af;">vs last month</span>
+    @endif
+</div>
+
+{{-- ══════════════════════════════════════════════════════════════
+     SECONDARY — Monthly trend | Platform breakdown (posting detail)
+═══════════════════════════════════════════════════════════════ --}}
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px;">
+
+    <div style="background:#fff; border:1px solid #f0eaf5; border-radius:12px; padding:20px;">
+        <h2 style="font-family:'Inter',sans-serif; font-size:13px; font-weight:600; color:#1e0a2c; margin:0 0 14px;">Posts Published — Last 6 Months</h2>
+        <div style="display:flex; align-items:flex-end; gap:10px; height:80px;">
+            @foreach ($monthlyTrend as $m)
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;">
+                <div style="width:100%; max-width:28px; height:{{ $m['pct'] }}%; background:#e9d5f5; border-radius:4px 4px 0 0;" title="{{ $m['count'] }} posts"></div>
+                <span style="font-family:'Inter',sans-serif; font-size:10px; color:#9ca3af;">{{ $m['month'] }}</span>
+            </div>
+            @endforeach
         </div>
     </div>
 
-    {{-- Scheduled --}}
-    <div style="background:#fff; border:1px solid #f0eaf5; border-radius:12px; padding:22px 20px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
-            <span style="font-family:'Inter',sans-serif; font-size:12px; font-weight:500; color:#9ca3af;">Scheduled</span>
-            <div style="width:32px; height:32px; border-radius:8px; background:#eff6ff; display:flex; align-items:center; justify-content:center;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
+    <div style="background:#fff; border:1px solid #f0eaf5; border-radius:12px; padding:20px;">
+        <h2 style="font-family:'Inter',sans-serif; font-size:13px; font-weight:600; color:#1e0a2c; margin:0 0 14px;">Platform Breakdown</h2>
+        @if (empty($platformBreakdown))
+            <p style="font-family:'Inter',sans-serif; font-size:12px; color:#9ca3af; margin:0;">No published posts yet.</p>
+        @else
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                @foreach ($platformBreakdown as $p)
+                <div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                        <span style="font-family:'Inter',sans-serif; font-size:12px; color:#1e0a2c;">{{ $p['label'] }}</span>
+                        <span style="font-family:'Inter',sans-serif; font-size:12px; color:#9ca3af;">{{ $p['count'] }} ({{ $p['pct'] }}%)</span>
+                    </div>
+                    <div style="background:#f5f0f8; border-radius:6px; height:6px; overflow:hidden;">
+                        <div style="width:{{ $p['pct'] }}%; height:100%; background:{{ $p['color'] }};"></div>
+                    </div>
+                </div>
+                @endforeach
             </div>
-        </div>
-        <div style="font-family:'Inter',sans-serif; font-size:28px; font-weight:700; color:#1e0a2c; margin-bottom:6px;">{{ $kpi['scheduled'] }}</div>
-        <div style="font-family:'Inter',sans-serif; font-size:11px; color:#9ca3af;">queued posts</div>
+        @endif
     </div>
 
-    {{-- Active Campaigns --}}
-    <div style="background:#fff; border:1px solid #f0eaf5; border-radius:12px; padding:22px 20px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
-            <span style="font-family:'Inter',sans-serif; font-size:12px; font-weight:500; color:#9ca3af;">Active Campaigns</span>
-            <div style="width:32px; height:32px; border-radius:8px; background:#f0fdf4; display:flex; align-items:center; justify-content:center;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                </svg>
+</div>
+
+{{-- ══════════════════════════════════════════════════════════════
+     INSIGHTS · RECENT ACTIVITY
+═══════════════════════════════════════════════════════════════ --}}
+<div style="display:grid; grid-template-columns:1.3fr 1fr; gap:20px;">
+
+    <div style="background:#fff; border:1px solid #f0eaf5; border-radius:12px; padding:20px;">
+        <h2 style="font-family:'Inter',sans-serif; font-size:13px; font-weight:600; color:#1e0a2c; margin:0 0 14px;">Insights</h2>
+        @if (empty($insights))
+            <p style="font-family:'Inter',sans-serif; font-size:12px; color:#9ca3af; margin:0;">Nothing to flag right now.</p>
+        @else
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                @foreach ($insights as $insight)
+                @php
+                    $tone = match ($insight['type']) {
+                        'success'     => ['bg' => '#f0fdf4', 'color' => '#16a34a'],
+                        'warning'     => ['bg' => '#fef2f2', 'color' => '#dc2626'],
+                        'opportunity' => ['bg' => '#fdf4ff', 'color' => '#7a1fa2'],
+                        default       => ['bg' => '#eff6ff', 'color' => '#2563eb'],
+                    };
+                @endphp
+                <div style="background:{{ $tone['bg'] }}; border-radius:8px; padding:12px 14px;">
+                    <p style="font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; color:{{ $tone['color'] }}; margin:0 0 3px;">{{ $insight['title'] }}</p>
+                    <p style="font-family:'Inter',sans-serif; font-size:12px; color:#5a4868; margin:0;">{{ $insight['body'] }}</p>
+                </div>
+                @endforeach
             </div>
-        </div>
-        <div style="font-family:'Inter',sans-serif; font-size:28px; font-weight:700; color:#1e0a2c; margin-bottom:6px;">{{ $kpi['active_campaigns'] }}</div>
-        <div style="font-family:'Inter',sans-serif; font-size:11px; color:#9ca3af;">running now</div>
+        @endif
     </div>
 
-    {{-- Total Leads --}}
-    <div style="background:#fff; border:1px solid #f0eaf5; border-radius:12px; padding:22px 20px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
-            <span style="font-family:'Inter',sans-serif; font-size:12px; font-weight:500; color:#9ca3af;">Total Leads</span>
-            <div style="width:32px; height:32px; border-radius:8px; background:#fff7ed; display:flex; align-items:center; justify-content:center;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-                </svg>
+    <div style="background:#fff; border:1px solid #f0eaf5; border-radius:12px; padding:20px;">
+        <h2 style="font-family:'Inter',sans-serif; font-size:13px; font-weight:600; color:#1e0a2c; margin:0 0 14px;">Recent Activity</h2>
+        @if (empty($recentActivity))
+            <p style="font-family:'Inter',sans-serif; font-size:12px; color:#9ca3af; margin:0;">No activity logged yet.</p>
+        @else
+            <div style="display:flex; flex-direction:column; gap:0;">
+                @foreach ($recentActivity as $i => $log)
+                <div style="padding:8px 0; {{ $i < count($recentActivity) - 1 ? 'border-bottom:1px solid #f5f0f8;' : '' }}">
+                    <p style="font-family:'Inter',sans-serif; font-size:12px; color:#1e0a2c; margin:0;">{{ $log['description'] }}</p>
+                    <p style="font-family:'Inter',sans-serif; font-size:11px; color:#9ca3af; margin:2px 0 0;">{{ $log['user'] }} · {{ $log['time'] }}</p>
+                </div>
+                @endforeach
             </div>
-        </div>
-        <div style="font-family:'Inter',sans-serif; font-size:28px; font-weight:700; color:#1e0a2c; margin-bottom:6px;">{{ $kpi['total_leads'] }}</div>
-        <div style="font-family:'Inter',sans-serif; font-size:11px; color:#9ca3af;">from all campaigns</div>
+        @endif
     </div>
 
-    {{-- Budget Spent --}}
-    <div style="background:#fff; border:1px solid #f0eaf5; border-radius:12px; padding:22px 20px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
-            <span style="font-family:'Inter',sans-serif; font-size:12px; font-weight:500; color:#9ca3af;">Budget Spent</span>
-            <div style="width:32px; height:32px; border-radius:8px; background:#fef2f2; display:flex; align-items:center; justify-content:center;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
-                </svg>
-            </div>
-        </div>
-        <div style="font-family:'Inter',sans-serif; font-size:28px; font-weight:700; color:#1e0a2c; margin-bottom:6px;">
-            Rs. {{ number_format($kpi['total_budget_spent'], 0) }}
-        </div>
-        <div style="font-family:'Inter',sans-serif; font-size:11px; color:#9ca3af;">total utilised</div>
-    </div>
+</div>
 
-    {{-- Completion Rate --}}
-    <div style="background:#fff; border:1px solid #f0eaf5; border-radius:12px; padding:22px 20px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
-            <span style="font-family:'Inter',sans-serif; font-size:12px; font-weight:500; color:#9ca3af;">Completion Rate</span>
-            <div style="width:32px; height:32px; border-radius:8px; background:#f0fdf4; display:flex; align-items:center; justify-content:center;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" 
+@endsection

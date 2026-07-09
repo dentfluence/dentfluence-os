@@ -30,6 +30,7 @@ class ClinicalFile extends Model
         'treatment_plan_item_id',
         // Clinical context
         'procedure',
+        'treatment_category',
         'tooth_number',
         'stage',
         // Classification
@@ -91,6 +92,28 @@ class ClinicalFile extends Model
     ];
 
     const IMAGE_TYPES = ['photo', 'xray', 'opg', 'cbct', 'intraoral_scan'];
+
+    /**
+     * Fixed-vocabulary treatment category, separate from the free-text `procedure`
+     * field and separate from Treatment/TreatmentCategory (the clinical/billing
+     * catalog). This is a content-findability taxonomy — deliberately grouped the
+     * way a patient or marketer searches ("whitening", "veneers"), not the way
+     * billing groups specialties ("Cosmetic Dentistry" covers both).
+     *
+     * Ported from the old (dead) CmsMedia::$treatmentTypeOptions vocabulary.
+     */
+    const TREATMENT_CATEGORIES = [
+        'implant'        => 'Implant',
+        'aligner'        => 'Aligner',
+        'whitening'      => 'Whitening',
+        'rct'            => 'Root Canal',
+        'crown'          => 'Crown',
+        'smile_makeover' => 'Smile Makeover',
+        'braces'         => 'Braces',
+        'extraction'     => 'Extraction',
+        'veneer'         => 'Veneer',
+        'other'          => 'Other',
+    ];
 
     // ── Relationships ──────────────────────────────────────────────────────────
 
@@ -201,6 +224,14 @@ class ClinicalFile extends Model
     }
 
     /**
+     * Human-readable treatment category label, or null if uncategorized.
+     */
+    public function getTreatmentCategoryLabelAttribute(): ?string
+    {
+        return self::TREATMENT_CATEGORIES[$this->treatment_category] ?? null;
+    }
+
+    /**
      * Human-readable stage label.
      */
     public function getStageLabelAttribute(): string
@@ -236,6 +267,12 @@ class ClinicalFile extends Model
     public function scopeForVisit($query, int $visitId)
     {
         return $query->where('visit_id', $visitId);
+    }
+
+    /** All files in a specific fixed treatment category. */
+    public function scopeByTreatmentCategory($query, string $category)
+    {
+        return $query->where('treatment_category', $category);
     }
 
     /** Eligible for the Marketing / Content Manager tab. */

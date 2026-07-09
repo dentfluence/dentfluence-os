@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Marketing\Concerns\ResolvesClinicId;
 use App\Models\Marketing\MarketingActivityLog;
 use App\Models\Marketing\PlatformConnection;
 use App\Services\Marketing\OAuthService;
@@ -29,6 +30,8 @@ use Illuminate\View\View;
  */
 class IntegrationController extends Controller
 {
+    use ResolvesClinicId;
+
     public function __construct(private readonly OAuthService $oauth) {}
 
     // -----------------------------------------------------------------------
@@ -37,7 +40,7 @@ class IntegrationController extends Controller
 
     public function index(): View
     {
-        $clinicId = auth()->user()->clinic_id ?? 1;
+        $clinicId = $this->currentClinicId();
 
         // Keyed by platform for easy access in the view
         $connections = PlatformConnection::where('clinic_id', $clinicId)
@@ -53,7 +56,7 @@ class IntegrationController extends Controller
 
     public function connect(string $platform): RedirectResponse
     {
-        $clinicId = auth()->user()->clinic_id ?? 1;
+        $clinicId = $this->currentClinicId();
 
         if (! array_key_exists($platform, OAuthService::PLATFORMS)) {
             return back()->with('error', "Unknown platform: {$platform}");
@@ -80,7 +83,7 @@ class IntegrationController extends Controller
 
     public function callback(string $platform, Request $request): RedirectResponse
     {
-        $clinicId = auth()->user()->clinic_id ?? 1;
+        $clinicId = $this->currentClinicId();
 
         if ($request->has('error')) {
             $msg = $request->input('error_description', $request->input('error'));
@@ -114,7 +117,7 @@ class IntegrationController extends Controller
 
     public function disconnect(string $platform): RedirectResponse
     {
-        $clinicId = auth()->user()->clinic_id ?? 1;
+        $clinicId = $this->currentClinicId();
 
         try {
             $this->oauth->disconnect($platform, $clinicId, auth()->id());
@@ -130,7 +133,7 @@ class IntegrationController extends Controller
 
     public function healthCheck(string $platform): JsonResponse
     {
-        $clinicId = auth()->user()->clinic_id ?? 1;
+        $clinicId = $this->currentClinicId();
         $result   = $this->oauth->checkHealth($platform, $clinicId);
 
         return response()->json($result, $result['status'] === 'connected' ? 200 : 422);
@@ -142,7 +145,7 @@ class IntegrationController extends Controller
 
     public function showWhatsappForm(): View
     {
-        $clinicId = auth()->user()->clinic_id ?? 1;
+        $clinicId = $this->currentClinicId();
         $conn     = PlatformConnection::where('clinic_id', $clinicId)
             ->where('platform', 'whatsapp')->first();
 
@@ -151,7 +154,7 @@ class IntegrationController extends Controller
 
     public function saveWhatsapp(Request $request): RedirectResponse
     {
-        $clinicId = auth()->user()->clinic_id ?? 1;
+        $clinicId = $this->currentClinicId();
 
         $request->validate([
             'access_token'    => 'required|string',
@@ -184,7 +187,7 @@ class IntegrationController extends Controller
 
     public function showWordpressForm(): View
     {
-        $clinicId = auth()->user()->clinic_id ?? 1;
+        $clinicId = $this->currentClinicId();
         $conn     = PlatformConnection::where('clinic_id', $clinicId)
             ->where('platform', 'wordpress')->first();
 
@@ -193,7 +196,7 @@ class IntegrationController extends Controller
 
     public function saveWordpress(Request $request): RedirectResponse
     {
-        $clinicId = auth()->user()->clinic_id ?? 1;
+        $clinicId = $this->currentClinicId();
 
         $request->validate([
             'site_url'     => 'required|url',

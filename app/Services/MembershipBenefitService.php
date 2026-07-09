@@ -6,6 +6,7 @@ use App\Models\Finance\FinancePatientMembership;
 use App\Models\Finance\FinanceMembershipPlan;
 use App\Models\Finance\MembershipBenefitLog;
 use App\Models\Patient;
+use App\Services\Relationship\ActivityEngine;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 
@@ -199,6 +200,19 @@ class MembershipBenefitService
             'membership_status'     => 'active',
             'membership_expires_at' => $endDate,
         ]);
+
+        // Additive Activity log (docs/backend-orchestration-plan.md §2.11) — no
+        // rule currently matches 'membership.enrolled', feeds Insights only.
+        // Covers both enroll() and enrollWithFinance() since the latter calls
+        // this method internally — single choke point, no duplicate log calls.
+        app(ActivityEngine::class)->log(
+            subject:        $record,
+            event:          'membership.enrolled',
+            actor:          Auth::user(),
+            metadata:       ['patient_id' => $patientId, 'plan_id' => $plan->id],
+            relationshipId: Patient::find($patientId)?->relationship_id,
+            description:    'Membership enrolled — ' . $plan->plan_name,
+        );
 
         return $record;
     }

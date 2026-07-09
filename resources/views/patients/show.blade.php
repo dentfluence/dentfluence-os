@@ -432,7 +432,6 @@
             'membership'        => 'Membership',
             'documents'         => 'Documents',
             'notes'             => 'Notes & Logs',
-            'communications'    => 'Communications',
         ] as $tab => $label)
         <button
             x-on:click="activeTab = '{{ $tab }}'"
@@ -992,6 +991,20 @@
                         {{ $label }}
                     </button>
                     @endforeach
+
+                    {{-- Send review request — real form POST (not an Alpine click
+                         handler, unlike the actions above) so it reuses the same
+                         Communication\ReviewController@send + global flash-banner
+                         system the Marketing/Communication Reviews pages use.
+                         back() in that controller returns here via the referer. --}}
+                    <form method="POST" action="{{ route('communication.reviews.send') }}">
+                        @csrf
+                        <input type="hidden" name="patient_id" value="{{ $patient->id }}">
+                        <button type="submit"
+                            class="w-full text-left px-3 py-2 text-sm text-gray-700 border border-gray-200 rounded hover:border-[#6a0f70] hover:text-[#6a0f70] hover:bg-[#faf5ff] transition-colors font-medium">
+                            Send review request
+                        </button>
+                    </form>
                 </div>
             </div>
 
@@ -3081,11 +3094,11 @@ document.getElementById('patientDeleteModal').addEventListener('click', function
          x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
          class="bg-white border border-[#6a0f70]/30 rounded-xl p-5 mb-4 shadow-sm">
         <h3 class="text-sm font-bold text-gray-800 mb-4">Upload Document</h3>
-        <form method="POST" action="{{ route('patients.documents.store', $patient) }}" enctype="multipart/form-data"
+        <form method="POST" action="{{ route('clinical-files.store', $patient) }}" enctype="multipart/form-data"
               @submit.prevent="
                 uploading = true; uploadError = '';
                 const fd = new FormData($el);
-                fetch('{{ route('patients.documents.store', $patient) }}', {
+                fetch('{{ route('clinical-files.store', $patient) }}', {
                     method: 'POST',
                     headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json' },
                     body: fd
@@ -3175,11 +3188,6 @@ document.getElementById('patientDeleteModal').addEventListener('click', function
     @endif
 </div>{{-- /x-data documents --}}
 </div>{{-- /x-show documents --}}
-
-{{-- ════════════════════════════════════
-     COMMUNICATIONS TAB
-════════════════════════════════════ --}}
-@include('patients.partials.communications-tab', ['patient' => $patient])
 
 {{-- ════════════════════════════════════
      NOTES & LOGS TAB
@@ -3394,7 +3402,7 @@ function patientProfile() {
 
         init() {
             const hash = window.location.hash.replace('#','');
-            const validTabs = ['profile','consultation','treatment-plan','visits','lab','prescriptions','billing','wallet','documents','notes','communications'];
+            const validTabs = ['profile','consultation','treatment-plan','visits','lab','prescriptions','billing','wallet','documents','notes'];
             if (validTabs.includes(hash)) {
                 this.activeTab = hash;
             }

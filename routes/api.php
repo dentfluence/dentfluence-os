@@ -102,6 +102,7 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::get('/patients/{patient}/wallet',          [PatientProfileController::class, 'wallet']);
         Route::get('/patients/{patient}/documents',       [PatientProfileController::class, 'documents']);
         Route::post('/patients/{patient}/documents',      [PatientProfileController::class, 'storeDocument']);
+        Route::post('/patients/{patient}/clinical-files',  [PatientProfileController::class, 'storeClinicalFile']);
         Route::get('/patients/{patient}/notes',           [PatientProfileController::class, 'notes']);
         Route::get('/patients/{patient}/communications',  [PatientProfileController::class, 'communications']);
         Route::get('/patients/{patient}/memberships',     [MembershipController::class, 'index']);

@@ -244,56 +244,69 @@
     {{-- Divider --}}
     <div style="width:1px; height:24px; background:rgba(185,92,183,0.15); flex-shrink:0;"></div>
 
-    {{-- Platform filter pills --}}
-    <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
-        @php
-            $pills = [
-                'all'       => ['label'=>'All',       'color'=>'#6a0f70',  'active'=>true],
-                'instagram' => ['label'=>'Instagram', 'color'=>'#e1306c',  'active'=>false],
-                'facebook'  => ['label'=>'Facebook',  'color'=>'#1877f2',  'active'=>false],
-                'google'    => ['label'=>'Google',    'color'=>'#4285f4',  'active'=>false],
-                'blog'      => ['label'=>'Blog',      'color'=>'#6366f1',  'active'=>false],
-                'whatsapp'  => ['label'=>'WhatsApp',  'color'=>'#25d366',  'active'=>false],
-            ];
-        @endphp
-        @foreach($pills as $key => $pill)
-        <button onclick="return false" style="
-            padding: 4px 11px;
-            font-family: 'Inter', sans-serif;
-            font-size: 11.5px;
-            font-weight: {{ $pill['active'] ? '600' : '400' }};
-            color: {{ $pill['active'] ? '#fff' : $pill['color'] }};
-            background: {{ $pill['active'] ? $pill['color'] : 'transparent' }};
-            border: 1.5px solid {{ $pill['color'] }};
-            border-radius: 20px;
-            cursor: pointer;
-            transition: all 120ms;
-        ">{{ $pill['label'] }}</button>
-        @endforeach
-    </div>
-
     {{-- Spacer --}}
     <div style="flex:1;"></div>
 
-    {{-- Filters button --}}
-    <button onclick="return false" style="
-        display: inline-flex; align-items: center; gap: 6px;
-        padding: 5px 13px;
-        font-family: 'Inter', sans-serif;
-        font-size: 12.5px;
-        font-weight: 500;
-        color: #5a4868;
-        background: #fff;
-        border: 1px solid rgba(185,92,183,0.2);
-        border-radius: 5px;
-        cursor: pointer;
-        flex-shrink: 0;
-    ">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
-        </svg>
-        Filters
-    </button>
+    {{-- ── Filters — collapsed into a single popover ──────────────
+         Slice 4: platform pills + the checklist filters (below in the
+         sidebar) used to sit permanently on-screen. Folded behind one
+         toggle instead of removed; nothing here was deleted. --}}
+    <div style="position:relative;" x-data="{ filtersOpen: false }" @click.outside="filtersOpen = false">
+        <button @click="filtersOpen = !filtersOpen" type="button" style="
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 13px;
+            font-family: 'Inter', sans-serif;
+            font-size: 12.5px;
+            font-weight: 500;
+            color: #5a4868;
+            background: #fff;
+            border: 1px solid rgba(185,92,183,0.2);
+            border-radius: 5px;
+            cursor: pointer;
+            flex-shrink: 0;
+        ">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
+            </svg>
+            Filters
+        </button>
+
+        <div x-show="filtersOpen" x-cloak x-transition style="
+            position:absolute; right:0; top:calc(100% + 6px); z-index:30;
+            width:240px; background:#fff; border:1px solid rgba(185,92,183,0.18);
+            border-radius:8px; box-shadow:0 4px 16px rgba(30,10,44,0.1);
+            padding:14px;
+        ">
+            <p style="font-family:'Inter',sans-serif; font-size:11px; font-weight:600; color:#9b6aad; text-transform:uppercase; letter-spacing:.5px; margin:0 0 8px;">Platform</p>
+            <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-bottom:12px;">
+                @php
+                    $pills = [
+                        'all'       => ['label'=>'All',       'color'=>'#6a0f70',  'active'=>true],
+                        'instagram' => ['label'=>'Instagram', 'color'=>'#e1306c',  'active'=>false],
+                        'facebook'  => ['label'=>'Facebook',  'color'=>'#1877f2',  'active'=>false],
+                        'google'    => ['label'=>'Google',    'color'=>'#4285f4',  'active'=>false],
+                        'blog'      => ['label'=>'Blog',      'color'=>'#6366f1',  'active'=>false],
+                        'whatsapp'  => ['label'=>'WhatsApp',  'color'=>'#25d366',  'active'=>false],
+                    ];
+                @endphp
+                @foreach($pills as $key => $pill)
+                <button onclick="return false" style="
+                    padding: 4px 11px;
+                    font-family: 'Inter', sans-serif;
+                    font-size: 11.5px;
+                    font-weight: {{ $pill['active'] ? '600' : '400' }};
+                    color: {{ $pill['active'] ? '#fff' : $pill['color'] }};
+                    background: {{ $pill['active'] ? $pill['color'] : 'transparent' }};
+                    border: 1.5px solid {{ $pill['color'] }};
+                    border-radius: 20px;
+                    cursor: pointer;
+                    transition: all 120ms;
+                ">{{ $pill['label'] }}</button>
+                @endforeach
+            </div>
+            <p style="font-family:'Inter',sans-serif; font-size:11px; color:#9ca3af; margin:0;">Status and content-type filters are in the sidebar.</p>
+        </div>
+    </div>
 </div>
 
 {{-- ══════════════════════════════════════════════════════
@@ -397,6 +410,25 @@
                 @endforeach
             </div>
         </div>{{-- /mini calendar --}}
+
+        {{-- ── Sidebar filters — collapsed by default ──────────────
+             Slice 4: Status + Content Type checklists used to always
+             take up the whole sidebar. Folded behind one disclosure
+             toggle instead of removed; nothing here was deleted. --}}
+        <div x-data="{ sidebarFiltersOpen: false }">
+        <button type="button" @click="sidebarFiltersOpen = !sidebarFiltersOpen" style="
+            width:100%; display:flex; align-items:center; justify-content:space-between;
+            padding:10px 14px; background:#fff;
+            border:1px solid rgba(185,92,183,0.14); border-radius:8px;
+            font-family:'Inter',sans-serif; font-size:12.5px; font-weight:500; color:#5a4868;
+            cursor:pointer; margin-bottom:10px;
+        ">
+            <span>More filters</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" :style="sidebarFiltersOpen ? 'transform:rotate(180deg);' : ''" style="transition:transform 150ms;">
+                <polyline points="6 9 12 15 18 9"/>
+            </svg>
+        </button>
+        <div x-show="sidebarFiltersOpen" x-cloak x-transition style="display:flex; flex-direction:column; gap:18px;">
 
         {{-- ── Filter by Status ────────────────────── --}}
         <div style="
@@ -507,6 +539,9 @@
                 </a>
             </div>
         </div>{{-- /content type --}}
+
+        </div>{{-- /sidebarFiltersOpen x-show --}}
+        </div>{{-- /sidebarFiltersOpen x-data --}}
 
     </div>{{-- /LEFT SIDEBAR --}}
 

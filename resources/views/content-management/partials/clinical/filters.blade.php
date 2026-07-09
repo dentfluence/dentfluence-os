@@ -35,8 +35,8 @@
                     style="width:100%;border:1px solid #e5e7eb;border-radius:5px;padding:7px 10px;font-size:13px;color:#111827;background:white;outline:none;cursor:pointer;"
                     onchange="window.cmsSearch?.debounceSearch()">
                 <option value="">All Treatments</option>
-                @foreach(['Implant','RCT','Crown','Veneers','Composite Filling','Scaling & Polishing','Orthodontics','Extraction','Bridge','Whitening','Full Mouth Rehab','Smile Design'] as $t)
-                <option>{{ $t }}</option>
+                @foreach(($treatmentCategoryOptions ?? \App\Models\ClinicalFile::TREATMENT_CATEGORIES) as $value => $label)
+                <option value="{{ $value }}">{{ $label }}</option>
                 @endforeach
             </select>
         </div>

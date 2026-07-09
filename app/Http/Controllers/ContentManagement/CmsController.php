@@ -68,6 +68,10 @@ class CmsController extends Controller
         // Tag options from clinical_media tags column
         $tagOptions = $this->searchService->getTagOptions();
 
+        // Fixed-vocabulary treatment categories for the "Treatment" filter —
+        // reliable, unlike matching free-text procedure names.
+        $treatmentCategoryOptions = $this->searchService->getTreatmentCategoryOptions();
+
         $stats = $this->searchService->getStats();
 
         $treatmentOptions = $treatments;
@@ -138,7 +142,8 @@ class CmsController extends Controller
         $casesByProcedure = $caseFiles->groupBy('procedure');
 
         return compact(
-            'toothOptions', 'treatments', 'treatmentOptions', 'patients', 'doctors',
+            'toothOptions', 'treatments', 'treatmentOptions', 'treatmentCategoryOptions',
+            'patients', 'doctors',
             'tagOptions', 'stats', 'tabCounts',
             'marketingFiles', 'marketingByMonth',
             'educationFiles',
@@ -177,44 +182,12 @@ class CmsController extends Controller
         ));
     }
 
-    // Education tab
-    public function education(Request $request)
-    {
-        if ($request->ajax() || $request->wantsJson()) {
-            $categories = \App\Models\CmsEduCategory::withCount('items')
-                ->where('is_active', true)
-                ->orderBy('sort_order')
-                ->get();
-
-            $items = \App\Models\CmsEduItem::with('category')
-                ->where('is_active', true)
-                ->orderBy('sort_order')
-                ->get()
-                ->map(fn($i) => [
-                    'id'          => $i->id,
-                    'title'       => $i->title,
-                    'description' => $i->description,
-                    'media_type'  => $i->media_type,
-                    'thumbnail'   => $i->thumbnail_path ? \Storage::url($i->thumbnail_path) : null,
-                    'duration'    => $i->duration_seconds,
-                    'photo_count' => $i->photo_count,
-                    'xray_count'  => $i->xray_count,
-                    'video_count' => $i->video_count,
-                    'category_id' => $i->category_id,
-                    'category'    => $i->category?->name,
-                ]);
-
-            return response()->json([
-                'categories' => $categories,
-                'items'      => $items,
-            ]);
-        }
-
-        return view('content-management.index', array_merge(
-            $this->sharedViewData(),
-            ['activeTab' => 'education']
-        ));
-    }
+    // NOTE: education() was removed here (2026-07-09 cleanup) — it had no route
+    // pointing to it (the live education tab is
+    // ContentManagement\ClinicalLibraryController::education(), using
+    // EducationCategory/EducationTreatment/EducationMedia) and it referenced
+    // CmsEduCategory/CmsEduItem, which were deleted in the same pass as
+    // confirmed-dead models. See docs/CLAUDE memory: project_clinical_library_audit_0709.
 
     // Marketing tab
     public function marketing()

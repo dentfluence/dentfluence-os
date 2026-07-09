@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Marketing\Concerns\ResolvesClinicId;
 use App\Models\Marketing\MarketingPost;
 use App\Models\Marketing\PostVariant;
 use App\Models\Marketing\PostSchedule;
 use App\Models\Marketing\MarketingActivityLog;
+use App\Models\Marketing\Idea;
 use App\Jobs\Marketing\ProcessScheduledPost;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
@@ -16,12 +18,53 @@ use Carbon\Carbon;
 
 class PublishController extends Controller
 {
-    private const CLINIC_ID = 1;
+    use ResolvesClinicId;
 
-    /** Show the compose/publish page */
+    /**
+     * Show the compose/publish page.
+     *
+     * Slice 3 addition (docs/marketing-module-reengineering-plan.md): a
+     * lightweight Ideas → Drafts → Scheduled → Published board sits above
+     * the composer so Content reads as one workflow instead of three
+     * separate pages (Publish/Brainstorm/Ideas). Purely additive — the
+     * compose/store/schedule logic below is untouched.
+     */
     public function index(): View
     {
-        return view('marketing.publish.index');
+        $clinicId = $this->currentClinicId();
+
+        $ideas = Idea::where('clinic_id', $clinicId)
+            ->whereIn('status', ['idea', 'in_progress'])
+            ->latest()
+            ->limit(5)
+            ->get(['id', 'title', 'content_type']);
+
+        $drafts = MarketingPost::where('clinic_id', $clinicId)
+            ->where('status', 'draft')
+            ->latest()
+            ->limit(5)
+            ->get(['id', 'title', 'caption', 'content_type']);
+
+        $scheduled = MarketingPost::where('clinic_id', $clinicId)
+            ->where('status', 'scheduled')
+            ->orderBy('updated_at')
+            ->limit(5)
+            ->get(['id', 'title', 'caption', 'content_type']);
+
+        $published = MarketingPost::where('clinic_id', $clinicId)
+            ->where('status', 'published')
+            ->latest('updated_at')
+            ->limit(5)
+            ->get(['id', 'title', 'caption', 'content_type']);
+
+        $board = [
+            'ideas'     => ['label' => 'Ideas',     'total' => Idea::where('clinic_id', $clinicId)->whereIn('status', ['idea', 'in_progress'])->count(), 'items' => $ideas],
+            'drafts'    => ['label' => 'Drafts',    'total' => MarketingPost::where('clinic_id', $clinicId)->where('status', 'draft')->count(), 'items' => $drafts],
+            'scheduled' => ['label' => 'Scheduled', 'total' => MarketingPost::where('clinic_id', $clinicId)->where('status', 'scheduled')->count(), 'items' => $scheduled],
+            'published' => ['label' => 'Published', 'total' => MarketingPost::where('clinic_id', $clinicId)->where('status', 'published')->count(), 'items' => $published],
+        ];
+
+        return view('marketing.publish.index', compact('board'));
     }
 
     // -------------------------------------------------------------------------
@@ -47,7 +90,7 @@ class PublishController extends Controller
 
         // 1. Create the master post
         $post = MarketingPost::create([
-            'clinic_id'    => self::CLINIC_ID,
+            'clinic_id'    => $this->currentClinicId(),
             'campaign_id'  => $validated['campaign_id'] ?? null,
             'title'        => $validated['title'] ?? null,
             'caption'      => $validated['caption'],
@@ -96,7 +139,7 @@ class PublishController extends Controller
         }
 
         MarketingActivityLog::log(
-            self::CLINIC_ID,
+            $this->currentClinicId(),
             'post_created',
             $post,
             "Post \"" . ($post->title ?: substr($post->caption, 0, 40)) . "\" created"
@@ -123,7 +166,7 @@ class PublishController extends Controller
         ]);
 
         $post = MarketingPost::create([
-            'clinic_id'    => self::CLINIC_ID,
+            'clinic_id'    => $this->currentClinicId(),
             'title'        => $validated['title'] ?? null,
             'caption'      => $validated['caption'],
             'content_type' => $validated['content_type'],

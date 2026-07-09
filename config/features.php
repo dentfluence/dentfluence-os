@@ -84,5 +84,18 @@ return [
         'integration.website'  => ['default' => false, 'description' => "The clinic's own website (WordPress publish) routed through Integration. Added Slice 3 — named in the Phase 7 deliverables but missing from this table until now."],
         'integration.payments' => ['default' => false, 'description' => 'Payment gateways routed through Integration.'],
         'integration.abdm'     => ['default' => false, 'description' => 'ABDM routed through Integration.'],
+
+        // ── Marketing re-engineering (V3) — provider abstraction ─────────
+        // Docs: docs/marketing-module-reengineering-plan.md §8-9.
+        // OFF = Marketing reads Revenue/Patient/Treatment/Media/Review/
+        // Appointment data from manual entry (Standalone providers) or, for
+        // Media/Review, from Marketing's own tables where that's already
+        // real data. ON = Integrated providers wire those same interfaces
+        // to real Dentfluence records (Invoices, the Reviews system, etc.)
+        // instead. Per-clinic override, same mechanism as integration.*.
+        'marketing.integrated_providers' => [
+            'default'     => false,
+            'description' => 'Marketing provider interfaces (Revenue/Patient/Treatment/Media/Review/Appointment) resolve to Integrated implementations instead of Standalone/manual ones.',
+        ],
     ],
 ];

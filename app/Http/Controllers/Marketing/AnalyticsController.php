@@ -10,6 +10,7 @@ use App\Models\Marketing\MarketingPost;
 use App\Models\Marketing\PlatformConnection;
 use App\Models\Marketing\PostVariant;
 use App\Models\Marketing\FestivalDate;
+use App\Http\Controllers\Marketing\Concerns\ResolvesClinicId;
 use App\Services\Marketing\MarketingScoreService;
 use Carbon\Carbon;
 use Illuminate\View\View;
@@ -28,11 +29,11 @@ use Illuminate\Support\Facades\DB;
  */
 class AnalyticsController extends Controller
 {
-    private const CLINIC_ID = 1;
+    use ResolvesClinicId;
 
     public function index(): View
     {
-        $clinicId = self::CLINIC_ID;
+        $clinicId = $this->currentClinicId();
 
         // ── KPI Summary ───────────────────────────────────────────────────
         $kpi = $this->kpiSummary($clinicId);
@@ -274,10 +275,11 @@ class AnalyticsController extends Controller
      */
     private function roiTotals(array $campaigns): array
     {
-        $totalBudget  = array_sum(array_column($campaigns, 'budget_total'));
-        $totalSpent   = array_sum(array_column($campaigns, 'budget_spent'));
-        $totalLeads   = array_sum(array_column($campaigns, 'leads_actual'));
-        $totalRevenue = array_sum(array_column($campaigns, 'revenue_actual'));
+        $totalBudget       = array_sum(array_column($campaigns, 'budget_total'));
+        $totalSpent        = array_sum(array_column($campaigns, 'budget_spent'));
+        $totalLeads        = array_sum(array_column($campaigns, 'leads_actual'));
+        $totalAppointments = array_sum(array_column($campaigns, 'appts_actual'));
+        $totalRevenue      = array_sum(array_column($campaigns, 'revenue_actual'));
 
         $overallRoi = $totalSpent > 0
             ? round(($totalRevenue - $totalSpent) / $totalSpent * 100, 1)
@@ -288,12 +290,13 @@ class AnalyticsController extends Controller
             : null;
 
         return [
-            'total_budget'  => $totalBudget,
-            'total_spent'   => $totalSpent,
-            'total_leads'   => $totalLeads,
-            'total_revenue' => $totalRevenue,
-            'overall_roi'   => $overallRoi,
-            'cost_per_lead' => $avgCostPerLead,
+            'total_budget'       => $totalBudget,
+            'total_spent'        => $totalSpent,
+            'total_leads'        => $totalLeads,
+            'total_appointments' => $totalAppointments,
+            'total_revenue'      => $totalRevenue,
+            'overall_roi'        => $overallRoi,
+            'cost_per_lead'      => $avgCostPerLead,
         ];
     }
 

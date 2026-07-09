@@ -31,6 +31,7 @@
 ═══════════════════════════════════════════════════════════════ --}}
 <div x-data="{
     activeTab: 'universal',
+    showPreviews: false,
     tabs: [
         { key: 'universal',        label: 'Universal' },
         { key: 'instagram',        label: 'Instagram' },
@@ -71,6 +72,34 @@
 
         {{-- Action Buttons --}}
         <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+            {{-- Ideas / Brainstorm — kept reachable here now that it no longer
+                 has its own top-level nav tab (folds fully into Content in a
+                 later pass; this link keeps it from becoming a dead end). --}}
+            <a href="{{ route('marketing.brainstorm') }}" style="
+                display: inline-flex;
+                align-items: center;
+                gap: 7px;
+                height: 38px;
+                padding: 0 16px;
+                font-family: 'Inter', sans-serif;
+                font-size: 13px;
+                font-weight: 500;
+                color: #5a4868;
+                background: #ffffff;
+                border: 1.5px solid rgba(185,92,183,0.25);
+                border-radius: 6px;
+                text-decoration: none;
+                transition: background 150ms;
+            "
+            onmouseover="this.style.background='#faf5ff'"
+            onmouseout="this.style.background='#ffffff'"
+            >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                Ideas
+            </a>
+
             {{-- Save as Draft --}}
             <button type="button" style="
                 display: inline-flex;
@@ -130,6 +159,32 @@
         </div>
     </div>
     {{-- /PAGE HEADER --}}
+
+    {{-- ── CONTENT BOARD — Ideas → Drafts → Scheduled → Published ──
+         Slice 3 addition: merges what used to be three separate pages
+         (Publish/Brainstorm/Ideas) into one workflow. Read-only summary;
+         clicking a column takes you to the fuller list. --}}
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:20px;">
+        @foreach ($board as $key => $col)
+        <div style="background:#fff; border:1px solid rgba(185,92,183,0.15); border-radius:8px; padding:14px 16px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                <span style="font-family:'Inter',sans-serif; font-size:11px; font-weight:600; color:#9b6aad; text-transform:uppercase; letter-spacing:.5px;">{{ $col['label'] }}</span>
+                <span style="font-family:'Inter',sans-serif; font-size:12px; font-weight:700; color:#1e0a2c;">{{ $col['total'] }}</span>
+            </div>
+            @forelse ($col['items'] as $item)
+            <a href="{{ $key === 'ideas' ? route('marketing.brainstorm') : '#' }}" style="
+                display:block; text-decoration:none;
+                font-family:'Inter',sans-serif; font-size:12px; color:#5a4868;
+                padding:5px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+                border-bottom:1px solid rgba(185,92,183,0.06);
+            ">{{ $item->title ?: \Illuminate\Support\Str::limit($item->caption ?? '', 40) }}</a>
+            @empty
+            <p style="font-family:'Inter',sans-serif; font-size:11px; color:#c4b5cc; margin:0;">Nothing here yet.</p>
+            @endforelse
+        </div>
+        @endforeach
+    </div>
+    {{-- /CONTENT BOARD --}}
 
     {{-- ── PLATFORM SUB-TABS ────────────────────────────────────── --}}
     <div style="
@@ -232,15 +287,39 @@
         </div>
         {{-- /PANEL 1 --}}
 
-        {{-- PANEL 2 — Platform Previews (40%) --}}
+        {{-- PANEL 2 — Platform Previews (40%) — collapsed by default.
+             Slice 3: live previews were one of the biggest sources of
+             on-screen clutter (dossier §10). Hidden behind a toggle
+             instead of removed — nothing here was deleted. --}}
         <div style="
             flex: 0 0 40%;
             width: 40%;
             min-width: 300px;
             border-right: 1px solid rgba(185,92,183,0.10);
             height: 100%;
+            overflow-y: auto;
         ">
-            @include('marketing.publish.partials._platform-previews')
+            <div x-show="!showPreviews" style="padding:24px 20px;">
+                <button type="button" @click="showPreviews = true" style="
+                    display:flex; align-items:center; gap:8px; width:100%;
+                    justify-content:center;
+                    padding:12px 16px;
+                    background:#faf5ff; border:1px dashed rgba(185,92,183,0.35); border-radius:8px;
+                    font-family:'Inter',sans-serif; font-size:13px; color:#6a0f70; font-weight:500;
+                    cursor:pointer;
+                ">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    Show live platform previews
+                </button>
+            </div>
+            <div x-show="showPreviews" x-cloak>
+                <div style="padding:8px 16px 0; display:flex; justify-content:flex-end;">
+                    <button type="button" @click="showPreviews = false" style="background:none; border:none; cursor:pointer; font-family:'Inter',sans-serif; font-size:11px; color:#9ca3af;">Hide previews</button>
+                </div>
+                @include('marketing.publish.partials._platform-previews')
+            </div>
         </div>
         {{-- /PANEL 2 --}}
 

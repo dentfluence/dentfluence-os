@@ -42,7 +42,7 @@
         </div>
 
         {{-- Clinical — hide entire section if no clinical access --}}
-        @if($user->canAccess('patients') || $user->canAccess('appointments') || $user->canAccess('treatments') || $user->canAccess('cms'))
+        @if($user->canAccess('patients') || $user->canAccess('appointments') || $user->canAccess('treatments') || $user->canAccess('cms') || $user->canAccess('presentations'))
         <div style="padding:12px 0 4px;">
             <div class="df-nav-section-label" style="font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.20em;text-transform:uppercase;color:rgba(185,130,210,0.38);padding:0 16px 5px;">Clinical</div>
             @if($user->canAccess('patients'))
@@ -66,6 +66,16 @@
                     'href'  => route('treatments.index'),
                     'label' => 'Treatments',
                     'icon'  => '<path d="M12 22 C12 22 5 17 5 11 C5 7 7.5 4 12 4 C16.5 4 19 7 19 11 C19 17 12 22 12 22Z"/>',
+                ])
+            @endif
+            {{-- Smart Treatment Presentation (2026-07-09) — new, independent module.
+                 Sits right after Treatments to match the real workflow order
+                 (plan created → presented/explained → billed). --}}
+            @if($user->canAccess('presentations'))
+                @include('components.sidebar-item', [
+                    'href'  => route('presentations.index'),
+                    'label' => 'Smart Presentation',
+                    'icon'  => '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
                 ])
             @endif
             @if($user->canAccess('patients') || $user->canAccess('treatments'))

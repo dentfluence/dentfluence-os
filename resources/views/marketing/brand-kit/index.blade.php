@@ -805,4 +805,90 @@
                         id="bk-brand-desc"
                         rows="4"
                         maxlength="300"
-                        placeholder="Your brand voice used when AI generates content for you�
+                        placeholder="Your brand voice used when AI generates content for you"
+                        style="
+                            width:100%; box-sizing:border-box;
+                            padding:10px 12px; resize:vertical;
+                            font-family:'Inter',sans-serif; font-size:13px; color:#1e0a2c;
+                            border:1px solid rgba(185,92,183,0.2); border-radius:6px;
+                            background:#fff; outline:none; line-height:1.5;
+                        "
+                        onfocus="this.style.borderColor='#6C3FE8'" onblur="this.style.borderColor='rgba(185,92,183,0.2)'"
+                        oninput="document.getElementById('bk-desc-count').textContent = this.value.length + '/300'"
+                    >{{ $brandKit['brand_description'] }}</textarea>
+                </div>
+            </div>
+
+            {{-- Save footer --}}
+            <div style="padding:14px 22px; border-top:1px solid rgba(185,92,183,0.09); display:flex; align-items:center; justify-content:flex-end; gap:14px;">
+                <span style="font-family:'Inter',sans-serif; font-size:11px; color:#b0a0bb;">Last saved: 3 hours ago</span>
+                <button type="button" style="
+                    background:#6C3FE8; color:#fff; border:none; border-radius:6px;
+                    padding:7px 18px; font-family:'Inter',sans-serif; font-size:12.5px; font-weight:500;
+                    cursor:pointer; transition:background 150ms;
+                " onmouseover="this.style.background='#5A2ED6'" onmouseout="this.style.background='#6C3FE8'">
+                    Save AI Settings
+                </button>
+            </div>
+        </div>
+        {{-- /#bk-ai — end of 8 section cards --}}
+
+    </div>
+    {{-- /RIGHT: Form Sections --}}
+
+</div>
+{{-- /2-Panel Layout --}}
+
+<script>
+// Section-nav active-state highlighter (scrollspy-lite).
+function bkSetActive(id) {
+    document.querySelectorAll('.bk-nav-link').forEach(el => {
+        el.style.background = 'transparent';
+        el.style.borderLeftColor = 'transparent';
+        el.style.color = '#5a4868';
+        el.style.fontWeight = '400';
+    });
+    const active = document.getElementById('bk-nav-' + id);
+    if (active) {
+        active.style.background = '#faf5ff';
+        active.style.borderLeftColor = '#6C3FE8';
+        active.style.color = '#6C3FE8';
+        active.style.fontWeight = '500';
+    }
+}
+
+// Hashtag chip input — Enter to add.
+function bkAddTag(event) {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const input = event.target;
+    let value = input.value.trim().replace(/^#/, '');
+    if (!value) return;
+
+    const chip = document.createElement('span');
+    chip.className = 'bk-tag';
+    chip.style.cssText = 'display:inline-flex; align-items:center; gap:5px; background:#fff; border:1px solid rgba(108,63,232,0.25); border-radius:20px; padding:4px 10px; font-family:\'Inter\',sans-serif; font-size:12px; font-weight:500; color:#6C3FE8;';
+    chip.innerHTML = '#' + value + ' <span onclick="this.parentElement.remove()" style="cursor:pointer; color:#9b6aad; line-height:1; font-size:14px;">&times;</span>';
+    input.parentElement.insertBefore(chip, input);
+    input.value = '';
+}
+
+// AI tone card selector visuals.
+function bkSetTone(radio) {
+    document.querySelectorAll('.bk-tone-card').forEach(card => {
+        card.style.border = '2px solid rgba(185,92,183,0.18)';
+        card.style.background = '#faf7fd';
+        const label = card.querySelector('div:nth-child(2)');
+        if (label) label.style.color = '#1e0a2c';
+    });
+    const selected = document.querySelector('.bk-tone-card[data-tone="' + radio.value + '"]');
+    if (selected) {
+        selected.style.border = '2px solid #6C3FE8';
+        selected.style.background = 'rgba(108,63,232,0.04)';
+        const label = selected.querySelector('div:nth-child(2)');
+        if (label) label.style.color = '#6C3FE8';
+    }
+}
+</script>
+
+@endsection

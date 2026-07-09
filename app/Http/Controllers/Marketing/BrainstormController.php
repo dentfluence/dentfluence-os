@@ -3,17 +3,18 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Marketing\Concerns\ResolvesClinicId;
 use App\Models\Marketing\Idea;
 use App\Models\Marketing\FestivalDate;
 use Illuminate\View\View;
 
 class BrainstormController extends Controller
 {
-    private const CLINIC_ID = 1;
+    use ResolvesClinicId;
 
     public function index(): View
     {
-        $clinicId = self::CLINIC_ID;
+        $clinicId = $this->currentClinicId();
 
         // ── Idea Bank — paginated, all active ideas ──────────────────────────
         $ideas = Idea::where('clinic_id', $clinicId)

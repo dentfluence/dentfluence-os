@@ -20,7 +20,15 @@ use App\Http\Controllers\Communication\CommunicationController;
 
 Route::prefix('communication')
     ->name('communication.')
-    ->middleware(['web', 'auth', 'communication.access', 'module:prm'])
+    // Was 'module:prm' — stale reference. Migration
+    // 2026_07_06_200002_cleanup_and_activate_role_permissions deleted the
+    // 'prm' module row and created 'communication' in its place (granting
+    // view+edit to every role as a zero-regression baseline), but this
+    // route group was never updated to match — so every role without the
+    // old ungated "role===admin && !role_id" bypass got locked out of all
+    // of Communication (Reviews, WhatsApp inbox, etc). Found live 2026-07-09
+    // while testing the Marketing→Reviews link.
+    ->middleware(['web', 'auth', 'communication.access', 'module:communication'])
     ->group(function () {
 
         // ── Module Home ──────────────────────────────────────────────────
@@ -185,6 +193,7 @@ Route::prefix('communication')
         Route::prefix('reviews')->name('reviews.')->group(function () {
             Route::get('/',     [\App\Http\Controllers\Communication\ReviewController::class, 'index'])->name('index');
             Route::post('/send',[\App\Http\Controllers\Communication\ReviewController::class, 'send'])->name('send');
+            Route::post('/{review}/reply', [\App\Http\Controllers\Communication\ReviewController::class, 'reply'])->name('reply');
         });
 
         // ── Phase B 1.2: WhatsApp two-way Inbox ───────────────────────────

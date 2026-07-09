@@ -20,15 +20,13 @@ use App\Modules\Huddle\Services\RoleBasedHuddleService;
 use App\Modules\Huddle\Transformers\AppointmentToCardTransformer;
 use App\Modules\Huddle\Transformers\TaskToCardTransformer;
 
-// CMS Services
-use App\Services\Cms\WatermarkService;
-use App\Services\Cms\ClinicalMediaService;
-use App\Services\Cms\CmsSearchService;
-use App\Services\Cms\TimelineService;
-
 // Phase 4 — B2B Observer
 use App\Models\LabCase;
 use App\Observers\LabCaseObserver;
+
+// Backend Orchestration — Activity observers (docs/backend-orchestration-plan.md)
+use App\Models\Consultation;
+use App\Observers\ConsultationActivityObserver;
 
 // Finance — mirror staff into finance_vendors for the Expense form
 use App\Models\User;
@@ -52,12 +50,6 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(HuddleTaskRepository::class);
         $this->app->singleton(HuddleCommentRepository::class);
         $this->app->singleton(RoleBasedHuddleService::class);
-
-        // CMS Module bindings
-        $this->app->singleton(WatermarkService::class);
-        $this->app->singleton(ClinicalMediaService::class);
-        $this->app->singleton(TimelineService::class);
-        $this->app->singleton(CmsSearchService::class);
     }
 
     /**
@@ -67,6 +59,10 @@ class AppServiceProvider extends ServiceProvider
     {
         // Phase 4: LabCase observer — auto-sync comm status with lab case status
         LabCase::observe(LabCaseObserver::class);
+
+        // Backend Orchestration: Consultation -> Activity/Timeline (additive,
+        // no rule currently matches 'consultation.completed', feeds Insights only)
+        Consultation::observe(ConsultationActivityObserver::class);
 
         // Finance: keep every staff member mirrored into finance_vendors
         // (vendor_type = 'staff') so they appear in the Expense form's

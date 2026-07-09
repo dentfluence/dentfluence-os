@@ -11,7 +11,9 @@
     {{-- ── Back to Communication OS Dashboard (hidden on the dashboard itself) ──
          Was "PRM Dashboard" — stale leftover from before the PRM board was
          retired (Phase 8). This module is Communication OS, not PRM; fixed
-         2026-07-06. --}}
+         2026-07-06. The ?from=marketing overlay (added then reverted
+         2026-07-09) is gone — Reviews now has a native page at
+         /marketing/reviews instead of linking into this shell. --}}
     @unless(request()->routeIs('communication.index'))
     <div style="padding:10px 24px 0; display:flex; align-items:center;">
         <a href="{{ route('communication.index') }}"

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Marketing\Concerns\ResolvesClinicId;
 use App\Models\Marketing\MarketingAsset;
 use App\Models\Marketing\AssetFolder;
 use App\Models\Marketing\AssetTag;
@@ -12,14 +13,14 @@ use Illuminate\View\View;
 
 class LibraryController extends Controller
 {
-    private const CLINIC_ID = 1;
+    use ResolvesClinicId;
 
     // -------------------------------------------------------------------------
     // Index — library main view
     // -------------------------------------------------------------------------
     public function index(Request $request): View
     {
-        $clinicId = self::CLINIC_ID;
+        $clinicId = $this->currentClinicId();
         $folderId = $request->get('folder');
         $tagId    = $request->get('tag');
         $type     = $request->get('type');
@@ -117,7 +118,7 @@ class LibraryController extends Controller
         ]);
 
         $folder = AssetFolder::create([
-            'clinic_id'  => self::CLINIC_ID,
+            'clinic_id'  => $this->currentClinicId(),
             'name'       => $validated['name'],
             'parent_id'  => $validated['parent_id'] ?? null,
             'created_by' => auth()->id(),

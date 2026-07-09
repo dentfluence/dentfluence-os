@@ -5,6 +5,7 @@ namespace Tests\Browser;
 use App\Models\User;
 use App\Models\Patient;
 use App\Models\PatientCommunication;
+use App\Services\Relationship\RelationshipEngine;
 use Illuminate\Support\Facades\DB;
 use Tests\DuskTestCase;
 use Laravel\Dusk\Browser;
@@ -15,12 +16,19 @@ use Laravel\Dusk\Browser;
  * ─────────────────────────────────────────────────────────────────────────
  *
  *  WHAT THIS CHECKS (plain language):
- *  On a patient's Communications tab, opens "Add Communication", writes a
- *  note, saves (type/direction/status default to call/outgoing/sent), and
- *  confirms the communication was saved to the database.
+ *  On the patient's Relationship Profile → Communication tab, opens
+ *  "Log Communication", writes a note, saves (type/direction/status default
+ *  to call/outgoing/sent), and confirms the communication was saved to the
+ *  database.
  *
- *  Creates its own throwaway patient and removes it (and the communication)
- *  in tearDown.
+ *  2026-07-09: the standalone "Communications" tab on the patient profile
+ *  page was retired (duplicate of this one — see Relationship Profile). The
+ *  logging UI now lives only on the Relationship Profile, so this test
+ *  explicitly links the throwaway patient to a Relationship first (normally
+ *  done by RelationshipEngine::linkPatient() during real patient creation).
+ *
+ *  Creates its own throwaway patient (+ relationship) and removes both (and
+ *  the communication) in tearDown.
  */
 class DailyClinicCommunicationTest extends DuskTestCase
 {
@@ -29,8 +37,12 @@ class DailyClinicCommunicationTest extends DuskTestCase
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
         $patientIds = Patient::where('last_name', 'DuskComm')->pluck('id');
         if ($patientIds->isNotEmpty()) {
+            $relationshipIds = Patient::whereIn('id', $patientIds)->pluck('relationship_id')->filter();
             PatientCommunication::whereIn('patient_id', $patientIds)->forceDelete();
             Patient::whereIn('id', $patientIds)->forceDelete();
+            if ($relationshipIds->isNotEmpty()) {
+                DB::table('relationships')->whereIn('id', $relationshipIds)->delete();
+            }
         }
         DB::statement('SET FOREIGN_KEY_CHECKS=1');
         parent::tearDown();
@@ -52,14 +64,22 @@ class DailyClinicCommunicationTest extends DuskTestCase
             'branch_id'  => $user->branch_id ?? 1,
             'created_by' => $user->id,
         ]);
-        $patientId = $patient->id;
-        $message   = 'DuskComm' . now()->format('His') . ' — called patient, confirmed appointment';
 
-        $this->browse(function (Browser $browser) use ($user, $patientId, $message) {
+        // Normal patient creation links a Relationship via RelationshipEngine;
+        // this test bypasses that flow, so link it explicitly.
+        app(RelationshipEngine::class)->linkPatient($patient);
+        $patient->refresh();
+        $this->assertNotNull($patient->relationship_id, 'Test patient must be linked to a Relationship to reach the Communication tab.');
+
+        $patientId      = $patient->id;
+        $relationshipId = $patient->relationship_id;
+        $message        = 'DuskComm' . now()->format('His') . ' — called patient, confirmed appointment';
+
+        $this->browse(function (Browser $browser) use ($user, $relationshipId, $message) {
             $browser->loginAs($user)
-                    ->visit('/patients/' . $patientId)
-                    ->waitFor('@tab-communications')
-                    ->click('@tab-communications')
+                    ->visit('/relationship/' . $relationshipId)
+                    ->waitFor('@rp-tab-communication')
+                    ->click('@rp-tab-communication')
                     ->waitFor('@comm-add')
                     ->click('@comm-add')
                     ->waitFor('@comm-message')

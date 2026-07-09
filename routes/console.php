@@ -31,6 +31,25 @@ Schedule::command('recall:run')
 
 /*
 |--------------------------------------------------------------------------
+| Membership Renewal Scan — Backend Orchestration (docs/backend-orchestration-plan.md §2.12)
+|--------------------------------------------------------------------------
+| Runs daily at 7:10am (just after recall:run). Fires 'membership.expiring'
+| for any active membership whose end_date is exactly
+| config('relationship_rules.today_actions.membership_renewal_days_ahead')
+| (default 30) days out — activates the already-enabled membership_renewal_30d
+| RulesEngine rule for the first time.
+|
+| Manual trigger: php artisan membership:scan-expiring
+| Preview only:   php artisan membership:scan-expiring --dry-run
+*/
+Schedule::command('membership:scan-expiring')
+    ->dailyAt('07:10')
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/membership-renewal-scan.log'));
+
+/*
+|--------------------------------------------------------------------------
 | WhatsApp — Appointment Reminders (Phase B 1.2)
 |--------------------------------------------------------------------------
 | Runs daily at 10:00am. Sends the approved `appointment_reminder` template to

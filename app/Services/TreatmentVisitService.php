@@ -12,6 +12,7 @@ use App\Models\Patient;
 use App\Models\Task;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentVisit;
+use App\Services\Relationship\ActivityEngine;
 use App\Services\Workflow\WorkflowShadowRunner;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -165,7 +166,7 @@ class TreatmentVisitService
 
             // Mark the linked treatment plan as completed if requested
             if (!empty($data['mark_treatment_complete']) && $visit->treatment_plan_id) {
-                $this->completePlanAndQueueRecall($visit->treatment_plan_id, $patient->id, $patient->name);
+                $this->completePlanAndQueueRecall($visit->treatment_plan_id, $patient->id, $patient->name, $data['treatment_name'] ?? null);
             }
 
             // Record implant placement + deduct stock for fixture/components used
@@ -201,7 +202,8 @@ class TreatmentVisitService
                 $this->completePlanAndQueueRecall(
                     $visit->treatment_plan_id,
                     $visit->patient_id,
-                    $visit->patient->name ?? 'Patient'
+                    $visit->patient->name ?? 'Patient',
+                    $data['treatment_name'] ?? $visit->treatment_name ?? null
                 );
             }
 
@@ -347,7 +349,7 @@ class TreatmentVisitService
      * (due 1 week before the 6-month mark). Skipped if a recall already exists.
      * Identical to the block that previously lived in store()/update().
      */
-    private function completePlanAndQueueRecall(int $treatmentPlanId, int $patientId, string $patientName): void
+    private function completePlanAndQueueRecall(int $treatmentPlanId, int $patientId, string $patientName, ?string $treatmentName = null): void
     {
         TreatmentPlan::where('id', $treatmentPlanId)->update(['status' => 'completed']);
 
@@ -373,6 +375,29 @@ class TreatmentVisitService
                 // Due 1 week before the 6-month mark so staff has time to reach out
                 'due_date'    => now()->addMonths(6)->subWeek(),
             ]);
+        }
+
+        // ── Backend orchestration (docs/backend-orchestration-plan.md §2.7) ────
+        // Record 'treatment.completed' — this is the trigger the already-enabled
+        // implant_followup / post_treatment_followup RulesEngine rules have been
+        // configured for since they were written, but nothing has ever fired it.
+        // Deliberately NOT logging 'visit.completed' here: the recall_6months
+        // rule keys off that string and would create a second, duplicate
+        // 6-month recall task alongside the inline one just above.
+        $plan = TreatmentPlan::with('patient')->find($treatmentPlanId);
+        if ($plan) {
+            app(ActivityEngine::class)->log(
+                subject:        $plan,
+                event:          'treatment.completed',
+                actor:          Auth::user(),
+                metadata:       [
+                    'patient_id'      => $patientId,
+                    'treatment_type'  => $treatmentName === 'Implant' ? 'implant' : 'other',
+                    'treatment_name'  => $treatmentName,
+                ],
+                relationshipId: $plan->patient?->relationship_id,
+                description:    'Treatment plan marked complete',
+            );
         }
     }
 

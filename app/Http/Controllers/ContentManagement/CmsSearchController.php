@@ -48,7 +48,8 @@ class CmsSearchController extends Controller
 
         // Optional filters
         if ($treatment = $request->get('treatment')) {
-            $query->where('procedure', $treatment);
+            // Fixed treatment_category vocabulary — see ClinicalFile::TREATMENT_CATEGORIES.
+            $query->where('treatment_category', $treatment);
         }
         if ($stage = $request->get('stage')) {
             $query->where('stage', $stage);
@@ -66,6 +67,8 @@ class CmsSearchController extends Controller
                     'id'            => $f->id,
                     'title'         => $f->title ?? $f->original_filename,
                     'procedure'     => $f->procedure,
+                    'treatment_category'       => $f->treatment_category,
+                    'treatment_category_label' => $f->treatment_category_label,
                     'stage'         => $f->stage_label,
                     'file_type'     => $f->file_type_label,
                     'thumbnail_url' => $f->thumbnail_url,

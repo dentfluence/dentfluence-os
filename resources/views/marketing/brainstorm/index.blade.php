@@ -124,6 +124,10 @@
 {{-- NOTE: Using real CSS classes (not Alpine :style) so Tailwind preflight
      cannot override the active/inactive button colours.                    --}}
 <style>
+    .qi-saving {
+        opacity: 0.6 !important;
+        cursor: default !important;
+    }
     .bs-tab-track {
         display: inline-flex;
         align-items: center;
@@ -427,17 +431,71 @@
     x-transition:enter-end="opacity-100"
     style="display:none;"
     x-data="{
+        qiTitle: '',
+        qiDescription: '',
+        qiNotes: '',
         qiContentType: '',
         qiPlatforms: [],
         qiPriority: 'medium',
-        qiCharCount: 0,
+        qiSaving: false,
+        qiError: '',
+        qiSuccess: '',
         togglePlatform(p) {
             const i = this.qiPlatforms.indexOf(p);
             if (i === -1) this.qiPlatforms.push(p);
             else this.qiPlatforms.splice(i, 1);
         },
         hasPlatform(p) { return this.qiPlatforms.includes(p); },
-        dragOver: false
+        dragOver: false,
+        // Wires the Quick Idea form to the real IdeaController::store
+        // endpoint — this panel used to be UI-only with nothing behind
+        // the Save Idea button. Found live 2026-07-09 while QA-testing.
+        qiSaveIdea() {
+            this.qiError = '';
+            this.qiSuccess = '';
+
+            if (!this.qiTitle.trim()) {
+                this.qiError = 'Title is required.';
+                return;
+            }
+
+            this.qiSaving = true;
+
+            fetch('{{ route('marketing.ideas.store') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                },
+                body: JSON.stringify({
+                    title: this.qiTitle,
+                    description: this.qiDescription,
+                    notes: this.qiNotes,
+                    content_type: this.qiContentType ? this.qiContentType.toLowerCase() : null,
+                    platforms: this.qiPlatforms,
+                }),
+            })
+            .then(r => r.json().then(data => ({ ok: r.ok, data })))
+            .then(({ ok, data }) => {
+                this.qiSaving = false;
+                if (!ok || !data.success) {
+                    this.qiError = (data && data.message) ? data.message : 'Could not save idea. Please try again.';
+                    return;
+                }
+                this.qiSuccess = 'Idea saved to Idea Bank.';
+                this.qiTitle = '';
+                this.qiDescription = '';
+                this.qiNotes = '';
+                this.qiContentType = '';
+                this.qiPlatforms = [];
+                this.qiPriority = 'medium';
+            })
+            .catch(() => {
+                this.qiSaving = false;
+                this.qiError = 'Could not save idea. Check your connection and try again.';
+            });
+        }
     }"
 >
     {{-- Centered card --}}
@@ -466,7 +524,7 @@
             {{-- ── TITLE ── --}}
             <div style="margin-bottom: 18px;">
                 <label style="display:block; font-family:'Inter',sans-serif; font-size:12px; font-weight:600; color:#5a4868; margin-bottom:6px; letter-spacing:0.03em; text-transform:uppercase;">Title</label>
-                <input type="text" placeholder="e.g. 5 reasons to choose implants over dentures" style="
+                <input type="text" x-model="qiTitle" placeholder="e.g. 5 reasons to choose implants over dentures" style="
                     width: 100%; height: 38px; padding: 0 12px;
                     border: 1px solid rgba(185,92,183,0.22);
                     border-radius: 7px;
@@ -568,13 +626,13 @@
             <div style="margin-bottom:18px;">
                 <label style="display:block; font-family:'Inter',sans-serif; font-size:12px; font-weight:600; color:#5a4868; margin-bottom:6px; letter-spacing:0.03em; text-transform:uppercase;">
                     Description
-                    <span style="font-weight:400; text-transform:none; letter-spacing:0; color:#9b6aad; margin-left:4px;">(<span x-text="qiCharCount"></span>/500)</span>
+                    <span style="font-weight:400; text-transform:none; letter-spacing:0; color:#9b6aad; margin-left:4px;">(<span x-text="qiDescription.length"></span>/500)</span>
                 </label>
                 <textarea
                     rows="4"
                     maxlength="500"
                     placeholder="What is this content about? What angle or hook will you use?"
-                    @input="qiCharCount = $event.target.value.length"
+                    x-model="qiDescription"
                     style="
                         width:100%; padding:10px 12px;
                         border:1px solid rgba(185,92,183,0.22); border-radius:7px;
@@ -597,6 +655,7 @@
                 <textarea
                     rows="2"
                     placeholder="Any references, inspiration, or internal notes…"
+                    x-model="qiNotes"
                     style="
                         width:100%; padding:10px 12px;
                         border:1px solid rgba(185,92,183,0.22); border-radius:7px;
@@ -663,9 +722,21 @@
                 </div>
             </div>
 
+            {{-- ── STATUS MESSAGES ── --}}
+            <div x-show="qiError" x-cloak x-text="qiError" style="
+                margin-bottom:14px; padding:9px 14px; border-radius:7px;
+                background:#fef2f2; border:1px solid #fecaca; color:#b91c1c;
+                font-family:'Inter',sans-serif; font-size:12.5px;
+            "></div>
+            <div x-show="qiSuccess" x-cloak x-text="qiSuccess" style="
+                margin-bottom:14px; padding:9px 14px; border-radius:7px;
+                background:#f0fdf4; border:1px solid #bbf7d0; color:#16a34a;
+                font-family:'Inter',sans-serif; font-size:12.5px;
+            "></div>
+
             {{-- ── ACTION BUTTONS ── --}}
             <div style="display:flex; gap:10px; justify-content:flex-end;">
-                {{-- Convert to Publish --}}
+                {{-- Convert to Publish — not wired yet, left as-is (out of scope for this fix) --}}
                 <button type="button" style="
                     display:inline-flex; align-items:center; gap:7px;
                     height:38px; padding:0 20px;
@@ -683,22 +754,28 @@
                     Convert to Publish
                 </button>
 
-                {{-- Save Idea --}}
-                <button type="button" style="
+                {{-- Save Idea — now wired to IdeaController::store via qiSaveIdea() --}}
+                <button
+                    type="button"
+                    @click="qiSaveIdea()"
+                    :disabled="qiSaving"
+                    style="
                     display:inline-flex; align-items:center; gap:7px;
                     height:38px; padding:0 22px;
                     background:linear-gradient(135deg,#6a0f70 0%,#9b3da0 100%);
                     border:none; border-radius:7px;
                     font-family:'Inter',sans-serif; font-size:13px; font-weight:600; color:#ffffff;
-                    cursor:pointer; transition:opacity 150ms;
+                    cursor:pointer;
+                    transition:opacity 150ms;
                 "
-                onmouseover="this.style.opacity='0.88'"
-                onmouseout="this.style.opacity='1'"
+                :class="qiSaving ? 'qi-saving' : ''"
+                onmouseover="if (!this.disabled) this.style.opacity='0.88'"
+                onmouseout="if (!this.disabled) this.style.opacity='1'"
                 >
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
                     </svg>
-                    Save Idea
+                    <span x-text="qiSaving ? 'Saving…' : 'Save Idea'"></span>
                 </button>
             </div>
 

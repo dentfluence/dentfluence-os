@@ -59,7 +59,7 @@ class ReviewsRequest extends Command
         $date   = Carbon::today()->subDays($days);
         $appts  = Appointment::with('patient')
             ->whereDate('appointment_date', $date)
-            ->where('status', 'completed')
+            ->where('status', 'done') // real "finished" value app-wide; 'completed' never matches (see docs/backend-orchestration-plan.md §2.13)
             ->get();
 
         $this->info("Review requests for visits completed {$date->toDateString()} ({$appts->count()} completed)");

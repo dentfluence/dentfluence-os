@@ -96,6 +96,34 @@ class ReviewService
         return $review->fresh();
     }
 
+    /**
+     * Record an internal reply/resolution note on a review. Internal only —
+     * does not send anything to the patient or to Google. See
+     * docs/marketing-module-reengineering-plan.md (V2) for why this starts
+     * as an internal note rather than a WhatsApp send or a public Google
+     * reply: those are real external sends (consent-gated messaging, or a
+     * whole separate Google Business Profile Reviews API integration) and
+     * deserve their own deliberate build, not a default.
+     */
+    public function recordReply(Review $review, string $reply, ?int $userId = null): Review
+    {
+        $review->update([
+            'clinic_reply'   => $reply,
+            'replied_at'     => now(),
+            'replied_by_id'  => $userId ?? Auth::id(),
+        ]);
+
+        AuditLog::event('review_replied', $userId ?? Auth::id(), [
+            'review_id' => $review->id,
+        ], [
+            'module'         => 'reviews',
+            'auditable_type' => Review::class,
+            'auditable_id'   => $review->id,
+        ]);
+
+        return $review->fresh();
+    }
+
     /** Public link for a review request. */
     public function link(Review $review): string
     {

@@ -829,6 +829,15 @@
                                 Print
                             </a>
 
+                            {{-- Create Smart Presentation — new, independent module (2026-07-09).
+                                 This is the ONLY touch point added to this file: a single link
+                                 into Smart Treatment Presentation, which imports this plan
+                                 read-only. See docs/plan-smart-treatment-presentation.md. --}}
+                            <a :href="'{{ url('presentations/create-from-plan') }}/' + plan.id" class="tp-btn tp-btn-outline">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                                Create Smart Presentation
+                            </a>
+
                             {{-- Bill from Plan (partial multi-tooth) — accepted plans only --}}
                             <a x-show="plan.is_accepted"
                                :href="'{{ url('billing/from-plan') }}/' + plan.id"

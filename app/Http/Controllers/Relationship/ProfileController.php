@@ -207,17 +207,40 @@ class ProfileController extends Controller
                 ->get();
         }
 
-        // ── WhatsApp messages (if table exists) ───────────────────────────────
+        // ── WhatsApp thread (inline chat lives on the Communication tab) ───────
+        // Matches by patient_id OR lead_id so a conversation started before
+        // conversion (lead-only) still shows up here, not just post-conversion.
+        // Reuses the same OutboundMessageService gate the standalone WhatsApp
+        // inbox (/communication/whatsapp) uses, so DPDP consent + Meta's 24h
+        // window rules are enforced identically from either screen.
 
-        $waMessages = collect();
-        if ($patient && Schema::hasTable('wa_messages')) {
-            $waMessages = DB::table('wa_messages')
-                ->join('wa_threads', 'wa_threads.id', '=', 'wa_messages.wa_thread_id')
-                ->where('wa_threads.patient_id', $patient->id)
-                ->orderBy('wa_messages.created_at', 'desc')
-                ->limit(20)
-                ->select('wa_messages.*')
-                ->get();
+        $waThread       = null;
+        $waMessages     = collect();
+        $waGate         = null;
+        $waTemplates    = [];
+        $waTemplateGate = null;
+
+        if (Schema::hasTable('wa_threads') && ($patient || $lead)) {
+            $waThread = \App\Models\WaThread::query()
+                ->where(function ($q) use ($patient, $lead) {
+                    if ($patient) {
+                        $q->orWhere('patient_id', $patient->id);
+                    }
+                    if ($lead) {
+                        $q->orWhere('lead_id', $lead->id);
+                    }
+                })
+                ->orderByDesc('last_message_at')
+                ->first();
+
+            if ($waThread) {
+                $waMessages = $waThread->messages()->with('sentBy')->get();
+
+                $outbound       = app(\App\Services\Whatsapp\OutboundMessageService::class);
+                $waGate         = $outbound->consentGate($waThread, 'service');
+                $waTemplates    = config('whatsapp.templates', []);
+                $waTemplateGate = $outbound->consentGate($waThread, 'service', isTemplate: true);
+            }
         }
 
         return view('relationship.profile.index', compact(
@@ -249,7 +272,11 @@ class ProfileController extends Controller
             'timeline',
             'openTasks',
             'recentComms',
+            'waThread',
             'waMessages',
+            'waGate',
+            'waTemplates',
+            'waTemplateGate',
         ));
     }
 

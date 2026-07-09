@@ -28,6 +28,13 @@ class RolePermissionSeeder extends Seeder
                 ['Appointments',  'appointments',  '<rect x="3" y="4" width="18" height="18" rx="0"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>', 4],
                 ['Treatments',    'treatments',    '<path d="M12 22 C12 22 5 17 5 11 C5 7 7.5 4 12 4 C16.5 4 19 7 19 11 C19 17 12 22 12 22Z"/>', 5],
                 ['Clinical Library', 'cms',        '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="12" y1="6" x2="16" y2="6"/><line x1="12" y1="10" x2="16" y2="10"/>', 6],
+                // Smart Treatment Presentation (2026-07-09) — new, independent module.
+                // Reads Patient/Consultation/TreatmentPlan/Billing/Clinical Library,
+                // never writes to any of them. See docs/plan-smart-treatment-presentation.md.
+                // sort_order is a plain int column (tinyint) — 100 avoids colliding
+                // with the existing 1-17 sequence; its real sidebar position is
+                // hardcoded directly in components/sidebar.blade.php (after Treatments).
+                ['Smart Presentation', 'presentations', '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>', 100],
             ],
             'communication' => [
                 // PRM was retired in Phase 8 (2026-07-03) — routes/prm.php removed,
@@ -100,6 +107,7 @@ class RolePermissionSeeder extends Seeder
                 'practice_protocols' => [1,1,1],
                 'reports'     => [1,1,1], 'analytics'    => [1,1,1],
                 'settings'    => [1,1,1],
+                'presentations' => [1,1,1],
             ],
             Role::MANAGER => [
                 'daily_huddle' => [1,1,0], 'patients'    => [1,1,0],
@@ -111,6 +119,7 @@ class RolePermissionSeeder extends Seeder
                 'cms'          => [1,1,0],
                 'practice_protocols' => [1,1,1],
                 'reports'      => [1,0,0],
+                'presentations' => [1,1,0],
             ],
             Role::DOCTOR => [
                 'daily_huddle' => [1,1,0], 'patients'   => [1,1,0],
@@ -118,18 +127,26 @@ class RolePermissionSeeder extends Seeder
                 'cms'          => [1,0,0], 'lab'        => [1,1,0],
                 'tasks'        => [1,1,0],
                 'hr'           => [1,1,0], 'communication' => [1,1,0],
+                // Doctor authors presentations (edit) and may remove their own drafts (delete).
+                // Front Desk gets edit too — but only for operate actions (send/resend/follow-up);
+                // authoring the AI summary/doctor message is additionally role-gated in the
+                // controller to Doctor/Admin only, regardless of this module-level flag.
+                'presentations' => [1,1,1],
             ],
             Role::ASSISTANT => [
                 'appointments' => [1,0,0], 'patients' => [1,0,0],
                 'tasks'        => [1,0,0],
                 'hr'           => [1,1,0], 'cms'      => [1,0,0],
                 'communication' => [1,1,0],
+                'presentations' => [1,0,0], // view only
             ],
             Role::FRONT_DESK => [
                 'appointments' => [1,1,0], 'patients' => [1,1,0],
                 'finance'      => [1,1,0], 'tasks'    => [1,0,0],
                 'communication' => [1,1,0],
                 'hr'           => [1,1,0], 'cms'      => [1,1,0],
+                // Operate (send/resend/follow-up/mark-accepted in later slices), never author.
+                'presentations' => [1,1,0],
             ],
             Role::ACCOUNTS => [
                 'finance'  => [1,1,0], 'reports' => [1,0,0],

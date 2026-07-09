@@ -4,6 +4,7 @@ namespace App\Services\Billing;
 
 use App\Models\Invoice;
 use App\Models\InvoicePayment;
+use App\Models\Patient;
 use App\Models\Receipt;
 use App\Models\FinalBill;
 use App\Models\EmiScheme;
@@ -11,6 +12,7 @@ use App\Models\EmiSchedule;
 use App\Models\AppSetting;
 use App\Models\Finance\FinanceBankAccount;
 use App\Models\Finance\FinanceTransaction;
+use App\Services\Relationship\ActivityEngine;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -252,6 +254,18 @@ class InvoicePaymentService
                 'notes'             => $in['notes'] ?? null,
                 'created_by'        => $userId,
             ]);
+
+            // Additive Activity log (docs/backend-orchestration-plan.md §2.9) —
+            // no rule currently matches 'payment.received', feeds Insights only.
+            // Covers the mobile API path (the only caller of this service today).
+            app(ActivityEngine::class)->log(
+                subject:        $payment,
+                event:          'payment.received',
+                actor:          null,
+                metadata:       ['patient_id' => $invoice->patient_id, 'invoice_id' => $invoice->id, 'amount' => (float) $in['amount']],
+                relationshipId: Patient::find($invoice->patient_id)?->relationship_id,
+                description:    'Payment recorded on invoice ' . $invoice->invoice_number,
+            );
         });
 
         // Build flash-style message (mirrors the web controller wording)

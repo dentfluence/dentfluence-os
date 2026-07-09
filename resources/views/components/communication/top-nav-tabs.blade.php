@@ -10,22 +10,31 @@
 ])
 
 @php
+// 2026-07-09: audited every href in this bar against the live route list —
+// 5 of 14 were hard 404s/500s. Root cause: the old tabbed Communication
+// Manager (Overdue/Today/Long Term/Ongoing/Yesterday/Special Days as
+// separate filtered views) was retired 2026-07-06 in favour of PRE's single
+// unified "Today's Actions" screen (routes/communication.php's manager.index
+// now just redirects to relationship.today) — but this tab array was never
+// updated to match, so 5 of its 6 old sub-filter links fell through to the
+// /communication/manager/{id} show-route wildcard and 500'd trying to treat
+// "today"/"long-term"/etc. as a numeric id. Since there's no longer a
+// distinct destination for each filter, collapsing to one "Overdue" tab
+// (the pre-existing first entry) instead of shipping 6 tabs that all open
+// the identical page. Call Manager / Activity Log / Follow-up Calendar /
+// Tasks kept as separate tabs but repointed at their real, currently-working
+// routes.
 $tabs = [
     ['key' => 'overdue',            'label' => 'Overdue',          'icon' => 'alert-triangle',    'route' => '/communication/manager',              'count_key' => 'overdue',   'badge_class' => 'tb-red'],
-    ['key' => 'today',              'label' => 'Today',            'icon' => 'calendar',           'route' => '/communication/manager/today',         'count_key' => 'today',     'badge_class' => 'tb-blue'],
-    ['key' => 'long_term',          'label' => 'Long Term (6M+)',  'icon' => 'calendar-stats',     'route' => '/communication/manager/long-term',     'count_key' => 'long_term', 'badge_class' => 'tb-green'],
-    ['key' => 'ongoing',            'label' => 'Ongoing Treatment','icon' => 'heart',              'route' => '/communication/manager/ongoing',       'count_key' => 'ongoing',   'badge_class' => 'tb-blue'],
-    ['key' => 'yesterday',          'label' => 'Yesterday',        'icon' => 'clock',              'route' => '/communication/manager/yesterday',     'count_key' => 'yesterday', 'badge_class' => 'tb-gray'],
-    ['key' => 'special',            'label' => 'Special Days',     'icon' => 'gift',               'route' => '/communication/manager/special-days',  'count_key' => 'special',   'badge_class' => 'tb-amber'],
     ['key' => 'whatsapp',           'label' => 'WhatsApp',         'icon' => 'brand-whatsapp',     'route' => '/communication/whatsapp',              'count_key' => null,        'badge_class' => ''],
     ['key' => 'reviews',            'label' => 'Reviews',          'icon' => 'star',               'route' => '/communication/reviews',               'count_key' => null,        'badge_class' => ''],
-    ['key' => 'call_manager',       'label' => 'Call Manager',     'icon' => 'phone',              'route' => '/communication/call-manager',          'count_key' => null,        'badge_class' => ''],
+    ['key' => 'call_manager',       'label' => 'Call Manager',     'icon' => 'phone',              'route' => '/communication/manager',               'count_key' => null,        'badge_class' => ''],
     // 'leads'/'pipeline' repointed to PRE — Phase 8 PRM Retirement (Slice 5).
     ['key' => 'leads',              'label' => 'Leads',            'icon' => 'users',              'route' => '/relationship/pipeline',               'count_key' => null,        'badge_class' => ''],
     ['key' => 'pipeline',           'label' => 'Pipeline',         'icon' => 'layout-kanban',      'route' => '/relationship/pipeline',               'count_key' => null,        'badge_class' => ''],
-    ['key' => 'activity_log',       'label' => 'Activity Log',     'icon' => 'clipboard-list',     'route' => '/communication/activity-log',          'count_key' => null,        'badge_class' => ''],
-    ['key' => 'followup_calendar',  'label' => 'Follow-up Calendar','icon' => 'calendar-event',   'route' => '/communication/followup-calendar',     'count_key' => null,        'badge_class' => ''],
-    ['key' => 'tasks',              'label' => 'Tasks',            'icon' => 'checkbox',           'route' => '/communication/tasks',                 'count_key' => null,        'badge_class' => ''],
+    ['key' => 'activity_log',       'label' => 'Activity Log',     'icon' => 'clipboard-list',     'route' => '/settings/activity-log',               'count_key' => null,        'badge_class' => ''],
+    ['key' => 'followup_calendar',  'label' => 'Follow-up Calendar','icon' => 'calendar-event',   'route' => '/communication/followup/calendar',     'count_key' => null,        'badge_class' => ''],
+    ['key' => 'tasks',              'label' => 'Tasks',            'icon' => 'checkbox',           'route' => '/tasks',                               'count_key' => null,        'badge_class' => ''],
 ];
 @endphp
 

@@ -8,7 +8,6 @@ use App\Models\ConsultationCohaReport;
 use App\Models\ConsultationSpecialtyModule;
 use App\Models\Patient;
 use App\Models\User;
-use App\Services\Cms\ClinicalMediaService;
 use Illuminate\Http\Request;
 
 class ConsultationController extends Controller
@@ -121,45 +120,13 @@ class ConsultationController extends Controller
             );
         }
 
-        // ── CMS: register uploaded media ──
-        $mediaService = app(ClinicalMediaService::class);
-        $context = [
-            'patient_id'      => $patient->id,
-            'patient_name'    => $patient->name,
-            'source_type'     => 'App\Models\Consultation',
-            'source_id'       => $consultation->id,
-            'treatment_name'  => $consultation->primary_diagnosis ?? 'Consultation',
-            'tooth_no'        => $consultation->tooth_area ?? null,
-            'treatment_stage' => 'before',
-            'visit_date'      => $consultation->created_at->toDateString(),
-        ];
-
-        foreach (range(0, 8) as $i) {
-            if ($request->hasFile('photo_' . $i)) {
-                $mediaService->register(
-                    $request->file('photo_' . $i),
-                    array_merge($context, ['media_type' => 'photo', 'tags' => ['photo', 'before']])
-                );
-            }
-        }
-
-        foreach ($request->file('inv_file_iopa', []) as $file) {
-            $mediaService->register($file, array_merge($context, ['media_type' => 'xray', 'tags' => ['iopa', 'xray']]));
-        }
-
-        foreach ($request->file('inv_file_opg', []) as $file) {
-            $mediaService->register($file, array_merge($context, ['media_type' => 'opg', 'tags' => ['opg', 'xray']]));
-        }
-
-        foreach (range(0, 20) as $i) {
-            if ($request->hasFile('scan_file_' . $i)) {
-                $mediaService->register(
-                    $request->file('scan_file_' . $i),
-                    array_merge($context, ['media_type' => 'scan', 'tags' => ['scan']])
-                );
-            }
-        }
-        // ── End CMS ──
+        // NOTE (2026-07-09): file/photo upload was deliberately removed from this
+        // controller. Consultation is a diagnosis/documentation form, not a photo
+        // capture point — that's handled by the patient's Documents tab and the
+        // mobile Capture Photo flow, both of which already write to clinical_files
+        // via ClinicalFileUploadService. Adding a third upload entry point here
+        // would just recreate the fragmentation the Clinical Library cleanup this
+        // week was trying to remove. See memory: project_clinical_library_audit_0709.
 
         if ($request->expectsJson()) {
             return response()->json([

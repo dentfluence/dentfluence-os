@@ -7,6 +7,8 @@ use App\Models\Patient;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentPlanItem;
 use App\Models\Treatment;
+use App\Models\TreatmentOpportunity;
+use App\Services\Relationship\ActivityEngine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -135,6 +137,17 @@ class TreatmentPlanController extends Controller
 
         $plan->load(['items', 'creator']);
 
+        // Additive Activity log (docs/backend-orchestration-plan.md §2.4) — no
+        // rule currently matches 'treatment_plan.created', feeds Insights only.
+        app(ActivityEngine::class)->log(
+            subject:        $plan,
+            event:          'treatment_plan.created',
+            actor:          Auth::user(),
+            metadata:       ['patient_id' => $patient->id],
+            relationshipId: $patient->relationship_id,
+            description:    'Treatment plan created',
+        );
+
         return response()->json([
             'success' => true,
             'message' => 'Treatment option created.',
@@ -201,7 +214,52 @@ class TreatmentPlanController extends Controller
             'status'      => 'ongoing',
         ]);
 
-        $plan->load(['items', 'creator']);
+        $plan->load(['items', 'creator', 'patient']);
+
+        // ── Backend orchestration (docs/backend-orchestration-plan.md §2.5) ────
+        // Record the acceptance on the Timeline and auto-create a follow-up
+        // Opportunity, exactly the way OpportunityPipelineController::store()
+        // already does it manually — same fields, same relationship_id
+        // resolution, same starting stage. Guarded by the treatment_plan_id
+        // lookup so re-accepting a plan (e.g. after a revert) never creates a
+        // second Opportunity for it. Creates no UI, no new form, no extra click.
+        $relationshipId = $plan->patient?->relationship_id;
+
+        app(ActivityEngine::class)->log(
+            subject:        $plan,
+            event:          'treatment_plan.accepted',
+            actor:          Auth::user(),
+            metadata:       ['patient_id' => $plan->patient_id],
+            relationshipId: $relationshipId,
+            description:    'Treatment plan accepted',
+        );
+
+        if (! TreatmentOpportunity::where('treatment_plan_id', $plan->id)->exists()) {
+            $firstItem = $plan->items->first();
+
+            $opportunity = TreatmentOpportunity::create([
+                'patient_id'        => $plan->patient_id,
+                'treatment_plan_id' => $plan->id,
+                'relationship_id'   => $relationshipId,
+                'type'              => 'other',
+                'label'             => $firstItem?->treatment_name ?? $plan->plan_name,
+                'status'            => 'prospect',
+                'priority'          => 'medium',
+                'created_by'        => Auth::id(),
+            ]);
+
+            // Fires the already-enabled opportunity_nudge_7d rule (RulesEngine ->
+            // TaskEngine::autoCreate, dedup-guarded) — "Opportunity follow-up —
+            // no appointment yet" call task, 7 days out, if still in 'prospect'.
+            app(ActivityEngine::class)->log(
+                subject:        $opportunity,
+                event:          'opportunity.created',
+                actor:          Auth::user(),
+                metadata:       ['stage' => 'prospect', 'patient_id' => $plan->patient_id, 'source' => 'treatment_plan_accepted'],
+                relationshipId: $relationshipId,
+                description:    'Opportunity created from accepted treatment plan',
+            );
+        }
 
         return response()->json([
             'success' => true,

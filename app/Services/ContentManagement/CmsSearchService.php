@@ -51,7 +51,9 @@ class CmsSearchService
             $q->where('cm.tooth_number', $filters['tooth']);
         }
         if (!empty($filters['treatment'])) {
-            $q->where('cm.procedure', 'like', '%' . $filters['treatment'] . '%');
+            // Filters on the fixed treatment_category vocabulary (exact match), not
+            // the free-text procedure column — see ClinicalFile::TREATMENT_CATEGORIES.
+            $q->where('cm.treatment_category', $filters['treatment']);
         }
         if (!empty($filters['doctor_id'])) {
             $q->where('cm.uploaded_by', $filters['doctor_id']);
@@ -103,6 +105,8 @@ class CmsSearchService
 
     /**
      * Distinct procedure (treatment) names for filter dropdowns.
+     * Free-text — kept for the global search box's autocomplete, not the
+     * structured "Treatment" filter (see getTreatmentCategoryOptions()).
      */
     public function getTreatmentOptions(): Collection
     {
@@ -112,6 +116,16 @@ class CmsSearchService
             ->pluck('procedure')
             ->filter()
             ->values();
+    }
+
+    /**
+     * Fixed-vocabulary treatment categories for the "Treatment" filter dropdown.
+     * Reliable because every value here is exactly what's stored in
+     * clinical_files.treatment_category — unlike free-text procedure matching.
+     */
+    public function getTreatmentCategoryOptions(): array
+    {
+        return ClinicalFile::TREATMENT_CATEGORIES;
     }
 
     public function getToothOptions(): array
@@ -156,7 +170,7 @@ class CmsSearchService
         return ClinicalFile::with(['patient', 'uploadedBy', 'visit'])
             ->when(!empty($filters['patient_id']), fn($q) => $q->where('patient_id', $filters['patient_id']))
             ->when(!empty($filters['tooth']),      fn($q) => $q->where('tooth_number', $filters['tooth']))
-            ->when(!empty($filters['treatment']),  fn($q) => $q->where('procedure', 'like', '%' . $filters['treatment'] . '%'))
+            ->when(!empty($filters['treatment']),  fn($q) => $q->where('treatment_category', $filters['treatment']))
             ->when(!empty($filters['doctor_id']),  fn($q) => $q->where('uploaded_by', $filters['doctor_id']))
             ->when(!empty($filters['tag']),        fn($q) => $q->where('tags', 'like', '%' . $filters['tag'] . '%'))
             ->when(!empty($filters['q']), function ($q) use ($filters) {
