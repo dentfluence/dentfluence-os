@@ -16,6 +16,7 @@ use App\Models\InvoicePayment;
 use App\Models\InvoiceItem;
 use App\Models\Receipt;
 use App\Models\User;
+use App\Models\AppSetting;
 use App\Services\Assistant\ReceiptScanService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,57 +39,71 @@ class FinanceController extends Controller
 {
     // ── Finance Dashboard ──────────────────────────────────────────────────
 
-    public function dashboard()
+    public function dashboard(Request $request)
     {
         $now   = now();
         $today = today();
 
-        // Today KPIs — from real billing payments and expenses
-        $todayIncome   = InvoicePayment::whereDate('payment_date', $today)->sum('amount');
-        $todayExpenses = FinanceExpense::whereDate('expense_date', $today)->sum('total_amount');
+        // ── Date filter — defaults to month-to-date; presets shared with Income tab ──
+        $preset = $request->input('preset', 'month');
+        [$defaultFrom, $defaultTo] = $this->resolveDatePreset($preset === 'custom' ? '' : $preset, $today);
+        $from = $request->filled('from') ? Carbon::parse($request->from)->startOfDay() : $defaultFrom;
+        $to   = $request->filled('to')   ? Carbon::parse($request->to)->endOfDay()     : $defaultTo;
+        if ($request->filled('from') || $request->filled('to')) {
+            $preset = 'custom';
+        }
 
-        // This Month
+        // ── Always-current snapshot — balances, not flows, so the date filter doesn't apply ──
+        $todayIncome       = InvoicePayment::whereDate('payment_date', $today)->sum('amount');
+        $outstandingAmount = Invoice::whereIn('status', ['draft', 'partial'])->sum('balance_due');
+        $outstandingCount  = Invoice::whereIn('status', ['draft', 'partial'])->count();
+        $cashReceived      = InvoicePayment::where('payment_mode', 'cash')->sum('amount');
+        $cashSpent         = FinanceExpense::where('payment_mode', 'cash')->sum('total_amount');
+
+        // This calendar month — always, used for the tax estimator regardless of the filter above
         $monthlyRevenue = InvoicePayment::whereMonth('payment_date', $now->month)
                             ->whereYear('payment_date', $now->year)
                             ->sum('amount');
-        $monthlyExpense = FinanceExpense::thisMonth()->sum('total_amount');
-        $monthlyProfit  = $monthlyRevenue - $monthlyExpense;
-        $profitPct      = $monthlyRevenue > 0
-                            ? round(($monthlyProfit / $monthlyRevenue) * 100, 1)
-                            : 0;
 
-        // Avg daily & month-end projection
-        $dayOfMonth        = (int) $today->format('j');
-        $daysInMonth       = (int) $today->daysInMonth;
-        $avgDaily          = $dayOfMonth > 0 ? round($monthlyRevenue / $dayOfMonth) : 0;
-        $projectedMonthEnd = $avgDaily * $daysInMonth;
+        // ── Period KPIs — respect the selected date filter ──────────────────────
+        $periodCollection = InvoicePayment::whereBetween('payment_date', [$from, $to])->sum('amount');
+        $periodExpense    = FinanceExpense::whereBetween('expense_date', [$from, $to])->sum('total_amount');
+        $periodProfit     = $periodCollection - $periodExpense;
+        $periodProfitPct  = $periodCollection > 0 ? round(($periodProfit / $periodCollection) * 100, 1) : 0;
 
-        // Outstanding (unpaid invoices from real billing)
-        $outstandingAmount = Invoice::whereIn('status', ['draft', 'partial'])->sum('balance_due');
-        $outstandingCount  = Invoice::whereIn('status', ['draft', 'partial'])->count();
+        // Avg daily / projected total — formula degrades to the actual total once the period
+        // has fully elapsed, so it works unchanged for past, current, and custom ranges.
+        $totalDays   = max(1, $from->diffInDays($to) + 1);
+        $elapsedTo   = $to->isFuture() ? $today : $to;
+        $elapsedDays = min($totalDays, max(1, $from->diffInDays($elapsedTo) + 1));
+        $avgDaily       = round($periodCollection / $elapsedDays);
+        $projectedTotal = round($avgDaily * $totalDays);
 
-        // Cash in hand estimate (cash received minus cash expenses)
-        $cashReceived = InvoicePayment::where('payment_mode', 'cash')->sum('amount');
-        $cashSpent    = FinanceExpense::where('payment_mode', 'cash')->sum('total_amount');
+        // Monthly revenue target — optional, configured in Settings → Billing & Invoice.
+        // Only meaningful when viewing a full calendar month.
+        $billingSettings   = AppSetting::group('billing');
+        $revenueTarget     = (float) ($billingSettings['monthly_revenue_target'] ?? 0);
+        $showRevenueTarget = $preset === 'month' && !empty($billingSettings['show_revenue_target']) && $revenueTarget > 0;
+        $targetPct         = $showRevenueTarget ? min(999, round(($periodCollection / $revenueTarget) * 100)) : 0;
 
         $kpis = [
             'today_collection'     => $todayIncome,
-            'today_expenses'       => $todayExpenses,
             'cash_in_hand'         => max(0, $cashReceived - $cashSpent),
             'bank_balance'         => 0, // wire to FinanceBankAccount when balances tracked
-            'net_collection'       => $todayIncome - $todayExpenses,
-            'pending_payments'     => $outstandingAmount,
             'outstanding_amount'   => $outstandingAmount,
             'outstanding_count'    => $outstandingCount,
-            'monthly_revenue'      => $monthlyRevenue,
-            'monthly_expense'      => $monthlyExpense,
-            'monthly_profit'       => $monthlyProfit,
-            'profit_percentage'    => $profitPct,
+            'period_collection'    => $periodCollection,
+            'period_expense'       => $periodExpense,
+            'period_profit'        => $periodProfit,
+            'period_profit_pct'    => $periodProfitPct,
             'avg_daily_collection' => $avgDaily,
-            'projected_month_end'  => $projectedMonthEnd,
+            'projected_total'      => $projectedTotal,
+            'show_revenue_target'  => $showRevenueTarget,
+            'revenue_target'       => $revenueTarget,
+            'revenue_target_pct'   => $targetPct,
         ];
 
-        // Recent Payments (last 10)
+        // Recent Payments (last 10, always most-recent — not date-filtered)
         $recentTransactions = InvoicePayment::with(['invoice' => fn($q) => $q->with('patient')])
             ->orderByDesc('payment_date')
             ->orderByDesc('id')
@@ -107,8 +122,8 @@ class FinanceController extends Controller
                 'status'   => 'active',
             ]);
 
-        // Top expense categories this month
-        $topExpensesRaw = FinanceExpense::thisMonth()
+        // Top expense categories — respects the date filter
+        $topExpensesRaw = FinanceExpense::whereBetween('expense_date', [$from, $to])
             ->join('finance_expense_categories as ec', 'finance_expenses.category_id', '=', 'ec.id')
             ->select('ec.name as category', DB::raw('SUM(finance_expenses.total_amount) as amount'))
             ->groupBy('ec.name')
@@ -123,7 +138,48 @@ class FinanceController extends Controller
             'percent'  => round(($r->amount / $totalExpAmt) * 100),
         ])->toArray();
 
-        return view('finance.dashboard', compact('kpis', 'recentTransactions', 'topExpenses'));
+        // Collection by payment mode — respects the date filter (real data, not a mock split)
+        $modeLabels = [
+            'upi' => 'UPI', 'cash' => 'Cash', 'card' => 'Card', 'debit_card' => 'Debit Card',
+            'cheque' => 'Cheque', 'netbanking' => 'Net Banking', 'bank_transfer' => 'Bank Transfer',
+            'emi' => 'EMI', 'other' => 'Other',
+        ];
+        $modeColors = [
+            'upi' => '#a855f7', 'cash' => '#22c55e', 'card' => '#60a5fa', 'debit_card' => '#60a5fa',
+            'cheque' => '#fbbf24', 'netbanking' => '#fbbf24', 'bank_transfer' => '#fbbf24',
+            'emi' => '#f97316', 'other' => '#9ca3af',
+        ];
+        $byModeRaw = InvoicePayment::whereBetween('payment_date', [$from, $to])
+            ->selectRaw('payment_mode, SUM(amount) as total')
+            ->groupBy('payment_mode')
+            ->orderByDesc('total')
+            ->get();
+        $modeTotal = $byModeRaw->sum('total') ?: 1;
+        $collectionByMode = $byModeRaw->map(fn($r) => [
+            'mode'  => $modeLabels[$r->payment_mode] ?? ucfirst($r->payment_mode),
+            'pct'   => round(($r->total / $modeTotal) * 100),
+            'amt'   => $r->total,
+            'color' => $modeColors[$r->payment_mode] ?? '#9ca3af',
+        ])->values()->toArray();
+
+        // Revenue vs Expenses — trailing 6 calendar months, always (independent of the filter above,
+        // since it's a trend view rather than a single-period snapshot)
+        $trendLabels = $trendRevenue = $trendExpense = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $m = $now->copy()->subMonths($i);
+            $trendLabels[]  = $m->format('M');
+            $trendRevenue[] = (float) InvoicePayment::whereMonth('payment_date', $m->month)
+                                ->whereYear('payment_date', $m->year)->sum('amount');
+            $trendExpense[] = (float) FinanceExpense::whereMonth('expense_date', $m->month)
+                                ->whereYear('expense_date', $m->year)->sum('total_amount');
+        }
+
+        $dateFilter = compact('preset', 'from', 'to');
+
+        return view('finance.dashboard', compact(
+            'kpis', 'recentTransactions', 'topExpenses', 'collectionByMode',
+            'trendLabels', 'trendRevenue', 'trendExpense', 'dateFilter', 'monthlyRevenue'
+        ));
     }
 
     // ── Income ─────────────────────────────────────────────────────────────

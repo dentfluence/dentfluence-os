@@ -985,6 +985,25 @@
                     </div>
                 </div>
 
+                <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:24px;margin-bottom:20px;">
+                    <h3 class="settings-section-title">Monthly Revenue Target</h3>
+                    <p style="font-size:12px;color:#8a7a95;margin:-6px 0 16px;">
+                        Shown as a progress insight on the Finance dashboard. Leave the toggle off if you'd rather not track against a target.
+                    </p>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:end;">
+                        <div>
+                            <label class="settings-label">Target Amount (Rs.)</label>
+                            <input type="number" name="monthly_revenue_target" value="{{ $b['monthly_revenue_target'] ?? '' }}" class="settings-input" min="0" step="1000" placeholder="e.g. 500000">
+                        </div>
+                        <div>
+                            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#4a3a55;cursor:pointer;">
+                                <input type="checkbox" name="show_revenue_target" value="1" {{ !empty($b['show_revenue_target']) ? 'checked' : '' }}>
+                                Show target on Finance dashboard
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 <button type="submit" class="settings-save-btn">Save Billing Settings</button>
             </form>
 

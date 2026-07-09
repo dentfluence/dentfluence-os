@@ -66,12 +66,6 @@
             </p>
         </div>
         <div class="flex gap-2 items-center">
-            <select class="text-sm border border-gray-300 bg-white text-gray-600 px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
-                <option>This Month</option>
-                <option>Last Month</option>
-                <option>This Quarter</option>
-                <option>This Year</option>
-            </select>
             <a href="{{ route('finance.expenses') }}"
                class="inline-flex items-center gap-2 border border-[#6a0f70] text-[#6a0f70] text-sm px-4 py-2 hover:bg-[#6a0f70] hover:text-white transition-colors">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -103,29 +97,62 @@
         @endforeach
     </div>
 
-    {{-- ── ROW 1: PRIMARY KPI CARDS ── --}}
+    {{-- ── DATE FILTER ── --}}
+    <div class="flex flex-wrap gap-2 items-center">
+        <span class="text-xs text-gray-400 uppercase tracking-wider mr-1">Period:</span>
+        @foreach(['today'=>'Today','yesterday'=>'Yesterday','week'=>'This Week','month'=>'This Month','quarter'=>'Quarter','fy'=>'Financial Year'] as $key=>$label)
+        <a href="{{ route('finance.dashboard', ['preset'=>$key]) }}"
+           class="text-xs px-3 py-1 border transition-colors
+               {{ $dateFilter['preset'] === $key ? 'bg-[#6a0f70] text-white border-[#6a0f70]' : 'border-gray-300 text-gray-600 hover:border-[#6a0f70] hover:text-[#6a0f70]' }}">
+            {{ $label }}
+        </a>
+        @endforeach
+        <form method="GET" action="{{ route('finance.dashboard') }}" class="flex gap-2 items-center ml-2">
+            <input type="date" name="from" value="{{ $dateFilter['from']->toDateString() }}"
+                   class="border border-gray-300 text-xs px-2 py-1 focus:outline-none focus:border-[#6a0f70]">
+            <span class="text-xs text-gray-400">to</span>
+            <input type="date" name="to" value="{{ $dateFilter['to']->toDateString() }}"
+                   class="border border-gray-300 text-xs px-2 py-1 focus:outline-none focus:border-[#6a0f70]">
+            <button type="submit"
+                    class="text-xs px-3 py-1 border transition-colors
+                        {{ $dateFilter['preset'] === 'custom' ? 'bg-[#6a0f70] text-white border-[#6a0f70]' : 'border-gray-300 text-gray-600 hover:border-[#6a0f70] hover:text-[#6a0f70]' }}">
+                Custom
+            </button>
+        </form>
+    </div>
+
+    {{-- ── ROW 1: PRIMARY KPI CARDS (respect the date filter above) ── --}}
     @php
     $finPrimaryKpis = [
         [
-            'label'   => "Today's Collection",
-            'value'   => 'Rs. ' . number_format($kpis['today_collection']),
-            'insight' => '↑ +12% vs yesterday',
-            'color'   => '#6a0f70',
-            'bg'      => 'rgba(106,15,112,0.08)',
-            'icon'    => 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
-        ],
-        [
-            'label'   => 'Monthly Revenue',
-            'value'   => 'Rs. ' . number_format($kpis['monthly_revenue']),
-            'insight' => 'Target Rs. 5,00,000 · 82%',
+            'label'   => 'Collection',
+            'value'   => 'Rs. ' . number_format($kpis['period_collection']),
+            'insight' => $kpis['show_revenue_target']
+                            ? 'Target Rs. ' . number_format($kpis['revenue_target']) . ' · ' . $kpis['revenue_target_pct'] . '%'
+                            : $dateFilter['from']->format('d M') . ' – ' . $dateFilter['to']->format('d M'),
             'color'   => '#1a7a45',
             'bg'      => 'rgba(26,122,69,0.08)',
             'icon'    => 'M22 7 13.5 15.5 8.5 10.5 2 17M16 7h6v6',
         ],
         [
+            'label'   => 'Expenses',
+            'value'   => 'Rs. ' . number_format($kpis['period_expense']),
+            'insight' => $kpis['period_collection'] > 0
+                            ? round(($kpis['period_expense'] / $kpis['period_collection']) * 100) . '% of collection'
+                            : 'No collection this period',
+            'color'   => '#b52020',
+            'bg'      => 'rgba(181,32,32,0.08)',
+            'icon'    => 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
+        ],
+        [
             'label'   => 'Net Profit',
-            'value'   => 'Rs. ' . number_format($kpis['monthly_profit']),
-            'insight' => $kpis['profit_percentage'] . '% margin · Excellent',
+            'value'   => 'Rs. ' . number_format($kpis['period_profit']),
+            'insight' => $kpis['period_profit_pct'] . '% margin' . (
+                            $kpis['period_profit_pct'] >= 40 ? ' · Excellent' :
+                            ($kpis['period_profit_pct'] >= 25 ? ' · Good' :
+                            ($kpis['period_profit_pct'] >= 10 ? ' · Fair' :
+                            ($kpis['period_profit_pct'] >= 0  ? ' · Tight' : ' · Loss')))
+                         ),
             'color'   => '#6a0f70',
             'bg'      => 'rgba(106,15,112,0.08)',
             'icon'    => 'M12 22s-7-5-7-11c0-4 2.5-7 7-7s7 3 7 7c0 6-7 11-7 11z',
@@ -133,7 +160,7 @@
         [
             'label'   => 'Outstanding',
             'value'   => 'Rs. ' . number_format($kpis['outstanding_amount']),
-            'insight' => 'Pending: Rs. ' . number_format($kpis['pending_payments']) . ' · 14 patients',
+            'insight' => 'As of today · ' . $kpis['outstanding_count'] . ' invoice' . ($kpis['outstanding_count'] == 1 ? '' : 's'),
             'color'   => '#a05c00',
             'bg'      => 'rgba(160,92,0,0.08)',
             'icon'    => 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 8v4M12 16h.01',
@@ -153,11 +180,11 @@
     {{-- ── ROW 2: SECONDARY KPI STRIP ── --}}
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;">
         @foreach([
-            ['label'=>'Cash In Hand',        'val'=>'cash_in_hand',         'color'=>'#1a7a45'],
+            ['label'=>"Today's Collection",   'val'=>'today_collection',     'color'=>'#6a0f70'],
+            ['label'=>'Cash In Hand',         'val'=>'cash_in_hand',         'color'=>'#1a7a45'],
             ['label'=>'Bank Balance',         'val'=>'bank_balance',         'color'=>'#1a5ea8'],
-            ['label'=>'Today Expenses',       'val'=>'today_expenses',       'color'=>'#b52020'],
             ['label'=>'Avg Daily Collection', 'val'=>'avg_daily_collection', 'color'=>'#6a0f70'],
-            ['label'=>'Projected Month End',  'val'=>'projected_month_end',  'color'=>'#a05c00'],
+            ['label'=>'Projected Period Total','val'=>'projected_total',     'color'=>'#a05c00'],
         ] as $card)
         <div class="df-kpi-card">
             <div class="df-kpi-insight" style="text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">{{ $card['label'] }}</div>
@@ -183,28 +210,27 @@
         {{-- Collection by Mode --}}
         <div class="bg-white border border-[#e8d5f0] p-5">
             <p class="text-xs font-semibold uppercase tracking-widest text-[#6a0f70] mb-4">Collection by Mode</p>
+            @if(count($collectionByMode))
             <div class="flex gap-4 items-center">
                 <canvas id="collectionPie" width="130" height="130" style="flex-shrink:0;"></canvas>
                 <div class="flex-1 space-y-3">
-                    @foreach([
-                        ['mode'=>'UPI',           'pct'=>42,'color'=>'bg-purple-400','amt'=>'Rs. 1,73,040'],
-                        ['mode'=>'Cash',          'pct'=>28,'color'=>'bg-green-400', 'amt'=>'Rs. 1,15,360'],
-                        ['mode'=>'Card',          'pct'=>18,'color'=>'bg-blue-400',  'amt'=>'Rs. 74,160'],
-                        ['mode'=>'Bank Transfer', 'pct'=>12,'color'=>'bg-amber-400', 'amt'=>'Rs. 49,440'],
-                    ] as $m)
+                    @foreach($collectionByMode as $m)
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                            <div class="w-2 h-2 rounded-full {{ $m['color'] }}"></div>
+                            <div class="w-2 h-2 rounded-full" style="background:{{ $m['color'] }};"></div>
                             <span class="text-xs text-gray-500">{{ $m['mode'] }}</span>
                         </div>
                         <div class="text-right">
                             <div class="text-xs font-semibold text-gray-700">{{ $m['pct'] }}%</div>
-                            <div class="text-xs text-gray-400">{{ $m['amt'] }}</div>
+                            <div class="text-xs text-gray-400">Rs. {{ number_format($m['amt']) }}</div>
                         </div>
                     </div>
                     @endforeach
                 </div>
             </div>
+            @else
+            <p class="text-xs text-gray-400 py-8 text-center">No collections in this period.</p>
+            @endif
         </div>
 
         {{-- Top Expenses --}}
@@ -296,7 +322,7 @@
 
     {{-- ── TAX ESTIMATOR ── --}}
     @php
-        $annualRevenue     = $kpis['monthly_revenue'] * 12;   // rough projection
+        $annualRevenue     = $monthlyRevenue * 12;   // rough projection, based on the current calendar month
         $taxableIncome44ADA = $annualRevenue * 0.50;           // Section 44ADA: 50% presumptive
         // New Tax Regime slabs FY 2025-26
         $tax = 0;
@@ -383,17 +409,17 @@ const rCtx = document.getElementById('revenueChart').getContext('2d');
 new Chart(rCtx, {
     type: 'bar',
     data: {
-        labels: ['Dec','Jan','Feb','Mar','Apr','May'],
+        labels: {!! json_encode($trendLabels) !!},
         datasets: [
             {
                 label: 'Revenue',
-                data: [340000, 380000, 295000, 420000, 390000, {{ $kpis['monthly_revenue'] }}],
+                data: {!! json_encode($trendRevenue) !!},
                 backgroundColor: 'rgba(106,15,112,0.70)',
                 borderRadius: 2,
             },
             {
                 label: 'Expenses',
-                data: [82000, 95000, 74000, 110000, 88000, {{ $kpis['monthly_expense'] }}],
+                data: {!! json_encode($trendExpense) !!},
                 backgroundColor: 'rgba(181,32,32,0.55)',
                 borderRadius: 2,
             },
@@ -414,14 +440,15 @@ new Chart(rCtx, {
 });
 
 // Collection by Mode — doughnut
+@if(count($collectionByMode))
 const cCtx = document.getElementById('collectionPie').getContext('2d');
 new Chart(cCtx, {
     type: 'doughnut',
     data: {
-        labels: ['UPI','Cash','Card','Bank Transfer'],
+        labels: {!! json_encode(array_column($collectionByMode, 'mode')) !!},
         datasets: [{
-            data: [42, 28, 18, 12],
-            backgroundColor: ['#a855f7','#22c55e','#60a5fa','#fbbf24'],
+            data: {!! json_encode(array_column($collectionByMode, 'pct')) !!},
+            backgroundColor: {!! json_encode(array_column($collectionByMode, 'color')) !!},
             borderWidth: 0,
             hoverOffset: 4,
         }],
@@ -432,6 +459,7 @@ new Chart(cCtx, {
         plugins: { legend: { display: false } },
     },
 });
+@endif
 </script>
 
 @endsection

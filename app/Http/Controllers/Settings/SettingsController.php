@@ -305,11 +305,16 @@ class SettingsController extends Controller
             // Credit-card convenience fee (configurable threshold + rate)
             'cc_convenience_threshold' => 'nullable|numeric|min:0',
             'cc_convenience_rate'      => 'nullable|numeric|min:0|max:100',
+            // Monthly revenue target (optional, shown on Finance dashboard)
+            'monthly_revenue_target'   => 'nullable|numeric|min:0',
         ]);
 
         // Default the convenience-fee keys so they always exist after a save
         $data['cc_convenience_threshold'] = $request->input('cc_convenience_threshold', 10000);
         $data['cc_convenience_rate']      = $request->input('cc_convenience_rate', 2.5);
+
+        // Checkbox: absent from the request means "off"
+        $data['show_revenue_target'] = $request->boolean('show_revenue_target');
 
         AppSetting::setMany($data, 'billing');
 
