@@ -12,7 +12,7 @@ class FinanceVendor extends Model
     protected $table = 'finance_vendors';
 
     protected $fillable = [
-        'clinic_id', 'vendor_name', 'company_name', 'vendor_type',
+        'clinic_id', 'user_id', 'vendor_name', 'company_name', 'vendor_type',
         'phone', 'email', 'address', 'city', 'state', 'pincode',
         'gstin', 'pan', 'credit_days', 'credit_limit',
         'total_purchases', 'total_paid', 'outstanding_amount', 'last_purchase_date',
@@ -51,6 +51,12 @@ class FinanceVendor extends Model
         return $this->hasOne(\App\Models\LabVendor::class, 'finance_vendor_id');
     }
 
+    /** Set when vendor_type = 'staff' — the staff member this row mirrors. */
+    public function staffUser()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'user_id');
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────
 
     public function getDisplayNameAttribute(): string
@@ -82,6 +88,7 @@ class FinanceVendor extends Model
             'amc'               => 'AMC / Maintenance',
             'office_supplies'   => 'Office Supplies',
             'miscellaneous'     => 'Miscellaneous',
+            'staff'             => 'Staff',
             'other'             => 'Other',
         ];
     }

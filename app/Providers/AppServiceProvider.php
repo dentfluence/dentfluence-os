@@ -30,6 +30,10 @@ use App\Services\Cms\TimelineService;
 use App\Models\LabCase;
 use App\Observers\LabCaseObserver;
 
+// Finance — mirror staff into finance_vendors for the Expense form
+use App\Models\User;
+use App\Observers\UserVendorSyncObserver;
+
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -63,6 +67,11 @@ class AppServiceProvider extends ServiceProvider
     {
         // Phase 4: LabCase observer — auto-sync comm status with lab case status
         LabCase::observe(LabCaseObserver::class);
+
+        // Finance: keep every staff member mirrored into finance_vendors
+        // (vendor_type = 'staff') so they appear in the Expense form's
+        // Vendor dropdown for petty cash / reimbursements.
+        User::observe(UserVendorSyncObserver::class);
 
         // Security (Phase A): force every generated URL to https when configured
         // (on by default in production). Keeps links/redirects/assets on HTTPS.

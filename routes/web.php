@@ -739,6 +739,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/expenses/export',      [FinanceController::class, 'expenseExport'])->name('expenses.export');
         Route::delete('/expenses/{expense}', [FinanceController::class, 'expenseDestroy'])->name('expenses.destroy');
 
+        // Expense Categories — inline quick-add from the Expense form
+        Route::post('/expense-categories', [FinanceController::class, 'categoryStore'])->name('expense-categories.store');
+
         // Vendors
         Route::get('/vendors',              [FinanceController::class, 'vendors'])->name('vendors');
         Route::get('/vendors/create',       [FinanceController::class, 'vendorCreate'])->name('vendors.create');

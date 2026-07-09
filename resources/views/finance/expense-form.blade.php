@@ -99,9 +99,49 @@
 
         {{-- Category + Vendor --}}
         <div class="grid grid-cols-2 gap-4">
-            <div>
-                <label class="block text-xs font-medium text-gray-600 uppercase tracking-wider mb-1">Category</label>
-                <select name="category_id" class="w-full border border-gray-300 text-sm px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+            <div x-data="{
+                    addingCat: false, newCatName: '', savingCat: false, catErr: '',
+                    async saveCat() {
+                        if (!this.newCatName.trim()) return;
+                        this.savingCat = true; this.catErr = '';
+                        try {
+                            const res = await fetch('{{ route('finance.expense-categories.store') }}', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json',
+                                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                                },
+                                body: JSON.stringify({ name: this.newCatName.trim() })
+                            });
+                            const json = await res.json();
+                            if (!res.ok) {
+                                this.catErr = json.errors?.name?.[0] || json.message || 'Could not add category.';
+                                return;
+                            }
+                            const opt = document.createElement('option');
+                            opt.value = json.id;
+                            opt.textContent = json.name;
+                            this.$refs.categorySelect.appendChild(opt);
+                            this.$refs.categorySelect.value = json.id;
+                            this.newCatName = '';
+                            this.addingCat = false;
+                        } catch (e) {
+                            this.catErr = 'Network error — try again.';
+                        } finally {
+                            this.savingCat = false;
+                        }
+                    }
+                 }">
+                <div class="flex items-center justify-between mb-1">
+                    <label class="block text-xs font-medium text-gray-600 uppercase tracking-wider">Category</label>
+                    <button type="button" x-show="!addingCat"
+                            @click="addingCat = true; $nextTick(() => $refs.newCatInput.focus())"
+                            class="text-xs text-[#6a0f70] hover:underline">+ Add</button>
+                </div>
+
+                <select name="category_id" x-ref="categorySelect" x-show="!addingCat"
+                        class="w-full border border-gray-300 text-sm px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
                     <option value="">— Select —</option>
                     @foreach($categories as $cat)
                         <option value="{{ $cat->id }}" {{ old('category_id', $expense?->category_id) == $cat->id ? 'selected' : '' }}>
@@ -109,16 +149,49 @@
                         </option>
                     @endforeach
                 </select>
+
+                <div x-show="addingCat" class="flex gap-1">
+                    <input type="text" x-ref="newCatInput" x-model="newCatName"
+                           @keydown.enter.prevent="saveCat()"
+                           @keydown.escape.prevent="addingCat = false; newCatName = ''; catErr = ''"
+                           placeholder="New category name"
+                           class="w-full border border-gray-300 text-sm px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                    <button type="button" @click="saveCat()" :disabled="savingCat || !newCatName.trim()"
+                            class="shrink-0 bg-[#6a0f70] text-white text-sm px-3 py-2 rounded disabled:opacity-50">
+                        <span x-show="!savingCat">Save</span>
+                        <span x-show="savingCat">…</span>
+                    </button>
+                    <button type="button" @click="addingCat = false; newCatName = ''; catErr = ''"
+                            class="shrink-0 text-sm px-2 py-2 text-gray-500 hover:text-gray-700">Cancel</button>
+                </div>
+                <p x-show="catErr" x-text="catErr" class="text-xs text-red-600 mt-1"></p>
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-600 uppercase tracking-wider mb-1">Vendor</label>
                 <select name="vendor_id" class="w-full border border-gray-300 text-sm px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
                     <option value="">— Select —</option>
-                    @foreach($vendors as $v)
-                        <option value="{{ $v->id }}" {{ old('vendor_id', $expense?->vendor_id) == $v->id ? 'selected' : '' }}>
-                            {{ $v->company_name ?: $v->vendor_name }}
-                        </option>
-                    @endforeach
+                    @php
+                        $staffVendors = $vendors->where('vendor_type', 'staff');
+                        $otherVendors = $vendors->where('vendor_type', '!=', 'staff');
+                    @endphp
+                    @if($staffVendors->count())
+                    <optgroup label="Staff">
+                        @foreach($staffVendors as $v)
+                            <option value="{{ $v->id }}" {{ old('vendor_id', $expense?->vendor_id) == $v->id ? 'selected' : '' }}>
+                                {{ $v->company_name ?: $v->vendor_name }}
+                            </option>
+                        @endforeach
+                    </optgroup>
+                    @endif
+                    @if($otherVendors->count())
+                    <optgroup label="Vendors">
+                        @foreach($otherVendors as $v)
+                            <option value="{{ $v->id }}" {{ old('vendor_id', $expense?->vendor_id) == $v->id ? 'selected' : '' }}>
+                                {{ $v->company_name ?: $v->vendor_name }}
+                            </option>
+                        @endforeach
+                    </optgroup>
+                    @endif
                 </select>
             </div>
         </div>

@@ -586,9 +586,32 @@ class FinanceController extends Controller
     public function expenseCreate()
     {
         $categories = FinanceExpenseCategory::orderBy('name')->get();
-        $vendors    = FinanceVendor::where('is_active', true)->orderBy('vendor_name')->get(['id', 'vendor_name', 'company_name']);
+        $vendors    = FinanceVendor::where('is_active', true)->orderBy('vendor_name')->get(['id', 'vendor_name', 'company_name', 'vendor_type']);
         $expense    = null;
         return view('finance.expense-form', compact('categories', 'vendors', 'expense'));
+    }
+
+    /**
+     * Inline "+ Add" quick-create from the Expense form's Category dropdown.
+     * Returns JSON — the form injects the new option into the <select> itself
+     * without a page reload.
+     */
+    public function categoryStore(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:100|unique:finance_expense_categories,name',
+        ]);
+
+        $category = FinanceExpenseCategory::create([
+            'clinic_id'  => 1,
+            'name'       => $data['name'],
+            'slug'       => \Illuminate\Support\Str::slug($data['name']),
+            'is_system'  => false,
+            'is_active'  => true,
+            'sort_order' => (int) FinanceExpenseCategory::max('sort_order') + 1,
+        ]);
+
+        return response()->json(['id' => $category->id, 'name' => $category->name]);
     }
 
     public function expenseStore(Request $request)
@@ -638,7 +661,7 @@ class FinanceController extends Controller
     public function expenseEdit(FinanceExpense $expense)
     {
         $categories = FinanceExpenseCategory::orderBy('name')->get();
-        $vendors    = FinanceVendor::where('is_active', true)->orderBy('vendor_name')->get(['id', 'vendor_name', 'company_name']);
+        $vendors    = FinanceVendor::where('is_active', true)->orderBy('vendor_name')->get(['id', 'vendor_name', 'company_name', 'vendor_type']);
         return view('finance.expense-form', compact('expense', 'categories', 'vendors'));
     }
 
@@ -870,7 +893,14 @@ class FinanceController extends Controller
                 ->where('vendor_name', 'like', "%$search%")
                 ->orWhere('company_name', 'like', "%$search%"));
         }
-        if ($type) { $query->where('vendor_type', $type); }
+        if ($type) {
+            $query->where('vendor_type', $type);
+        } else {
+            // Staff are auto-mirrored here so they can be picked as an expense
+            // payee, but this page is for managing real vendors — hide staff
+            // unless the "Staff" type filter is picked explicitly.
+            $query->where('vendor_type', '!=', 'staff');
+        }
 
         $vendors = $query->paginate(25)->withQueryString();
         $types   = FinanceVendor::typeLabels();
