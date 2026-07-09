@@ -243,6 +243,17 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             Route::post('/today/dismiss',  [RelationshipController::class, 'todayDismiss'])
                 ->name('today.dismiss');
 
+            // Close / Notes / Add-Call (2026-07-08 web parity) — static
+            // segments, declared with /today above, before the /{id} wildcard.
+            Route::post('/today/close',    [RelationshipController::class, 'todayClose'])
+                ->name('today.close');
+            Route::get('/today/notes',     [RelationshipController::class, 'todayNotes'])
+                ->name('today.notes.index');
+            Route::post('/today/notes',    [RelationshipController::class, 'todayAddNote'])
+                ->name('today.notes.add');
+            Route::post('/today/add-call', [RelationshipController::class, 'todayAddCall'])
+                ->name('today.add-call');
+
             // Universal search — name, phone, email
             Route::get('/search',          [RelationshipController::class, 'search'])
                 ->name('search');
@@ -332,6 +343,9 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             Route::post('/{lead}/convert', [RelationshipController::class, 'leadConvert'])
                 ->whereNumber('lead')
                 ->name('convert');
+            Route::get('/{lead}/detail',   [RelationshipController::class, 'leadDetail'])
+                ->whereNumber('lead')
+                ->name('detail');
         });
 
         // ── Missed Calls (mobile face of the PRE "Missed Calls" backlog page) ────
@@ -527,6 +541,10 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         // Item detail (declared after the static "/items" list above)
         Route::get('/inventory/items/{item}', [InventoryController::class, 'showItem']);
 
+        // Stock History panel (2026-07-08 web parity) — recent movements +
+        // which ones this user can still reverse.
+        Route::get('/inventory/items/{item}/history', [InventoryController::class, 'stockHistory']);
+
         /* ---- Writes (role-gated) ---- */
 
         // Item update + quick stock adjust
@@ -534,6 +552,11 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             ->middleware('api.role:admin,front_desk');
         Route::post('/inventory/items/{item}/adjust', [InventoryController::class, 'adjustStock'])
             ->middleware('api.role:admin,front_desk');
+
+        // Reverse a manual quick-adjustment (2026-07-08 web parity) —
+        // admin-only, same gate as the web 'admin.only' middleware.
+        Route::post('/inventory/movements/{movement}/reverse', [InventoryController::class, 'reverseAdjustment'])
+            ->middleware('api.role:admin');
 
         // Stock movements
         Route::post('/inventory/stock-in',  [InventoryController::class, 'stockIn'])

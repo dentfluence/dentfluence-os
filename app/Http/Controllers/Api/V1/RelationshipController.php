@@ -5,19 +5,24 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Activity;
 use App\Models\ActionOptionList;
+use App\Models\AppNotification;
 use App\Models\Appointment;
 use App\Models\CommunicationQueue;
 use App\Models\Finance\FinancePatientMembership;
+use App\Models\FollowUp;
 use App\Models\Invoice;
 use App\Models\LabCase;
 use App\Models\Lead;
 use App\Models\Patient;
 use App\Models\Relationship;
 use App\Models\Scopes\BranchScope;
+use App\Models\Task;
 use App\Models\TodayActionDismissal;
 use App\Models\TreatmentOpportunity;
 use App\Models\TreatmentVisit;
 use App\Models\User;
+use App\Modules\Huddle\Models\HuddleTaskLog;
+use App\Modules\Huddle\Repositories\HuddleBoardRepository;
 use App\Services\Prm\LeadFollowUpService;
 use App\Services\Prm\PrmRelationshipAdapter;
 use App\Services\RecallEngineService;
@@ -30,6 +35,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * RelationshipController (API v1)
@@ -369,17 +375,30 @@ class RelationshipController extends ApiController
     // Mobile equivalent of TodayController::dismiss(). 2026-07-06 parity.
     // ─────────────────────────────────────────────────────────────────────────
 
-    /** category => model class, for the live-computed categories that use TodayActionDismissal. */
+    /**
+     * category => model class, for the live-computed categories that use
+     * TodayActionDismissal. 2026-07-08: reconciled with the web
+     * TodayController's map (was missing 3 categories — new_enquiries,
+     * lead_followups, missed_appointments_yesterday — see
+     * project_mobile_web_gap_audit_0708 memory) so Close/Dismiss behave
+     * identically on mobile and web for every category.
+     */
     private const DISMISSIBLE_MODELS = [
-        'opportunities'            => TreatmentOpportunity::class,
-        'appointment_reminders'    => Appointment::class,
-        'pending_estimates'        => TreatmentOpportunity::class,
-        'membership_renewals'      => FinancePatientMembership::class,
-        'birthdays'                => Patient::class,
-        'lab_ready'                => LabCase::class,
-        'payment_reminders'        => Invoice::class,
-        'wellness_check_yesterday' => TreatmentVisit::class,
+        'opportunities'                 => TreatmentOpportunity::class,
+        'appointment_reminders'         => Appointment::class,
+        'missed_appointments_yesterday' => Appointment::class,
+        'pending_estimates'             => TreatmentOpportunity::class,
+        'membership_renewals'           => FinancePatientMembership::class,
+        'birthdays'                     => Patient::class,
+        'lab_ready'                     => LabCase::class,
+        'payment_reminders'             => Invoice::class,
+        'wellness_check_yesterday'      => TreatmentVisit::class,
+        'new_enquiries'                 => Lead::class,
+        'lead_followups'                => Lead::class,
     ];
+
+    /** category keys whose Today's Actions row is backed by a communication_queue record. */
+    private const QUEUE_BACKED_CATEGORIES = ['recall_calls', 'missed_calls_yesterday', 'logged_communications'];
 
     public function todayDismiss(Request $request): JsonResponse
     {
@@ -469,6 +488,324 @@ class RelationshipController extends ApiController
                 'message' => 'Could not dismiss item. Please try again.',
             ], 500);
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/v1/relationships/today/close
+    // Mobile equivalent of TodayController::closeAction() — the explicit
+    // "Close" action (2026-07-08 web parity): "I'm done with this one" after
+    // however many Log attempts, no outcome required. Reuses the same
+    // per-category suppression logic todayDismiss() above already needs.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function todayClose(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'category'        => ['required', 'string'],
+            'patient_id'      => ['nullable', 'integer'],
+            'lead_id'         => ['nullable', 'integer'],
+            'relationship_id' => ['nullable', 'integer'],
+            'subject_id'      => ['nullable', 'integer'],
+            'notes'           => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $this->closeUnderlyingRecord(array_merge($validated, ['response' => 'closed_manually']));
+
+            $subject = $this->resolveNoteSubject($validated['patient_id'] ?? null, $validated['lead_id'] ?? null);
+            if ($subject) {
+                $this->activityEngine->log(
+                    subject       : $subject,
+                    event         : 'today_action.closed',
+                    actor         : $request->user(),
+                    metadata      : [
+                        'category' => $validated['category'],
+                        'notes'    => $validated['notes'] ?? null,
+                        'source'   => 'today_actions_mobile',
+                    ],
+                    relationshipId: $validated['relationship_id'] ?? null,
+                    description   : "Closed from Today's Actions",
+                );
+            }
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            Log::error('Api/V1/RelationshipController::todayClose failed', [
+                'data'  => $validated,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not close. Please try again.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Mirrors TodayController::closeUnderlyingRecord() exactly (same three
+     * branches: queue-backed autoClose, follow_up_calls completion, or a
+     * TodayActionDismissal suppression row for everything else in
+     * DISMISSIBLE_MODELS). Kept private/local rather than reaching into the
+     * web controller, matching this class's existing self-contained convention.
+     */
+    private function closeUnderlyingRecord(array $validated): void
+    {
+        $category  = $validated['category'];
+        $subjectId = $validated['subject_id'] ?? null;
+
+        if (in_array($category, self::QUEUE_BACKED_CATEGORIES, true)) {
+            if ($subjectId) {
+                CommunicationQueue::find($subjectId)?->autoClose(
+                    $validated['response'],
+                    $validated['notes'] ?? "Logged from Today's Actions"
+                );
+            }
+            return;
+        }
+
+        if ($category === 'follow_up_calls') {
+            if ($subjectId) {
+                FollowUp::where('id', $subjectId)->update([
+                    'status'          => 'completed',
+                    'completed_at'    => now(),
+                    'completed_by'    => auth()->id(),
+                    'completion_note' => $validated['notes'] ?? null,
+                ]);
+            }
+            return;
+        }
+
+        $modelClass = self::DISMISSIBLE_MODELS[$category] ?? null;
+        if (! $modelClass) {
+            return;
+        }
+
+        $resolvedSubjectId = $modelClass === Lead::class
+            ? ($validated['lead_id'] ?? $subjectId)
+            : $subjectId;
+
+        if (! $resolvedSubjectId) {
+            return;
+        }
+
+        TodayActionDismissal::updateOrCreate(
+            [
+                'category'           => $category,
+                'subject_type'       => $modelClass,
+                'subject_id'         => $resolvedSubjectId,
+                'dismissed_for_date' => \Illuminate\Support\Carbon::today()->toDateString(),
+            ],
+            [
+                'reason_key'   => $validated['response'],
+                'notes'        => $validated['notes'] ?? null,
+                'dismissed_by' => auth()->id(),
+            ]
+        );
+    }
+
+    /** Patient first, then Lead — same precedence as todayLogAction()/todayDismiss(). */
+    private function resolveNoteSubject(?int $patientId, ?int $leadId): ?\Illuminate\Database\Eloquent\Model
+    {
+        if ($patientId) {
+            return Patient::find($patientId);
+        }
+        if ($leadId) {
+            return Lead::find($leadId);
+        }
+        return null;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET/POST /api/v1/relationships/today/notes
+    // Mobile equivalent of TodayController::notes()/addNote() — the
+    // Suggestion/Patient Response notes drawer ported from the Lead/
+    // Opportunity Pipeline onto the Action Board (2026-07-08 web parity).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function todayNotes(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'patient_id' => ['nullable', 'integer'],
+            'lead_id'    => ['nullable', 'integer'],
+        ]);
+
+        $subject = $this->resolveNoteSubject($validated['patient_id'] ?? null, $validated['lead_id'] ?? null);
+
+        if (! $subject) {
+            return response()->json(['success' => true, 'notes' => []]);
+        }
+
+        $notes = Activity::query()
+            ->with('actor')
+            ->where('subject_type', get_class($subject))
+            ->where('subject_id', $subject->getKey())
+            ->ofEvent('today_action.note_added')
+            ->recent()
+            ->get()
+            ->map(fn (Activity $note) => [
+                'note_type'   => $note->metadata['note_type'] ?? 'suggestion',
+                'text'        => $note->metadata['text'] ?? $note->description,
+                'author'      => $note->actor?->name ?? 'Staff',
+                'occurred_at' => $note->occurred_at?->format('d M Y, g:i A'),
+            ]);
+
+        return response()->json(['success' => true, 'notes' => $notes]);
+    }
+
+    public function todayAddNote(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'note_type'       => ['required', 'in:suggestion,response'],
+            'text'            => ['required', 'string', 'max:1000'],
+            'category'        => ['nullable', 'string'],
+            'patient_id'      => ['nullable', 'integer'],
+            'lead_id'         => ['nullable', 'integer'],
+            'relationship_id' => ['nullable', 'integer'],
+        ]);
+
+        $subject = $this->resolveNoteSubject($validated['patient_id'] ?? null, $validated['lead_id'] ?? null);
+
+        if (! $subject) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This item has no patient or lead attached — a note cannot be added.',
+            ], 422);
+        }
+
+        $label = $validated['note_type'] === 'suggestion' ? 'Suggestion' : 'Patient response';
+
+        $this->activityEngine->log(
+            subject       : $subject,
+            event         : 'today_action.note_added',
+            actor         : $request->user(),
+            metadata      : [
+                'note_type' => $validated['note_type'],
+                'text'      => $validated['text'],
+                'category'  => $validated['category'] ?? null,
+            ],
+            relationshipId: $validated['relationship_id'] ?? null,
+            description   : "{$label} added from Today's Actions: " . Str::limit($validated['text'], 80),
+        );
+
+        return response()->json(['success' => true]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/v1/relationships/today/add-call
+    // Mobile equivalent of Communication\TaskController::store()'s
+    // Call/WhatsApp/Follow-up path — the "+ Add Call" button on Today's
+    // Actions (2026-07-08 web parity, feature-spec-manual-add-call.md).
+    // Unlike the web form this endpoint is scoped to the 3 comm categories
+    // only (call/whatsapp/follow_up) since that's the only thing "+ Add Call"
+    // needs to create; clinical/admin/lab/maintenance tasks still go through
+    // the existing /huddle/tasks endpoint.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function todayAddCall(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'title'        => 'required|string|max:255',
+            'description'  => 'nullable|string|max:1000',
+            'assigned_to'  => 'required|exists:users,id',
+            'due_date'     => 'required|date',
+            'priority'     => 'required|in:urgent,high,medium,low',
+            'category'     => 'required|in:call,whatsapp,follow_up',
+            'patient_id'   => 'nullable|exists:patients,id',
+            'contact_name' => 'nullable|string|max:255',
+            'contact_type' => 'nullable|in:vendor,lab,consultant,other',
+        ]);
+
+        $contactName = $data['contact_name'] ?? null;
+        $contactType = $data['contact_type'] ?? null;
+        unset($data['contact_name'], $data['contact_type']);
+
+        $task = Task::create([
+            ...$data,
+            'branch_id'  => $request->user()->branch_id,
+            'created_by' => $request->user()->id,
+            'status'     => 'pending',
+        ]);
+
+        try {
+            if ($task->patient_id) {
+                FollowUp::create([
+                    'patient_id'   => $task->patient_id,
+                    'label'        => $task->title,
+                    'note'         => $task->description,
+                    'trigger_type' => 'manual',
+                    'due_date'     => $task->due_date,
+                    'due_time'     => $task->due_time,
+                    'channel'      => $task->category === 'whatsapp' ? 'whatsapp' : 'call',
+                    'priority'     => $task->priority,
+                    'status'       => 'pending',
+                    'assigned_to'  => $task->assigned_to,
+                    'auto_created' => false,
+                ]);
+            } elseif ($task->category !== 'follow_up' && $contactName) {
+                CommunicationQueue::create([
+                    'person_name'    => $contactName,
+                    'phone'          => '',
+                    'channel'        => $task->category === 'whatsapp' ? 'whatsapp' : 'call',
+                    'comm_type'      => $contactType === 'consultant' ? 'doctor' : ($contactType ?? 'other'),
+                    'contact_type'   => $contactType ?? 'other',
+                    'source_engine'  => 'manual',
+                    'status'         => 'pending',
+                    'priority'       => $task->priority,
+                    'note'           => $task->description,
+                    'follow_up_date' => $task->due_date,
+                    'assigned_to'    => optional(User::find($task->assigned_to))->name,
+                    'created_by'     => $request->user()->id,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Api mobile Task-to-CommunicationQueue/FollowUp sync failed: ' . $e->getMessage(), [
+                'task_id' => $task->id,
+            ]);
+        }
+
+        try {
+            $assignedUser = User::find($task->assigned_to);
+            if ($assignedUser) {
+                $board = app(HuddleBoardRepository::class)->findOrCreateForToday(
+                    branchId: $task->branch_id,
+                    role:     $assignedUser->role ?? 'staff',
+                );
+                HuddleTaskLog::firstOrCreate(
+                    ['task_id' => $task->id, 'huddle_board_id' => $board->id],
+                    ['status' => 'pending', 'carried_forward' => false]
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Api mobile HuddleTaskLog sync failed: ' . $e->getMessage());
+        }
+
+        if ($task->assigned_to && $task->assigned_to !== $request->user()->id) {
+            AppNotification::notify(
+                userId:      $task->assigned_to,
+                type:        'task_assigned',
+                title:       'New task assigned to you',
+                message:     "\"{$task->title}\" — due {$task->due_date->format('d M Y')}. Assigned by {$request->user()->name}.",
+                actionUrl:   route('tasks.index'),
+                actionLabel: 'View Tasks',
+            );
+        }
+
+        $task->load(['assignedTo', 'patient']);
+
+        return response()->json([
+            'success' => true,
+            'task'    => [
+                'id'           => $task->id,
+                'title'        => $task->title,
+                'priority'     => $task->priority,
+                'due_date'     => $task->due_date->toDateString(),
+                'assigned_to'  => $task->assignedTo?->name,
+                'patient_name' => $task->patient?->name,
+                'category'     => $task->category,
+                'status'       => $task->status,
+            ],
+        ], 201);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1245,6 +1582,51 @@ class RelationshipController extends ApiController
         app(PrmRelationshipAdapter::class)->onConverted($leadModel, $request->user());
 
         return $this->success(['patient_id' => $patient->id], 'Lead converted to patient.');
+    }
+
+    /**
+     * GET /api/v1/leads/{lead}/detail — Lead Detail modal, mobile equivalent
+     * of LeadPipelineController::detailModal() (2026-07-08 web parity). Reads
+     * straight off Lead::activities() (LeadActivity's `by` column already
+     * stores who logged it), so this works even for leads with no
+     * relationship_id — same as the web modal. No new write path: activity
+     * logging already exists at POST /api/v1/leads/{lead}/activity above.
+     */
+    public function leadDetail(int $lead): JsonResponse
+    {
+        $leadModel = Lead::with(['activities' => fn ($q) => $q->latest('id')])->findOrFail($lead);
+
+        $stageInfo = self::LEAD_STAGES[$leadModel->stage] ?? [];
+
+        return $this->success([
+            'id'              => $leadModel->id,
+            'name'            => $leadModel->name,
+            'phone'           => $leadModel->phone,
+            'stage'           => $leadModel->stage,
+            'stage_label'     => $stageInfo['label'] ?? $leadModel->stage,
+            'stage_color'     => $stageInfo['color'] ?? null,
+            'stage_bg'        => $stageInfo['bg'] ?? null,
+            'treatment'       => $leadModel->treatment,
+            'lead_value'      => (float) $leadModel->lead_value,
+            'urgency'         => $leadModel->urgency,
+            'followup_date'   => $leadModel->followup_date?->toDateString(),
+            'assigned_to'     => $leadModel->assigned_to,
+            'source'          => $leadModel->source,
+            'lead_source'     => $leadModel->lead_source,
+            'notes'           => $leadModel->notes,
+            'relationship_id' => $leadModel->relationship_id,
+            'created_at'      => $leadModel->created_at?->toIso8601String(),
+            'updated_at'      => $leadModel->updated_at?->toIso8601String(),
+            'activities'      => $leadModel->activities->map(fn ($a) => [
+                'type'          => $a->type,
+                'label'         => $a->label,
+                'note'          => $a->note,
+                'outcome'       => $a->outcome,
+                'by'            => $a->by,
+                'activity_date' => $a->activity_date?->toDateString(),
+                'activity_time' => $a->activity_time,
+            ])->values(),
+        ]);
     }
 
     /** POST /api/v1/leads/quick-add — 4-field quick add (name/phone/lead_source/treatment). */

@@ -610,6 +610,99 @@ class InventoryController extends ApiController
         return $this->success($this->mapProduct($this->inventory->findItem($item->id), true), 'Stock updated.');
     }
 
+    /**
+     * Recent stock movement log for one product — mobile equivalent of the
+     * web "Stock History" panel (InventoryController::stockHistory, 2026-07-08
+     * web parity). Same 25-row window, same reversal metadata.
+     */
+    public function stockHistory(Request $request, InventoryItem $item): JsonResponse
+    {
+        $isAdmin = $this->user($request)?->isAdminRole() ?? false;
+
+        $movements = StockMovement::where('inventory_item_id', $item->id)
+            ->with(['toLocation:id,name', 'fromLocation:id,name', 'createdBy:id,name', 'reversedBy:id,name'])
+            ->latest()
+            ->take(25)
+            ->get()
+            ->map(fn (StockMovement $m) => [
+                'id'            => $m->id,
+                'date'          => $m->created_at->format('d M Y, h:i A'),
+                'type'          => $m->getMovementLabel(),
+                'color'         => $m->getMovementColor(),
+                'is_add'        => $m->movement_type === 'stock_in',
+                'qty'           => (float) $m->qty,
+                'unit_cost'     => (float) $m->unit_cost,
+                'total_cost'    => (float) $m->total_cost,
+                'location'      => $m->toLocation?->name ?? $m->fromLocation?->name ?? '—',
+                'note'          => $m->notes,
+                'created_by'    => $m->createdBy?->name ?? '—',
+                'is_reversal'   => (bool) $m->reversal_of_id,
+                'reversed'      => (bool) $m->reversed_at,
+                'reversed_meta' => $m->reversed_at
+                    ? ($m->reversed_at->format('d M Y, h:i A') . ' by ' . ($m->reversedBy?->name ?? '—'))
+                    : null,
+                'can_reverse'   => $m->isReversible() && $isAdmin,
+            ]);
+
+        return $this->success($movements);
+    }
+
+    /**
+     * Reverse a manual quick-adjustment — mobile equivalent of
+     * InventoryController::reverseAdjustment (2026-07-08 web parity). Never
+     * edits/deletes the original row; creates a compensating movement and
+     * stamps the original reversed so it can't be reversed twice. Admin-only
+     * Admin-only — gated by the 'api.role:admin' route middleware.
+     */
+    public function reverseAdjustment(Request $request, StockMovement $movement): JsonResponse
+    {
+        if (! $movement->isReversible()) {
+            return $this->error('This entry can no longer be reversed.', [], 422);
+        }
+
+        $isAdd = $movement->movement_type === 'stock_in';
+
+        if ($isAdd) {
+            $stock = \App\Models\Inventory\InventoryStock::where('inventory_item_id', $movement->inventory_item_id)
+                ->where('location_id', $movement->to_location_id)
+                ->first();
+
+            if (! $stock || $stock->available_qty < $movement->qty) {
+                return $this->error(
+                    'Cannot reverse — only ' . ($stock->available_qty ?? 0) . ' left at that location (some of this stock has already moved).',
+                    [],
+                    422
+                );
+            }
+        }
+
+        $userId = $this->user($request)?->id;
+
+        DB::transaction(function () use ($movement, $isAdd, $userId) {
+            StockMovement::create([
+                'inventory_item_id' => $movement->inventory_item_id,
+                'to_location_id'    => $isAdd ? null : $movement->from_location_id,
+                'from_location_id'  => $isAdd ? $movement->to_location_id : null,
+                'movement_type'     => $isAdd ? 'stock_out' : 'stock_in',
+                'qty'               => $movement->qty,
+                'unit_cost'         => $movement->unit_cost,
+                'total_cost'        => $movement->total_cost,
+                'reference_type'    => 'manual_adjustment_reversal',
+                'reference_id'      => $movement->id,
+                'reversal_of_id'    => $movement->id,
+                'notes'             => 'Reversal of #' . $movement->id . ($movement->notes ? ' — ' . $movement->notes : ''),
+                'created_by'        => $userId,
+            ]);
+
+            $movement->update([
+                'reversed_at' => now(),
+                'reversed_by' => $userId,
+            ]);
+        });
+
+        return $this->success(null, 'Adjustment reversed.');
+    }
+
     /* ─────────── STOCK IN / OUT ─────────── */
 
     public function stockIn(Request $request): JsonResponse
