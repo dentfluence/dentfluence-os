@@ -655,6 +655,29 @@ class BillingController extends Controller
         }
     }
 
+    // ── Reverse wallet credit debited against this invoice ──────────────────
+    // If wallet balance was applied when this invoice was created, deleting or
+    // cancelling it must give that credit back — otherwise the debit stays on
+    // the wallet ledger forever with no invoice to show what it paid for, and
+    // the patient's usable balance is short by that amount permanently.
+    private function reverseInvoiceWalletDebit(Invoice $invoice, string $reason): void
+    {
+        $debited = \App\Models\WalletTransaction::where('invoice_id', $invoice->id)
+            ->where('source', 'invoice_debit')
+            ->where('direction', 'debit')
+            ->sum('amount');
+
+        if ($debited > 0) {
+            (new WalletService())->credit(
+                patientId:  $invoice->patient_id,
+                amount:     (float) $debited,
+                creditType: 'permanent',
+                notes:      'Reversal — ' . $reason,
+                createdBy:  auth()->id(),
+            );
+        }
+    }
+
     // ── Destroy ──────────────────────────────────────────────────────────────
     // Called from the 3-dot menu on Finance > Invoices tab.
     // Unpaid/draft invoices: simple soft-delete with reason.
@@ -685,6 +708,7 @@ class BillingController extends Controller
         );
 
         $this->reverseRetailStockMovements($invoice);
+        $this->reverseInvoiceWalletDebit($invoice, 'invoice ' . $invoice->invoice_number . ' deleted. ' . $request->cancelled_reason);
 
         $invoice->update([
             'status'           => 'cancelled',
@@ -1473,6 +1497,9 @@ class BillingController extends Controller
 
             // 4. Reverse any retail-product stock deductions this invoice made
             $this->reverseRetailStockMovements($invoice);
+
+            // 4b. Reverse any wallet credit that was debited against this invoice
+            $this->reverseInvoiceWalletDebit($invoice, 'invoice ' . $invoice->invoice_number . ' cancelled. ' . $request->cancelled_reason);
 
             // 5. Mark invoice as cancelled + save audit
             $invoice->update([
