@@ -6,8 +6,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Credit Note — {{ $patient->name }}</title>
-    @php $pm = \App\Models\AppSetting::printMargins(['top' => '24px', 'bottom' => '24px', 'left' => '32px', 'right' => '32px']); @endphp
+    @php
+        // Real cash received with no invoice yet (advance/recharge) gets a Receipt —
+        // it's proof of payment, not a credit adjustment. Promotional/goodwill wallet
+        // credits (no money changed hands) keep the Credit Note document.
+        $isAdvance = $transaction->source === 'advance';
+        $pm = \App\Models\AppSetting::printMargins(['top' => '24px', 'bottom' => '24px', 'left' => '32px', 'right' => '32px']);
+    @endphp
+    <title>{{ $isAdvance ? 'Receipt' : 'Credit Note' }} — {{ $patient->name }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -236,8 +242,8 @@
             </div>
         </div>
         <div class="doc-label">
-            <h1>Credit Note</h1>
-            <div class="ref">Ref: CN-{{ str_pad($transaction->id, 6, '0', STR_PAD_LEFT) }}</div>
+            <h1>{{ $isAdvance ? 'Receipt' : 'Credit Note' }}</h1>
+            <div class="ref">Ref: {{ $isAdvance ? 'RCP-ADV-' : 'CN-' }}{{ str_pad($transaction->id, 6, '0', STR_PAD_LEFT) }}</div>
             <div class="doc-date">Date: {{ $transaction->created_at->format('d F Y') }}</div>
         </div>
     </div>
@@ -265,14 +271,17 @@
         <tbody>
             <tr>
                 <td>
-                    <strong>Credit Balance Added</strong>
+                    <strong>{{ $isAdvance ? 'Advance Payment Received' : 'Credit Balance Added' }}</strong>
+                    @if($isAdvance && $transaction->payment_mode)
+                        <br><span style="color:#777;font-size:12px;">Paid via {{ ucfirst(str_replace('_', ' ', $transaction->payment_mode)) }}</span>
+                    @endif
                     @if($transaction->notes)
                         <br><span style="color:#777;font-size:12px;">{{ $transaction->notes }}</span>
                     @endif
                 </td>
                 <td>
                     <span style="background:#f3e8ff;color:#6a0f70;font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600;">
-                        Credit Balance
+                        {{ $isAdvance ? 'Advance Payment' : 'Credit Balance' }}
                     </span>
                 </td>
                 <td style="text-align:right;font-weight:700;color:#6a0f70;">
@@ -280,7 +289,7 @@
                 </td>
             </tr>
             <tr class="amount-row">
-                <td colspan="2" style="font-size:13px;color:#555;font-weight:600;">Total Credit</td>
+                <td colspan="2" style="font-size:13px;color:#555;font-weight:600;">{{ $isAdvance ? 'Total Received' : 'Total Credit' }}</td>
                 <td style="text-align:right;">Rs. {{ number_format($transaction->amount, 2) }}</td>
             </tr>
         </tbody>
@@ -296,23 +305,33 @@
                 @else
                     <span style="color:#6b7280;margin-left:8px;">({{ $transaction->expiry_date->diffForHumans() }})</span>
                 @endif
-                <div style="margin-top:2px;font-size:12px;">This credit note must be redeemed before the above date.</div>
+                <div style="margin-top:2px;font-size:12px;">{{ $isAdvance ? 'This balance must be used before the above date.' : 'This credit note must be redeemed before the above date.' }}</div>
             </div>
         </div>
     @else
         <div class="no-expiry-banner">
-            <strong>No expiry</strong> — This credit balance carries over indefinitely and can be used at any future visit.
+            @if($isAdvance)
+                <strong>No expiry</strong> — This amount has been credited to {{ $patient->name }}'s wallet and will be adjusted against future invoices.
+            @else
+                <strong>No expiry</strong> — This credit balance carries over indefinitely and can be used at any future visit.
+            @endif
         </div>
     @endif
 
     {{-- ── Conditions ──────────────────────────────────────────────────────── --}}
     <div class="conditions">
         <strong>Terms & Conditions:</strong><br>
-        • This credit note is non-transferable and valid only for {{ $patient->name }}.<br>
-        • Credit balance can be applied against any treatment invoice at {{ $clinicName }}.<br>
-        • Credit balance is not redeemable for cash.<br>
+        @if($isAdvance)
+            • This receipt confirms Rs. {{ number_format($transaction->amount, 2) }} received from {{ $patient->name }}{{ $transaction->payment_mode ? ' via ' . ucfirst(str_replace('_', ' ', $transaction->payment_mode)) : '' }}.<br>
+            • The amount has been added to the patient's wallet and will be adjusted against future invoices.<br>
+            • Not redeemable for cash; applicable only for treatments/services at {{ $clinicName }}.<br>
+        @else
+            • This credit note is non-transferable and valid only for {{ $patient->name }}.<br>
+            • Credit balance can be applied against any treatment invoice at {{ $clinicName }}.<br>
+            • Credit balance is not redeemable for cash.<br>
+        @endif
         @if($transaction->expiry_date && !$transaction->expiry_date->isPast())
-            • This credit note expires on {{ $transaction->expiry_date->format('d F Y') }} and will be forfeited if unused.<br>
+            • This balance expires on {{ $transaction->expiry_date->format('d F Y') }} and will be forfeited if unused.<br>
         @endif
         • This is a computer-generated document.
     </div>

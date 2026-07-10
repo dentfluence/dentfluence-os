@@ -1689,7 +1689,31 @@
             @endif
 
             @php
-                $allReceipts  = ($invoices ?? collect())->flatMap(fn($i) => $i->receipts ?? collect())->sortByDesc('receipt_date');
+                // Invoice-tied receipts (issued when a payment is recorded against an invoice)
+                $invoiceReceipts = ($invoices ?? collect())->flatMap(fn($i) => $i->receipts ?? collect());
+                foreach ($invoiceReceipts as $rcpt) {
+                    $rcpt->view_url = route('billing.receipt', [$rcpt->invoice, $rcpt]);
+                }
+
+                // Advance payments straight into the wallet (no invoice yet) — these are real
+                // money received too, so they belong in the same Receipts list. Document is
+                // printed from the Wallet module (source='advance' → labelled "Receipt" there).
+                $advanceReceipts = (isset($wallet) && $wallet)
+                    ? $wallet->transactions()
+                        ->where('direction', 'credit')
+                        ->where('source', 'advance')
+                        ->get()
+                        ->map(function ($tx) use ($patient) {
+                            $tx->receipt_number = 'ADV-' . str_pad($tx->id, 6, '0', STR_PAD_LEFT);
+                            $tx->receipt_date   = $tx->created_at;
+                            $tx->reference_no   = null;
+                            $tx->invoice        = null;
+                            $tx->view_url       = route('finance.wallets.credit-note', [$patient, $tx]);
+                            return $tx;
+                        })
+                    : collect();
+
+                $allReceipts   = $invoiceReceipts->concat($advanceReceipts)->sortByDesc('receipt_date');
                 $allFinalBills = ($invoices ?? collect())->filter(fn($i) => $i->finalBill)->map(fn($i) => $i->finalBill)->sortByDesc('generated_date');
             @endphp
 
@@ -1808,15 +1832,15 @@
                                     <div class="text-xs font-bold text-green-700">Rs. {{ number_format($rcpt->amount, 0) }}</div>
                                     @if($rcpt->invoice)
                                         <div class="text-[10px] text-gray-400 font-mono">{{ $rcpt->invoice->invoice_number }}</div>
+                                    @else
+                                        <div class="text-[10px] text-purple-500 font-mono">Advance · Wallet</div>
                                     @endif
                                 </div>
                                 <div class="opacity-0 group-hover:opacity-100 transition flex-shrink-0">
-                                    @if($rcpt->invoice)
-                                    <a href="{{ route('billing.receipt', [$rcpt->invoice, $rcpt]) }}" target="_blank"
+                                    <a href="{{ $rcpt->view_url }}" target="_blank"
                                        class="w-7 h-7 flex items-center justify-center rounded hover:bg-green-50 text-gray-400 hover:text-green-600" title="View Receipt">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                     </a>
-                                    @endif
                                 </div>
                             </div>
                             @endforeach
@@ -3021,6 +3045,10 @@ document.getElementById('patientDeleteModal').addEventListener('click', function
                                         @if($tx->campaign_name)
                                             <div class="text-xs text-amber-600 mt-0.5">{{ $tx->campaign_name }}</div>
                                         @endif
+                                    @elseif($tx->direction === 'debit')
+                                        <span class="text-xs px-1.5 py-0.5 bg-red-50 text-red-600 rounded">Used</span>
+                                    @elseif($tx->source === 'advance')
+                                        <span class="text-xs px-1.5 py-0.5 bg-green-50 text-green-700 rounded">Advance Paid</span>
                                     @else
                                         <span class="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">Credit</span>
                                     @endif
@@ -3049,7 +3077,7 @@ document.getElementById('patientDeleteModal').addEventListener('click', function
                                     @if($tx->direction === 'credit' && $tx->credit_type === 'permanent')
                                         <a href="{{ route('finance.wallets.credit-note', [$patient, $tx]) }}"
                                            target="_blank"
-                                           class="block text-xs text-[#6a0f70] hover:underline mt-0.5">Credit Note ↗</a>
+                                           class="block text-xs text-[#6a0f70] hover:underline mt-0.5">{{ $tx->source === 'advance' ? 'Receipt' : 'Credit Note' }} ↗</a>
                                     @endif
                                 </td>
                             </tr>
