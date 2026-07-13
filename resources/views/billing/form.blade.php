@@ -480,6 +480,18 @@
 </div>
 
 <script>
+// rowIdx/visitItemIds must be initialized before ANYTHING else in this script
+// runs — addRow() (called from inline onclick="" chip buttons further down
+// the page, e.g. the "Pre-filled from the visit" re-add chips) closes over
+// these. They used to be declared much further down (right before addRow's
+// own definition), which left a window where any earlier failure in this
+// script — even one recovered from — could leave them stuck in the temporal
+// dead zone, so every click on those chips threw "Cannot access 'rowIdx'
+// before initialization" and silently did nothing (2026-07-13 bug report:
+// clicking a re-add chip never added the line item).
+let rowIdx = {{ count($existingItems ?? []) }};
+const visitItemIds = new Set();
+
 // ── Tooth-chart modal ───────────────────────────────────────────────────────
 // FDI_UPPER/FDI_LOWER are always PERMANENT position codes — that's what
 // drives layout order. Mixed dentition (toothDentitionMode) lets any of the
@@ -623,9 +635,6 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && document.getElementById('toothModal').classList.contains('open')) closeToothModal();
 });
 buildToothArches();
-
-let rowIdx = {{ count($existingItems ?? []) }};
-const visitItemIds = new Set();
 
 // Membership benefit config from server — used for client-side recalc
 const memBenefits = @json($memActive ? ($memInfo['benefit_config'] ?? null) : null);
