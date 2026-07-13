@@ -335,7 +335,7 @@
     }
     .inv-pill-rm:hover { color:#6a0f70; }
 
-    /* ── Tooth chart legend pills ── */
+    /* ── Tooth chart summary pills (legend-style capsules) ── */
     .tc-legend-pill {
         display:inline-flex; align-items:center; gap:5px;
         padding:4px 10px 4px 7px; border-radius:999px;
@@ -343,6 +343,11 @@
         border:1.5px solid; cursor:default;
     }
     .tc-legend-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+    .tc-tooth-chip {
+        padding:2px 9px; border-radius:999px; background:transparent;
+        border:1.5px solid; font-size:11px; font-weight:700;
+        font-family:'Inter',sans-serif;
+    }
 
     /* ── Tooth chart condition picker modal ── */
     .tc-cond-btn {
@@ -909,7 +914,7 @@
             {{-- 4. TOOTH CHART --}}
             <div class="c-card" x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak
                  x-data="toothChart(@js($consultation?->chart_data ?? []))">
-                <input type="hidden" name="chart_data" :value="JSON.stringify(Object.keys(toothData).map(Number))">
+                <input type="hidden" name="chart_data" :value="serializedChart">
 
                 <div class="c-card-head">
                     <span class="c-head-label">
@@ -930,18 +935,6 @@
                 </div>
 
                 <div class="c-body">
-                    {{-- Condition legend — pills use CSS class + :style object so Alpine doesn't wipe static styles --}}
-                    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:16px;">
-                        <template x-for="c in conditions" :key="c.key">
-                            <span class="tc-legend-pill"
-                                  :style="{ background: c.bg, color: c.color, borderColor: c.color + '60' }">
-                                <span class="tc-legend-dot"
-                                      :style="{ background: c.color }"></span>
-                                <span x-text="c.label"></span>
-                            </span>
-                        </template>
-                    </div>
-
                     {{-- Upper --}}
                     <div style="text-align:center;font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;
                                 letter-spacing:.07em;margin-bottom:5px;font-family:'Inter',sans-serif;">Upper</div>
@@ -1009,21 +1002,52 @@
 
                     {{-- Summary by condition --}}
                     <template x-if="markedCount > 0">
-                        <div style="margin-top:14px;border-top:1px solid #f3f4f6;padding-top:12px;
-                                    display:flex;flex-direction:column;gap:6px;">
-                            <template x-for="c in conditions.filter(c => markedByCondition(c.key).length > 0)" :key="c.key">
-                                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                                    <span style="padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;
-                                                 font-family:'Inter',sans-serif;white-space:nowrap;flex-shrink:0;"
-                                          :style="`background:${c.bg};color:${c.color}`"
-                                          x-text="c.label"></span>
-                                    <div style="display:flex;flex-wrap:wrap;gap:3px;">
+                        <div style="margin-top:16px;background:#fafafa;border:1px solid #f0f0f2;border-radius:10px;
+                                    padding:12px 14px;display:flex;flex-direction:column;gap:9px;">
+                            <template x-for="c in conditions.filter(c => c.key !== 'other' && markedByCondition(c.key).length > 0)" :key="c.key">
+                                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                    <span class="tc-legend-pill" :style="{ background: c.bg, color: c.color, borderColor: c.color + '60' }">
+                                        <span class="tc-legend-dot" :style="{ background: c.color }"></span>
+                                        <span x-text="c.label"></span>
+                                    </span>
+                                    <div style="display:flex;flex-wrap:wrap;gap:4px;">
                                         <template x-for="t in markedByCondition(c.key)" :key="t">
-                                            <span style="padding:1px 6px;background:#f9fafb;border:1px solid #e5e7eb;
-                                                         border-radius:3px;font-size:11px;font-weight:600;
-                                                         color:#374151;font-family:'Inter',sans-serif;"
-                                                  :style="isPrimaryCode(t) ? 'color:#db2777;border-color:#f9a8d4;background:#fdf2f8;' : ''"
-                                                  :title="isPrimaryCode(t) ? 'Primary (child) tooth' : ''"
+                                            <span class="tc-tooth-chip"
+                                                  :style="isPrimaryCode(t) ? { color: '#db2777', borderColor: '#f9a8d4' } : { color: c.color, borderColor: c.color + '70' }"
+                                                  :title="toothTitle(t)"
+                                                  x-text="t + surfaceSuffix(t) + (isPrimaryCode(t) ? ' ·P' : '')"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            {{-- "Other" — free-text condition, one row per tooth since the label varies --}}
+                            <template x-if="markedByCondition('other').length > 0">
+                                <div style="display:flex;flex-direction:column;gap:6px;">
+                                    <template x-for="t in markedByCondition('other')" :key="t">
+                                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                            <span class="tc-legend-pill" style="background:#f3f4f6;color:#6b7280;border-color:#6b728060;">
+                                                <span class="tc-legend-dot" style="background:#6b7280;"></span>
+                                                <span x-text="'Tooth ' + t + ' — Other'"></span>
+                                            </span>
+                                            <span style="font-size:11.5px;color:#374151;font-family:'Inter',sans-serif;font-weight:600;"
+                                                  x-text="toothData[t].custom || '—'"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+
+                            {{-- Legacy rows saved before condition-tracking existed — no condition on file yet --}}
+                            <template x-if="unspecified().length > 0">
+                                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                    <span class="tc-legend-pill" style="background:#f3f4f6;color:#9ca3af;border-color:#e5e7eb;">
+                                        <span class="tc-legend-dot" style="background:#d1d5db;"></span>
+                                        <span>Unspecified</span>
+                                    </span>
+                                    <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                                        <template x-for="t in unspecified()" :key="t">
+                                            <span class="tc-tooth-chip" style="color:#6b7280;border-color:#e5e7eb;"
+                                                  title="Marked before a condition was recorded — reopen to set one"
                                                   x-text="t"></span>
                                         </template>
                                     </div>
@@ -1039,7 +1063,7 @@
                          style="position:fixed;inset:0;z-index:300;display:flex;align-items:center;
                                 justify-content:center;background:rgba(15,5,20,.45);backdrop-filter:blur(3px);">
                         <div @click.stop
-                             style="background:#fff;border-radius:16px;padding:0;width:240px;
+                             style="background:#fff;border-radius:16px;padding:0;width:266px;
                                     box-shadow:0 24px 64px rgba(0,0,0,.22),0 0 0 1px rgba(106,15,112,.08);
                                     overflow:hidden;">
 
@@ -1053,7 +1077,7 @@
                                     <span x-text="activeTooth"
                                           style="font-size:11px;font-weight:700;color:#6a0f70;
                                                  font-family:'Inter',sans-serif;margin-left:4px;letter-spacing:.04em;"></span>
-                                    <div x-show="toothData[activeTooth]"
+                                    <div x-show="toothData[activeTooth] && condLabel(activeTooth)"
                                          style="display:flex;align-items:center;gap:4px;margin-top:2px;">
                                         <span class="tc-current-dot"
                                               :style="{ background: condColor(activeTooth) }"></span>
@@ -1075,21 +1099,21 @@
                             <div style="padding:10px 12px;display:flex;flex-direction:column;gap:5px;">
                                 <template x-for="c in conditions" :key="c.key">
                                     {{-- Use CSS class + :style OBJECT so Alpine doesn't wipe border-radius --}}
-                                    <button type="button" @click="setCondition(c.key)"
+                                    <button type="button" @click="c.key === 'other' ? pickOther() : setCondition(c.key)"
                                             class="tc-cond-btn"
-                                            :style="toothData[activeTooth] === c.key
+                                            :style="toothData[activeTooth]?.condition === c.key
                                                 ? { background: c.color, borderColor: c.color }
                                                 : { background: c.bg,    borderColor: c.color + '40' }">
                                         <span class="tc-cond-dot"
-                                              :style="toothData[activeTooth] === c.key
+                                              :style="toothData[activeTooth]?.condition === c.key
                                                   ? { background: 'rgba(255,255,255,.8)' }
                                                   : { background: c.color }"></span>
                                         <span class="tc-cond-label"
-                                              :style="toothData[activeTooth] === c.key
+                                              :style="toothData[activeTooth]?.condition === c.key
                                                   ? { color: '#fff' }
                                                   : { color: c.color }"
-                                              x-text="c.label"></span>
-                                        <svg x-show="toothData[activeTooth] === c.key"
+                                              x-text="c.key === 'other' && toothData[activeTooth]?.condition === 'other' ? (toothData[activeTooth].custom || 'Other') : c.label"></span>
+                                        <svg x-show="toothData[activeTooth]?.condition === c.key"
                                              width="12" height="12" viewBox="0 0 24 24" fill="none"
                                              stroke="rgba(255,255,255,.9)" stroke-width="3"
                                              stroke-linecap="round" stroke-linejoin="round">
@@ -1098,6 +1122,25 @@
                                     </button>
                                 </template>
                             </div>
+
+                            {{-- Surface picker — only for restorations where surface matters clinically --}}
+                            <template x-if="toothData[activeTooth] && needsSurfaces(toothData[activeTooth].condition)">
+                                <div style="padding:2px 12px 10px;border-top:1px solid #f3f4f6;">
+                                    <div style="font-size:9.5px;font-weight:700;color:#9ca3af;text-transform:uppercase;
+                                                letter-spacing:.06em;margin:10px 0 6px;font-family:'Inter',sans-serif;">
+                                        Surface(s)
+                                    </div>
+                                    <div style="display:flex;flex-wrap:wrap;gap:5px;">
+                                        <template x-for="s in SURFACES" :key="s.key">
+                                            <button type="button" @click="toggleSurface(s.key)" :title="s.label"
+                                                    :style="(toothData[activeTooth].surfaces||[]).includes(s.key)
+                                                        ? 'padding:5px 11px;border-radius:999px;border:1px solid #6a0f70;background:#6a0f70;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:Inter,sans-serif;'
+                                                        : 'padding:5px 11px;border-radius:999px;border:1px solid #e5e7eb;background:#f9fafb;color:#6b7280;font-size:11px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif;'"
+                                                    x-text="s.key"></button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
 
                             {{-- Footer --}}
                             <div style="padding:0 12px 12px;">
@@ -1633,24 +1676,36 @@ function consultForm() {
 // currently showing/marking the child (primary) tooth instead, e.g. position
 // 11 displays & stores against code 51. Molars (16-18 etc.) have no primary
 // predecessor, so they never get a toggle — see DentalNotation.hasPrimary().
-// initialTeeth: flat array of previously-saved tooth codes (chart_data), e.g.
-// [11, 16, 55] — used to rehydrate an existing consultation when editing.
-// We only persist WHICH teeth were marked (see hidden input above), not the
-// per-tooth condition, so reloaded teeth show as generically "marked" (brand
-// colour) until the dentist re-opens one and picks a condition again.
+// initialTeeth: previously-saved chart_data. Two shapes are accepted so old
+// records still load cleanly:
+//   - New shape (this fix, 2026-07-13): array of objects
+//     { tooth, condition, custom, surfaces } — full round-trip of what the
+//     dentist picked in the modal.
+//   - Legacy shape (pre-fix): flat array of tooth codes, e.g. [11, 16, 55] —
+//     only WHICH teeth were marked was ever saved, not the condition. These
+//     hydrate into the "Unspecified" bucket in the summary so nothing is
+//     silently dropped; the dentist can reopen the tooth to set a condition.
 function toothChart(initialTeeth = []) {
     const seedData = {};
     const seedMode = {};
-    (initialTeeth || []).forEach((code) => {
-        code = Number(code);
-        seedData[code] = true;
+    (initialTeeth || []).forEach((entry) => {
+        let code, condition = null, custom = null, surfaces = [];
+        if (entry && typeof entry === 'object') {
+            code      = Number(entry.tooth);
+            condition = entry.condition ?? null;
+            custom    = entry.custom ?? null;
+            surfaces  = Array.isArray(entry.surfaces) ? entry.surfaces : [];
+        } else {
+            code = Number(entry); // legacy: bare tooth number, no condition on file
+        }
+        seedData[code] = { condition, custom, surfaces };
         if (window.DentalNotation.isPrimary(code)) {
             seedMode[window.DentalNotation.D2P[code]] = 'primary';
         }
     });
 
     return {
-        toothData:    seedData, // { code: conditionKey|true } — code is whichever (permanent|primary) is active
+        toothData:    seedData, // { code: { condition, custom, surfaces } } — code is whichever (permanent|primary) is active
         positionMode: seedMode, // { permanentPos: 'primary' } — absent/'permanent' = adult tooth
         activeTooth:  null,
 
@@ -1665,10 +1720,41 @@ function toothChart(initialTeeth = []) {
             { key: 'mobile',    label: 'Mobile Tooth',        color: '#ca8a04', bg: '#fef9c3' },
             { key: 'missing',   label: 'Missing',             color: '#dc2626', bg: '#fee2e2' },
             { key: 'cavity',    label: 'Cavity',              color: '#991b1b', bg: '#fef2f2' },
+            { key: 'other',     label: 'Other',               color: '#6b7280', bg: '#f3f4f6' },
         ],
+
+        // Surface only matters clinically for restorations that sit on part of
+        // the tooth, not the whole crown — Crown/Bridge, Missing, etc. don't need it.
+        SURFACES: [
+            { key: 'M', label: 'Mesial' },
+            { key: 'D', label: 'Distal' },
+            { key: 'O', label: 'Occlusal' },
+            { key: 'B', label: 'Buccal' },
+            { key: 'L', label: 'Lingual' },
+        ],
+
+        needsSurfaces(key) {
+            return ['cavity', 'composite', 'amalgam'].includes(key);
+        },
 
         get markedCount() {
             return Object.keys(this.toothData).length;
+        },
+
+        // Serialized for the hidden `chart_data` input — this is what actually
+        // gets saved. Object shape (not just tooth numbers) is the whole point
+        // of this fix: conditions used to be picked in the UI but discarded on
+        // save, so reopening a consultation always showed teeth as generically
+        // "marked" with no condition. See project memory / mentor note below.
+        get serializedChart() {
+            return JSON.stringify(
+                Object.entries(this.toothData).map(([tooth, v]) => ({
+                    tooth:     Number(tooth),
+                    condition: v?.condition ?? null,
+                    custom:    v?.custom ?? null,
+                    surfaces:  (v?.surfaces && v.surfaces.length) ? v.surfaces : undefined,
+                }))
+            );
         },
 
         // ── Mixed dentition (adult/child per position) ──────────────────────
@@ -1705,9 +1791,36 @@ function toothChart(initialTeeth = []) {
 
         clickTooth(pos)   { this.activeTooth = this.codeAt(pos); },
 
-        setCondition(key) {
-            this.toothData = { ...this.toothData, [this.activeTooth]: key };
-            this.activeTooth = null;
+        // Conditions that don't need a surface close the modal immediately
+        // (unchanged behaviour). Conditions that do (cavity/filling) keep the
+        // modal open so the surface chips can be picked, then the dentist
+        // closes it manually via the × — same pattern as before, just deferred.
+        setCondition(key, custom = null) {
+            const existing = this.toothData[this.activeTooth] || {};
+            const surfaces = this.needsSurfaces(key) ? (existing.surfaces || []) : [];
+            this.toothData = { ...this.toothData, [this.activeTooth]: { condition: key, custom, surfaces } };
+            if (!this.needsSurfaces(key)) {
+                this.activeTooth = null;
+            }
+        },
+
+        // "Other" — free-text condition (root piece, supraeruption, etc.).
+        // Same +Add-custom pattern already used in Clinical Findings.
+        pickOther() {
+            const current = this.toothData[this.activeTooth];
+            const prefill = (current && current.condition === 'other') ? (current.custom || '') : '';
+            const v = prompt('Describe the condition (e.g. Root piece, Supraeruption):', prefill);
+            if (v && v.trim()) {
+                this.setCondition('other', v.trim());
+            }
+        },
+
+        toggleSurface(s) {
+            const cur = this.toothData[this.activeTooth];
+            if (!cur) return;
+            const set = new Set(cur.surfaces || []);
+            set.has(s) ? set.delete(s) : set.add(s);
+            this.toothData = { ...this.toothData, [this.activeTooth]: { ...cur, surfaces: Array.from(set) } };
         },
 
         clearTooth() {
@@ -1720,18 +1833,46 @@ function toothChart(initialTeeth = []) {
         clearAll() { this.toothData = {}; this.positionMode = {}; },
 
         condColor(t) {
-            const c = this.conditions.find(c => c.key === this.toothData[t]);
+            const key = this.toothData[t]?.condition;
+            const c = this.conditions.find(c => c.key === key);
             return c ? c.color : '#6a0f70';
         },
 
         condLabel(t) {
-            const c = this.conditions.find(c => c.key === this.toothData[t]);
-            return c ? c.label : '';
+            const d = this.toothData[t];
+            if (!d || !d.condition) return '';
+            if (d.condition === 'other') return d.custom || 'Other';
+            const c = this.conditions.find(c => c.key === d.condition);
+            if (!c) return '';
+            const surf = (d.surfaces && d.surfaces.length) ? ' (' + d.surfaces.join(',') + ')' : '';
+            return c.label + surf;
+        },
+
+        surfaceSuffix(t) {
+            const d = this.toothData[t];
+            return (d && d.surfaces && d.surfaces.length) ? ' ' + d.surfaces.join('') : '';
+        },
+
+        toothTitle(t) {
+            const d = this.toothData[t];
+            const parts = [];
+            if (this.isPrimaryCode(t)) parts.push('Primary (child) tooth');
+            if (d && d.surfaces && d.surfaces.length) parts.push('Surfaces: ' + d.surfaces.join(', '));
+            return parts.join(' · ');
         },
 
         markedByCondition(key) {
             return Object.entries(this.toothData)
-                .filter(([, v]) => v === key)
+                .filter(([, v]) => v && v.condition === key)
+                .map(([t]) => parseInt(t))
+                .sort((a, b) => a - b);
+        },
+
+        // Legacy rows carried over from before condition-tracking existed —
+        // marked but with no condition on file (see toothChart() header note).
+        unspecified() {
+            return Object.entries(this.toothData)
+                .filter(([, v]) => !v || !v.condition)
                 .map(([t]) => parseInt(t))
                 .sort((a, b) => a - b);
         },

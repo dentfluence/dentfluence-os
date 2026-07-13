@@ -178,7 +178,7 @@ class ConsultAssistController extends Controller
         $timeline = $consultations
             ->filter(function (Consultation $c) use ($tooth) {
                 $teeth = array_merge(
-                    (array) ($c->chart_data ?? []),
+                    $c->chartToothNumbers(),
                     (array) ($c->tx_teeth    ?? [])
                 );
                 return in_array($tooth, $teeth, true);

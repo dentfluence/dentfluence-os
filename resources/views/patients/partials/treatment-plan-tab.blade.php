@@ -32,13 +32,33 @@
             ])->values()->all(),
         ])->values();
 
-    // Treatments for autocomplete
+    // Treatments for autocomplete + the tooth-chart treatment picker (grouped by category there)
     $treatmentsJson = ($treatments ?? collect())->map(fn($t) => [
         'id'                => $t->id,
         'name'              => $t->name,
         'price'             => (float)($t->default_price ?? 0),
         'consent_required'  => (bool)($t->consent_required ?? false),
+        'category'          => $t->category?->name ?? 'Other',
+        'categoryColor'     => $t->category?->color ?: '#6a0f70',
     ]);
+
+    // Latest known condition per tooth, merged chronologically across all of this
+    // patient's consultations (a later consultation's reading for a tooth wins).
+    // Feeds the faded "as examined" hint in the Chart-by-Tooth treatment picker
+    // below, so treatment gets planned against what was actually found.
+    $latestToothConditions = [];
+    foreach ($consultationsList->sortBy('consultation_date') as $c) {
+        $cd = is_array($c->chart_data) ? $c->chart_data : [];
+        foreach ($cd as $entry) {
+            if (is_array($entry) && !empty($entry['tooth']) && !empty($entry['condition'])) {
+                $latestToothConditions[(int)$entry['tooth']] = [
+                    'condition' => $entry['condition'],
+                    'custom'    => $entry['custom'] ?? null,
+                    'surfaces'  => $entry['surfaces'] ?? [],
+                ];
+            }
+        }
+    }
 
     // Group consultations for the consultation selector
     $consultationsJson = $consultationsList->map(fn($c) => [
@@ -242,6 +262,75 @@
         padding: 3px 10px; cursor: pointer; font-family: 'Inter', sans-serif;
     }
     .tp-variant-add:hover { background: #f3e8ff; }
+
+    /* Chart-by-Tooth picker (Slice 4/5) — odontogram styling matches the
+       consultation tooth chart 1:1 (resources/views/consultations/create.blade.php)
+       so the two feel like the same feature, not two different UIs. */
+    .tooth-btn {
+        width: 30px; height: 30px; border: 1.5px solid #e5e7eb; border-radius: 4px;
+        font-size: 10px; font-weight: 600; color: #6b7280;
+        background: #fff; cursor: pointer; transition: all .12s;
+        font-family: 'Inter', sans-serif;
+        display: inline-flex; align-items: center; justify-content: center;
+        padding: 0;
+    }
+    .tooth-btn:hover { border-color: #b95cb7; color: #6a0f70; background: #faf5fb; }
+    .tooth-btn.active { box-shadow: 0 0 0 2px rgba(106,15,112,.45); border-color: #6a0f70; }
+    .tooth-row { display: flex; justify-content: center; gap: 3px; }
+    .tooth-midline { width: 1px; background: #e5e7eb; margin: 0 6px; flex-shrink: 0; }
+    .tooth-slot { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .tooth-dentition-toggle {
+        width: 18px; height: 12px; border: 1px solid #e5e7eb; border-radius: 3px;
+        font-size: 7px; font-weight: 800; line-height: 1; color: #b0b0b8;
+        background: #fafafa; cursor: pointer; font-family: 'Inter', sans-serif;
+        padding: 0; display: inline-flex; align-items: center; justify-content: center;
+        letter-spacing: .02em;
+    }
+    .tooth-dentition-toggle:hover { border-color: #b95cb7; color: #6a0f70; }
+    .tooth-dentition-toggle.is-child { background: #fce7f3; border-color: #db2777; color: #db2777; }
+
+    .tx-region-chip {
+        padding: 6px 14px; border: 1.5px solid #e5e7eb; border-radius: 999px;
+        font-size: 10.5px; font-weight: 700; color: #6b7280; background: #fff;
+        cursor: pointer; font-family: 'Inter', sans-serif; transition: all .12s;
+    }
+    .tx-region-chip:hover { border-color: #b95cb7; color: #6a0f70; background: #faf5fb; }
+    .tx-region-chip.active { box-shadow: 0 0 0 2px rgba(106,15,112,.45); border-color: #6a0f70; }
+
+    /* Chart-by-Tooth treatment list — plain list, not a button grid */
+    .tx-list-row {
+        display: flex; align-items: center; gap: 10px; width: 100%;
+        padding: 8px 4px; border: none; border-bottom: 1px solid #f3f4f6;
+        background: transparent; cursor: pointer; text-align: left;
+        font-family: 'Inter', sans-serif; transition: background .1s;
+    }
+    .tx-list-row:last-child { border-bottom: none; }
+    .tx-list-row:hover { background: #faf5fb; }
+    .tx-list-row.selected { background: #f5eef9; }
+    .tx-list-check {
+        width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid #d1d5db;
+        flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+        transition: all .1s; background: #fff;
+    }
+    .tx-list-row.selected .tx-list-check { background: #6a0f70; border-color: #6a0f70; }
+    .tx-list-name { flex: 1; font-size: 12.5px; font-weight: 600; color: #374151; }
+    .tx-list-row.selected .tx-list-name { color: #6a0f70; }
+    .tx-list-price { font-size: 11px; font-weight: 600; color: #9ca3af; flex-shrink: 0; }
+
+    /* Category dropdown header (accordion) */
+    .tx-cat-head {
+        display: flex; align-items: center; justify-content: space-between; width: 100%;
+        background: none; border: none; cursor: pointer; padding: 6px 2px;
+        font-family: 'Inter', sans-serif;
+    }
+    .tx-cat-head:hover .tx-cat-name { color: #6a0f70; }
+    .tx-cat-name { font-size: 10.5px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .06em; transition: color .1s; }
+    .tx-cat-count {
+        font-size: 10px; font-weight: 700; color: #6a0f70; background: #f5eef9;
+        border-radius: 999px; padding: 1px 7px; margin-right: 6px;
+    }
+    .tx-chevron { transition: transform .15s; flex-shrink: 0; }
+    .tx-chevron.open { transform: rotate(180deg); }
 </style>
 
 @include('partials.tooth-chart-assets')
@@ -428,7 +517,16 @@
             <div class="mb-4">
                 <div class="flex items-center justify-between mb-2">
                     <label class="tp-label mb-0">Treatments</label>
-                    <span class="text-xs text-gray-400" x-text="form.items.length + ' treatment(s)'"></span>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <button type="button" @click="openChart()"
+                                style="font-size:11px;font-weight:600;color:#6a0f70;background:#fdf4ff;
+                                       border:1px solid rgba(106,15,112,.2);border-radius:6px;padding:4px 10px;
+                                       cursor:pointer;display:flex;align-items:center;gap:5px;">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                            Chart by Tooth
+                        </button>
+                        <span class="text-xs text-gray-400" x-text="form.items.length + ' treatment(s)'"></span>
+                    </div>
                 </div>
 
                 {{-- Column headers --}}
@@ -586,6 +684,233 @@
                     Add Treatment
                 </button>
             </div>
+
+            {{-- ── Chart-by-Tooth treatment picker (Slice 4/5) ──
+                 Click a tooth on the odontogram, see what was found on
+                 examination (faded, read-only — pulled from the patient's
+                 consultation chart_data), then multi-select treatments for
+                 that tooth. Each selected treatment becomes its own line
+                 item, so a tooth can carry a sequence (RCT → Post & Core →
+                 Crown) without re-typing the tooth number three times. --}}
+            <template x-if="chartOpen">
+                <div @click.self="closeChart()"
+                     style="position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;
+                            background:rgba(15,5,20,.45);backdrop-filter:blur(3px);">
+                    <div @click.stop
+                         style="background:#fff;border-radius:14px;width:680px;max-width:94vw;max-height:88vh;
+                                overflow:hidden;display:flex;flex-direction:column;
+                                box-shadow:0 24px 64px rgba(0,0,0,.22),0 0 0 1px rgba(106,15,112,.08);">
+
+                        {{-- Header --}}
+                        <div style="padding:14px 18px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between;">
+                            <div>
+                                <div style="font-size:13px;font-weight:700;color:#111827;font-family:'Inter',sans-serif;">Chart Treatment by Tooth</div>
+                                <div style="font-size:10.5px;color:#9ca3af;font-family:'Inter',sans-serif;margin-top:1px;">Click a tooth, then pick one or more treatments for it</div>
+                            </div>
+                            <button type="button" @click="closeChart()"
+                                    style="width:26px;height:26px;border-radius:50%;border:1px solid #e5e7eb;background:#f9fafb;
+                                           color:#9ca3af;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">×</button>
+                        </div>
+
+                        <div style="flex:1;overflow-y:auto;padding:18px 20px;">
+
+                            {{-- Odontogram — full width, centered, identical markup/classes to the consultation tooth chart --}}
+                            <div style="max-width:540px;margin:0 auto;">
+                                <div style="text-align:center;font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;font-family:'Inter',sans-serif;">Upper</div>
+                                <div class="tooth-row">
+                                    <template x-for="pos in [18,17,16,15,14,13,12,11]" :key="'u'+pos">
+                                        <div class="tooth-slot">
+                                            <button type="button" @click="chartClickTooth(codeAt(pos))" class="tooth-btn"
+                                                    :class="chartTooth === codeAt(pos) ? 'active' : ''"
+                                                    :style="chartToothStyle(codeAt(pos))"
+                                                    x-text="codeAt(pos)"></button>
+                                            <button type="button" x-show="canToggleDentition(pos)" x-cloak
+                                                    @click.stop="toggleDentitionMode(pos)" class="tooth-dentition-toggle"
+                                                    :class="isChildPos(pos) ? 'is-child' : ''"
+                                                    x-text="isChildPos(pos) ? 'P' : 'A'"></button>
+                                        </div>
+                                    </template>
+                                    <div class="tooth-midline"></div>
+                                    <template x-for="pos in [21,22,23,24,25,26,27,28]" :key="'u'+pos">
+                                        <div class="tooth-slot">
+                                            <button type="button" @click="chartClickTooth(codeAt(pos))" class="tooth-btn"
+                                                    :class="chartTooth === codeAt(pos) ? 'active' : ''"
+                                                    :style="chartToothStyle(codeAt(pos))"
+                                                    x-text="codeAt(pos)"></button>
+                                            <button type="button" x-show="canToggleDentition(pos)" x-cloak
+                                                    @click.stop="toggleDentitionMode(pos)" class="tooth-dentition-toggle"
+                                                    :class="isChildPos(pos) ? 'is-child' : ''"
+                                                    x-text="isChildPos(pos) ? 'P' : 'A'"></button>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div style="text-align:center;font-size:8px;color:#d1d5db;font-family:'Inter',sans-serif;margin:5px 0;letter-spacing:.18em;">— MIDLINE —</div>
+                                <div class="tooth-row">
+                                    <template x-for="pos in [48,47,46,45,44,43,42,41]" :key="'l'+pos">
+                                        <div class="tooth-slot">
+                                            <button type="button" @click="chartClickTooth(codeAt(pos))" class="tooth-btn"
+                                                    :class="chartTooth === codeAt(pos) ? 'active' : ''"
+                                                    :style="chartToothStyle(codeAt(pos))"
+                                                    x-text="codeAt(pos)"></button>
+                                            <button type="button" x-show="canToggleDentition(pos)" x-cloak
+                                                    @click.stop="toggleDentitionMode(pos)" class="tooth-dentition-toggle"
+                                                    :class="isChildPos(pos) ? 'is-child' : ''"
+                                                    x-text="isChildPos(pos) ? 'P' : 'A'"></button>
+                                        </div>
+                                    </template>
+                                    <div class="tooth-midline"></div>
+                                    <template x-for="pos in [31,32,33,34,35,36,37,38]" :key="'l'+pos">
+                                        <div class="tooth-slot">
+                                            <button type="button" @click="chartClickTooth(codeAt(pos))" class="tooth-btn"
+                                                    :class="chartTooth === codeAt(pos) ? 'active' : ''"
+                                                    :style="chartToothStyle(codeAt(pos))"
+                                                    x-text="codeAt(pos)"></button>
+                                            <button type="button" x-show="canToggleDentition(pos)" x-cloak
+                                                    @click.stop="toggleDentitionMode(pos)" class="tooth-dentition-toggle"
+                                                    :class="isChildPos(pos) ? 'is-child' : ''"
+                                                    x-text="isChildPos(pos) ? 'P' : 'A'"></button>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div style="text-align:center;font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.07em;margin-top:5px;font-family:'Inter',sans-serif;">Lower</div>
+
+                                {{-- Region targets — for treatments that apply to more than one
+                                     tooth at once (full-mouth extraction, full-arch denture, etc.) --}}
+                                <div style="margin-top:16px;text-align:center;">
+                                    <div style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;font-family:'Inter',sans-serif;">Or a Region</div>
+                                    <div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px;">
+                                        <template x-for="r in REGIONS" :key="r">
+                                            <button type="button" @click="chartClickTooth(r)" class="tx-region-chip"
+                                                    :class="chartTooth === r ? 'active' : ''"
+                                                    :style="chartToothStyle(r)"
+                                                    x-text="r"></button>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <div style="margin-top:16px;display:flex;align-items:center;justify-content:center;gap:16px;font-size:10px;color:#9ca3af;font-family:'Inter',sans-serif;">
+                                    <span style="display:flex;align-items:center;gap:5px;">
+                                        <span style="width:8px;height:8px;border-radius:2px;background:#6a0f70;display:inline-block;flex-shrink:0;"></span>
+                                        Treatment planned
+                                    </span>
+                                    <span style="display:flex;align-items:center;gap:5px;">
+                                        <span style="width:8px;height:8px;border-radius:2px;border:1.5px solid #9ca3af;background:#9ca3af1f;display:inline-block;flex-shrink:0;"></span>
+                                        Condition on file
+                                    </span>
+                                </div>
+                            </div>
+
+                            {{-- Treatment list — below the chart, not beside it --}}
+                            <div style="max-width:540px;margin:22px auto 0;padding-top:18px;border-top:1px solid #f3f4f6;">
+                                <template x-if="!chartTooth">
+                                    <div style="min-height:100px;display:flex;align-items:center;justify-content:center;
+                                                color:#d1d5db;font-size:12px;font-family:'Inter',sans-serif;text-align:center;">
+                                        Select a tooth above to plan treatment
+                                    </div>
+                                </template>
+
+                                <template x-if="chartTooth">
+                                    <div>
+                                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                                            <span style="font-size:11px;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;font-family:'Inter',sans-serif;"
+                                                  x-text="REGIONS.includes(chartTooth) ? 'Region' : 'Tooth'"></span>
+                                            <span x-text="chartTooth" style="font-size:13px;font-weight:700;color:#6a0f70;font-family:'Inter',sans-serif;"></span>
+                                        </div>
+
+                                        {{-- Faded condition-as-examined hint — pulled from the consultation
+                                             tooth chart so treatment is planned against what was found. --}}
+                                        <template x-if="chartCondition()">
+                                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;padding:6px 10px;
+                                                        border-radius:6px;background:#fafafa;border:1px dashed #e5e7eb;opacity:.72;">
+                                                <span :style="{ background: chartCondition().color, width: '7px', height: '7px', borderRadius: '50%', flexShrink: '0' }"></span>
+                                                <span style="font-size:11px;color:#6b7280;font-family:'Inter',sans-serif;">
+                                                    As examined: <strong x-text="chartCondition().label"></strong><span x-show="chartCondition().surfaces.length" x-text="' (' + chartCondition().surfaces.join(',') + ')'"></span>
+                                                </span>
+                                            </div>
+                                        </template>
+
+                                        {{-- Treatment picker — a search box that opens a dropdown panel,
+                                             not a permanently-visible list. Stays open while picking
+                                             multiple treatments; closes on an outside click. --}}
+                                        <div class="relative" @click.outside="chartListOpen = false">
+                                            <input type="text" x-model="chartSearch" placeholder="Search treatments…"
+                                                   @focus="chartListOpen = true" @click="chartListOpen = true"
+                                                   class="tp-input" style="font-size:12.5px;" autocomplete="off">
+
+                                            <div x-show="chartListOpen" x-cloak
+                                                 style="position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;
+                                                        background:#fff;border:1px solid #e5e7eb;border-radius:8px;
+                                                        box-shadow:0 12px 28px rgba(0,0,0,.1);max-height:280px;overflow-y:auto;">
+                                                <template x-for="grp in chartFilteredGroups" :key="grp.name">
+                                                    <div style="border-bottom:1px solid #f3f4f6;">
+                                                        <button type="button" class="tx-cat-head" style="padding:6px 10px;" @click="chartToggleCategory(grp.name)">
+                                                            <span class="tx-cat-name" x-text="grp.name"></span>
+                                                            <span style="display:flex;align-items:center;">
+                                                                <span class="tx-cat-count" x-show="chartCategorySelectedCount(grp.name) > 0" x-text="chartCategorySelectedCount(grp.name)"></span>
+                                                                <svg class="tx-chevron" :class="chartCategoryOpen(grp.name) ? 'open' : ''"
+                                                                     width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                                                                    <path d="m6 9 6 6 6-6"/>
+                                                                </svg>
+                                                            </span>
+                                                        </button>
+                                                        <div x-show="chartCategoryOpen(grp.name)" x-collapse style="padding:0 6px 6px;">
+                                                            <template x-for="tx in grp.items" :key="tx.id">
+                                                                <button type="button" @click="chartToggleTx(tx.id)"
+                                                                        class="tx-list-row"
+                                                                        :class="chartSelectedIds.includes(tx.id) ? 'selected' : ''">
+                                                                    <span class="tx-list-check">
+                                                                        <svg x-show="chartSelectedIds.includes(tx.id)" width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                                                             stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+                                                                            <polyline points="20 6 9 17 4 12"/>
+                                                                        </svg>
+                                                                    </span>
+                                                                    <span class="tx-list-name" x-text="tx.name"></span>
+                                                                    <span class="tx-list-price" x-text="'Rs. ' + fmtInt(tx.price)"></span>
+                                                                </button>
+                                                            </template>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <template x-if="chartFilteredGroups.length === 0">
+                                                    <div style="font-size:11.5px;color:#d1d5db;font-family:'Inter',sans-serif;padding:10px;">No treatments match "<span x-text="chartSearch"></span>".</div>
+                                                </template>
+                                            </div>
+                                        </div>
+
+                                        {{-- Selected treatments for this tooth — shown as a plain list below
+                                             the search box, so the picker doesn't have to stay open to review them. --}}
+                                        <template x-if="chartSelectedIds.length > 0">
+                                            <div style="margin-top:12px;display:flex;flex-direction:column;gap:4px;">
+                                                <template x-for="id in chartSelectedIds" :key="id">
+                                                    <div class="tx-list-row selected" style="cursor:default;">
+                                                        <span class="tx-list-check" style="background:#6a0f70;border-color:#6a0f70;">
+                                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                                        </span>
+                                                        <span class="tx-list-name" x-text="TP_TREATMENTS.find(t => t.id === id)?.name || ''"></span>
+                                                        <span class="tx-list-price" x-text="'Rs. ' + fmtInt(TP_TREATMENTS.find(t => t.id === id)?.price || 0)"></span>
+                                                        <button type="button" @click="chartToggleTx(id)" title="Remove"
+                                                                style="background:none;border:none;color:#c4b5d4;cursor:pointer;font-size:14px;line-height:1;padding:0 2px;">&#xD7;</button>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        {{-- Footer --}}
+                        <div style="padding:12px 18px;border-top:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between;">
+                            <span style="font-size:11px;color:#9ca3af;font-family:'Inter',sans-serif;"
+                                  x-text="chartTooth ? (chartSelectedIds.length + ' treatment(s) selected for tooth ' + chartTooth) : ''"></span>
+                            <div style="display:flex;gap:8px;">
+                                <button type="button" @click="closeChart()" class="tp-btn tp-btn-ghost">Close</button>
+                                <button type="button" @click="applyChartTooth()" :disabled="!chartTooth" class="tp-btn tp-btn-primary">Apply &amp; Chart Next Tooth</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
 
             {{-- Estimated total (read-only) --}}
             <div class="flex items-center justify-between px-4 py-3 rounded-lg bg-purple-50 border border-purple-100">
@@ -844,6 +1169,181 @@ function treatmentPlanTab() {
         // ── Print picker ────────────────────────────────────────────────────
         printPickerOpen: false,
         printSelected:   [],
+
+        // ── Chart-by-Tooth treatment picker (Slice 4/5) ─────────────────────
+        // Static condition palette — mirrors the consultation tooth chart
+        // (resources/views/consultations/create.blade.php) so a condition
+        // read on examination shows in the same colour here. Kept as a small
+        // duplicated lookup table rather than a shared JS file — it's static
+        // reference data, not logic, so the duplication risk is low.
+        CHART_CONDITIONS: [
+            { key: 'crown',     label: 'Crown / Bridge',      color: '#d97706' },
+            { key: 'composite', label: 'Filling (Composite)', color: '#2563eb' },
+            { key: 'amalgam',   label: 'Silver Filling',      color: '#475569' },
+            { key: 'veneer',    label: 'Veneer',              color: '#7c3aed' },
+            { key: 'rct',       label: 'RCT + Crown',         color: '#ea580c' },
+            { key: 'rct_only',  label: 'RCT',                 color: '#db2777' },
+            { key: 'implant',   label: 'Implant + Crown',     color: '#0891b2' },
+            { key: 'mobile',    label: 'Mobile Tooth',        color: '#ca8a04' },
+            { key: 'missing',   label: 'Missing',             color: '#dc2626' },
+            { key: 'cavity',    label: 'Cavity',              color: '#991b1b' },
+            { key: 'other',     label: 'Other',               color: '#6b7280' },
+        ],
+        TOOTH_CONDITIONS: @json($latestToothConditions ?? []), // { toothNumber: {condition, custom, surfaces} } — as last examined
+
+        // Region targets for treatments that apply to more than one tooth at
+        // once (full-mouth extraction, full-arch denture, etc.) — same
+        // vocabulary as the plain tooth-picker used elsewhere in this file
+        // (partials/tooth-chart.blade.php), so tooth_number values stay
+        // consistent across both entry points.
+        REGIONS: ['Full Arch', 'UL', 'UR', 'LL', 'LR'],
+
+        chartOpen:              false,
+        chartTooth:             null,
+        chartSelectedIds:       [],
+        chartSearch:            '',
+        chartListOpen:          false, // treatment search dropdown — closed until the search box is used
+        chartExpandedCategories: [], // category names currently expanded within the dropdown
+
+        openChart() {
+            this.chartOpen               = true;
+            this.chartTooth              = null;
+            this.chartSelectedIds        = [];
+            this.chartSearch             = '';
+            this.chartListOpen           = false;
+            this.chartExpandedCategories = [];
+        },
+        closeChart() {
+            this.chartOpen        = false;
+            this.chartTooth       = null;
+            this.chartSelectedIds = [];
+            this.chartListOpen    = false;
+        },
+        chartClickTooth(code) {
+            this.chartTooth    = code;
+            this.chartSearch   = '';
+            this.chartListOpen = false;
+            // Pre-select whatever's already been charted for this tooth in the
+            // current form, so reopening it doesn't lose or duplicate work.
+            const toothStr = String(code);
+            this.chartSelectedIds = this.form.items
+                .filter(i => i.tooth_number === toothStr && i.treatment_id)
+                .map(i => i.treatment_id);
+            // Auto-expand any category that already has a selection, so the
+            // dentist isn't hunting through collapsed categories for it.
+            this.chartExpandedCategories = this.groupedTreatments
+                .filter(g => g.items.some(t => this.chartSelectedIds.includes(t.id)))
+                .map(g => g.name);
+        },
+        chartToggleCategory(name) {
+            const i = this.chartExpandedCategories.indexOf(name);
+            if (i > -1) this.chartExpandedCategories.splice(i, 1);
+            else this.chartExpandedCategories.push(name);
+        },
+        chartCategoryOpen(name) {
+            // A search in progress always shows matches, regardless of collapse state.
+            return !!this.chartSearch || this.chartExpandedCategories.includes(name);
+        },
+        chartCategorySelectedCount(name) {
+            const grp = this.groupedTreatments.find(g => g.name === name);
+            return grp ? grp.items.filter(t => this.chartSelectedIds.includes(t.id)).length : 0;
+        },
+        chartToggleTx(id) {
+            const i = this.chartSelectedIds.indexOf(id);
+            if (i > -1) this.chartSelectedIds.splice(i, 1);
+            else this.chartSelectedIds.push(id);
+        },
+        chartCategoryColorFor(treatmentId) {
+            return TP_TREATMENTS.find(t => t.id === treatmentId)?.categoryColor || '#6a0f70';
+        },
+        // Odontogram fill for a tooth/region button — two independent signals:
+        //   - solid fill (category colour) = a treatment is already planned here
+        //   - light outline (condition colour) = what was found on examination,
+        //     pulled from TOOTH_CONDITIONS, shown even before anything is planned
+        // Planned takes visual priority since it's the more actionable state.
+        chartToothStyle(code) {
+            const s = String(code);
+            const items = this.form.items.filter(i => i.tooth_number === s && i.treatment_id);
+            if (items.length) {
+                const color = this.chartCategoryColorFor(items[0].treatment_id);
+                return { background: color, borderColor: color, color: '#fff', fontWeight: '700' };
+            }
+            const cond = this.TOOTH_CONDITIONS[code];
+            if (cond && cond.condition) {
+                const meta = this.CHART_CONDITIONS.find(x => x.key === cond.condition);
+                const color = meta?.color || '#9ca3af';
+                return { borderColor: color, color: color, background: color + '14', fontWeight: '700' };
+            }
+            return {};
+        },
+        // What was found on examination for this tooth — shown faded/read-only
+        // above the treatment list. Pulled from TOOTH_CONDITIONS (built server-
+        // side from the patient's consultation chart_data), not editable here.
+        chartCondition() {
+            const c = this.TOOTH_CONDITIONS[this.chartTooth];
+            if (!c || !c.condition) return null;
+            const meta = this.CHART_CONDITIONS.find(x => x.key === c.condition);
+            return {
+                label:    c.condition === 'other' ? (c.custom || 'Other') : (meta?.label || c.condition),
+                color:    meta?.color || '#9ca3af',
+                surfaces: c.surfaces || [],
+            };
+        },
+        // Treatments grouped by category for the picker — reuses TP_TREATMENTS
+        // (already loaded for the autocomplete) rather than a second dataset.
+        get groupedTreatments() {
+            const map = new Map();
+            TP_TREATMENTS.forEach(t => {
+                const key = t.category || 'Other';
+                if (!map.has(key)) map.set(key, []);
+                map.get(key).push(t);
+            });
+            return Array.from(map.entries()).map(([name, items]) => ({ name, items }));
+        },
+        get chartFilteredGroups() {
+            const q = (this.chartSearch || '').toLowerCase().trim();
+            return this.groupedTreatments
+                .map(g => ({ name: g.name, items: q ? g.items.filter(t => t.name.toLowerCase().includes(q)) : g.items }))
+                .filter(g => g.items.length > 0);
+        },
+        // Reconciles form.items for the active tooth against chartSelectedIds:
+        // drops any tooth+treatment combo that got deselected, adds any new
+        // one. Matching is by (tooth_number, treatment_id), so this never
+        // creates a duplicate of a treatment added manually for the same tooth.
+        applyChartTooth() {
+            if (!this.chartTooth) return;
+            const toothStr = String(this.chartTooth);
+
+            this.form.items = this.form.items.filter(i =>
+                !(i.tooth_number === toothStr && i.treatment_id && !this.chartSelectedIds.includes(i.treatment_id))
+            );
+
+            this.chartSelectedIds.forEach(id => {
+                const already = this.form.items.some(i => i.tooth_number === toothStr && i.treatment_id === id);
+                if (already) return;
+                const tx = TP_TREATMENTS.find(t => t.id === id);
+                if (!tx) return;
+                this.form.items.push({
+                    treatment_id:     tx.id,
+                    tooth_number:     toothStr,
+                    teeth:            [toothStr],
+                    units:            1,
+                    treatment_name:   tx.name,
+                    unit_price:       tx.price,
+                    notes:            '',
+                    variants:         [],
+                    showVariants:     false,
+                    showNotes:        false,
+                    consent_required: !!tx.consent_required,
+                });
+            });
+
+            // Back to the tooth grid so the dentist can chart the next tooth
+            // without re-opening the modal — mirrors "click tooth to mark".
+            this.chartTooth       = null;
+            this.chartSelectedIds = [];
+            this.chartSearch      = '';
+        },
 
         // ── Init ────────────────────────────────────────────────────────────
         init() {

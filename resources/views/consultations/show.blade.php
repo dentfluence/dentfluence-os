@@ -346,12 +346,18 @@
                     <h3 class="font-semibold text-gray-800">Tooth Chart</h3>
                 </div>
                 <div class="px-5 py-4 text-sm">
-                    @php $chartData = $consultation->chart_data ?? []; @endphp
-                    @if(count($chartData))
+                    @php
+                        // chart_data rows saved 2026-07-13 onward carry {tooth, condition, custom,
+                        // surfaces}; older rows are a flat array of tooth numbers only. Normalize both.
+                        $chartData = collect($consultation->chart_data ?? [])->map(fn ($e) => is_array($e)
+                            ? $e
+                            : ['tooth' => $e, 'condition' => null, 'custom' => null, 'surfaces' => []]);
+                    @endphp
+                    @if($chartData->count())
                     <div class="flex flex-wrap gap-1.5">
-                        @foreach($chartData as $tooth)
+                        @foreach($chartData as $entry)
                         <span class="bg-indigo-100 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded cursor-pointer hover:bg-indigo-200 transition-colors"
-                              @click="cipToothTimeline('{{ $tooth }}')" title="View tooth timeline">{{ $tooth }}</span>
+                              @click="cipToothTimeline('{{ $entry['tooth'] }}')" title="View tooth timeline">{{ $entry['tooth'] }}@if(!empty($entry['condition']))<span class="font-normal opacity-70"> · {{ $entry['condition'] === 'other' ? ($entry['custom'] ?: 'Other') : ucwords(str_replace('_', ' ', $entry['condition'])) }}@if(!empty($entry['surfaces'])) ({{ implode(',', $entry['surfaces']) }})@endif</span>@endif</span>
                         @endforeach
                     </div>
                     @else
@@ -832,7 +838,7 @@
                         <svg class="w-4 h-4 text-gray-400 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                     </button>
                     <div x-show="open" x-collapse class="px-4 pb-4 border-t border-gray-100">
-                        @php $currentTeeth = array_merge($consultation->tx_teeth ?? [], $consultation->chart_data ?? []); $relatedConsults = $prevConsultations->filter(function($c) use ($currentTeeth) { $pt = array_merge($c->tx_teeth ?? [], $c->chart_data ?? []); return count($currentTeeth) > 0 && count(array_intersect($currentTeeth, $pt)) > 0; }); @endphp
+                        @php $currentTeeth = array_merge($consultation->tx_teeth ?? [], $consultation->chartToothNumbers()); $relatedConsults = $prevConsultations->filter(function($c) use ($currentTeeth) { $pt = array_merge($c->tx_teeth ?? [], $c->chartToothNumbers()); return count($currentTeeth) > 0 && count(array_intersect($currentTeeth, $pt)) > 0; }); @endphp
                         <div class="mt-3">
                             @if(count($currentTeeth))
                             <p class="text-xs text-gray-400 mb-2">Teeth: <span class="font-medium text-gray-600">{{ implode(', ', $currentTeeth) }}</span></p>

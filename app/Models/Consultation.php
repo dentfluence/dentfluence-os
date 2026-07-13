@@ -153,6 +153,25 @@ class Consultation extends Model
         'emergency_treatment_rendered'=> \App\Casts\Encrypted::class,
     ];
 
+    /**
+     * Flat list of tooth numbers marked in chart_data, regardless of which
+     * shape the row was saved in:
+     *   - rows saved 2026-07-13 onward: array of {tooth, condition, custom, surfaces}
+     *   - legacy rows: flat array of tooth numbers only (no condition ever saved)
+     * Any code that just needs "which teeth were marked" (tooth timelines,
+     * "previous treatment on this tooth" lookups, etc.) should call this
+     * instead of reading chart_data directly.
+     */
+    public function chartToothNumbers(): array
+    {
+        return collect($this->chart_data ?? [])
+            ->map(fn ($e) => is_array($e) ? ($e['tooth'] ?? null) : $e)
+            ->filter(fn ($t) => $t !== null && $t !== '')
+            ->map(fn ($t) => (int) $t)
+            ->values()
+            ->all();
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // Relationships — child models
     // ──────────────────────────────────────────────────────────────────────────

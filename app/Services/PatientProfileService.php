@@ -137,7 +137,8 @@ class PatientProfileService
                     ->pluck('treatment_id')
                     ->flip();
 
-                return \App\Models\Treatment::select('id', 'name', 'default_price')
+                return \App\Models\Treatment::select('id', 'name', 'default_price', 'treatment_category_id')
+                    ->with('category:id,name,color')
                     ->where('is_active', 1)
                     ->orderBy('name')
                     ->get()

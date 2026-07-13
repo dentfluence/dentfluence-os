@@ -423,26 +423,20 @@
                             </div>
                         </template>
 
-                        {{-- Action buttons (shown when not editing) --}}
+                        {{-- Action buttons (shown when not editing) — plain text, no icons --}}
                         <template x-if="editingId !== op.id">
-                            <div style="display:flex;gap:4px;">
-                                {{-- Edit --}}
+                            <div style="display:flex;gap:4px;flex-shrink:0;">
                                 <button @click="startEdit(op)"
-                                        title="Rename"
-                                        style="padding:5px 8px;background:#f3f4f6;border:none;border-radius:5px;cursor:pointer;font-size:11px;color:#374151;">
-                                    ✏️
+                                        style="padding:4px 10px;background:#f3f4f6;color:#374151;border:none;border-radius:5px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;">
+                                    Edit
                                 </button>
-                                {{-- Toggle active --}}
                                 <button @click="toggleActive(op)"
-                                        :title="op.is_active ? 'Deactivate' : 'Activate'"
-                                        style="padding:5px 8px;background:#f3f4f6;border:none;border-radius:5px;cursor:pointer;font-size:11px;color:#374151;">
-                                    <span x-text="op.is_active ? '' : ''"></span>
+                                        style="padding:4px 10px;background:#f3f4f6;color:#374151;border:none;border-radius:5px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;"
+                                        x-text="op.is_active ? 'Deactivate' : 'Activate'">
                                 </button>
-                                {{-- Delete --}}
                                 <button @click="deleteOperatory(op)"
-                                        title="Delete"
-                                        style="padding:5px 8px;background:#fee2e2;border:none;border-radius:5px;cursor:pointer;font-size:11px;color:#dc2626;">
-                                   
+                                        style="padding:4px 10px;background:#fee2e2;color:#dc2626;border:none;border-radius:5px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;">
+                                    Delete
                                 </button>
                             </div>
                         </template>
