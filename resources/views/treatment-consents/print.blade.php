@@ -129,7 +129,7 @@
             background: #fff; border: 1px solid var(--accent);
             border-radius: 4px; padding: 1px 6px;
         }
-        .section-body { padding: 12px 14px; font-size: 11.5px; color: #333; line-height: 1.7; }
+        .section-body { padding: 12px 14px; font-size: 11.5px; color: #333; line-height: 1.7; white-space: pre-line; }
         .section-missing { font-size: 11px; color: #999; font-style: italic; }
 
         .ack {
