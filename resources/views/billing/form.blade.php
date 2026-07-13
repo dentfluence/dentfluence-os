@@ -634,7 +634,19 @@ function closeToothModal() {
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && document.getElementById('toothModal').classList.contains('open')) closeToothModal();
 });
-buildToothArches();
+// Deferred to DOMContentLoaded (2026-07-13 fix) — buildToothArches() calls
+// window.DentalNotation.hasPrimary(), and partials.dental-notation (which
+// defines window.DentalNotation) is @included near the bottom of the shared
+// layout, AFTER this page's own script runs. Calling it synchronously here
+// threw "DentalNotation is undefined" on real page loads and silently
+// aborted the REST of this script — every let/const declared afterward
+// (memBenefits, then whatever came next) was left permanently uninitialized,
+// and neither the invoiceForm submit listener nor the auto-add-from-visit
+// DOMContentLoaded block below ever got registered. That's the real cause
+// behind: totals/AOCP discount never updating, and line items pre-filled
+// from a visit not appearing. Deferring here sidesteps the load-order race
+// entirely — by DOMContentLoaded every other script has already run.
+document.addEventListener('DOMContentLoaded', buildToothArches);
 
 // Membership benefit config from server — used for client-side recalc
 const memBenefits = @json($memActive ? ($memInfo['benefit_config'] ?? null) : null);
