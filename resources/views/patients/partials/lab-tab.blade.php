@@ -290,13 +290,18 @@
 <script>
 // Vendor id => active services ([{category, service_name, default_rate}]) — used to
 // auto-fill the lab cost from the vendor's own price list instead of typing it blind.
-const LAB_VENDOR_SERVICES = @json($vendors->mapWithKeys(fn ($v) => [
-    $v->id => $v->services->map(fn ($s) => [
-        'category'     => $s->category,
-        'service_name' => $s->service_name,
-        'default_rate' => (float) $s->default_rate,
-    ]),
-]));
+@php
+    $labVendorServicesForJs = $vendors->mapWithKeys(function ($v) {
+        return [$v->id => $v->services->map(function ($s) {
+            return [
+                'category'     => $s->category,
+                'service_name' => $s->service_name,
+                'default_rate' => (float) $s->default_rate,
+            ];
+        })];
+    });
+@endphp
+const LAB_VENDOR_SERVICES = @json($labVendorServicesForJs);
 
 function patientLabTab(patientId, initialCases) {
     return {
