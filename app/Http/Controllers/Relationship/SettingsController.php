@@ -322,6 +322,7 @@ class SettingsController extends Controller
             'label'          => ['required', 'string', 'max:150'],
             'sort_order'     => ['required', 'integer', 'min:0'],
             'requires_notes' => ['nullable', 'boolean'],
+            'closes_task'    => ['nullable', 'boolean'],
             'is_active'      => ['nullable', 'boolean'],
         ]);
 
@@ -329,6 +330,7 @@ class SettingsController extends Controller
             'label'          => $data['label'],
             'sort_order'     => $data['sort_order'],
             'requires_notes' => $request->boolean('requires_notes'),
+            'closes_task'    => $request->boolean('closes_task'),
             'is_active'      => $request->boolean('is_active'),
         ]);
 
@@ -360,6 +362,10 @@ class SettingsController extends Controller
             'key'             => $key,
             'label'           => $data['label'],
             'sort_order'      => $nextOrder,
+            // New outcomes default to auto-close (true) — the common case is a
+            // resolved outcome; admin can untick "Auto-closes" below for a
+            // retry-style outcome like "No answer".
+            'closes_task'     => true,
             'is_active'       => true,
         ]);
 

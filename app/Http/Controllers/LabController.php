@@ -169,7 +169,7 @@ class LabController extends Controller
                                            ->orWhere('name', 'like', 'Dr.%'))
                         ->orderBy('name')
                         ->get(['id', 'name', 'role']);
-        $vendors    = LabVendor::active()->orderBy('name')->get();
+        $vendors    = LabVendor::active()->with(['services' => fn ($q) => $q->active()])->orderBy('name')->get();
         $patients   = Patient::where('branch_id', $branchId)->orderBy('name')->get(['id', 'name', 'phone']);
         $categories = array_keys(LabCase::WORK_CATEGORIES);
         $status     = $filters['status'];
@@ -207,8 +207,6 @@ class LabController extends Controller
             'work_subtype'         => 'nullable|string|max:100',
             'priority'             => 'nullable|in:routine,urgent,express',
             'status'               => 'nullable|in:' . implode(',', LabCase::STATUSES),
-            'tooth_number'         => 'nullable|string|max:50',
-            'shade'                => 'nullable|string|max:30',
             'sent_date'            => 'nullable|date',
             'expected_return_date' => 'nullable|date',
             'received_date'        => 'nullable|date',
@@ -219,6 +217,16 @@ class LabController extends Controller
             'instructions'         => 'nullable|string|max:2000',
             'internal_notes'       => 'nullable|string|max:2000',
             'notes'                => 'nullable|string|max:2000',  // legacy alias
+            // Per-tooth line items — tooth chart + shade guide (see partials.tooth-chart / partials.shade-select)
+            'items'                    => 'nullable|array',
+            'items.*.tooth_number'     => 'nullable|string|max:10',
+            'items.*.work_type'        => 'nullable|string|max:100',
+            'items.*.material'         => 'nullable|string|max:100',
+            'items.*.shade'            => 'nullable|string|max:20',
+            'items.*.shade_guide'      => 'nullable|string|max:20',
+            // items_json — the /lab page's native-POST drawer sends items this way
+            // (fed by the same shared tooth-chart/shade-select partials as items[]).
+            'items_json'               => 'nullable|string',
         ]);
 
         // Resolve work_category: legacy work_type → new category
@@ -231,23 +239,17 @@ class LabController extends Controller
             $vendorId = LabVendor::where('name', $data['lab_vendor'])->value('id');
         }
 
-        // Determine initial billing_status (Phase 2)
-        $billingStatus = 'unbilled';
-        if (!empty($data['lab_cost'])) {
-            // Has a cost but not yet reconciled
-            $billingStatus = 'unbilled';
-        }
+        $items = $this->resolveItemsInput($data);
 
         // ── Repeat / remake detection ────────────────────────────────────
-        // If same patient + same tooth has a completed case, flag as remake
+        // If same patient + any of the same teeth has a completed case, flag as remake
         $isRemake   = false;
         $remakeOfId = null;
-        $toothInput = $data['tooth_number'] ?? null;
+        $teethInput = array_filter(array_column($items, 'tooth_number'));
 
-        if ($toothInput && !empty($data['patient_id'])) {
-            // Tooth numbers live on lab_case_items, so match via the items relation.
+        if ($teethInput && !empty($data['patient_id'])) {
             $priorCase = LabCase::where('patient_id', $data['patient_id'])
-                ->whereHas('items', fn($q) => $q->where('tooth_number', $toothInput))
+                ->whereHas('items', fn($q) => $q->whereIn('tooth_number', $teethInput))
                 ->whereIn('status', ['complete', 'final_received'])
                 ->latest()
                 ->first();
@@ -271,7 +273,7 @@ class LabController extends Controller
             'received_date'        => $data['received_date'] ?? null,
             'lab_cost'             => $data['lab_cost'] ?? null,
             'estimated_cost'       => $data['estimated_cost'] ?? null,
-            'billing_status'       => $billingStatus,
+            'billing_status'       => 'unbilled',
             'payment_status'       => $data['payment_status'] ?? 'pending',
             'instructions'         => $data['instructions'] ?? null,
             'internal_notes'       => $data['internal_notes'] ?? ($data['notes'] ?? null),
@@ -280,12 +282,71 @@ class LabController extends Controller
             'created_by'           => auth()->id(),
         ]);
 
+        $this->syncItems($labCase, $items, $workCategory, $data['work_subtype'] ?? null);
+
         $message = 'Lab case ' . $labCase->case_number . ' created.';
         if ($isRemake) {
             $message .= ' ⚠️ Flagged as repeat work for this tooth.';
         }
 
+        if ($request->expectsJson()) {
+            return response()->json(['message' => $message, 'lab_case' => $labCase->load('items')]);
+        }
+
         return redirect()->route('lab.index')->with('success', $message);
+    }
+
+    /**
+     * Normalize the two ways items can arrive: a real items[] array (fetch/JSON
+     * callers — the patient-profile Lab tab) or an items_json string (the /lab
+     * page's native-POST drawer, which can't array-encode a JS-built payload
+     * into a plain form post). Both are produced by the same shared
+     * partials.tooth-chart + partials.shade-select UI.
+     */
+    private function resolveItemsInput(array $data): array
+    {
+        if (!empty($data['items']) && is_array($data['items'])) {
+            return $data['items'];
+        }
+
+        if (!empty($data['items_json'])) {
+            $decoded = json_decode($data['items_json'], true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * Replace a case's LabCaseItem rows with the submitted tooth/shade lines.
+     * work_type/material default from the case's own category/subtype since
+     * neither form exposes a separate per-tooth work-type picker (MVP).
+     */
+    private function syncItems(LabCase $labCase, array $items, ?string $workCategory, ?string $workSubtype): void
+    {
+        $labCase->items()->delete();
+
+        foreach (array_values($items) as $i => $row) {
+            $toothNumber = trim((string) ($row['tooth_number'] ?? ''));
+            $shade       = trim((string) ($row['shade'] ?? ''));
+            $workType    = trim((string) ($row['work_type'] ?? ''));
+            $material    = trim((string) ($row['material'] ?? ''));
+
+            if ($toothNumber === '' && $shade === '' && $workType === '' && $material === '') {
+                continue;
+            }
+
+            $labCase->items()->create([
+                'tooth_number' => $toothNumber ?: null,
+                'work_type'    => $workType ?: ($workSubtype ?: ($workCategory ?: 'Other')),
+                'material'     => $material ?: ($workSubtype ?: null),
+                'shade'        => $shade ?: null,
+                'shade_guide'  => $shade !== '' ? ($row['shade_guide'] ?? 'vita_classical') : null,
+                'sort_order'   => $i,
+            ]);
+        }
     }
 
     // ── SHOW ─────────────────────────────────────────────────────────────
@@ -329,8 +390,6 @@ class LabController extends Controller
             'work_subtype'         => 'nullable|string|max:100',
             'priority'             => 'nullable|in:routine,urgent,express',
             'status'               => 'nullable|in:' . implode(',', LabCase::STATUSES),
-            'tooth_number'         => 'nullable|string|max:50',
-            'shade'                => 'nullable|string|max:30',
             'sent_date'            => 'nullable|date',
             'expected_return_date' => 'nullable|date',
             'received_date'        => 'nullable|date',
@@ -341,6 +400,13 @@ class LabController extends Controller
             'instructions'         => 'nullable|string|max:2000',
             'internal_notes'       => 'nullable|string|max:2000',
             'notes'                => 'nullable|string|max:2000',
+            'items'                    => 'nullable|array',
+            'items.*.tooth_number'     => 'nullable|string|max:10',
+            'items.*.work_type'        => 'nullable|string|max:100',
+            'items.*.material'         => 'nullable|string|max:100',
+            'items.*.shade'            => 'nullable|string|max:20',
+            'items.*.shade_guide'      => 'nullable|string|max:20',
+            'items_json'               => 'nullable|string',
         ]);
 
         // Map legacy work_type → category
@@ -357,9 +423,26 @@ class LabController extends Controller
         if (isset($data['notes']) && !isset($data['internal_notes'])) {
             $data['internal_notes'] = $data['notes'];
         }
-        unset($data['work_type'], $data['lab_vendor'], $data['notes']);
+
+        $items = $this->resolveItemsInput($data);
+        $itemsProvided = array_key_exists('items', $data) || array_key_exists('items_json', $data);
+
+        unset($data['work_type'], $data['lab_vendor'], $data['notes'], $data['items'], $data['items_json']);
 
         $labCase->update(array_merge($data, ['updated_by' => auth()->id()]));
+
+        if ($itemsProvided) {
+            $this->syncItems(
+                $labCase,
+                $items,
+                $data['work_category'] ?? $labCase->work_category,
+                $data['work_subtype'] ?? $labCase->work_subtype
+            );
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Lab case updated.', 'lab_case' => $labCase->load('items')]);
+        }
 
         return redirect()->route('lab.index')->with('success', 'Lab case updated.');
     }
@@ -524,6 +607,18 @@ class LabController extends Controller
         $new->created_by      = auth()->id();
         $new->save();
 
+        foreach ($labCase->items as $item) {
+            $new->items()->create([
+                'tooth_number' => $item->tooth_number,
+                'work_type'    => $item->work_type,
+                'material'     => $item->material,
+                'shade'        => $item->shade,
+                'shade_guide'  => $item->shade_guide,
+                'notes'        => $item->notes,
+                'sort_order'   => $item->sort_order,
+            ]);
+        }
+
         return redirect()->route('lab.index')->with('success', "Duplicate case created: {$new->case_number}.");
     }
 
@@ -617,7 +712,12 @@ class LabController extends Controller
             return response()->json($cases);
         }
 
-        return view('lab.patient-cases', compact('patient', 'cases'));
+        // The Lab tab is rendered inline inside the patient profile
+        // (patients.partials.lab-tab, included from patients/show.blade.php).
+        // Direct/HTML navigation to this endpoint has no standalone view —
+        // send the user to the profile instead, same convention as
+        // create()/edit() above for direct navigation to drawer-only routes.
+        return redirect()->route('patients.show', $patient);
     }
 
     // ── PRIVATE HELPERS ──────────────────────────────────────────────────

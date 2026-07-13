@@ -50,27 +50,27 @@
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
             <p class="text-xs text-gray-400 uppercase tracking-widest">This Month — Estimated</p>
-            <p class="text-xl font-bold text-gray-700 mt-1">Rs. {{ number_format($billingTotals['month_estimated'], 0) }}</p>
+            <p class="text-xl font-bold text-gray-700 mt-1">Rs. {{ number_format($billingTotals['month_estimated'], 0) }}</p>
         </div>
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
             <p class="text-xs text-gray-400 uppercase tracking-widest">This Month — Actual</p>
-            <p class="text-xl font-bold text-[#6a0f70] mt-1">Rs. {{ number_format($billingTotals['month_actual'], 0) }}</p>
+            <p class="text-xl font-bold text-[#6a0f70] mt-1">Rs. {{ number_format($billingTotals['month_actual'], 0) }}</p>
             @if($billingTotals['month_estimated'] > 0)
                 @php $variance = $billingTotals['month_actual'] - $billingTotals['month_estimated']; @endphp
                 <p class="text-xs mt-0.5 {{ $variance > 0 ? 'text-red-500' : 'text-green-600' }}">
-                    {{ $variance > 0 ? '+' : '' }}Rs. {{ number_format($variance, 0) }} vs estimate
+                    {{ $variance > 0 ? '+' : '' }}Rs. {{ number_format($variance, 0) }} vs estimate
                 </p>
             @endif
         </div>
         <a href="{{ route('lab.reconciliation.index') }}"
            class="bg-orange-50 rounded-xl border border-orange-200 shadow-sm p-4 hover:bg-orange-100 transition-colors block">
             <p class="text-xs text-orange-500 uppercase tracking-widest">Unbilled Cases</p>
-            <p class="text-xl font-bold text-orange-600 mt-1">Rs. {{ number_format($billingTotals['unbilled'], 0) }}</p>
+            <p class="text-xl font-bold text-orange-600 mt-1">Rs. {{ number_format($billingTotals['unbilled'], 0) }}</p>
             <p class="text-xs text-orange-400 mt-0.5">{{ $billingTotals['unbilled_count'] }} case{{ $billingTotals['unbilled_count'] != 1 ? 's' : '' }} · Start reconciliation →</p>
         </a>
         <div class="bg-green-50 rounded-xl border border-green-200 shadow-sm p-4">
             <p class="text-xs text-green-500 uppercase tracking-widest">Billed (Pending Payment)</p>
-            <p class="text-xl font-bold text-green-700 mt-1">Rs. {{ number_format($billingTotals['billed'], 0) }}</p>
+            <p class="text-xl font-bold text-green-700 mt-1">Rs. {{ number_format($billingTotals['billed'], 0) }}</p>
         </div>
     </div>
 
@@ -500,7 +500,7 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Work Category *</label>
-                        <select name="work_category" required x-model="form.work_category" @change="form.work_subtype = ''"
+                        <select name="work_category" required x-model="form.work_category" @change="form.work_subtype = ''; autoFillCost()"
                             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
                             <option value="">— Select category —</option>
                             @foreach(\App\Models\LabCase::WORK_CATEGORIES as $cat => $subs)
@@ -510,7 +510,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Subtype / Material</label>
-                        <select name="work_subtype" x-model="form.work_subtype"
+                        <select name="work_subtype" x-model="form.work_subtype" @change="autoFillCost()"
                             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none"
                             :disabled="!form.work_category">
                             <option value="">— Select subtype —</option>
@@ -521,86 +521,28 @@
                     </div>
                 </div>
 
-                {{-- Tooth Chart + Shade --}}
+                {{-- Tooth Chart (shared partial — also used by the patient-profile Lab tab) --}}
+                @include('partials.tooth-chart-assets')
+                @include('partials.shade-select-assets')
                 <div>
-                    <div class="flex items-center justify-between mb-1.5">
-                        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tooth Selection</label>
-                        <div class="flex gap-1">
-                            <button type="button" onclick="labToothArch('upper')"
-                                class="px-2 py-0.5 text-[10px] font-semibold rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition">
-                                Upper Arch
-                            </button>
-                            <button type="button" onclick="labToothArch('lower')"
-                                class="px-2 py-0.5 text-[10px] font-semibold rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition">
-                                Lower Arch
-                            </button>
-                            <button type="button" onclick="labToothArch('all')"
-                                class="px-2 py-0.5 text-[10px] font-semibold rounded border border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 transition">
-                                Full Mouth
-                            </button>
-                            <button type="button" onclick="labToothClear()"
-                                class="px-2 py-0.5 text-[10px] font-semibold rounded border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100 transition">
-                                Clear
-                            </button>
-                        </div>
-                    </div>
-
-                    {{-- Dental Chart --}}
-                    <div style="background:#f8f5fc;border:1.5px solid #ede4f3;border-radius:10px;padding:10px 6px;user-select:none;">
-
-                        {{-- Quadrant labels top --}}
-                        <div style="display:flex;justify-content:center;margin-bottom:3px;font-size:9px;font-weight:700;color:#9a7aaa;letter-spacing:.08em;text-transform:uppercase;">
-                            <span style="flex:1;text-align:right;padding-right:10px;">UR (Q1)</span>
-                            <span style="width:2px;"></span>
-                            <span style="flex:1;text-align:left;padding-left:10px;">UL (Q2)</span>
-                        </div>
-
-                        {{-- Upper arch --}}
-                        <div id="lab-arch-upper"
-                             style="display:flex;justify-content:center;align-items:flex-end;gap:2px;padding-bottom:4px;border-bottom:2px solid #d8b4fe;">
-                        </div>
-
-                        {{-- Lower arch --}}
-                        <div id="lab-arch-lower"
-                             style="display:flex;justify-content:center;align-items:flex-start;gap:2px;padding-top:4px;">
-                        </div>
-
-                        {{-- Quadrant labels bottom --}}
-                        <div style="display:flex;justify-content:center;margin-top:3px;font-size:9px;font-weight:700;color:#9a7aaa;letter-spacing:.08em;text-transform:uppercase;">
-                            <span style="flex:1;text-align:right;padding-right:10px;">LR (Q4)</span>
-                            <span style="width:2px;"></span>
-                            <span style="flex:1;text-align:left;padding-left:10px;">LL (Q3)</span>
-                        </div>
-
-                        {{-- Selected summary --}}
-                        <div style="margin-top:8px;padding:5px 8px;background:#fff;border-radius:6px;border:1px solid #ede4f3;font-size:11px;color:#6a0f70;min-height:26px;display:flex;align-items:center;gap:4px;">
-                            <span style="font-weight:600;color:#9a7aaa;white-space:nowrap;">Selected:</span>
-                            <span id="lab-tooth-display" style="font-weight:600;flex:1;">None</span>
-                        </div>
-                    </div>
-
-                    <input type="hidden" name="tooth_number" id="lab-tooth-input">
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Tooth Selection</label>
+                    @include('partials.tooth-chart', ['target' => 'form.item', 'pickerId' => "'lab'"])
                 </div>
 
-                {{-- Shade --}}
+                {{-- Shade (shared partial) --}}
                 <div>
                     <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Shade</label>
-                    <select name="shade" x-model="form.shade"
-                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
-                        <option value="">— Select shade —</option>
-                        @php $shades = ['A1','A2','A3','A3.5','A4','B1','B2','B3','B4','C1','C2','C3','C4','D2','D3','D4','BL1','BL2','BL3','BL4','OM1','OM2','OM3']; @endphp
-                        @foreach($shades as $sh)
-                        <option value="{{ $sh }}">{{ $sh }}</option>
-                        @endforeach
-                        <option value="custom">Custom / Other</option>
-                    </select>
+                    @include('partials.shade-select', ['target' => 'form.item'])
                 </div>
+
+                {{-- items_json carries the tooth/shade rows the backend turns into LabCaseItem records --}}
+                <input type="hidden" name="items_json" :value="JSON.stringify(itemsPayloadFromState(form.item, form.work_subtype, form.work_subtype))">
 
                 {{-- Lab vendor & cost (Phase 2: estimated_cost added; Phase B: vendor select with badges) --}}
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Lab Vendor</label>
-                        <select name="lab_vendor_id" x-model="form.lab_vendor_id"
+                        <select name="lab_vendor_id" x-model="form.lab_vendor_id" @change="autoFillCost()"
                             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
                             <option value="">— Select Lab —</option>
                             @foreach($vendors as $vnd)
@@ -623,14 +565,16 @@
                         @endforeach
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Estimated Cost (Rs. )</label>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Estimated Cost (Rs. )</label>
                         <input type="number" name="estimated_cost" placeholder="Quoted amount" step="0.01" min="0" x-model="form.estimated_cost"
+                            @input="costAutoFilled = false"
                             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
+                        <p x-show="costAutoFilled" class="text-[10px] text-gray-400 mt-0.5">From the vendor's price list — edit if this job differs.</p>
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Final Lab Cost (Rs. )</label>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Final Lab Cost (Rs. )</label>
                         <input type="number" name="lab_cost" placeholder="Actual charged" step="0.01" min="0" x-model="form.lab_cost"
                             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
                     </div>
@@ -758,149 +702,68 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// ── Dental Tooth Chart (FDI Numbering) ───────────────────────────
-// Upper: UR (Q1) 18→11, UL (Q2) 21→28
-// Lower: LR (Q4) 48→41, LL (Q3) 31→38
-const LAB_ARCH_UPPER = [18,17,16,15,14,13,12,11, 21,22,23,24,25,26,27,28];
-const LAB_ARCH_LOWER = [48,47,46,45,44,43,42,41, 31,32,33,34,35,36,37,38];
-
-// Width (px) by tooth type digit (1=central incisor … 8=wisdom)
-const LAB_TOOTH_W = { 1:18, 2:16, 3:17, 4:18, 5:18, 6:22, 7:22, 8:20 };
-// Height (px) by tooth type — molars taller
-const LAB_TOOTH_H = { 1:26, 2:26, 3:28, 4:26, 5:26, 6:30, 7:30, 8:28 };
-
-let _labTeeth = new Set();
-
-function labRenderArch(archId, teeth, isUpper) {
-    const el = document.getElementById(archId);
-    if (!el) return;
-    el.innerHTML = '';
-    teeth.forEach((tooth, idx) => {
-        const n   = tooth % 10;                       // type digit
-        const w   = LAB_TOOTH_W[n] || 18;
-        const h   = LAB_TOOTH_H[n] || 26;
-        const sel = _labTeeth.has(tooth);
-
-        // Mid-gap between quadrants (after index 7)
-        if (idx === 8) {
-            const gap = document.createElement('div');
-            gap.style.cssText = 'width:6px;border-left:2px dashed #d8b4fe;margin:0 2px;';
-            el.appendChild(gap);
-        }
-
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.title = 'Tooth ' + tooth;
-
-        // Upper: rounded top, flat bottom. Lower: flat top, rounded bottom.
-        const radius = isUpper
-            ? '5px 5px 2px 2px'
-            : '2px 2px 5px 5px';
-
-        btn.style.cssText = [
-            'width:'  + w + 'px',
-            'height:' + h + 'px',
-            'border-radius:' + radius,
-            'border:1.5px solid ' + (sel ? '#6a0f70' : (n >= 6 ? '#c4b5d4' : '#d1d5db')),
-            'background:'     + (sel ? '#6a0f70'  : '#fff'),
-            'color:'          + (sel ? '#fff'     : '#6b7280'),
-            'font-size:9px',
-            'font-weight:700',
-            'cursor:pointer',
-            'transition:all .1s',
-            'display:flex',
-            'align-items:center',
-            'justify-content:center',
-            'font-family:Inter,sans-serif',
-            'flex-shrink:0',
-            // Subtle shadow on molars
-            n >= 6 ? 'box-shadow:inset 0 0 0 1px ' + (sel ? 'rgba(255,255,255,.2)' : 'rgba(0,0,0,.05)') : '',
-        ].join(';');
-
-        btn.textContent = tooth;
-        btn.onmouseover = () => {
-            if (!_labTeeth.has(tooth)) btn.style.background = '#f3e8ff';
-        };
-        btn.onmouseout  = () => {
-            if (!_labTeeth.has(tooth)) btn.style.background = '#fff';
-        };
-        btn.onclick = () => labToothToggle(tooth);
-        el.appendChild(btn);
-    });
-}
-
-function labRenderChart() {
-    labRenderArch('lab-arch-upper', LAB_ARCH_UPPER, true);
-    labRenderArch('lab-arch-lower', LAB_ARCH_LOWER, false);
-    labSyncTeethInput();
-}
-
-function labToothToggle(tooth) {
-    if (_labTeeth.has(tooth)) _labTeeth.delete(tooth);
-    else _labTeeth.add(tooth);
-    labRenderChart();
-}
-
-function labToothArch(arch) {
-    if (arch === 'upper' || arch === 'all') LAB_ARCH_UPPER.forEach(t => _labTeeth.add(t));
-    if (arch === 'lower' || arch === 'all') LAB_ARCH_LOWER.forEach(t => _labTeeth.add(t));
-    labRenderChart();
-}
-
-function labToothClear() {
-    _labTeeth.clear();
-    labRenderChart();
-}
-
-function labSyncTeethInput() {
-    const sorted = [..._labTeeth].sort((a, b) => a - b);
-    const val    = sorted.join(', ');
-    const inp    = document.getElementById('lab-tooth-input');
-    const disp   = document.getElementById('lab-tooth-display');
-    if (inp)  inp.value     = val;
-    if (disp) disp.textContent = val || 'None';
-    // Sync into Alpine form
-    try {
-        const root = document.querySelector('[x-data]');
-        if (root && root._x_dataStack) root._x_dataStack[0].form.tooth_number = val;
-    } catch(e) {}
-}
-
-function labInitChart(existing) {
-    _labTeeth.clear();
-    if (existing) {
-        existing.split(/[,\s]+/).forEach(t => {
-            const n = parseInt(t.trim());
-            if (n >= 11 && n <= 48) _labTeeth.add(n);
-        });
-    }
-    labRenderChart();
-}
-
-// Init on page load
-document.addEventListener('DOMContentLoaded', () => labInitChart(''));
+// Vendor id => active services ([{category, service_name, default_rate}]) — used to
+// auto-fill Estimated Cost from the vendor's own price list.
+@php
+    $labVendorServices = $vendors->mapWithKeys(fn ($v) => [
+        $v->id => $v->services->map(fn ($s) => [
+            'category'     => $s->category,
+            'service_name' => $s->service_name,
+            'default_rate' => (float) $s->default_rate,
+        ]),
+    ]);
+@endphp
+const LAB_VENDOR_SERVICES = @json($labVendorServices);
 
 function labModule() {
     return {
+        ...toothChartMixin(),
+        ...shadeSelectMixin(),
+
         drawerOpen: false,
         editingId: null,
-        form: {
-            patient_id: '', doctor_id: '', work_category: '', work_subtype: '',
-            tooth_number: '', shade: '', lab_vendor: '', lab_vendor_id: '',
-            estimated_cost: '', lab_cost: '',
-            payment_status: 'pending',
-            sent_date: '{{ now()->format("Y-m-d") }}',
-            expected_return_date: '', received_date: '',
-            status: 'draft', instructions: '', notes: '',
-        },
+        form: {},
+        costAutoFilled: false,
 
         // Generated from LabCase::WORK_CATEGORIES — single source of truth
         subtypes: @json(\App\Models\LabCase::WORK_CATEGORIES),
 
         subtypesFor(cat) { return this.subtypes[cat] ?? []; },
 
+        // Look up the vendor's priced service for the selected category/subtype and
+        // fill Estimated Cost — only while the field is empty or holds a value we
+        // auto-filled ourselves, so it never overwrites a manual edit.
+        autoFillCost() {
+            if (!this.form.lab_vendor_id || !this.form.work_category) return;
+            if (this.form.estimated_cost && !this.costAutoFilled) return;
+
+            const services = LAB_VENDOR_SERVICES[this.form.lab_vendor_id] || [];
+            const match = services.find(s => s.category === this.form.work_category
+                    && (!this.form.work_subtype || s.service_name === this.form.work_subtype))
+                || services.find(s => s.category === this.form.work_category);
+
+            if (match) {
+                this.form.estimated_cost = match.default_rate;
+                this.costAutoFilled = true;
+            }
+        },
+
+        _blankForm() {
+            return {
+                patient_id: '', doctor_id: '', work_category: '', work_subtype: '',
+                lab_vendor: '', lab_vendor_id: '',
+                estimated_cost: '', lab_cost: '',
+                payment_status: 'pending',
+                sent_date: '{{ now()->format("Y-m-d") }}',
+                expected_return_date: '', received_date: '',
+                status: 'draft', instructions: '', notes: '',
+                item: { teeth: [], tooth_number: '', shade_guide: 'vita_classical', shade: '', per_tooth_shade: false, tooth_shades: {} },
+            };
+        },
+
         openDrawer() {
             this.editingId = null;
+            this.costAutoFilled = false;
             this.resetForm();
             this.drawerOpen = true;
             this.$nextTick(() => {
@@ -909,8 +772,6 @@ function labModule() {
                 const sel = document.getElementById('lab-patient-selected');
                 if (inp) inp.value = '';
                 if (sel) sel.style.display = 'none';
-                // Reset tooth chart
-                labInitChart('');
             });
         },
 
@@ -921,13 +782,12 @@ function labModule() {
 
         editCase(c) {
             this.editingId = c.id;
+            this.costAutoFilled = false;
             this.form = {
                 patient_id:           String(c.patient_id ?? ''),
                 doctor_id:            String(c.doctor_id ?? ''),
                 work_category:        c.work_category ?? c.work_type ?? '',
                 work_subtype:         c.work_subtype ?? '',
-                tooth_number:         c.tooth_number ?? '',
-                shade:                c.shade ?? '',
                 lab_vendor:           c.lab_vendor ?? '',
                 lab_vendor_id:        c.lab_vendor_id ?? '',
                 estimated_cost:       c.estimated_cost ?? '',   // Phase 2
@@ -939,9 +799,10 @@ function labModule() {
                 status:               c.status ?? 'draft',
                 instructions:         c.instructions ?? '',
                 notes:                c.internal_notes ?? c.notes ?? '',
+                item: itemStateFromCaseItems(c.items),
             };
             this.drawerOpen = true;
-            // Pre-fill patient search + tooth chart
+            // Pre-fill patient search
             this.$nextTick(() => {
                 const inp = document.getElementById('lab-patient-search');
                 const sel = document.getElementById('lab-patient-selected');
@@ -950,22 +811,13 @@ function labModule() {
                     inp.value = p ? p.name : '';
                     if (sel) sel.style.display = 'none';
                 }
-                // Load existing tooth selection into chart
-                labInitChart(c.tooth_number || '');
             });
         },
 
         closeDrawer() { this.drawerOpen = false; },
 
         resetForm() {
-            this.form = {
-                patient_id:'', doctor_id:'', work_category:'', work_subtype:'',
-                tooth_number:'', shade:'', lab_vendor:'', lab_vendor_id:'',
-                estimated_cost:'', lab_cost:'', payment_status:'pending',  // Phase 2
-                sent_date:'{{ now()->format("Y-m-d") }}',
-                expected_return_date:'', received_date:'',
-                status:'draft', instructions:'', notes:'',
-            };
+            this.form = this._blankForm();
         },
     };
 }
@@ -1076,4 +928,3 @@ function submitLabDelete() {
 }
 </script>
 @endsection
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           

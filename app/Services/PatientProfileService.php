@@ -128,7 +128,21 @@ class PatientProfileService
             'opportunities'     => $patient->opportunities,
             'doctors'           => \App\Models\User::where('role', 'doctor')->orderBy('name')->get(),
             'treatmentVisits'   => $patient->treatmentVisits,
-            'treatments'        => \App\Models\Treatment::select('id', 'name', 'default_price')->where('is_active', 1)->orderBy('name')->get(),
+            // Phase 2 refinement (consent per item) — one extra query for the
+            // whole set of consent-flagged treatment IDs, not per-treatment,
+            // so the hot patient-profile path stays a single lookup.
+            'treatments'        => (function () {
+                $consentIds = \App\Models\TreatmentRule::where('rule_type', 'consent_required')
+                    ->where('is_active', true)
+                    ->pluck('treatment_id')
+                    ->flip();
+
+                return \App\Models\Treatment::select('id', 'name', 'default_price')
+                    ->where('is_active', 1)
+                    ->orderBy('name')
+                    ->get()
+                    ->each(fn ($t) => $t->consent_required = $consentIds->has($t->id));
+            })(),
             'consultations'     => $patient->consultations,
             // Prescriptions
             'prescriptions'     => $prescriptions,

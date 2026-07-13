@@ -11,6 +11,8 @@ use App\Models\Complaint;
 use App\Models\DentalCondition;
 use App\Models\Diagnosis;
 use App\Models\Investigation;
+use App\Models\Material;
+use App\Models\Brand;
 use App\Models\MedicalCondition;
 use App\Models\Medicine;
 use App\Models\MessageTemplate;
@@ -52,8 +54,13 @@ class SettingsController extends Controller
         // Masters
         $treatments       = Treatment::orderBy('name')->get();
         $complaints       = Complaint::orderBy('name')->get();
-        $diagnoses        = Diagnosis::orderBy('name')->get();
+        // withCount('treatmentOptions') also feeds the Knowledge Bank tab —
+        // same list, just needs the ranked-option count alongside it.
+        $diagnoses        = Diagnosis::withCount('treatmentOptions')->orderBy('name')->get();
         $investigations   = Investigation::orderBy('name')->get();
+        // Phase 4 — Material/Brand masters (docs/gap-analysis-treatment-planning-knowledge-bank.md)
+        $materials        = Material::orderBy('name')->get();
+        $brands           = Brand::with('material')->orderBy('name')->get();
 
         // Clinical
         $medicines        = Medicine::orderBy('name')->get();
@@ -106,6 +113,7 @@ class SettingsController extends Controller
             'activeTab', 'clinic', 'notifications', 'billing', 'print',
             'staff', 'roles',
             'treatments', 'complaints', 'diagnoses', 'investigations',
+            'materials', 'brands',
             'medicines', 'medicalConditions', 'dentalConditions', 'patientSources',
             'messageTemplates',
             'invCategories', 'invLocations', 'invSubTypes', 'invSettings',

@@ -1328,7 +1328,7 @@ document.addEventListener('alpine:init', () => {
         <div class="hd-col-hdr">
             <div class="hd-col-title">
                 <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                Yesterday's Flow
+                {{ $flowCombined ?? false ? "Weekend Flow (Sat–Sun)" : "Yesterday's Flow" }}
             </div>
             <div style="display:flex;align-items:center;gap:.3rem;">
                 <span class="hd-col-count">{{ $yesterdaysAppointments->count() }}</span>
@@ -1355,6 +1355,10 @@ document.addEventListener('alpine:init', () => {
                         <div style="font-size:.66rem;color:var(--c-muted);margin-top:.1rem;display:flex;align-items:center;gap:.3rem;">
                             <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                             {{ $yAppt->doctor->doctor_name ?? '—' }}
+                            @if(!empty($yAppt->appointment_date))
+                                <span style="color:var(--c-border);">·</span>
+                                <span>{{ \Carbon\Carbon::parse($yAppt->appointment_date)->format('D, d M') }}</span>
+                            @endif
                         </div>
                     </div>
                     <span style="font-size:.62rem;font-weight:600;color:var(--c-accent);background:#ede9fe;border-radius:4px;padding:.15rem .4rem;white-space:nowrap;flex-shrink:0;">

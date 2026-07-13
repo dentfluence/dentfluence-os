@@ -160,6 +160,13 @@
         table.rx-table .rx-drug { font-weight: 600; color: #111; }
         table.rx-table .rx-sub  { font-size: 9.5px; color: #666; margin-top: 1px; }
 
+        /* ── Smart Presentation QR (only when a live link exists) ── */
+        .qr-box {
+            display: flex; align-items: center; gap: 8px; margin-top: 6px;
+        }
+        .qr-box img { width: 48px; height: 48px; flex-shrink: 0; }
+        .qr-box span { font-size: 9.5px; color: #666; line-height: 1.3; }
+
         /* ── Signature + footer ── */
         .sig { margin-top: 44px; text-align: right; }
         .sig-for { font-size: 11px; color: #555; margin-bottom: 34px; }
@@ -456,6 +463,14 @@
         <span class="cp-value">{{ $adviceText }}</span>
     </div>
     @endif
+    @foreach($linkedPlans as $plan)
+        @if($plan->presentation_qr ?? null)
+        <div class="qr-box">
+            <img src="{{ $plan->presentation_qr }}" alt="QR code">
+            <span>Scan to view {{ $plan->plan_name }} online, with cost breakdown and payment options.</span>
+        </div>
+        @endif
+    @endforeach
 </div>
 @endif
 

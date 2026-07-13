@@ -19,22 +19,25 @@
             'created_by_name'    => $p->creator?->name,
             'created_at'         => $p->created_at?->format('d M Y'),
             'items'              => $p->items->map(fn($i) => [
-                'id'             => $i->id,
-                'tooth_number'   => $i->tooth_number,
-                'units'          => (int)($i->units ?? 1),
-                'treatment_name' => $i->treatment_name,
-                'unit_price'     => (float)$i->unit_price,
-                'total'          => (float)$i->total,
-                'notes'          => $i->notes,
-                'sort_order'     => (int)$i->sort_order,
+                'id'                => $i->id,
+                'treatment_id'      => $i->treatment_id,
+                'tooth_number'      => $i->tooth_number,
+                'units'             => (int)($i->units ?? 1),
+                'treatment_name'    => $i->treatment_name,
+                'unit_price'        => (float)$i->unit_price,
+                'total'             => (float)$i->total,
+                'notes'             => $i->notes,
+                'sort_order'        => (int)$i->sort_order,
+                'consent_required'  => (bool)$i->consent_required,
             ])->values()->all(),
         ])->values();
 
     // Treatments for autocomplete
     $treatmentsJson = ($treatments ?? collect())->map(fn($t) => [
-        'id'    => $t->id,
-        'name'  => $t->name,
-        'price' => (float)($t->default_price ?? 0),
+        'id'                => $t->id,
+        'name'              => $t->name,
+        'price'             => (float)($t->default_price ?? 0),
+        'consent_required'  => (bool)($t->consent_required ?? false),
     ]);
 
     // Group consultations for the consultation selector
@@ -212,59 +215,12 @@
         margin-bottom: 0;
         background: #fafafa;
     }
-    .tp-tooth-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Tooth-picker CSS (.tp-tooth-*) now lives in partials.tooth-chart-assets,
+       included once below — shared with the Lab Case tooth chart. */
     /* qty field */
     .tp-qty-input { text-align: center; }
-    /* tooth popup footer */
-    .tp-tooth-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding-top: 6px; border-top: 1px solid #f3e8ff; }
-    .tp-tooth-count { font-size: 11px; color: #6a0f70; font-weight: 700; }
-    .tp-tooth-foot button { font-size: 11px; font-weight: 700; font-family: 'Inter', sans-serif; border-radius: 5px; padding: 4px 12px; cursor: pointer; border: none; }
-    .tp-tooth-done { background: #6a0f70; color: #fff; }
-    .tp-tooth-clear { background: #fff; color: #6b7280; border: 1px solid #e5e7eb !important; }
     .tp-proc-row:hover { border-color: #e8d5f0; background: #fdf8ff; }
     .tp-proc-wrap { margin-bottom: 8px; }
-    .tp-tooth-badge { display: inline-block; font-size: 10px; font-weight: 700; color: #6a0f70; background: #f3e8ff; border-radius: 4px; padding: 1px 5px; margin-right: 4px; }
-
-    /* tooth picker button */
-    .tp-tooth-btn {
-        width: 100%; height: 34px; border: 1px solid #e5e7eb; border-radius: 6px;
-        background: #fff; cursor: pointer; font-size: 11px; font-weight: 700;
-        color: #6a0f70; font-family: 'Inter', sans-serif;
-        display: flex; align-items: center; justify-content: center; gap: 4px;
-        transition: border-color .15s, background .15s;
-    }
-    .tp-tooth-btn:hover { border-color: #6a0f70; background: #fdf4ff; }
-
-    /* tooth chart popup */
-    .tp-tooth-popup {
-        position: absolute; top: calc(100% + 4px); left: 0; z-index: 9999;
-        background: #fff; border: 1.5px solid #e9d5ff; border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(106,15,112,.13);
-        padding: 10px 12px; width: 340px;
-    }
-    .tp-tooth-grid {
-        display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; margin-bottom: 4px;
-    }
-    .tp-tooth-grid-lower { margin-bottom: 0; margin-top: 4px; }
-    .tp-tooth-cell {
-        font-size: 9px; font-weight: 700; font-family: 'Inter', sans-serif;
-        border: 1px solid #e5e7eb; border-radius: 3px; padding: 3px 0;
-        text-align: center; cursor: pointer; color: #374151; background: #fff;
-        transition: background .1s, color .1s;
-    }
-    .tp-tooth-cell:hover { background: #f3e8ff; color: #6a0f70; border-color: #6a0f70; }
-    .tp-tooth-cell.selected { background: #6a0f70; color: #fff; border-color: #6a0f70; }
-    .tp-tooth-midline { grid-column: span 16; height: 1px; background: #e9d5ff; margin: 2px 0; }
-    /* Adult/child (mixed dentition) per-position toggle — small corner chip */
-    .tp-tooth-cell { position: relative; }
-    .tp-tooth-dchip {
-        position: absolute; top: -4px; right: -3px; width: 10px; height: 10px;
-        border-radius: 2px; border: 1px solid #e5e7eb; background: #fff;
-        font-size: 6px; font-weight: 800; line-height: 1; color: #9ca3af;
-        display: flex; align-items: center; justify-content: center; cursor: pointer;
-    }
-    .tp-tooth-dchip.is-child { background: #fce7f3; border-color: #db2777; color: #db2777; }
-    .tp-tooth-labels { display: flex; justify-content: space-between; font-size: 8px; color: #9ca3af; margin-bottom: 3px; font-family: 'Inter', sans-serif; }
 
     /* variant rows */
     .tp-variants-wrap {
@@ -287,6 +243,8 @@
     }
     .tp-variant-add:hover { background: #f3e8ff; }
 </style>
+
+@include('partials.tooth-chart-assets')
 
 <div
     x-show="activeTab === 'treatment-plan'"
@@ -489,63 +447,8 @@
                         {{-- Main treatment row --}}
                         <div class="tp-proc-row" :class="(item.showVariants || item.showNotes) ? '' : 'rounded-b-md'">
 
-                            {{-- Tooth picker --}}
-                            <div class="relative" @click.outside="if(activeToothPicker===idx) activeToothPicker=null">
-                                <button type="button" class="tp-tooth-btn"
-                                        @click.stop="activeToothPicker = (activeToothPicker===idx ? null : idx)">
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
-                                    <span x-text="item.tooth_number || 'Tooth'"></span>
-                                </button>
-                                {{-- Tooth chart popup (multi-select) --}}
-                                <div x-show="activeToothPicker === idx" class="tp-tooth-popup" x-cloak>
-                                    <div style="font-size:10px;color:#9ca3af;margin-bottom:5px;">Tap teeth to select one or more — quantity updates automatically. Corner chip toggles primary (child) tooth.</div>
-                                    <div class="tp-tooth-labels"><span>Upper Right &#x2192;</span><span>&#x2190; Upper Left</span></div>
-                                    <div class="tp-tooth-grid">
-                                        <template x-for="pos in [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28]" :key="'u'+pos">
-                                            <div class="tp-tooth-cell"
-                                                 :class="isToothSelected(item, codeAt(pos)) ? 'selected' : ''"
-                                                 @click="toggleTooth(item, codeAt(pos))">
-                                                <span x-text="codeAt(pos)"></span>
-                                                <span x-show="canToggleDentition(pos)" x-cloak class="tp-tooth-dchip"
-                                                      :class="isChildPos(pos) ? 'is-child' : ''"
-                                                      @click.stop="toggleDentitionMode(pos)"
-                                                      :title="isChildPos(pos) ? 'Primary tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
-                                                      x-text="isChildPos(pos) ? 'P' : 'A'"></span>
-                                            </div>
-                                        </template>
-                                        <div class="tp-tooth-midline"></div>
-                                        <template x-for="pos in [48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38]" :key="'l'+pos">
-                                            <div class="tp-tooth-cell"
-                                                 :class="isToothSelected(item, codeAt(pos)) ? 'selected' : ''"
-                                                 @click="toggleTooth(item, codeAt(pos))">
-                                                <span x-text="codeAt(pos)"></span>
-                                                <span x-show="canToggleDentition(pos)" x-cloak class="tp-tooth-dchip"
-                                                      :class="isChildPos(pos) ? 'is-child' : ''"
-                                                      @click.stop="toggleDentitionMode(pos)"
-                                                      :title="isChildPos(pos) ? 'Primary tooth — click for permanent' : 'Permanent tooth — click for primary (child)'"
-                                                      x-text="isChildPos(pos) ? 'P' : 'A'"></span>
-                                            </div>
-                                        </template>
-                                    </div>
-                                    <div class="tp-tooth-labels" style="margin-top:3px;"><span>Lower Right &#x2192;</span><span>&#x2190; Lower Left</span></div>
-                                    <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
-                                        <template x-for="lbl in ['UL','UR','LL','LR','Full Arch','Multiple']" :key="lbl">
-                                            <div class="tp-tooth-cell" style="padding:3px 6px;font-size:9px;"
-                                                 :class="isToothSelected(item, lbl) ? 'selected' : ''"
-                                                 @click="toggleTooth(item, lbl)"
-                                                 x-text="lbl"></div>
-                                        </template>
-                                    </div>
-                                    {{-- Footer: count + actions --}}
-                                    <div class="tp-tooth-foot">
-                                        <span class="tp-tooth-count" x-text="(item.teeth?.length || 0) + ' selected'"></span>
-                                        <div style="display:flex;gap:6px;">
-                                            <button type="button" class="tp-tooth-clear" @click="clearTeeth(item)">Clear</button>
-                                            <button type="button" class="tp-tooth-done" @click="activeToothPicker=null">Done</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            {{-- Tooth picker (shared partial — also used by the Lab Case tooth chart) --}}
+                            @include('partials.tooth-chart', ['target' => 'item', 'pickerId' => 'idx'])
 
                             {{-- Treatment name (autocomplete) --}}
                             <div class="relative">
@@ -606,6 +509,18 @@
                                     class="w-7 h-7 flex items-center justify-center rounded transition-colors"
                                     :class="item.showVariants ? 'text-[#6a0f70] bg-purple-50' : 'text-gray-300 hover:text-[#6a0f70] hover:bg-purple-50'">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                            </button>
+
+                            {{-- Consent required toggle — Phase 2 refinement.
+                                 Defaults from the treatment's own "Consent form required"
+                                 rule when picked from the autocomplete; togglable per item
+                                 so staff can opt a specific case in/out. --}}
+                            <button type="button"
+                                    @click="item.consent_required = !item.consent_required"
+                                    :title="item.consent_required ? 'Consent form required for this treatment/tooth' : 'No consent form needed — click to require one'"
+                                    class="w-7 h-7 flex items-center justify-center rounded transition-colors"
+                                    :class="item.consent_required ? 'text-[#6a0f70] bg-purple-50' : 'text-gray-300 hover:text-[#6a0f70] hover:bg-purple-50'">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                             </button>
 
                             {{-- Remove --}}
@@ -829,6 +744,15 @@
                                 Print
                             </a>
 
+                            {{-- Generate Consent Form — Phase 2, docs/gap-analysis-treatment-planning-knowledge-bank.md.
+                                 Only shown when at least one item on this plan is flagged
+                                 consent_required — no dead button for plans that don't need one. --}}
+                            <a x-show="plan.items.some(i => i.consent_required)"
+                               :href="'{{ url('treatment-plans') }}/' + plan.id + '/consent'" target="_blank" class="tp-btn tp-btn-ghost">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                                Consent Form
+                            </a>
+
                             {{-- Create Smart Presentation — new, independent module (2026-07-09).
                                  This is the ONLY touch point added to this file: a single link
                                  into Smart Treatment Presentation, which imports this plan
@@ -883,6 +807,11 @@ const TP_CONSULTATIONS = @json($consultationsJson);
 
 function treatmentPlanTab() {
     return {
+        // Tooth-picker state + helpers (activeToothPicker, dentitionMode,
+        // codeAt, isToothSelected, toggleTooth, clearTeeth, syncTeeth, ...) —
+        // shared with the Lab Case tooth chart. See tooth-chart-assets.blade.php.
+        ...toothChartMixin(),
+
         plans: @json($plansJson),
 
         // ── Form state ──────────────────────────────────────────────────────
@@ -895,25 +824,6 @@ function treatmentPlanTab() {
         // ── Autocomplete ────────────────────────────────────────────────────
         activeSuggest:    null,
         suggestions:      [],
-
-        // ── Tooth picker ────────────────────────────────────────────────────
-        activeToothPicker: null,
-
-        // Mixed dentition — shared adult/child toggle for whichever tooth
-        // picker popup is open. Keyed by permanent position code.
-        dentitionMode: {},
-        codeAt(pos) {
-            return window.DentalNotation.displayCode(pos, this.dentitionMode[pos] || 'permanent');
-        },
-        isChildPos(pos) {
-            return this.dentitionMode[pos] === 'primary';
-        },
-        canToggleDentition(pos) {
-            return window.DentalNotation.hasPrimary(pos);
-        },
-        toggleDentitionMode(pos) {
-            this.dentitionMode = { ...this.dentitionMode, [pos]: this.isChildPos(pos) ? 'permanent' : 'primary' };
-        },
 
         // ── Accept state ────────────────────────────────────────────────────
         accepting: null,
@@ -1018,35 +928,11 @@ function treatmentPlanTab() {
             };
         },
         _blankItem() {
-            return { tooth_number: '', teeth: [], units: 1, treatment_name: '', unit_price: 0, notes: '', variants: [], showVariants: false, showNotes: false };
+            return { treatment_id: null, tooth_number: '', teeth: [], units: 1, treatment_name: '', unit_price: 0, notes: '', variants: [], showVariants: false, showNotes: false, consent_required: false };
         },
 
-        // ── Tooth multi-select helpers ───────────────────────────────────────
-        isToothSelected(item, t) {
-            return Array.isArray(item.teeth) && item.teeth.includes(String(t));
-        },
-        toggleTooth(item, t) {
-            t = String(t);
-            if (!Array.isArray(item.teeth)) item.teeth = [];
-            const i = item.teeth.indexOf(t);
-            if (i > -1) item.teeth.splice(i, 1);
-            else item.teeth.push(t);
-            this.syncTeeth(item);
-        },
-        clearTeeth(item) {
-            item.teeth = [];
-            this.syncTeeth(item);
-        },
-        // Keep tooth_number string + qty (units) in sync with the selected teeth.
-        // Numeric teeth are sorted; region labels (UL, Full Arch…) kept as-is.
-        syncTeeth(item) {
-            const nums = item.teeth.filter(t => /^\d+$/.test(t)).sort((a, b) => parseInt(a) - parseInt(b));
-            const labels = item.teeth.filter(t => !/^\d+$/.test(t));
-            item.teeth = [...nums, ...labels];
-            item.tooth_number = item.teeth.join(', ');
-            // Auto quantity = number of teeth selected (min 1 so a no-tooth treatment still counts as 1)
-            item.units = Math.max(item.teeth.length, 1);
-        },
+        // Tooth multi-select helpers (isToothSelected, toggleTooth, clearTeeth,
+        // syncTeeth) now come from toothChartMixin() spread in above.
 
         // ── Form open / close ─────────────────────────────────────────────────
         openNewForm(consultationId = null) {
@@ -1068,16 +954,18 @@ function treatmentPlanTab() {
                     visit_count:        plan.visit_count ?? '',
                     doctor_notes:       plan.doctor_notes ?? '',
                     items:              items.map(i => ({
-                        id:             i.id,
-                        tooth_number:   i.tooth_number ?? '',
-                        teeth:          (i.tooth_number ? String(i.tooth_number).split(',').map(s => s.trim()).filter(Boolean) : []),
-                        units:          i.units ?? 1,
-                        treatment_name: i.treatment_name ?? '',
-                        unit_price:     i.unit_price ?? 0,
-                        notes:          i.notes ?? '',
-                        variants:       Array.isArray(i.variants) ? i.variants : [],
-                        showVariants:   !!(i.variants && i.variants.length > 0),
-                        showNotes:      !!(i.notes && i.notes.length > 0),
+                        id:               i.id,
+                        treatment_id:     i.treatment_id ?? null,
+                        tooth_number:     i.tooth_number ?? '',
+                        teeth:            (i.tooth_number ? String(i.tooth_number).split(',').map(s => s.trim()).filter(Boolean) : []),
+                        units:            i.units ?? 1,
+                        treatment_name:   i.treatment_name ?? '',
+                        unit_price:       i.unit_price ?? 0,
+                        notes:            i.notes ?? '',
+                        variants:         Array.isArray(i.variants) ? i.variants : [],
+                        showVariants:     !!(i.variants && i.variants.length > 0),
+                        showNotes:        !!(i.notes && i.notes.length > 0),
+                        consent_required: !!i.consent_required,
                     })),
                 };
                 this.suggestions = [];
@@ -1114,8 +1002,13 @@ function treatmentPlanTab() {
                 .slice(0, 8);
         },
         selectSuggest(idx, sug) {
-            this.form.items[idx].treatment_name = sug.name;
-            this.form.items[idx].unit_price     = sug.price;
+            this.form.items[idx].treatment_id      = sug.id;
+            this.form.items[idx].treatment_name    = sug.name;
+            this.form.items[idx].unit_price        = sug.price;
+            // Default from the treatment's own "Consent form required" rule
+            // (Treatment Library → Rules) — staff can still toggle it off/on
+            // for this specific plan item below.
+            this.form.items[idx].consent_required  = !!sug.consent_required;
             this.suggestions[idx] = [];
             this.activeSuggest    = null;
         },

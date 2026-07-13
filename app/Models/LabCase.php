@@ -107,6 +107,8 @@ class LabCase extends Model
             'Full Metal / Cast Metal',
             'Temporary Crown (PMMA)',
             'Maryland Bridge',
+            'Post & Core (Cast)',
+            'Post & Core (Fiber)',
         ],
         'Implant Prosthesis'      => [
             'Implant Crown – Cement Retained',
@@ -128,6 +130,9 @@ class LabCase extends Model
             'Immediate Denture',
             'Overdenture',
             'Soft Liner / Reline',
+            'Denture Repair — Fracture',
+            'Denture Repair — Tooth Addition',
+            'Denture Repair — Clasp Repair',
         ],
         'Veneer'                  => [
             'E-max Veneer',
@@ -194,13 +199,28 @@ class LabCase extends Model
         'Retainer', 'Aligner', 'Splint', 'Other',
     ];
 
-    /** Common shade guide values for the shade dropdown */
+    /** Vita Classical (Vita Classical Shade Guide) values for the shade dropdown */
     public const SHADES = [
         'A1', 'A2', 'A3', 'A3.5', 'A4',
         'B1', 'B2', 'B3', 'B4',
         'C1', 'C2', 'C3', 'C4',
         'D2', 'D3', 'D4',
         'BL1', 'BL2', 'BL3', 'BL4',
+    ];
+
+    /** Vita 3D Master shade guide values */
+    public const SHADES_3D_MASTER = [
+        '1M1', '1M2',
+        '2L1.5', '2L2.5', '2M1', '2M2', '2M3', '2R1.5', '2R2.5',
+        '3L1.5', '3L2.5', '3M1', '3M2', '3M3', '3R1.5', '3R2.5',
+        '4L1.5', '4L2.5', '4M1', '4M2', '4M3', '4R1.5', '4R2.5',
+        '5M1', '5M2', '5M3',
+    ];
+
+    /** Shade guide system keys → display labels, used by the shade-select partial */
+    public const SHADE_GUIDE_LABELS = [
+        'vita_classical' => 'Vita Classical',
+        'vita_3d_master' => 'Vita 3D Master',
     ];
 
     // ── Repeat / remake reasons ──────────────────────────────────────────
@@ -233,6 +253,7 @@ class LabCase extends Model
     protected $fillable = [
         'case_number', 'branch_id',
         'patient_id', 'doctor_id', 'lab_vendor_id', 'technician_name',
+        'treatment_visit_id',
         'work_category', 'work_subtype', 'priority', 'status',
         'sent_date', 'expected_return_date',
         'order_placed_date', 'impression_sent_date', 'final_received_date',
@@ -528,6 +549,15 @@ class LabCase extends Model
     public static function subtypesFor(string $category): array
     {
         return self::WORK_CATEGORIES[$category] ?? [];
+    }
+
+    /** Shade codes for a given guide key ('vita_classical' | 'vita_3d_master') */
+    public static function shadesForGuide(string $guide): array
+    {
+        return match ($guide) {
+            'vita_3d_master' => self::SHADES_3D_MASTER,
+            default          => self::SHADES,
+        };
     }
 
     /** @deprecated Legacy alias used by the old v1 blade — removed with Phase 3 UI */

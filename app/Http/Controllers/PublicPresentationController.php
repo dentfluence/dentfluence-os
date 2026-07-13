@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\EmiProvider;
 use App\Models\Presentation;
 use App\Models\PresentationAccessToken;
 use App\Models\TreatmentOpportunity;
 use App\Models\User;
+use App\Services\MembershipBenefitService;
 use App\Services\Presentations\PresentationNarrativeService;
 use App\Services\Relationship\ActivityEngine;
 use Illuminate\Http\RedirectResponse;
@@ -63,12 +65,34 @@ class PublicPresentationController extends Controller
             );
         }
 
+        $costSummary = $presentation->currentCostSummary();
+
+        // ── Phase 3: membership + EMI, pure display wiring onto data that
+        // already exists — no new computation, same methods the staff
+        // billing panel already calls (MembershipBenefitService::getActive(),
+        // EmiScheme::breakdown()). ──
+        $activeMembership = $presentation->patient_id
+            ? MembershipBenefitService::getActive($presentation->patient_id)
+            : null;
+
+        $emiOptions = $costSummary['balance_due'] > 0
+            ? EmiProvider::allActive()
+                ->flatMap(fn (EmiProvider $provider) => $provider->activeSchemes->map(
+                    fn ($scheme) => array_merge($scheme->breakdown($costSummary['balance_due']), [
+                        'provider_name' => $provider->name,
+                    ])
+                ))
+                ->values()
+            : collect();
+
         return view('presentations.public.show', [
-            'presentation'  => $presentation,
-            'costSummary'   => $presentation->currentCostSummary(),
-            'includedMedia' => $presentation->mediaItems->where('included', true)->pluck('treatmentMedia')->filter(),
-            'narrative'     => app(PresentationNarrativeService::class)->build($presentation),
-            'token'         => $token,
+            'presentation'     => $presentation,
+            'costSummary'      => $costSummary,
+            'includedMedia'    => $presentation->mediaItems->where('included', true)->pluck('treatmentMedia')->filter(),
+            'narrative'        => app(PresentationNarrativeService::class)->build($presentation),
+            'token'            => $token,
+            'activeMembership' => $activeMembership,
+            'emiOptions'       => $emiOptions,
         ]);
     }
 
@@ -146,6 +170,8 @@ class PublicPresentationController extends Controller
         }
 
         $presentation = $accessToken->presentation;
+        $plan = $presentation->treatmentPlan;
+        $relationshipId = $presentation->patient?->relationship_id;
 
         // Deliberately does NOT touch treatment_plans — declining a presentation
         // is a communication-layer fact, not a clinical one.
@@ -156,9 +182,127 @@ class PublicPresentationController extends Controller
             event:          'presentation.declined',
             actor:          null,
             metadata:       ['patient_id' => $presentation->patient_id],
-            relationshipId: $presentation->patient?->relationship_id,
+            relationshipId: $relationshipId,
             description:    'Patient declined via Smart Presentation',
         );
+
+        // ── Fix (2026-07-12): decline() used to stop here, leaving the sales
+        // pipeline unaware — an Opportunity already in 'prospect'/'quoted'
+        // stayed stuck forever, and if none existed yet nothing tracked the
+        // decline at all. Mirrors accept()'s guarded Opportunity handling
+        // above, but finds-or-creates into the 'declined' stage instead. ──
+        if ($plan) {
+            $opportunity = TreatmentOpportunity::where('treatment_plan_id', $plan->id)->first();
+
+            if ($opportunity) {
+                $opportunity->update([
+                    'status'          => 'declined',
+                    'declined_reason' => $opportunity->declined_reason ?? 'Declined via Smart Presentation',
+                ]);
+            } else {
+                $plan->loadMissing('items');
+                $firstItem = $plan->items->first();
+
+                $opportunity = TreatmentOpportunity::create([
+                    'patient_id'        => $plan->patient_id,
+                    'treatment_plan_id' => $plan->id,
+                    'relationship_id'   => $relationshipId,
+                    'type'              => 'other',
+                    'label'             => $firstItem?->treatment_name ?? $plan->plan_name,
+                    'status'            => 'declined',
+                    'priority'          => 'medium',
+                    'declined_reason'   => 'Declined via Smart Presentation',
+                    'created_by'        => $presentation->created_by,
+                ]);
+            }
+
+            app(ActivityEngine::class)->log(
+                subject:        $opportunity,
+                event:          'opportunity.declined',
+                actor:          null,
+                metadata:       ['stage' => 'declined', 'patient_id' => $plan->patient_id, 'source' => 'smart_presentation_declined'],
+                relationshipId: $relationshipId,
+                description:    'Opportunity marked declined from Smart Presentation',
+            );
+        }
+
+        return redirect()->route('presentations.public.show', $token);
+    }
+
+    /**
+     * Phase 3 — "Request a Callback". A third outcome alongside accept/decline:
+     * the patient isn't ready to commit either way but wants a human to call
+     * them. Lands the Opportunity in the existing 'discussed' ("Nurturing")
+     * stage using the follow_up_date field that already existed but was never
+     * set anywhere, and moves the Presentation into STATUS_FOLLOW_UP_REQUIRED
+     * — a status the model already defined/reserved but never used. No new
+     * enum values needed on either model.
+     */
+    public function requestCallback(string $token): RedirectResponse|View
+    {
+        $accessToken = PresentationAccessToken::where('token', $token)->first();
+        if (! $accessToken || ! $accessToken->isValid()) {
+            return view('presentations.public.expired');
+        }
+
+        $presentation = $accessToken->presentation;
+        $plan = $presentation->treatmentPlan;
+        $relationshipId = $presentation->patient?->relationship_id;
+
+        // Guard: don't clobber an accept/decline that already happened (e.g. a
+        // stray duplicate POST) with a "follow-up required" status.
+        if (! in_array($presentation->status, [Presentation::STATUS_ACCEPTED, Presentation::STATUS_DECLINED], true)) {
+            $presentation->update(['status' => Presentation::STATUS_FOLLOW_UP_REQUIRED]);
+        }
+
+        app(ActivityEngine::class)->log(
+            subject:        $presentation,
+            event:          'presentation.follow_up_requested',
+            actor:          null,
+            metadata:       ['patient_id' => $presentation->patient_id],
+            relationshipId: $relationshipId,
+            description:    'Patient requested a callback via Smart Presentation',
+        );
+
+        // ── Mirrors accept()/decline()'s guarded Opportunity handling above.
+        // Won't downgrade an opportunity that's already committed/converted —
+        // a callback request after acceptance shouldn't reopen the pipeline. ──
+        if ($plan) {
+            $opportunity = TreatmentOpportunity::where('treatment_plan_id', $plan->id)->first();
+
+            if ($opportunity) {
+                if (! in_array($opportunity->status, ['accepted', 'completed'], true)) {
+                    $opportunity->update([
+                        'status'         => 'discussed',
+                        'follow_up_date' => $opportunity->follow_up_date ?? now()->toDateString(),
+                    ]);
+                }
+            } else {
+                $plan->loadMissing('items');
+                $firstItem = $plan->items->first();
+
+                $opportunity = TreatmentOpportunity::create([
+                    'patient_id'        => $plan->patient_id,
+                    'treatment_plan_id' => $plan->id,
+                    'relationship_id'   => $relationshipId,
+                    'type'              => 'other',
+                    'label'             => $firstItem?->treatment_name ?? $plan->plan_name,
+                    'status'            => 'discussed',
+                    'priority'          => 'high',
+                    'follow_up_date'    => now()->toDateString(),
+                    'created_by'        => $presentation->created_by,
+                ]);
+            }
+
+            app(ActivityEngine::class)->log(
+                subject:        $opportunity,
+                event:          'opportunity.callback_requested',
+                actor:          null,
+                metadata:       ['stage' => 'discussed', 'patient_id' => $plan->patient_id, 'source' => 'smart_presentation_callback'],
+                relationshipId: $relationshipId,
+                description:    'Patient requested a callback via Smart Presentation',
+            );
+        }
 
         return redirect()->route('presentations.public.show', $token);
     }

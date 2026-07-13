@@ -73,7 +73,7 @@
             padding-bottom: 10px;
             border-bottom: 1px dashed #cbd5e1;
         }
-        .rx-header .rx-number { font-size: 14px; font-weight: 700; font-family: monospace; color: #6a0f70; }
+        .rx-header .rx-number { font-size: 9px; font-weight: 400; font-family: monospace; color: #94a3b8; }
         .rx-header .rx-meta   { font-size: 10px; color: #64748b; line-height: 1.6; text-align: right; }
 
         /* ── Patient info box ── */
@@ -210,31 +210,11 @@
 
     {{-- Rx number + meta --}}
     <div class="rx-header">
-        <div>
-            <div class="rx-number">{{ $prescription->prescription_number }}</div>
-            <div style="font-size:10px;color:#64748b;margin-top:2px;">
-                Source: {{ $prescription->sourceLabel() }}
-                @if($prescription->printed_at)
-                    &nbsp;·&nbsp; Printed: {{ $prescription->printed_at->format('d M Y') }}
-                @endif
-            </div>
-        </div>
+        <div class="rx-number">{{ $prescription->prescription_number }}</div>
         <div class="rx-meta">
             Date: {{ $prescription->created_at->format('d M Y') }}<br>
             {{ $prescription->prescribedBy?->doctor_name ?? '—' }}<br>
-            @if($prescription->prescribedBy?->registration_number)Reg. No.: {{ $prescription->prescribedBy->registration_number }}<br>@endif
-            @php
-                $statusLabels = [
-                    'draft'          => 'Draft',
-                    'issued'         => 'Issued',
-                    'printed'        => 'Printed',
-                    'whatsapp_sent'  => 'WhatsApp Sent',
-                    'email_sent'     => 'Email Sent',
-                    'revised'        => 'Revised',
-                    'cancelled'      => 'Cancelled',
-                ];
-            @endphp
-            Status: {{ $statusLabels[$prescription->status] ?? ucfirst($prescription->status) }}
+            @if($prescription->prescribedBy?->registration_number)Reg. No.: {{ $prescription->prescribedBy->registration_number }}@endif
         </div>
     </div>
 
@@ -254,12 +234,6 @@
         <div class="field">
             <div class="label">Gender</div>
             <div class="value">{{ ucfirst($patient->gender) }}</div>
-        </div>
-        @endif
-        @if($patient->phone)
-        <div class="field">
-            <div class="label">Phone</div>
-            <div class="value">{{ $patient->phone }}</div>
         </div>
         @endif
         @if($patient->medical_alert)
@@ -364,9 +338,6 @@
                 Follow-up: <strong>{{ $prescription->followUpLabel() }}</strong>
             @else
                 Follow-up as advised
-            @endif
-            @if($prescription->print_count && $prescription->print_count > 1)
-                <br><span style="font-size:9px;color:#94a3b8;">Print #{{ $prescription->print_count }}</span>
             @endif
         </div>
         <div class="signature-area">

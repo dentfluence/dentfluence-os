@@ -1426,11 +1426,9 @@ function todayActions() {
             const item   = this.drawer.item;
             const itemId = this.drawer.itemId;
 
-            // subject_id identifies which record this row is backed by.
-            // Log itself no longer closes/suppresses anything (2026-07-08 —
-            // see closeAction()/the Close tab instead); kept here since the
-            // server still records it on the Timeline entry and a future
-            // per-category auto-close could reuse it. Mirrors confirmClose()'s
+            // subject_id identifies which record this row is backed by, so
+            // the server can auto-close it when the logged outcome's
+            // closes_task is true (2026-07-10). Mirrors confirmClose()'s
             // identical subject resolution just below.
             const isQueueBacked = (item.category === 'recall_calls' || item.category === 'missed_calls_yesterday' || item.category === 'logged_communications');
             const subjectId = isQueueBacked
@@ -1461,9 +1459,15 @@ function todayActions() {
                 const data = await res.json();
 
                 if (data.success) {
-                    // Logging no longer closes/fades the row (2026-07-08) —
-                    // it stays on the list so staff can retry or Close it
-                    // explicitly once they're actually done with it.
+                    // 2026-07-10: whether the row disappears now depends on
+                    // the outcome — resolved outcomes (booked, confirmed,
+                    // declined...) auto-close server-side and report
+                    // `closed: true`; "needs retry" outcomes (no answer,
+                    // still deciding...) report `closed: false` and the row
+                    // stays for staff to log again or Close manually later.
+                    if (data.closed) {
+                        this.actioned[itemId] = true;
+                    }
                     this.closeDrawer();
                 } else {
                     this.submitError = data.message || 'Could not save. Please try again.';

@@ -1,8 +1,14 @@
 {{--
 | Lab Cases Tab — shown inside the patient profile (/patients/{id})
-| Loaded via AJAX from LabController@patientCases
-| Also rendered directly when the patient show page includes it statically.
+| This is the "full detail" lab case form (tooth chart + shade guide +
+| real vendor dropdown), as opposed to the Treatment Visit tab's quick-add
+| lab card. Both write to the same LabCase/LabCaseItem tables via
+| LabController — see partials.tooth-chart / partials.shade-select for the
+| shared tooth+shade UI also used on the main /lab page.
 --}}
+@include('partials.tooth-chart-assets')
+@include('partials.shade-select-assets')
+
 <div
     x-show="activeTab === 'lab'"
     style="display:none"
@@ -40,27 +46,30 @@
                     {{-- Left: work details --}}
                     <div class="space-y-1">
                         <div class="flex items-center gap-2">
-                            <span class="font-semibold text-gray-800 text-sm" x-text="workTypeLabel(c.work_type)"></span>
+                            <span class="text-xs font-mono text-gray-400" x-text="c.case_number"></span>
+                            <span class="font-semibold text-gray-800 text-sm" x-text="c.work_category || '—'"></span>
                             <template x-if="c.work_subtype">
                                 <span class="text-xs text-gray-400" x-text="'— ' + c.work_subtype"></span>
                             </template>
                         </div>
                         <div class="flex flex-wrap gap-3 text-xs text-gray-500">
-                            <template x-if="c.tooth_number">
-                                <span>Tooth: <strong x-text="c.tooth_number"></strong></span>
+                            <template x-if="toothSummary(c)">
+                                <span>Tooth: <strong x-text="toothSummary(c)"></strong></span>
                             </template>
-                            <template x-if="c.shade">
-                                <span>Shade: <strong x-text="c.shade"></strong></span>
+                            <template x-if="shadeSummary(c)">
+                                <span>Shade: <strong x-text="shadeSummary(c)"></strong></span>
                             </template>
-                            <template x-if="c.lab_vendor">
-                                <span>Lab: <strong x-text="c.lab_vendor"></strong></span>
+                            <template x-if="c.vendor">
+                                <span>Lab: <strong x-text="c.vendor.name"></strong></span>
                             </template>
                             <template x-if="c.lab_cost">
-                                <span>Cost: <strong x-text="'Rs. ' + Number(c.lab_cost).toLocaleString('en-IN')"></strong></span>
+                                <span>Cost: <strong x-text="'Rs. ' + Number(c.lab_cost).toLocaleString('en-IN')"></strong></span>
                             </template>
                         </div>
                         <div class="flex flex-wrap gap-3 text-xs text-gray-400 mt-1">
-                            <span>Sent: <span x-text="formatDate(c.sent_date)"></span></span>
+                            <template x-if="c.sent_date">
+                                <span>Sent: <span x-text="formatDate(c.sent_date)"></span></span>
+                            </template>
                             <template x-if="c.expected_return_date">
                                 <span :class="isOverdue(c) ? 'text-red-500 font-medium' : ''">
                                     Expected: <span x-text="formatDate(c.expected_return_date)"></span>
@@ -84,27 +93,20 @@
                             x-text="statusLabel(c.status)"
                         ></span>
 
-                        {{-- Quick status change --}}
-                        <select
-                            class="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:ring-brand-300 focus:outline-none opacity-0 group-hover:opacity-100 transition"
-                            @change="quickStatus(c, $event.target.value)"
-                            :value="c.status"
-                        >
-                            <option value="sent">Sent</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="received">Received</option>
-                            <option value="rejected">Rejected</option>
-                        </select>
+                        {{-- One-click next-step transitions (mirrors /lab) --}}
+                        <div class="flex gap-1 flex-wrap justify-end opacity-0 group-hover:opacity-100 transition">
+                            <template x-for="next in nextStatuses(c.status)" :key="next">
+                                <button @click="transition(c, next)"
+                                    class="text-[10px] px-2 py-0.5 rounded border border-gray-200 text-gray-600 hover:bg-gray-50">
+                                    <span x-text="statusLabel(next)"></span>
+                                </button>
+                            </template>
+                        </div>
 
                         <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition">
-                            <button
-                                @click="editCase(c)"
-                                class="text-xs text-[#6a0f70] hover:underline"
-                            >Edit</button>
-                            <button
-                                @click="deleteCase(c)"
-                                class="text-xs text-red-500 hover:underline"
-                            >Delete</button>
+                            <a :href="'/lab/' + c.id" class="text-xs text-gray-500 hover:underline">View</a>
+                            <button @click="editCase(c)" class="text-xs text-[#6a0f70] hover:underline">Edit</button>
+                            <button @click="deleteCase(c)" class="text-xs text-red-500 hover:underline">Delete</button>
                         </div>
                     </div>
                 </div>
@@ -140,13 +142,10 @@
 
         <div class="flex-1 overflow-y-auto px-6 py-5">
             <form id="patient-lab-form" class="space-y-5" @submit.prevent="submitForm()">
-                {{-- Hidden patient_id --}}
-                <input type="hidden" name="patient_id" :value="patientId">
-
                 {{-- Doctor --}}
                 <div>
                     <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Doctor</label>
-                    <select name="doctor_id" x-model="form.doctor_id"
+                    <select x-model="form.doctor_id"
                         class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
                         <option value="">— Select doctor —</option>
                         @foreach($doctors as $d)
@@ -155,74 +154,90 @@
                     </select>
                 </div>
 
-                {{-- Work type + subtype --}}
+                {{-- Work category + subtype --}}
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Work Type *</label>
-                        <select name="work_type" required x-model="form.work_type" @change="form.work_subtype = ''"
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Work Category *</label>
+                        <select required x-model="form.work_category" @change="form.work_subtype = ''; autoFillCost()"
                             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
-                            <option value="">— Select —</option>
-                            <option value="crown_bridge">Crown / Bridge</option>
-                            <option value="denture">Denture / Partial</option>
-                            <option value="implant">Implant Component</option>
-                            <option value="ortho">Orthodontic / Aligner</option>
+                            <option value="">— Select category —</option>
+                            @foreach(\App\Models\LabCase::WORK_CATEGORIES as $cat => $subs)
+                            <option value="{{ $cat }}">{{ $cat }}</option>
+                            @endforeach
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Subtype</label>
-                        <select name="work_subtype" x-model="form.work_subtype"
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Subtype / Material</label>
+                        <select x-model="form.work_subtype" :disabled="!form.work_category" @change="autoFillCost()"
                             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
                             <option value="">— Select —</option>
-                            <template x-for="sub in subtypesFor(form.work_type)" :key="sub">
+                            <template x-for="sub in subtypesFor(form.work_category)" :key="sub">
                                 <option :value="sub" x-text="sub"></option>
                             </template>
                         </select>
                     </div>
                 </div>
 
-                {{-- Tooth & Shade --}}
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Tooth Number</label>
-                        <input type="text" name="tooth_number" placeholder="e.g. 14" x-model="form.tooth_number"
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Shade</label>
-                        <input type="text" name="shade" placeholder="e.g. A2" x-model="form.shade"
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
-                    </div>
+                {{-- Tooth chart --}}
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Tooth Selection</label>
+                    @include('partials.tooth-chart', ['target' => 'form.item', 'pickerId' => "'lab'"])
                 </div>
 
-                {{-- Lab vendor & cost --}}
+                {{-- Shade guide --}}
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Shade</label>
+                    @include('partials.shade-select', ['target' => 'form.item'])
+                </div>
+
+                {{-- Lab vendor & priority --}}
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Lab Vendor</label>
-                        <input type="text" name="lab_vendor" placeholder="Lab name" x-model="form.lab_vendor"
+                        <select x-model="form.lab_vendor_id" @change="autoFillCost()"
                             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
+                            <option value="">— Select Lab —</option>
+                            @foreach($vendors as $vnd)
+                            <option value="{{ $vnd->id }}">{{ $vnd->name }}</option>
+                            @endforeach
+                        </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Lab Cost (Rs. )</label>
-                        <input type="number" name="lab_cost" placeholder="0.00" step="0.01" min="0" x-model="form.lab_cost"
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Priority</label>
+                        <div class="flex gap-1.5">
+                            <template x-for="p in ['routine','urgent','express']" :key="p">
+                                <button type="button" @click="form.priority = p"
+                                    :class="form.priority === p ? 'bg-[#6a0f70] text-white border-[#6a0f70]' : 'bg-white text-gray-600 border-gray-200'"
+                                    class="flex-1 text-xs font-medium py-2 rounded-lg border capitalize transition" x-text="p"></button>
+                            </template>
+                        </div>
                     </div>
+                </div>
+
+                {{-- Cost --}}
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Lab Cost (Rs. )</label>
+                    <input type="number" placeholder="0.00" step="0.01" min="0" x-model="form.lab_cost"
+                        @input="costAutoFilled = false"
+                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
+                    <p x-show="costAutoFilled" class="text-[10px] text-gray-400 mt-0.5">From the vendor's price list — edit if this job differs.</p>
                 </div>
 
                 {{-- Dates --}}
                 <div class="grid grid-cols-3 gap-3">
                     <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Sent Date *</label>
-                        <input type="date" name="sent_date" required x-model="form.sent_date"
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Sent Date</label>
+                        <input type="date" x-model="form.sent_date"
                             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Expected Return</label>
-                        <input type="date" name="expected_return_date" x-model="form.expected_return_date"
+                        <input type="date" x-model="form.expected_return_date"
                             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Received Date</label>
-                        <input type="date" name="received_date" x-model="form.received_date"
+                        <input type="date" x-model="form.received_date"
                             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
                     </div>
                 </div>
@@ -230,28 +245,30 @@
                 {{-- Status --}}
                 <div>
                     <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Status *</label>
-                    <div class="flex gap-4 flex-wrap">
-                        @foreach(['order_placed'=>'Order Placed','impression_sent'=>'Impression Sent','trial_received'=>'Trial Received','final_received'=>'Final Received','rejected'=>'Rejected'] as $val => $lbl)
-                        <label class="flex items-center gap-1.5 cursor-pointer">
-                            <input type="radio" name="status" value="{{ $val }}" x-model="form.status" class="text-[#6a0f70]">
-                            <span class="text-sm text-gray-700">{{ $lbl }}</span>
-                        </label>
+                    <select x-model="form.status"
+                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
+                        @foreach(\App\Models\LabCase::STATUS_LABELS as $val => $lbl)
+                        <option value="{{ $val }}">{{ $lbl }}</option>
                         @endforeach
-                    </div>
+                    </select>
                 </div>
 
                 {{-- Instructions --}}
                 <div>
                     <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Instructions to Lab</label>
-                    <textarea name="instructions" rows="3" placeholder="Specific instructions for the lab…" x-model="form.instructions"
+                    <textarea rows="3" placeholder="Specific instructions for the lab…" x-model="form.instructions"
                         class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none resize-none"></textarea>
                 </div>
 
                 <div>
                     <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Internal Notes</label>
-                    <textarea name="notes" rows="2" placeholder="Notes for clinic use only…" x-model="form.notes"
+                    <textarea rows="2" placeholder="Notes for clinic use only…" x-model="form.internal_notes"
                         class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none resize-none"></textarea>
                 </div>
+
+                <template x-if="formError">
+                    <p class="text-xs text-red-500" x-text="formError"></p>
+                </template>
             </form>
         </div>
 
@@ -271,101 +288,135 @@
 
 @push('scripts')
 <script>
+// Vendor id => active services ([{category, service_name, default_rate}]) — used to
+// auto-fill the lab cost from the vendor's own price list instead of typing it blind.
+const LAB_VENDOR_SERVICES = @json($vendors->mapWithKeys(fn ($v) => [
+    $v->id => $v->services->map(fn ($s) => [
+        'category'     => $s->category,
+        'service_name' => $s->service_name,
+        'default_rate' => (float) $s->default_rate,
+    ]),
+]));
+
 function patientLabTab(patientId, initialCases) {
     return {
+        ...toothChartMixin(),
+        ...shadeSelectMixin(),
+
         patientId,
         cases: initialCases,
         drawerOpen: false,
         editingId: null,
         saving: false,
+        formError: '',
+        costAutoFilled: false,
 
-        form: {
-            doctor_id: '', work_type: '', work_subtype: '', tooth_number: '',
-            shade: '', lab_vendor: '', lab_cost: '',
-            sent_date: new Date().toISOString().slice(0,10),
-            expected_return_date: '', received_date: '',
-            status: 'order_placed', instructions: '', notes: '',
+        form: {},
+
+        subtypes: @json(\App\Models\LabCase::WORK_CATEGORIES),
+        subtypesFor(cat) { return this.subtypes[cat] ?? []; },
+
+        // Look up the vendor's priced service for the selected category/subtype and
+        // fill the cost field — only while the field is still empty or holds a value
+        // we auto-filled ourselves, so it never overwrites a manual edit.
+        autoFillCost() {
+            if (!this.form.lab_vendor_id || !this.form.work_category) return;
+            if (this.form.lab_cost && !this.costAutoFilled) return;
+
+            const services = LAB_VENDOR_SERVICES[this.form.lab_vendor_id] || [];
+            const match = services.find(s => s.category === this.form.work_category
+                    && (!this.form.work_subtype || s.service_name === this.form.work_subtype))
+                || services.find(s => s.category === this.form.work_category);
+
+            if (match) {
+                this.form.lab_cost = match.default_rate;
+                this.costAutoFilled = true;
+            }
         },
 
-        subtypes: {
-            crown_bridge: ['PFM','Zirconia','All-Ceramic (Emax)','Metal','Temporary'],
-            denture:      ['Full Denture','Partial Denture (Metal)','Partial Denture (Acrylic)','Flexible Denture','Immediate Denture'],
-            implant:      ['Implant Crown','Custom Abutment','Stock Abutment','Bar Overdenture'],
-            ortho:        ['Study Model','Retainer (Hawley)','Retainer (Essix)','Night Guard','Aligner'],
+        _blankForm() {
+            return {
+                doctor_id: '', work_category: '', work_subtype: '',
+                lab_vendor_id: '', priority: 'routine', lab_cost: '',
+                sent_date: new Date().toISOString().slice(0, 10),
+                expected_return_date: '', received_date: '',
+                status: 'draft', instructions: '', internal_notes: '',
+                item: { teeth: [], tooth_number: '', shade_guide: 'vita_classical', shade: '', per_tooth_shade: false, tooth_shades: {} },
+            };
         },
-
-        subtypesFor(type) { return this.subtypes[type] ?? []; },
 
         openDrawer() {
             this.editingId = null;
-            this.resetForm();
+            this.formError = '';
+            this.costAutoFilled = false;
+            this.form = this._blankForm();
             this.drawerOpen = true;
         },
 
         editCase(c) {
             this.editingId = c.id;
+            this.formError = '';
+            this.costAutoFilled = false;
             this.form = {
-                doctor_id:            String(c.doctor_id ?? ''),
-                work_type:            c.work_type ?? '',
+                doctor_id:            c.doctor_id ? String(c.doctor_id) : '',
+                work_category:        c.work_category ?? '',
                 work_subtype:         c.work_subtype ?? '',
-                tooth_number:         c.tooth_number ?? '',
-                shade:                c.shade ?? '',
-                lab_vendor:           c.lab_vendor ?? '',
+                lab_vendor_id:        c.lab_vendor_id ? String(c.lab_vendor_id) : '',
+                priority:             c.priority ?? 'routine',
                 lab_cost:             c.lab_cost ?? '',
                 sent_date:            c.sent_date ?? '',
                 expected_return_date: c.expected_return_date ?? '',
                 received_date:        c.received_date ?? '',
-                status:               c.status ?? 'sent',
+                status:               c.status ?? 'draft',
                 instructions:         c.instructions ?? '',
-                notes:                c.notes ?? '',
+                internal_notes:       c.internal_notes ?? '',
+                item: itemStateFromCaseItems(c.items),
             };
             this.drawerOpen = true;
         },
 
         closeDrawer() { this.drawerOpen = false; },
 
-        resetForm() {
-            this.form = {
-                doctor_id:'', work_type:'', work_subtype:'', tooth_number:'',
-                shade:'', lab_vendor:'', lab_cost:'',
-                sent_date: new Date().toISOString().slice(0,10),
-                expected_return_date:'', received_date:'',
-                status:'order_placed', instructions:'', notes:'',
-            };
-        },
-
         async submitForm() {
             this.saving = true;
+            this.formError = '';
             const url    = this.editingId ? `/lab/${this.editingId}` : `/patients/${this.patientId}/lab-cases`;
             const method = this.editingId ? 'PUT' : 'POST';
-            const body   = { ...this.form, patient_id: this.patientId, _token: document.querySelector('meta[name=csrf-token]').content };
+            const items  = itemsPayloadFromState(this.form.item, this.form.work_subtype, this.form.work_subtype);
+            const token  = document.querySelector('meta[name=csrf-token]').content;
+
+            const body = {
+                ...this.form,
+                patient_id: this.patientId,
+                items,
+            };
+            delete body.item;
 
             try {
                 const res = await fetch(url, {
                     method,
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': body._token },
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
                     body: JSON.stringify(body),
                 });
-                if (!res.ok) throw new Error('Server error');
-                // Reload list from server
-                const listRes = await fetch(`/patients/${this.patientId}/lab-cases`, { headers: { 'Accept': 'application/json' } });
-                // Re-fetch rendered partial via page reload of just the data
+                if (!res.ok) {
+                    const payload = await res.json().catch(() => null);
+                    throw new Error(payload?.message || 'Server error');
+                }
                 window.location.reload();
             } catch (e) {
-                alert('Something went wrong. Please try again.');
+                this.formError = e.message || 'Something went wrong. Please try again.';
             } finally {
                 this.saving = false;
             }
         },
 
-        async quickStatus(c, newStatus) {
+        async transition(c, toStatus) {
             const token = document.querySelector('meta[name=csrf-token]').content;
-            await fetch(`/lab/${c.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
-                body: JSON.stringify({ status: newStatus, _token: token }),
+            const res = await fetch(`/lab/${c.id}/status/${toStatus}`, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
             });
-            c.status = newStatus;
+            if (res.ok) c.status = toStatus;
         },
 
         async deleteCase(c) {
@@ -381,31 +432,35 @@ function patientLabTab(patientId, initialCases) {
 
         // ── Helpers ─────────────────────────────────────────────────────────
 
-        workTypeLabel(type) {
-            return { crown_bridge:'Crown / Bridge', denture:'Denture / Partial', implant:'Implant Component', ortho:'Orthodontic / Aligner' }[type] ?? type;
-        },
-
         statusLabel(s) {
-            return { sent:'Sent', in_progress:'In Progress', received:'Received', rejected:'Rejected' }[s] ?? s;
+            return ({!! json_encode(\App\Models\LabCase::STATUS_LABELS) !!})[s] ?? s;
         },
 
         statusColor(s) {
-            return {
-                sent:        'bg-blue-100 text-blue-700',
-                in_progress: 'bg-yellow-100 text-yellow-700',
-                received:    'bg-green-100 text-green-700',
-                rejected:    'bg-red-100 text-red-700',
-            }[s] ?? 'bg-gray-100 text-gray-700';
+            return ({!! json_encode(\App\Models\LabCase::STATUS_COLORS) !!})[s] ?? 'bg-gray-100 text-gray-700';
+        },
+
+        nextStatuses(status) {
+            return ({!! json_encode(\App\Models\LabCase::STATUS_FLOW) !!})[status] ?? [];
+        },
+
+        toothSummary(c) {
+            return (c.items || []).map(i => i.tooth_number).filter(Boolean).join(', ');
+        },
+
+        shadeSummary(c) {
+            const shades = [...new Set((c.items || []).map(i => i.shade).filter(Boolean))];
+            return shades.join(', ');
         },
 
         formatDate(d) {
             if (!d) return '';
             const dt = new Date(d);
-            return dt.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+            return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
         },
 
         isOverdue(c) {
-            if (!c.expected_return_date || c.received_date) return false;
+            if (!c.expected_return_date || c.received_date || c.final_received_date) return false;
             return new Date(c.expected_return_date) < new Date();
         },
     };

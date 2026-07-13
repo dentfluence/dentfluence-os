@@ -326,6 +326,16 @@
                     <th>Label</th>
                     <th style="width:80px;">Order</th>
                     <th style="width:90px;">Requires note</th>
+                    <th style="width:90px;">
+                        Auto-closes
+                        <div class="help-hint" tabindex="0">
+                            <span class="help-icon">?</span>
+                            <div class="help-card">
+                                <strong>What this does</strong>
+                                <p style="margin:6px 0 0;">When staff log this outcome on the Action Board, ticked = the row is removed automatically (call is resolved). Unticked = the row stays so staff can retry or Close it manually — use this for outcomes like "No answer" where nothing was actually accomplished.</p>
+                            </div>
+                        </div>
+                    </th>
                     <th style="width:70px;">Active</th>
                     <th style="width:70px;"></th>
                 </tr>
@@ -338,6 +348,7 @@
                         <td><input type="text" name="label" value="{{ $opt->label }}" class="rs-input" style="width:100%;"></td>
                         <td><input type="number" name="sort_order" value="{{ $opt->sort_order }}" min="0" class="rs-input" style="width:60px;"></td>
                         <td style="text-align:center;"><input type="checkbox" name="requires_notes" value="1" {{ $opt->requires_notes ? 'checked' : '' }}></td>
+                        <td style="text-align:center;"><input type="checkbox" name="closes_task" value="1" {{ $opt->closes_task ? 'checked' : '' }}></td>
                         <td style="text-align:center;"><input type="checkbox" name="is_active" value="1" {{ $opt->is_active ? 'checked' : '' }}></td>
                         <td><button type="submit" class="rs-save-btn">Save</button></td>
                     </form>

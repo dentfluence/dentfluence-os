@@ -111,6 +111,12 @@ class Treatment extends Model
         return $this->hasMany(TreatmentMedia::class)->orderBy('sort_order');
     }
 
+    /** Knowledge Bank — diagnoses this treatment is a ranked option for. */
+    public function diagnosisOptions(): HasMany
+    {
+        return $this->hasMany(DiagnosisTreatmentOption::class);
+    }
+
     // ── Scopes ────────────────────────────────────────────────────────────────
 
     public function scopeActive($query)

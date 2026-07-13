@@ -138,6 +138,22 @@ class Presentation extends Model
             ->first(fn (PresentationAccessToken $t) => $t->isValid());
     }
 
+    /**
+     * The live public microsite URL for a given treatment plan's most recent
+     * Presentation, if one exists and still has a valid (non-revoked,
+     * non-expired) link — null otherwise. Used to put a "scan to view
+     * online" QR on print templates without forcing a Presentation to be
+     * created just for printing (see TreatmentPlanController::printView and
+     * ConsultationController::print).
+     */
+    public static function activeLinkUrlForPlan(int $treatmentPlanId): ?string
+    {
+        $presentation = static::where('treatment_plan_id', $treatmentPlanId)->latest('id')->first();
+        $token = $presentation?->activeAccessToken();
+
+        return $token ? route('presentations.public.show', $token->token) : null;
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     public function getStatusLabelAttribute(): string

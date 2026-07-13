@@ -5,6 +5,7 @@ namespace App\Services\Relationship;
 use App\Models\Appointment;
 use App\Models\CommunicationQueue;
 use App\Models\TodayActionDismissal;
+use App\Support\ClinicFlowRange;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -79,11 +80,15 @@ class YesterdayReviewService
 
     /**
      * Appointments from yesterday with status = no_show or cancelled.
+     *
+     * "Yesterday" resolves through ClinicFlowRange — on a Monday this is
+     * Saturday (or Saturday+Sunday if the clinic happened to open that
+     * Sunday), not a dark Sunday. See App\Support\ClinicFlowRange.
      */
     private function missedAppointments(): array
     {
         try {
-            $yesterday = Carbon::yesterday()->toDateString();
+            [$start, $end] = ClinicFlowRange::resolve();
 
             // Excludes anything already handled today via Today's Actions
             // "Log & Close" or Dismiss — same TodayActionDismissal suppression
@@ -95,7 +100,7 @@ class YesterdayReviewService
             );
 
             return Appointment::with('patient:id,name,phone,relationship_id')
-                ->whereDate('appointment_date', $yesterday)
+                ->whereBetween('appointment_date', [$start->toDateString(), $end->copy()->endOfDay()])
                 ->whereIn('status', ['no_show', 'cancelled'])
                 ->whereNotIn('id', $dismissedIds)
                 ->orderBy('appointment_date')
@@ -109,7 +114,7 @@ class YesterdayReviewService
                         'patient_id'      => $appt->patient_id,
                         'lead_id'         => null,
                         'relationship_id' => $patient?->relationship_id ?? null,
-                        'reason'          => 'Missed appointment yesterday (' . ucfirst($appt->status) . ')',
+                        'reason'          => 'Missed appointment (' . $appt->appointment_date?->format('d M') . ', ' . ucfirst($appt->status) . ')',
                         'priority'        => 'high',
                         'suggested_action'=> 'Call to reschedule',
                         'link'            => $appt->patient_id
@@ -134,17 +139,20 @@ class YesterdayReviewService
      * CommunicationQueue items that were due yesterday and are still pending/unactioned.
      *
      * These are calls that should have been made yesterday but weren't.
+     * "Yesterday" resolves through ClinicFlowRange — see missedAppointments().
      */
     private function missedCalls(): array
     {
         try {
-            $yesterday = Carbon::yesterday();
+            [$start, $end] = ClinicFlowRange::resolve();
+            $startDate = $start->toDateString();
+            $endBound  = $end->copy()->endOfDay();
 
             return CommunicationQueue::with('patient:id,name,phone,relationship_id')
-                ->where(function ($q) use ($yesterday) {
-                    // Due yesterday (follow_up_date or due_at was yesterday)
-                    $q->whereDate('follow_up_date', $yesterday->toDateString())
-                      ->orWhereDate('due_at', $yesterday->toDateString());
+                ->where(function ($q) use ($startDate, $endBound) {
+                    // Due in range (follow_up_date or due_at fell within it)
+                    $q->whereBetween('follow_up_date', [$startDate, $endBound])
+                      ->orWhereBetween('due_at', [$startDate, $endBound]);
                 })
                 ->where('status', 'pending')
                 ->notIgnored() // Missed Calls (2026-07-05): honour per-item Ignore
@@ -159,7 +167,7 @@ class YesterdayReviewService
                         'patient_id'      => $item->patient_id,
                         'lead_id'         => null,
                         'relationship_id' => $patient?->relationship_id ?? null,
-                        'reason'          => 'Call was due yesterday — not yet actioned ('
+                        'reason'          => 'Call was due — not yet actioned ('
                             . ($item->purpose_label ?? $item->purpose ?? 'follow-up') . ')',
                         'priority'        => 'high',
                         'suggested_action'=> 'Call today — overdue from yesterday',

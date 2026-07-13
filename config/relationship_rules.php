@@ -385,6 +385,28 @@ return [
             'enabled'       => true,
         ],
 
+        /*
+         * 12. Smart Presentation callback request — patient asked to be
+         *     called back instead of accepting/declining outright. This is a
+         *     warm, active request (not a cold nudge), so same-day + high
+         *     priority. Without this rule the callback request would just
+         *     sit in the Opportunity pipeline unseen — same gap 'decline'
+         *     had before it was wired to create/update the Opportunity.
+         */
+        'presentation_callback_requested' => [
+            'trigger'       => 'opportunity.callback_requested',
+            'conditions'    => [],
+            'action'        => 'create_task',
+            'action_config' => [
+                'category'   => 'call',
+                'title'      => 'Patient requested a callback — Smart Presentation',
+                'priority'   => 'high',
+                'days_after' => 0,
+            ],
+            'cooldown_days' => 1,
+            'enabled'       => true,
+        ],
+
     ], // end rules
 
 

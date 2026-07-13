@@ -395,19 +395,27 @@ class TodayController extends Controller
                 );
             }
 
-            // Revised 2026-07-08 (Sumit) — Log no longer auto-closes the row,
-            // full stop. The earlier "Log & Close" combined button used
-            // `action_option_lists.closes_task` (defaults true) to decide
-            // whether to also close/suppress the underlying record — but
-            // every seeded outcome defaults to closes_task=true, including
-            // "No answer" / "Not connected" / "Wrong number", so a failed
-            // call attempt silently vanished from the board instead of
-            // staying open for a retry. Logging is now purely a Timeline
-            // entry (above); closing is a separate, explicit action — see
-            // closeAction() / the drawer's "Close" tab. `closes_task` is no
-            // longer read here (left on the model/table — harmless, may be
-            // reused later if a genuine "always auto-close" outcome is
-            // wanted, but nothing does today).
+            // Revised 2026-07-08 (Sumit) — Log stopped auto-closing every
+            // outcome, because every seeded row defaulted to
+            // `closes_task = true` with nothing varying it, so failed
+            // attempts ("No answer" etc.) vanished from the board instead of
+            // staying open for a retry.
+            //
+            // Revised again 2026-07-10 (Sumit) — the opposite problem: with
+            // Log never closing anything, staff had to remember to flip to
+            // the separate Close tab after every genuinely resolved call
+            // (booked, confirmed, declined...), which was confusing them
+            // about how many actions were actually done. `closes_task` is
+            // now per-outcome (seeded with real values, editable per clinic
+            // in Settings > Call Outcomes) and IS read here again: a
+            // resolved outcome auto-closes via the same closeUnderlyingRecord()
+            // the Close tab uses, a "needs retry" outcome (no answer, busy,
+            // still deciding...) leaves the row open. The Close tab remains
+            // for staff to manually give up on a row after however many
+            // failed attempts.
+            if ($optionRow?->closes_task) {
+                $this->closeUnderlyingRecord($validated);
+            }
 
             // Resolve next action label from config
             $nextActionLabel = config('relationship_rules.next_actions.' . $validated['response'])
@@ -416,6 +424,7 @@ class TodayController extends Controller
 
             return response()->json([
                 'success'          => true,
+                'closed'           => (bool) $optionRow?->closes_task,
                 'next_action_label'=> $nextActionLabel,
             ]);
         } catch (\Throwable $e) {
@@ -433,9 +442,11 @@ class TodayController extends Controller
 
     /**
      * Mark the row behind a logged Today's Action as handled, so it stops
-     * being pulled back in by TodayActionsEngine on the next page load. See
-     * the 2026-07-08 fix note in logAction() above. Three cases, mirroring
-     * the exact same category split TodayActionsEngine/dismiss() already use:
+     * being pulled back in by TodayActionsEngine on the next page load.
+     * Called from two places: automatically by logAction() when the logged
+     * outcome's `closes_task` is true, and always by the drawer's explicit
+     * Close tab. Three cases, mirroring the exact same category split
+     * TodayActionsEngine/dismiss() already use:
      *
      *  - Queue-backed categories (recall_calls, missed_calls_yesterday,
      *    logged_communications) → the row IS the source of truth, so this

@@ -406,7 +406,7 @@ class TreatmentVisitService
      */
     private function createLabCase(TreatmentVisit $visit, array $lc): void
     {
-        LabCase::create([
+        $labCase = LabCase::create([
             'patient_id'           => $visit->patient_id,
             'treatment_visit_id'   => $visit->id,
             'doctor_id'            => $visit->doctor_id ?? auth()->id(),
@@ -419,6 +419,29 @@ class TreatmentVisitService
             'status'               => 'draft',
             'payment_status'       => 'pending',
         ]);
+
+        // Inherit the teeth the doctor already picked on this visit's tooth chart
+        // (treatment_visits.tooth_number, comma-joined) so the Lab tab shows them
+        // without re-selecting — one LabCaseItem per tooth.
+        $teeth = collect(explode(',', (string) $visit->tooth_number))
+            ->map(fn ($t) => trim($t))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($teeth->isEmpty()) {
+            return;
+        }
+
+        $workType = $lc['work_subtype'] ?? $lc['work_category'] ?? 'Other';
+
+        foreach ($teeth as $i => $tooth) {
+            $labCase->items()->create([
+                'tooth_number' => $tooth,
+                'work_type'    => $workType,
+                'sort_order'   => $i,
+            ]);
+        }
     }
 
     /**

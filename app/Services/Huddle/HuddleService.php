@@ -32,7 +32,7 @@ class HuddleService
     public function build(?int $branchId = null, ?string $date = null): array
     {
         $day       = $date ? Carbon::parse($date) : today();
-        $yesterday = $day->copy()->subDay();
+        [$flowStart, $flowEnd] = $this->resolveFlowRange($day);
         $appts     = $this->todaysAppointments($branchId, $day);
 
         $sections = array_values(array_filter([
@@ -42,8 +42,8 @@ class HuddleService
             $this->safe(fn () => $this->moneySection($appts)),
             $this->safe(fn () => $this->opportunitiesSection($appts, $branchId, $day)),
             // ── Yesterday (H2) ───────────────────────────────────────────────
-            $this->safe(fn () => $this->yesterdaySection($branchId, $yesterday)),
-            $this->safe(fn () => $this->failuresSection($branchId, $yesterday)),
+            $this->safe(fn () => $this->yesterdaySection($branchId, $flowStart, $flowEnd)),
+            $this->safe(fn () => $this->failuresSection($branchId, $flowStart, $flowEnd)),
             // ── Operations (H2) ──────────────────────────────────────────────
             $this->safe(fn () => $this->tasksSection($day)),
             $this->safe(fn () => $this->labSection($day)),
@@ -206,49 +206,68 @@ class HuddleService
 
     // ── Yesterday & operations (H2) ────────────────────────────────────────
 
-    protected function yesterdaySection(?int $branchId, Carbon $yest): array
+    /**
+     * Resolve the date range "Yesterday's Flow" / "Yesterday's Failures"
+     * should report on. See App\Support\ClinicFlowRange for the Monday
+     * (Saturday-open-Sunday) rule this delegates to — kept as a single
+     * shared source of truth so this doesn't drift out of sync with the
+     * other "yesterday" sections in Huddle (YesterdayReviewService,
+     * TodayActionsEngine::wellnessCheckYesterday).
+     *
+     * @return array{0: Carbon, 1: Carbon} [$start, $end] — both dates inclusive.
+     */
+    protected function resolveFlowRange(Carbon $day): array
     {
-        $lines = [];
+        return \App\Support\ClinicFlowRange::resolve($day);
+    }
 
-        // Visits completed yesterday + money collected on them.
-        $visits    = \App\Models\TreatmentVisit::whereDate('visit_date', $yest)
+    protected function yesterdaySection(?int $branchId, Carbon $start, Carbon $end): array
+    {
+        $lines    = [];
+        $combined = ! $start->isSameDay($end);
+
+        // Visits completed in range + money collected on them.
+        $visits    = \App\Models\TreatmentVisit::whereBetween('visit_date', [$start->toDateString(), $end->copy()->endOfDay()])
             ->where('status', 'completed')->get(['amount_paid', 'cost']);
         $visitCount = $visits->count();
         $visitMoney = (float) $visits->sum('amount_paid');
         $lines[] = "Visits completed: {$visitCount}" . ($visitCount ? " (collected " . $this->money($visitMoney) . " on visits)" : '');
 
-        // Total collections yesterday from the finance ledger (all sources).
+        // Total collections in range from the finance ledger (all sources).
         $collected = $visitMoney;
         if (class_exists(\App\Models\Finance\FinanceTransaction::class)) {
             $collected = (float) \App\Models\Finance\FinanceTransaction::where('type', 'income')
                 ->where('status', 'active')
-                ->whereDate('transaction_date', $yest)
+                ->whereBetween('transaction_date', [$start->toDateString(), $end->copy()->endOfDay()])
                 ->sum('amount');
             $lines[] = "Total collections (all sources): " . $this->money($collected);
         }
 
-        // Appointments that completed yesterday.
-        $done = Appointment::whereDate('appointment_date', $yest)
+        // Appointments that completed in range.
+        $done = Appointment::whereBetween('appointment_date', [$start->toDateString(), $end->copy()->endOfDay()])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->where('status', 'done')->count();
         $lines[] = "Appointments completed: {$done}";
 
         return [
-            'title'    => "Yesterday's Flow",
+            'title'    => $combined ? "Weekend Flow (Sat–Sun)" : "Yesterday's Flow",
             'headline' => $this->money($collected) . ' collected',
             'lines'    => $lines,
         ];
     }
 
-    protected function failuresSection(?int $branchId, Carbon $yest): array
+    protected function failuresSection(?int $branchId, Carbon $start, Carbon $end): array
     {
-        $appts = Appointment::whereDate('appointment_date', $yest)
+        $combined = ! $start->isSameDay($end);
+        $title    = $combined ? "Weekend Failures (Sat–Sun)" : "Yesterday's Failures";
+
+        $appts = Appointment::whereBetween('appointment_date', [$start->toDateString(), $end->copy()->endOfDay()])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->whereIn('status', ['no_show', 'cancelled'])
             ->with('patient:id,name')->get();
 
         if ($appts->isEmpty()) {
-            return ['title' => "Yesterday's Failures", 'headline' => 'clean day', 'lines' => ['No no-shows or cancellations yesterday.']];
+            return ['title' => $title, 'headline' => 'clean day', 'lines' => ['No no-shows or cancellations.']];
         }
 
         $noShow    = $appts->where('status', 'no_show');
@@ -263,7 +282,7 @@ class HuddleService
         }
 
         return [
-            'title'    => "Yesterday's Failures",
+            'title'    => $title,
             'headline' => "{$noShow->count()} no-show, {$cancelled->count()} cancelled",
             'lines'    => $lines,
         ];

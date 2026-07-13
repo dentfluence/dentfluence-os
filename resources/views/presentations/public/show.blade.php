@@ -16,6 +16,10 @@
     <div class="bg-gray-100 border border-gray-200 text-gray-600 rounded-xl px-4 py-3 text-sm text-center mb-4">
         You've let us know this isn't the right time. If anything changes, we're here whenever you're ready.
     </div>
+    @elseif($presentation->status === 'follow_up_required')
+    <div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm text-center mb-4">
+        Thanks — we've noted that you'd like a callback. Our team will reach out to you shortly.
+    </div>
     @endif
 
     {{-- ══ CASE SUMMARY — deterministic, always accurate (no AI required) ═══ --}}
@@ -60,6 +64,41 @@
         </div>
     </div>
 
+    {{-- ══ MEMBERSHIP + PAYMENT PLAN OPTIONS — existing data, display only ═══ --}}
+    @if($activeMembership || $emiOptions->isNotEmpty())
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-4 space-y-4">
+        @if($activeMembership)
+        <div>
+            <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Your Membership</div>
+            <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-700">{{ $activeMembership->plan->plan_name }}</span>
+                <span class="text-xs text-gray-400">{{ $activeMembership->days_remaining }} days left</span>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">{{ $activeMembership->plan->benefit_summary }}</p>
+        </div>
+        @endif
+
+        @if($activeMembership && $emiOptions->isNotEmpty())
+        <div class="border-t border-gray-100"></div>
+        @endif
+
+        @if($emiOptions->isNotEmpty())
+        <div>
+            <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Payment Plan Options</div>
+            <div class="space-y-2">
+                @foreach($emiOptions as $emi)
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-gray-700">{{ $emi['provider_name'] }} &middot; {{ $emi['tenure_months'] }} months</span>
+                    <span class="text-gray-800 font-medium">Rs. {{ number_format($emi['patient_monthly_emi'], 0) }}/mo</span>
+                </div>
+                @endforeach
+            </div>
+            <p class="text-[11px] text-gray-400 mt-2">Ask our team for full EMI terms and eligibility.</p>
+        </div>
+        @endif
+    </div>
+    @endif
+
     {{-- ══ ALTERNATIVES (other options discussed for this consultation) ═══ --}}
     @if(!empty($narrative['alternatives']))
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-4">
@@ -96,8 +135,8 @@
     </div>
     @endif
 
-    {{-- ══ ACCEPT / DECLINE ════════════════════════════════════════════════ --}}
-    @if(!in_array($presentation->status, ['accepted', 'declined']))
+    {{-- ══ ACCEPT / DECLINE / REQUEST CALLBACK ═══════════════════════════════ --}}
+    @if(!in_array($presentation->status, ['accepted', 'declined', 'follow_up_required']))
     <div class="flex gap-3 mt-6">
         <form method="POST" action="{{ route('presentations.public.decline', $token) }}" class="flex-1">
             @csrf
@@ -112,6 +151,12 @@
             </button>
         </form>
     </div>
+    <form method="POST" action="{{ route('presentations.public.request-callback', $token) }}" class="mt-3">
+        @csrf
+        <button type="submit" class="w-full py-2.5 text-brand-600 text-sm font-medium underline decoration-brand-200 underline-offset-2">
+            Request a callback instead
+        </button>
+    </form>
     @endif
 
     <div class="text-center text-xs text-gray-300 mt-6 space-y-0.5">

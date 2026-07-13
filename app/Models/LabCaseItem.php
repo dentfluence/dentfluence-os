@@ -17,12 +17,20 @@ class LabCaseItem extends Model
 {
     protected $fillable = [
         'lab_case_id', 'tooth_number', 'work_type',
-        'material', 'shade', 'notes', 'sort_order',
+        'material', 'shade', 'shade_guide', 'notes', 'sort_order',
     ];
 
     public function labCase(): BelongsTo
     {
         return $this->belongsTo(LabCase::class);
+    }
+
+    /** Display label for the shade guide this item's shade belongs to, e.g. "Vita Classical" */
+    public function shadeGuideLabel(): ?string
+    {
+        return $this->shade
+            ? (LabCase::SHADE_GUIDE_LABELS[$this->shade_guide] ?? LabCase::SHADE_GUIDE_LABELS['vita_classical'])
+            : null;
     }
 
     /** "11 · Crown · Zirconia · A2" — compact display string */

@@ -697,9 +697,15 @@ class TodayActionsEngine
 
     private function wellnessCheckYesterday(): array
     {
+        // "Yesterday" resolves through ClinicFlowRange — on a Monday this is
+        // Saturday (or Saturday+Sunday if the clinic opened that Sunday),
+        // so a patient treated Saturday still gets their check-in call
+        // instead of silently falling through a dark Sunday query.
+        [$start, $end] = \App\Support\ClinicFlowRange::resolve();
+
         return TreatmentVisit::with('patient:id,name,phone,relationship_id')
             ->where('status', 'completed')
-            ->whereDate('visit_date', Carbon::yesterday())
+            ->whereBetween('visit_date', [$start->toDateString(), $end->copy()->endOfDay()])
             ->whereNotNull('patient_id')
             ->whereNotIn('id', $this->dismissedIds('wellness_check_yesterday', TreatmentVisit::class))
             ->orderBy('visit_date')
@@ -711,7 +717,7 @@ class TodayActionsEngine
                 'patient_id'      => $visit->patient_id,
                 'lead_id'         => null,
                 'relationship_id' => $visit->patient?->relationship_id ?? null,
-                'reason'          => 'Treated yesterday ('
+                'reason'          => 'Treated ' . $visit->visit_date?->format('d M') . ' ('
                     . ($visit->treatment_name ?? $visit->procedure ?? 'procedure')
                     . ') — wellness check-in call',
                 'priority'        => 'high',

@@ -47,11 +47,15 @@ class LabVendorController extends Controller
                 'email'                   => $v->email,
                 'digital_email'           => $v->digital_email,
                 'address'                 => $v->address,
-                'specialties'             => $v->specialties ?? [],
                 'default_turnaround_days' => $v->default_turnaround_days,
                 'payment_terms'           => $v->payment_terms,
+                'credit_days'             => $v->credit_days,
                 'is_active'               => $v->is_active,
                 'notes'                   => $v->notes,
+                // Capabilities are derived from the priced service catalog, not a
+                // separate checklist — a category only shows up here if the vendor
+                // has an active priced service for it.
+                'capability_categories'   => $v->capabilityCategories(),
                 // Phase 1 — contacts & services
                 'contacts'                => $v->contacts->values(),
                 'services'                => $v->services->values(),
@@ -195,7 +199,9 @@ class LabVendorController extends Controller
     {
         $data = $request->validate([
             'service_name'    => 'required|string|max:150',
-            'category'        => 'nullable|string|max:100',
+            // Category drives the vendor's capability list (see LabVendor::capabilityCategories()),
+            // so it's constrained to the same taxonomy every lab case form uses.
+            'category'        => 'required|in:' . implode(',', array_keys(LabCase::WORK_CATEGORIES)),
             'default_rate'    => 'required|numeric|min:0',
             'unit'            => 'nullable|string|max:40',
             'turnaround_days' => 'nullable|integer|min:1|max:90',
@@ -214,7 +220,7 @@ class LabVendorController extends Controller
 
         $data = $request->validate([
             'service_name'    => 'required|string|max:150',
-            'category'        => 'nullable|string|max:100',
+            'category'        => 'required|in:' . implode(',', array_keys(LabCase::WORK_CATEGORIES)),
             'default_rate'    => 'required|numeric|min:0',
             'unit'            => 'nullable|string|max:40',
             'turnaround_days' => 'nullable|integer|min:1|max:90',
@@ -235,6 +241,34 @@ class LabVendorController extends Controller
         return response()->json(['success' => true]);
     }
 
+    /**
+     * POST /lab-vendors/{labVendor}/services/bulk
+     * Quick multi-row price-list entry: treatment/item + cost per row, added
+     * all at once. Same validation as storeService(), just for many rows —
+     * these become real LabVendorService rows the Lab tab's cost auto-fill
+     * matches against.
+     */
+    public function storeServicesBulk(Request $request, LabVendor $labVendor)
+    {
+        $data = $request->validate([
+            'rows'                    => 'required|array|min:1',
+            'rows.*.service_name'     => 'required|string|max:150',
+            'rows.*.category'         => 'required|in:' . implode(',', array_keys(LabCase::WORK_CATEGORIES)),
+            'rows.*.default_rate'     => 'required|numeric|min:0',
+            'rows.*.turnaround_days'  => 'nullable|integer|min:1|max:90',
+        ]);
+
+        $created = collect($data['rows'])->map(fn (array $row) => $labVendor->services()->create([
+            'service_name'    => $row['service_name'],
+            'category'        => $row['category'],
+            'default_rate'    => $row['default_rate'],
+            'turnaround_days' => $row['turnaround_days'] ?? null,
+            'is_active'       => true,
+        ]));
+
+        return response()->json(['success' => true, 'count' => $created->count(), 'services' => $created->values()]);
+    }
+
     /* ══════════════════════════════════════════════════════════
        PRIVATE HELPERS
     ══════════════════════════════════════════════════════════ */
@@ -249,11 +283,11 @@ class LabVendorController extends Controller
             'email'                   => 'nullable|email|max:150',
             'digital_email'           => 'nullable|email|max:150',
             'address'                 => 'nullable|string|max:500',
-            'specialties'             => 'nullable|array',
-            'specialties.*'           => 'string|max:100',
             'notes'                   => 'nullable|string|max:1000',
             'default_turnaround_days' => 'nullable|integer|min:1|max:365',
             'payment_terms'           => 'nullable|in:per_case,monthly_account',
+            // Only meaningful for monthly_account vendors, but no harm storing it regardless
+            'credit_days'             => 'nullable|integer|min:0|max:180',
             'is_active'               => 'boolean',
         ]);
     }

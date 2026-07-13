@@ -222,7 +222,12 @@
                     </div>
                     <div>
                         <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Payment Terms</div>
-                        <div class="text-gray-700">{{ $v->payment_terms === 'monthly_account' ? 'Monthly Account' : 'Per Case' }}</div>
+                        <div class="text-gray-700">
+                            {{ $v->payment_terms === 'monthly_account' ? 'Monthly Account' : 'Per Case' }}
+                            @if($v->payment_terms === 'monthly_account' && $v->credit_days)
+                                <span class="text-gray-400">· Net {{ $v->credit_days }}</span>
+                            @endif
+                        </div>
                     </div>
                     <div>
                         <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Last Order</div>
@@ -234,11 +239,11 @@
                         <div class="text-gray-700">{{ $v->address }}</div>
                     </div>
                     @endif
-                    @if(!empty($v->specialties))
+                    @if(!empty($v->capability_categories))
                     <div class="col-span-2 md:col-span-3">
-                        <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Specialties</div>
+                        <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Work Categories</div>
                         <div class="flex flex-wrap gap-1">
-                            @foreach($v->specialties as $sp)
+                            @foreach($v->capability_categories as $sp)
                             <span class="px-2 py-0.5 text-xs bg-brand-50 text-brand-700 border border-brand-200 rounded-full">{{ $sp }}</span>
                             @endforeach
                         </div>
@@ -352,18 +357,60 @@
                         </div>
                     </template>
 
-                    {{-- Add service form --}}
-                    <div x-show="!showServiceForm">
+                    {{-- Add service form(s) --}}
+                    <div x-show="!showServiceForm && !showBulkForm" class="flex gap-2">
                         <button @click="showServiceForm=true; serviceForm={is_active:true}"
-                                class="w-full py-2 text-sm text-brand-600 border border-dashed border-brand-300 rounded-lg hover:bg-brand-50 transition">
+                                class="flex-1 py-2 text-sm text-brand-600 border border-dashed border-brand-300 rounded-lg hover:bg-brand-50 transition">
                             + Add Service / Rate
                         </button>
+                        <button @click="showBulkForm=true; if(!bulkRows.length) addBulkRow()"
+                                class="flex-1 py-2 text-sm text-gray-600 border border-dashed border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                            + Add Price List (multiple)
+                        </button>
+                    </div>
+
+                    {{-- Bulk price list — Treatment/Item + Cost, one row per line --}}
+                    <div x-show="showBulkForm" class="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                        <p class="text-xs text-gray-500">Add the lab's price list — treatment/item on one side, cost on the other. These feed directly into the Lab tab / lab entry forms, so the cost auto-fills the moment that treatment is selected for this vendor.</p>
+                        <div class="grid grid-cols-12 gap-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-1">
+                            <div class="col-span-5">Treatment / Item</div>
+                            <div class="col-span-3">Category</div>
+                            <div class="col-span-2">Cost (Rs.)</div>
+                            <div class="col-span-1">Days</div>
+                        </div>
+                        <div class="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                            <template x-for="(row, idx) in bulkRows" :key="idx">
+                                <div class="grid grid-cols-12 gap-1.5 items-center bg-white p-1.5 rounded border border-gray-100">
+                                    <input x-model="row.service_name" type="text" placeholder="e.g. Zirconia Crown"
+                                           class="col-span-5 border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-brand-300 focus:outline-none">
+                                    <select x-model="row.category" class="col-span-3 border border-gray-200 rounded px-1 py-1 text-xs focus:ring-1 focus:ring-brand-300 focus:outline-none">
+                                        <option value="">— Category —</option>
+                                        @foreach(array_keys(\App\Models\LabCase::WORK_CATEGORIES) as $cat)
+                                        <option value="{{ $cat }}">{{ $cat }}</option>
+                                        @endforeach
+                                    </select>
+                                    <input x-model="row.default_rate" type="number" min="0" step="0.01" placeholder="0.00"
+                                           class="col-span-2 border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-brand-300 focus:outline-none">
+                                    <input x-model="row.turnaround_days" type="number" min="1" max="90" placeholder="—"
+                                           class="col-span-1 border border-gray-200 rounded px-1 py-1 text-xs focus:ring-1 focus:ring-brand-300 focus:outline-none">
+                                    <button @click="bulkRows.splice(idx, 1)" class="col-span-1 text-gray-300 hover:text-red-500 text-xs">✕</button>
+                                </div>
+                            </template>
+                        </div>
+                        <button @click="addBulkRow()" class="text-xs text-brand-600 hover:text-brand-700 font-semibold">+ Add Row</button>
+                        <div class="flex gap-2 justify-end pt-1">
+                            <button @click="showBulkForm=false; bulkRows=[]" class="px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+                            <button @click="saveBulkRows({{ $v->id }})" :disabled="bulkSaving"
+                                    class="px-4 py-1.5 text-xs font-semibold bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
+                                <span x-text="bulkSaving ? 'Saving…' : 'Save All'"></span>
+                            </button>
+                        </div>
                     </div>
                     <div x-show="showServiceForm" class="p-4 bg-brand-50 border border-brand-200 rounded-lg space-y-3">
                         <div class="grid grid-cols-2 gap-3">
                             <div class="col-span-2">
-                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Service Name *</label>
-                                <input x-model="serviceForm.service_name" type="text" placeholder="e.g. Zirconia Crown, PFM Crown"
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Treatment / Prosthesis *</label>
+                                <input x-model="serviceForm.service_name" type="text" placeholder="e.g. Zirconia Crown, PFM Crown, Cast Partial Denture"
                                        class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
                             </div>
                             <div>
@@ -382,7 +429,7 @@
                                        class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
                             </div>
                             <div>
-                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Rate (Rs.) *</label>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Amount / Charges (Rs.) *</label>
                                 <input x-model="serviceForm.default_rate" type="number" min="0" step="0.01"
                                        class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
                             </div>
@@ -594,24 +641,16 @@
                         </div>
                     </div>
 
-                    {{-- Available Services (specialties checkboxes) --}}
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Available Work Categories</label>
-                        <div class="flex flex-wrap gap-2">
-                            @foreach(array_keys(\App\Models\LabCase::WORK_CATEGORIES) as $cat)
-                            <label class="flex items-center gap-1.5 cursor-pointer px-2.5 py-1 rounded-full border text-xs transition"
-                                   :class="form.specialties && form.specialties.includes('{{ $cat }}')
-                                       ? 'bg-brand-100 border-brand-400 text-brand-800 font-semibold'
-                                       : 'bg-white border-gray-200 text-gray-600 hover:border-brand-300'">
-                                <input type="checkbox" name="specialties[]" value="{{ $cat }}"
-                                       :checked="form.specialties && form.specialties.includes('{{ $cat }}')"
-                                       @change="toggleSpecialty('{{ $cat }}')"
-                                       class="sr-only">
-                                {{ $cat }}
-                            </label>
-                            @endforeach
-                        </div>
+                    <div x-show="form.payment_terms === 'monthly_account'">
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Credit Days</label>
+                        <input type="number" name="credit_days" x-model="form.credit_days" min="0" max="180" placeholder="e.g. 30"
+                               class="w-full max-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-300 focus:outline-none">
+                        <p class="text-[10px] text-gray-400 mt-0.5">Days after the monthly bill before payment is due.</p>
                     </div>
+
+                    <p class="text-xs text-gray-400 -mt-1">
+                        Work categories this lab can do are set from its priced Service catalog — save the vendor first, then add services from the expanded card.
+                    </p>
 
                     {{-- Notes --}}
                     <div>
@@ -650,7 +689,7 @@ function labVendors() {
             email: '', digital_email: '',
             default_turnaround_days: 7,
             payment_terms: 'per_case',
-            specialties: [],
+            credit_days: null,
             notes: '',
         },
 
@@ -658,7 +697,7 @@ function labVendors() {
             this.editId = null;
             this.form = { name:'', address:'', contact_person:'', phone:'', whatsapp_number:'',
                           email:'', digital_email:'', default_turnaround_days:7,
-                          payment_terms:'per_case', specialties:[], notes:'' };
+                          payment_terms:'per_case', credit_days:null, notes:'' };
             this.modalOpen = true;
         },
 
@@ -674,17 +713,10 @@ function labVendors() {
                 digital_email:           v.digital_email || '',
                 default_turnaround_days: v.default_turnaround_days || 7,
                 payment_terms:           v.payment_terms || 'per_case',
-                specialties:             v.specialties || [],
+                credit_days:             v.credit_days ?? null,
                 notes:                   v.notes || '',
             };
             this.modalOpen = true;
-        },
-
-        toggleSpecialty(cat) {
-            if (!this.form.specialties) this.form.specialties = [];
-            const idx = this.form.specialties.indexOf(cat);
-            if (idx > -1) this.form.specialties.splice(idx, 1);
-            else this.form.specialties.push(cat);
         },
 
         submitVendorForm() {
@@ -701,6 +733,9 @@ function vendorDetail(vendorId) {
         services: [],
         showContactForm: false,
         showServiceForm: false,
+        showBulkForm: false,
+        bulkRows: [],
+        bulkSaving: false,
         contactForm: {},
         serviceForm: { is_active: true },
 
@@ -712,6 +747,11 @@ function vendorDetail(vendorId) {
                 this.contacts = vendor.contacts || [];
                 this.services = vendor.services || [];
             }
+        },
+
+        formatDate(d) {
+            if (!d) return '';
+            return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
         },
 
         async saveContact(vendorId) {
@@ -791,6 +831,37 @@ function vendorDetail(vendorId) {
             });
             const data = await res.json();
             if (data.success) this.services = this.services.filter(s => s.id !== id);
+        },
+
+        addBulkRow() {
+            this.bulkRows.push({ service_name: '', category: '', default_rate: null, turnaround_days: null });
+        },
+
+        async saveBulkRows(vendorId) {
+            const rows = this.bulkRows.filter(r => r.service_name && r.category && r.default_rate !== null && r.default_rate !== '');
+            const skipped = this.bulkRows.length - rows.length;
+            if (!rows.length) { alert('Fill in treatment, category, and cost for at least one row.'); return; }
+            this.bulkSaving = true;
+            try {
+                const res = await fetch(`/lab-vendors/${vendorId}/services/bulk`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
+                    body: JSON.stringify({ rows }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    this.services.push(...data.services);
+                    this.showBulkForm = false;
+                    this.bulkRows = [];
+                    if (skipped > 0) alert(`Saved ${data.count}. Skipped ${skipped} incomplete row(s) — treatment, category, and cost are all required.`);
+                } else {
+                    alert(data.message || 'Could not save the price list.');
+                }
+            } catch (e) {
+                alert('Save failed. Please try again.');
+            } finally {
+                this.bulkSaving = false;
+            }
         },
     };
 }

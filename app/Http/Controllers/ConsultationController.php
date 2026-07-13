@@ -7,7 +7,9 @@ use App\Models\Consultation;
 use App\Models\ConsultationCohaReport;
 use App\Models\ConsultationSpecialtyModule;
 use App\Models\Patient;
+use App\Models\Presentation;
 use App\Models\User;
+use App\Support\QrCodeGenerator;
 use Illuminate\Http\Request;
 
 class ConsultationController extends Controller
@@ -208,6 +210,17 @@ class ConsultationController extends Controller
 
         $print  = \App\Models\AppSetting::group('print');
         $clinic = \App\Models\AppSetting::group('clinic');
+
+        // ── Phase 0 QR fix: same "scan to view online" QR as the treatment
+        // plan printout — only surfaces a link if one already exists (see
+        // TreatmentPlanController::printView for the identical logic). ──
+        foreach ($consultation->treatmentPlans as $plan) {
+            if ($url = Presentation::activeLinkUrlForPlan($plan->id)) {
+                $plan->presentation_url = $url;
+                $plan->presentation_qr  = QrCodeGenerator::dataUri($url);
+            }
+        }
+
         return view('consultations.print', compact('consultation', 'print', 'clinic', 'prescription'));
     }
 

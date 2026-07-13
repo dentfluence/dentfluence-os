@@ -43,7 +43,17 @@ class HuddleController extends Controller
         $user      = auth()->user();
         $branchId  = $user->branch_id;
         $today     = Carbon::today();
-        $yesterday = Carbon::yesterday();
+        // "Yesterday" for the whole Huddle page resolves through ClinicFlowRange:
+        // on a Monday this is Saturday (or Saturday+Sunday if the clinic opened
+        // that Sunday — inferred from whether any appointment exists that day),
+        // not a dark Sunday. Every "yesterday" query below uses this range
+        // instead of a single fixed date. $yesterday is kept as an alias for
+        // $flowEnd (the most recent day in the range) for the few spots that
+        // only need "the day right before today" as a boundary, not a filter.
+        [$flowStart, $flowEnd] = \App\Support\ClinicFlowRange::resolve($today);
+        $yesterday = $flowEnd;
+        $flowRange    = [$flowStart->toDateString(), $flowEnd->copy()->endOfDay()];
+        $flowCombined = ! $flowStart->isSameDay($flowEnd);
 
         // ── Today's appointments ──────────────────────────────────────────────
         $todaysAppointments = DB::table('appointments')
@@ -92,7 +102,7 @@ class HuddleController extends Controller
         // ── Yesterday summary ─────────────────────────────────────────────────
         $yesterdayAppts = DB::table('appointments')
             ->where('branch_id', $branchId)
-            ->whereDate('appointment_date', $yesterday->toDateString())
+            ->whereBetween('appointment_date', $flowRange)
             ->whereIn('status', ['done', 'checkout'])
             ->select('treatment_id')
             ->get();
@@ -109,19 +119,20 @@ class HuddleController extends Controller
             ->join('patients', 'patients.id', '=', 'appointments.patient_id')
             ->leftJoin('users as doctors', 'doctors.id', '=', 'appointments.doctor_id')
             ->leftJoin('treatment_types', 'treatment_types.id', '=', 'appointments.treatment_id')
-            ->leftJoin('consultations', function ($join) use ($yesterday) {
+            ->leftJoin('consultations', function ($join) use ($flowRange) {
                 $join->on('consultations.patient_id', '=', 'appointments.patient_id')
                     ->on('consultations.doctor_id',  '=', 'appointments.doctor_id')
-                    ->whereDate('consultations.consultation_date', $yesterday->toDateString())
+                    ->whereBetween('consultations.consultation_date', $flowRange)
                     ->whereNull('consultations.deleted_at');
             })
             ->where('appointments.branch_id', $branchId)
-            ->whereDate('appointments.appointment_date', $yesterday->toDateString())
+            ->whereBetween('appointments.appointment_date', $flowRange)
             ->select([
                 'appointments.id',
                 'appointments.patient_id',
                 'appointments.doctor_id',
                 'appointments.appointment_time',
+                'appointments.appointment_date',
                 'appointments.status as appointment_status',
                 'appointments.type',
                 'patients.name as patient_name',
@@ -135,6 +146,7 @@ class HuddleController extends Controller
                 'consultations.primary_diagnosis',
                 'consultations.finishing_notes',
             ])
+            ->orderBy('appointments.appointment_date')
             ->orderBy('appointments.appointment_time')
             ->get();
 
@@ -146,17 +158,16 @@ class HuddleController extends Controller
         // clinical details when patient + doctor + date all line up.
         $yApptIds = $yesterdaysAppointments->pluck('id');
         $yPatIds  = $yesterdaysAppointments->pluck('patient_id')->unique();
-        $yDateStr = $yesterday->toDateString();
 
         $consByAppt = DB::table('consultations')->whereNull('deleted_at')
             ->whereIn('appointment_id', $yApptIds)->pluck('appointment_id')->flip();
         $consByPat  = DB::table('consultations')->whereNull('deleted_at')
-            ->whereIn('patient_id', $yPatIds)->whereDate('consultation_date', $yDateStr)
+            ->whereIn('patient_id', $yPatIds)->whereBetween('consultation_date', $flowRange)
             ->pluck('patient_id')->flip();
         $tvByAppt   = DB::table('treatment_visits')->whereNull('deleted_at')
             ->whereIn('appointment_id', $yApptIds)->pluck('appointment_id')->flip();
         $tvByPat    = DB::table('treatment_visits')->whereNull('deleted_at')
-            ->whereIn('patient_id', $yPatIds)->whereDate('visit_date', $yDateStr)
+            ->whereIn('patient_id', $yPatIds)->whereBetween('visit_date', $flowRange)
             ->pluck('patient_id')->flip();
 
         $yesterdaysAppointments = $yesterdaysAppointments
@@ -277,7 +288,7 @@ class HuddleController extends Controller
         // ($yesterdayPatientIds already computed from $yesterdaysAppointments above)
         $branchPatientIdsYesterday = DB::table('appointments')
             ->where('branch_id', $branchId)
-            ->whereDate('appointment_date', $yesterday->toDateString())
+            ->whereBetween('appointment_date', $flowRange)
             ->pluck('patient_id')
             ->unique();
 
@@ -286,7 +297,7 @@ class HuddleController extends Controller
             ->leftJoin('users as ytv_doctors', 'ytv_doctors.id', '=', 'treatment_visits.doctor_id')
             ->whereIn('treatment_visits.patient_id', $branchPatientIdsYesterday)
             ->whereNotIn('treatment_visits.patient_id', $yesterdayPatientIds->isNotEmpty() ? $yesterdayPatientIds->toArray() : [0])
-            ->whereDate('treatment_visits.visit_date', $yesterday->toDateString())
+            ->whereBetween('treatment_visits.visit_date', $flowRange)
             ->select([
                 'treatment_visits.id',
                 'treatment_visits.patient_id',
@@ -311,7 +322,7 @@ class HuddleController extends Controller
         $yesterdaysConsultations = DB::table('consultations')
             ->join('patients', 'patients.id', '=', 'consultations.patient_id')
             ->leftJoin('users as ycons_doctors', 'ycons_doctors.id', '=', 'consultations.doctor_id')
-            ->whereDate('consultations.consultation_date', $yesterday->toDateString())
+            ->whereBetween('consultations.consultation_date', $flowRange)
             ->whereNotIn('consultations.patient_id', $yesterdayPatientIds->isNotEmpty() ? $yesterdayPatientIds->toArray() : [0])
             ->whereNull('consultations.deleted_at')
             ->select([
@@ -529,14 +540,14 @@ class HuddleController extends Controller
             ->leftJoin('users as dr', 'dr.id', '=', 'appointments.doctor_id')
             ->leftJoin('treatment_types', 'treatment_types.id', '=', 'appointments.treatment_id')
             ->where('appointments.branch_id', $branchId)
-            ->whereDate('appointments.appointment_date', $yesterday->toDateString())
+            ->whereBetween('appointments.appointment_date', $flowRange)
             ->whereIn('appointments.status', ['done', 'checkout', 'completed'])
             // skip if a FollowUp already exists for this patient+trigger
-            ->whereNotExists(function ($q) use ($yesterday) {
+            ->whereNotExists(function ($q) use ($flowStart) {
                 $q->from('follow_ups')
                   ->whereColumn('follow_ups.patient_id', 'appointments.patient_id')
                   ->where('follow_ups.trigger_type', 'post_treatment')
-                  ->whereDate('follow_ups.created_at', '>=', $yesterday->toDateString())
+                  ->where('follow_ups.created_at', '>=', $flowStart->toDateString())
                   ->whereNull('follow_ups.deleted_at');
             })
             ->select([
@@ -679,6 +690,7 @@ class HuddleController extends Controller
             'todaySnapshot',
             'staff',
             'yesterday',
+            'flowCombined',
             'todaysAppointments',
             'todaysTreatmentVisits',
             'todaysConsultations',

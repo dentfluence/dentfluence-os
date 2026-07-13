@@ -208,6 +208,8 @@ Route::middleware('auth')->group(function () {
         // Note: /print must be BEFORE /{plan} routes so 'print' isn't treated as an ID
         Route::get('/treatment-plans/print',          [TreatmentPlanController::class, 'printView'])->name('treatment-plans.print');
         Route::get('/treatment-plans/{plan}/items',    [TreatmentPlanController::class, 'getItems'])->name('treatment-plans.items');
+        // Phase 2 — Clinical consent print (docs/gap-analysis-treatment-planning-knowledge-bank.md)
+        Route::get('/treatment-plans/{plan}/consent',  [TreatmentPlanController::class, 'consentPrint'])->name('treatment-plans.consent');
         Route::put('/treatment-plans/{plan}',          [TreatmentPlanController::class, 'update'])->name('treatment-plans.update');
         Route::post('/treatment-plans/{plan}/accept',  [TreatmentPlanController::class, 'accept'])->name('treatment-plans.accept');
         Route::post('/treatment-plans/{plan}/revert',  [TreatmentPlanController::class, 'revert'])->name('treatment-plans.revert');
@@ -361,6 +363,11 @@ Route::middleware('auth')->group(function () {
             Route::delete('/diagnoses/{id}',    [$c, 'destroyDiagnosis'])->name('diagnoses.destroy');
             Route::post('/investigations',      [$c, 'storeInvestigation'])->name('investigations.store');
             Route::delete('/investigations/{id}',[$c, 'destroyInvestigation'])->name('investigations.destroy');
+            // Phase 4 — Material/Brand masters (docs/gap-analysis-treatment-planning-knowledge-bank.md)
+            Route::post('/materials',           [$c, 'storeMaterial'])->name('materials.store');
+            Route::delete('/materials/{id}',    [$c, 'destroyMaterial'])->name('materials.destroy');
+            Route::post('/brands',              [$c, 'storeBrand'])->name('brands.store');
+            Route::delete('/brands/{id}',       [$c, 'destroyBrand'])->name('brands.destroy');
             // Clinical
             Route::post('/medicines',           [$c, 'storeMedicine'])->name('medicines.store');
             Route::delete('/medicines/{id}',    [$c, 'destroyMedicine'])->name('medicines.destroy');
@@ -388,6 +395,15 @@ Route::middleware('auth')->group(function () {
             Route::post('/',        [TagController::class, 'store'])->name('store');
             Route::put('/{tag}',    [TagController::class, 'update'])->name('update');
             Route::delete('/{tag}', [TagController::class, 'destroy'])->name('destroy');
+        });
+
+        // Knowledge Bank — ranked Treatment options per Diagnosis
+        Route::prefix('settings/knowledge-bank')->name('settings.knowledge-bank.')->group(function () {
+            $kb = \App\Http\Controllers\Settings\KnowledgeBankController::class;
+            Route::get('/{diagnosis}',           [$kb, 'manage'])->name('manage');
+            Route::post('/{diagnosis}/options',  [$kb, 'store'])->name('options.store');
+            Route::patch('/options/{option}',    [$kb, 'update'])->name('options.update');
+            Route::delete('/options/{option}',   [$kb, 'destroy'])->name('options.destroy');
         });
     }); // end module:settings
 
@@ -694,9 +710,10 @@ Route::middleware('auth')->group(function () {
     Route::withoutMiddleware('auth')->prefix('present')->name('presentations.public.')->group(function () {
         $ppc = \App\Http\Controllers\PublicPresentationController::class;
 
-        Route::get('/{token}',           [$ppc, 'show'])->name('show');
-        Route::post('/{token}/accept',   [$ppc, 'accept'])->name('accept');
-        Route::post('/{token}/decline',  [$ppc, 'decline'])->name('decline');
+        Route::get('/{token}',                    [$ppc, 'show'])->name('show');
+        Route::post('/{token}/accept',            [$ppc, 'accept'])->name('accept');
+        Route::post('/{token}/decline',           [$ppc, 'decline'])->name('decline');
+        Route::post('/{token}/request-callback',  [$ppc, 'requestCallback'])->name('request-callback');
     });
 
     /* ── Lab Module v2 ── */
@@ -763,6 +780,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/{labVendor}/services',                    [\App\Http\Controllers\LabVendorController::class, 'storeService'])->name('services.store');
         Route::put('/{labVendor}/services/{service}',           [\App\Http\Controllers\LabVendorController::class, 'updateService'])->name('services.update');
         Route::delete('/{labVendor}/services/{service}',        [\App\Http\Controllers\LabVendorController::class, 'destroyService'])->name('services.destroy');
+        Route::post('/{labVendor}/services/bulk',               [\App\Http\Controllers\LabVendorController::class, 'storeServicesBulk'])->name('services.bulk');
     });
 
     /* ── Patient-nested lab cases (used by patient profile Lab tab) ── */

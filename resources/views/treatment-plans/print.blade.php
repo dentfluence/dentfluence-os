@@ -181,6 +181,14 @@
         }
         .notes strong { color: var(--accent-dark); }
 
+        /* ── Smart Presentation QR (only when a live link exists) ── */
+        .qr-box {
+            display: flex; align-items: center; justify-content: flex-end;
+            gap: 8px; margin-top: 6px;
+        }
+        .qr-box img { width: 52px; height: 52px; flex-shrink: 0; }
+        .qr-box span { font-size: 9.5px; color: #666; line-height: 1.3; max-width: 220px; text-align: right; }
+
         /* ── Signature + footer ── */
         .sig { margin-top: 40px; text-align: right; }
         .sig-line { border-top: 1px solid #333; display: inline-block; width: 180px; margin-bottom: 5px; }
@@ -390,6 +398,14 @@
     {{-- Doctor note for this option --}}
     @if($plan->doctor_notes)
     <div class="notes"><strong>Note:</strong> {{ $plan->doctor_notes }}</div>
+    @endif
+
+    {{-- Scan to view this option online (only if a Smart Presentation link already exists) --}}
+    @if($plan->presentation_qr ?? null)
+    <div class="qr-box">
+        <img src="{{ $plan->presentation_qr }}" alt="QR code">
+        <span>Scan to view this plan online, with cost breakdown and payment options.</span>
+    </div>
     @endif
 
 </div>

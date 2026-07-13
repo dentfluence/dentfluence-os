@@ -206,6 +206,7 @@
         ],
         'Clinical' => [
             ['id'=>'masters',         'label'=>'Masters',           'icon'=>'<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>'],
+            ['id'=>'knowledge-bank',  'label'=>'Knowledge Bank',    'icon'=>'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>'],
             ['id'=>'clinical',        'label'=>'Clinical',          'icon'=>'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'],
             ['id'=>'patient-defaults','label'=>'Patient Defaults',  'icon'=>'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'],
             ['id'=>'clinical-library-link', 'label'=>'Clinical Library', 'icon'=>'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/><path d="M7 7h2m0 0h2m-2 0v4"/>', 'href' => 'settings.clinical-library'],
@@ -1422,6 +1423,97 @@
                 </div>
             </div>
 
+            {{-- Materials — Phase 4, docs/gap-analysis-treatment-planning-knowledge-bank.md --}}
+            <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;overflow:hidden;">
+                <div style="padding:14px 18px;border-bottom:1px solid #ede4f3;display:flex;align-items:center;justify-content:space-between;">
+                    <span class="settings-section-title" style="margin:0;">Materials</span>
+                    <span style="font-size:11px;color:#9a7aaa;">{{ $materials->count() }}</span>
+                </div>
+                <form action="{{ route('settings.masters.materials.store') }}" method="POST" style="padding:12px 18px;border-bottom:1px solid #f5f0f8;display:flex;gap:8px;">
+                    @csrf
+                    <input name="name" class="settings-input" placeholder="e.g. Zirconia, PFM, Composite" required style="flex:1;">
+                    <button type="submit" class="settings-save-btn" style="padding:7px 14px;font-size:12px;">+</button>
+                </form>
+                <div style="max-height:240px;overflow-y:auto;">
+                    @forelse($materials as $item)
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 18px;border-bottom:1px solid #f9f5fc;">
+                        <span style="font-size:13px;color:#1a0320;">{{ $item->name }}</span>
+                        <form action="{{ route('settings.masters.materials.destroy', $item->id) }}" method="POST" onsubmit="return confirm('Remove?')">
+                            @csrf @method('DELETE')
+                            <button type="submit" style="background:none;border:none;cursor:pointer;color:#c5a8d8;font-size:18px;line-height:1;padding:0;">×</button>
+                        </form>
+                    </div>
+                    @empty
+                    <p style="padding:16px 18px;color:#b0a0bb;font-size:12.5px;margin:0;">No materials yet.</p>
+                    @endforelse
+                </div>
+            </div>
+
+            {{-- Brands — Phase 4. Optionally scoped to a Material. --}}
+            <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;overflow:hidden;">
+                <div style="padding:14px 18px;border-bottom:1px solid #ede4f3;display:flex;align-items:center;justify-content:space-between;">
+                    <span class="settings-section-title" style="margin:0;">Brands</span>
+                    <span style="font-size:11px;color:#9a7aaa;">{{ $brands->count() }}</span>
+                </div>
+                <form action="{{ route('settings.masters.brands.store') }}" method="POST" style="padding:12px 18px;border-bottom:1px solid #f5f0f8;display:flex;gap:8px;">
+                    @csrf
+                    <input name="name" class="settings-input" placeholder="e.g. Ivoclar, Nobel Biocare" required style="flex:1;">
+                    <select name="material_id" class="settings-input" style="max-width:150px;">
+                        <option value="">No material</option>
+                        @foreach($materials as $m)
+                        <option value="{{ $m->id }}">{{ $m->name }}</option>
+                        @endforeach
+                    </select>
+                    <button type="submit" class="settings-save-btn" style="padding:7px 14px;font-size:12px;">+</button>
+                </form>
+                <div style="max-height:240px;overflow-y:auto;">
+                    @forelse($brands as $item)
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 18px;border-bottom:1px solid #f9f5fc;">
+                        <span style="font-size:13px;color:#1a0320;">{{ $item->name }}</span>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            @if($item->material)
+                            <span style="font-size:11px;color:#9a7aaa;">{{ $item->material->name }}</span>
+                            @endif
+                            <form action="{{ route('settings.masters.brands.destroy', $item->id) }}" method="POST" onsubmit="return confirm('Remove?')">
+                                @csrf @method('DELETE')
+                                <button type="submit" style="background:none;border:none;cursor:pointer;color:#c5a8d8;font-size:18px;line-height:1;padding:0;">×</button>
+                            </form>
+                        </div>
+                    </div>
+                    @empty
+                    <p style="padding:16px 18px;color:#b0a0bb;font-size:12.5px;margin:0;">No brands yet.</p>
+                    @endforelse
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    {{-- ════════════════════════════════════════════
+         TAB 6b · KNOWLEDGE BANK
+         Diagnosis → ranked Treatment options. New diagnoses are added on
+         the Masters tab above; this tab only manages the ranked options
+         hanging off each one (a 2-level form, so it's a separate page —
+         see settings/knowledge-bank/manage.blade.php).
+    ════════════════════════════════════════════ --}}
+    <div x-show="activeTab==='knowledge-bank'" x-cloak>
+        <div style="max-width:640px;margin:0 auto;">
+            <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;overflow:hidden;">
+                <div style="padding:14px 18px;border-bottom:1px solid #ede4f3;">
+                    <span class="settings-section-title" style="margin:0;">Knowledge Bank</span>
+                    <p style="margin:6px 0 0;font-size:12px;color:#9a7aaa;line-height:1.5;">For each diagnosis, rank which treatment is recommended, acceptable, or an alternative. Add new diagnoses on the Masters tab first.</p>
+                </div>
+                <div style="max-height:480px;overflow-y:auto;">
+                    @forelse($diagnoses as $item)
+                    <a href="{{ route('settings.knowledge-bank.manage', $item) }}" style="display:flex;align-items:center;justify-content:space-between;padding:11px 18px;border-bottom:1px solid #f9f5fc;text-decoration:none;color:inherit;">
+                        <span style="font-size:13px;color:#1a0320;">{{ $item->name }}</span>
+                        <span style="font-size:11.5px;color:#9a7aaa;">{{ $item->treatment_options_count }} option{{ $item->treatment_options_count === 1 ? '' : 's' }} &rarr;</span>
+                    </a>
+                    @empty
+                    <p style="padding:16px 18px;color:#b0a0bb;font-size:12.5px;margin:0;">No diagnoses yet — add one on the Masters tab first.</p>
+                    @endforelse
+                </div>
+            </div>
         </div>
     </div>
 

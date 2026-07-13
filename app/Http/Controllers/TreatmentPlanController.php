@@ -4,11 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\AppSetting;
 use App\Models\Patient;
+use App\Models\Presentation;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentPlanItem;
 use App\Models\Treatment;
 use App\Models\TreatmentOpportunity;
 use App\Services\Relationship\ActivityEngine;
+use App\Services\TreatmentPlan\ConsentDocumentService;
+use App\Support\QrCodeGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -44,6 +47,18 @@ class TreatmentPlanController extends Controller
             $plan->plan_letter = $letters[$idx] ?? ($idx + 1);
         }
 
+        // ── Phase 0 QR fix: if this plan has a live Smart Presentation link,
+        // put a "scan to view online" QR on the printout. Deliberately does
+        // NOT create a presentation/token here — only surfaces one that
+        // already exists, so a plan never printed through Smart Presentation
+        // just prints without the QR block, same as before. ──
+        foreach ($plans as $plan) {
+            if ($url = Presentation::activeLinkUrlForPlan($plan->id)) {
+                $plan->presentation_url = $url;
+                $plan->presentation_qr  = QrCodeGenerator::dataUri($url);
+            }
+        }
+
         // Use patient + consultation from the first plan
         $firstPlan   = $plans->first();
         $patient     = $firstPlan->patient;
@@ -60,6 +75,36 @@ class TreatmentPlanController extends Controller
             'clinicName',
             'clinicLogo'
         ));
+    }
+
+    // ── Phase 2: Clinical consent document ───────────────────────────────────
+    //
+    // GET /treatment-plans/{plan}/consent
+    // Merges each item's treatment consent text (SOP consent_notes, falling
+    // back to the Intelligence-tab consent_template) with this plan's actual
+    // teeth and procedures, and persists an immutable snapshot row so there
+    // is always a record of exactly what the patient was shown. Separate
+    // from the DPDP consent module. No e-signature — wet-ink print only.
+    //
+
+    public function consentPrint(TreatmentPlan $plan, ConsentDocumentService $consents)
+    {
+        $plan->load(['patient', 'consultation.doctor']);
+
+        $consent = $consents->generateAndPersist($plan, Auth::id());
+
+        $clinicName = AppSetting::get('clinic_name', config('app.clinic_name', 'Dental Clinic'));
+        $clinicLogo = AppSetting::get('clinic_logo');
+
+        return view('treatment-consents.print', [
+            'plan'         => $plan,
+            'patient'      => $plan->patient,
+            'consultation' => $plan->consultation,
+            'sections'     => $consent->sections,
+            'generatedAt'  => $consent->created_at,
+            'clinicName'   => $clinicName,
+            'clinicLogo'   => $clinicLogo,
+        ]);
     }
 
     // ── Return items for a single plan (used by visit form AJAX) ────────────
@@ -104,11 +149,13 @@ class TreatmentPlanController extends Controller
             'visit_count'        => ['nullable', 'integer', 'min:1'],
             'doctor_notes'       => ['nullable', 'string'],
             'items'              => ['required', 'array', 'min:1'],
-            'items.*.tooth_number'   => ['nullable', 'string', 'max:100'],
-            'items.*.treatment_name' => ['required', 'string', 'max:150'],
-            'items.*.unit_price'     => ['required', 'numeric', 'min:0'],
-            'items.*.units'          => ['nullable', 'integer', 'min:1'],
-            'items.*.notes'          => ['nullable', 'string'],
+            'items.*.tooth_number'      => ['nullable', 'string', 'max:100'],
+            'items.*.treatment_name'    => ['required', 'string', 'max:150'],
+            'items.*.unit_price'        => ['required', 'numeric', 'min:0'],
+            'items.*.units'             => ['nullable', 'integer', 'min:1'],
+            'items.*.notes'             => ['nullable', 'string'],
+            'items.*.treatment_id'      => ['nullable', 'exists:treatments,id'],
+            'items.*.consent_required'  => ['nullable', 'boolean'],
         ]);
 
         $plan = DB::transaction(function () use ($request, $patient) {
@@ -166,12 +213,14 @@ class TreatmentPlanController extends Controller
             'doctor_notes'       => ['nullable', 'string'],
             'status'             => ['nullable', 'in:pending,ongoing,completed,cancelled'],
             'items'              => ['nullable', 'array'],
-            'items.*.id'             => ['nullable', 'exists:treatment_plan_items,id'],
-            'items.*.tooth_number'   => ['nullable', 'string', 'max:100'],
-            'items.*.treatment_name' => ['required_with:items', 'string', 'max:150'],
-            'items.*.unit_price'     => ['required_with:items', 'numeric', 'min:0'],
-            'items.*.units'          => ['nullable', 'integer', 'min:1'],
-            'items.*.notes'          => ['nullable', 'string'],
+            'items.*.id'                => ['nullable', 'exists:treatment_plan_items,id'],
+            'items.*.tooth_number'      => ['nullable', 'string', 'max:100'],
+            'items.*.treatment_name'    => ['required_with:items', 'string', 'max:150'],
+            'items.*.unit_price'        => ['required_with:items', 'numeric', 'min:0'],
+            'items.*.units'             => ['nullable', 'integer', 'min:1'],
+            'items.*.notes'             => ['nullable', 'string'],
+            'items.*.treatment_id'      => ['nullable', 'exists:treatments,id'],
+            'items.*.consent_required'  => ['nullable', 'boolean'],
         ]);
 
         DB::transaction(function () use ($request, $plan) {
@@ -539,6 +588,7 @@ class TreatmentPlanController extends Controller
 
             $data = [
                 'treatment_plan_id' => $plan->id,
+                'treatment_id'      => $row['treatment_id']  ?? null,
                 'tooth_number'      => $row['tooth_number']  ?? null,
                 'treatment_name'    => $row['treatment_name'],
                 'unit_price'        => (float)($row['unit_price']  ?? 0),
@@ -550,6 +600,7 @@ class TreatmentPlanController extends Controller
                 'notes'             => $row['notes']         ?? null,
                 'sort_order'        => $idx,
                 'aocp_applied'      => (bool)($row['aocp_applied'] ?? false),
+                'consent_required'  => (bool)($row['consent_required'] ?? false),
             ];
 
             if ($hasVariantsCol) {
@@ -584,14 +635,16 @@ class TreatmentPlanController extends Controller
             'created_at'         => $plan->created_at?->format('d M Y'),
             // Clinical procedure list — no billing fields
             'items'              => $plan->items->map(fn($i) => [
-                'id'             => $i->id,
-                'tooth_number'   => $i->tooth_number,
-                'units'          => (int)($i->units ?? 1),
-                'treatment_name' => $i->treatment_name,
-                'unit_price'     => (float)$i->unit_price,
-                'total'          => (float)$i->total,
-                'notes'          => $i->notes,
-                'variants'       => $i->material_variants ?? [],
+                'id'                => $i->id,
+                'treatment_id'      => $i->treatment_id,
+                'tooth_number'      => $i->tooth_number,
+                'units'             => (int)($i->units ?? 1),
+                'treatment_name'    => $i->treatment_name,
+                'unit_price'        => (float)$i->unit_price,
+                'total'             => (float)$i->total,
+                'notes'             => $i->notes,
+                'variants'          => $i->material_variants ?? [],
+                'consent_required'  => (bool)$i->consent_required,
             ])->values(),
         ];
     }

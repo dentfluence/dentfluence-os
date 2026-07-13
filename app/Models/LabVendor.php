@@ -21,13 +21,13 @@ class LabVendor extends Model
     protected $fillable = [
         'branch_id', 'finance_vendor_id',
         'name', 'contact_person', 'phone', 'whatsapp_number', 'email', 'digital_email', 'address',
-        'specialties', 'default_turnaround_days', 'payment_terms',
+        'default_turnaround_days', 'payment_terms', 'credit_days',
         'is_active', 'notes', 'created_by',
     ];
 
     protected $casts = [
-        'specialties' => 'array',
         'is_active'   => 'boolean',
+        'credit_days' => 'integer',
     ];
 
     // ── Relationships ────────────────────────────────────────────────────
@@ -53,10 +53,19 @@ class LabVendor extends Model
         return $this->hasMany(LabVendorContact::class, 'lab_vendor_id');
     }
 
-    /** Phase 1 — Lab Master: service catalog with agreed rates */
+    /** Phase 1 — Lab Master: service catalog with agreed rates. This IS the
+     *  vendor's capability list — a category appears here only if a priced
+     *  service exists for it, so there's no separate checklist to drift
+     *  out of sync with what the vendor can actually be booked for. */
     public function services(): HasMany
     {
         return $this->hasMany(LabVendorService::class, 'lab_vendor_id');
+    }
+
+    /** Distinct work categories this vendor has an active priced service for */
+    public function capabilityCategories(): array
+    {
+        return $this->services()->active()->distinct()->pluck('category')->filter()->values()->all();
     }
 
     /**
@@ -72,7 +81,7 @@ class LabVendor extends Model
             'phone'        => $this->phone,
             'email'        => $this->email,
             'address'      => $this->address,
-            'credit_days'  => 0,
+            'credit_days'  => $this->credit_days ?? 0,
             'is_active'    => $this->is_active,
             'notes'        => $this->notes,
         ];

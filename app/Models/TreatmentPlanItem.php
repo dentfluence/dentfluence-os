@@ -33,6 +33,9 @@ class TreatmentPlanItem extends Model
         'sort_order',
         'recall_queued_at',   // recall-engine cooldown stamp
         'material_variants',
+        'consent_required',   // Phase 2 refinement — per-item consent toggle
+        'material_id',         // Phase 4 — final chosen material (optional, separate from variants JSON)
+        'brand_id',            // Phase 4 — final chosen brand (optional)
     ];
 
     protected $casts = [
@@ -46,6 +49,7 @@ class TreatmentPlanItem extends Model
         'aocp_applied'      => 'boolean',
         'material_variants' => 'array',
         'invoiced_units'    => 'integer',
+        'consent_required'  => 'boolean',
     ];
 
     // Billing-progress states
@@ -71,6 +75,18 @@ class TreatmentPlanItem extends Model
     public function teeth(): HasMany
     {
         return $this->hasMany(TreatmentPlanItemTooth::class, 'treatment_plan_item_id');
+    }
+
+    /** Phase 4 — final chosen material for this item, if set. */
+    public function material(): BelongsTo
+    {
+        return $this->belongsTo(Material::class);
+    }
+
+    /** Phase 4 — final chosen brand for this item, if set. */
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

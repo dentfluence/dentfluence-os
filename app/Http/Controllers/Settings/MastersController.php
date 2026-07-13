@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
-use App\Models\{Complaint, DentalCondition, Diagnosis, Investigation, MedicalCondition, Medicine, MessageTemplate, PatientSource, Treatment};
+use App\Models\{Brand, Complaint, DentalCondition, Diagnosis, Investigation, Material, MedicalCondition, Medicine, MessageTemplate, PatientSource, Treatment};
 use Illuminate\Http\Request;
 
 class MastersController extends Controller
@@ -73,6 +73,19 @@ class MastersController extends Controller
     // ── Patient Sources ───────────────────────────────────────────────────────
     public function storePatientSource(Request $request)     { return $this->storeSimple(PatientSource::class, $request, 'patient-defaults'); }
     public function destroyPatientSource(int $id)            { return $this->destroySimple(PatientSource::class, $id, 'patient-defaults'); }
+
+    // ── Materials (Phase 4 — docs/gap-analysis-treatment-planning-knowledge-bank.md) ──
+    public function storeMaterial(Request $request)  { return $this->storeSimple(Material::class, $request, 'masters'); }
+    public function destroyMaterial(int $id)         { return $this->destroySimple(Material::class, $id, 'masters'); }
+
+    // ── Brands (Phase 4) ─────────────────────────────────────────────────────
+    public function storeBrand(Request $request)
+    {
+        $request->validate(['name' => 'required|string|max:200', 'material_id' => 'nullable|exists:materials,id']);
+        Brand::create($request->only('name', 'material_id'));
+        return redirect()->route('settings.index', ['tab' => 'masters'])->with('success', 'Brand added.');
+    }
+    public function destroyBrand(int $id) { return $this->destroySimple(Brand::class, $id, 'masters'); }
 
     // ── Message Templates ─────────────────────────────────────────────────────
     public function storeMessageTemplate(Request $request)
