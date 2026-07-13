@@ -476,6 +476,64 @@
         </div>
     </div>
 
+    {{-- ── Consent Form Picker Modal (2026-07-13) ──
+         Lets staff choose exactly which treatment/tooth rows on this plan to
+         generate a consent document for. Rows come pre-checked from each
+         item's consent_required flag (Treatment Library default or the
+         per-item override in Edit), but can be freely adjusted per generation
+         — this is the primary entry point now, not the Edit-mode toggle. ── --}}
+    <div x-show="consentPickerOpen" x-cloak
+         class="fixed inset-0 z-[9999] flex items-center justify-center"
+         style="background:rgba(20,5,25,.45);"
+         @click.self="consentPickerOpen=false"
+         @keydown.escape.window="consentPickerOpen=false">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" @click.stop>
+
+            {{-- Header --}}
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+                <div>
+                    <div class="text-sm font-bold text-gray-900">Generate Consent Form</div>
+                    <div class="text-xs text-gray-400 mt-0.5">
+                        <span x-text="consentRows.filter(r => r.checked).length"></span> of <span x-text="consentRows.length"></span> selected
+                    </div>
+                </div>
+                <button @click="consentPickerOpen=false" class="text-gray-400 hover:text-gray-600">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+
+            {{-- Select all / clear --}}
+            <div class="flex items-center gap-4 px-5 py-2 border-b border-gray-50 bg-gray-50">
+                <button @click="selectAllConsent()" class="text-xs font-semibold text-[#6a0f70] hover:underline">Select all</button>
+                <button @click="clearConsent()" class="text-xs font-semibold text-gray-400 hover:text-gray-600 hover:underline">Clear</button>
+            </div>
+
+            {{-- Row list --}}
+            <div class="max-h-80 overflow-y-auto px-2 py-2">
+                <template x-if="!consentRows.length">
+                    <div class="px-3 py-6 text-xs text-gray-400 text-center">No treatments on this plan yet.</div>
+                </template>
+                <template x-for="row in consentRows" :key="row.key">
+                    <label class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-purple-50 cursor-pointer">
+                        <input type="checkbox" :checked="row.checked"
+                               @change="toggleConsentRow(row.key)"
+                               style="accent-color:#6a0f70;width:15px;height:15px;flex-shrink:0;">
+                        <div class="flex-1 min-w-0 text-sm font-medium text-gray-800 truncate" x-text="row.label"></div>
+                    </label>
+                </template>
+            </div>
+
+            {{-- Footer --}}
+            <div class="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50">
+                <button @click="consentPickerOpen=false" class="tp-btn tp-btn-ghost">Cancel</button>
+                <button @click="generateConsentForm()" :disabled="!consentRows.filter(r => r.checked).length" class="tp-btn tp-btn-primary">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    Generate
+                </button>
+            </div>
+        </div>
+    </div>
+
     {{-- ── New / Edit Form ── --}}
     <div x-show="formOpen" x-collapse class="tp-form-panel">
 
@@ -1070,13 +1128,14 @@
                             </a>
 
                             {{-- Generate Consent Form — Phase 2, docs/gap-analysis-treatment-planning-knowledge-bank.md.
-                                 Only shown when at least one item on this plan is flagged
-                                 consent_required — no dead button for plans that don't need one. --}}
-                            <a x-show="plan.items.some(i => i.consent_required)"
-                               :href="'{{ url('treatment-plans') }}/' + plan.id + '/consent'" target="_blank" class="tp-btn tp-btn-ghost">
+                                 Always visible (2026-07-13 picker refinement): opens a picker
+                                 to choose which treatment/tooth rows to generate for, rather
+                                 than only working when items were pre-flagged in Edit. The
+                                 consent_required flag still drives which rows come pre-checked. --}}
+                            <button type="button" @click="openConsentPicker(plan)" class="tp-btn tp-btn-ghost">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                                 Consent Form
-                            </a>
+                            </button>
 
                             {{-- Create Smart Presentation — new, independent module (2026-07-09).
                                  This is the ONLY touch point added to this file: a single link
@@ -1169,6 +1228,52 @@ function treatmentPlanTab() {
         // ── Print picker ────────────────────────────────────────────────────
         printPickerOpen: false,
         printSelected:   [],
+
+        // ── Consent form picker (2026-07-13) ────────────────────────────────
+        // Explodes each plan item into one row per tooth (mirrors
+        // ConsentDocumentService::buildSections on the backend) so staff pick
+        // exactly which treatment/tooth combos to generate a consent doc for.
+        consentPickerOpen: false,
+        consentPlanId:     null,
+        consentRows:       [],
+
+        openConsentPicker(plan) {
+            this.consentPlanId = plan.id;
+            this.consentRows = [];
+            plan.items.forEach(item => {
+                const teeth = String(item.tooth_number || '')
+                    .split(',').map(t => t.trim()).filter(Boolean);
+                if (!teeth.length) {
+                    this.consentRows.push({
+                        key:     item.id + '|',
+                        label:   item.treatment_name,
+                        checked: !!item.consent_required,
+                    });
+                    return;
+                }
+                teeth.forEach(tooth => {
+                    this.consentRows.push({
+                        key:     item.id + '|' + tooth,
+                        label:   item.treatment_name + ' — Tooth ' + tooth,
+                        checked: !!item.consent_required,
+                    });
+                });
+            });
+            this.consentPickerOpen = true;
+        },
+        toggleConsentRow(key) {
+            const row = this.consentRows.find(r => r.key === key);
+            if (row) row.checked = !row.checked;
+        },
+        selectAllConsent() { this.consentRows.forEach(r => r.checked = true); },
+        clearConsent()     { this.consentRows.forEach(r => r.checked = false); },
+        generateConsentForm() {
+            const chosen = this.consentRows.filter(r => r.checked).map(r => r.key);
+            if (!chosen.length) return;
+            const params = chosen.map(k => 'sel[]=' + encodeURIComponent(k)).join('&');
+            window.open('{{ url('treatment-plans') }}/' + this.consentPlanId + '/consent?' + params, '_blank');
+            this.consentPickerOpen = false;
+        },
 
         // ── Chart-by-Tooth treatment picker (Slice 4/5) ─────────────────────
         // Static condition palette — mirrors the consultation tooth chart

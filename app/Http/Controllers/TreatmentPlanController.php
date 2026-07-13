@@ -87,11 +87,18 @@ class TreatmentPlanController extends Controller
     // from the DPDP consent module. No e-signature — wet-ink print only.
     //
 
-    public function consentPrint(TreatmentPlan $plan, ConsentDocumentService $consents)
+    public function consentPrint(Request $request, TreatmentPlan $plan, ConsentDocumentService $consents)
     {
         $plan->load(['patient', 'consultation.doctor']);
 
-        $consent = $consents->generateAndPersist($plan, Auth::id());
+        // Selection from the "Consent Form" picker on the plan tab — an array
+        // of "{item_id}|{tooth}" keys (tooth blank for whole-mouth items). If
+        // absent (e.g. an old bookmarked link), fall back to the original
+        // behaviour: every item flagged consent_required.
+        $selected     = $request->query('sel');
+        $selectedKeys = is_array($selected) ? array_values($selected) : null;
+
+        $consent = $consents->generateAndPersist($plan, Auth::id(), $selectedKeys);
 
         $clinicName = AppSetting::get('clinic_name', config('app.clinic_name', 'Dental Clinic'));
         $clinicLogo = AppSetting::get('clinic_logo');

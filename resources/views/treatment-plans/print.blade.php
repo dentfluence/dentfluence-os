@@ -152,26 +152,6 @@
         .tx-name   { font-weight: 600; color: #111; }
         .tx-tooth  { font-size: 11px; color: var(--accent-dark); font-weight: 600; }
         .tx-note   { font-size: 10.5px; color: #666; font-style: italic; margin-top: 2px; line-height: 1.4; }
-        tr.tx-total td {
-            font-weight: 700;
-            background: var(--accent-light) !important;
-            border-top: 1.5px solid var(--accent);
-        }
-
-        /* ── Totals box (bottom-right) ── */
-        .totals { display: flex; justify-content: flex-end; margin-bottom: 8px; }
-        .totals-box { width: 280px; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
-        .totals-row {
-            display: flex; justify-content: space-between;
-            padding: 7px 14px; font-size: 12px;
-            border-bottom: 1px solid #f0f0f0;
-        }
-        .totals-row .amt { font-weight: 600; }
-        .totals-row.grand {
-            background: var(--accent); color: #fff;
-            font-size: 14px; font-weight: 700; border-bottom: none;
-        }
-        .totals-row .disc { color: #b91c1c; }
 
         /* ── Notes ── */
         .notes {
@@ -226,8 +206,6 @@
             @page { size: A4; margin: 0; }
             .opt-block { page-break-inside: avoid; }
             table.tx-table th,
-            tr.tx-total td,
-            .totals-row.grand,
             .opt-head,
             .notes { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
@@ -309,20 +287,6 @@
 
 {{-- ── One block per option ── --}}
 @foreach($plans as $idx => $plan)
-@php
-    // Per-option roll-up (kept internally consistent: Amount − Discount = Net)
-    $amount   = 0; $discount = 0; $gst = 0; $net = 0;
-    foreach ($plan->items as $it) {
-        $qty   = max((int) $it->units, 1);
-        $gross = (float) $it->unit_price * $qty;
-        $amount   += $gross;
-        $discount += (float) $it->disc_amount;
-        $gst      += (float) $it->gst_amount;
-        $net      += (float) $it->net_amount;
-    }
-    $grand = $net + $gst;
-@endphp
-
 <div class="opt-block">
 
     {{-- Option heading — only when comparing multiple options --}}
@@ -364,36 +328,8 @@
                 <td class="r">{{ number_format($gross, 0) }}</td>
             </tr>
             @endforeach
-
-            {{-- Row total --}}
-            <tr class="tx-total">
-                <td>Total</td>
-                <td class="c"></td>
-                <td class="r"></td>
-                <td class="r">{{ number_format($amount, 0) }}</td>
-            </tr>
         </tbody>
     </table>
-
-    {{-- Totals box --}}
-    <div class="totals">
-        <div class="totals-box">
-            @if($gst > 0)
-            <div class="totals-row">
-                <span>Subtotal</span>
-                <span class="amt">Rs. {{ number_format($amount, 0) }}</span>
-            </div>
-            <div class="totals-row">
-                <span>Tax (GST)</span>
-                <span class="amt">Rs. {{ number_format($gst, 0) }}</span>
-            </div>
-            @endif
-            <div class="totals-row grand">
-                <span>Total Estimate</span>
-                <span class="amt">Rs. {{ number_format($grand, 0) }}</span>
-            </div>
-        </div>
-    </div>
 
     {{-- Doctor note for this option --}}
     @if($plan->doctor_notes)
