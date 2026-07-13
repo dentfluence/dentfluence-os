@@ -16,6 +16,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9d6ea8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         </span>
         <input
+            id="df-global-search"
             type="text"
             name="df_global_search_nofill"
             x-model="query"
@@ -32,6 +33,8 @@
             data-1p-ignore="true"
             data-bwignore="true"
             data-form-type="other"
+            readonly
+            onfocus="this.removeAttribute('readonly');"
         />
         {{-- Spinner --}}
         <span x-show="loading" class="absolute inset-y-0 right-3 flex items-center">
@@ -46,6 +49,12 @@
 
     {{-- Dropdown --}}
     <div x-show="open" x-cloak
+         x-transition:enter="transition ease-out duration-100"
+         x-transition:enter-start="opacity-0 -translate-y-1"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-75"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
          class="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-purple-200 shadow-lg overflow-hidden"
          style="max-height:460px;overflow-y:auto;">
 

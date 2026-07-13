@@ -239,11 +239,12 @@
     ])->filter(fn($v) => filled($v));
 
     // ── Diagnosis bits that are filled ──
-    $riskVal = $consultation->diagnosis_risk ?: $consultation->risk_assessment;
+    // Risk is captured elsewhere in the app (patient risk assessment) but isn't
+    // part of the take-home Case Paper — dropped from $hasDiagnosis too so an
+    // empty section doesn't render if risk was the only thing set.
     $hasDiagnosis = filled($consultation->primary_diagnosis)
                  || filled($consultation->secondary_diagnosis)
                  || filled($consultation->provisional_diagnosis)
-                 || filled($riskVal)
                  || filled($consultation->diagnosis_notes);
 
     // ── Investigations advised (compact) ──
@@ -262,15 +263,6 @@
     $adviceText = $consultation->advice;
     $linkedPlans = $consultation->treatmentPlans ?? collect();
     $hasTreatment = filled($txText) || filled($adviceText) || $linkedPlans->isNotEmpty();
-
-    // ── Risk pill colour ──
-    $riskStyle = '';
-    if (filled($riskVal)) {
-        $rl = strtolower((string) $riskVal);
-        $riskStyle = (str_contains($rl,'high')) ? 'background:#fee2e2;color:#991b1b;'
-                   : (str_contains($rl,'moderate') || str_contains($rl,'medium') ? 'background:#fef9c3;color:#854d0e;'
-                   : (str_contains($rl,'low') ? 'background:#dcfce7;color:#166534;' : 'background:#f1f5f9;color:#475569;'));
-    }
 @endphp
 
 {{-- ── Screen action bar ── --}}
@@ -300,7 +292,6 @@
     <div>
         <div class="lh-name">{{ $patient->name ?? '—' }} ({{ $patientCode }})</div>
         @if($genderAge)<div class="lh-line">{{ $genderAge }}</div>@endif
-        @if($patient->phone ?? null)<div class="lh-line">{{ $patient->phone }}</div>@endif
         @if($addressLine)<div class="lh-line">{{ $addressLine }}</div>@endif
     </div>
 
@@ -388,10 +379,10 @@
 </div>
 @endif
 
-{{-- ── Diagnosis ── --}}
+{{-- ── Provisional Diagnosis (the only diagnosis type actually used) ── --}}
 @if($hasDiagnosis)
 <div class="cp-section">
-    <div class="cp-section-title">Diagnosis</div>
+    <div class="cp-section-title">Provisional Diagnosis</div>
     @if(filled($consultation->primary_diagnosis))
     <div class="cp-row">
         <span class="cp-label">Primary</span><span class="cp-colon">:</span>
@@ -399,21 +390,12 @@
     </div>
     @endif
     @if(filled($consultation->provisional_diagnosis))
-    <div class="cp-row">
-        <span class="cp-label">Provisional</span><span class="cp-colon">:</span>
-        <span class="cp-value">{{ $consultation->provisional_diagnosis }}</span>
-    </div>
+    <div class="cp-value" style="font-size:12.5px;">{{ $consultation->provisional_diagnosis }}</div>
     @endif
     @if(filled($consultation->secondary_diagnosis))
     <div class="cp-row">
         <span class="cp-label">Secondary</span><span class="cp-colon">:</span>
         <span class="cp-value">{{ $consultation->secondary_diagnosis }}</span>
-    </div>
-    @endif
-    @if(filled($riskVal))
-    <div class="cp-row">
-        <span class="cp-label">Risk</span><span class="cp-colon">:</span>
-        <span class="cp-value"><span class="cp-pill" style="{{ $riskStyle }}">{{ ucwords($riskVal) }}</span></span>
     </div>
     @endif
     @if(filled($consultation->diagnosis_notes))
@@ -434,10 +416,7 @@
         $label  = $invLabels[$key] ?? ucwords(str_replace('_', ' ', $key));
         $detail = $invDetails[$key] ?? null;
     @endphp
-    <div class="cp-row">
-        <span class="cp-label">{{ $loop->first ? 'Suggested' : '' }}</span><span class="cp-colon">{{ $loop->first ? ':' : '' }}</span>
-        <span class="cp-value">{{ $label }}@if($detail && $detail !== '✓') — {{ $detail }}@endif</span>
-    </div>
+    <div class="cp-value" style="font-size:12.5px;">{{ $label }}@if($detail && $detail !== '✓') — {{ $detail }}@endif</div>
     @endforeach
 </div>
 @endif
@@ -557,11 +536,13 @@
     @if($doctor?->registration_number ?? null)<div class="sig-sub">Reg. No.: {{ $doctor->registration_number }}</div>@endif
 </div>
 
-{{-- ── Footer (clinic identity hidden on plain / pre-printed stationery) ── --}}
+{{-- ── Footer (clinic identity only — hidden entirely on plain / pre-printed
+     stationery, and dropped altogether if there's no clinic name to show) ── --}}
+@if($showClinic && ($clinic['clinic_name'] ?? false))
 <div class="doc-footer">
-    <span>@if($showClinic){{ $clinic['clinic_name'] ?? '' }}@if($clinic['clinic_phone'] ?? false) · {{ $clinic['clinic_phone'] }}@endif @endif</span>
-    <span style="white-space:nowrap;margin-left:16px;">Printed: {{ now()->format('d M Y, h:i A') }}</span>
+    <span>{{ $clinic['clinic_name'] }}@if($clinic['clinic_phone'] ?? false) · {{ $clinic['clinic_phone'] }}@endif</span>
 </div>
+@endif
 
 </body>
 </html>
