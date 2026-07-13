@@ -96,16 +96,7 @@
             letter-spacing: 3px;
             text-transform: uppercase;
             color: var(--accent-dark);
-            margin: 20px 0 6px;
-        }
-        .doc-date { font-size: 12px; color: #333; margin-bottom: 18px; text-align: center; }
-        .doc-date strong { color: #111; }
-
-        .intro {
-            font-size: 11.5px;
-            color: #444;
-            line-height: 1.7;
-            margin-bottom: 18px;
+            margin: 20px 0 20px;
         }
 
         .section {
@@ -200,6 +191,12 @@
         <div class="lh-name">{{ $patient->name ?? '—' }} ({{ $patientCode }})</div>
         @if($genderAge)<div class="lh-line">{{ $genderAge }}</div>@endif
         @if($patient->phone ?? null)<div class="lh-line">{{ $patient->phone }}</div>@endif
+        {{-- Blank fill-in, same convention as the signature lines below — not
+             auto-filled from the DPDP consent record, since whoever actually
+             brings the minor in to sign may not match whatever's on file. --}}
+        @if($patient->isMinor())
+        <div class="lh-line" style="margin-top:4px;">Guardian Name: <span style="display:inline-block; width:170px; border-bottom:1px solid #999;">&nbsp;</span></div>
+        @endif
     </div>
     <div class="lh-right">
         <div class="lh-doc">{{ $doctor?->doctor_name ?? ($showClinic ? ($clinic['clinic_name'] ?? '') : '') }}</div>
@@ -208,12 +205,6 @@
 </div>
 
 <div class="doc-title">Treatment Consent Form</div>
-<div class="doc-date">Plan: <strong>{{ $plan->plan_name }}</strong> &nbsp;·&nbsp; Generated <strong>{{ $generatedAt->format('d M Y') }}</strong></div>
-
-<div class="intro">
-    This form explains, for each procedure in the treatment plan below, why it is recommended and what
-    it involves, so the patient (or guardian) can make an informed decision before treatment begins.
-</div>
 
 @forelse($sections as $section)
     <div class="section">
