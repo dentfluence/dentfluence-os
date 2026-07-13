@@ -99,6 +99,7 @@
                 ['overview',      'Overview'],
                 ['intelligence',  'Intelligence'],
                 ['sop',           'SOP'],
+                ['consent',    'Consent'],
                 ['stages',     'Stages'],
                 ['rules',      'Rules'],
                 ['media',      'Media'],
@@ -118,12 +119,55 @@
                         <span class="ml-1 text-xs text-yellow-500">!</span>
                     @endif
                 @endif
+                @if($key === 'consent' && $treatment->hasRule('consent_required') && empty(($treatment->activeSop ?? $treatment->sops->first())?->consent_notes))
+                    <span class="ml-1 text-xs text-yellow-500" title="Consent Form Required is on, but no explanation text is saved yet">!</span>
+                @endif
                 @if($key === 'review' && $treatment->activeSop && $treatment->activeSop->next_review_at && $treatment->activeSop->next_review_at->isPast())
                     <span class="ml-1 text-xs text-red-500">!</span>
                 @endif
             </button>
             @endforeach
         </nav>
+    </div>
+
+    {{-- ── Quick Upload PDF modal (triggered from any tab's "Upload PDF" button —
+         page-level so it isn't hidden along with whichever tab dispatched it;
+         moved out of the SOP tab 2026-07-13 when the Consent tab was split out,
+         since its own Upload PDF button needed this too) ── --}}
+    <div x-data="{
+            showUploadPdf: false,
+            uploadType: '',
+            uploadLabel: ''
+         }"
+         @open-upload.window="uploadType = $event.detail.type; uploadLabel = $event.detail.label; showUploadPdf = true">
+        <div x-show="showUploadPdf" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center"
+             style="background:rgba(14,1,24,.55);"
+             @click.self="showUploadPdf=false">
+            <div class="bg-white w-full max-w-md mx-4 shadow-xl p-6 space-y-4" @click.stop>
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-[#380740] font-[Cormorant_Garamond]" x-text="'Upload PDF — ' + uploadLabel"></h3>
+                    <button type="button" @click="showUploadPdf=false" class="text-gray-400 hover:text-gray-600">✕</button>
+                </div>
+                <form method="POST" action="{{ route('treatments.media.upload', $treatment) }}" enctype="multipart/form-data" class="space-y-3">
+                    @csrf
+                    <input type="hidden" name="media_type" :value="uploadType">
+                    <input type="hidden" name="label" :value="uploadLabel">
+                    <div>
+                        <label class="block text-xs text-gray-500 uppercase tracking-wider font-[DM_Sans] mb-1">Select PDF file</label>
+                        <input type="file" name="file" accept=".pdf" required
+                               class="w-full text-sm font-[DM_Sans] text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:border file:border-[#e8d5f0] file:text-xs file:font-[DM_Sans] file:bg-[#f3e8f9] file:text-[#6a0f70]">
+                    </div>
+                    <p class="text-xs text-gray-400 font-[DM_Sans]">This PDF will appear as a downloadable/viewable attachment alongside the text instructions above.</p>
+                    <div class="flex justify-end gap-3">
+                        <button type="button" @click="showUploadPdf=false"
+                                class="px-4 py-2 text-sm text-gray-500 font-[DM_Sans] border border-[#e8d5f0] hover:bg-gray-50">Cancel</button>
+                        <button type="submit"
+                                class="px-5 py-2 bg-[#6a0f70] text-white text-sm font-[DM_Sans] hover:bg-[#52095a]">Upload</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     {{-- ════════════════════════════════════════════════════
@@ -802,98 +846,15 @@
                           class="w-full border border-[#e8d5f0] px-3 py-2 text-sm font-[DM_Sans] focus:outline-none focus:border-[#6a0f70] resize-none">{{ $sop?->post_instructions }}</textarea>
             </div>
 
-            {{-- Clinical Notes / Consent Notes --}}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div class="bg-white border border-[#e8d5f0] p-5">
-                    <label class="block text-base font-semibold text-[#380740] font-[Cormorant_Garamond] mb-2">
-                        Clinical Notes
-                        <span class="text-xs text-gray-400 font-[DM_Sans] font-normal ml-1">Internal tips for doctors</span>
-                    </label>
-                    <textarea name="clinical_notes" rows="5"
-                              placeholder="Clinical tips, contraindications, materials used…"
-                              class="w-full border border-[#e8d5f0] px-3 py-2 text-sm font-[DM_Sans] focus:outline-none focus:border-[#6a0f70] resize-none">{{ $sop?->clinical_notes }}</textarea>
-                </div>
-
-                {{-- Consent Notes with actions --}}
-                <div class="bg-white border border-[#e8d5f0] p-5 space-y-3">
-                    <div class="flex items-start justify-between gap-3 flex-wrap">
-                        <div>
-                            <p class="text-base font-semibold text-[#380740] font-[Cormorant_Garamond]">Consent Explanation</p>
-                            <p class="text-xs text-gray-400 font-[DM_Sans]">Explain to patient before obtaining consent</p>
-                        </div>
-                        <div class="flex items-center gap-2 flex-wrap">
-                            <a href="{{ route('treatments.print', [$treatment, 'consent']) }}" target="_blank"
-                               class="flex items-center gap-1.5 px-2 py-1 text-xs font-[DM_Sans] border border-[#e8d5f0] text-[#6a0f70] hover:bg-[#f3e8f9] transition">
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                    <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
-                                </svg>
-                                Print
-                            </a>
-                            <button type="button" @click="$dispatch('open-upload', {type:'consent_template', label:'Consent Form PDF'})"
-                                    class="flex items-center gap-1.5 px-2 py-1 text-xs font-[DM_Sans] border border-[#e8d5f0] text-gray-600 hover:bg-gray-50 transition">
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                                </svg>
-                                {{ $consentDoc ? 'Replace PDF' : 'Upload PDF' }}
-                            </button>
-                            @if($consentDoc)
-                            <a href="{{ $consentDoc->url }}" target="_blank"
-                               class="flex items-center gap-1.5 px-2 py-1 text-xs font-[DM_Sans] bg-green-50 border border-green-200 text-green-700 hover:bg-green-100 transition">
-                                View
-                            </a>
-                            @endif
-                            <button type="button"
-                                    @click="openShare('consent','Consent Information',{{ json_encode($sop?->consent_notes ?? '') }},'{{ $consentDoc?->url ?? '' }}')"
-                                    class="flex items-center gap-1.5 px-2 py-1 text-xs font-[DM_Sans] bg-[#6a0f70] text-white hover:bg-[#52095a] transition">
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                                </svg>
-                                Share
-                            </button>
-                        </div>
-                    </div>
-                    <textarea name="consent_notes" rows="5"
-                              placeholder="Key points to explain to the patient before obtaining consent…"
-                              class="w-full border border-[#e8d5f0] px-3 py-2 text-sm font-[DM_Sans] focus:outline-none focus:border-[#6a0f70] resize-none">{{ $sop?->consent_notes }}</textarea>
-                </div>
-            </div>
-
-            {{-- ── Quick Upload PDF modal (triggered from Upload PDF buttons) ── --}}
-            <div x-data="{
-                    showUploadPdf: false,
-                    uploadType: '',
-                    uploadLabel: ''
-                 }"
-                 @open-upload.window="uploadType = $event.detail.type; uploadLabel = $event.detail.label; showUploadPdf = true">
-                <div x-show="showUploadPdf" x-cloak
-                     class="fixed inset-0 z-50 flex items-center justify-center"
-                     style="background:rgba(14,1,24,.55);"
-                     @click.self="showUploadPdf=false">
-                    <div class="bg-white w-full max-w-md mx-4 shadow-xl p-6 space-y-4" @click.stop>
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-lg font-semibold text-[#380740] font-[Cormorant_Garamond]" x-text="'Upload PDF — ' + uploadLabel"></h3>
-                            <button type="button" @click="showUploadPdf=false" class="text-gray-400 hover:text-gray-600">✕</button>
-                        </div>
-                        <form method="POST" action="{{ route('treatments.media.upload', $treatment) }}" enctype="multipart/form-data" class="space-y-3">
-                            @csrf
-                            <input type="hidden" name="media_type" :value="uploadType">
-                            <input type="hidden" name="label" :value="uploadLabel">
-                            <div>
-                                <label class="block text-xs text-gray-500 uppercase tracking-wider font-[DM_Sans] mb-1">Select PDF file</label>
-                                <input type="file" name="file" accept=".pdf" required
-                                       class="w-full text-sm font-[DM_Sans] text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:border file:border-[#e8d5f0] file:text-xs file:font-[DM_Sans] file:bg-[#f3e8f9] file:text-[#6a0f70]">
-                            </div>
-                            <p class="text-xs text-gray-400 font-[DM_Sans]">This PDF will appear as a downloadable/viewable attachment alongside the text instructions above.</p>
-                            <div class="flex justify-end gap-3">
-                                <button type="button" @click="showUploadPdf=false"
-                                        class="px-4 py-2 text-sm text-gray-500 font-[DM_Sans] border border-[#e8d5f0] hover:bg-gray-50">Cancel</button>
-                                <button type="submit"
-                                        class="px-5 py-2 bg-[#6a0f70] text-white text-sm font-[DM_Sans] hover:bg-[#52095a]">Upload</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+            {{-- Clinical Notes — Consent Explanation moved to its own Consent tab (2026-07-13) --}}
+            <div class="bg-white border border-[#e8d5f0] p-5">
+                <label class="block text-base font-semibold text-[#380740] font-[Cormorant_Garamond] mb-2">
+                    Clinical Notes
+                    <span class="text-xs text-gray-400 font-[DM_Sans] font-normal ml-1">Internal tips for doctors</span>
+                </label>
+                <textarea name="clinical_notes" rows="5"
+                          placeholder="Clinical tips, contraindications, materials used…"
+                          class="w-full border border-[#e8d5f0] px-3 py-2 text-sm font-[DM_Sans] focus:outline-none focus:border-[#6a0f70] resize-none">{{ $sop?->clinical_notes }}</textarea>
             </div>
 
             {{-- SOP Status & Save --}}
@@ -910,6 +871,93 @@
                 <button type="submit"
                         class="px-5 py-2 bg-[#6a0f70] text-white text-sm font-[DM_Sans] hover:bg-[#52095a] transition">
                     Save SOP
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {{-- ════════════════════════════════════════════════════
+         TAB: CONSENT (2026-07-13) — split out of SOP so the text that
+         feeds the patient-facing Treatment Plan Consent Form has its own
+         home instead of being buried in a two-column SOP grid. Still the
+         same TreatmentSop.consent_notes column ConsentDocumentService reads
+         (Patient → Treatment Plan → Consent Form button), so nothing about
+         how the printed form is generated changes — only where staff edit
+         the explanation text.
+    ════════════════════════════════════════════════════ --}}
+    <div x-show="activeTab === 'consent'" class="space-y-5">
+        @php
+            $consentSop = $treatment->activeSop ?? $treatment->sops->first();
+            $consentDoc = $treatment->media->where('media_type', 'consent_template')->first();
+        @endphp
+
+        <div class="flex gap-2 px-4 py-3 text-xs text-gray-500 font-[DM_Sans] bg-[#faf5ff] border border-[#e8d5f0]">
+            <span>
+                This explanation is what prints on the <strong>Consent Form</strong> generated from a patient's
+                Treatment Plan (Patient → Treatment Plan → Consent Form). It only appears there for plan items
+                whose tooth/treatment is checked in that picker — the
+                <strong>Consent Form Required</strong> rule under the Rules tab just controls whether those
+                rows come pre-checked by default.
+            </span>
+        </div>
+
+        @if($treatment->hasRule('consent_required') && empty($consentSop?->consent_notes))
+        <div class="bg-yellow-50 border border-yellow-200 px-4 py-3 text-sm text-yellow-800 font-[DM_Sans]">
+            "Consent Form Required" is on for this treatment, but there's no explanation text yet — the printed
+            consent form will show a placeholder until this is filled in.
+        </div>
+        @endif
+
+        <form method="POST" action="{{ route('treatments.consent.save', $treatment) }}" class="space-y-3">
+            @csrf
+
+            <div class="bg-white border border-[#e8d5f0] p-5 space-y-3">
+                <div class="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                        <p class="text-base font-semibold text-[#380740] font-[Cormorant_Garamond]">Consent Explanation</p>
+                        <p class="text-xs text-gray-400 font-[DM_Sans]">Explain to patient before obtaining consent</p>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <a href="{{ route('treatments.print', [$treatment, 'consent']) }}" target="_blank"
+                           class="flex items-center gap-1.5 px-2 py-1 text-xs font-[DM_Sans] border border-[#e8d5f0] text-[#6a0f70] hover:bg-[#f3e8f9] transition">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+                            </svg>
+                            Print
+                        </a>
+                        <button type="button" @click="$dispatch('open-upload', {type:'consent_template', label:'Consent Form PDF'})"
+                                class="flex items-center gap-1.5 px-2 py-1 text-xs font-[DM_Sans] border border-[#e8d5f0] text-gray-600 hover:bg-gray-50 transition">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            {{ $consentDoc ? 'Replace PDF' : 'Upload PDF' }}
+                        </button>
+                        @if($consentDoc)
+                        <a href="{{ $consentDoc->url }}" target="_blank"
+                           class="flex items-center gap-1.5 px-2 py-1 text-xs font-[DM_Sans] bg-green-50 border border-green-200 text-green-700 hover:bg-green-100 transition">
+                            View
+                        </a>
+                        @endif
+                        <button type="button"
+                                @click="openShare('consent','Consent Information',{{ json_encode($consentSop?->consent_notes ?? '') }},'{{ $consentDoc?->url ?? '' }}')"
+                                class="flex items-center gap-1.5 px-2 py-1 text-xs font-[DM_Sans] bg-[#6a0f70] text-white hover:bg-[#52095a] transition">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                            </svg>
+                            Share
+                        </button>
+                    </div>
+                </div>
+                <textarea name="consent_notes" rows="8"
+                          placeholder="Key points to explain to the patient before obtaining consent — what the procedure involves, risks, benefits, alternatives…"
+                          class="w-full border border-[#e8d5f0] px-3 py-2 text-sm font-[DM_Sans] focus:outline-none focus:border-[#6a0f70] resize-none">{{ $consentSop?->consent_notes }}</textarea>
+            </div>
+
+            <div class="flex justify-end">
+                <button type="submit"
+                        class="px-5 py-2 bg-[#6a0f70] text-white text-sm font-[DM_Sans] hover:bg-[#52095a] transition">
+                    Save Consent Explanation
                 </button>
             </div>
         </form>

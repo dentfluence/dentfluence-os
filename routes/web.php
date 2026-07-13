@@ -425,6 +425,10 @@ Route::middleware('auth')->group(function () {
         // SOP
         Route::post('/{treatment}/sop',                  [$tc, 'saveSop'])->name('sop.save');
 
+        // Consent (2026-07-13) — split out of SOP tab, own save route so it
+        // never touches doctor_steps/pre_instructions/etc.
+        Route::post('/{treatment}/consent',               [$tc, 'saveConsent'])->name('consent.save');
+
         // Stages
         Route::post('/{treatment}/stages',               [$tc, 'saveStages'])->name('stages.save');
 

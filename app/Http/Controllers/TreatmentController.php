@@ -251,6 +251,40 @@ class TreatmentController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // CONSENT — dedicated tab (2026-07-13), split out of the SOP tab so this
+    // text isn't buried in a two-column grid. Still writes to the same
+    // TreatmentSop.consent_notes column the SOP tab's form used to write, so
+    // ConsentDocumentService (Treatment Plan → Consent Form) is unaffected.
+    // A separate save route — rather than reusing saveSop()/treatments.sop.save
+    // — so this tab's form only ever posts consent_notes and can never
+    // accidentally blank out doctor_steps/pre_instructions/etc. from the SOP
+    // tab, and so it doesn't force an SOP status choice on staff who are only
+    // here to fill in a consent explanation.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public function saveConsent(Request $request, Treatment $treatment)
+    {
+        $data = $request->validate([
+            'consent_notes' => 'nullable|string',
+        ]);
+
+        $sop = $treatment->sops()->whereIn('status', ['draft', 'active', 'under_review'])->first();
+
+        if ($sop) {
+            $sop->update($data);
+        } else {
+            $lastVersion = $treatment->sops()->max('version') ?? 0;
+            $sop = TreatmentSop::create(array_merge($data, [
+                'treatment_id' => $treatment->id,
+                'version'      => $lastVersion + 1,
+                'status'       => 'draft',
+            ]));
+        }
+
+        return back()->with('success', 'Consent explanation saved.');
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // STAGES — define ordered visit stages for this treatment (Stages tab)
     // ══════════════════════════════════════════════════════════════════════════
 
