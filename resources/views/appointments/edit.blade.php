@@ -11,6 +11,9 @@
           style="background:#fff;border:1px solid #ede4f3;border-radius:10px;padding:28px;">
         @csrf
         @method('PATCH')
+        {{-- Optimistic lock: the server refuses the save if another user edited
+             this appointment since this page was rendered. --}}
+        <input type="hidden" name="updated_at" value="{{ $appointment->updated_at?->toIso8601String() }}">
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
             <div>

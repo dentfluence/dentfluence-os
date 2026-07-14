@@ -129,8 +129,11 @@ class RecallEngineService
         // but should behave the same if that flag is ever reverted.
         $effectiveFrom = AppSetting::get('recall.effective_from');
 
+        // No phone filter here (2026-07-14): a patient with no number who hasn't
+        // visited in 6 months is exactly the patient the clinic is losing money
+        // on. They're now queued and flagged "needs contact number" by
+        // createQueueItem() rather than silently excluded forever.
         Patient::query()
-            ->whereNotNull('phone')
             ->where(function ($q) use ($cutoff, $effectiveFrom) {
                 if ($effectiveFrom) {
                     $q->whereDate('last_visit_date', '>=', $effectiveFrom)
@@ -208,7 +211,10 @@ class RecallEngineService
             ->chunk(100, function ($items) use (&$count) {
                 foreach ($items as $item) {
                     $patient = $item->plan->patient ?? null;
-                    if (!$patient || !$patient->phone) continue;
+                    // No phone is NOT a reason to skip — createQueueItem() flags
+                    // the item as "needs contact number" instead of dropping the
+                    // patient silently (see its docblock).
+                    if (!$patient) continue;
 
                     if ($this->hasOpenQueueItem($patient->id, 'recall_approved_plan')) {
                         continue;
@@ -269,7 +275,10 @@ class RecallEngineService
             ->chunk(100, function ($visits) use (&$count) {
                 foreach ($visits as $visit) {
                     $patient = $visit->patient ?? null;
-                    if (!$patient || !$patient->phone) continue;
+                    // No phone is NOT a reason to skip — createQueueItem() flags
+                    // the item as "needs contact number" instead of dropping the
+                    // patient silently (see its docblock).
+                    if (!$patient) continue;
 
                     if ($this->hasOpenQueueItem($patient->id, 'recall_post_op')) {
                         $visit->update(['recall_queued_at' => now()]);
@@ -321,7 +330,10 @@ class RecallEngineService
             ->chunk(100, function ($cases) use (&$count) {
                 foreach ($cases as $case) {
                     $patient = $case->patient ?? null;
-                    if (!$patient || !$patient->phone) continue;
+                    // No phone is NOT a reason to skip — createQueueItem() flags
+                    // the item as "needs contact number" instead of dropping the
+                    // patient silently (see its docblock).
+                    if (!$patient) continue;
 
                     // Check if patient already has a future appointment
                     $hasAppointment = Appointment::where('patient_id', $patient->id)
@@ -391,7 +403,10 @@ class RecallEngineService
             ->chunk(100, function ($visits) use (&$count) {
                 foreach ($visits as $visit) {
                     $patient = $visit->patient ?? null;
-                    if (!$patient || !$patient->phone) continue;
+                    // No phone is NOT a reason to skip — createQueueItem() flags
+                    // the item as "needs contact number" instead of dropping the
+                    // patient silently (see its docblock).
+                    if (!$patient) continue;
 
                     if ($this->hasOpenQueueItem($patient->id, 'recall_7day_followup')) {
                         $visit->update(['recall_queued_at' => now()]);
@@ -453,6 +468,11 @@ class RecallEngineService
             fn($d) => $today->copy()->addDays($d)->format('m-d')
         );
 
+        // Phone filter INTENTIONALLY kept for birthdays (unlike the clinical
+        // recall triggers): a birthday greeting is a nicety, not retention-
+        // critical, so queueing "send a greeting" for someone with no number
+        // would just be noise on the action board. Clinical recalls for
+        // no-phone patients ARE queued (flagged) — see recallNoVisit6Months().
         Patient::query()
             ->whereNotNull('phone')
             ->whereNotNull('date_of_birth')
@@ -588,9 +608,25 @@ class RecallEngineService
     /**
      * Create a communication_queue record for a recall item.
      * Sets SLA deadline, status, channel defaults automatically.
+     *
+     * No-phone patients (2026-07-14): every trigger used to filter these out
+     * entirely, so a patient with a blank mobile was invisible to recall
+     * FOREVER — the clinic quietly lost them and nobody ever knew. They are
+     * now still queued, but flagged: low priority, an explicit note, and
+     * next_action = update_contact, so they surface as "we can't reach this
+     * person — get a number" instead of vanishing.
      */
     private function createQueueItem(array $data): CommunicationQueue
     {
+        $hasPhone = ! empty(trim((string) ($data['phone'] ?? '')));
+
+        if (! $hasPhone) {
+            $data['priority']    = 'low';
+            $data['next_action'] = 'update_contact';
+            $data['note']        = '⚠ No contact number on file — update the patient record before calling. '
+                . ($data['note'] ?? '');
+        }
+
         return CommunicationQueue::create(array_merge([
             'channel'        => 'call',
             'direction'      => 'outbound',

@@ -72,6 +72,7 @@ class FinanceReportsController extends Controller
             'advance'      => $this->advanceData($from, $to),
             'liability'    => $this->liabilityData($from, $to),
             'collection'   => $this->collectionData($from, $to),
+            'provider'     => $this->providerData($from, $to),
             default        => $this->incomeData($from, $to),
         };
 
@@ -368,6 +369,43 @@ class FinanceReportsController extends Controller
         ];
     }
 
+    // ── 12. Provider (Per-Dentist) Earnings ────────────────────────────────
+    //
+    // Attributes collected revenue to the treating doctor via
+    // invoice_payments -> invoices.appointment_id -> appointments.doctor_id.
+    // Invoices with no appointment_id (e.g. raised directly against a
+    // treatment plan with no linked appointment) fall into an "Unassigned"
+    // bucket rather than being silently dropped or guessed at — this is the
+    // real attribution the data supports today, not a perfect one.
+
+    private function providerData(Carbon $from, Carbon $to): array
+    {
+        $baseQuery = fn () => InvoicePayment::whereBetween('invoice_payments.payment_date', [$from, $to])
+            ->join('invoices', 'invoice_payments.invoice_id', '=', 'invoices.id')
+            ->leftJoin('appointments', 'invoices.appointment_id', '=', 'appointments.id')
+            ->leftJoin('users', 'appointments.doctor_id', '=', 'users.id');
+
+        $byDoctor = $baseQuery()
+            ->selectRaw("COALESCE(users.id, 0) as doctor_id, COALESCE(users.name, 'Unassigned') as doctor_name, SUM(invoice_payments.amount) as total, COUNT(DISTINCT invoice_payments.invoice_id) as invoice_count, COUNT(*) as payment_count")
+            ->groupBy('doctor_id', 'doctor_name')
+            ->orderByDesc('total')
+            ->get();
+
+        $byDoctorMonth = $baseQuery()
+            ->selectRaw("COALESCE(users.id, 0) as doctor_id, COALESCE(users.name, 'Unassigned') as doctor_name, DATE_FORMAT(invoice_payments.payment_date, '%Y-%m') as month, SUM(invoice_payments.amount) as total")
+            ->groupBy('doctor_id', 'doctor_name', 'month')
+            ->orderBy('month')
+            ->orderByDesc('total')
+            ->get()
+            ->groupBy('doctor_name');
+
+        $total      = (float) $byDoctor->sum('total');
+        $unassigned = (float) optional($byDoctor->first(fn ($r) => (int) $r->doctor_id === 0))->total;
+        $doctorRows = $byDoctor->filter(fn ($r) => (int) $r->doctor_id !== 0)->values();
+
+        return compact('byDoctor', 'byDoctorMonth', 'total', 'unassigned', 'doctorRows');
+    }
+
     // ── Export ─────────────────────────────────────────────────────────────
 
     private function export(string $tab, array $data, Carbon $from, Carbon $to, string $format)
@@ -387,6 +425,7 @@ class FinanceReportsController extends Controller
             'membership'  => 'Membership Revenue',
             'wallet'      => 'Wallet Summary',
             'coupon'      => 'Coupon Summary',
+            'provider'    => 'Provider Earnings',
             default       => 'Finance Report',
         };
         $sheet->setTitle(substr($title, 0, 31));
@@ -399,6 +438,7 @@ class FinanceReportsController extends Controller
             'membership'  => $this->exportMembership($sheet, $data),
             'wallet'      => $this->exportWallet($sheet, $data),
             'coupon'      => $this->exportCoupon($sheet, $data),
+            'provider'    => $this->exportProvider($sheet, $data),
             default       => $this->exportGeneric($sheet, $data),
         };
 
@@ -541,5 +581,20 @@ class FinanceReportsController extends Controller
         }
         $sheet->setCellValue("B{$row}", 'TOTAL'); $sheet->setCellValue("C{$row}", (float)$d['totalDiscount']);
         $sheet->getStyle("B{$row}:C{$row}")->getFont()->setBold(true);
+    }
+
+    private function exportProvider($sheet, array $d): void
+    {
+        $this->head($sheet, ['Doctor', 'Invoices', 'Payments', 'Total Collected (Rs)']);
+        $row = 2;
+        foreach ($d['byDoctor'] as $r) {
+            $sheet->setCellValue("A{$row}", $r->doctor_name);
+            $sheet->setCellValue("B{$row}", $r->invoice_count);
+            $sheet->setCellValue("C{$row}", $r->payment_count);
+            $sheet->setCellValue("D{$row}", (float)$r->total);
+            $row++;
+        }
+        $sheet->setCellValue("C{$row}", 'TOTAL'); $sheet->setCellValue("D{$row}", (float)$d['total']);
+        $sheet->getStyle("C{$row}:D{$row}")->getFont()->setBold(true);
     }
 }

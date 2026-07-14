@@ -121,6 +121,44 @@
         </table>
     </div>
 
+    {{-- Quarterly P&L table --}}
+    <div class="bg-white border border-[#e8d5f0] overflow-hidden">
+        <div class="px-4 py-3 border-b border-[#f0e4f7]">
+            <p class="text-sm font-medium text-gray-700">Quarterly P&L Summary</p>
+            <p class="text-xs text-gray-400 mt-0.5">Indian FY quarters (Apr&ndash;Jun, Jul&ndash;Sep, Oct&ndash;Dec, Jan&ndash;Mar), rolled up from the {{ $months }}-month window selected above. The earliest/latest quarter may be partial if it isn't fully inside that window.</p>
+        </div>
+        <table class="w-full text-sm">
+            <thead class="bg-[#f9f4fb]">
+                <tr>
+                    <th class="text-left px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Quarter</th>
+                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Revenue</th>
+                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Expenses</th>
+                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Net Profit</th>
+                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Margin</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                @forelse($quarterly as $q)
+                <tr class="hover:bg-[#fdf8ff]">
+                    <td class="px-4 py-3 font-medium text-gray-700">{{ $q['quarter'] }}</td>
+                    <td class="px-4 py-3 text-right text-green-600 font-semibold">Rs. {{ number_format($q['revenue'],0) }}</td>
+                    <td class="px-4 py-3 text-right text-red-600">Rs. {{ number_format($q['expense'],0) }}</td>
+                    <td class="px-4 py-3 text-right font-bold {{ $q['profit'] >= 0 ? 'text-green-700' : 'text-red-700' }}">
+                        Rs. {{ number_format($q['profit'],0) }}
+                    </td>
+                    <td class="px-4 py-3 text-right">
+                        <span class="text-xs font-medium {{ $q['margin'] >= 20 ? 'text-green-600' : ($q['margin'] >= 0 ? 'text-amber-600' : 'text-red-600') }}">
+                            {{ $q['margin'] }}%
+                        </span>
+                    </td>
+                </tr>
+                @empty
+                <tr><td colspan="5" class="px-4 py-6 text-center text-gray-400 text-xs">No data</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>

@@ -78,6 +78,7 @@
         'advance'     => 'Advances',
         'liability'   => 'Credit Liability',
         'collection'  => 'Daily Collection',
+        'provider'    => 'Provider Earnings',
     ];
     @endphp
     <div class="flex flex-wrap gap-1 border-b border-gray-200">
@@ -699,6 +700,80 @@
                 <td class="px-4 py-2 text-right text-[#6a0f70]">&#8377;{{ number_format($data['walletUseTotal'], 0) }}</td>
                 <td class="px-4 py-2 text-right text-red-500">&#8377;{{ number_format($data['refundTotal'], 0) }}</td>
             </tr></tfoot>
+        </table>
+    </div>
+
+    @elseif($tab === 'provider')
+    {{-- PROVIDER (PER-DENTIST) EARNINGS --}}
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white border border-gray-100 p-4">
+            <p class="text-xs text-gray-400 uppercase tracking-wider">Total Collected</p>
+            <p class="text-2xl font-bold text-green-600 mt-1">&#8377;{{ number_format($data['total'], 0) }}</p>
+        </div>
+        <div class="bg-white border border-gray-100 p-4">
+            <p class="text-xs text-gray-400 uppercase tracking-wider">Doctors</p>
+            <p class="text-2xl font-bold text-gray-700 mt-1">{{ $data['doctorRows']->count() }}</p>
+        </div>
+        <div class="bg-white border border-gray-100 p-4">
+            <p class="text-xs text-gray-400 uppercase tracking-wider">Unassigned</p>
+            <p class="text-2xl font-bold text-amber-600 mt-1">&#8377;{{ number_format($data['unassigned'], 0) }}</p>
+        </div>
+    </div>
+
+    <div class="bg-white border border-gray-100">
+        <div class="px-4 py-3 border-b border-gray-100 text-xs font-semibold text-gray-600 uppercase tracking-wider">Earnings by Doctor</div>
+        <table class="w-full text-sm">
+            <thead><tr class="bg-gray-50 text-xs text-gray-500">
+                <th class="px-4 py-2 text-left">Doctor</th>
+                <th class="px-4 py-2 text-right">Invoices</th>
+                <th class="px-4 py-2 text-right">Payments</th>
+                <th class="px-4 py-2 text-right">Total Collected (&#8377;)</th>
+            </tr></thead>
+            <tbody>
+            @forelse($data['byDoctor'] as $r)
+            <tr class="border-t border-gray-50 hover:bg-gray-50 {{ (int)$r->doctor_id === 0 ? 'text-gray-400 italic' : '' }}">
+                <td class="px-4 py-2 {{ (int)$r->doctor_id === 0 ? '' : 'font-medium' }}">{{ $r->doctor_name }}</td>
+                <td class="px-4 py-2 text-right">{{ $r->invoice_count }}</td>
+                <td class="px-4 py-2 text-right">{{ $r->payment_count }}</td>
+                <td class="px-4 py-2 text-right font-semibold {{ (int)$r->doctor_id === 0 ? 'text-gray-400' : 'text-green-700' }}">{{ number_format($r->total, 0) }}</td>
+            </tr>
+            @empty
+            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-400 text-xs">No data</td></tr>
+            @endforelse
+            </tbody>
+            <tfoot><tr class="border-t-2 border-gray-200 bg-gray-50 font-semibold">
+                <td class="px-4 py-2">Total</td>
+                <td class="px-4 py-2 text-right"></td>
+                <td class="px-4 py-2 text-right"></td>
+                <td class="px-4 py-2 text-right">{{ number_format($data['total'], 0) }}</td>
+            </tr></tfoot>
+        </table>
+        <p class="px-4 py-2 text-xs text-gray-400 border-t border-gray-50">
+            "Unassigned" = payments on invoices not linked to a specific appointment, so no treating doctor could be attributed. Link the invoice to its appointment at billing time to close this gap.
+        </p>
+    </div>
+
+    <div class="bg-white border border-gray-100">
+        <div class="px-4 py-3 border-b border-gray-100 text-xs font-semibold text-gray-600 uppercase tracking-wider">Monthly Trend by Doctor</div>
+        <table class="w-full text-sm">
+            <thead><tr class="bg-gray-50 text-xs text-gray-500">
+                <th class="px-4 py-2 text-left">Doctor</th>
+                <th class="px-4 py-2 text-left">Month</th>
+                <th class="px-4 py-2 text-right">Total (&#8377;)</th>
+            </tr></thead>
+            <tbody>
+            @forelse($data['byDoctorMonth'] as $doctorName => $rows)
+                @foreach($rows as $r)
+                <tr class="border-t border-gray-50 hover:bg-gray-50">
+                    <td class="px-4 py-2 {{ $doctorName === 'Unassigned' ? 'text-gray-400 italic' : 'font-medium' }}">{{ $doctorName }}</td>
+                    <td class="px-4 py-2">{{ $r->month }}</td>
+                    <td class="px-4 py-2 text-right">{{ number_format($r->total, 0) }}</td>
+                </tr>
+                @endforeach
+            @empty
+            <tr><td colspan="3" class="px-4 py-6 text-center text-gray-400 text-xs">No data</td></tr>
+            @endforelse
+            </tbody>
         </table>
     </div>
     @endif

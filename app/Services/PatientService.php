@@ -247,6 +247,32 @@ class PatientService
     }
 
     /**
+     * Existing patients in this branch that share a phone number.
+     *
+     * Families legitimately share one mobile, so this is NOT a hard block —
+     * callers use it to warn ("possible duplicate — is this a returning
+     * patient?") and let the user decide. Previously only quickCreate() looked
+     * for duplicates, so the main registration form silently created a second
+     * record for every returning patient, splitting their history and billing.
+     *
+     * @return \Illuminate\Support\Collection<int, Patient>
+     */
+    public function findDuplicatesByPhone(?string $phone, int $branchId)
+    {
+        $phone = trim((string) $phone);
+
+        if ($phone === '') {
+            return collect();
+        }
+
+        return Patient::where('branch_id', $branchId)
+            ->where('phone', $phone)
+            ->orderBy('name')
+            ->limit(5)
+            ->get(['id', 'name', 'phone', 'date_of_birth']);
+    }
+
+    /**
      * Minimal "quick add" (e.g. from the appointment modal): name + phone only.
      * Returns ['duplicate' => Patient] if the phone already exists in this
      * branch, otherwise ['patient' => Patient].
@@ -255,9 +281,7 @@ class PatientService
     {
         $phone = trim((string) ($in['phone'] ?? ''));
 
-        $existing = Patient::where('branch_id', $actor->branch_id)
-            ->where('phone', $phone)
-            ->first(['id', 'name', 'phone']);
+        $existing = $this->findDuplicatesByPhone($phone, (int) $actor->branch_id)->first();
 
         if ($existing) {
             return ['duplicate' => $existing];

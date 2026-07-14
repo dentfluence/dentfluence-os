@@ -8,9 +8,9 @@ use App\Models\Presentation;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentPlanItem;
 use App\Models\Treatment;
-use App\Models\TreatmentOpportunity;
 use App\Services\Relationship\ActivityEngine;
 use App\Services\TreatmentPlan\ConsentDocumentService;
+use App\Services\TreatmentPlan\TreatmentPlanAcceptanceService;
 use App\Support\QrCodeGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -241,7 +241,31 @@ class TreatmentPlanController extends Controller
 
             if ($request->has('items')) {
                 $keptIds = collect($request->items)->pluck('id')->filter()->all();
-                $plan->items()->whereNotIn('id', $keptIds)->delete();
+
+                // Never delete work that has already been done or billed.
+                // A plan revision re-sends only the pending rows, so the old
+                // blanket `whereNotIn(...)->delete()` silently hard-deleted
+                // completed and already-invoiced line items (and their
+                // plan↔invoice linkage) whenever a dentist revised an ongoing
+                // plan. Those rows are now protected regardless of the payload.
+                $protectedIds = $plan->items()
+                    ->where(function ($q) {
+                        $q->where('status', 'completed')
+                          ->orWhereIn('billing_progress', [
+                              TreatmentPlanItem::PROGRESS_PARTIAL,
+                              TreatmentPlanItem::PROGRESS_COMPLETED,
+                              TreatmentPlanItem::PROGRESS_INVOICED,
+                          ])
+                          ->orWhere('invoiced_units', '>', 0)
+                          ->orWhereHas('teeth', fn ($t) => $t->where('status', '!=', 'pending'));
+                    })
+                    ->pluck('id')
+                    ->all();
+
+                $plan->items()
+                    ->whereNotIn('id', array_merge($keptIds, $protectedIds))
+                    ->delete();
+
                 $this->syncItems($plan, $request->items, 0);
                 $plan->update(['total' => $plan->items()->sum('total')]);
             }
@@ -263,59 +287,13 @@ class TreatmentPlanController extends Controller
     // Any other options for the same consultation remain as-is (for history).
     //
 
-    public function accept(TreatmentPlan $plan): JsonResponse
+    public function accept(TreatmentPlan $plan, TreatmentPlanAcceptanceService $acceptance): JsonResponse
     {
-        $plan->update([
-            'accepted_at' => now(),
-            'status'      => 'ongoing',
-        ]);
-
-        $plan->load(['items', 'creator', 'patient']);
-
-        // ── Backend orchestration (docs/backend-orchestration-plan.md §2.5) ────
-        // Record the acceptance on the Timeline and auto-create a follow-up
-        // Opportunity, exactly the way OpportunityPipelineController::store()
-        // already does it manually — same fields, same relationship_id
-        // resolution, same starting stage. Guarded by the treatment_plan_id
-        // lookup so re-accepting a plan (e.g. after a revert) never creates a
-        // second Opportunity for it. Creates no UI, no new form, no extra click.
-        $relationshipId = $plan->patient?->relationship_id;
-
-        app(ActivityEngine::class)->log(
-            subject:        $plan,
-            event:          'treatment_plan.accepted',
-            actor:          Auth::user(),
-            metadata:       ['patient_id' => $plan->patient_id],
-            relationshipId: $relationshipId,
-            description:    'Treatment plan accepted',
-        );
-
-        if (! TreatmentOpportunity::where('treatment_plan_id', $plan->id)->exists()) {
-            $firstItem = $plan->items->first();
-
-            $opportunity = TreatmentOpportunity::create([
-                'patient_id'        => $plan->patient_id,
-                'treatment_plan_id' => $plan->id,
-                'relationship_id'   => $relationshipId,
-                'type'              => 'other',
-                'label'             => $firstItem?->treatment_name ?? $plan->plan_name,
-                'status'            => 'prospect',
-                'priority'          => 'medium',
-                'created_by'        => Auth::id(),
-            ]);
-
-            // Fires the already-enabled opportunity_nudge_7d rule (RulesEngine ->
-            // TaskEngine::autoCreate, dedup-guarded) — "Opportunity follow-up —
-            // no appointment yet" call task, 7 days out, if still in 'prospect'.
-            app(ActivityEngine::class)->log(
-                subject:        $opportunity,
-                event:          'opportunity.created',
-                actor:          Auth::user(),
-                metadata:       ['stage' => 'prospect', 'patient_id' => $plan->patient_id, 'source' => 'treatment_plan_accepted'],
-                relationshipId: $relationshipId,
-                description:    'Opportunity created from accepted treatment plan',
-            );
-        }
+        // Acceptance orchestration (stamp + Timeline log + guarded Opportunity)
+        // lives in TreatmentPlanAcceptanceService — shared with the Smart
+        // Presentation and mobile accept paths so all three produce identical
+        // downstream records. See docs/backend-orchestration-plan.md §2.5.
+        $plan = $acceptance->accept($plan, Auth::user(), via: 'clinic');
 
         return response()->json([
             'success' => true,
@@ -392,6 +370,15 @@ class TreatmentPlanController extends Controller
 
     public function destroy(TreatmentPlan $plan): JsonResponse
     {
+        // Billing guard — mirrors revert(). Deleting a plan that already has
+        // invoices orphans the billing linkage, so it's refused outright.
+        if ($plan->invoices()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot delete: this plan already has invoices/billing against it. Cancel the plan instead.',
+            ], 422);
+        }
+
         $plan->delete();
 
         return response()->json(['success' => true, 'message' => 'Treatment plan deleted.']);
@@ -401,6 +388,22 @@ class TreatmentPlanController extends Controller
 
     public function destroyItem(TreatmentPlanItem $item): JsonResponse
     {
+        // Same protection as update(): completed / billed work is never deleted.
+        $isBilled = $item->status === 'completed'
+            || (int) $item->invoiced_units > 0
+            || in_array($item->billing_progress, [
+                TreatmentPlanItem::PROGRESS_PARTIAL,
+                TreatmentPlanItem::PROGRESS_COMPLETED,
+                TreatmentPlanItem::PROGRESS_INVOICED,
+            ], true);
+
+        if ($isBilled) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot remove: this item is already completed or billed.',
+            ], 422);
+        }
+
         $plan = $item->plan;
         $item->delete();
         $plan->update(['total' => $plan->items()->sum('total')]);

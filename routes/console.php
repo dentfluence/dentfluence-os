@@ -50,6 +50,34 @@ Schedule::command('membership:scan-expiring')
 
 /*
 |--------------------------------------------------------------------------
+| Dead-rule producers (production hardening 2026-07-14)
+|--------------------------------------------------------------------------
+| Two RulesEngine rules were enabled but had NO producer — nothing in the app
+| ever emitted their trigger event, so neither had ever fired:
+|
+|   payment_overdue_3d  ← payment.overdue      (payments:scan-overdue)
+|   birthday_3d         ← birthday.approaching (birthdays:scan)
+|
+| Both mirror the shape of membership:scan-expiring above: a thin command over
+| a plain query, firing the event once when the threshold is crossed. The
+| rules' own cooldowns + TaskEngine's dedup guard prevent repeat tasks.
+|
+| Preview either with --dry-run before trusting it.
+*/
+Schedule::command('payments:scan-overdue')
+    ->dailyAt('07:15')
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/payment-overdue-scan.log'));
+
+Schedule::command('birthdays:scan')
+    ->dailyAt('07:20')
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/birthday-scan.log'));
+
+/*
+|--------------------------------------------------------------------------
 | WhatsApp — Appointment Reminders (Phase B 1.2)
 |--------------------------------------------------------------------------
 | Runs daily at 10:00am. Sends the approved `appointment_reminder` template to
@@ -315,3 +343,78 @@ Schedule::command('analytics:rebuild-snapshots')
     ->withoutOverlapping()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/analytics-snapshots.log'));
+
+/*
+|--------------------------------------------------------------------------
+| Audit chain integrity check (production hardening 2026-07-14)
+|--------------------------------------------------------------------------
+| A tamper-evident log that nobody checks is decoration.
+|
+| The chain silently broke on 2026-07-04 (JSON columns are re-formatted and
+| key-reordered by MySQL, so the string read back never matched the string that
+| was hashed) and went unnoticed for ten days — because verification was only
+| ever run by hand, and nobody ran it. Every row with real content had been
+| failing its own hash check the entire time.
+|
+| So it now runs daily and SHOUTS on failure. A failure is either a code defect
+| (as it was in July) or someone editing history — both need a human today, not
+| whenever someone next remembers to type the command.
+|
+| Kept in the foreground (not runInBackground) so the exit code reaches
+| onFailure. It's a few hundred hash computations; it costs nothing.
+*/
+Schedule::command('audit:verify')
+    ->dailyAt('06:30')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/audit-verify.log'))
+    ->onFailure(function () {
+        \Illuminate\Support\Facades\Log::critical(
+            'AUDIT CHAIN VERIFICATION FAILED — the audit log can no longer be trusted. '
+            . 'Run `php artisan audit:diagnose` to find out whether this is a code defect or tampering. '
+            . 'Do NOT run `audit:verify --backfill` until you know which.'
+        );
+
+        // Surface it in-app to every admin, not just in a log file nobody reads.
+        try {
+            \App\Models\User::query()
+                ->where('is_active', true)
+                ->get()
+                ->filter(fn ($u) => $u->isAdminRole())
+                ->each(fn ($u) => \App\Models\AppNotification::create([
+                    'user_id'      => $u->id,
+                    'type'         => 'security',
+                    'title'        => 'Audit log integrity check FAILED',
+                    'message'      => 'The tamper-evident audit chain did not verify this morning. '
+                                    . 'This means either a code defect or that audit history was altered. '
+                                    . 'Investigate with: php artisan audit:diagnose',
+                    'action_label' => null,
+                    'action_url'   => null,
+                ]));
+        } catch (\Throwable $e) {
+            // Never let the alerting path swallow the alert itself.
+            \Illuminate\Support\Facades\Log::critical(
+                'Audit-failure notification could not be delivered: ' . $e->getMessage()
+            );
+        }
+    });
+
+/*
+|--------------------------------------------------------------------------
+| Log table pruning (production hardening 2026-07-14)
+|--------------------------------------------------------------------------
+| activities and audit_logs are written on effectively every action and
+| nothing ever removed a row — both grow without bound, bloating backups and
+| slowing writes. Prunes rows older than the retention window
+| (config/prune.php · PRUNE_RETENTION_MONTHS, default 24 months).
+|
+| Runs weekly, off-hours, chunked so it never holds a long lock.
+| audit_logs is NOT pruned by default (its hash chain is tamper-evident);
+| add --include-audit here once the retention policy is agreed.
+|
+| Preview at any time: php artisan logs:prune          (dry-run by default)
+*/
+Schedule::command('logs:prune --apply')
+    ->weeklyOn(0, '03:30')
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/logs-prune.log'));

@@ -182,14 +182,14 @@
         <span class="co-qa__arrow">&rarr;</span>
     </a>
 
-    {{-- Session 5 — Communication Timeline --}}
-    <a href="{{ route('communication.timeline.index') }}" class="co-qa">
-        <div class="co-qa__icon co-qa__icon--violet">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        </div>
-        <span class="co-qa__label">Timeline</span>
-        <span class="co-qa__arrow">&rarr;</span>
-    </a>
+    {{-- Communication Timeline quick-action REMOVED 2026-07-14 (production
+         hardening). TimelineController still renders hardcoded sample patients,
+         so the page is unwired and its routes are unregistered — this tile was
+         the last live caller of route('communication.timeline.index') and was
+         500-ing the whole Communication dashboard.
+
+         Restore alongside routes/timeline.php, config/communication.php and the
+         communication sidebar once the controller reads live data. --}}
 
 </div>
 </div>{{-- /co-box quick actions --}}

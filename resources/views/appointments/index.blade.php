@@ -1642,6 +1642,37 @@ function showDragToast(msg, type = 'success') {
     toast._t = setTimeout(() => { toast.style.opacity = '0'; }, 2800);
 }
 
+// ─── Reschedule POST helper ───────────────────────────────────
+// The server now enforces blocked-slot + double-booking rules on reschedule.
+// A 422 with has_conflict means "the doctor is already booked here" — that's a
+// deliberate-double-booking decision for the user, so we ask and retry with
+// allow_overlap. A blocked slot (doctor on leave) is a hard no: no retry.
+async function postReschedule(id, body) {
+    const url = window.__APPT_DATA.routes.reschedule.replace('{id}', id);
+    const r   = await fetch(url, {
+        method:  'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept':       'application/json',
+            'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken,
+        },
+        body: JSON.stringify(body),
+    });
+    return r.json();
+}
+
+async function rescheduleWithConfirm(id, body) {
+    let data = await postReschedule(id, body);
+
+    if (!data.ok && data.has_conflict) {
+        const proceed = confirm((data.message || 'This doctor is already booked in that slot.') + '\n\nBook anyway?');
+        if (!proceed) return data;
+        data = await postReschedule(id, { ...body, allow_overlap: true });
+    }
+
+    return data;
+}
+
 // ─── Drag-drop handler ────────────────────────────────────────
 async function onEventDrop(info) {
     const apt  = info.event.extendedProps;
@@ -1654,17 +1685,10 @@ async function onEventDrop(info) {
     const newTime  = `${hh}:${mm}`;
 
     try {
-        const url = window.__APPT_DATA.routes.reschedule.replace('{id}', info.event.id);
-        const r   = await fetch(url, {
-            method:  'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept':       'application/json',
-                'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken,
-            },
-            body: JSON.stringify({ appointment_date: newDate, appointment_time: newTime }),
+        const data = await rescheduleWithConfirm(info.event.id, {
+            appointment_date: newDate,
+            appointment_time: newTime,
         });
-        const data = await r.json();
         if (data.ok) {
             // Sync in-memory record
             const local = window.__APPT_DATA.appointments.find(a => a.id == info.event.id);
@@ -1693,17 +1717,11 @@ async function onEventResize(info) {
     const mm       = start.getMinutes().toString().padStart(2,'0');
 
     try {
-        const url = window.__APPT_DATA.routes.reschedule.replace('{id}', info.event.id);
-        const r   = await fetch(url, {
-            method:  'PATCH',
-            headers: { 'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':window.__APPT_DATA.csrfToken },
-            body: JSON.stringify({
-                appointment_date:  start.toLocaleDateString('en-CA'),
-                appointment_time:  `${hh}:${mm}`,
-                duration_minutes:  diffMins,
-            }),
+        const data = await rescheduleWithConfirm(info.event.id, {
+            appointment_date:  start.toLocaleDateString('en-CA'),
+            appointment_time:  `${hh}:${mm}`,
+            duration_minutes:  diffMins,
         });
-        const data = await r.json();
         if (data.ok) {
             const local = window.__APPT_DATA.appointments.find(a => a.id == info.event.id);
             if (local) local.duration_minutes = diffMins;

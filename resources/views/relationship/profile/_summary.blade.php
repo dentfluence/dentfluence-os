@@ -18,6 +18,8 @@
 |   $score           — int (0–100)
 |   $scoreColor      — string (green|amber|red)
 |   $nextAction      — string
+|   $ltvSignal       — array{value_realized,value_projected,level,factors}  optional
+|   $riskSignal      — array{score,level,factors}  optional
 |==========================================================================
 --}}
 
@@ -131,7 +133,7 @@
         </div>
 
         {{-- Membership --}}
-        <div style="padding:14px 20px;">
+        <div style="padding:14px 20px;{{ (isset($ltvSignal) || isset($riskSignal)) ? 'border-right:1px solid rgba(185,92,183,0.08);' : '' }}">
             <div style="font-size:10px;font-weight:700;color:#9a7aaa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Membership</div>
             @if($membershipStatus && $membershipStatus !== 'not_enrolled')
                 <div style="font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;display:inline-block;
@@ -142,6 +144,46 @@
                 <div style="font-size:12px;color:#9a7aaa;">None</div>
             @endif
         </div>
+
+        {{-- LTV Tier (Insights engine — value_projected bucketed) --}}
+        @isset($ltvSignal)
+            @php
+                $ltvColors = [
+                    'platinum' => ['bg' => '#eef1fb', 'fg' => '#3b4a9e'],
+                    'gold'     => ['bg' => '#fff4e0', 'fg' => '#a05c00'],
+                    'silver'   => ['bg' => '#f0f0f2', 'fg' => '#5a5a63'],
+                    'bronze'   => ['bg' => '#f7ece2', 'fg' => '#8a4a1c'],
+                ];
+                $ltvColor = $ltvColors[$ltvSignal['level']] ?? $ltvColors['bronze'];
+            @endphp
+            <div style="padding:14px 20px;border-right:1px solid rgba(185,92,183,0.08);" title="Realized ₹{{ number_format($ltvSignal['value_realized'], 0) }} + projected accepted work">
+                <div style="font-size:10px;font-weight:700;color:#9a7aaa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">LTV Tier</div>
+                <div style="font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;display:inline-block;background:{{ $ltvColor['bg'] }};color:{{ $ltvColor['fg'] }};">
+                    {{ ucfirst($ltvSignal['level']) }}
+                </div>
+                <div style="font-size:11px;color:#9a7aaa;margin-top:3px;">₹ {{ number_format($ltvSignal['value_projected'], 0) }} projected</div>
+            </div>
+        @endisset
+
+        {{-- Risk (Insights engine — dormancy + no-shows + unanswered outreach) --}}
+        @isset($riskSignal)
+            @php
+                $riskColors = [
+                    'low'      => ['bg' => '#e8f7ef', 'fg' => '#1a7a45'],
+                    'medium'   => ['bg' => '#fff4e0', 'fg' => '#a05c00'],
+                    'high'     => ['bg' => '#fdeaea', 'fg' => '#b52020'],
+                    'critical' => ['bg' => '#fdeaea', 'fg' => '#7a1010'],
+                ];
+                $riskColor = $riskColors[$riskSignal['level']] ?? $riskColors['medium'];
+            @endphp
+            <div style="padding:14px 20px;" title="Dormancy, no-show rate and unanswered outreach, 0-100 (higher = riskier)">
+                <div style="font-size:10px;font-weight:700;color:#9a7aaa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Risk</div>
+                <div style="font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;display:inline-block;background:{{ $riskColor['bg'] }};color:{{ $riskColor['fg'] }};">
+                    {{ ucfirst($riskSignal['level']) }}
+                </div>
+                <div style="font-size:11px;color:#9a7aaa;margin-top:3px;">Score {{ $riskSignal['score'] }}/100</div>
+            </div>
+        @endisset
 
     </div>
 

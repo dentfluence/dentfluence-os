@@ -44,6 +44,12 @@
           id="invoiceForm">
         @csrf
         @if($invoice) @method('PUT') @endif
+        @if($invoice)
+            {{-- Optimistic lock: the server refuses the save if someone else
+                 edited this invoice since this page was rendered, instead of
+                 silently overwriting their changes. --}}
+            <input type="hidden" name="updated_at" value="{{ $invoice->updated_at?->toIso8601String() }}">
+        @endif
         {{-- Hidden fields the controller expects --}}
         <input type="hidden" name="discount_pct" value="0">
         <input type="hidden" name="due_date" value="">

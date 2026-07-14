@@ -578,7 +578,7 @@
                     && (filterVisit === ''     || filterVisit == '{{ $file->visit_id ?? '' }}')
                     && (filterFrom  === ''     || '{{ $file->captured_at?->format('Y-m-d') ?? '' }}' >= filterFrom)
                     && (filterTo    === ''     || '{{ $file->captured_at?->format('Y-m-d') ?? '' }}' <= filterTo)"
-                     @click="window.dispatchEvent(new CustomEvent('open-file-viewer', { detail: { id: {{ $file->id }} } }))"
+                     @click="window.dispatchEvent(new CustomEvent('open-file-viewer', { detail: { id: {{ $file->id }}, patientId: {{ $file->patient_id }} } }))"
                      class="group relative bg-white border border-gray-200 rounded-xl overflow-hidden
                             hover:border-[#6a0f70]/40 hover:shadow-md transition-all cursor-pointer">
 
@@ -631,7 +631,7 @@
                                     flex items-center justify-center gap-2"
                              @click.stop>
                             {{-- View --}}
-                            <button @click="window.dispatchEvent(new CustomEvent('open-file-viewer', { detail: { id: {{ $file->id }} } }))"
+                            <button @click="window.dispatchEvent(new CustomEvent('open-file-viewer', { detail: { id: {{ $file->id }}, patientId: {{ $file->patient_id }} } }))"
                                     class="w-7 h-7 rounded-full bg-white/90 flex items-center justify-center hover:bg-white transition-colors"
                                     title="View">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#374151"

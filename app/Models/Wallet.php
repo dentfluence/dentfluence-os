@@ -42,6 +42,18 @@ class Wallet extends Model
     }
 
     /**
+     * Get or create the wallet, then re-fetch it under a pessimistic row lock.
+     * MUST be called inside a DB transaction. Used by every debit path so two
+     * concurrent debits serialize instead of both reading the same balance.
+     */
+    public static function forPatientLocked(int $patientId): self
+    {
+        $wallet = self::firstOrCreate(['patient_id' => $patientId]);
+
+        return self::whereKey($wallet->id)->lockForUpdate()->first();
+    }
+
+    /**
      * Recalculate and persist running totals from transaction ledger.
      * Call after any credit/debit.
      */
@@ -56,6 +68,19 @@ class Wallet extends Model
             ->where('credit_type', 'permanent')
             ->selectRaw('SUM(CASE WHEN direction="credit" THEN amount ELSE -amount END) as bal')
             ->value('bal') ?? 0;
+
+        // A negative ledger sum means more was debited than credited (e.g. a
+        // historical concurrency bug). Never hide it silently — the balance is
+        // still floored at 0 for display, but the discrepancy is logged so it
+        // shows up in reconciliation instead of being erased.
+        if ($promo < -0.009 || $perm < -0.009) {
+            \Illuminate\Support\Facades\Log::warning('Wallet ledger negative — possible double-spend', [
+                'wallet_id'  => $this->id,
+                'patient_id' => $this->patient_id,
+                'promo_sum'  => (float) $promo,
+                'perm_sum'   => (float) $perm,
+            ]);
+        }
 
         $this->update([
             'balance_promotional' => max(0, $promo),

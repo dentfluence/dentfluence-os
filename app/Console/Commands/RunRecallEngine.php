@@ -6,6 +6,7 @@ use App\Models\Patient;
 use App\Services\RecallEngineService;
 use App\Services\Relationship\ActivityEngine;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 /**
  * RunRecallEngine — Phase 2 Communication OS.
@@ -31,16 +32,29 @@ class RunRecallEngine extends Command
         $this->newLine();
 
         if ($isDryRun) {
-            $this->warn('  ⚠  DRY RUN — no records will be created.');
+            $this->warn('  ⚠  DRY RUN — nothing will be saved.');
             $this->newLine();
-            // TODO: extend service to support dry-run mode
-            return self::SUCCESS;
         }
 
         $this->line('  Running 6 recall triggers...');
         $this->newLine();
 
-        $summary = $engine->runAll();
+        if ($isDryRun) {
+            // Real preview: run the engine for real inside a transaction we
+            // always roll back. The counts are therefore exactly what a live
+            // run would queue, but no rows survive. (Previously --dry-run
+            // printed a banner and exited without computing anything, which
+            // misleadingly reported "nothing to do".)
+            $summary = [];
+            DB::beginTransaction();
+            try {
+                $summary = $engine->runAll();
+            } finally {
+                DB::rollBack();
+            }
+        } else {
+            $summary = $engine->runAll();
+        }
 
         $labels = [
             'no_visit_6months'    => '6-month no-visit recall',
@@ -58,10 +72,17 @@ class RunRecallEngine extends Command
             $rows[] = [$label, $status];
         }
 
-        $this->table(['Trigger', 'Items Queued'], $rows);
+        $this->table(['Trigger', $isDryRun ? 'Would Queue' : 'Items Queued'], $rows);
 
         $total = $summary['total'] ?? 0;
         $this->newLine();
+        if ($isDryRun) {
+            $this->line("  <fg=yellow;options=bold>≈ Would queue {$total} item(s) — rolled back, nothing saved.</>");
+            $this->newLine();
+
+            return self::SUCCESS;
+        }
+
         $this->line("  <fg=green;options=bold>✓ Total items queued: {$total}</>");
         $this->newLine();
 

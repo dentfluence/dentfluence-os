@@ -253,10 +253,28 @@ class User extends Authenticatable
 
     /**
      * Check if user has a specific role.
+     *
+     * Checks BOTH role systems (2026-07-14). Previously this read only the
+     * legacy `role` string, while web authorization (canAccess) reads
+     * `role_id`/RoleModulePermission — so the API (EnsureApiRole → hasRole)
+     * and the web app could disagree about who holds a role for the same user.
+     * That divergence is masked today because everyone is admin, but it would
+     * surface the moment non-admin logins ship: mobile could grant access the
+     * web denies (or vice-versa).
+     *
+     * Mirrors isAdminRole(), which already consulted both systems.
      */
     public function hasRole(string $role): bool
     {
-        return $this->role === $role;
+        if ($this->role === $role) {
+            return true;
+        }
+
+        $roleModel = $this->relationLoaded('roleModel')
+            ? $this->roleModel
+            : $this->roleModel()->first();
+
+        return $roleModel?->slug === $role;
     }
 
     /**

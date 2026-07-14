@@ -652,7 +652,9 @@
 @section('head-extra')
 <script>
 // ── Patient search data (branch-scoped, loaded once) ─────────────
-const __LAB_PATIENTS = {!! json_encode($patients) !!};
+{{-- @json escapes < > / (JSON_HEX_TAG etc.) — raw json_encode allowed a
+     patient name containing </script> to break out and execute (stored XSS) --}}
+const __LAB_PATIENTS = @json($patients);
 
 function labSearchPatient(q) {
     const dd  = document.getElementById('lab-patient-dropdown');

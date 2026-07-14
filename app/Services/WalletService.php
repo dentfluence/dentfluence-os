@@ -86,7 +86,14 @@ class WalletService
         array $treatmentIds = []
     ): float {
         return DB::transaction(function () use ($patientId, $amount, $invoiceId, $createdBy, $treatmentIds) {
-            $wallet        = Wallet::forPatient($patientId);
+            // Row-lock the wallet so concurrent debits serialize (a double-click
+            // or two counters can otherwise both read the same balance and
+            // double-spend the credit). Then refresh cached totals from the
+            // ledger so the checks below run on trustworthy numbers.
+            $wallet = Wallet::forPatientLocked($patientId);
+            $wallet->recalculate();
+            $wallet->refresh();
+
             $invoiceNumber = Invoice::find($invoiceId)?->invoice_number;
 
             if ($wallet->balance_total <= 0 || $amount <= 0) {
@@ -206,7 +213,10 @@ class WalletService
         ?int    $createdBy = null
     ): float {
         return DB::transaction(function () use ($patientId, $amount, $paymentMode, $notes, $createdBy) {
-            $wallet = Wallet::forPatient($patientId);
+            // Row lock + fresh totals: withdrawal is a debit path too.
+            $wallet = Wallet::forPatientLocked($patientId);
+            $wallet->recalculate();
+            $wallet->refresh();
 
             $take = round(min((float) $wallet->balance_permanent, max(0, $amount)), 2);
             if ($take <= 0) {
@@ -245,7 +255,10 @@ class WalletService
         ?int    $createdBy = null
     ): ?WalletTransaction {
         return DB::transaction(function () use ($patientId, $amount, $direction, $reason, $createdBy) {
-            $wallet = Wallet::forPatient($patientId);
+            // Row lock + fresh totals: adjustment can be a debit path.
+            $wallet = Wallet::forPatientLocked($patientId);
+            $wallet->recalculate();
+            $wallet->refresh();
 
             $amt = round(max(0, $amount), 2);
             if ($direction === 'debit') {

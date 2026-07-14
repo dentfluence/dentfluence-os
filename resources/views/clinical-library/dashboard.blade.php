@@ -211,7 +211,7 @@
             <div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid rgba(185,92,183,0.06);transition:background 0.1s;cursor:pointer;"
                  onmouseover="this.style.background='#faf5fb'"
                  onmouseout="this.style.background='transparent'"
-                 onclick="window.dispatchEvent(new CustomEvent('open-file-viewer', { detail: { id: {{ $f->id }} } }))">
+                 onclick="window.dispatchEvent(new CustomEvent('open-file-viewer', { detail: { id: {{ $f->id }}, patientId: {{ $f->patient_id }} } }))">
 
                 {{-- Thumbnail --}}
                 <div style="width:32px;height:32px;border-radius:2px;background:#f3e8f4;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;">

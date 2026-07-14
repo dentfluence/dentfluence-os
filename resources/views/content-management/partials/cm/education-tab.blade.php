@@ -103,7 +103,7 @@ $libraryResources = [
         {{-- Quick actions --}}
         <div class="cm-card-actions" @click.stop="">
             <button class="cm-card-action-btn" title="View"
-                    onclick="window.dispatchEvent(new CustomEvent('open-file-viewer', { detail: { id: {{ $file->id }} } }))">
+                    onclick="window.dispatchEvent(new CustomEvent('open-file-viewer', { detail: { id: {{ $file->id }}, patientId: {{ $file->patient_id }} } }))">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
             <a class="cm-card-action-btn" title="Download" href="{{ $file->display_url }}" download="{{ $file->original_filename }}">

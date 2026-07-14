@@ -60,6 +60,26 @@ class AppointmentActivityLogger
         $this->log($appointment, 'appointment.checked_in', $actor, "{$who} checked in the patient");
     }
 
+    /**
+     * Patient didn't show up.
+     *
+     * Fires the 'appointment.missed' event, which the enabled
+     * 'missed_appointment_followup' rule listens for (config/relationship_rules
+     * .php) to auto-create the reschedule call task. That rule had NO producer
+     * — nothing in the app ever emitted this event — so it could never run.
+     */
+    public function missed(Appointment $appointment, ?User $actor): void
+    {
+        $appointment->loadMissing(['patient', 'doctor']);
+
+        $this->log($appointment, 'appointment.missed', $actor, 'Patient did not attend (no-show)', [
+            'doctor_id'        => $appointment->doctor_id,
+            'appointment_date' => (string) $appointment->appointment_date,
+            'appointment_time' => $appointment->appointment_time,
+            'type'             => $appointment->type,
+        ]);
+    }
+
     public function completed(Appointment $appointment, ?User $actor): void
     {
         $who = $actor?->name;

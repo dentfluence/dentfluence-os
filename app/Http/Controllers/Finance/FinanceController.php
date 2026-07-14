@@ -957,6 +957,35 @@ class FinanceController extends Controller
                     });
                 }
             }
+
+            // ── 4. Sync Vendor Invoice status (2026-07-14) ────────────────
+            // VendorInvoice.status was created as 'pending' and NOTHING ever
+            // advanced it. Two consequences: (a) the procurement analytics
+            // filter on status 'unpaid'/'paid' and so always returned zero;
+            // (b) VendorInvoiceController::destroy()'s "cannot delete a paid
+            // invoice" guard never fired, so a paid vendor bill could be
+            // deleted — taking its paid FinanceExpense with it and corrupting
+            // the vendor's outstanding balance.
+            if ($expense->source_type === \App\Models\Procurement\VendorInvoice::class) {
+                \App\Models\Procurement\VendorInvoice::where('id', $expense->source_id)
+                    ->update(['status' => 'paid']);
+            }
+
+            // Vendor outstanding is a cached counter. It was incremented when the
+            // bill was raised but never decremented when it was PAID, so it only
+            // ever grew and drifted away from the real payable. Settle it here,
+            // floored at zero so a legacy/mismatched counter can't go negative.
+            if ($expense->vendor_id) {
+                $vendor = \App\Models\Finance\FinanceVendor::lockForUpdate()->find($expense->vendor_id);
+
+                if ($vendor) {
+                    $settled = min((float) $expense->total_amount, (float) $vendor->outstanding_amount);
+
+                    if ($settled > 0) {
+                        $vendor->decrement('outstanding_amount', $settled);
+                    }
+                }
+            }
         });
 
         return redirect()->back()->with('success', "'{$expense->title}' marked as paid. Voucher generated.");

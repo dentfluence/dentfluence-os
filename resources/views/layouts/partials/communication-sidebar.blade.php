@@ -200,23 +200,11 @@
                 </a>
             </li>
 
-            <li class="comm-sidebar__nav-divider" role="separator">
-                <span>History</span>
-            </li>
-
-            {{-- Communication Timeline --}}
-            <li class="comm-sidebar__nav-item">
-                <a href="{{ route('communication.timeline.index') }}"
-                   class="comm-sidebar__nav-link {{ $activeNav === 'timeline' ? 'is-active' : '' }}"
-                   aria-current="{{ $activeNav === 'timeline' ? 'page' : 'false' }}">
-                    <span class="comm-sidebar__nav-icon" aria-hidden="true">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><circle cx="12" cy="12" r="4"/>
-                        </svg>
-                    </span>
-                    <span class="comm-sidebar__nav-label">Communication Timeline</span>
-                </a>
-            </li>
+            {{-- 'History' divider + Communication Timeline nav removed
+                 2026-07-14 (production hardening) — TimelineController still
+                 renders hardcoded SAMPLE patients (getDummyPatients). Restore
+                 together with the config/communication.php tile once the
+                 controller is wired to live data. --}}
 
             {{-- Templates nav item removed 2026-07-06 — Templates moved to the
                  Relationship/PRE module (relationship.templates.*). It's now a

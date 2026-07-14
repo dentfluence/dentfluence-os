@@ -1022,16 +1022,26 @@ function dfAppointmentModal() {
 
         // Doctor may be double-booked on purpose (second chair, overlap
         // consult) — warn and let the user decide rather than hard-blocking.
+        //
+        // The server now ENFORCES the overlap rule (it previously did not), so
+        // when the user knowingly confirms we must tell the server that by
+        // sending allow_overlap. This sets this.allowOverlap, which the submit
+        // bodies below include.
         async confirmIfDoubleBooked(doctorId, date, time, duration, excludeId = null) {
+            this.allowOverlap = false;
+
             const data = await this.fetchConflictData(doctorId, date, time, duration, excludeId);
             if (!data || !data.has_conflict || !data.conflicts.length) return true;
 
             const c = data.conflicts[0];
             const doctorName = this.doctors.find(d => d.id == doctorId)?.name || 'This doctor';
-            return confirm(
+            const proceed = confirm(
                 `Dr. ${doctorName} already has an appointment with ${c.patient_name} at ${c.time} ` +
                 `(${c.duration} min). Book this appointment for the same doctor anyway?`
             );
+
+            this.allowOverlap = proceed;
+            return proceed;
         },
 
         // ── Submit Appointment ────────────────────────────────────────
@@ -1070,6 +1080,7 @@ function dfAppointmentModal() {
                         treatment_id:          this.appt.treatmentId          || null,
                         notes:                 this.appt.notes,
                         operatory_id:          this.appt.operatoryId          || null,
+                        allow_overlap:         !!this.allowOverlap,
                     }),
                 });
                 const data = await r.json();
@@ -1097,7 +1108,10 @@ function dfAppointmentModal() {
         // ── Submit Walk-In ────────────────────────────────────────────
         async submitWalkin() {
             this.errors = {};
-            const today = new Date().toISOString().split('T')[0];
+            // en-CA gives LOCAL YYYY-MM-DD. toISOString() is UTC — between
+            // 00:00 and 05:29 IST it returned YESTERDAY while the time below is
+            // local, so an early-hours walk-in landed on the wrong day-sheet.
+            const today = new Date().toLocaleDateString('en-CA');
 
             let body = {
                 appointment_date:      today,
@@ -1129,6 +1143,7 @@ function dfAppointmentModal() {
                     this.wi.doctorId, today, body.appointment_time, 30
                 );
                 if (!okToBook) return;
+                body.allow_overlap = !!this.allowOverlap;
             }
 
             this.submitting = true;

@@ -67,9 +67,11 @@ class Receipt extends Model
 
         // withTrashed ensures soft-deleted receipts still count,
         // so voided receipts never cause a duplicate number collision.
+        // lockForUpdate serializes concurrent generation (see Invoice::nextNumber).
         $last = self::withTrashed()
             ->whereYear('created_at', $year)
             ->where('receipt_number', 'like', $prefix . '%')
+            ->lockForUpdate()
             ->max('receipt_number');
 
         $seq = $last ? (int) substr($last, strlen($prefix)) : 0;

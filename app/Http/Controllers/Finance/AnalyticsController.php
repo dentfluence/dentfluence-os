@@ -82,7 +82,11 @@ class AnalyticsController extends Controller
             ->keyBy('month');
 
         // Overdue vendor invoices (Phase 1 vendor_invoices)
-        $overdueInvoices = VendorInvoice::where('status', 'unpaid')
+        // 2026-07-14: filtered on status 'unpaid', which is NOT in the enum
+        // (draft|pending|approved|paid|cancelled) — so this always returned
+        // zero and every overdue vendor bill was invisible. The unpaid states
+        // are the non-terminal ones.
+        $overdueInvoices = VendorInvoice::whereIn('status', VendorInvoice::UNPAID_STATUSES)
             ->where('due_date', '<', today())
             ->with(['financeVendor', 'purchaseOrder'])
             ->orderBy('due_date')
@@ -327,7 +331,7 @@ class AnalyticsController extends Controller
             'total_po_value'   => ($poSummary->sum('total')),
             'pending_pos'      => $pendingPos->count(),
             'total_invoiced'   => VendorInvoice::whereBetween('invoice_date', [$from, $to])->sum('total_amount'),
-            'unpaid_invoices'  => VendorInvoice::where('status', 'unpaid')->sum('total_amount'),
+            'unpaid_invoices'  => VendorInvoice::whereIn('status', VendorInvoice::UNPAID_STATUSES)->sum('total_amount'),
             'grn_count'        => $grnSummary->cnt ?? 0,
             'grn_value'        => $grnSummary->total ?? 0,
         ];
@@ -437,7 +441,7 @@ class AnalyticsController extends Controller
             ->withQueryString();
 
         // Vendor invoice outstanding (from procurement)
-        $procurementOutstanding = VendorInvoice::where('status', 'unpaid')
+        $procurementOutstanding = VendorInvoice::whereIn('status', VendorInvoice::UNPAID_STATUSES)
             ->with(['financeVendor', 'purchaseOrder'])
             ->orderBy('due_date')
             ->limit(20)
@@ -452,7 +456,7 @@ class AnalyticsController extends Controller
         $kpis = [
             'patient_outstanding'  => Invoice::whereIn('status', ['draft', 'partial'])->sum('balance_due'),
             'vendor_outstanding'   => FinanceExpense::where('payment_status', 'unpaid')->sum('total_amount'),
-            'procurement_due'      => VendorInvoice::where('status', 'unpaid')->sum('total_amount'),
+            'procurement_due'      => VendorInvoice::whereIn('status', VendorInvoice::UNPAID_STATUSES)->sum('total_amount'),
             'lab_outstanding'      => LabMonthlyReconciliation::where('status', 'approved')->sum('agreed_amount'),
             'overdue_patient_cnt'  => Invoice::where('status', '!=', 'paid')
                                         ->whereNotNull('due_date')->where('due_date', '<', today())->count(),
@@ -505,6 +509,33 @@ class AnalyticsController extends Controller
             $cursor->addMonth();
         }
 
+        // Quarter-over-quarter roll-up of the same monthly figures — Indian FY
+        // convention (Q1=Apr-Jun ... Q4=Jan-Mar), matching fyRange() in
+        // Finance\FinanceReportsController. Reuses $profitability, no new query.
+        // Built as a plain array, not a Collection, while accumulating — writing
+        // to a nested array through Collection's ArrayAccess (`$c[$k]['x'] += 1`)
+        // silently no-ops in PHP ("indirect modification of overloaded element"),
+        // it does not throw, so it's an easy way to ship rows that never total.
+        $quarterlyMap = [];
+        foreach ($profitability as $row) {
+            [$yearNum, $monthNum] = array_map('intval', explode('-', $row['month']));
+            $fyStart = $monthNum >= 4 ? $yearNum : $yearNum - 1;
+            $fyEnd   = $fyStart + 1;
+            $qNum    = intdiv((($monthNum - 4 + 12) % 12), 3) + 1;
+            $qKey    = "FY{$fyStart}-{$fyEnd} Q{$qNum}";
+
+            if (! isset($quarterlyMap[$qKey])) {
+                $quarterlyMap[$qKey] = ['quarter' => $qKey, 'revenue' => 0, 'expense' => 0, 'profit' => 0];
+            }
+            $quarterlyMap[$qKey]['revenue'] += $row['revenue'];
+            $quarterlyMap[$qKey]['expense'] += $row['expense'];
+            $quarterlyMap[$qKey]['profit']  += $row['profit'];
+        }
+        $quarterly = collect($quarterlyMap)->map(function ($q) {
+            $q['margin'] = $q['revenue'] > 0 ? round(($q['profit'] / $q['revenue']) * 100, 1) : 0;
+            return $q;
+        })->values();
+
         // Revenue breakdown by payment mode
         $revenueByMode = InvoicePayment::whereBetween('payment_date', [$from, $to])
             ->selectRaw('payment_mode, SUM(amount) as total, COUNT(*) as cnt')
@@ -545,7 +576,7 @@ class AnalyticsController extends Controller
         ];
 
         return view('finance.analytics.business', compact(
-            'kpis', 'profitability', 'revenueByMode', 'expenseByCategory',
+            'kpis', 'profitability', 'quarterly', 'revenueByMode', 'expenseByCategory',
             'procurementTrend', 'months', 'from', 'to'
         ));
     }

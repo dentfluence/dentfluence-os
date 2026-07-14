@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\Relationship\AppointmentActivityLogger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 
 /**
  * AppointmentService
@@ -29,6 +30,102 @@ class AppointmentService
     private const WITH = ['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'];
 
     public function __construct(private AppointmentActivityLogger $activityLogger) {}
+
+    // ── Scheduling guards (shared by web + API) ──────────────────────────────
+
+    /**
+     * Is the doctor blocked (leave / break / emergency) across this slot?
+     *
+     * @return DoctorBlockedSlot|null the blocking row, or null when free
+     */
+    public function blockedSlotConflict(?int $doctorId, string $date, string $time, int $duration): ?DoctorBlockedSlot
+    {
+        if (! $doctorId) return null;
+
+        $start = Carbon::parse("$date $time");
+        $end   = $start->copy()->addMinutes($duration);
+
+        return DoctorBlockedSlot::with('doctor')
+            ->where('doctor_id', $doctorId)
+            ->where('block_date', $date)
+            ->where('start_time', '<', $end->format('H:i:s'))
+            ->where('end_time',   '>', $start->format('H:i:s'))
+            ->first();
+    }
+
+    /**
+     * Throw a 422 ValidationException unless the slot is bookable.
+     * Used by the API/service create path; the web controller renders its own
+     * messages (JSON for the modals, flash for the form) and calls the two
+     * check methods above directly.
+     */
+    public function assertSlotIsBookable(
+        ?int   $doctorId,
+        int    $branchId,
+        string $date,
+        string $time,
+        int    $duration,
+        bool   $allowOverlap = false,
+        ?int   $excludeId = null
+    ): void {
+        if ($block = $this->blockedSlotConflict($doctorId, $date, $time, $duration)) {
+            $doctorName = $block->doctor?->name ?? 'This doctor';
+            $reason     = $block->reason ? " ({$block->reason})" : '';
+
+            throw ValidationException::withMessages([
+                'appointment_time' => "{$doctorName} is not available from {$block->start_time} to {$block->end_time} on this date{$reason}.",
+            ]);
+        }
+
+        if ($allowOverlap) {
+            return;
+        }
+
+        if ($clash = $this->overlapConflict($doctorId, $branchId, $date, $time, $duration, $excludeId)) {
+            $who  = $clash->patient?->name ?? 'another patient';
+            $when = substr((string) $clash->appointment_time, 0, 5);
+
+            throw ValidationException::withMessages([
+                'appointment_time' => "This doctor already has {$who} at {$when} ({$clash->duration_minutes} min). Choose another time, or resend with allow_overlap to double-book.",
+            ]);
+        }
+    }
+
+    /**
+     * Does this slot overlap an existing appointment for the same doctor?
+     *
+     * Cancelled and no-show appointments don't count. $excludeId skips the
+     * appointment being edited/rescheduled so it never conflicts with itself.
+     *
+     * @return Appointment|null the clashing appointment, or null when free
+     */
+    public function overlapConflict(
+        ?int   $doctorId,
+        int    $branchId,
+        string $date,
+        string $time,
+        int    $duration,
+        ?int   $excludeId = null
+    ): ?Appointment {
+        if (! $doctorId) return null;
+
+        $start = Carbon::parse("$date $time");
+        $end   = $start->copy()->addMinutes($duration);
+
+        return Appointment::with('patient')
+            ->where('branch_id', $branchId)
+            ->where('doctor_id', $doctorId)
+            ->whereDate('appointment_date', $date)
+            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
+            ->get()
+            ->first(function (Appointment $apt) use ($start, $end) {
+                $aptStart = Carbon::parse($apt->appointment_date . ' ' . $apt->appointment_time);
+                $aptEnd   = $aptStart->copy()->addMinutes($apt->duration_minutes ?? 30);
+
+                return $start->lt($aptEnd) && $end->gt($aptStart);
+            });
+    }
 
     /**
      * Branch-scoped, filtered, ordered appointment query.
@@ -102,6 +199,19 @@ class AppointmentService
      */
     public function create(array $in, User $actor): Appointment
     {
+        // Scheduling guards (2026-07-14): the API path previously ran NO
+        // conflict checks at all, so the mobile app could book a doctor onto
+        // their leave or on top of another patient. Deliberate double-booking
+        // stays possible via allow_overlap, matching the web modals.
+        $this->assertSlotIsBookable(
+            doctorId:     (int) $in['doctor_id'],
+            branchId:     (int) $actor->branch_id,
+            date:         $in['appointment_date'],
+            time:         $in['appointment_time'],
+            duration:     (int) ($in['duration_minutes'] ?? 30),
+            allowOverlap: (bool) ($in['allow_overlap'] ?? false),
+        );
+
         $appointment = Appointment::create([
             'patient_id'            => $in['patient_id'],
             'doctor_id'             => $in['doctor_id'],
@@ -147,6 +257,8 @@ class AppointmentService
         match ($status) {
             'checkin' => $this->activityLogger->checkedIn($appointment, $actor),
             'done'    => $this->activityLogger->completed($appointment, $actor),
+            // Web parity — fires the missed_appointment_followup rule.
+            'no_show' => $this->activityLogger->missed($appointment, $actor),
             default   => null,
         };
 
@@ -176,6 +288,20 @@ class AppointmentService
     public function createWalkIn(array $in, User $actor): Appointment
     {
         $branchId = $actor->branch_id;
+
+        $doctorIdForCheck = $in['doctor_id']
+            ?? User::where('branch_id', $branchId)->where('is_active', true)->value('id');
+
+        // Guards run BEFORE the patient is created, so a rejected walk-in never
+        // leaves an orphan patient record behind.
+        $this->assertSlotIsBookable(
+            doctorId:     $doctorIdForCheck ? (int) $doctorIdForCheck : null,
+            branchId:     (int) $branchId,
+            date:         $in['appointment_date'] ?? today()->toDateString(),
+            time:         $in['appointment_time'] ?? now()->format('H:i'),
+            duration:     (int) ($in['duration_minutes'] ?? 30),
+            allowOverlap: (bool) ($in['allow_overlap'] ?? false),
+        );
 
         if (! empty($in['patient_id'])) {
             $patient = Patient::find($in['patient_id']);

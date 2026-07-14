@@ -177,16 +177,34 @@ class VendorInvoiceController extends Controller
                 ]);
             }
 
-            // ── 3. Auto-create Accounts Payable entry in Finance ──────────
+            // ── 3. Accounts Payable entry in Finance ─────────────────────
             //    Finance is the single source of truth for payments.
-            //    This unpaid expense shows in Finance > Expenses as a vendor bill.
+            //
+            //    DOUBLE-AP GUARD (2026-07-14): receiving goods against a PO
+            //    ALREADY books an unpaid vendor bill (InventoryService, on GRN
+            //    receipt, source_type='PurchaseOrder'). Entering the vendor's
+            //    actual invoice for that same PO then created a SECOND unpaid
+            //    expense for the same liability — payables were double-counted
+            //    in Finance > Expenses and the bill could be paid twice.
+            //
+            //    So: if a GRN-sourced unpaid expense already exists for this PO,
+            //    take it over — re-point it at this invoice and correct its
+            //    amounts to the invoice's (authoritative) figures — instead of
+            //    creating a second bill. Note the GRN path writes the bare
+            //    string 'PurchaseOrder' while everything else uses the FQCN, so
+            //    both forms are matched here.
             $suppliesCategory = FinanceExpenseCategory::where('name', 'like', '%Suppl%')
                 ->orWhere('name', 'like', '%Dental%')
                 ->orWhere('name', 'like', '%Inventory%')
                 ->orWhere('name', 'like', '%Purchase%')
                 ->first();
 
-            $expense = FinanceExpense::create([
+            $existingGrnExpense = FinanceExpense::whereIn('source_type', ['PurchaseOrder', PurchaseOrder::class])
+                ->where('source_id', $po->id)
+                ->where('payment_status', 'unpaid')
+                ->first();
+
+            $expenseFields = [
                 'title'          => 'Vendor Invoice ' . $invoice->invoice_ref
                                     . ' — PO# ' . $po->order_no,
                 'description'    => 'Vendor bill: '
@@ -207,8 +225,19 @@ class VendorInvoiceController extends Controller
                 'source_type'    => VendorInvoice::class,
                 'source_id'      => $invoice->id,
                 'notes'          => $data['notes'] ?? null,
-                'created_by'     => auth()->id(),
-            ]);
+            ];
+
+            // Delta the vendor's cached outstanding by the CHANGE in the bill,
+            // not the full amount, when we're taking over an existing GRN bill.
+            $previousTotal = 0.0;
+
+            if ($existingGrnExpense) {
+                $previousTotal = (float) $existingGrnExpense->total_amount;
+                $existingGrnExpense->update($expenseFields);
+                $expense = $existingGrnExpense;
+            } else {
+                $expense = FinanceExpense::create($expenseFields + ['created_by' => auth()->id()]);
+            }
 
             // ── 4. Link the Finance expense back to the invoice ───────────
             $invoice->update(['finance_expense_id' => $expense->id]);
@@ -218,7 +247,11 @@ class VendorInvoiceController extends Controller
 
             // ── 6. Update Finance vendor outstanding (cached field) ────────
             if ($financeVendorId) {
-                \App\Models\Finance\FinanceVendor::where('id', $financeVendorId)->increment('outstanding_amount', $totalAmount);
+                $delta = $totalAmount - $previousTotal;
+                if (abs($delta) >= 0.01) {
+                    \App\Models\Finance\FinanceVendor::where('id', $financeVendorId)
+                        ->increment('outstanding_amount', $delta);
+                }
             }
         });
 

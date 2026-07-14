@@ -803,6 +803,9 @@ function addPatientModal() {
                 referral_type: '', referred_patient_id: null,
                 referrer_name: '', referrer_mobile: '', referrer_type: '', referrer_notes: '',
                 notes: '',
+                // Set to true only after the user acknowledges a duplicate-phone
+                // warning and chooses to register a new patient anyway.
+                confirm_duplicate: false,
             };
         },
 
@@ -1001,6 +1004,31 @@ function addPatientModal() {
                     body: JSON.stringify(this.form),
                 });
                 const data = await resp.json();
+
+                // 409 = a patient with this mobile already exists. Families do
+                // share a number, so this is a decision, not a hard block: show
+                // who it is and let the user open them or register anyway.
+                if (resp.status === 409 && data.duplicate) {
+                    const list = (data.duplicates || [])
+                        .map(p => `• ${p.name} (${p.phone})`)
+                        .join('\n');
+                    const proceed = confirm(
+                        `A patient with this mobile number already exists:\n\n${list}\n\n` +
+                        `Click Cancel to open the existing record instead, or OK to register a NEW patient ` +
+                        `(e.g. a family member sharing the number).`
+                    );
+
+                    if (!proceed) {
+                        const first = (data.duplicates || [])[0];
+                        if (first?.url) window.location.href = first.url;
+                        return;
+                    }
+
+                    this.form.confirm_duplicate = true;
+                    this.loading = false;
+                    return this.submit();
+                }
+
                 if (resp.ok && data.success) {
                     this.createdPatientId = data.patient?.patient_id ?? ('#' + data.patient?.id);
                     this.createdPatientUrl = data.patient_url;

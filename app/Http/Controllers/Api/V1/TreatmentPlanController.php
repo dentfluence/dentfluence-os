@@ -9,6 +9,7 @@ use App\Models\Treatment;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentPlanItem;
 use App\Services\Billing\TreatmentPlanBillingService;
+use App\Services\TreatmentPlan\TreatmentPlanAcceptanceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -123,7 +124,25 @@ class TreatmentPlanController extends ApiController
 
             if (array_key_exists('items', $data)) {
                 $keep = collect($data['items'])->pluck('id')->filter()->all();
-                $p->items()->whereNotIn('id', $keep)->delete();
+
+                // Never delete completed / already-billed items (web parity —
+                // a revision re-sends only the pending rows, so the old blanket
+                // delete destroyed finished work and its invoice linkage).
+                $protected = $p->items()
+                    ->where(function ($q) {
+                        $q->where('status', 'completed')
+                          ->orWhereIn('billing_progress', [
+                              TreatmentPlanItem::PROGRESS_PARTIAL,
+                              TreatmentPlanItem::PROGRESS_COMPLETED,
+                              TreatmentPlanItem::PROGRESS_INVOICED,
+                          ])
+                          ->orWhere('invoiced_units', '>', 0)
+                          ->orWhereHas('teeth', fn ($t) => $t->where('status', '!=', 'pending'));
+                    })
+                    ->pluck('id')
+                    ->all();
+
+                $p->items()->whereNotIn('id', array_merge($keep, $protected))->delete();
                 $this->syncItems($p, $data['items']);
                 $p->update(['total' => $p->items()->sum('total')]);
             }
@@ -138,7 +157,13 @@ class TreatmentPlanController extends ApiController
         $p = $this->findPlan($request, $plan);
         if ($p instanceof JsonResponse) return $p;
 
-        $p->update(['accepted_at' => now(), 'status' => 'ongoing']);
+        // This path previously ONLY flipped the status — it silently skipped
+        // the Timeline log and the follow-up Opportunity that the web path
+        // creates, so a plan accepted on mobile produced different records to
+        // the same plan accepted at the desk. Now both go through the shared
+        // acceptance service.
+        $p = app(TreatmentPlanAcceptanceService::class)
+            ->accept($p, $request->user(), via: 'mobile');
 
         return $this->success($this->payload($p->fresh(['items', 'creator'])),
             'Treatment option accepted.');

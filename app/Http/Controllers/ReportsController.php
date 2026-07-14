@@ -32,7 +32,11 @@ class ReportsController extends Controller
         $base = Appointment::whereBetween('appointment_date', [$from, $to]);
 
         $totalAppointments  = (clone $base)->count();
-        $completed          = (clone $base)->where('status', 'completed')->count();
+        // Appointments' terminal status is 'done' (enum: scheduled, checkin,
+        // in_chair, checkout, done, cancelled, no_show) — 'completed' does not
+        // exist on appointments and always counted 0. (treatment_visits DOES
+        // use 'completed'; don't "fix" those queries.)
+        $completed          = (clone $base)->where('status', 'done')->count();
         $cancelled          = (clone $base)->where('status', 'cancelled')->count();
         $noShow             = (clone $base)->where('status', 'no_show')->count();
         $walkins            = (clone $base)->where('is_walkin', true)->count();
@@ -46,7 +50,7 @@ class ReportsController extends Controller
             ->select(
                 DB::raw('DATE(appointment_date) as day'),
                 DB::raw('COUNT(*) as total'),
-                DB::raw('SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed'),
+                DB::raw('SUM(CASE WHEN status = "done" THEN 1 ELSE 0 END) as completed'),
                 DB::raw('SUM(CASE WHEN status = "cancelled" THEN 1 ELSE 0 END) as cancelled'),
                 DB::raw('SUM(CASE WHEN status = "no_show"   THEN 1 ELSE 0 END) as no_show')
             )

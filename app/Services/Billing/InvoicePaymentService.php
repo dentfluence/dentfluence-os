@@ -12,8 +12,11 @@ use App\Models\EmiSchedule;
 use App\Models\AppSetting;
 use App\Models\Finance\FinanceBankAccount;
 use App\Models\Finance\FinanceTransaction;
+use App\Models\Wallet;
 use App\Services\Relationship\ActivityEngine;
+use App\Services\WalletService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * InvoicePaymentService
@@ -89,7 +92,54 @@ class InvoicePaymentService
             $convenienceFee, $providerScheme, $providerBreakdown,
             &$receipt, &$payment
         ) {
+            // ── Concurrency guard (parity with web recordPayment) ────────────
+            // Lock the invoice row so concurrent submissions serialize, then
+            // re-check state on fresh data and reject an identical resubmission
+            // (double-tap / network retry) within a short window.
+            Invoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+            $invoice->refresh();
+
+            if ($invoice->status === 'cancelled') {
+                throw ValidationException::withMessages([
+                    'amount' => 'Cannot record payment on a cancelled invoice.',
+                ]);
+            }
+
+            $isDuplicate = InvoicePayment::where('invoice_id', $invoice->id)
+                ->where('amount', (float) $in['amount'])
+                ->where('payment_mode', $mode)
+                ->whereDate('payment_date', $in['payment_date'])
+                ->where('created_at', '>=', now()->subSeconds(20))
+                ->exists();
+            if ($isDuplicate) {
+                throw ValidationException::withMessages([
+                    'amount' => 'An identical payment was recorded seconds ago — this looks like a duplicate submission. Refresh and verify before retrying.',
+                ]);
+            }
+
             $paidBefore = (float) $invoice->paid_amount;
+
+            // ── Payment allocation: consume wallet credit first ──────────────
+            // Parity with web recordPayment — only active when the caller
+            // explicitly passes wallet_used (the mobile app may add this later;
+            // absent key = unchanged behaviour).
+            if ((float) ($in['wallet_used'] ?? 0) > 0) {
+                $wallet = Wallet::forPatient($invoice->patient_id);
+                $cap    = min((float) $in['wallet_used'], (float) $wallet->balance_total, (float) $invoice->balance_due);
+                if ($cap > 0) {
+                    $debited = (new WalletService())->debit(
+                        patientId: $invoice->patient_id,
+                        amount:    $cap,
+                        invoiceId: $invoice->id,
+                        createdBy: $userId,
+                    );
+                    if ($debited > 0) {
+                        $invoice->update(['wallet_applied' => (float) $invoice->wallet_applied + $debited]);
+                        $invoice->recalculate();
+                        $invoice->refresh();
+                    }
+                }
+            }
 
             // ── Direct EMI: compute instalment amount ────────────────────────
             $emiAmount = null;
@@ -179,6 +229,24 @@ class InvoicePaymentService
             $invoice->recalculate();
             $invoice->refresh();
             $balanceAfter = (float) $invoice->balance_due;
+
+            // 3b. Excess payment → wallet credit (parity with web recordPayment).
+            // If the patient paid more than the invoice total, the surplus becomes
+            // permanent wallet credit (usable on future invoices). The full cash is
+            // already recorded as income, so no extra finance entry is needed here.
+            if ((float) $invoice->paid_amount > (float) $invoice->total_amount) {
+                $excess = round((float) $invoice->paid_amount - (float) $invoice->total_amount, 2);
+                if ($excess >= 0.01) {
+                    (new WalletService())->deposit(
+                        patientId:   $invoice->patient_id,
+                        amount:      $excess,
+                        paymentMode: $mode,
+                        notes:       'Excess payment from ' . $invoice->invoice_number,
+                        createdBy:   $userId,
+                        source:      'advance',
+                    );
+                }
+            }
 
             // 4. Generate receipt(s)
             //

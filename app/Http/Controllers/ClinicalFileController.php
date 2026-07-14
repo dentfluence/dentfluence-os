@@ -150,9 +150,21 @@ class ClinicalFileController extends Controller
 
         $file->load(['visit.doctor', 'uploadedBy', 'protocolStep.protocol']);
 
+        $data = $this->formatFile($file, detailed: true);
+
+        // Patient block for the File Viewer right pane (the viewer may be
+        // opened from pages that don't already have the patient in scope,
+        // e.g. Clinical Library dashboard / Marketing / Education tabs).
+        $data['patient'] = [
+            'id'     => $patient->id,
+            'name'   => $patient->name,
+            'gender' => $patient->gender,
+            'age'    => $patient->date_of_birth?->age,
+        ];
+
         return response()->json([
             'success' => true,
-            'file'    => $this->formatFile($file, detailed: true),
+            'file'    => $data,
         ]);
     }
 

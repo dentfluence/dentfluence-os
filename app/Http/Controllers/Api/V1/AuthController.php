@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use PragmaRX\Google2FAQRCode\Google2FA;
 
 /**
  * AuthController (API)
@@ -33,6 +34,9 @@ class AuthController extends ApiController
             'email'    => ['required', 'email'],
             'password' => ['required', 'string'],
             'device'   => ['nullable', 'string'], // optional label, e.g. "Pixel 7"
+            // 2FA: TOTP code or one-time recovery code, required when the
+            // account has two-factor enabled.
+            'code'     => ['nullable', 'string'],
         ]);
 
         $user = User::where('email', $data['email'])->first();
@@ -46,6 +50,42 @@ class AuthController extends ApiController
         if (! $user->is_active) {
             AuditLog::event('login_failed', $user->id, ['email' => $data['email'], 'reason' => 'inactive'], ['module' => 'auth']);
             return $this->error('This account is inactive. Please contact your admin.', [], 403);
+        }
+
+        // ── Two-factor challenge ─────────────────────────────────────────────
+        // The web login holds a 2FA-enabled user in a pending state and forces
+        // the code challenge (AuthController::login). This path did NOT — it
+        // issued a full Bearer token on the password alone, so 2FA was not an
+        // enforceable control while the API existed: any 2FA-protected account
+        // was fully reachable via /api/v1/auth/login with just a password.
+        //
+        // Same verification the web challenge uses (TwoFactorController::verify):
+        // TOTP first, then a one-time recovery code.
+        if ($user->hasTwoFactorEnabled()) {
+            $code = trim((string) ($data['code'] ?? ''));
+
+            if ($code === '') {
+                // Not an error the client should treat as "wrong password" —
+                // it's a prompt to collect the second factor and retry.
+                return $this->error(
+                    'Two-factor code required.',
+                    ['two_factor_required' => true],
+                    401
+                );
+            }
+
+            $passedTotp     = $user->two_factor_secret
+                && (new Google2FA())->verifyKey($user->two_factor_secret, $code);
+            $passedRecovery = ! $passedTotp && $user->useRecoveryCode($code);
+
+            if (! $passedTotp && ! $passedRecovery) {
+                AuditLog::event('login_failed', $user->id, [
+                    'email'  => $data['email'],
+                    'reason' => '2fa_failed',
+                ], ['module' => 'auth']);
+
+                return $this->error('Invalid two-factor code.', ['two_factor_required' => true], 401);
+            }
         }
 
         $user->recordLogin(); // updates last_login_at, same as the web login

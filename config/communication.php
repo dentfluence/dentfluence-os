@@ -179,13 +179,18 @@ return [
             'route' => 'communication.tasks.index',
             'badge' => 'pending_tasks_count',
         ],
-        [
-            'key'   => 'timeline',
-            'label' => 'Communication Timeline',
-            'icon'  => 'timeline',
-            'route' => 'communication.timeline.index',
-            'badge' => null,
-        ],
+        // 'timeline' tile removed 2026-07-14 (production hardening) — the
+        // TimelineController still renders hardcoded SAMPLE patients
+        // (getDummyPatients/getDummyTimeline). Restore this entry only after
+        // the controller is wired to live data (see the TODO in
+        // App\Http\Controllers\Communication\TimelineController).
+        // [
+        //     'key'   => 'timeline',
+        //     'label' => 'Communication Timeline',
+        //     'icon'  => 'timeline',
+        //     'route' => 'communication.timeline.index',
+        //     'badge' => null,
+        // ],
         // 'templates' tile removed 2026-07-06 — Message Templates moved to the
         // Relationship/PRE module (relationship.templates.*), reached via gear
         // icons on Recall/Birthday/Anniversary settings, not a Communication OS

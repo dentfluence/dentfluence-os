@@ -26,6 +26,9 @@ class StoreAppointmentRequest extends ApiFormRequest
             'operatory_id'          => ['nullable', 'integer', 'exists:operatories,id'],
             'notes'                 => ['nullable', 'string', 'max:1000'],
             'chief_complaint'       => ['nullable', 'string', 'max:1000'],
+            // Explicit opt-in to double-book a doctor who already has an
+            // overlapping appointment. Without it the service rejects (422).
+            'allow_overlap'         => ['nullable', 'boolean'],
         ];
     }
 }

@@ -174,9 +174,14 @@ class Invoice extends Model
         $year   = now()->year;
         $prefix = 'INV-' . $year . '-';
 
+        // lockForUpdate: serializes concurrent number generation. MAX()+1 was
+        // racy — two simultaneous creations could read the same max, and the
+        // UNIQUE constraint would then roll back one whole payment/invoice
+        // transaction. All callers invoke this inside a DB transaction.
         $last = self::withTrashed()
             ->whereYear('created_at', $year)
             ->where('invoice_number', 'like', $prefix . '%')
+            ->lockForUpdate()
             ->max('invoice_number');
 
         $seq = $last ? (int) substr($last, strlen($prefix)) : 0;

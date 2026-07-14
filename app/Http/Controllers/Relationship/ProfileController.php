@@ -16,6 +16,7 @@ use App\Models\Review;
 use App\Models\Task;
 use App\Models\TreatmentOpportunity;
 use App\Models\TreatmentVisit;
+use App\Services\Insights\InsightsEngine;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,7 +41,7 @@ class ProfileController extends Controller
 {
     // ── Main profile page ──────────────────────────────────────────────────────
 
-    public function show(int $id): View
+    public function show(int $id, InsightsEngine $insights): View
     {
         // Load relationship with all associations
         $relationship = Relationship::with([
@@ -175,6 +176,15 @@ class ProfileController extends Controller
         // Next recommended action (simple rule, Phase 5 will use RulesEngine)
         $nextAction = $this->resolveNextAction($relationship, $patient, $recallStatus, $opportunities);
 
+        // ── Insights signals (LTV tier + risk score) ───────────────────────────
+        // Computed live from the Insights engine (app/Services/Insights) — same
+        // deterministic calculators the insight_signals projection uses, just
+        // read directly here instead of through the (currently unwired) stored
+        // table. Cheap: a handful of read-contract queries scoped to this one
+        // relationship, same cost class as the other stats above.
+        $ltvSignal  = $insights->calculate($relationship, \App\Models\InsightSignal::SIGNAL_LTV);
+        $riskSignal = $insights->calculate($relationship, \App\Models\InsightSignal::SIGNAL_RISK);
+
         // ── Build unified timeline (paginated) ────────────────────────────────
         // Sprint 3 cutover: behind the activity.single_ledger_reads flag the
         // timeline is served by UnifiedTimelineService (a faithful mirror of
@@ -269,6 +279,8 @@ class ProfileController extends Controller
             'score',
             'scoreColor',
             'nextAction',
+            'ltvSignal',
+            'riskSignal',
             'timeline',
             'openTasks',
             'recentComms',

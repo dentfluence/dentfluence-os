@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\MembershipBenefitService;
 use App\Services\Presentations\PresentationNarrativeService;
 use App\Services\Relationship\ActivityEngine;
+use App\Services\TreatmentPlan\TreatmentPlanAcceptanceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
@@ -108,45 +109,16 @@ class PublicPresentationController extends Controller
         $relationshipId = $presentation->patient?->relationship_id;
         $actor = $presentation->created_by ? User::find($presentation->created_by) : null;
 
-        // ── Mirrors TreatmentPlanController::accept() exactly — same fields,
-        // same event name, same guarded Opportunity creation — so a patient
-        // accepting via the presentation is indistinguishable downstream from
-        // an in-clinic acceptance. See class docblock. ──
-        $plan->update(['accepted_at' => now(), 'status' => 'ongoing']);
-        $plan->load(['items', 'patient']);
-
-        app(ActivityEngine::class)->log(
-            subject:        $plan,
-            event:          'treatment_plan.accepted',
-            actor:          $actor,
-            metadata:       ['patient_id' => $plan->patient_id, 'via' => 'smart_presentation'],
-            relationshipId: $relationshipId,
-            description:    'Treatment plan accepted by patient via Smart Presentation',
+        // Acceptance orchestration is shared with the in-clinic and mobile
+        // paths (TreatmentPlanAcceptanceService) — it was previously a
+        // hand-copied clone of TreatmentPlanController::accept(), which meant
+        // any change had to be made in three places or the channels drifted.
+        app(TreatmentPlanAcceptanceService::class)->accept(
+            $plan,
+            $actor,
+            via: 'smart_presentation',
+            createdBy: $presentation->created_by,
         );
-
-        if (! TreatmentOpportunity::where('treatment_plan_id', $plan->id)->exists()) {
-            $firstItem = $plan->items->first();
-
-            $opportunity = TreatmentOpportunity::create([
-                'patient_id'        => $plan->patient_id,
-                'treatment_plan_id' => $plan->id,
-                'relationship_id'   => $relationshipId,
-                'type'              => 'other',
-                'label'             => $firstItem?->treatment_name ?? $plan->plan_name,
-                'status'            => 'prospect',
-                'priority'          => 'medium',
-                'created_by'        => $presentation->created_by,
-            ]);
-
-            app(ActivityEngine::class)->log(
-                subject:        $opportunity,
-                event:          'opportunity.created',
-                actor:          $actor,
-                metadata:       ['stage' => 'prospect', 'patient_id' => $plan->patient_id, 'source' => 'treatment_plan_accepted'],
-                relationshipId: $relationshipId,
-                description:    'Opportunity created from accepted treatment plan',
-            );
-        }
 
         $presentation->update(['status' => Presentation::STATUS_ACCEPTED]);
 

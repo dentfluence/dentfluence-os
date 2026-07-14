@@ -20,6 +20,10 @@
     <form action="{{ route('patients.update', $patient) }}" method="POST" class="px-8 py-8 max-w-5xl mx-auto space-y-8">
         @csrf
         @method('PUT')
+        {{-- Optimistic lock: the server refuses the save if another user edited
+             this patient since this page was rendered, rather than silently
+             overwriting their changes (last-write-wins). --}}
+        <input type="hidden" name="updated_at" value="{{ $patient->updated_at?->toIso8601String() }}">
 
         @if($errors->any())
         <div class="border border-red-300 bg-red-50 px-5 py-4 text-sm" style="font-family:'Inter',sans-serif;color:#991b1b;">

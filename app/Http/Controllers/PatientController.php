@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\ChecksStaleUpdates;
 use App\Models\Patient;
 use App\Services\PatientProfileService;
 use App\Services\PatientService;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\Auth;
 
 class PatientController extends Controller
 {
+    use ChecksStaleUpdates;
+
     public function __construct(
         private PatientProfileService $profileService,
         private PatientService $patients,
@@ -124,7 +127,43 @@ class PatientController extends Controller
             'referrer_type'        => ['nullable', 'in:Doctor,Friend,Family,Staff,Corporate,Other'],
             'referrer_notes'       => ['nullable', 'string', 'max:500'],
             'notes'                => ['nullable', 'string'],
+            // Set by the "Register anyway" confirmation when a possible
+            // duplicate was surfaced (families do share one mobile number).
+            'confirm_duplicate'    => ['nullable', 'boolean'],
         ]);
+
+        // ── Duplicate-phone guard ────────────────────────────────────────
+        // Only quickCreate() checked for duplicates before, so the main
+        // registration form silently created a second record for returning
+        // patients — splitting their visit history, billing and recalls.
+        // This is a soft warning, not a block: staff can confirm and proceed.
+        if (! $request->boolean('confirm_duplicate')) {
+            $dupes = $this->patients->findDuplicatesByPhone(
+                $request->input('mobile'),
+                (int) Auth::user()->branch_id
+            );
+
+            if ($dupes->isNotEmpty()) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success'    => false,
+                        'duplicate'  => true,
+                        'message'    => 'A patient with this mobile number already exists.',
+                        'duplicates' => $dupes->map(fn ($p) => [
+                            'id'    => $p->id,
+                            'name'  => $p->name,
+                            'phone' => $p->phone,
+                            'url'   => route('patients.show', $p),
+                        ])->values(),
+                    ], 409);
+                }
+
+                return back()
+                    ->withInput()
+                    ->with('duplicate_patients', $dupes)
+                    ->with('warning', 'A patient with this mobile number already exists. Open the existing record, or confirm to register a new patient (e.g. a family member sharing the number).');
+            }
+        }
 
         // The form sends `mobile`/`dob`/`notes`; the service maps those and
         // handles display-name assembly + tag syncing in one place.
@@ -213,6 +252,11 @@ class PatientController extends Controller
             'follow_up_status'     => ['nullable', 'in:none,due,pending,completed'],
             'follow_up_date'       => ['nullable', 'date'],
         ]);
+
+        // Optimistic lock — refuse the save if someone else edited this patient
+        // since the form was loaded, instead of silently overwriting them.
+        // No-op for clients that don't send updated_at (backward compatible).
+        $this->assertNotStale($request, $patient);
 
         // Service rebuilds the display name and writes only the provided fields.
         $patient = $this->patients->updateFromInput($patient, $request->all());

@@ -30,13 +30,20 @@
         </div>
 
         {{-- Stats Strip --}}
-        <div class="grid grid-cols-4 border-b border-[#e8d5f0] bg-white">
+        <div class="grid grid-cols-5 border-b border-[#e8d5f0] bg-white">
             <template x-for="stat in stats" :key="stat.label">
                 <div class="px-6 py-3 border-r border-[#e8d5f0] last:border-r-0">
                     <div class="font-['Cormorant_Garamond'] text-2xl font-bold text-[#380740]" x-text="stat.count"></div>
                     <div class="font-['DM_Sans'] text-[10px] uppercase tracking-widest text-[#6a0f70]/60 mt-0.5" x-text="stat.label"></div>
                 </div>
             </template>
+            {{-- Chair utilization — booked minutes / (chairs x clinic hours). See
+                 AppointmentController::getChairUtilization() for how this is computed
+                 and what it defaults to when operatories/capacity aren't configured. --}}
+            <div class="px-6 py-3" :title="utilizationTooltip">
+                <div class="font-['Cormorant_Garamond'] text-2xl font-bold" :class="utilizationColor" x-text="(counts.chair_utilization_pct ?? 0) + '%'"></div>
+                <div class="font-['DM_Sans'] text-[10px] uppercase tracking-widest text-[#6a0f70]/60 mt-0.5">Chair Utilization</div>
+            </div>
         </div>
 
         {{-- Doctor Filter Tabs --}}
@@ -172,10 +179,26 @@
 document.addEventListener('alpine:init', () => {
     Alpine.data('todaySchedule', () => ({
         appointments: [],
+        counts: {},
         loading: true,
         activeDoctor: null,
         dateLabel: '',
         refreshTimer: null,
+
+        get utilizationColor() {
+            const pct = this.counts.chair_utilization_pct ?? 0;
+            if (pct >= 80) return 'text-emerald-600';
+            if (pct >= 50) return 'text-[#380740]';
+            return 'text-amber-600';
+        },
+
+        get utilizationTooltip() {
+            if (!this.counts.chair_capacity_minutes) return '';
+            const booked = this.counts.chair_booked_minutes ?? 0;
+            const capacity = this.counts.chair_capacity_minutes ?? 0;
+            const chairs = this.counts.chair_count ?? 1;
+            return `${booked} of ${capacity} chair-minutes booked across ${chairs} chair(s) today`;
+        },
 
         get doctors() {
             return [...new Set(this.appointments.map(a => a.doctor_name))].filter(Boolean);
@@ -208,10 +231,16 @@ document.addEventListener('alpine:init', () => {
             const pad = n => String(n).padStart(2,'0');
             const dateStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
             try {
-                const res = await fetch(`{{ route('appointments.index') }}?json=1&view=day&date=${dateStr}`, {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                });
-                this.appointments = await res.json();
+                const [apptRes, countsRes] = await Promise.all([
+                    fetch(`{{ route('appointments.index') }}?json=1&view=day&date=${dateStr}`, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    }),
+                    fetch(`{{ route('appointments.status.counts') }}`, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    }),
+                ]);
+                this.appointments = await apptRes.json();
+                this.counts = await countsRes.json();
             } catch(e) {}
             this.loading = false;
         },
@@ -220,7 +249,7 @@ document.addEventListener('alpine:init', () => {
             const prev = appt.status;
             appt.status = status;
             try {
-                await fetch(`/appointments/${appt.id}/status`, {
+                const res = await fetch(`/appointments/${appt.id}/status`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
@@ -229,6 +258,8 @@ document.addEventListener('alpine:init', () => {
                     },
                     body: JSON.stringify({ status })
                 });
+                const data = await res.json();
+                if (data.counts) this.counts = data.counts;
             } catch(e) {
                 appt.status = prev;
             }

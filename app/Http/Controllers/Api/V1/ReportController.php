@@ -43,7 +43,9 @@ class ReportController extends ApiController
         $apptWeek = $appt()
             ->whereBetween('appointment_date', [$weekStart, $weekEnd])
             ->whereNotIn('status', ['cancelled', 'no_show'])->count();
-        $apptCompletedMonth = $appt()->where('status', 'completed')
+        // Appointments' terminal status is 'done' — 'completed' does not exist
+        // on the appointments enum and always counted 0 here.
+        $apptCompletedMonth = $appt()->where('status', 'done')
             ->whereDate('appointment_date', '>=', $monthStart)->count();
         $apptCancelledMonth = $appt()->whereIn('status', ['cancelled', 'no_show'])
             ->whereDate('appointment_date', '>=', $monthStart)->count();

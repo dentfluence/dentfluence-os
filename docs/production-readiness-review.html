@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dentfluence — Production Readiness Review (2026-07-14)</title>
+<style>
+:root{--crit:#c0392b;--high:#d97706;--rec:#2563eb;--fut:#6b7280;--ink:#1f2937;--muted:#6b7280;--bg:#ffffff;--code:#f3f4f6;--line:#e5e7eb;}
+*{box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:var(--ink);background:#f8fafc;margin:0;line-height:1.6}
+.page{max-width:960px;margin:0 auto;background:var(--bg);padding:48px 56px;box-shadow:0 0 24px rgba(0,0,0,.06)}
+h1{font-size:1.9rem;border-bottom:3px solid var(--ink);padding-bottom:.4rem;margin-top:0}
+h2{font-size:1.35rem;margin-top:2.6rem;border-bottom:2px solid var(--line);padding-bottom:.3rem}
+h3{font-size:1.05rem;margin-top:1.8rem}
+h2[id^="1-critical"]{color:var(--crit);border-color:var(--crit)}
+h2[id^="2-high"]{color:var(--high);border-color:var(--high)}
+h2[id^="3-recommended"]{color:var(--rec);border-color:var(--rec)}
+h2[id^="4-future"]{color:var(--fut);border-color:var(--fut)}
+h3[id^="c"]{color:var(--crit)}
+h3[id^="h1"],h3[id^="h2"]{color:var(--high)}
+code{background:var(--code);padding:.12em .35em;border-radius:4px;font-size:.85em;font-family:Consolas,'Courier New',monospace;word-break:break-word}
+strong>code{font-weight:600}
+ul,ol{padding-left:1.4rem}
+li{margin:.3rem 0}
+hr{border:none;border-top:1px solid var(--line);margin:2rem 0}
+blockquote{border-left:4px solid var(--line);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}
+.toc{background:#f1f5f9;border:1px solid var(--line);border-radius:8px;padding:1rem 1.4rem;margin:1.5rem 0}
+.toc ul{margin:.2rem 0;padding-left:1.2rem;list-style:none}
+.toc>ul{padding-left:0}
+.toc a{text-decoration:none;color:#334155}
+.toc a:hover{text-decoration:underline}
+.toc .toctitle{font-weight:700;font-size:1rem;display:block;margin-bottom:.4rem}
+em{color:var(--muted)}
+a{color:#2563eb}
+@media print{body{background:#fff}.page{box-shadow:none;padding:0;max-width:none}h2{page-break-after:avoid}h3{page-break-after:avoid}}
+@media(max-width:700px){.page{padding:24px 18px}}
+</style>
+</head>
+<body>
+<div class="page">
+<h1 id="dentfluence-production-readiness-review">Dentfluence — Production Readiness Review</h1>
+<p><strong>Date:</strong> 2026-07-14
+<strong>Scope:</strong> Full-application review before first paying clinics. Seven parallel audit tracks: money handling, loose ends, inter-module wiring, multi-tenancy &amp; RBAC, security, database/performance/API, and clinic workflows/UX.
+<strong>Method:</strong> Static code review (routes → controllers → services → models → migrations → blades). No code was changed. Every finding cites file:line evidence; the highest-severity findings were independently re-verified against source.</p>
+<hr />
+<h2 id="executive-summary">Executive Summary</h2>
+<p>Dentfluence's bones are good. The finance chain is transactional and audit-trailed, the ActivityEngine/RulesEngine backbone is fail-safe and well-designed, the API layer is disciplined (Sanctum, shared services, uniform envelope), Phase A genuinely closed the public-media exposure, and the feature-flag discipline is exactly right for staged cutovers. <strong>Nothing here requires a rewrite.</strong></p>
+<p>But the review found a consistent pattern: <strong>the newest code is production-grade while the older core (patients, appointments, communication_queue) and the "glue" between modules never got the same treatment.</strong> The must-fix list breaks down as:</p>
+<ul>
+<li><strong>11 Critical</strong> issues that will cause revenue loss, data corruption, or visible embarrassment at clinic #1.</li>
+<li><strong>~22 High Priority</strong> issues that will bite within the first months of real use.</li>
+<li><strong>Multi-tenancy is NOT a flag-flip.</strong> Onboarding clinic #2 today would leak clinic #1's PHI. This is a focused multi-week hardening effort (detailed in Section 6) — evolutionary, not a rewrite.</li>
+</ul>
+<p><strong>Verdict:</strong> Launchable for clinic #1 after the Critical list (~1–2 weeks of focused fixes). Clinic #2 must wait for the tenancy hardening.</p>
+<hr />
+<h2 id="1-critical-must-fix-before-production">1. CRITICAL — Must fix before production</h2>
+<h3 id="c1-web-invoice-creation-trusts-a-client-submitted-coupon-discount">C1. Web invoice creation trusts a client-submitted coupon discount</h3>
+<p><code>app/Http/Controllers/BillingController.php:340-345</code> <em>(verified)</em></p>
+<p>The rupee discount is taken verbatim from a hidden form field (<code>$request-&gt;input('coupon_discount', 0)</code>) — never recomputed via <code>$coupon-&gt;calculateDiscount()</code>, never capped to the coupon's value or the subtotal. The API path already does this correctly (<code>Api/V1/BillingController.php:652</code>); web does not.</p>
+<ul>
+<li><strong>Impact:</strong> Any valid coupon code + a tampered hidden field = arbitrary discount, invoice drops to zero. Direct revenue loss with a valid-looking coupon on record.</li>
+<li><strong>Fix:</strong> After items are saved, set <code>$couponDiscount = $coupon-&gt;calculateDiscount((float) $invoice-&gt;subtotal)</code> and enforce <code>min_invoice_amount</code> — mirror the API exactly.</li>
+</ul>
+<h3 id="c2-invoice-store-records-a-wallet-discount-larger-than-the-amount-actually-debited">C2. Invoice <code>store()</code> records a wallet discount larger than the amount actually debited</h3>
+<p><code>app/Http/Controllers/BillingController.php:355, 382, 410-421</code></p>
+<p><code>wallet_applied</code> is written from the raw request and subtracted from the total <em>before</em> the debit. <code>WalletService::debit()</code> caps the debit to real/eligible balance and returns the actual figure — which is discarded. Patient asks for ₹500, only ₹100 available → invoice reduced by ₹500, wallet loses ₹100. The payment path (<code>:854</code>) and API (<code>:699</code>) handle this correctly; only <code>store()</code> doesn't.</p>
+<ul>
+<li><strong>Impact:</strong> Silent revenue leak; wallet credit remains for reuse. Trivially triggered with promo-restricted credits.</li>
+<li><strong>Fix:</strong> After debit: <code>if ($debited != $walletApplied) { $invoice-&gt;update(['wallet_applied' =&gt; $debited]); $invoice-&gt;recalculate(); }</code></li>
+</ul>
+<h3 id="c3-payment-recording-has-no-idempotency-no-invoice-lock-and-no-double-submit-protection">C3. Payment recording has no idempotency, no invoice lock, and no double-submit protection</h3>
+<p>Backend: <code>BillingController.php:831</code>, <code>app/Services/Billing/InvoicePaymentService.php:87</code> — no <code>lockForUpdate()</code>, no dedupe.
+Frontend: <code>resources/views/billing/show.blade.php:479</code> — <code>#paymentForm</code> is a plain POST with <strong>zero</strong> disable-on-submit anywhere in the file.</p>
+<ul>
+<li><strong>Impact:</strong> The single most likely money bug in daily use. Receptionist double-clicks on slow wifi → two <code>InvoicePayment</code> + two <code>Receipt</code> numbers + two <code>FinanceTransaction</code> income rows; invoice overpays and the phantom excess lands in the wallet as credit. Reconciliation nightmare at day-close.</li>
+<li><strong>Fix (both ends):</strong> (a) disable the submit button on submit (the pattern already exists in <code>add-patient-modal</code>); (b) <code>lockForUpdate()</code> on the invoice at the top of the transaction + reject an identical (amount, mode, date) payment within the last few seconds. Consider <code>Idempotency-Key</code> on the API.</li>
+</ul>
+<h3 id="c4-wallet-debit-has-no-row-lock-negative-balances-are-clamped-and-hidden">C4. Wallet debit has no row lock; negative balances are clamped and hidden</h3>
+<p><code>app/Services/WalletService.php:88-119</code>, <code>app/Models/Wallet.php:48-65</code></p>
+<p><code>debit()</code> reads cached balance columns without a pessimistic lock — two concurrent debits both see ₹100 and both spend it. <code>recalculate()</code> then does <code>max(0, $perm)</code>, erasing the evidence of the overdraw.</p>
+<ul>
+<li><strong>Impact:</strong> Wallet credit spendable more than once under concurrency; the clamp destroys the reconciliation trail.</li>
+<li><strong>Fix:</strong> <code>Wallet::where('patient_id',$id)-&gt;lockForUpdate()-&gt;first()</code> inside the existing transaction; log/alert instead of clamping when the ledger goes negative.</li>
+</ul>
+<h3 id="c5-communication-timeline-shows-fabricated-patients">C5. Communication Timeline shows fabricated patients</h3>
+<p><code>app/Http/Controllers/Communication/TimelineController.php:15, 80-93</code> <em>(verified — hardcoded "Riya Sharma", "Amit Kulkarni" etc.)</em>; nav entry live at <code>config/communication.php:183-186</code>.</p>
+<p>A clickable nav destination renders ten invented patients with fake phones and treatments.</p>
+<ul>
+<li><strong>Impact:</strong> A paying clinic opens Communication → Timeline and sees strangers' data. Looks like a data leak; instant credibility loss.</li>
+<li><strong>Fix:</strong> Hide the Timeline nav item until the real union query (already sketched in the TODO at <code>:66-77</code>) is wired.</li>
+</ul>
+<h3 id="c6-global-file-viewer-is-a-static-mockup-it-never-fetches-the-real-file">C6. Global File Viewer is a static mockup — it never fetches the real file</h3>
+<p><code>resources/views/clinical-library/partials/file-viewer.blade.php:14, 32-55</code> — included globally (<code>layouts/app.blade.php:1130</code>) and triggered with real file IDs from Patients Documents tab, Clinical Library, Marketing and Education tabs. <code>init()</code> captures <code>e.detail.id</code> but never fetches; notes/tags are hardcoded literals ("Pre-operative IOPA taken before root canal treatment on tooth 26…").</p>
+<ul>
+<li><strong>Impact:</strong> Clinician clicks any X-ray/document and sees the same fabricated clinical notes regardless of the file — a clinical-safety and trust failure.</li>
+<li><strong>Fix:</strong> Fetch the existing JSON endpoint (<code>routes/clinical-library.php:29</code>) in <code>init()</code> and bind the response; delete the hardcoded literals.</li>
+</ul>
+<h3 id="c7-inbound-webhooks-are-imported-but-never-routed-all-inbound-channels-are-dead">C7. Inbound webhooks are imported but never routed — all inbound channels are dead</h3>
+<p><code>routes/api.php:29-32</code> <em>(verified — <code>WhatsAppLeadController</code> appears only as a <code>use</code> import, no route anywhere)</em>. Same for <code>MetaLeadController</code>, <code>ChatbotController</code>, <code>WebsiteLeadController</code>. <code>InboundMessageService</code> is only reachable via the unrouted controller.</p>
+<ul>
+<li><strong>Impact:</strong> Patient WhatsApp replies are never ingested → the 24-hour service window never opens, so staff can only send templates, never free-text replies (this undermines the PRE inline chat built on 07-09). Meta/website/chatbot leads never become leads.</li>
+<li><strong>Fix:</strong> Register the documented routes with the existing <code>VerifiesMetaSignature</code> check. Small change, big functional unlock.</li>
+</ul>
+<h3 id="c8-reports-count-appointment-status-completed-a-status-that-does-not-exist">C8. Reports count appointment status <code>'completed'</code> — a status that does not exist</h3>
+<p><code>app/Http/Controllers/ReportsController.php:35, 49, 258</code> <em>(verified)</em> vs the enum <code>scheduled, checkin, in_chair, checkout, done, cancelled, no_show</code> <em>(verified in <code>2026_05_13_000001_create_appointments_table.php:20</code>)</em>. The terminal state is <code>'done'</code>.</p>
+<ul>
+<li><strong>Impact:</strong> The "Completed" KPI, "Completion Rate", and the daily-trend completed line on the main reports page are <strong>always zero</strong>. The owner's first look at analytics shows garbage. (Same bug class as the historical <code>reviews:request</code> fix — see H-13 for the systemic answer.)</li>
+<li><strong>Fix:</strong> <code>'completed'</code> → <code>'done'</code> in ReportsController now; introduce <code>app/Enums/AppointmentStatus.php</code> so this class of bug can't recur.</li>
+</ul>
+<h3 id="c9-patients-table-zero-foreign-keys-no-index-or-uniqueness-on-phone">C9. <code>patients</code> table: zero foreign keys, no index or uniqueness on <code>phone</code></h3>
+<p><code>database/migrations/2024_01_01_000000_create_patients_table.php:39-48</code> — <code>branch_id</code>/<code>created_by</code> are raw ints with an empty <code>// Foreign Keys</code> comment; <code>phone</code> is <code>string(20)</code> with no index; nothing in the other 375 migrations remediates this. (<code>phone</code> is deliberately plaintext — indexing is safe.)</p>
+<ul>
+<li><strong>Impact:</strong> Every phone lookup (dedup, search, missed-call matching) is a full-table scan on the app's central table; nothing prevents duplicate patients; no referential integrity.</li>
+<li><strong>Fix (additive migration):</strong> <code>index('phone')</code>, <code>index(['branch_id','phone'])</code>, nullable non-cascading FKs. Add <code>unique(['branch_id','phone'])</code> only after a dedup pass.</li>
+</ul>
+<h3 id="c10-patient-import-whole-file-in-memory-one-giant-transaction-per-row-full-scans-bypasses-the-relationship-linker">C10. Patient import: whole file in memory, one giant transaction, per-row full scans, bypasses the relationship linker</h3>
+<p><code>app/Http/Controllers/PatientImportExportController.php:155-228, 359</code></p>
+<p><code>$sheet-&gt;toArray()</code> loads everything into RAM; one <code>DB::transaction</code> wraps the whole loop; each row fires 2 unindexed existence queries; <code>Patient::create()</code> is called directly so <strong>no relationship shell is created</strong> — this is the exact mechanism behind the 17 orphan rows already observed. Compounding: <code>patient_links</code> uses <code>onDelete('cascade')</code> but Patient soft-deletes, so the cascade never fires and children outlive soft-deleted parents.</p>
+<ul>
+<li><strong>Impact:</strong> Every clinic migration (the first thing a new customer does) reproduces the orphan bug at scale, and a 40k-row legacy import will OOM or timeout with full rollback.</li>
+<li><strong>Fix:</strong> Route import creates through the same <code>PatientService</code>/linker path as web Add Patient; chunked transactions (~500 rows); pre-load existing phones with one <code>pluck</code>. Add a Patient <code>deleting</code> observer that soft-cascades children. Run <code>relationship:backfill --apply</code> for existing data (see H-15).</li>
+</ul>
+<h3 id="c11-calendar-drag-drop-reschedule-bypasses-all-conflict-and-blocked-slot-checks">C11. Calendar drag-drop reschedule bypasses ALL conflict and blocked-slot checks</h3>
+<p><code>AppointmentController::reschedule</code> (<code>:541-557</code>) — validates only date/time/duration then updates. No <code>blockedSlotConflict()</code>, no overlap query. The JS <code>onEventDrop</code>/<code>onEventResize</code> (appointments/index.blade.php:1656, 1695) never call the conflict check that the create modal uses.</p>
+<ul>
+<li><strong>Impact:</strong> The most conflict-prone action in the app (dragging appointments around) silently double-books doctors or books onto their leave. Two patients arrive for the same chair.</li>
+<li><strong>Fix:</strong> In <code>reschedule()</code> (and <code>update()</code>, see H-5) reuse the existing <code>checkConflict()</code> overlap filter + <code>blockedSlotConflict()</code>; return 422 so the existing <code>info.revert()</code> branch fires.</li>
+</ul>
+<hr />
+<h2 id="2-high-priority-fix-soon-after-or-alongside-the-critical-list">2. HIGH PRIORITY — Fix soon after (or alongside) the Critical list</h2>
+<h3 id="money-billing">Money &amp; billing</h3>
+<p><strong>H1. Overpayment-to-wallet exists on web but is missing from the shared service (mobile).</strong>
+<code>BillingController.php:951-968</code> deposits excess to wallet; <code>InvoicePaymentService.php:178-234</code> (the only path mobile uses) has no equivalent — a mobile overpayment is booked as income, <code>balance_due</code> clamps to 0, and the patient's surplus vanishes from their ledger. <strong>Fix:</strong> port the excess block into the shared service so both paths are identical.</p>
+<p><strong>H2. Double Accounts-Payable: GRN auto-books a vendor bill AND VendorInvoice books another.</strong>
+<code>InventoryService.php:604-622</code> (GRN → <code>FinanceExpense</code>, <code>source_type =&gt; 'PurchaseOrder'</code>) + <code>VendorInvoiceController.php:189-214</code> (same PO → second unpaid expense, <code>source_type =&gt; VendorInvoice::class</code>). Nothing dedupes; the two <code>source_type</code> conventions don't even correlate. <strong>Fix:</strong> before creating vendor-invoice AP, link to or skip an existing GRN-sourced unpaid expense on the same PO; standardise <code>source_type</code> on the FQCN.</p>
+<p><strong>H3. <code>VendorInvoice.status</code> never advances — analytics always zero, paid bills stay deletable.</strong>
+Created <code>'pending'</code> (<code>VendorInvoiceController.php:159</code>); <code>AnalyticsController.php:85,330,440,455</code> filters <code>status='unpaid'</code>/<code>'paid'</code> which never match; the <code>destroy()</code> paid-guard (<code>:250</code>) never fires, so a <em>paid</em> vendor invoice can be deleted along with its paid expense, corrupting vendor outstanding. <strong>Fix:</strong> propagate <code>FinanceExpense.payment_status</code> back to the parent; align the analytics filters to the real enum.</p>
+<p><strong>H4. Document-number generation is not concurrency-safe.</strong>
+<code>Invoice.php:172-185</code>, <code>Receipt.php:63-78</code>, <code>FinalBill.php:63-76</code> — <code>MAX()+1</code> with no lock against UNIQUE columns. Concurrent creations collide; the losing <strong>payment transaction rolls back entirely with no retry</strong> — a legitimate payment fails with a 500 and staff assume it saved. <strong>Fix:</strong> generate inside the transaction under <code>lockForUpdate()</code> (or a counter table) and/or retry on unique violation.</p>
+<h3 id="scheduling-clinical-workflows">Scheduling &amp; clinical workflows</h3>
+<p><strong>H5. No server-side appointment overlap enforcement anywhere.</strong>
+<code>AppointmentController::store</code> (<code>:110-280</code>) checks only blocked slots; real overlap detection is an <em>advisory</em> GET (<code>checkConflict</code>, <code>:583-618</code>) surfaced as a soft JS <code>confirm()</code> in one modal only. The mobile API <code>create()</code>, the full edit form (<code>update()</code>, <code>:506-538</code>), and concurrent bookings by two receptionists all write overlaps silently. <strong>Fix:</strong> enforce the overlap guard in <code>store()</code>/<code>update()</code>/API <code>create()</code> server-side, with an explicit <code>force=true</code> for intentional double-booking.</p>
+<p><strong>H6. Treatment-plan revision hard-deletes completed/invoiced items.</strong>
+<code>TreatmentPlanController::update</code> (<code>:242-247</code>) — <code>whereNotIn('id', $keptIds)-&gt;delete()</code> with no status guard. Revising an ongoing plan deletes completed, already-billed line items and their plan↔invoice linkage. (<code>revert()</code> is guarded; <code>update()</code> is not.) <strong>Fix:</strong> never delete items with <code>status = completed</code> or linked invoices; prune only <code>pending</code>.</p>
+<p><strong>H7. Full patient registration has no duplicate-phone detection.</strong>
+<code>PatientController::store</code> → <code>PatientService::createFromInput</code> always inserts; only <code>quickCreate</code> (<code>:254-264</code>) returns a 409 duplicate. The main registration modal creates split records for returning patients. <strong>Fix:</strong> run the same phone lookup in <code>store()</code>; show "Use existing / Create new" on match.</p>
+<p><strong>H8. Recall engine silently drops no-phone patients; no consent check.</strong>
+<code>RecallEngineService.php:133, 211, 272, 324, 394, 457</code> — every trigger filters <code>whereNotNull('phone')</code> or <code>continue</code>s. No "couldn't-contact" bucket, so those patients are permanently invisible to recall; no opt-out check on birthday/marketing triggers. <strong>Fix:</strong> queue no-phone matches tagged <code>needs_contact</code> instead of skipping; add the consent flag check.</p>
+<p><strong>H9. Concurrent edits are silent last-write-wins.</strong>
+<code>PatientService::updateFromInput</code> (<code>:286-375</code>), <code>BillingController::update</code> (<code>:497-579</code>), <code>AppointmentController::update</code> (<code>:506-538</code>) — no optimistic locking. Two staff editing the same record overwrite each other invisibly. <strong>Fix:</strong> hidden <code>updated_at</code> field + 409 "record changed since you opened it" on mismatch.</p>
+<h3 id="backend-wiring">Backend wiring</h3>
+<p><strong>H10. Recall queue → WhatsApp is a dead end.</strong>
+<code>RecallEngineService.php:552-605</code> — every recall writes <code>channel =&gt; 'call'</code>; no <code>OutboundMessageService</code> call exists in the pipeline, and <code>whatsapp:send-reminders</code> covers appointment reminders only. All recalls depend on reception manually calling. <strong>Fix:</strong> a queue-drain step that sends via the already consent-gated <code>OutboundMessageService::sendTemplate()</code> for channels the clinic enables.</p>
+<p><strong>H11. Four enabled automation rules are permanently dead — no producer fires them.</strong>
+<code>config/relationship_rules.php:285-386</code> — zero producers exist for <code>birthday.approaching</code>, <code>estimate.sent</code>, <code>appointment.missed</code>, <code>payment.overdue</code> (grep-verified). 5 of 12 rules never run. <strong>Fix:</strong> fire <code>appointment.missed</code> where status flips to <code>no_show</code> (<code>AppointmentController.php:286</code>); add a scheduled overdue-invoice scan (mirror <code>membership:scan-expiring</code>); fire <code>estimate.sent</code> in <code>PresentationController::sent</code>; emit <code>birthday.approaching</code> from the recall run. Also flip <code>recall_6months</code> to <code>enabled =&gt; false</code> with a comment — it's intentionally starved by <code>TreatmentVisitService.php:384-386</code> but the config lies.</p>
+<p><strong>H12. The whole automation backbone silently depends on cron + a queue worker.</strong>
+All producers are <code>Schedule::command()</code> entries; jobs use the <code>database</code> queue (<code>config/queue.php:16</code>). If <code>schedule:run</code> or <code>queue:work</code> isn't running, recalls, reminders, reviews, membership scans and score recomputes all stop <strong>with no error surfaced</strong>. <strong>Fix:</strong> confirm the VPS provisions both (cron + supervised worker) and add a staleness health-check/alert.</p>
+<h3 id="auth-security">Auth &amp; security</h3>
+<p><strong>H13. The mobile API completely bypasses MFA.</strong>
+<code>Api/V1/AuthController.php:30-68</code> — never calls <code>hasTwoFactorEnabled()</code>; issues a full Bearer token on password alone, while web forces the 2FA challenge (<code>AuthController.php:52-57</code>). <strong>Fix:</strong> mirror the web branch (TOTP/recovery code required, or a limited 2fa-pending token).</p>
+<p><strong>H14. Web and API use different authorization systems.</strong>
+Web: <code>CheckModulePermission</code> → <code>role_id</code>/<code>RoleModulePermission</code>. API: <code>EnsureApiRole</code> → legacy <code>role</code> string (<code>EnsureApiRole.php:41-45</code>). Masked today because everyone is admin; the moment non-admin logins ship, mobile and web will grant/deny differently for the same user. Related: <code>User.php:204</code> still short-circuits on the legacy string, and <code>HrStaffController.php:316</code> gates password reset with an inline <code>role === 'admin'</code>. <strong>Fix:</strong> route both middlewares through <code>canAccess()</code>; make <code>role_id</code> authoritative and demote <code>role</code> to a label.</p>
+<p><strong>H15. Stored XSS: patient data injected unescaped into <code>&lt;script&gt;</code>.</strong>
+<code>resources/views/lab/index.blade.php:655</code> <em>(verified)</em> and <code>appointments/_modal.blade.php:431</code> — <code>{!! json_encode($patients) !!}</code> doesn't escape <code>&lt;</code>/<code>&gt;</code>; a patient name containing <code>&lt;/script&gt;&lt;script&gt;…</code> executes in every staff browser opening those screens. The rest of the app correctly uses <code>@json</code>. <strong>Fix:</strong> replace both with <code>@json()</code> / <code>Js::from()</code> (one-line changes).</p>
+<p><strong>H16. PHI encryption gaps + a cast that silently hides plaintext.</strong>
+<code>Patient.php:137-147</code> encrypts secondary fields but <strong>not</strong> <code>name</code>, <code>phone</code>, <code>email</code>, <code>date_of_birth</code> — the strongest identifiers stay plaintext at rest and in backups. <code>app/Casts/Encrypted.php:30-35</code> returns raw value on decrypt failure, so unencrypted rows read back silently as if fine (and can fool <code>security:selftest</code>). Note: <code>phone</code> plaintext is currently <em>required</em> by C9's index fix — if you encrypt it later, use a blind-index hash column for lookups. <strong>Fix:</strong> extend casts to name/email (+DOB), blind-index for phone, and make the cast log/throw on fallback.</p>
+<p><strong>H17. The "tamper-evident" audit chain is unkeyed.</strong>
+<code>app/Traits/HashChained.php:84</code> — plain <code>sha256(prev|json)</code>, no secret, no external anchor; the append-only guard is Eloquent-only, bypassed by any direct DB write. An attacker with DB access recomputes the chain and <code>audit:verify</code> passes. <strong>Fix:</strong> <code>hash_hmac</code> with a key outside the DB + periodic offsite anchoring of the latest hash.</p>
+<h3 id="database-performance">Database &amp; performance</h3>
+<p><strong>H18. Appointments have no index on <code>appointment_date</code> or <code>status</code>.</strong>
+<code>2026_05_13_000001</code> indexes only FK columns; <code>ReportsController</code> (~12 aggregate scans per page load, <code>:32-119</code>), <code>AppointmentService::todayCounts</code> (6 status counts) and every calendar view full-scan. <strong>Fix (additive):</strong> <code>index(['branch_id','appointment_date'])</code>, <code>index(['appointment_date','status'])</code>; then cache the reports KPI block (<code>Cache::remember</code>, 5–15 min).</p>
+<p><strong>H19. <code>communication_queue</code>: no FKs, no status/phone indexes, <code>assigned_to</code> is a name string.</strong>
+<code>2026_06_04_000020</code> — <code>patient_id</code> unconstrained, <code>assigned_to</code> stores staff <em>names</em> (breaks on rename, can't join), <code>status</code>/<code>due_at</code>/<code>phone</code> unindexed; missed-calls search does leading-wildcard LIKE on top (<code>MissedCallsController.php:68-79</code>). This is one of the busiest tables in the app. <strong>Fix (additive):</strong> <code>index('status')</code>, <code>index(['status','due_at'])</code>, <code>index('patient_id')</code> + FKs; add nullable <code>assigned_to_user_id</code> alongside the legacy column.</p>
+<p><strong>H20. Invoice links have no FKs.</strong>
+<code>2026_06_05_000001:38-43</code> — <code>treatment_plan_id</code>, <code>appointment_id</code>, <code>created_by</code>, <code>updated_by</code> are raw nullable ints. Financial rows can dangle against deleted records; hard to defend in an audit. <strong>Fix (additive):</strong> nullable FKs with <code>nullOnDelete</code> + indexes.</p>
+<p><strong>H21. <code>audit_logs</code> and <code>activities</code> grow unbounded — no pruning anywhere.</strong>
+Both are written on effectively every action; no retention command exists (verified across <code>app/Console/Commands</code>). Millions of rows within a year; backup and write costs climb. <strong>Fix:</strong> scheduled chunked prune with a retention window, respecting legal hold on financial modules.</p>
+<h3 id="loose-ends">Loose ends</h3>
+<p><strong>H22. <code>recall:run --dry-run</code> is a stub that does nothing.</strong>
+<code>RunRecallEngine.php:33-38</code> — prints a banner and exits before computing anything. An operator validating recall config sees "clean" and may never run the real thing. <strong>Fix:</strong> implement a real preview or remove the advertised option.</p>
+<p><strong>H23. Communication sidebar badge counts are hardcoded to 0.</strong>
+<code>CommunicationServiceProvider.php:33-38</code> — overdue/follow-up/pending badges permanently read zero, so real overdue work is invisible to staff. <strong>Fix:</strong> replace three literals with the real count queries.</p>
+<p><strong>H24. Treatment-plan <code>accept()</code> is triplicated.</strong>
+<code>TreatmentPlanController.php:266-324</code>, <code>PublicPresentationController.php:99-163</code>, <code>Api/V1/TreatmentPlanController.php:136</code> — identical acceptance orchestration in three places (the public one even says "mirrors … exactly" in a comment). Any change must be made thrice; drift produces inconsistent Opportunities per channel. <strong>Fix:</strong> extract <code>TreatmentPlanAcceptanceService</code> and call it from all three. (Matches the flag already on record for this module.)</p>
+<p><strong>H25. Pending one-time data-repair commands gate correctness.</strong>
+<code>config/features.php:46-52</code> — <code>identity.link_patient</code> is ON for <em>new</em> patients only; existing patients have no relationship row until <code>relationship:backfill --apply --force</code> runs. Also pending per past work: <code>action-options:sync-closes-task --apply</code>. <strong>Fix:</strong> add both to the deploy checklist with post-run count verification; consider an idempotent guarded post-deploy runner.</p>
+<hr />
+<h2 id="3-recommended-improves-quality-schedule-after-high-priority">3. RECOMMENDED — Improves quality; schedule after High Priority</h2>
+<h3 id="money-edges">Money edges</h3>
+<ul>
+<li><strong>R1.</strong> Zero-interest EMI schedule doesn't absorb rounding on the final instalment (<code>EmiSchedule.php:58-72</code>) — ₹100/3 = 99.99. Set last instalment to <code>principal − (monthly × (n−1))</code>.</li>
+<li><strong>R2.</strong> Membership free-item matching uses substring <code>str_contains</code> (<code>MembershipBenefitService.php:97-107</code>) — "Deep scaling + full-mouth rehab" becomes 100% free because it contains "scaling". Match on treatment master / word boundary and cap at the plan's freebie value.</li>
+<li><strong>R3.</strong> Web skips the coupon <code>min_invoice_amount</code> check the API enforces (<code>BillingController.php:336-345</code> vs <code>Api/V1/BillingController.php:649-651</code>). Add the same guard to web <code>store()</code> and <code>validateCoupon()</code>.</li>
+<li><strong>R4.</strong> Coupon usage limit is check-then-act, non-atomic (<code>CouponService.php:24, 52-64</code>) — single-use coupons redeemable twice under concurrency. Unique index on <code>(coupon_code_id, patient_id)</code> or re-check under lock.</li>
+<li><strong>R5.</strong> Provider-EMI marks the invoice fully paid (and issues a Final Bill) before the provider settles (<code>InvoicePaymentService.php:121-151</code>, <code>Invoice.php:148</code>). Track the unsettled portion as receivable or defer FinalBill until <code>provider_paid_at</code>.</li>
+<li><strong>R6.</strong> FinalBill generation is check-then-act without a lock (<code>BillingController.php:1019</code>, <code>InvoicePaymentService.php:232</code>) — resolved for free by C3's invoice lock; also add unique index on <code>final_bills.invoice_id</code>.</li>
+<li><strong>R7.</strong> <code>updatePaymentDate</code> cascades to receipt + ledger but not to EMI schedule due dates (<code>InvoicePaymentService.php:350-364</code>).</li>
+<li><strong>R8.</strong> Overpayment silently becomes wallet credit with no cap or confirmation (<code>BillingController.php:747, 955-968</code>) — a ₹50,000 typo on a ₹5,000 invoice becomes standing credit. Require an explicit "record as advance" confirmation when <code>amount &gt; balance_due</code>.</li>
+<li><strong>R9.</strong> Legacy <code>billing.cancel</code> cancels with no reason, no audit, no admin gate (<code>BillingController.php:725-730</code>) while <code>destroy()</code> requires all three. Retire the button or bring <code>cancel()</code> up to par.</li>
+<li><strong>R10.</strong> <code>FinanceVendor.outstanding_amount</code> is a cached counter with no maintainer on payment (<code>VendorInvoiceController.php:220-222, 261-264</code>) — derive from unpaid expenses on read, or update on payment too.</li>
+</ul>
+<h3 id="clinical-workflow-edges">Clinical &amp; workflow edges</h3>
+<ul>
+<li><strong>R11.</strong> Accepting a treatment option doesn't retire sibling options (<code>TreatmentPlanController::accept</code>) — both the ₹40k implant and ₹18k bridge options can be simultaneously active and billable. Set siblings to <code>superseded</code> on accept.</li>
+<li><strong>R12.</strong> <code>TreatmentPlanController::destroy</code> (<code>:393-398</code>) has no billing guard and no role check — <code>revert()</code> has both. Mirror them.</li>
+<li><strong>R13.</strong> Walk-in date computed in UTC while time is local (<code>appointment-modal-global.blade.php:1100-1104</code>) — between 00:00–05:29 IST the walk-in lands on yesterday. Use <code>toLocaleDateString('en-CA')</code> (already used correctly at <code>index.blade.php:1651</code>).</li>
+<li><strong>R14.</strong> Appointment status vocabulary drift: <code>RecallEngineService.php:329</code> filters <code>'confirmed'</code>, which isn't a valid status — that branch is inert. Same bug class as C8; the enum (F1) is the systemic fix.</li>
+</ul>
+<h3 id="security-hardening">Security hardening</h3>
+<ul>
+<li><strong>R15.</strong> Latent IDOR: <code>BranchScope</code> documents itself as "effectively inert today"; <code>ClinicalFileController</code> checks file→patient but never user→patient (<code>:35, 77, 149</code>). Fine while everyone is admin; a hole the day non-admin logins ship. Add explicit <code>authorizeBranch()</code> like <code>SecureMediaController</code> already does.</li>
+<li><strong>R16.</strong> MFA is capability, not policy — no middleware enforces it for privileged roles, and <code>security:selftest</code> only checks that columns/routes exist. Enforce for admins; make the self-test assert enforcement.</li>
+<li><strong>R17.</strong> CSV formula injection in patient export (<code>PatientImportExportController.php:275-296</code>) — prefix leading <code>= + - @</code> with <code>'</code>.</li>
+<li><strong>R18.</strong> Public share links: "never expires" allowed (<code>PresentationLinkService.php:37</code>) and no throttle on <code>/present/{token}</code>, <code>/r/{token}</code>. Enforce max expiry; add <code>throttle:</code>.</li>
+<li><strong>R19.</strong> Backups unencrypted and co-located on the VPS (<code>backup.sh:34-47</code>) — the dump contains plaintext name/phone/DOB/email + all financials. Encrypt (<code>gpg</code>/<code>age</code>), store outside the app tree, push offsite.</li>
+<li><strong>R20.</strong> Set <code>SESSION_SECURE_COOKIE=true</code>, <code>SESSION_ENCRYPT=true</code>, and a non-zero <code>session.absolute_lifetime</code> in production (<code>AbsoluteSessionTimeout</code> is registered but a no-op at 0); have <code>security:selftest</code> assert these + <code>APP_DEBUG=false</code>.</li>
+<li><strong>R21.</strong> Login throttle is per-IP only (<code>throttle:5,1</code>) — add a per-email limiter. Sanctum tokens: 30-day expiry with no rotation — shorten + add refresh.</li>
+<li><strong>R22.</strong> Empty catch swallows the WordPress connection-test failure then saves the (possibly bad) credentials anyway (<code>Marketing/IntegrationController.php:211-224</code>). Log the throwable; block/flag save when the test fails.</li>
+</ul>
+<h3 id="data-quality-performance">Data quality &amp; performance</h3>
+<ul>
+<li><strong>R23.</strong> Import writes <code>phone = ''</code> to satisfy NOT NULL (<code>PatientImportExportController.php:221</code>) — defeats dedup and any future unique. Make phone nullable (additive change) and store null, or route empty-phone rows to review.</li>
+<li><strong>R24.</strong> <code>communication_queue.overdue_since</code> is a stored human string ("2 hours") that goes stale instantly; <code>patients.total_billed/total_received</code> are denormalized with no reconciler. Compute overdue at query time; nightly reconcile of patient rollups from <code>invoice_payments</code>.</li>
+<li><strong>R25.</strong> Reports duplication: <code>ReportsController</code> and <code>Api/V1/ReportController</code> compute overlapping KPIs separately with raw joins in controllers — exactly the drift the PatientService pattern prevents (C8 lives in only one of them). Extract a <code>ReportingService</code> used by both.</li>
+<li><strong>R26.</strong> Recall: <code>recall.general_days</code> setting is display-only (<code>RecallEngineService.php:108-123</code>) — clinics changing the interval in Settings see no change. Wire it into both hardcoded <code>subMonths(6)</code> cutoffs and re-run <code>automation:parity recall</code>.</li>
+<li><strong>R27.</strong> Repo hygiene: <code>under_review/</code> contains a full pre-V1 git object store, retired blades, and a stale lock. Audit the old history for secrets, then move it out of the tree.</li>
+<li><strong>R28.</strong> Stale provenance docblocks: <code>clinical-library/dashboard.blade.php:6</code> claims "static placeholder" but is live; the file-viewer claims nothing but is fake (C6). Fix both so in-file notes can be trusted.</li>
+<li><strong>R29.</strong> "Coming soon" panels reachable in live UI (campaign performance tabs, campaigns "pagination coming soon", cloud-storage settings). Hide behind flags/roles; add real pagination to campaigns index.</li>
+<li><strong>R30.</strong> <code>PatientRegistered</code> domain event has zero subscribers and no <code>patient.registered</code> activity — no welcome/onboarding automation can ever trigger. (Held for product decision previously — decide, then wire or remove.)</li>
+</ul>
+<hr />
+<h2 id="4-future-enhancement-do-not-delay-launch-for-these">4. FUTURE ENHANCEMENT — Do not delay launch for these</h2>
+<ul>
+<li><strong>F1.</strong> Introduce backed PHP enums (<code>AppointmentStatus</code>, <code>InvoiceStatus</code>, <code>CommunicationStatus</code>) and cast model attributes — there is no <code>app/Enums</code> today and C8/R14 are the first two casualties of string drift across web/API/mobile.</li>
+<li><strong>F2.</strong> GST computed on pre-discount base when header <code>discount_pct</code> is used (<code>Invoice.php:134-147</code>) — slight GST overstatement; recompute on the discounted taxable base when GST billing matters.</li>
+<li><strong>F3.</strong> <code>RulesEngine::evaluate()</code> runs synchronously in the request's <code>afterCommit</code> — fine today; queue it when actions get heavier.</li>
+<li><strong>F4.</strong> Recall engine logs system events against <code>Patient::first()</code> (<code>RunRecallEngine.php:69-83</code>) — polluting a random patient's timeline; use a system subject.</li>
+<li><strong>F5.</strong> <code>trustProxies(at: '*')</code> (<code>bootstrap/app.php:35</code>) — pin to the Caddy proxy IP if the container is ever directly exposed.</li>
+<li><strong>F6.</strong> Standardise the remaining numeric <code>{!! json_encode() !!}</code> chart embeds on <code>@json</code> (finance analytics blades) to remove the footgun class entirely.</li>
+<li><strong>F7.</strong> Insights incremental recompute is flag-dark (<code>insights.signals</code> OFF) — intended staging, but keep the per-flag verification matrix current (the <code>*:parity</code> commands exist for exactly this) before flipping any of the ~25 OFF flags.</li>
+<li><strong>F8.</strong> Tighter named throttles on heavy report/summary API endpoints once report caching lands.</li>
+<li><strong>F9.</strong> Campaign performance numbers and video durations are placeholders presented as data (<code>CampaignController.php:77</code>, <code>EducationContentController.php:138</code>) — label "not yet available" until real sources are wired.</li>
+<li><strong>F10.</strong> Recall queue: add a one-tap "called — no answer, retry tomorrow" action (<code>attempt_count</code>/<code>next_action</code> columns already exist, no UI uses them).</li>
+<li><strong>F11.</strong> Walk-in blocked-slot error loses typed input on the non-JSON fallback (<code>AppointmentController.php:144</code> — missing <code>-&gt;withInput()</code>).</li>
+</ul>
+<hr />
+<h2 id="5-whats-designed-well-preserve-this">5. What's Designed Well (preserve this)</h2>
+<ul>
+<li><strong>Finance chain:</strong> transactional multi-writes, soft-delete voids with <code>FinanceTransaction</code> flips (real audit trail), <code>withTrashed()</code> number sequencing, <code>decimal:2</code> throughout, compensating stock movements instead of deletes, server-authoritative convenience fees, password+reason on destructive patient actions.</li>
+<li><strong>Event backbone:</strong> <code>ActivityEngine::log()</code> never throws, auto-resolves relationships, defers side-effects to <code>afterCommit</code>; <code>RulesEngine</code> is config-driven with cooldowns and failure-routing; newer producers pass <code>relationship_id</code> explicitly (the historic silent-skip gotcha is closed for the wired events).</li>
+<li><strong>Consent:</strong> every patient-facing WhatsApp send routes through the DPDP <code>consentGate()</code>; the one historic bypass (prescription wa.me link) was explicitly closed.</li>
+<li><strong>API layer:</strong> uniform envelope via <code>ApiController</code> traits, FormRequests + Resources, Sanctum with expiring ability-scoped tokens, login throttling, no user-enumeration on login errors, shared services (<code>PatientService</code>, <code>InvoicePaymentService</code>) consumed by both web and API — this is the template the rest of the app should converge on.</li>
+<li><strong>Security posture:</strong> clinical media genuinely moved off the public disk behind auth + branch check + download audit; webhook HMAC verification is constant-time and fails closed; raw SQL is parameterized; no debug leftovers; 2FA secrets encrypted at rest.</li>
+<li><strong>Feature flags:</strong> centrally declared, fail-safe to <code>false</code>, DB-overridable, with dry-run-defaulted parity/backfill commands — real staged-cutover discipline.</li>
+<li><strong>Tenancy scaffolding:</strong> <code>BelongsToBranch</code> + <code>BranchScope</code> + <code>BranchSetting</code> are the right <em>shape</em>; the service layer gives one clean seam to enforce tenancy through.</li>
+<li><strong>UX:</strong> mixed-dentition per-tooth chip (correct pediatric model), broad empty-state coverage, fast topbar patient search, sane click-counts on the high-frequency actions (payment = 3 clicks, booking = 3 clicks).</li>
+</ul>
+<hr />
+<h2 id="6-multi-tenancy-readiness-the-honest-picture">6. Multi-Tenancy Readiness — the honest picture</h2>
+<p><strong>Verdict: onboarding clinic #2 today would expose clinic #1's patient data. This is not a flag-flip; it is a focused multi-week hardening effort. It is, however, an evolution of the existing scaffolding — not a rewrite.</strong></p>
+<p>The five structural problems, in dependency order:</p>
+<ol>
+<li><strong>Two disjoint tenant keys, no tenant table.</strong> Clinical/ops tables use <code>branch_id</code> (~25 migrations); finance/marketing/inventory use <code>clinic_id</code> (~30 migrations, all <code>finance_*</code>/<code>mkt_*</code>). There is no <code>clinics</code> table and no FK tying the keyspaces together. <em>Fix:</em> create a canonical <code>clinics</code> table; treat <code>branch_id</code> as a sub-partition <strong>within</strong> a clinic; standardise the isolation scope on <code>clinic_id</code>.</li>
+<li><strong>The <code>clinic_id</code> resolver reads a column that doesn't exist.</strong> <code>ResolvesClinicId.php:25</code> → <code>auth()-&gt;user()-&gt;clinic_id ?? 1</code> — but <code>users</code> has no <code>clinic_id</code> column <em>(verified)</em>, so it is always <code>1</code>. <code>FinanceController.php:667, 1277</code> hardcode <code>'clinic_id' =&gt; 1</code> on writes, and there are zero <code>where('clinic_id', …)</code> read filters in finance. Finance/marketing tenancy is decorative today. <em>Fix:</em> add <code>clinic_id</code> to <code>users</code>, backfill, remove the <code>?? 1</code> and hardcoded writes.</li>
+<li><strong>Admin bypasses the isolation scope.</strong> <code>BranchScope.php:37-39</code> exempts <code>isAdminRole()</code> entirely — correct for branches of one clinic, fatal for SaaS where <em>every clinic owner is an admin</em>. <em>Fix:</em> a separate, non-bypassable tenant scope; the admin bypass may only widen visibility within a tenant. The scope must also fail <strong>closed</strong> (it currently returns all rows for a user with null branch, and rows default to <code>branch_id = 1</code>).</li>
+<li><strong>Automatic isolation covers 3 of ~167 models</strong> (<code>Patient</code>, <code>Appointment</code>, <code>LabCase</code>) — and even there the scope documents itself as "effectively inert today." Consultations, treatment plans, tasks, inventory, prescriptions, finance, marketing have no automatic guard. <em>Fix:</em> apply the tenant trait to every tenant-owned model + a test asserting each model boots the scope.</li>
+<li><strong>Global singletons.</strong> <code>AppSetting</code> (clinic name, GST, print config) has no tenant column — clinic #2 would overwrite clinic #1's identity. <code>users.branch_id</code> is <code>unsignedTinyInteger</code> (cap 255, no FK) vs bigint FKs elsewhere. <em>Fix:</em> tenant-scope <code>app_settings</code> (the <code>BranchSetting</code> pattern already does this correctly); normalise the key columns.</li>
+</ol>
+<p>Plus the auth-parity items (H13 MFA bypass, H14 dual authz systems) which become tenant-isolation issues the moment multiple organizations share the instance.</p>
+<p><strong>Suggested sequence for tenant #2 readiness:</strong> <code>clinics</code> table + <code>users.clinic_id</code> → backfill <code>clinic_id</code> across owned tables (additive migrations) → non-bypassable <code>ClinicScope</code> on all owned models, fail-closed → tenant-scope <code>app_settings</code> → remove <code>?? 1</code> / hardcoded writes → H13/H14 auth parity → a tenant-isolation test suite that creates two clinics and asserts zero cross-reads. Design target of 100 clinics is comfortably served by this single-DB + global-scope approach; nothing more exotic is warranted yet.</p>
+<hr />
+<h2 id="7-suggested-fix-order-pre-launch-runbook">7. Suggested Fix Order (pre-launch runbook)</h2>
+<p><strong>Week 1 — money + safety (C1–C4, C11, H5, H6):</strong> the coupon/wallet trust bugs, payment idempotency + double-submit, wallet lock, scheduling conflict enforcement, plan-item deletion guard. These are the bugs that lose money or double-book chairs in week one of real use.</p>
+<p><strong>Week 1, same pass — embarrassment removals (C5, C6, H22, H23):</strong> hide Timeline, wire the file viewer, fix/remove dry-run, real badge counts. Hours, not days.</p>
+<p><strong>Week 2 — data + wiring (C7–C10, H10–H12, H15, H18–H19, H25):</strong> webhook routes, reports status fix, phone index + import overhaul, recall send path, dead-rule producers, cron/queue health check, the two XSS one-liners, the two index migrations, run the pending backfills.</p>
+<p><strong>Weeks 3–4 — hardening (remaining High + top Recommended):</strong> MFA/authz parity, PHI encryption extension, audit HMAC, AP dedupe, vendor-invoice status, document-number locking, backup encryption, session config.</p>
+<p><strong>Before clinic #2 — Section 6 in full.</strong></p>
+<p><strong>Deploy checklist additions:</strong> cron <code>schedule:run</code> + supervised <code>queue:work</code> verified; <code>relationship:backfill --apply --force</code> + <code>action-options:sync-closes-task --apply</code> executed with count verification; <code>SESSION_SECURE_COOKIE</code>/<code>SESSION_ENCRYPT</code>/<code>session.absolute_lifetime</code> set; <code>security:selftest</code> green; <code>APP_DEBUG=false</code> asserted.</p>
+<hr />
+<p><em>Verification note: the 8 highest-impact claims (C1, C5, C7, C8, C9's phone column, H15, the appointments enum, and the missing <code>users.clinic_id</code>) were independently re-verified against source during this review. All confirmed. Remaining findings carry direct file:line excerpts from the audit passes.</em></p>
+</div>
+</body>
+</html>

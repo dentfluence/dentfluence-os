@@ -428,7 +428,9 @@
 
 <script>
 // ── Patient search ─────────────────────────────────────────────
-const __ALL_PATIENTS = {!! json_encode(auth()->check() ? \App\Models\Patient::where('branch_id', auth()->user()->branch_id)->orderBy('name')->get(['id','name','phone']) : []) !!};
+{{-- @json escapes < > / — raw json_encode allowed a patient name containing
+     </script> to break out and execute in staff browsers (stored XSS) --}}
+const __ALL_PATIENTS = @json(auth()->check() ? \App\Models\Patient::where('branch_id', auth()->user()->branch_id)->orderBy('name')->get(['id','name','phone']) : []);
 
 function filterPatientDropdown(q) {
     const dd = document.getElementById('am-patient-dropdown');
@@ -627,16 +629,26 @@ async function checkConflict(doctorId, date, time, duration) {
 
 // Ask the user to confirm before double-booking a doctor. Returns true when
 // it's safe to proceed (no conflict, or user confirmed anyway).
+//
+// The server now ENFORCES the overlap rule, so a knowing confirmation must be
+// communicated to it via allow_overlap — tracked in __dfAllowOverlap and
+// included in the submit bodies below.
+let __dfAllowOverlap = false;
+
 async function confirmIfDoubleBooked(doctorId, doctorName, date, time, duration) {
+    __dfAllowOverlap = false;
     if (!doctorId || !date || !time) return true;
     const data = await fetchConflictData(doctorId, date, time, duration);
     if (!data || !data.has_conflict || !data.conflicts.length) return true;
 
     const c = data.conflicts[0];
-    return confirm(
+    const proceed = confirm(
         `Dr. ${doctorName} already has an appointment with ${c.patient_name} at ${c.time} ` +
         `(${c.duration} min). Book this appointment for the same doctor anyway?`
     );
+
+    __dfAllowOverlap = proceed;
+    return proceed;
 }
 
 // ── Modal open / close / tab switch ───────────────────────────
@@ -720,6 +732,7 @@ async function submitApptModal() {
                 duration_minutes:      parseInt(document.getElementById('am-duration').value) || 30,
                 treatment_category_id: document.getElementById('am-category').value || null,
                 notes:                 document.getElementById('am-notes').value || '',
+                allow_overlap:         __dfAllowOverlap,
             }),
         });
 
@@ -756,7 +769,9 @@ async function submitWalkin() {
     const wiDoctorId  = document.getElementById('wi-doctor').value;
     const wiCatSel    = document.getElementById('wi-category');
     const wiDuration  = autoDurationFromName(wiCatSel.options[wiCatSel.selectedIndex]?.text);
-    const today0      = new Date().toISOString().split('T')[0];
+    // en-CA = local YYYY-MM-DD (toISOString is UTC and rolled back a day for
+    // early-hours walk-ins, putting them on yesterday's day-sheet).
+    const today0      = new Date().toLocaleDateString('en-CA');
     if (wiDoctorId) {
         const wiDoctorName = document.getElementById('wi-doctor').selectedOptions[0]?.text || 'This doctor';
         const okToBook = await confirmIfDoubleBooked(wiDoctorId, wiDoctorName, today0, time, wiDuration);
@@ -768,7 +783,7 @@ async function submitWalkin() {
     btn.disabled    = true;
 
     try {
-        const today = new Date().toISOString().split('T')[0];
+        const today = today0;
         const res   = await fetch(window.__APPT_DATA.routes.store, {
             method:  'POST',
             headers: {
@@ -786,6 +801,7 @@ async function submitWalkin() {
                 treatment_category_id: document.getElementById('wi-category').value || null,
                 notes:                 document.getElementById('wi-notes').value || '',
                 is_walkin:             true,
+                allow_overlap:         __dfAllowOverlap,
             }),
         });
 

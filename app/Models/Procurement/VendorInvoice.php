@@ -42,6 +42,16 @@ class VendorInvoice extends Model
         'total_amount'   => 'decimal:2',
     ];
 
+    /**
+     * Statuses that mean "this bill still owes money".
+     *
+     * The DB enum is (draft|pending|approved|paid|cancelled) — there is NO
+     * 'unpaid' value, yet the procurement analytics filtered on exactly that,
+     * so every "outstanding vendor bill" figure silently returned zero.
+     * Defined here so the enum and the queries can't drift apart again.
+     */
+    public const UNPAID_STATUSES = ['draft', 'pending', 'approved'];
+
     /* ── Relationships ── */
 
     public function purchaseOrder(): BelongsTo

@@ -9,6 +9,7 @@ use App\Models\Operatory;
 use App\Models\Patient;
 use App\Models\TreatmentCategory;
 use App\Models\User;
+use App\Services\AppointmentService;
 use App\Services\Relationship\AppointmentActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,7 +17,12 @@ use Carbon\Carbon;
 
 class AppointmentController extends Controller
 {
-    public function __construct(private AppointmentActivityLogger $activityLogger) {}
+    use \App\Http\Controllers\Concerns\ChecksStaleUpdates;
+
+    public function __construct(
+        private AppointmentActivityLogger $activityLogger,
+        private AppointmentService $appointments,
+    ) {}
 
     // ── Index / Calendar view ────────────────────────────────────
     public function index(Request $request)
@@ -124,25 +130,37 @@ class AppointmentController extends Controller
                 'treatment_id'         => 'nullable|exists:treatments,id',
             ]);
 
-            // Always create a new patient — multiple family members can share a phone number
-            $patient = Patient::create([
-                'name'      => trim($request->first_name . ' ' . $request->last_name),
-                'phone'     => $request->mobile,
-                'branch_id' => $branchId,
-            ]);
-
             $doctorId = $request->filled('doctor_id')
                 ? $request->doctor_id
                 : User::where('branch_id', $branchId)->where('is_active', true)->value('id');
 
             $duration = $this->autoDuration($request->treatment_category_id);
 
-            // ── Blocked slot check ─────────────────────────────────
+            // ── Guards run BEFORE the patient is created ───────────
+            // Previously Patient::create() ran first, so a rejected booking
+            // left an orphan patient record behind on every failed attempt.
+
+            // Blocked slot (doctor on leave) — hard block.
             if ($err = $this->blockedSlotConflict($doctorId, $request->appointment_date, $request->appointment_time, $duration)) {
                 return $request->expectsJson()
                     ? response()->json($err, 422)
-                    : back()->withErrors($err['message']);
+                    : back()->withErrors($err['message'])->withInput();
             }
+
+            // Double-booking guard (bypass with allow_overlap).
+            if (! $this->overlapAllowed($request)
+                && $err = $this->overlapConflict($doctorId, $request->appointment_date, $request->appointment_time, $duration, null, $branchId)) {
+                return $request->expectsJson()
+                    ? response()->json($err, 422)
+                    : back()->withErrors($err['message'])->withInput();
+            }
+
+            // Always create a new patient — multiple family members can share a phone number
+            $patient = Patient::create([
+                'name'      => trim($request->first_name . ' ' . $request->last_name),
+                'phone'     => $request->mobile,
+                'branch_id' => $branchId,
+            ]);
 
             $appointment = Appointment::create([
                 'patient_id'           => $patient->id,
@@ -195,7 +213,15 @@ class AppointmentController extends Controller
             if ($err = $this->blockedSlotConflict($doctorId, $request->appointment_date, $request->appointment_time, $wiDuration)) {
                 return $request->expectsJson()
                     ? response()->json($err, 422)
-                    : back()->withErrors($err['message']);
+                    : back()->withErrors($err['message'])->withInput();
+            }
+
+            // ── Double-booking guard (bypass with allow_overlap) ───
+            if (! $this->overlapAllowed($request)
+                && $err = $this->overlapConflict($doctorId, $request->appointment_date, $request->appointment_time, $wiDuration, null, $branchId)) {
+                return $request->expectsJson()
+                    ? response()->json($err, 422)
+                    : back()->withErrors($err['message'])->withInput();
             }
 
             $appointment = Appointment::create([
@@ -257,6 +283,14 @@ class AppointmentController extends Controller
                 : back()->withErrors($err['message'])->withInput();
         }
 
+        // ── Double-booking guard (bypass with allow_overlap) ────────
+        if (! $this->overlapAllowed($request)
+            && $err = $this->overlapConflict($data['doctor_id'], $data['appointment_date'], $data['appointment_time'], $data['duration_minutes'], null, $branchId)) {
+            return $request->expectsJson()
+                ? response()->json($err, 422)
+                : back()->withErrors($err['message'])->withInput();
+        }
+
         $appointment = Appointment::create($data);
 
         $this->activityLogger->booked($appointment, Auth::user());
@@ -306,6 +340,10 @@ class AppointmentController extends Controller
             // Direct cancel via the status dropdown (no reason captured) — the
             // calendar's "Cancel Appointment" modal uses cancelWithReason() below instead.
             'cancelled' => $this->activityLogger->cancelled($appointment, Auth::user()),
+            // Fires 'appointment.missed' → the enabled missed_appointment_followup
+            // rule auto-creates the reschedule call task. Nothing emitted this
+            // event before, so that rule could never fire.
+            'no_show'   => $this->activityLogger->missed($appointment, Auth::user()),
             default   => null,
         };
 
@@ -519,6 +557,30 @@ class AppointmentController extends Controller
             'operatory_id'         => 'nullable|exists:operatories,id',
         ]);
 
+        // Optimistic lock — two receptionists editing the same appointment no
+        // longer silently overwrite each other.
+        $this->assertNotStale($request, $appointment);
+
+        $duration = $data['duration_minutes']
+            ?? $appointment->duration_minutes
+            ?? $this->autoDuration($data['treatment_category_id'] ?? null);
+
+        // ── Blocked slot + double-booking guards ───────────────────
+        // The edit form could previously move an appointment onto a doctor's
+        // leave or on top of another patient with no check at all.
+        if ($err = $this->blockedSlotConflict($data['doctor_id'], $data['appointment_date'], $data['appointment_time'], $duration)) {
+            return $request->expectsJson()
+                ? response()->json($err, 422)
+                : back()->withErrors($err['message'])->withInput();
+        }
+
+        if (! $this->overlapAllowed($request)
+            && $err = $this->overlapConflict($data['doctor_id'], $data['appointment_date'], $data['appointment_time'], $duration, $appointment->id, $appointment->branch_id)) {
+            return $request->expectsJson()
+                ? response()->json($err, 422)
+                : back()->withErrors($err['message'])->withInput();
+        }
+
         $appointment->update($data);
 
         if ($request->expectsJson()) {
@@ -545,6 +607,22 @@ class AppointmentController extends Controller
             'appointment_time' => 'required|date_format:H:i',
             'duration_minutes' => 'nullable|integer|min:10|max:480',
         ]);
+
+        $duration = $data['duration_minutes'] ?? $appointment->duration_minutes ?? 30;
+
+        // ── Blocked slot + double-booking guards ───────────────────
+        // Drag-drop is the most conflict-prone action in the app and previously
+        // ran NO checks — a cleaning could be dropped onto an in-progress RCT or
+        // onto the doctor's leave and it would just snap into place.
+        // The calendar reverts the drag on a 422 (see onEventDrop).
+        if ($err = $this->blockedSlotConflict($appointment->doctor_id, $data['appointment_date'], $data['appointment_time'], $duration)) {
+            return response()->json($err, 422);
+        }
+
+        if (! $this->overlapAllowed($request)
+            && $err = $this->overlapConflict($appointment->doctor_id, $data['appointment_date'], $data['appointment_time'], $duration, $appointment->id, $appointment->branch_id)) {
+            return response()->json($err, 422);
+        }
 
         $appointment->update($data);
 
@@ -590,30 +668,25 @@ class AppointmentController extends Controller
             'exclude_id'       => 'nullable|integer',
         ]);
 
-        $branchId = Auth::user()->branch_id;
-        $start    = Carbon::parse($request->appointment_date . ' ' . $request->appointment_time);
-        $duration = $request->duration_minutes ?? 30;
-        $end      = $start->copy()->addMinutes($duration);
-
-        $conflicts = Appointment::where('branch_id', $branchId)
-            ->where('doctor_id', $request->doctor_id)
-            ->whereDate('appointment_date', $request->appointment_date)
-            ->whereNotIn('status', ['cancelled', 'no_show'])
-            ->when($request->exclude_id, fn($q) => $q->where('id', '!=', $request->exclude_id))
-            ->get()
-            ->filter(function ($apt) use ($start, $end) {
-                $aptStart = Carbon::parse($apt->appointment_date . ' ' . $apt->appointment_time);
-                $aptEnd   = $aptStart->copy()->addMinutes($apt->duration_minutes ?? 30);
-                return $start->lt($aptEnd) && $end->gt($aptStart);
-            });
+        // Advisory check for the booking modals. Uses the same shared overlap
+        // filter the server now ENFORCES on write, so the warning the user sees
+        // and the rule the server applies can never drift apart.
+        $clash = $this->appointments->overlapConflict(
+            (int) $request->doctor_id,
+            (int) Auth::user()->branch_id,
+            $request->appointment_date,
+            $request->appointment_time,
+            (int) ($request->duration_minutes ?? 30),
+            $request->exclude_id ? (int) $request->exclude_id : null
+        );
 
         return response()->json([
-            'has_conflict' => $conflicts->isNotEmpty(),
-            'conflicts'    => $conflicts->map(fn($a) => [
-                'patient_name' => $a->patient?->name,
-                'time'         => substr($a->appointment_time, 0, 5),
-                'duration'     => $a->duration_minutes,
-            ])->values(),
+            'has_conflict' => (bool) $clash,
+            'conflicts'    => $clash ? [[
+                'patient_name' => $clash->patient?->name,
+                'time'         => substr((string) $clash->appointment_time, 0, 5),
+                'duration'     => $clash->duration_minutes,
+            ]] : [],
         ]);
     }
 
@@ -682,20 +755,61 @@ class AppointmentController extends Controller
      * Return a JSON error response if the doctor has a blocked slot
      * overlapping the given appointment window, or null if clear.
      */
+    /**
+     * Doctor double-booking guard (2026-07-14 production hardening).
+     *
+     * Overlap detection previously existed ONLY as an advisory GET
+     * (checkConflict) surfaced as a JS confirm() in the booking modals — so the
+     * mobile API, the edit form, drag-drop reschedule, and two receptionists
+     * booking the same slot simultaneously could all write overlaps silently.
+     *
+     * This is the same overlap filter, enforced server-side. Deliberate
+     * double-booking (second chair, overlap consult) remains possible: the
+     * caller passes allow_overlap=true, which is exactly what the modals send
+     * after the user confirms the "Book anyway?" prompt.
+     *
+     * @return array|null  error payload, or null when the slot is free
+     */
+    private function overlapConflict(
+        ?int   $doctorId,
+        string $date,
+        string $time,
+        int    $duration,
+        ?int   $excludeId = null,
+        ?int   $branchId = null
+    ): ?array {
+        $clash = $this->appointments->overlapConflict(
+            $doctorId,
+            $branchId ?? Auth::user()->branch_id,
+            $date,
+            $time,
+            $duration,
+            $excludeId
+        );
+
+        if (! $clash) return null;
+
+        $who  = $clash->patient?->name ?? 'another patient';
+        $when = substr((string) $clash->appointment_time, 0, 5);
+
+        return [
+            'success'      => false,
+            'ok'           => false,
+            'has_conflict' => true,
+            'message'      => "This doctor already has {$who} at {$when} ({$clash->duration_minutes} min). Choose another time, or confirm to double-book.",
+            'errors'       => ['appointment_time' => 'Doctor is already booked in this slot.'],
+        ];
+    }
+
+    /** True when the caller explicitly opted into double-booking. */
+    private function overlapAllowed(Request $request): bool
+    {
+        return $request->boolean('allow_overlap');
+    }
+
     private function blockedSlotConflict(?int $doctorId, string $date, string $time, int $duration): ?array
     {
-        if (! $doctorId) return null;
-
-        $start   = Carbon::parse("$date $time");
-        $end     = $start->copy()->addMinutes($duration);
-        $startHi = $start->format('H:i:s');
-        $endHi   = $end->format('H:i:s');
-
-        $block = DoctorBlockedSlot::where('doctor_id', $doctorId)
-            ->where('block_date', $date)
-            ->where('start_time', '<', $endHi)
-            ->where('end_time',   '>',  $startHi)
-            ->first();
+        $block = $this->appointments->blockedSlotConflict($doctorId, $date, $time, $duration);
 
         if (! $block) return null;
 
@@ -715,7 +829,7 @@ class AppointmentController extends Controller
         $base = Appointment::where('branch_id', $branchId)
             ->whereDate('appointment_date', today());
 
-        return [
+        return array_merge([
             'total'     => (clone $base)->count(),
             'scheduled' => (clone $base)->where('status', 'scheduled')->count(),
             'checkin'   => (clone $base)->where('status', 'checkin')->count(),
@@ -724,6 +838,45 @@ class AppointmentController extends Controller
             'cancelled' => (clone $base)->where('status', 'cancelled')->count(),
             'no_show'   => (clone $base)->where('status', 'no_show')->count(),
             'walkin'    => (clone $base)->where('is_walkin', true)->count(),
+        ], $this->getChairUtilization($branchId, $base));
+    }
+
+    /**
+     * Chair/slot utilization for today: booked-minutes across every scheduled
+     * appointment (excluding cancelled/no_show, which never occupy a chair)
+     * divided by total available chair-minutes (active operatories x the
+     * clinic's daily capacity window).
+     *
+     * Two things are configurable but currently defaulted, since neither is
+     * captured anywhere else in the app yet:
+     *   - appointments.daily_capacity_hours (AppSetting) — defaults to 14h
+     *     (08:00-22:00), matching the booking slot generator in create()/edit().
+     *   - Chair count falls back to the branch's distinct chair_number values
+     *     when no Operatory rows are configured, and to 1 if neither exists,
+     *     so the metric degrades gracefully instead of exploding to 0/0.
+     */
+    private function getChairUtilization(int $branchId, $baseQuery): array
+    {
+        $bookedMinutes = (clone $baseQuery)
+            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->get(['duration_minutes'])
+            ->sum(fn ($a) => $a->duration_minutes ?? 30);
+
+        $chairCount = Operatory::forBranch($branchId)->active()->count();
+        if ($chairCount === 0) {
+            $chairCount = max(1, (clone $baseQuery)->whereNotNull('chair_number')->distinct()->count('chair_number'));
+        }
+
+        $capacityHours   = (float) AppSetting::get('appointments.daily_capacity_hours', '14');
+        $capacityMinutes = max(1, $chairCount * $capacityHours * 60);
+
+        $pct = min(100, round(($bookedMinutes / $capacityMinutes) * 100, 1));
+
+        return [
+            'chair_utilization_pct'     => $pct,
+            'chair_booked_minutes'      => (int) $bookedMinutes,
+            'chair_capacity_minutes'    => (int) $capacityMinutes,
+            'chair_count'               => $chairCount,
         ];
     }
 

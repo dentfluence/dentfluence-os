@@ -65,9 +65,11 @@ class FinalBill extends Model
         $year   = now()->year;
         $prefix = 'BILL-' . $year . '-';
 
+        // lockForUpdate serializes concurrent generation (see Invoice::nextNumber).
         $last = self::withTrashed()
             ->whereYear('created_at', $year)
             ->where('bill_number', 'like', $prefix . '%')
+            ->lockForUpdate()
             ->max('bill_number');
 
         $seq = $last ? (int) substr($last, strlen($prefix)) : 0;

@@ -806,6 +806,19 @@
 </div>
 
 <script>
+// ── Double-submit protection ──────────────────────────────────────────────
+// Disable the Save button the moment the form submits so a double-click or a
+// slow-network re-click can't record the same payment twice. The server also
+// de-dupes, but this stops the duplicate at the source.
+document.getElementById('paymentForm')?.addEventListener('submit', function () {
+    const btn = document.getElementById('pmtSubmitBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-60', 'cursor-not-allowed');
+        btn.textContent = 'Saving…';
+    }
+});
+
 // ── Payment modal JS ──────────────────────────────────────────────────────
 // Configurable in Settings → Billing → Credit Card Convenience Fee
 const CC_LIMIT       = {{ (float) \App\Models\AppSetting::get('cc_convenience_threshold', 10000) }};

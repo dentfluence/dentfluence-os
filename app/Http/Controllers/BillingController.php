@@ -37,6 +37,8 @@ use Illuminate\Support\Facades\Hash;
 
 class BillingController extends Controller
 {
+    use \App\Http\Controllers\Concerns\ChecksStaleUpdates;
+
     // ── Index ────────────────────────────────────────────────────────────────
 
     public function index(Request $request)
@@ -194,6 +196,13 @@ class BillingController extends Controller
             return response()->json(['valid' => false, 'error' => 'This coupon has already been used the maximum number of times for this patient.']);
         }
 
+        if ((float) $request->subtotal < (float) $coupon->min_invoice_amount) {
+            return response()->json([
+                'valid' => false,
+                'error' => 'Minimum invoice amount for this coupon is Rs. ' . number_format((float) $coupon->min_invoice_amount, 0) . '.',
+            ]);
+        }
+
         $discountAmount = $coupon->calculateDiscount((float) $request->subtotal);
 
         return response()->json([
@@ -330,32 +339,20 @@ class BillingController extends Controller
 
         DB::transaction(function () use ($request, &$invoiceId) {
 
-            // ── Resolve coupon ───────────────────────────────────────────────
-            $couponId       = null;
-            $couponDiscount = 0;
-            if ($request->filled('coupon_code')) {
-                $coupon = CouponCode::active()
-                    ->where('code', strtoupper(trim($request->coupon_code)))
-                    ->first();
-                if ($coupon && $coupon->canBeUsedByPatient((int) $request->patient_id)) {
-                    $couponId = $coupon->id;
-                    // Will be calculated after items are saved via recalculate
-                    // Store coupon_discount based on submitted hidden field
-                    $couponDiscount = max(0, (float) $request->input('coupon_discount', 0));
-                }
-            }
-
             // ── Create invoice header ────────────────────────────────────────
+            // Discounts (coupon / membership / wallet) are all recomputed
+            // server-side AFTER the line items are saved — never trust a
+            // client-submitted rupee amount (mirrors Api/V1/BillingController).
             $invoice = Invoice::create([
                 'invoice_number'      => Invoice::nextNumber(),
                 'patient_id'          => $request->patient_id,
                 'invoice_date'        => $request->invoice_date,
                 'due_date'            => $request->due_date,
                 'discount_pct'        => $request->discount_pct ?? 0,
-                'wallet_applied'      => $request->wallet_applied ?? 0,
-                'coupon_id'           => $couponId,
-                'coupon_discount'     => $couponDiscount,
-                'membership_discount' => $request->membership_discount ?? 0,
+                'wallet_applied'      => 0,
+                'coupon_id'           => null,
+                'coupon_discount'     => 0,
+                'membership_discount' => 0,
                 'notes'               => $request->notes,
                 'status'              => 'draft',
                 'created_by'          => auth()->id(),
@@ -394,30 +391,86 @@ class BillingController extends Controller
                 description:    'Invoice created',
             );
 
-            // ── Record coupon usage ──────────────────────────────────────────
-            if ($couponId) {
-                (new CouponService())->apply(
-                    couponId:       $couponId,
-                    patientId:      (int) $request->patient_id,
-                    invoiceId:      $invoice->id,
-                    discountAmount: $couponDiscount,
-                    createdBy:      auth()->id()
-                );
+            // ── Coupon (server-side recompute) ───────────────────────────────
+            if ($request->filled('coupon_code')) {
+                $coupon = CouponCode::active()
+                    ->where('code', strtoupper(trim($request->coupon_code)))
+                    ->first();
+                if (! $coupon) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'coupon_code' => 'Invalid or expired coupon code.',
+                    ]);
+                }
+                if (! $coupon->canBeUsedByPatient((int) $request->patient_id)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'coupon_code' => 'This coupon has already been used the maximum number of times for this patient.',
+                    ]);
+                }
+                if ((float) $invoice->subtotal < (float) $coupon->min_invoice_amount) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'coupon_code' => 'Minimum invoice amount for this coupon is Rs. ' . number_format((float) $coupon->min_invoice_amount, 0) . '.',
+                    ]);
+                }
+
+                $couponDiscount = $coupon->calculateDiscount((float) $invoice->subtotal);
+                if ($couponDiscount > 0) {
+                    $invoice->update(['coupon_id' => $coupon->id, 'coupon_discount' => $couponDiscount]);
+                    (new CouponService())->apply(
+                        couponId:       $coupon->id,
+                        patientId:      (int) $request->patient_id,
+                        invoiceId:      $invoice->id,
+                        discountAmount: $couponDiscount,
+                        createdBy:      auth()->id()
+                    );
+                }
             }
 
-            // ── Debit wallet if wallet credit was applied ────────────────────
-            // Pass treatment IDs so promo credits can be hard-blocked for non-applicable treatments.
-            $walletApplied = (float) ($request->wallet_applied ?? 0);
-            if ($walletApplied > 0) {
-                $treatmentIds = array_map('intval', (array) ($request->wallet_treatment_ids ?? []));
+            // ── Membership discount (server-side recompute) ──────────────────
+            // The submitted membership_discount is treated as an opt-in signal
+            // only; the rupee amount is always recomputed from the saved items.
+            if ((float) $request->input('membership_discount', 0) > 0) {
+                $invoice->refresh();
+                $eligibleItems = $invoice->items->whereNull('inventory_item_id');
+                $lineItems = $eligibleItems->map(fn ($it) => [
+                    'name'   => $it->description,
+                    'amount' => (float) $it->unit_price,
+                    'qty'    => (int) $it->qty,
+                ])->all();
+                $eligibleSubtotal = (float) $eligibleItems->sum(fn ($it) => (float) $it->unit_price * (int) $it->qty);
+                $benefit = MembershipBenefitService::forPatient((int) $request->patient_id, $lineItems, $eligibleSubtotal);
+                if (($benefit['active'] ?? false) && ($benefit['discount'] ?? 0) > 0) {
+                    $invoice->update([
+                        'membership_id'       => $benefit['membership_id'],
+                        'membership_discount' => $benefit['discount'],
+                    ]);
+                }
+            }
 
-                (new WalletService())->debit(
-                    patientId:    (int) $request->patient_id,
-                    amount:       $walletApplied,
-                    invoiceId:    $invoice->id,
-                    createdBy:    auth()->id(),
-                    treatmentIds: $treatmentIds
-                );
+            $invoice->recalculate();
+
+            // ── Wallet (capped + synced to the amount actually debited) ──────
+            // Pass treatment IDs so promo credits can be hard-blocked for
+            // non-applicable treatments. WalletService::debit() caps the debit
+            // to the real/eligible balance — the invoice must reflect the
+            // debited figure, never the requested one.
+            if ((float) $request->input('wallet_applied', 0) > 0) {
+                $invoice->refresh();
+                $wallet    = Wallet::forPatient((int) $request->patient_id);
+                $requested = (float) $request->wallet_applied;
+                $cap       = min($requested, (float) $wallet->balance_total, (float) $invoice->balance_due);
+                if ($cap > 0) {
+                    $debited = (new WalletService())->debit(
+                        patientId:    (int) $request->patient_id,
+                        amount:       $cap,
+                        invoiceId:    $invoice->id,
+                        createdBy:    auth()->id(),
+                        treatmentIds: array_map('intval', (array) ($request->wallet_treatment_ids ?? []))
+                    );
+                    if ($debited > 0) {
+                        $invoice->update(['wallet_applied' => $debited]);
+                    }
+                }
+                $invoice->recalculate();
             }
 
             // ── Mark billing prompts as invoiced ─────────────────────────────
@@ -519,6 +572,11 @@ class BillingController extends Controller
             'manual_discount_value' => 'nullable|numeric|min:0',
             'manual_discount_reason'=> 'nullable|string|max:500',
         ]);
+
+        // Optimistic lock — this update wholesale deletes and recreates the line
+        // items, so a stale save would silently destroy edits (and stock
+        // movements) another user made in the meantime.
+        $this->assertNotStale($request, $invoice);
 
         DB::transaction(function () use ($request, $invoice) {
             $invoice->update([
@@ -833,6 +891,31 @@ class BillingController extends Controller
             $convenienceFee, $providerScheme, $providerBreakdown,
             &$receipt, &$walletUsedApplied, &$excessToWallet
         ) {
+            // ── Concurrency guard ────────────────────────────────────────────
+            // Lock the invoice row so concurrent submissions serialize, then
+            // re-check state on fresh data and reject an identical resubmission
+            // (double-click / network replay) within a short window.
+            Invoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+            $invoice->refresh();
+
+            if ($invoice->status === 'cancelled') {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'amount' => 'Cannot record payment on a cancelled invoice.',
+                ]);
+            }
+
+            $isDuplicate = InvoicePayment::where('invoice_id', $invoice->id)
+                ->where('amount', (float) $request->amount)
+                ->where('payment_mode', $mode)
+                ->whereDate('payment_date', $request->payment_date)
+                ->where('created_at', '>=', now()->subSeconds(20))
+                ->exists();
+            if ($isDuplicate) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'amount' => 'An identical payment was recorded seconds ago — this looks like a duplicate submission. Refresh the page to verify before retrying.',
+                ]);
+            }
+
             $paidBefore = (float) $invoice->paid_amount;
 
             // ── Payment allocation: consume wallet credit first ──────────────

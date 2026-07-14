@@ -24,6 +24,15 @@ return [
         // Minimum ₹ balance_due on an overdue invoice to trigger a payment reminder call
         'payment_reminder_threshold'       => (int) env('REL_PAYMENT_THRESHOLD', 500),
 
+        // Days past an invoice's due_date at which `payment.overdue` fires
+        // (producer: php artisan payments:scan-overdue). Matches the
+        // payment_overdue_3d rule's name/intent.
+        'payment_overdue_days'             => (int) env('REL_PAYMENT_OVERDUE_DAYS', 3),
+
+        // Days of lead time before a birthday at which `birthday.approaching`
+        // fires (producer: php artisan birthdays:scan). Matches birthday_3d.
+        'birthday_days_ahead'              => (int) env('REL_BIRTHDAY_DAYS_AHEAD', 3),
+
         // Hours before appointment to include in reminder list (default: 24 = tomorrow's appts)
         'appointment_reminder_hours_ahead' => (int) env('REL_APPT_REMINDER_HOURS', 24),
 
@@ -234,7 +243,17 @@ return [
 
         /*
          * 3. 6-month recall reminder — 180 days after a completed visit.
-         *    Core retention tool. Prevents patient churn.
+         *
+         * DISABLED 2026-07-14 (production hardening) — deliberately starved,
+         * and the config was lying about it. TreatmentVisitService explicitly
+         * does NOT log 'visit.completed' (see the comment at
+         * TreatmentVisitService.php:384) because it already creates the 6-month
+         * recall task inline; letting this rule fire too would double-queue
+         * every recall. The 6-month recall IS still produced — by the inline
+         * path and by RecallEngineService's no_visit_6months trigger.
+         *
+         * Left in place (not deleted) so the intent is documented. Enable ONLY
+         * if the inline creation in TreatmentVisitService is removed first.
          */
         'recall_6months' => [
             'trigger'       => 'visit.completed',
@@ -245,7 +264,7 @@ return [
                 'days_after' => 180,
             ],
             'cooldown_days' => 150,   // don't re-queue if one already pending
-            'enabled'       => true,
+            'enabled'       => false,
         ],
 
         /*
@@ -317,9 +336,14 @@ return [
         /*
          * 8. Estimate follow-up — 3 days after a treatment estimate is sent.
          *    Patient received a quote; check for questions before they go cold.
+         *
+         *    2026-07-14: trigger corrected from 'estimate.sent' (which NOTHING
+         *    in the app ever emitted, so this rule was dead) to the event that
+         *    is actually fired when an estimate goes out —
+         *    PresentationController::send()/resend() log 'presentation.sent'.
          */
         'estimate_followup_3d' => [
-            'trigger'       => 'estimate.sent',
+            'trigger'       => 'presentation.sent',
             'conditions'    => [],
             'action'        => 'create_task',
             'action_config' => [

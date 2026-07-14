@@ -8,10 +8,25 @@ use Illuminate\Http\Request;
 class TimelineController extends Controller
 {
     /**
+     * Production hardening 2026-07-14: this controller still renders hardcoded
+     * SAMPLE data (getDummyPatients/getDummyTimeline below). Until it is wired
+     * to live records, every entry point 404s so a real clinic can never see
+     * fabricated patients. Nav links were removed from config/communication.php
+     * and the communication sidebar at the same time — restore all three
+     * together when the live union query (see TODO below) is implemented.
+     */
+    private function guardNotWired(): void
+    {
+        abort(404);
+    }
+
+    /**
      * Patient list — search & select a patient/lead to view timeline
      */
     public function index(Request $request)
     {
+        $this->guardNotWired();
+
         $patients = $this->getDummyPatients();
 
         if ($request->filled('q')) {
@@ -42,6 +57,8 @@ class TimelineController extends Controller
      */
     public function show(Request $request, $personId)
     {
+        $this->guardNotWired();
+
         $person   = $this->getDummyPersonById($personId);
         $timeline = $this->getDummyTimeline($personId);
 
