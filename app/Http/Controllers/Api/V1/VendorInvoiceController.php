@@ -3,14 +3,12 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
-use App\Models\Finance\FinanceExpense;
-use App\Models\Finance\FinanceExpenseCategory;
 use App\Models\Finance\FinanceVendor;
 use App\Models\Inventory\PurchaseOrder;
 use App\Models\Procurement\VendorInvoice;
+use App\Services\Procurement\VendorInvoiceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -131,129 +129,14 @@ class VendorInvoiceController extends ApiController
        (exact same side effects as web store())
     ══════════════════════════════════════════════════════════ */
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, VendorInvoiceService $service): JsonResponse
     {
-        $data = $request->validate([
-            'purchase_order_id'   => 'required|exists:purchase_orders,id',
-            'finance_vendor_id'   => 'nullable|exists:finance_vendors,id',
-            'invoice_number'      => 'nullable|string|max:100',
-            'invoice_date'        => 'required|date',
-            'due_date'            => 'nullable|date|after_or_equal:invoice_date',
-            'payment_terms'       => 'nullable|string|max:100',
-            'invoice_amount'      => 'required|numeric|min:0.01',
-            'gst_amount'          => 'nullable|numeric|min:0',
-            'notes'               => 'nullable|string|max:1000',
-            'bill_attachment'     => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            // Line items
-            'items'               => 'nullable|array',
-            'items.*.inventory_item_id' => 'nullable|exists:inventory_items,id',
-            'items.*.description'       => 'nullable|string|max:200',
-            'items.*.qty'               => 'nullable|numeric|min:0.01',
-            'items.*.unit_price'        => 'nullable|numeric|min:0',
-            'items.*.gst_rate'          => 'nullable|numeric|min:0|max:100',
-        ]);
+        $data = $request->validate(VendorInvoiceService::rules());
 
-        $po          = PurchaseOrder::findOrFail($data['purchase_order_id']);
-        $gstAmount   = (float) ($data['gst_amount'] ?? 0);
-        $totalAmount = (float) $data['invoice_amount'] + $gstAmount;
-
-        // Handle bill attachment upload — identical disk/path to web.
-        $attachmentPath = null;
-        if ($request->hasFile('bill_attachment')) {
-            $attachmentPath = $request->file('bill_attachment')
-                ->store('vendor-invoices', 'public');
-        }
-
-        // Resolve finance_vendor_id — use from form if provided, else from PO.
-        $financeVendorId = $data['finance_vendor_id']
-            ?? $po->finance_vendor_id
-            ?? $po->resolveFinanceVendor()?->id;
-
-        $invoice = DB::transaction(function () use (
-            $data, $po, $gstAmount, $totalAmount, $attachmentPath, $financeVendorId
-        ) {
-            // ── 1. Create the Vendor Invoice ──────────────────────────────
-            $invoice = VendorInvoice::create([
-                'invoice_ref'         => VendorInvoice::generateRef(),
-                'purchase_order_id'   => $po->id,
-                'finance_vendor_id'   => $financeVendorId,
-                'inventory_vendor_id' => $po->vendor_id,
-                'invoice_number'      => $data['invoice_number'] ?? null,
-                'invoice_date'        => $data['invoice_date'],
-                'due_date'            => $data['due_date'] ?? null,
-                'payment_terms'       => $data['payment_terms'] ?? null,
-                'invoice_amount'      => $data['invoice_amount'],
-                'gst_amount'          => $gstAmount,
-                'total_amount'        => $totalAmount,
-                'bill_attachment'     => $attachmentPath,
-                'notes'               => $data['notes'] ?? null,
-                'status'              => 'pending',
-                'created_by'          => auth()->id(),
-            ]);
-
-            // ── 2. Save line items (if provided) ─────────────────────────
-            foreach ($data['items'] ?? [] as $line) {
-                $lineQty   = (float) ($line['qty'] ?? 1);
-                $linePrice = (float) ($line['unit_price'] ?? 0);
-                $lineGst   = (float) ($line['gst_rate'] ?? 0);
-                $lineTotal = $lineQty * $linePrice * (1 + $lineGst / 100);
-
-                $invoice->items()->create([
-                    'inventory_item_id' => $line['inventory_item_id'] ?? null,
-                    'description'       => $line['description'] ?? null,
-                    'qty'               => $lineQty,
-                    'unit_price'        => $linePrice,
-                    'gst_rate'          => $lineGst,
-                    'total_price'       => $lineTotal,
-                ]);
-            }
-
-            // ── 3. Auto-create Accounts Payable entry in Finance ──────────
-            //    Finance is the single source of truth for payments.
-            //    This unpaid expense shows in Finance > Expenses as a vendor bill.
-            $suppliesCategory = FinanceExpenseCategory::where('name', 'like', '%Suppl%')
-                ->orWhere('name', 'like', '%Dental%')
-                ->orWhere('name', 'like', '%Inventory%')
-                ->orWhere('name', 'like', '%Purchase%')
-                ->first();
-
-            $expense = FinanceExpense::create([
-                'title'          => 'Vendor Invoice ' . $invoice->invoice_ref
-                                    . ' — PO# ' . $po->order_no,
-                'description'    => 'Vendor bill: '
-                                    . ($invoice->invoice_number ? 'Invoice# ' . $invoice->invoice_number . '. ' : '')
-                                    . 'Auto-created from Procurement → Vendor Invoice.',
-                'expense_date'   => $data['invoice_date'],
-                'due_date'       => $data['due_date'] ?? null,
-                'amount'         => $data['invoice_amount'],
-                'gst_applicable' => $gstAmount > 0,
-                'gst_amount'     => $gstAmount,
-                'total_amount'   => $totalAmount,
-                'category_id'    => $suppliesCategory?->id,
-                'vendor_id'      => $financeVendorId,
-                'payment_status' => 'unpaid',
-                // payment_mode intentionally omitted — DB default applies;
-                // will be set when the bill is paid in Finance
-                'status'         => 'approved',
-                'source_type'    => VendorInvoice::class,
-                'source_id'      => $invoice->id,
-                'notes'          => $data['notes'] ?? null,
-                'created_by'     => auth()->id(),
-            ]);
-
-            // ── 4. Link the Finance expense back to the invoice ───────────
-            $invoice->update(['finance_expense_id' => $expense->id]);
-
-            // ── 5. Update PO invoice_status + running invoiced_amount ─────
-            $po->recalculateInvoiceStatus();
-
-            // ── 6. Update Finance vendor outstanding (cached field) ────────
-            if ($financeVendorId) {
-                FinanceVendor::where('id', $financeVendorId)->increment('outstanding_amount', $totalAmount);
-            }
-
-            return $invoice;
-        });
+        // Shared brain — identical side effects to web store(), including the
+        // DOUBLE-AP GUARD (previously missing on this path: a mobile vendor
+        // invoice against an already-received PO double-booked the payable).
+        $invoice = $service->create($data, $request->user(), $request->file('bill_attachment'));
 
         return $this->success(
             $this->mapSummary($invoice->load(['purchaseOrder', 'financeVendor', 'inventoryVendor'])),
@@ -313,29 +196,13 @@ class VendorInvoiceController extends ApiController
        DESTROY — reverses AP entry, same guard as web
     ══════════════════════════════════════════════════════════ */
 
-    public function destroy(VendorInvoice $vendorInvoice): JsonResponse
+    public function destroy(VendorInvoice $vendorInvoice, VendorInvoiceService $service): JsonResponse
     {
-        if ($vendorInvoice->status === 'paid') {
-            return $this->error('Cannot delete a paid invoice.', [], 422);
+        try {
+            $service->cancel($vendorInvoice);
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), [], 422);
         }
-
-        DB::transaction(function () use ($vendorInvoice) {
-            // Reverse the Finance AP entry
-            if ($vendorInvoice->financeExpense) {
-                $vendorInvoice->financeExpense->delete();
-            }
-
-            // Reverse Finance vendor outstanding
-            if ($vendorInvoice->finance_vendor_id) {
-                FinanceVendor::where('id', $vendorInvoice->finance_vendor_id)
-                    ->decrement('outstanding_amount', $vendorInvoice->total_amount);
-            }
-
-            $vendorInvoice->delete();
-
-            // Recalculate PO invoice status
-            $vendorInvoice->purchaseOrder->recalculateInvoiceStatus();
-        });
 
         return $this->success(null, 'Invoice cancelled and Finance AP entry reversed.');
     }

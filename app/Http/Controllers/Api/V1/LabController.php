@@ -289,39 +289,17 @@ class LabController extends ApiController
             );
         }
 
-        $data  = $request->validate(['notes' => 'nullable|string|max:500', 'date' => 'nullable|date']);
-        $from  = $case->status;
-        $date  = $data['date'] ?? now()->toDateString();
-        $notes = $data['notes'] ?? null;
-
-        // Map transition → date field to stamp
-        $dateMap = [
-            'order_placed'    => 'order_placed_date',
-            'impression_sent' => 'sent_date',
-            'scan_sent'       => 'sent_date',
-            'trial_received'  => 'trial_received_date',
-            'trial_returned'  => 'trial_returned_date',
-            'final_received'  => 'final_received_date',
-            'complete'        => 'final_received_date',
-        ];
-
-        $updates = ['status' => $to];
-        if (isset($dateMap[$to])) {
-            // Only stamp if not already set (preserve original date on re-entries)
-            $updates[$dateMap[$to]] = $case->{$dateMap[$to]} ?? $date;
-        }
-
-        $case->update($updates);
-        $case->logEvent('transition', "Status: {$from} → {$to}" . ($notes ? " — {$notes}" : ''), [
-            'from' => $from, 'to' => $to, 'by' => $user->name,
-        ]);
-
-        // Fire notifications (non-blocking)
+        // Shared brain (2026-07-14) — web's canonical transition: correct date
+        // columns, task chain close/create, notifications, and the lab Finance
+        // expense on final_received. This path previously stamped non-fillable
+        // columns, skipped the task chain, and never posted the AP expense.
         try {
-            app(\App\Services\LabNotificationService::class)->onTransition($case, $from, $to, $user);
-        } catch (\Throwable) {
-            // Notifications must never block a transition
+            app(\App\Services\LabCaseTransitionService::class)->transition($case, $to, $user);
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), [], 422);
         }
+
+        $case->refresh();
 
         return $this->success([
             'status'       => $case->status,

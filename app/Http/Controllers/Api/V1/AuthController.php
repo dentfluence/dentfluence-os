@@ -155,17 +155,37 @@ class AuthController extends ApiController
     {
         $user = $request->user();
 
+        // Rules mirror web ProfileController::update()/updatePassword()
+        // (2026-07-14 parity fix — this endpoint previously accepted a new
+        // password with no current-password check and only min:8).
         $data = $request->validate([
-            'name'     => ['required', 'string', 'max:255'],
-            'email'    => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
-            'password' => ['nullable', 'string', 'min:8'],
+            'name'        => ['required', 'string', 'max:100'],
+            'email'       => ['required', 'email', 'max:150', 'unique:users,email,' . $user->id],
+            'phone'       => ['nullable', 'string', 'max:20'],
+            'designation' => ['nullable', 'string', 'max:100'],
+            'password'         => ['nullable', 'string', \Illuminate\Validation\Rules\Password::defaults()],
+            'current_password' => ['required_with:password', 'string'],
         ]);
+
+        if (! empty($data['password'])) {
+            if (! Hash::check($data['current_password'], $user->password)) {
+                AuditLog::event('password_change_failed', $user->id, ['reason' => 'wrong_current_password'], ['module' => 'auth']);
+
+                return $this->error('Current password is incorrect.', [
+                    'current_password' => ['Current password is incorrect.'],
+                ], 422);
+            }
+            $user->password = Hash::make($data['password']);
+        }
 
         $user->name  = $data['name'];
         $user->email = $data['email'];
 
-        if (! empty($data['password'])) {
-            $user->password = Hash::make($data['password']);
+        if (array_key_exists('phone', $data)) {
+            $user->phone = $data['phone'];
+        }
+        if (array_key_exists('designation', $data)) {
+            $user->designation = $data['designation'];
         }
 
         $user->save();
@@ -211,14 +231,16 @@ class AuthController extends ApiController
     private function userPayload(User $user): array
     {
         return [
-            'id'         => $user->id,
-            'name'       => $user->name,
-            'email'      => $user->email,
-            'role'       => $user->role,
-            'role_label' => $user->role_label,
-            'is_admin'   => $user->isAdminRole(),
-            'branch_id'  => $user->branch_id,
-            'avatar'     => $user->avatar,
+            'id'          => $user->id,
+            'name'        => $user->name,
+            'email'       => $user->email,
+            'phone'       => $user->phone,
+            'designation' => $user->designation,
+            'role'        => $user->role,
+            'role_label'  => $user->role_label,
+            'is_admin'    => $user->isAdminRole(),
+            'branch_id'   => $user->branch_id,
+            'avatar'      => $user->avatar,
         ];
     }
 }

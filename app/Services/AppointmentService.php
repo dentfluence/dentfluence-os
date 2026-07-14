@@ -85,6 +85,9 @@ class AppointmentService
             $who  = $clash->patient?->name ?? 'another patient';
             $when = substr((string) $clash->appointment_time, 0, 5);
 
+            // NOTE: the mobile client detects an overridable overlap by the
+            // literal 'allow_overlap' token in this message (its "Book
+            // anyway?" flow). Keep the token if you reword this.
             throw ValidationException::withMessages([
                 'appointment_time' => "This doctor already has {$who} at {$when} ({$clash->duration_minutes} min). Choose another time, or resend with allow_overlap to double-book.",
             ]);

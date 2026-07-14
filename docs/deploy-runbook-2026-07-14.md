@@ -174,6 +174,45 @@ gunzip < backups/db_<timestamp>.sql.gz | mysql -u <user> -p <database>
 
 ---
 
+## GOTCHA: queue worker crash-loop after deploy (hit this on 2026-07-14)
+
+**Symptom:** `docker compose ps` shows `dentfluence-queue-1` as
+`Restarting (0) N seconds ago`, looping every ~10s. Logs show the worker starting
+and exiting cleanly with NO error — just `[entrypoint] starting: php artisan
+queue:work` over and over.
+
+**Cause:** a stale `illuminate:queue:restart` timestamp in the cache.
+`queue:work` compares that value against its own boot time and shuts down
+immediately if it looks newer. `deploy.sh` triggers a restart signal on every
+deploy, so this can get wedged — and then EVERY worker exits the instant it
+starts, silently, forever.
+
+**Consequence (why this is not cosmetic):** while it loops, nothing on the queue
+runs — relationship score recalcs, insight signals, the automation failure
+handler. They pile up with no error surfaced anywhere.
+
+**Fix — clear the flag, re-broadcast, THEN restart the container (order matters):**
+
+```bash
+cd /opt/dentfluence
+DC="docker compose --env-file .env.production"
+
+$DC exec -T app php artisan cache:clear
+$DC exec -T app php artisan queue:restart
+$DC restart queue
+
+sleep 90
+$DC ps queue            # want: "Up About a minute", NOT "Restarting"
+```
+
+**Not a fault:** the worker exits every 60 minutes by design (`--max-time=3600`)
+and Docker restarts it. An hourly restart is healthy. A ~10-second restart is not.
+
+**Check this after every deploy.** `docker compose ps` — if queue says
+`Restarting`, run the three commands above.
+
+---
+
 ## Known behaviour changes to tell staff about
 
 - **Duplicate phone at registration** now prompts ("open existing / register

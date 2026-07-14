@@ -115,11 +115,15 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::put('/consultations/{consultation}', [ConsultationController::class, 'update'])
             ->middleware('api.role:doctor,resident_dentist,associate_dentist,visiting_consultant');
 
-        // Notes + communications write actions
-        Route::post('/patients/{patient}/notes',           [PatientProfileController::class, 'storeNote']);
-        Route::put('/patients/{patient}/notes/{note}',     [PatientProfileController::class, 'updateNote']);
-        Route::delete('/patients/{patient}/notes/{note}',  [PatientProfileController::class, 'deleteNote']);
-        Route::post('/patients/{patient}/communications',  [PatientProfileController::class, 'storeCommunication']);
+        // Notes + communications write actions — gated by the SAME permission
+        // table AND the same action as web (module:patients checks can_view,
+        // matching web.php:126/182), was previously ungated (2026-07-14).
+        Route::middleware('api.role:module:patients,view')->group(function () {
+            Route::post('/patients/{patient}/notes',           [PatientProfileController::class, 'storeNote']);
+            Route::put('/patients/{patient}/notes/{note}',     [PatientProfileController::class, 'updateNote']);
+            Route::delete('/patients/{patient}/notes/{note}',  [PatientProfileController::class, 'deleteNote']);
+            Route::post('/patients/{patient}/communications',  [PatientProfileController::class, 'storeCommunication']);
+        });
 
         // Consultation create — 4 workflows (mirrors web)
         Route::get('/patients/{patient}/consultations/same-issue-context', [ConsultationController::class, 'sameIssueContext']);
@@ -212,18 +216,29 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::get('/billing/summary',  [BillingController::class, 'summary']);
 
         // Lab Work board — read + write (mobile Lab module).
-        Route::get('/lab/cases',                              [LabController::class, 'index']);
-        Route::get('/lab/summary',                            [LabController::class, 'summary']);
-        Route::get('/lab/templates',                          [LabController::class, 'templates']);
-        Route::get('/lab/cases/{id}',                         [LabController::class, 'show']);
-        Route::post('/lab/cases',                             [LabController::class, 'store']);
-        Route::patch('/lab/cases/{id}/status/{to}',           [LabController::class, 'transition']);
-        Route::post('/lab/cases/{id}/prescription',           [LabController::class, 'prescriptionSave']);
-        Route::post('/lab/cases/{id}/attachments',            [LabController::class, 'attachmentStore']);
+        // Gated by the SAME permission table as web (module:lab) — reads need
+        // view, writes need edit. Previously ungated entirely (2026-07-14).
+        Route::middleware('api.role:module:lab,view')->group(function () {
+            Route::get('/lab/cases',                          [LabController::class, 'index']);
+            Route::get('/lab/summary',                        [LabController::class, 'summary']);
+            Route::get('/lab/templates',                      [LabController::class, 'templates']);
+            Route::get('/lab/cases/{id}',                     [LabController::class, 'show']);
+        });
+        // Writes use the same action as web (module:lab checks can_view for
+        // the whole lab group, web.php:724) — identical, not stricter.
+        Route::middleware('api.role:module:lab,view')->group(function () {
+            Route::post('/lab/cases',                         [LabController::class, 'store']);
+            Route::patch('/lab/cases/{id}/status/{to}',       [LabController::class, 'transition']);
+            Route::post('/lab/cases/{id}/prescription',       [LabController::class, 'prescriptionSave']);
+            Route::post('/lab/cases/{id}/attachments',        [LabController::class, 'attachmentStore']);
+        });
 
         // Reports / analytics (mobile Reports module). Read-only.
-        Route::get('/reports/overview', [ReportController::class, 'overview']);
-        Route::get('/reports/outstanding', [ReportController::class, 'outstandingByPatient']);
+        // Same permission as web reports pages (module:reports), was ungated.
+        Route::middleware('api.role:module:reports,view')->group(function () {
+            Route::get('/reports/overview', [ReportController::class, 'overview']);
+            Route::get('/reports/outstanding', [ReportController::class, 'outstandingByPatient']);
+        });
 
         // ── Relationship Engine / PRE (Phase 7, extended for full mobile parity) ──
         // All endpoints use the same Sanctum auth as the rest of /api/v1/.

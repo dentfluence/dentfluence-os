@@ -226,7 +226,7 @@
     /* procedure rows in form */
     .tp-proc-row {
         display: grid;
-        grid-template-columns: 82px 1fr 48px 100px 26px 26px 26px;
+        grid-template-columns: 82px 1fr 48px 100px 26px 82px 26px 26px;
         gap: 7px;
         align-items: center;
         padding: 8px 10px;
@@ -262,6 +262,22 @@
         padding: 3px 10px; cursor: pointer; font-family: 'Inter', sans-serif;
     }
     .tp-variant-add:hover { background: #f3e8ff; }
+
+    /* labeled "Options" toggle on each treatment row — replaced the old
+       unlabelled three-dot icon that nobody could identify */
+    .tp-opt-btn {
+        display: flex; align-items: center; justify-content: center; gap: 3px;
+        height: 26px; padding: 0 4px; white-space: nowrap;
+        font-size: 10px; font-weight: 700; font-family: 'Inter', sans-serif;
+        color: #9ca3af; background: none;
+        border: 1px dashed #d1d5db; border-radius: 5px; cursor: pointer;
+        transition: all .12s;
+    }
+    .tp-opt-btn:hover { color: #6a0f70; border-color: #c4b5d4; background: #fdf4ff; }
+    .tp-opt-btn.active {
+        color: #6a0f70; background: #f3e8ff;
+        border: 1px solid rgba(106,15,112,.25);
+    }
 
     /* Chart-by-Tooth picker (Slice 4/5) — odontogram styling matches the
        consultation tooth chart 1:1 (resources/views/consultations/create.blade.php)
@@ -596,6 +612,7 @@
                     <div></div>
                     <div></div>
                     <div></div>
+                    <div></div>
                 </div>
 
                 <template x-for="(item, idx) in form.items" :key="idx">
@@ -658,13 +675,14 @@
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                             </button>
 
-                            {{-- Options toggle --}}
+                            {{-- Options toggle — labeled so it's discoverable --}}
                             <button type="button"
                                     @click="item.showVariants = !item.showVariants; if(!item.variants) item.variants=[];"
-                                    :title="item.showVariants ? 'Hide options' : 'Add material options'"
-                                    class="w-7 h-7 flex items-center justify-center rounded transition-colors"
-                                    :class="item.showVariants ? 'text-[#6a0f70] bg-purple-50' : 'text-gray-300 hover:text-[#6a0f70] hover:bg-purple-50'">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                                    :title="item.showVariants ? 'Hide material options' : 'Offer material options — patient picks one'"
+                                    class="tp-opt-btn"
+                                    :class="(item.showVariants || (item.variants && item.variants.length)) ? 'active' : ''">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                                <span x-text="(item.variants && item.variants.length > 1) ? 'Options ('+item.variants.length+')' : 'Options'"></span>
                             </button>
 
                             {{-- Consent required toggle — Phase 2 refinement.
@@ -702,8 +720,27 @@
                                 <div>
                                     <template x-for="(v, vi) in item.variants" :key="vi">
                                         <div class="tp-variant-row">
-                                            <input type="text" x-model="v.label" placeholder="e.g. PFM Crown, Zirconia Crown…"
-                                                   class="tp-input text-sm" style="font-size:12px;">
+                                            {{-- Option name — autocompletes from the Treatment master (pulls price too) --}}
+                                            <div class="relative">
+                                                <input type="text" x-model="v.label"
+                                                       @input="filterVariantTx(idx, vi)"
+                                                       @focus="activeVariantSuggest = idx + ':' + vi"
+                                                       @blur="hideVariantSuggestDelayed()"
+                                                       placeholder="Type to pick from treatments…"
+                                                       class="tp-input text-sm" style="font-size:12px;"
+                                                       autocomplete="off">
+                                                <div x-show="activeVariantSuggest === (idx + ':' + vi) && variantSuggestions.length"
+                                                     class="absolute left-0 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-30 max-h-40 overflow-y-auto" x-cloak>
+                                                    <template x-for="sug in variantSuggestions" :key="sug.id">
+                                                        <button type="button"
+                                                                @mousedown.prevent="selectVariantSuggest(idx, vi, sug)"
+                                                                class="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 hover:text-[#6a0f70]">
+                                                            <span x-text="sug.name"></span>
+                                                            <span class="text-xs text-gray-400 ml-2">Rs. <span x-text="fmt(sug.price)"></span></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
                                             <div class="relative">
                                                 <span class="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-semibold pointer-events-none">Rs.</span>
                                                 <input type="number" x-model="v.price" min="0" step="1"
@@ -714,7 +751,7 @@
                                             <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#374151;cursor:pointer;white-space:nowrap;">
                                                 <input type="radio" :name="'vr_'+idx"
                                                        :checked="v.selected"
-                                                       @change="item.variants.forEach((x,xi)=>x.selected=xi===vi); item.unit_price=parseFloat(v.price)||0;"
+                                                       @change="item.variants.forEach((x,xi)=>x.selected=xi===vi); applyVariantAsDefault(idx, vi);"
                                                        style="accent-color:#6a0f70;">
                                                 Default
                                             </label>
@@ -725,10 +762,10 @@
                                 </div>
                             </template>
                             <template x-if="!item.variants || item.variants.length === 0">
-                                <p style="font-size:11px;color:#9ca3af;margin-bottom:6px;">No options yet. Click below to add.</p>
+                                <p style="font-size:11px;color:#9ca3af;margin-bottom:6px;">No options yet. Click below to add — start typing to pick from your treatment list.</p>
                             </template>
                             <button type="button" class="tp-variant-add"
-                                    @click="if(!item.variants) item.variants=[]; item.variants.push({label:'',price:0,selected:item.variants.length===0})">
+                                    @click="addVariant(idx)">
                                 + Add Option
                             </button>
                         </div>
@@ -1208,6 +1245,9 @@ function treatmentPlanTab() {
         // ── Autocomplete ────────────────────────────────────────────────────
         activeSuggest:    null,
         suggestions:      [],
+        // Material-option autocomplete (keyed 'itemIdx:variantIdx')
+        activeVariantSuggest: null,
+        variantSuggestions:   [],
 
         // ── Accept state ────────────────────────────────────────────────────
         accepting: null,
@@ -1619,6 +1659,58 @@ function treatmentPlanTab() {
         },
         hideSuggestDelayed() {
             setTimeout(() => { this.activeSuggest = null; }, 200);
+        },
+
+        // ── Material options ─────────────────────────────────────────────────
+        // The first "+ Add Option" click seeds the current treatment as the
+        // default option, so staff only type the alternatives.
+        addVariant(idx) {
+            const item = this.form.items[idx];
+            if (!item.variants) item.variants = [];
+            if (item.variants.length === 0 && (item.treatment_name || '').trim()) {
+                item.variants.push({
+                    label:        item.treatment_name,
+                    price:        parseFloat(item.unit_price) || 0,
+                    treatment_id: item.treatment_id || null,
+                    selected:     true,
+                });
+            }
+            item.variants.push({ label: '', price: 0, treatment_id: null, selected: item.variants.length === 0 });
+        },
+        // Options autocomplete against the same Treatment master as the main
+        // row — picking one pulls its price (and id) instead of free-typing.
+        filterVariantTx(idx, vi) {
+            const q = (this.form.items[idx]?.variants?.[vi]?.label || '').toLowerCase().trim();
+            this.activeVariantSuggest = idx + ':' + vi;
+            this.variantSuggestions = (!q || q.length < 2)
+                ? []
+                : TP_TREATMENTS.filter(t => t.name.toLowerCase().includes(q)).slice(0, 8);
+        },
+        selectVariantSuggest(idx, vi, sug) {
+            const v = this.form.items[idx].variants[vi];
+            v.label        = sug.name;
+            v.price        = sug.price;
+            v.treatment_id = sug.id;
+            if (v.selected) this.applyVariantAsDefault(idx, vi);
+            this.variantSuggestions   = [];
+            this.activeVariantSuggest = null;
+        },
+        hideVariantSuggestDelayed() {
+            setTimeout(() => { this.activeVariantSuggest = null; }, 200);
+        },
+        // Making an option the default drives the whole plan line: price
+        // always; name/id/consent too when the option came from the master,
+        // so the printed line always reads as the chosen material.
+        applyVariantAsDefault(idx, vi) {
+            const item = this.form.items[idx];
+            const v    = item.variants[vi];
+            item.unit_price = parseFloat(v.price) || 0;
+            if (v.treatment_id) {
+                item.treatment_id   = v.treatment_id;
+                item.treatment_name = v.label;
+                const tx = TP_TREATMENTS.find(t => t.id === v.treatment_id);
+                if (tx) item.consent_required = !!tx.consent_required;
+            }
         },
 
         // ── Save ──────────────────────────────────────────────────────────────

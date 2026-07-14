@@ -28,6 +28,9 @@ class WalkInRequest extends ApiFormRequest
             'treatment_id'          => ['nullable', 'integer', 'exists:treatments,id'],
             'operatory_id'          => ['nullable', 'integer', 'exists:operatories,id'],
             'notes'                 => ['nullable', 'string', 'max:1000'],
+            // Explicit double-book override — same as StoreAppointmentRequest;
+            // without this rule the walk-in path could never be overridden.
+            'allow_overlap'         => ['nullable', 'boolean'],
         ];
     }
 }

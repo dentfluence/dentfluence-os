@@ -147,6 +147,11 @@ class BillingController extends ApiController
             'clinic_account_id' => 'nullable|exists:finance_bank_accounts,id',
             'reference_no'      => 'nullable|string|max:100',
             'notes'             => 'nullable|string|max:500',
+            // Wallet allocation during payment — same rule as web recordPayment.
+            // InvoicePaymentService already implements the debit; this rule was
+            // the only thing stopping mobile from paying part of an invoice
+            // from wallet credit (2026-07-14 parity fix).
+            'wallet_used'       => 'nullable|numeric|min:0',
         ];
 
         if (in_array($mode, ['upi', 'netbanking', 'bank_transfer'])) {
@@ -893,6 +898,15 @@ class BillingController extends ApiController
             // cancelled — mirrors web BillingController (2026-07-06 parity).
             $this->reverseRetailStockMovements($inv);
 
+            // Reverse any wallet credit debited against this invoice — without
+            // this, cancelling a wallet-part-paid invoice from mobile silently
+            // lost the patient's credit (2026-07-14 parity fix, shared brain).
+            (new WalletService())->reverseInvoiceDebit(
+                $inv,
+                'invoice ' . $inv->invoice_number . ' cancelled. ' . $data['cancelled_reason'],
+                $request->user()->id,
+            );
+
             $inv->update([
                 'status'           => 'cancelled',
                 'cancelled_reason' => $data['cancelled_reason'],
@@ -1096,18 +1110,34 @@ class BillingController extends ApiController
             return $this->error('Patient not found.', [], 404);
         }
 
+        // Same permission gate as web receiveAdvance (ADVANCE_ADJUSTMENT,
+        // admin bypass) — this endpoint was previously ungated.
+        $user = $request->user();
+        if (! $user->isAdminRole()) {
+            $role = $user->roleModel;
+            if (! $role || ! $role->billingCan(RoleBillingPermission::ADVANCE_ADJUSTMENT)) {
+                return $this->error('You do not have permission for this wallet action.', [], 403);
+            }
+        }
+
+        // Validation identical to web Finance\WalletController::receiveAdvance.
         $request->validate([
             'amount'       => 'required|numeric|min:1',
-            'payment_mode' => 'required|string',
+            'payment_mode' => 'required|in:cash,card,debit_card,upi,cheque,netbanking,bank_transfer,other',
+            'payment_date' => 'required|date',
             'notes'        => 'nullable|string|max:300',
         ]);
 
-        (new WalletService())->credit(
-            patientId:  $pt->id,
-            amount:     (float) $request->amount,
-            creditType: 'permanent',
-            notes:      $request->notes ?? ('Advance payment via mobile — ' . $request->payment_mode),
-            createdBy:  $request->user()->id,
+        // Shared brain — wallet deposit + FinanceTransaction income mirror +
+        // billing audit. Previously this path skipped the finance ledger
+        // entirely, so mobile advances were invisible to the cashbook.
+        (new WalletService())->receiveAdvance(
+            patient:     $pt,
+            amount:      (float) $request->amount,
+            paymentMode: $request->payment_mode,
+            paymentDate: $request->payment_date,
+            notes:       $request->notes,
+            createdBy:   $user->id,
         );
 
         // Reload wallet balance after the credit.

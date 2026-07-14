@@ -720,20 +720,8 @@ class BillingController extends Controller
     // the patient's usable balance is short by that amount permanently.
     private function reverseInvoiceWalletDebit(Invoice $invoice, string $reason): void
     {
-        $debited = \App\Models\WalletTransaction::where('invoice_id', $invoice->id)
-            ->where('source', 'invoice_debit')
-            ->where('direction', 'debit')
-            ->sum('amount');
-
-        if ($debited > 0) {
-            (new WalletService())->credit(
-                patientId:  $invoice->patient_id,
-                amount:     (float) $debited,
-                creditType: 'permanent',
-                notes:      'Reversal — ' . $reason,
-                createdBy:  auth()->id(),
-            );
-        }
+        // Shared brain — same reversal the API cancel path uses.
+        (new WalletService())->reverseInvoiceDebit($invoice, $reason, auth()->id());
     }
 
     // ── Destroy ──────────────────────────────────────────────────────────────

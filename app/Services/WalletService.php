@@ -2,7 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\BillingAuditLog;
+use App\Models\Finance\FinanceTransaction;
 use App\Models\Invoice;
+use App\Models\Patient;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use Illuminate\Support\Facades\DB;
@@ -161,6 +164,33 @@ class WalletService
         });
     }
 
+    /**
+     * Reverse every wallet debit that was applied against an invoice.
+     * MUST be called whenever an invoice is cancelled or deleted — otherwise
+     * the debit stays on the ledger with no invoice to show what it paid for,
+     * and the patient's usable balance is short by that amount permanently.
+     *
+     * Extracted 2026-07-14 from web BillingController::reverseInvoiceWalletDebit
+     * so the API cancel path stops silently losing patient wallet credit.
+     */
+    public function reverseInvoiceDebit(Invoice $invoice, string $reason, ?int $createdBy = null): void
+    {
+        $debited = WalletTransaction::where('invoice_id', $invoice->id)
+            ->where('source', 'invoice_debit')
+            ->where('direction', 'debit')
+            ->sum('amount');
+
+        if ($debited > 0) {
+            $this->credit(
+                patientId:  $invoice->patient_id,
+                amount:     (float) $debited,
+                creditType: 'permanent',
+                notes:      'Reversal — ' . $reason,
+                createdBy:  $createdBy,
+            );
+        }
+    }
+
     // ── Advance / Recharge (money INTO wallet, no invoice) ───────────────────
 
     /**
@@ -194,6 +224,56 @@ class WalletService
             ]);
 
             $wallet->recalculate();
+
+            return $tx;
+        });
+    }
+
+    /**
+     * Receive an advance payment into a patient's wallet WITH the full finance
+     * chain: wallet deposit + FinanceTransaction income mirror + billing audit.
+     *
+     * Extracted 2026-07-14 from Finance\WalletController::receiveAdvance so the
+     * mobile advance path stops bypassing the cashbook and audit log. Every
+     * advance — web or mobile — must land in the finance ledger.
+     */
+    public function receiveAdvance(
+        Patient $patient,
+        float   $amount,
+        string  $paymentMode,
+        string  $paymentDate,
+        ?string $notes = null,
+        ?int    $createdBy = null
+    ): WalletTransaction {
+        return DB::transaction(function () use ($patient, $amount, $paymentMode, $paymentDate, $notes, $createdBy) {
+            $tx = $this->deposit(
+                patientId:   $patient->id,
+                amount:      $amount,
+                paymentMode: $paymentMode,
+                notes:       $notes ?? 'Advance payment',
+                createdBy:   $createdBy,
+                source:      'advance',
+            );
+
+            // Finance mirror — real cash received (separable in reports via source_type).
+            FinanceTransaction::create([
+                'type'              => 'income',
+                'direction'         => 'credit',
+                'source_type'       => WalletTransaction::class,
+                'source_id'         => $tx->id,
+                'amount'            => $amount,
+                'net_amount'        => $amount,
+                'payment_mode'      => $paymentMode,
+                'patient_id'        => $patient->id,
+                'status'            => 'active',
+                'transaction_date'  => $paymentDate,
+                'notes'             => 'Advance deposit to wallet' . ($notes ? ' — ' . $notes : ''),
+                'created_by'        => $createdBy,
+            ]);
+
+            BillingAuditLog::record('wallet_advance', $tx,
+                'Advance Rs. ' . number_format($amount, 2) . ' (' . $paymentMode . ')',
+                $createdBy, 'Wallet · ' . $patient->name);
 
             return $tx;
         });

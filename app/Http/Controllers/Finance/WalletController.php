@@ -305,36 +305,16 @@ class WalletController extends Controller
             'notes'        => 'nullable|string|max:300',
         ]);
 
-        DB::transaction(function () use ($request, $patient) {
-            $tx = $this->walletService->deposit(
-                patientId:   $patient->id,
-                amount:      (float) $request->amount,
-                paymentMode: $request->payment_mode,
-                notes:       $request->notes ?? 'Advance payment',
-                createdBy:   auth()->id(),
-                source:      'advance',
-            );
-
-            // Finance mirror — real cash received (separable in reports via source_type).
-            FinanceTransaction::create([
-                'type'              => 'income',
-                'direction'         => 'credit',
-                'source_type'       => WalletTransaction::class,
-                'source_id'         => $tx->id,
-                'amount'            => (float) $request->amount,
-                'net_amount'        => (float) $request->amount,
-                'payment_mode'      => $request->payment_mode,
-                'patient_id'        => $patient->id,
-                'status'            => 'active',
-                'transaction_date'  => $request->payment_date,
-                'notes'             => 'Advance deposit to wallet' . ($request->notes ? ' — ' . $request->notes : ''),
-                'created_by'        => auth()->id(),
-            ]);
-
-            BillingAuditLog::record('wallet_advance', $tx,
-                'Advance Rs. ' . number_format($request->amount, 2) . ' (' . $request->payment_mode . ')',
-                auth()->id(), 'Wallet · ' . $patient->name);
-        });
+        // Shared brain — same deposit + FinanceTransaction + audit chain the
+        // mobile API uses (WalletService::receiveAdvance).
+        $this->walletService->receiveAdvance(
+            patient:     $patient,
+            amount:      (float) $request->amount,
+            paymentMode: $request->payment_mode,
+            paymentDate: $request->payment_date,
+            notes:       $request->notes,
+            createdBy:   auth()->id(),
+        );
 
         $msg = '₹' . number_format($request->amount, 0) . ' advance added to ' . $patient->name . "'s wallet.";
 

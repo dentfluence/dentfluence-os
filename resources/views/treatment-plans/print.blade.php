@@ -152,6 +152,8 @@
         .tx-name   { font-weight: 600; color: #111; }
         .tx-tooth  { font-size: 11px; color: var(--accent-dark); font-weight: 600; }
         .tx-note   { font-size: 10.5px; color: #666; font-style: italic; margin-top: 2px; line-height: 1.4; }
+        .tx-variants { font-size: 9.5px; color: #777; margin-top: 3px; line-height: 1.5; }
+        .tx-variants .sel { font-weight: 700; color: var(--accent-dark); }
 
         /* ── Notes ── */
         .notes {
@@ -317,11 +319,23 @@
             @php
                 $qty   = max((int) $item->units, 1);
                 $gross = (float) $item->unit_price * $qty;
+                // Material options — only worth printing when there is a real
+                // choice (2+ named options). Selected one is highlighted.
+                $variants = collect(is_array($item->material_variants) ? $item->material_variants : [])
+                    ->filter(fn ($v) => filled($v['label'] ?? null))
+                    ->values();
             @endphp
             <tr>
                 <td>
                     <span class="tx-name">{{ $item->treatment_name }}</span>@if($item->tooth_number) <span class="tx-tooth">({{ $item->tooth_number }})</span>@endif
                     @if(filled($item->notes))<div class="tx-note">{{ $item->notes }}</div>@endif
+                    @if($variants->count() > 1)
+                    <div class="tx-variants">
+                        Options:
+                        @foreach($variants as $v)<span class="{{ !empty($v['selected']) ? 'sel' : '' }}">{{ $v['label'] }} — Rs. {{ number_format((float) ($v['price'] ?? 0), 0) }}@if(!empty($v['selected'])) (selected)@endif</span>@if(!$loop->last) &middot; @endif
+                        @endforeach
+                    </div>
+                    @endif
                 </td>
                 <td class="c">{{ $qty }}</td>
                 <td class="r">{{ number_format((float) $item->unit_price, 0) }}</td>

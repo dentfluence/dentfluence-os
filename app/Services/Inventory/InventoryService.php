@@ -614,8 +614,13 @@ class InventoryService
                     'vendor_id'         => $financeVendorId,
                     'payment_status'    => 'unpaid',
                     'status'            => 'approved',
-                    'source_type'       => 'PurchaseOrder',
-                    'source_id'         => $po->id,
+                    // Canonical form — same as web receivePO (GRN class + GRN id).
+                    // Was 'PurchaseOrder'/$po->id, which made the vendor-invoice
+                    // double-AP guard fragile across channels (2026-07-14).
+                    // VendorInvoiceService::findExistingGrnExpense still matches
+                    // historical rows written in the old form.
+                    'source_type'       => GoodsReceiptNote::class,
+                    'source_id'         => $grn->id,
                     'vendor_invoice_no' => $vendorInvoiceNo,
                     'grn_number'        => $grn->grn_number,
                     'created_by'        => $user->id,
