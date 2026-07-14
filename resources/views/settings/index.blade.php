@@ -1296,6 +1296,45 @@
                     </div>
                 </div>
 
+                {{-- ── Treatment plan footer text ── --}}
+                <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:24px;margin-bottom:20px;">
+                    <h3 class="settings-section-title">Treatment Plan — Footer Text</h3>
+                    <p style="font-size:12.5px;color:#9a7aaa;margin:0 0 16px;">
+                        Printed at the bottom of every treatment plan. One line = one bullet point.
+                        Clear a box completely to remove that block from the printout.
+                    </p>
+
+                    @php
+                        $tpTermsDefault = "These treatment charges are valid for {days} days from the date of planning ({plan_date}) — valid until {valid_until}."
+                            . "\nThis plan is based on the current clinical findings. The treatment, its sequence, or the charges may be revised if additional conditions are detected during the course of treatment."
+                            . "\nThe clinic reserves the right to modify the treatment plan as clinically required. Charges for any additional procedures will be discussed and agreed before they are carried out.";
+                        $tpBenefitDefault = 'AOCP holders get a 10% discount on all the above treatments — except orthodontic treatments, full mouth rehabilitation, and full mouth implant treatments.';
+                    @endphp
+
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                        <span style="font-size:13px;color:#555;">Plan charges valid for</span>
+                        <input type="number" name="tp_valid_days" value="{{ $p['tp_valid_days'] ?? 15 }}"
+                               min="1" max="365" step="1"
+                               style="width:64px;padding:4px 8px;border:1.5px solid #ddd;border-radius:6px;font-size:13px;text-align:center;">
+                        <span style="font-size:13px;color:#555;">days</span>
+                    </div>
+
+                    <label style="display:block;font-size:12.5px;font-weight:600;color:#1a0320;margin-bottom:4px;">Terms &amp; Validity</label>
+                    <textarea name="tp_terms" rows="4"
+                              style="width:100%;padding:10px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:12.5px;line-height:1.5;font-family:inherit;resize:vertical;">{{ $p['tp_terms'] ?? $tpTermsDefault }}</textarea>
+                    <p style="font-size:11px;color:#b0a0bb;margin:4px 0 16px;">
+                        Placeholders filled in automatically on each printout:
+                        <code>{days}</code> (validity days above), <code>{plan_date}</code>, <code>{valid_until}</code>.
+                    </p>
+
+                    <label style="display:block;font-size:12.5px;font-weight:600;color:#1a0320;margin-bottom:4px;">Benefit / Offer Note</label>
+                    <input type="text" name="tp_benefit_title" value="{{ $p['tp_benefit_title'] ?? 'AOCP Membership Benefit' }}"
+                           placeholder="Block title (e.g. AOCP Membership Benefit)"
+                           style="width:100%;padding:8px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:12.5px;margin-bottom:8px;">
+                    <textarea name="tp_benefit_text" rows="2"
+                              style="width:100%;padding:10px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:12.5px;line-height:1.5;font-family:inherit;resize:vertical;">{{ $p['tp_benefit_text'] ?? $tpBenefitDefault }}</textarea>
+                </div>
+
                 <button type="submit" class="settings-save-btn">Save Print Settings</button>
             </form>
         </div>

@@ -357,6 +357,13 @@ class SettingsController extends Controller
             AppSetting::set("print_section_{$s}", $request->boolean("print_section_{$s}") ? '1' : '0', 'print');
         }
 
+        // Treatment plan print footer (Terms & Validity + benefit note).
+        // One line per bullet; an emptied box hides that block on the printout.
+        AppSetting::set('tp_valid_days', (string) max(1, (int) $request->input('tp_valid_days', 15)), 'print');
+        foreach (['tp_terms', 'tp_benefit_title', 'tp_benefit_text'] as $key) {
+            AppSetting::set($key, trim((string) $request->input($key, '')), 'print');
+        }
+
         return back()->with('success', 'Print settings saved.');
     }
 

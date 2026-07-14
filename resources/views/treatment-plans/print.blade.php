@@ -153,7 +153,6 @@
         .tx-tooth  { font-size: 11px; color: var(--accent-dark); font-weight: 600; }
         .tx-note   { font-size: 10.5px; color: #666; font-style: italic; margin-top: 2px; line-height: 1.4; }
         .tx-variants { font-size: 9.5px; color: #777; margin-top: 3px; line-height: 1.5; }
-        .tx-variants .sel { font-weight: 700; color: var(--accent-dark); }
 
         /* ── Notes ── */
         .notes {
@@ -253,8 +252,30 @@
                    ? \Carbon\Carbon::parse($consultation->consultation_date)
                    : now();
     $planDate    = $planDateRaw->format('d M Y');
-    $validDays   = 15;
+    $validDays   = max(1, (int) ($print['tp_valid_days'] ?? 15));
     $validUntil  = $planDateRaw->copy()->addDays($validDays)->format('d M Y');
+
+    // Footer text blocks — editable in Settings → Printing. One line = one
+    // bullet; a cleared setting hides the block. Placeholders {days},
+    // {plan_date}, {valid_until} are substituted per printout.
+    $tpTermsDefault = "These treatment charges are valid for {days} days from the date of planning ({plan_date}) — valid until {valid_until}."
+        . "\nThis plan is based on the current clinical findings. The treatment, its sequence, or the charges may be revised if additional conditions are detected during the course of treatment."
+        . "\nThe clinic reserves the right to modify the treatment plan as clinically required. Charges for any additional procedures will be discussed and agreed before they are carried out.";
+    $termsLines = collect(preg_split('/\r\n|\r|\n/', $print['tp_terms'] ?? $tpTermsDefault))
+        ->map(fn ($l) => trim(strtr($l, [
+            '{days}'        => $validDays,
+            '{plan_date}'   => $planDate,
+            '{valid_until}' => $validUntil,
+        ])))
+        ->filter()
+        ->values();
+
+    $benefitTitle   = trim($print['tp_benefit_title'] ?? 'AOCP Membership Benefit');
+    $benefitDefault = 'AOCP holders get a 10% discount on all the above treatments — except orthodontic treatments, full mouth rehabilitation, and full mouth implant treatments.';
+    $benefitLines   = collect(preg_split('/\r\n|\r|\n/', $print['tp_benefit_text'] ?? $benefitDefault))
+        ->map(fn ($l) => trim($l))
+        ->filter()
+        ->values();
 
     $multiple = count($plans) > 1;
 @endphp
@@ -319,20 +340,20 @@
             @php
                 $qty   = max((int) $item->units, 1);
                 $gross = (float) $item->unit_price * $qty;
-                // Material options — only worth printing when there is a real
-                // choice (2+ named options). Selected one is highlighted.
-                $variants = collect(is_array($item->material_variants) ? $item->material_variants : [])
-                    ->filter(fn ($v) => filled($v['label'] ?? null))
+                // Material options — the chosen one already IS the main line,
+                // so print only the alternatives the patient could switch to.
+                $altVariants = collect(is_array($item->material_variants) ? $item->material_variants : [])
+                    ->filter(fn ($v) => filled($v['label'] ?? null) && empty($v['selected']))
                     ->values();
             @endphp
             <tr>
                 <td>
                     <span class="tx-name">{{ $item->treatment_name }}</span>@if($item->tooth_number) <span class="tx-tooth">({{ $item->tooth_number }})</span>@endif
                     @if(filled($item->notes))<div class="tx-note">{{ $item->notes }}</div>@endif
-                    @if($variants->count() > 1)
+                    @if($altVariants->isNotEmpty())
                     <div class="tx-variants">
-                        Options:
-                        @foreach($variants as $v)<span class="{{ !empty($v['selected']) ? 'sel' : '' }}">{{ $v['label'] }} — Rs. {{ number_format((float) ($v['price'] ?? 0), 0) }}@if(!empty($v['selected'])) (selected)@endif</span>@if(!$loop->last) &middot; @endif
+                        Other options:
+                        @foreach($altVariants as $v)<span>{{ $v['label'] }} — Rs. {{ number_format((float) ($v['price'] ?? 0), 0) }}</span>@if(!$loop->last) &middot; @endif
                         @endforeach
                     </div>
                     @endif
@@ -369,29 +390,36 @@
     @if($doctor?->registration_number ?? null)<div class="sig-sub">Reg. No.: {{ $doctor->registration_number }}</div>@endif
 </div>
 
-{{-- ── Terms & validity ── --}}
+{{-- ── Terms & validity (editable: Settings → Printing) ── --}}
+@if($termsLines->isNotEmpty())
 <div class="terms">
     <div class="terms-title">Terms &amp; Validity</div>
     <ul>
-        <li>These treatment charges are valid for <strong>{{ $validDays }} days</strong> from the date of planning ({{ $planDate }}) — valid until <strong>{{ $validUntil }}</strong>.</li>
-        <li>This plan is based on the current clinical findings. The treatment, its sequence, or the charges may be revised if additional conditions are detected during the course of treatment.</li>
-        <li>The clinic reserves the right to modify the treatment plan as clinically required. Charges for any additional procedures will be discussed and agreed before they are carried out.</li>
+        @foreach($termsLines as $line)
+        <li>{{ $line }}</li>
+        @endforeach
     </ul>
 </div>
+@endif
 
-{{-- ── AOCP membership benefit ── --}}
+{{-- ── Benefit note (editable: Settings → Printing) ── --}}
+@if($benefitLines->isNotEmpty())
 <div class="terms" style="margin-top:10px;">
-    <div class="terms-title">AOCP Membership Benefit</div>
+    @if($benefitTitle !== '')<div class="terms-title">{{ $benefitTitle }}</div>@endif
     <ul>
-        <li>AOCP holders get a <strong>10% discount</strong> on all the above treatments — <strong>except</strong> orthodontic treatments, full mouth rehabilitation, and full mouth implant treatments.</li>
+        @foreach($benefitLines as $line)
+        <li>{{ $line }}</li>
+        @endforeach
     </ul>
 </div>
+@endif
 
 {{-- ── Footer (clinic identity hidden on plain / pre-printed stationery) ── --}}
+@if($showClinic && (($clinic['clinic_name'] ?? false) || ($clinic['clinic_phone'] ?? false)))
 <div class="doc-footer">
-    <span>@if($showClinic){{ $clinic['clinic_name'] ?? '' }}@if($clinic['clinic_phone'] ?? false) · {{ $clinic['clinic_phone'] }}@endif @endif</span>
-    <span style="white-space:nowrap;margin-left:16px;">Generated: {{ now()->format('d M Y') }}</span>
+    <span>{{ $clinic['clinic_name'] ?? '' }}@if($clinic['clinic_phone'] ?? false) · {{ $clinic['clinic_phone'] }}@endif</span>
 </div>
+@endif
 
 </body>
 </html>
