@@ -336,7 +336,10 @@ class PatientService
         $referralType = array_key_exists('referral_type', $in) && $in['referral_type'] !== ''
             ? $in['referral_type']
             : null;
-        $referredPatientId = array_key_exists('referred_patient_id', $in) && $in['referred_patient_id'] !== ''
+        // filled() guards against '' AND null — casting null with (int) produced
+        // referred_patient_id = 0, which violates the patients FK on every save
+        // for patients without a referral.
+        $referredPatientId = filled($in['referred_patient_id'] ?? null)
             ? (int) $in['referred_patient_id']
             : null;
         $referrerType = array_key_exists('referrer_type', $in) && $in['referrer_type'] !== ''
