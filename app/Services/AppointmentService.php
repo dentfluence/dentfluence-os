@@ -120,7 +120,9 @@ class AppointmentService
             ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
             ->get()
             ->first(function (Appointment $apt) use ($start, $end) {
-                $aptStart = Carbon::parse($apt->appointment_date . ' ' . $apt->appointment_time);
+                // appointment_date is cast to a Carbon date — naive string concat
+                // yields "Y-m-d 00:00:00 H:i:s", which Carbon::parse throws on.
+                $aptStart = Carbon::parse($apt->appointment_date->toDateString() . ' ' . $apt->appointment_time);
                 $aptEnd   = $aptStart->copy()->addMinutes($apt->duration_minutes ?? 30);
 
                 return $start->lt($aptEnd) && $end->gt($aptStart);
