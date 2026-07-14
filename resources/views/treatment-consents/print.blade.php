@@ -172,7 +172,8 @@
     $print      = AppSetting::group('print');
     $headerType = $print['print_header_type'] ?? 'plain';
     $showClinic = $headerType !== 'plain';
-    $doctor     = $consultation?->doctor;
+    // Plan's own treating doctor wins; fall back to the consultation's doctor.
+    $doctor     = $plan?->doctor ?? $consultation?->doctor;
 
     $patientCode = $patient?->patient_id
                    ?? ('P-' . str_pad($patient?->id ?? 0, 5, '0', STR_PAD_LEFT));

@@ -417,8 +417,11 @@ class ReportsController extends Controller
     private function buildRevenueData(Carbon $from, Carbon $to): array
     {
         // ── KPIs ─────────────────────────────────────────────────────────
-        $collected    = InvoicePayment::whereBetween('payment_date', [$from, $to])->sum('amount');
-        $outstanding  = Invoice::whereIn('status', ['draft', 'partial'])->sum('balance_due');
+        // Shared brain (2026-07-14): collected/outstanding come from
+        // ReportMetricsService so web and mobile always show the same totals.
+        $metrics      = app(\App\Services\Analytics\ReportMetricsService::class);
+        $collected    = $metrics->collected($from, $to);
+        $outstanding  = $metrics->outstanding();
         $invoiceCount = Invoice::whereBetween('invoice_date', [$from, $to])
                             ->whereNotIn('status', ['cancelled'])->count();
         $avgInvoice   = $invoiceCount > 0

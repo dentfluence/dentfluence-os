@@ -7,7 +7,7 @@ use App\Models\Appointment;
 use App\Models\Invoice;
 use App\Models\LabCase;
 use App\Models\Patient;
-use App\Models\Receipt;
+use App\Services\Analytics\ReportMetricsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -22,13 +22,21 @@ use Illuminate\Http\Request;
  */
 class ReportController extends ApiController
 {
-    public function overview(Request $request): JsonResponse
+    public function overview(Request $request, ReportMetricsService $metrics): JsonResponse
     {
         $bid        = $request->user()->branch_id;
         $today      = now()->toDateString();
         $monthStart = now()->startOfMonth()->toDateString();
         $weekStart  = now()->startOfWeek()->toDateString();
         $weekEnd    = now()->endOfWeek()->toDateString();
+
+        // ── Selected range — ?period=7|30|90|365|custom(&from&to), same
+        //    semantics as the web Reports page. Defaults to 30 days.
+        [$from, $to] = $metrics->resolveRange(
+            $request->query('period'),
+            $request->query('from'),
+            $request->query('to'),
+        );
 
         // ── Patients ──────────────────────────────────────────────────────────
         $patientsActive = Patient::where('branch_id', $bid)
@@ -50,38 +58,42 @@ class ReportController extends ApiController
         $apptCancelledMonth = $appt()->whereIn('status', ['cancelled', 'no_show'])
             ->whereDate('appointment_date', '>=', $monthStart)->count();
 
-        // ── Finance ───────────────────────────────────────────────────────────
-        $receipts = fn () => Receipt::whereHas(
-            'patient', fn ($q) => $q->where('branch_id', $bid)
-        );
-        $collectedToday = (float) $receipts()
-            ->whereDate('receipt_date', $today)->sum('amount');
-        $collectedMonth = (float) $receipts()
-            ->whereDate('receipt_date', '>=', $monthStart)->sum('amount');
-        $outstanding = (float) Invoice::whereHas(
-            'patient', fn ($q) => $q->where('branch_id', $bid)
-        )->where('status', '!=', 'cancelled')->sum('balance_due');
+        // ── Finance — shared ReportMetricsService (2026-07-14): same tables
+        //    and filters as the web Reports page, so the totals MATCH. This
+        //    endpoint previously summed Receipts and counted all non-cancelled
+        //    invoices as outstanding, so mobile and desk disagreed.
+        $collectedToday = $metrics->collected(
+            now()->startOfDay(), now()->endOfDay(), $bid);
+        $collectedMonth = $metrics->collected(
+            now()->startOfMonth(), now()->endOfDay(), $bid);
+        $outstanding    = $metrics->outstanding($bid);
 
         // ── Lab ───────────────────────────────────────────────────────────────
         $labOpen = LabCase::where('branch_id', $bid)
             ->whereIn('status', LabCase::OPEN_STATUSES)->count();
 
-        // ── 7-day collections series (oldest → today) ─────────────────────────
-        $rows = Receipt::whereHas('patient', fn ($q) => $q->where('branch_id', $bid))
-            ->whereDate('receipt_date', '>=', now()->subDays(6)->toDateString())
-            ->selectRaw('DATE(receipt_date) as d, SUM(amount) as total')
-            ->groupBy('d')->pluck('total', 'd');
+        // ── Selected-range block + collections series ─────────────────────────
+        $rangeAppointments = Appointment::where('branch_id', $bid)
+            ->whereBetween('appointment_date', [$from, $to])
+            ->whereNotIn('status', ['cancelled', 'no_show'])->count();
 
-        $series = [];
-        for ($i = 6; $i >= 0; $i--) {
-            $day = now()->subDays($i);
-            $key = $day->toDateString();
-            $series[] = [
-                'date'   => $key,
-                'label'  => $day->format('D'),
-                'amount' => (float) ($rows[$key] ?? 0),
-            ];
+        $range = [
+            'from'               => $from->toDateString(),
+            'to'                 => $to->toDateString(),
+            'collected'          => $metrics->collected($from, $to, $bid),
+            'appointments'       => $rangeAppointments,
+            'appointments_done'  => $metrics->appointmentsDone($from, $to, $bid),
+            'new_patients'       => Patient::where('branch_id', $bid)
+                ->whereBetween('created_at', [$from, $to])->count(),
+        ];
+
+        // Series over the selected range, capped at 90 points to keep the
+        // payload phone-friendly (longer ranges: chart the last 90 days).
+        $seriesFrom = $from->copy();
+        if ($seriesFrom->diffInDays($to) > 89) {
+            $seriesFrom = $to->copy()->subDays(89);
         }
+        $series = $metrics->collectionsSeries($seriesFrom, $to, $bid);
 
         return $this->success([
             'patients' => [
@@ -102,6 +114,7 @@ class ReportController extends ApiController
             'lab' => [
                 'open_cases' => $labOpen,
             ],
+            'range'          => $range,
             'collections_7d' => $series,
             'generated_at'   => now()->toIso8601String(),
         ], '');

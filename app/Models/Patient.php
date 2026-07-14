@@ -370,10 +370,11 @@ class Patient extends Model
      */
     public function getAgeAttribute(): ?string
     {
-        if ($this->dob_unknown) {
+        // No DOB on record (imported data often has only age_years, without
+        // the dob_unknown flag set) — fall back to the stored age.
+        if ($this->dob_unknown || !$this->date_of_birth) {
             return $this->age_years ? $this->age_years . ' yrs' : null;
         }
-        if (!$this->date_of_birth) return null;
         return $this->date_of_birth->age . ' yrs';
     }
 
@@ -382,8 +383,7 @@ class Patient extends Model
      */
     public function getAgeNumericAttribute(): ?int
     {
-        if ($this->dob_unknown) return $this->age_years;
-        if (!$this->date_of_birth) return null;
+        if ($this->dob_unknown || !$this->date_of_birth) return $this->age_years;
         return $this->date_of_birth->age;
     }
 

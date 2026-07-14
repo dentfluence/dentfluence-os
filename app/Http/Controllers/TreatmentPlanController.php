@@ -33,7 +33,7 @@ class TreatmentPlanController extends Controller
         abort_if(count($ids) > 30, 400, 'Too many plans.');
 
         // Load plans in the order the IDs were passed
-        $plans = TreatmentPlan::with(['items', 'patient', 'consultation.doctor', 'creator'])
+        $plans = TreatmentPlan::with(['items', 'patient', 'consultation.doctor', 'doctor', 'creator'])
             ->whereIn('id', $ids)
             ->get()
             ->sortBy(fn($p) => array_search($p->id, $ids))
@@ -89,7 +89,7 @@ class TreatmentPlanController extends Controller
 
     public function consentPrint(Request $request, TreatmentPlan $plan, ConsentDocumentService $consents)
     {
-        $plan->load(['patient', 'consultation.doctor']);
+        $plan->load(['patient', 'consultation.doctor', 'doctor']);
 
         // Selection from the "Consent Form" picker on the plan tab — an array
         // of "{item_id}|{tooth}" keys (tooth blank for whole-mouth items). If
@@ -152,6 +152,7 @@ class TreatmentPlanController extends Controller
         $request->validate([
             'plan_name'          => ['nullable', 'string', 'max:100'],
             'consultation_id'    => ['nullable', 'exists:consultations,id'],
+            'doctor_id'          => ['nullable', 'exists:users,id'],
             'estimated_duration' => ['nullable', 'string', 'max:50'],
             'visit_count'        => ['nullable', 'integer', 'min:1'],
             'doctor_notes'       => ['nullable', 'string'],
@@ -174,6 +175,7 @@ class TreatmentPlanController extends Controller
             $plan = TreatmentPlan::create([
                 'patient_id'         => $patient->id,
                 'consultation_id'    => $request->consultation_id,
+                'doctor_id'          => $request->doctor_id,
                 'plan_name'          => $request->plan_name ?? ('Treatment Option ' . ($existingCount + 1)),
                 'display_order'      => $existingCount + 1,
                 'status'             => 'pending',
@@ -215,6 +217,7 @@ class TreatmentPlanController extends Controller
     {
         $request->validate([
             'plan_name'          => ['nullable', 'string', 'max:100'],
+            'doctor_id'          => ['nullable', 'exists:users,id'],
             'estimated_duration' => ['nullable', 'string', 'max:50'],
             'visit_count'        => ['nullable', 'integer', 'min:1'],
             'doctor_notes'       => ['nullable', 'string'],
@@ -238,6 +241,12 @@ class TreatmentPlanController extends Controller
                 'doctor_notes'       => $request->doctor_notes,
                 'status'             => $request->status,
             ], fn($v) => !is_null($v)));
+
+            // doctor_id set outside the array_filter so it can also be cleared
+            // (null = fall back to consultation doctor on prints).
+            if ($request->exists('doctor_id')) {
+                $plan->update(['doctor_id' => $request->doctor_id ?: null]);
+            }
 
             if ($request->has('items')) {
                 $keptIds = collect($request->items)->pluck('id')->filter()->all();
@@ -315,49 +324,17 @@ class TreatmentPlanController extends Controller
             'reason' => ['required', 'string', 'max:500'],
         ]);
 
-        // Nothing to do if it isn't accepted.
-        if (is_null($plan->accepted_at)) {
+        // Shared brain — same billing guard + audit as the mobile API
+        // (TreatmentPlanAcceptanceService::revert, consolidated 2026-07-14).
+        try {
+            $plan = app(\App\Services\TreatmentPlan\TreatmentPlanAcceptanceService::class)
+                ->revert($plan, $request->input('reason'), $request->user(), 'clinic');
+        } catch (\RuntimeException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'This plan is not accepted, so there is nothing to revert.',
+                'message' => $e->getMessage(),
             ], 422);
         }
-
-        // Billing guard — refuse if invoices already exist against this plan.
-        if ($plan->invoices()->exists()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot revert: this plan already has invoices/billing against it.',
-            ], 422);
-        }
-
-        $plan->load('patient');
-
-        // Flip back to the un-accepted (pending) state.
-        $plan->update([
-            'accepted_at' => null,
-            'status'      => 'pending',
-        ]);
-
-        // Record the revert in the staff activity log (with the reason).
-        // Note: the log's `note` column is varchar(255), so cap the message.
-        $note = sprintf(
-            'Reverted treatment plan #%d (%s) for patient %s. Reason: %s',
-            $plan->id,
-            $plan->plan_name,
-            $plan->patient?->name ?? ('#' . $plan->patient_id),
-            $request->input('reason')
-        );
-
-        \App\Models\StaffActivityLog::record(
-            Auth::id(),                       // acting user
-            'tp_reverted',                    // action (fits varchar(40))
-            'accepted',                       // old value
-            'pending',                        // new value
-            mb_substr($note, 0, 255)          // note (capped to column length)
-        );
-
-        $plan->load(['items', 'creator']);
 
         return response()->json([
             'success' => true,
@@ -638,6 +615,7 @@ class TreatmentPlanController extends Controller
             'accepted_at'        => $plan->accepted_at?->format('d M Y'),
             'total'              => (float)$plan->total,
             'consultation_id'    => $plan->consultation_id,
+            'doctor_id'          => $plan->doctor_id,
             'estimated_duration' => $plan->estimated_duration,
             'visit_count'        => $plan->visit_count ? (int)$plan->visit_count : null,
             'doctor_notes'       => $plan->doctor_notes,

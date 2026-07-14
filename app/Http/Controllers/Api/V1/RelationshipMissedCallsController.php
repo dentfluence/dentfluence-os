@@ -3,10 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
-use App\Models\CommActivityLog;
 use App\Models\CommunicationQueue;
 use App\Services\Relationship\YesterdayReviewService;
-use App\Services\Whatsapp\OutboundMessageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -91,55 +89,9 @@ class RelationshipMissedCallsController extends ApiController
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // POST /api/v1/relationship/missed-calls/bulk-whatsapp
-    // ─────────────────────────────────────────────────────────────────────
-
-    public function bulkWhatsapp(Request $request, OutboundMessageService $outbound): JsonResponse
-    {
-        $validated = $request->validate([
-            'comm_ids'   => ['required', 'array', 'min:1'],
-            'comm_ids.*' => ['integer', 'exists:communication_queue,id'],
-            'message'    => ['required', 'string', 'max:1000'],
-        ]);
-
-        $items = CommunicationQueue::with('patient:id,name,phone')
-            ->whereIn('id', $validated['comm_ids'])
-            ->get();
-
-        $sent   = 0;
-        $failed = 0;
-
-        foreach ($items as $item) {
-            $phone = $item->patient?->phone ?? $item->phone;
-
-            if (! $phone) {
-                $failed++;
-                continue;
-            }
-
-            $result = $outbound->sendText($phone, $validated['message'], [
-                'category'     => 'service',
-                'patient_id'   => $item->patient_id,
-                'contact_name' => $item->patient?->name ?? $item->person_name,
-            ]);
-
-            if ($result['ok']) {
-                $sent++;
-                $item->logAttempt('Bulk WhatsApp sent from Missed Calls list');
-            } else {
-                $failed++;
-                CommActivityLog::log($item->id, 'whatsapp_blocked', 'Bulk WhatsApp failed: ' . ($result['reason'] ?? 'unknown'));
-            }
-        }
-
-        $message = "{$sent} message(s) sent.";
-        if ($failed > 0) {
-            $message .= " {$failed} skipped (no phone or consent not granted).";
-        }
-
-        return $this->success(['sent' => $sent, 'failed' => $failed], $message);
-    }
+    // NOTE: bulkWhatsapp() removed 2026-07-14 — the route was orphaned (web
+    // removed bulk WhatsApp on 07-06 and mobile followed; nothing called it).
+    // Individual consent-gated sends now live in Api\V1\WhatsappController.
 
     // ─────────────────────────────────────────────────────────────────────
     // POST /api/v1/relationship/missed-calls/bulk-dismiss
@@ -147,6 +99,43 @@ class RelationshipMissedCallsController extends ApiController
 
     public function bulkDismiss(Request $request): JsonResponse
     {
+        // select_all mode (2026-07-14 web parity): re-applies the same
+        // filters server-side and dismisses EVERY matching row — this is
+        // what lets the 1,800+ item backlog get cleared in one pass instead
+        // of one loaded page at a time. Mirrors web MissedCallsController.
+        if ($request->boolean('select_all')) {
+            $showIgnored = $request->boolean('show_ignored');
+            $filters     = $request->only(['search', 'purpose', 'priority']);
+
+            $query = $this->yesterdayReview->missedCallsQuery($showIgnored);
+
+            if (! empty($filters['search'])) {
+                $search = $filters['search'];
+                $query->where(function ($q) use ($search) {
+                    $q->where('person_name', 'like', "%{$search}%")
+                      ->orWhere('phone', 'like', "%{$search}%")
+                      ->orWhereHas('patient', fn ($p) => $p->where('name', 'like', "%{$search}%"));
+                });
+            }
+            if (! empty($filters['purpose'])) {
+                $query->where('purpose', $filters['purpose']);
+            }
+            if (! empty($filters['priority'])) {
+                $query->where('priority', $filters['priority']);
+            }
+
+            $count  = 0;
+            $userId = $request->user()?->id;
+            $query->chunkById(200, function ($chunk) use (&$count, $userId) {
+                foreach ($chunk as $item) {
+                    $item->dismiss($userId);
+                    $count++;
+                }
+            });
+
+            return $this->success(['dismissed' => $count], "{$count} item(s) dismissed.");
+        }
+
         $validated = $request->validate([
             'comm_ids'   => ['required', 'array', 'min:1'],
             'comm_ids.*' => ['integer', 'exists:communication_queue,id'],
@@ -158,7 +147,7 @@ class RelationshipMissedCallsController extends ApiController
             $item->dismiss($request->user()?->id);
         }
 
-        return $this->success(null, count($items) . ' item(s) dismissed.');
+        return $this->success(['dismissed' => count($items)], count($items) . ' item(s) dismissed.');
     }
 
     // ─────────────────────────────────────────────────────────────────────

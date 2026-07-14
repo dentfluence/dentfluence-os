@@ -687,6 +687,93 @@ class InventoryService
     }
 
     /**
+     * Reverse the most recent GRN on a PO — the "fix a receiving mistake"
+     * action, gated by the grn_correction_window_hours setting. Extracted
+     * 2026-07-14 from web InventoryController::reverseLastGrn (was web-only;
+     * mobile can receive POs so it needs the undo too).
+     *
+     * Expense-void matching fixed while extracting: the old code matched only
+     * FinanceExpense.grn_number, which web-created GRN expenses never set
+     * (they use source_type=GoodsReceiptNote::class). Both forms are matched
+     * now, and expenses already taken over by a vendor invoice (source_type
+     * = VendorInvoice) are left alone — the invoice owns them.
+     *
+     * @throws \RuntimeException with a user-facing message on any guard
+     */
+    public function reverseLastGrn(PurchaseOrder $po): GoodsReceiptNote
+    {
+        $windowHours = (int) AppSetting::get('grn_correction_window_hours', 0);
+        if ($windowHours === 0) {
+            throw new \RuntimeException('GRN corrections are disabled. Enable them in Settings → Inventory.');
+        }
+
+        $grn = GoodsReceiptNote::where('purchase_order_id', $po->id)
+            ->latest()
+            ->first();
+
+        if (! $grn) {
+            throw new \RuntimeException('No receipt found for this PO.');
+        }
+
+        $cutoff = now()->subHours($windowHours);
+        if ($grn->created_at->lt($cutoff)) {
+            throw new \RuntimeException(
+                'Correction window has expired. GRN ' . $grn->grn_number
+                . ' was recorded more than ' . $windowHours . ' hour(s) ago.'
+            );
+        }
+
+        DB::transaction(function () use ($grn, $po) {
+            // 1. Reverse each stock movement created by this GRN
+            foreach ($grn->items as $grnItem) {
+                $poItem = $po->items()
+                    ->where('inventory_item_id', $grnItem->inventory_item_id)
+                    ->first();
+                if ($poItem) {
+                    $poItem->update([
+                        'qty_received' => max(0, $poItem->qty_received - $grnItem->qty_received),
+                    ]);
+                }
+
+                if ($grnItem->stock_movement_id) {
+                    StockMovement::where('id', $grnItem->stock_movement_id)->delete();
+                }
+            }
+
+            // 2. Void the Finance expense linked to this GRN (both historical
+            //    forms; skip expenses a vendor invoice has taken over).
+            FinanceExpense::where(function ($q) use ($grn) {
+                    $q->where('grn_number', $grn->grn_number)
+                      ->orWhere(fn ($qq) => $qq
+                          ->whereIn('source_type', ['GoodsReceiptNote', GoodsReceiptNote::class])
+                          ->where('source_id', $grn->id));
+                })
+                ->where('payment_status', 'unpaid')
+                ->update([
+                    'payment_status' => 'void',
+                    'notes'          => 'Voided — GRN ' . $grn->grn_number . ' reversed on ' . now()->format('d M Y H:i') . '.',
+                ]);
+
+            // 3. Delete the GRN
+            $grn->items()->delete();
+            $grn->delete();
+
+            // 4. Recalculate PO status
+            $po->refresh();
+            $allItems         = $po->items;
+            $allFullyReceived = $allItems->every(fn ($i) => $i->qty_received >= $i->qty_ordered);
+            $anyPartial       = $allItems->some(fn ($i) => $i->qty_received > 0);
+
+            $po->update([
+                'status' => $allFullyReceived ? 'completed'
+                          : ($anyPartial ? 'partially_received' : 'ordered'),
+            ]);
+        });
+
+        return $grn;
+    }
+
+    /**
      * Build a ready-to-send WhatsApp message + target number for a PO, so the
      * mobile "Send PO via WhatsApp" button can open wa.me directly.
      * Returns null number if the vendor has no WhatsApp/phone on file.

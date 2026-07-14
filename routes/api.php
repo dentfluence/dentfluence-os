@@ -103,6 +103,10 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::get('/patients/{patient}/documents',       [PatientProfileController::class, 'documents']);
         Route::post('/patients/{patient}/documents',      [PatientProfileController::class, 'storeDocument']);
         Route::post('/patients/{patient}/clinical-files',  [PatientProfileController::class, 'storeClinicalFile']);
+        // Edit metadata + delete — same web capability (ClinicalFileController
+        // update/destroy); mobile could previously only upload (2026-07-14).
+        Route::put('/patients/{patient}/clinical-files/{file}',    [PatientProfileController::class, 'updateClinicalFile']);
+        Route::delete('/patients/{patient}/clinical-files/{file}', [PatientProfileController::class, 'deleteClinicalFile']);
         Route::get('/patients/{patient}/notes',           [PatientProfileController::class, 'notes']);
         Route::get('/patients/{patient}/communications',  [PatientProfileController::class, 'communications']);
         Route::get('/patients/{patient}/memberships',     [MembershipController::class, 'index']);
@@ -114,6 +118,9 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         // Clinical write — doctors only (admin always passes). Phase A role-gating.
         Route::put('/consultations/{consultation}', [ConsultationController::class, 'update'])
             ->middleware('api.role:doctor,resident_dentist,associate_dentist,visiting_consultant');
+        // Delete — same permission the web route checks (module:patients).
+        Route::delete('/consultations/{consultation}', [ConsultationController::class, 'destroy'])
+            ->middleware('api.role:module:patients,view');
 
         // Notes + communications write actions — gated by the SAME permission
         // table AND the same action as web (module:patients checks can_view,
@@ -123,6 +130,10 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             Route::put('/patients/{patient}/notes/{note}',     [PatientProfileController::class, 'updateNote']);
             Route::delete('/patients/{patient}/notes/{note}',  [PatientProfileController::class, 'deleteNote']);
             Route::post('/patients/{patient}/communications',  [PatientProfileController::class, 'storeCommunication']);
+
+            // Consent-gated WhatsApp send (2026-07-14 product decision) —
+            // replaces the mobile deep-link that bypassed the DPDP gate.
+            Route::post('/patients/{patient}/whatsapp/send',   [\App\Http\Controllers\Api\V1\WhatsappController::class, 'send']);
         });
 
         // Consultation create — 4 workflows (mirrors web)
@@ -373,8 +384,9 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::prefix('relationship/missed-calls')->name('api.relationship.missed-calls.')->group(function () {
             Route::get('/',                  [RelationshipMissedCallsController::class, 'index'])
                 ->name('index');
-            Route::post('/bulk-whatsapp',    [RelationshipMissedCallsController::class, 'bulkWhatsapp'])
-                ->name('bulk-whatsapp');
+            // bulk-whatsapp route removed 2026-07-14: it was orphaned — no
+            // web page equivalent (bulk WhatsApp was removed 07-06 for web
+            // parity) and no mobile caller. bulk-dismiss gained select_all.
             Route::post('/bulk-dismiss',     [RelationshipMissedCallsController::class, 'bulkDismiss'])
                 ->name('bulk-dismiss');
             Route::post('/{missedCall}/ignore',   [RelationshipMissedCallsController::class, 'ignore'])
@@ -607,6 +619,9 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             ->middleware('api.role:admin,front_desk');
         Route::post('/inventory/purchase-orders/{po}/receive', [InventoryController::class, 'receivePurchaseOrder'])
             ->middleware('api.role:admin,front_desk');
+        // Undo the most recent GRN (window-gated) — admin-only like web.
+        Route::delete('/inventory/purchase-orders/{po}/grn/last', [InventoryController::class, 'reverseLastGrn'])
+            ->middleware('api.role:admin');
 
         // Implant catalog + placements — writes (mobile Add Component / Add
         // Placement screens already call these paths; only the routes were

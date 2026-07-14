@@ -138,7 +138,7 @@
                class="px-4 py-2 text-sm border border-gray-300 text-gray-700 hover:border-[#6a0f70] hover:text-[#6a0f70] transition-colors bg-white font-medium">
                 Data Request
             </a>
-            <button x-on:click="editDrawerOpen = true"
+            <button x-on:click="window.dispatchEvent(new CustomEvent('open-edit-patient', { detail: window.__editPatientPrefill }))"
                     class="px-4 py-2 text-sm border border-gray-300 text-gray-700 hover:border-[#6a0f70] hover:text-[#6a0f70] transition-colors bg-white font-medium">
                 Edit Patient
             </button>
@@ -471,7 +471,7 @@
                     <div class="p-5">
                         <div class="flex items-center justify-between mb-3">
                             <span class="text-xs font-semibold text-gray-500">Personal Details</span>
-                            <button x-on:click="editDrawerOpen = true" class="text-xs text-[#6a0f70] hover:underline font-medium">Edit</button>
+                            <button x-on:click="window.dispatchEvent(new CustomEvent('open-edit-patient', { detail: window.__editPatientPrefill }))" class="text-xs text-[#6a0f70] hover:underline font-medium">Edit</button>
                         </div>
                         <div class="space-y-2.5">
                             @php
@@ -1325,7 +1325,7 @@
                     @endif
                     @endforeach
                     <div class="pt-1 border-t border-gray-100">
-                        <button x-on:click="editDrawerOpen=true"
+                        <button x-on:click="window.dispatchEvent(new CustomEvent('open-edit-patient', { detail: window.__editPatientPrefill }))"
                                 class="text-xs text-[#6a0f70] hover:underline font-medium">
                             Edit Patient Details →
                         </button>
@@ -3272,7 +3272,64 @@ document.getElementById('patientDeleteModal').addEventListener('click', function
     </div>
 {{-- /x-show notes --}}
 {{-- Edit Patient Drawer — inside x-data patientProfile() scope --}}
-@include('patients.partials.edit-patient-drawer')
+{{-- Edit Patient — same 5-tab form as New Patient, opened pre-filled via
+     the 'open-edit-patient' window event (replaces the old edit drawer). --}}
+@include('partials.add-patient-modal')
+
+@php
+$editPatientPrefill = [
+    'id'          => $patient->id,
+    'name'        => $patient->name,
+    'title'       => $patient->title,
+    'first_name'  => $patient->first_name,
+    'middle_name' => $patient->middle_name,
+    'last_name'   => $patient->last_name,
+    'gender'      => $patient->gender,
+    'patient_id'  => $patient->patient_id,
+    'occupation'  => $patient->occupation,
+    'dob'         => $patient->date_of_birth?->format('Y-m-d'),
+    'dob_unknown' => (bool) $patient->dob_unknown,
+    'age_years'   => $patient->age_years,
+    'tags'        => $patient->tags->pluck('name')->values(),
+    'phone'           => $patient->phone,
+    'alternate_phone' => $patient->alternate_phone,
+    'email'           => $patient->email,
+    'emergency_contact_name'         => $patient->emergency_contact_name,
+    'emergency_contact_relationship' => $patient->emergency_contact_relationship,
+    'emergency_contact_number'       => $patient->emergency_contact_number,
+    'address' => $patient->address,
+    'area'    => $patient->area,
+    'city'    => $patient->city,
+    'pincode' => $patient->pincode,
+    'medical_conditions'  => $patient->medical_conditions ?? [],
+    'current_medications' => $patient->current_medications,
+    'dental_conditions'   => $patient->dental_conditions ?? [],
+    'habits'              => $patient->habits ?? [],
+    'habit_frequency'     => $patient->habit_frequency ?: new \stdClass,
+    'medical_alert'       => $patient->medical_alert,
+    'allergies'           => $patient->allergies ?? [],
+    'family_notes'        => $patient->family_notes,
+    'source'              => $patient->source,
+    'source_camp_name'    => $patient->source_camp_name,
+    'source_campaign'     => $patient->source_campaign,
+    'referral_type'       => $patient->referral_type,
+    'referred_patient_id' => $patient->referred_patient_id,
+    'referred_patient'    => $patient->referredPatient ? [
+        'id'         => $patient->referredPatient->id,
+        'name'       => $patient->referredPatient->name,
+        'patient_id' => $patient->referredPatient->patient_id,
+        'phone'      => $patient->referredPatient->phone,
+    ] : null,
+    'referrer_name'   => $patient->referrer_name,
+    'referrer_mobile' => $patient->referrer_mobile,
+    'referrer_type'   => $patient->referrer_type,
+    'referrer_notes'  => $patient->referrer_notes,
+    'updated_at'      => $patient->updated_at?->toIso8601String(),
+];
+@endphp
+<script>
+    window.__editPatientPrefill = {{ \Illuminate\Support\Js::from($editPatientPrefill) }};
+</script>
 
 </div>{{-- /x-data patientProfile --}}
 
@@ -3390,9 +3447,6 @@ document.getElementById('patientDeleteModal').addEventListener('click', function
 function patientProfile() {
     return {
         activeTab: 'profile',
-        editDrawerOpen: false,
-        editSaving: false,
-        editSaveError: '',
         aocpModalOpen: false,
         showNoteForm: false,
         showOppForm: false,
@@ -3441,59 +3495,9 @@ function patientProfile() {
             return {prospect:'Identified',discussed:'Discussed',quoted:'Financial Discussion',accepted:'Planned',completed:'Completed'}[s] || s;
         },
 
-        // Save the Edit Patient drawer (form lives in patients/partials/edit-patient-drawer.blade.php).
-        // Two fields need a small transform before they match what PatientController@update expects:
-        //   - medical_alert_flags[] + medical_alert_custom  -> single comma-separated medical_alert string
-        //   - allergies_text (comma separated)               -> allergies[] array
-        async submitEditPatient() {
-            const form = document.getElementById('editPatientForm');
-            if (!form) return;
-
-            this.editSaving = true;
-            this.editSaveError = '';
-
-            const fd = new FormData(form);
-
-            const alertFlags  = fd.getAll('medical_alert_flags[]');
-            const customAlert = (fd.get('medical_alert_custom') || '').trim();
-            const allAlerts   = customAlert ? [...alertFlags, customAlert] : alertFlags;
-            fd.delete('medical_alert_flags[]');
-            fd.delete('medical_alert_custom');
-            fd.set('medical_alert', allAlerts.join(', '));
-
-            const allergiesText = (fd.get('allergies_text') || '').trim();
-            fd.delete('allergies_text');
-            allergiesText.split(',').map(a => a.trim()).filter(Boolean).forEach(a => fd.append('allergies[]', a));
-
-            try {
-                const r = await fetch('{{ route('patients.update', $patient->id) }}', {
-                    method: 'POST', // _method=PATCH is spoofed via the @method('PATCH') hidden field already in the form
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
-                        'Accept': 'application/json',
-                    },
-                    body: fd,
-                });
-
-                if (!r.ok) {
-                    const errBody = await r.json().catch(() => ({}));
-                    this.editSaveError = errBody.message
-                        || (errBody.errors ? Object.values(errBody.errors).flat().join(' ') : null)
-                        || `Save failed (${r.status}). Please check the fields and try again.`;
-                    console.error('submitEditPatient HTTP error', r.status, errBody);
-                    this.editSaving = false;
-                    return;
-                }
-
-                // Full reload — simplest way to make every tab (header name, billing,
-                // referral display, etc.) reflect the updated patient consistently.
-                window.location.reload();
-            } catch (e) {
-                this.editSaveError = 'Network error. Please check your connection.';
-                console.error('submitEditPatient error', e);
-                this.editSaving = false;
-            }
-        },
+        // Patient editing now opens the shared New/Edit Patient modal
+        // (partials/add-patient-modal.blade.php) via the 'open-edit-patient'
+        // window event — the old edit drawer and submitEditPatient() are gone.
 
         toggleNoteTag(t) {
             this.newNoteTags.includes(t)

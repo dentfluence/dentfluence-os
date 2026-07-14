@@ -62,8 +62,10 @@ class TreatmentPlanController extends ApiController
             'items'                  => ['required', 'array', 'min:1'],
             'items.*.tooth_number'   => ['nullable', 'string', 'max:100'],
             'items.*.treatment_name' => ['required', 'string', 'max:150'],
+            'items.*.treatment_id'   => ['nullable', 'integer', 'exists:treatments,id'],
             'items.*.unit_price'     => ['required', 'numeric', 'min:0'],
             'items.*.units'          => ['nullable', 'integer', 'min:1'],
+            'items.*.consent_required' => ['nullable', 'boolean'],
             'items.*.notes'          => ['nullable', 'string'],
         ]);
 
@@ -108,8 +110,10 @@ class TreatmentPlanController extends ApiController
             'items.*.id'             => ['nullable', 'integer'],
             'items.*.tooth_number'   => ['nullable', 'string', 'max:100'],
             'items.*.treatment_name' => ['required_with:items', 'string', 'max:150'],
+            'items.*.treatment_id'   => ['nullable', 'integer', 'exists:treatments,id'],
             'items.*.unit_price'     => ['required_with:items', 'numeric', 'min:0'],
             'items.*.units'          => ['nullable', 'integer', 'min:1'],
+            'items.*.consent_required' => ['nullable', 'boolean'],
             'items.*.notes'          => ['nullable', 'string'],
         ]);
 
@@ -176,11 +180,15 @@ class TreatmentPlanController extends ApiController
 
         $request->validate(['reason' => ['required', 'string', 'max:500']]);
 
-        if (is_null($p->accepted_at)) {
-            return $this->error('This plan is not accepted.', [], 422);
+        // Shared brain (2026-07-14) — this path previously flipped the status
+        // with NO billing guard (a billed plan could be un-accepted from
+        // mobile) and NO staff-activity audit. Same door as web now.
+        try {
+            $p = app(TreatmentPlanAcceptanceService::class)
+                ->revert($p, $request->input('reason'), $request->user(), 'mobile');
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), [], 422);
         }
-
-        $p->update(['accepted_at' => null, 'status' => 'pending']);
 
         return $this->success($this->payload($p->fresh(['items', 'creator'])),
             'Acceptance reverted.');
@@ -262,6 +270,10 @@ class TreatmentPlanController extends ApiController
                 'treatment_plan_id' => $plan->id,
                 'tooth_number'      => $row['tooth_number'] ?? null,
                 'treatment_name'    => $row['treatment_name'],
+                // Master-treatment link + consent flag — same columns the
+                // web form writes (2026-07-14 parity; were dropped here).
+                'treatment_id'      => $row['treatment_id'] ?? null,
+                'consent_required'  => (bool) ($row['consent_required'] ?? false),
                 'unit_price'        => (float) ($row['unit_price'] ?? 0),
                 'units'             => (int) ($row['units'] ?? 1),
                 'disc_pct'          => 0,

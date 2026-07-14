@@ -211,10 +211,14 @@ class PatientService
             'area'    => $in['area'] ?? null,
             'city'    => $in['city'] ?? null,
             'pincode' => $in['pincode'] ?? null,
+            'occupation'      => $in['occupation'] ?? null,
             // Clinical
             'medical_conditions'  => $in['medical_conditions'] ?? [],
             'current_medications' => $in['current_medications'] ?? null,
             'dental_conditions'   => $in['dental_conditions'] ?? [],
+            'medical_alert'       => $in['medical_alert'] ?? null,
+            'allergies'           => $in['allergies'] ?? [],
+            'family_notes'        => $in['family_notes'] ?? null,
             // Habits
             'habits'          => $in['habits'] ?? [],
             'habit_frequency' => $in['habit_frequency'] ?? [],
@@ -345,6 +349,9 @@ class PatientService
             'middle_name' => $in['middle_name'] ?? null,
             'last_name'   => $in['last_name'] ?? null,
             'name'        => $displayName,
+            // Clinic register number — editable to correct wrong imports.
+            // Blank input leaves the existing ID untouched (can't be cleared).
+            'patient_id'  => filled($in['patient_id'] ?? null) ? trim($in['patient_id']) : null,
             'phone'           => $in['phone'] ?? $in['mobile'] ?? null,
             'alternate_phone' => $in['alternate_phone'] ?? null,
             'email'           => $in['email'] ?? null,
@@ -396,7 +403,22 @@ class PatientService
             $fields['referrer_type']       = $referrerType;
         }
 
+        // medical_alert must also be CLEARABLE (unchecking every alert sends
+        // ''/null which the array_filter above would silently drop — a safety
+        // problem for stale alerts). Only touched when the key was submitted.
+        if (array_key_exists('medical_alert', $in)) {
+            $fields['medical_alert'] = filled($in['medical_alert']) ? $in['medical_alert'] : null;
+        }
+
         $patient->update($fields);
+
+        // Tags — sync only when the form actually submitted them.
+        if (array_key_exists('tags', $in) && is_array($in['tags'])) {
+            $actor = \Illuminate\Support\Facades\Auth::user();
+            if ($actor) {
+                $this->syncTags($patient, $in['tags'], $actor);
+            }
+        }
 
         return $patient->fresh();
     }

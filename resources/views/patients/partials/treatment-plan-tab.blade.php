@@ -1,6 +1,11 @@
 @php
     $consultationsList = $consultations ?? collect();
 
+    // Doctors for the "Treating Doctor" select on the plan form (printed on the plan)
+    $tpDoctors = \App\Models\User::whereIn('role', \App\Models\User::DOCTOR_ROLES)
+        ->orderBy('name')
+        ->get(['id', 'name']);
+
     // Build plans JSON — clinical fields only, no billing fields in this view
     $plansJson = ($patient->treatmentPlans ?? collect())
         ->sortBy('display_order')
@@ -13,6 +18,7 @@
             'accepted_at'        => $p->accepted_at?->format('d M Y'),
             'total'              => (float)$p->total,
             'consultation_id'    => $p->consultation_id,
+            'doctor_id'          => $p->doctor_id,
             'estimated_duration' => $p->estimated_duration,
             'visit_count'        => $p->visit_count ? (int)$p->visit_count : null,
             'doctor_notes'       => $p->doctor_notes,
@@ -565,8 +571,8 @@
 
         <div class="tp-form-body">
 
-            {{-- Row 1: Option name + Consultation --}}
-            <div class="grid grid-cols-2 gap-4 mb-4">
+            {{-- Row 1: Option name + Consultation + Treating doctor --}}
+            <div class="grid grid-cols-3 gap-4 mb-4">
                 <div class="tp-field-group">
                     <label class="tp-label">Option Name <span class="text-red-400">*</span></label>
                     <input type="text" x-model="form.plan_name" placeholder="e.g. Dental Implant, Fixed Bridge…"
@@ -582,6 +588,15 @@
                             {{ $c->consultation_date ? \Carbon\Carbon::parse($c->consultation_date)->format('d M Y') : 'Undated' }}
                             {{ $c->chief_complaint ? '— ' . \Str::limit($c->chief_complaint, 35) : '' }}
                         </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="tp-field-group">
+                    <label class="tp-label">Treating Doctor</label>
+                    <select x-model="form.doctor_id" class="tp-input">
+                        <option value="">— Consultation doctor —</option>
+                        @foreach($tpDoctors as $d)
+                        <option value="{{ $d->id }}">{{ $d->doctor_name }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -1566,6 +1581,7 @@ function treatmentPlanTab() {
             return {
                 plan_name:          'Treatment Option ' + optNum,
                 consultation_id:    consultationId ?? '',
+                doctor_id:          '',
                 estimated_duration: '',
                 visit_count:        '',
                 doctor_notes:       '',
@@ -1595,6 +1611,7 @@ function treatmentPlanTab() {
                 this.form = {
                     plan_name:          plan.plan_name ?? '',
                     consultation_id:    plan.consultation_id ?? '',
+                    doctor_id:          plan.doctor_id ?? '',
                     estimated_duration: plan.estimated_duration ?? '',
                     visit_count:        plan.visit_count ?? '',
                     doctor_notes:       plan.doctor_notes ?? '',
@@ -1742,6 +1759,7 @@ function treatmentPlanTab() {
                     body: JSON.stringify({
                         plan_name:          this.form.plan_name,
                         consultation_id:    this.form.consultation_id || null,
+                        doctor_id:          this.form.doctor_id || null,
                         estimated_duration: this.form.estimated_duration || null,
                         visit_count:        this.form.visit_count || null,
                         doctor_notes:       this.form.doctor_notes || null,

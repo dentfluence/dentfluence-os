@@ -232,7 +232,9 @@
     // Plain paper = pre-printed stationery already carrying clinic identity,
     // so we don't re-print the clinic name/logo here.
     $showClinic = $headerType !== 'plain';
-    $doctor   = $consultation?->doctor;
+    // Plan's own treating doctor wins; older plans without one fall back
+    // to the consultation's doctor (previous behaviour).
+    $doctor   = $plans->first()?->doctor ?? $consultation?->doctor;
 
     $patientCode = $patient?->patient_id
                    ?? ('P-' . str_pad($patient?->id ?? 0, 5, '0', STR_PAD_LEFT));
@@ -290,7 +292,6 @@
     <div>
         <div class="lh-name">{{ $patient->name ?? '—' }} ({{ $patientCode }})</div>
         @if($genderAge)<div class="lh-line">{{ $genderAge }}</div>@endif
-        @if($patient->phone ?? null)<div class="lh-line">{{ $patient->phone }}</div>@endif
         @if($addressLine)<div class="lh-line">{{ $addressLine }}</div>@endif
     </div>
 

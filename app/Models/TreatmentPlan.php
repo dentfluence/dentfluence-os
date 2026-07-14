@@ -21,6 +21,7 @@ class TreatmentPlan extends Model
         'plan_uuid',          // stable public identifier
         'patient_id',
         'consultation_id',
+        'doctor_id',          // treating doctor shown on the printed plan
         'plan_name',          // internal name e.g. "Treatment Plan A"
         'display_order',      // ordering within a consultation (1, 2, 3 …)
         'plan_type',
@@ -69,6 +70,12 @@ class TreatmentPlan extends Model
     public function consultation(): BelongsTo
     {
         return $this->belongsTo(Consultation::class);
+    }
+
+    /** Treating doctor for this plan (falls back to consultation doctor on prints). */
+    public function doctor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'doctor_id');
     }
 
     public function creator(): BelongsTo

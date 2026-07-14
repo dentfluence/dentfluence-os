@@ -50,18 +50,36 @@ Product decisions locked with Sumit:
 - `lab_screen.dart`: "Move case forward" card on the detail (buttons from `next_statuses`, confirm dialogs — final_received explains the auto task + finance expense), list refreshes after transitions; FAB → new `LabCaseCreateScreen` (patient picker, category→subtype cascade keyed to rebuild, vendor/doctor, priority segmented, expected return, shade, est. cost, notes, draft-vs-order toggle).
 - DEFERRED: lab attachments UI — clinical photo capture already exists on the patient profile (per the existing-upload-paths rule); lab prescriptionSave UI (specialist workflow, low mobile frequency).
 
-## Slice 6 — Inventory/Vendors ◐ BACKEND + CLIENT COMPLETE, UI hooks pending
+## Slice 6 — Inventory/Vendors ✅ CODE-COMPLETE (untested)
 - **`InventoryService::adjustStock` now THE single implementation** — gained web's unit_price/cost handling (mobile adds no longer log zero-cost movements); web `adjustStock` delegates to it. API validation accepts `unit_price`.
 - **`InventoryService::costPerUsage()`** — extracted from web `calculateCostPerUsage`; web delegates; API `storeProduct` now sets `cost_per_usage` (was always 0 for mobile-created products).
 - **New endpoints**: `POST /inventory/vendors` (storeVendor + Finance sync), `PATCH /inventory/vendors/{v}/toggle` (never hard-delete), `DELETE /inventory/products/{item}` (soft archive, admin-only — same as web admin.only).
 - **Client methods**: `createVendor/toggleVendor/archiveProduct`.
-- REMAINING (next session): UI affordances — "New vendor" button + form (9 fields, reuse the existing edit form in `inventory_settings_screens.dart`), activate/deactivate toggle on the vendor row, "Archive" in the product ⋯ menu (admin only). GRN reversal endpoint also still pending.
+- **UI hooks done (2nd session)**: `VendorsEditScreen` gained a New-vendor FAB (form is now create+edit dual-mode), per-row activate/deactivate toggle with strikethrough on inactive; item detail gained an Archive action (confirm dialog, admin-gated server-side).
+- **GRN reversal consolidated + exposed**: extracted web `reverseLastGrn` into `InventoryService::reverseLastGrn()` (window guard throws; web delegates). BUG FIXED while extracting: expense-void matched only `grn_number`, which web-created GRN expenses never set — now matches both historical source forms, and skips expenses already taken over by a vendor invoice. New API `DELETE /inventory/purchase-orders/{po}/grn/last` (admin); "Undo last GRN" action on the mobile PO detail.
 
-## Slices 7-10 — NOT STARTED
-7. Reports parity: shared `ReportMetricsService` (outstanding: web=draft+partial vs API=all-non-cancelled; collections: 3 different source tables); date-range params; dashboard KPIs.
-8. Clinical gaps: consultation delete + inline Rx; clinical-file edit/delete; TP revert billing-guard+audit (extend `TreatmentPlanAcceptanceService`); TP store/update missing fields.
-9. PRE/Notifications: notifications API+screen; select_all bulk-dismiss; consent-gated WhatsApp send endpoint for mobile; profile Communication tab; delete orphan bulk-whatsapp route.
-10. Final pass: flutter analyze fixes, UI states audit, final report.
+## Slice 7 — Reports parity ✅ CODE-COMPLETE (untested)
+- **New `app/Services/Analytics/ReportMetricsService.php`** — ONE definition of collected (InvoicePayment), outstanding (draft+partial), appointmentsDone ('done'), collectionsSeries, resolveRange (7|30|90|365|custom). Optional branch scoping.
+- Web `ReportsController::buildRevenueData` collected/outstanding → service. API `ReportController::overview` → service (was Receipt-summed + all-non-cancelled outstanding — web and mobile now show the SAME totals), gained `?period=` support + a `range` block (collected/appointments/done/new patients) + range-driven series (capped 90 points).
+- Flutter Reports screen: 7/30/90/365 chips, "Selected range" KPI cards, chart follows the range.
+- **Dashboard parity**: API dashboard now returns finance (today_revenue/outstanding_balance/count), lab (pending/overdue), and the web's 3 alert rules (with `key` for client routing). Flutter Home gained an alert strip (only when something needs attention) + one dense pulse line (₹in / ₹due / lab) — deliberately NOT a stat-card wall (Sumit removed those before; simple-not-busier).
+- DEBT (documented): huddle period report still computes from FinanceTransaction with its own status set — web-internal divergence, migrate to ReportMetricsService in a later pass.
+
+## Slice 8 — Clinical gaps ✅ CODE-COMPLETE (untested)
+- **TP revert consolidated**: `TreatmentPlanAcceptanceService::revert()` (accepted-check + billing guard + StaffActivityLog with reason); web + API delegate. API previously had NO billing guard and NO audit.
+- **TP items**: API store/update now accept + persist `items.*.treatment_id` and `items.*.consent_required` (web parity; were silently dropped).
+- **Consultation delete**: API `DELETE /consultations/{id}` (soft, branch-scoped, module:patients gate) + Delete entry in the mobile consultation menu with confirm.
+- **Inline Rx/instructions**: same-issue/minor/emergency API workflows accept `prescriptions`/`instructions` arrays (same encrypted-array columns web writes).
+- **Clinical files**: API PUT/DELETE `/patients/{p}/clinical-files/{f}` mirroring web ClinicalFileController update/destroy (full metadata field set). Client methods ready (`updateClinicalFile`/`deleteClinicalFile`); library-tab edit UI = next session.
+
+## Slice 9 — PRE/WhatsApp ◐ MOSTLY COMPLETE
+- **Consent-gated WhatsApp send (Sumit's decision)**: new `Api/V1/WhatsappController::send` → `OutboundMessageService::sendText` (consent gate runs inside) + Timeline log; route under module:patients. Flutter `_composeWhatsapp` sheet replaces the deep-link wherever a patient_id exists (Today's Actions, opportunities, recalls, missed calls); leads (no patient record → no consent to check) keep the deep-link fallback, documented in code.
+- **select_all bulk-dismiss**: API mirrors web (chunkById over the same filters); Flutter "Dismiss ALL matching" app-bar action with confirm — the 1,810-item backlog is now clearable from mobile.
+- **Orphan removed**: `bulk-whatsapp` route + method deleted (no web equivalent since 07-06, no caller).
+- REMAINING (next session): notifications API + mobile list screen; relationship-profile Communication tab (thread view via wa_threads — needs a thread-read API).
+
+## Slice 10 — NOT STARTED
+Final pass: flutter analyze fixes, UI states audit, final report per the sprint brief (completed modules, screens added, APIs added, backend changes, services, debt, web-only justifications, build verification, migration steps).
 
 ## Verification needed (Sumit's machine — nothing run yet)
 ```bash
@@ -98,6 +116,17 @@ php -l app/Http/Controllers/InventoryController.php
 php -l app/Http/Controllers/Api/V1/InventoryController.php
 php -l app/Http/Controllers/Api/V1/InventorySettingsController.php
 php -l app/Http/Controllers/Api/V1/LabController.php
+php -l app/Services/Analytics/ReportMetricsService.php
+php -l app/Services/TreatmentPlan/TreatmentPlanAcceptanceService.php
+php -l app/Http/Controllers/Api/V1/WhatsappController.php
+php -l app/Http/Controllers/Api/V1/ReportController.php
+php -l app/Http/Controllers/Api/V1/DashboardController.php
+php -l app/Http/Controllers/Api/V1/ConsultationController.php
+php -l app/Http/Controllers/Api/V1/TreatmentPlanController.php
+php -l app/Http/Controllers/Api/V1/RelationshipMissedCallsController.php
+php -l app/Http/Controllers/ReportsController.php
+php -l app/Http/Controllers/TreatmentPlanController.php
+php -l routes/api.php
 ```
 
 ## Behavioural changes to test manually
@@ -121,4 +150,11 @@ php -l app/Http/Controllers/Api/V1/LabController.php
 18. Transition a lab case from mobile through to final_received → tasks roll, notifications fire, lab expense appears in Finance.
 19. Quick stock-add with a unit price from mobile → item purchase price updates, movement has cost (web + mobile identical now).
 20. Create a product from mobile → cost_per_usage computed (was 0).
-21. Create + deactivate a vendor via API (UI buttons come next session; test via existing edit screen path or curl).
+21. Create + deactivate a vendor from the mobile Vendors screen (FAB + toggle); archive a product from item detail.
+22. Undo last GRN from the mobile PO detail (inside the correction window; outside → clear 422 message).
+23. Reports: switch 7/30/90/365 on mobile → "Selected range" totals MATCH the web Reports page for the same range (this is the headline parity test).
+24. Mobile home shows the alert strip when lab is overdue / >5 outstanding invoices; pulse line matches web dashboard numbers.
+25. Revert an accepted plan on mobile: blocked with clear message if billed; success writes the staff-activity audit row.
+26. Delete a consultation from mobile → disappears on web too (soft delete).
+27. WhatsApp a patient from Today's Actions on mobile → consent-gated; without consent → 422 reason shown; with consent → message in web inbox + patient timeline.
+28. Missed calls "Dismiss ALL matching" clears the whole filtered backlog (not just the page).

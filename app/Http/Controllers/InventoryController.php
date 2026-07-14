@@ -1880,66 +1880,14 @@ class InventoryController extends Controller
 
     public function reverseLastGrn(PurchaseOrder $po)
     {
-        // Check correction window is enabled
-        $windowHours = (int) AppSetting::get('grn_correction_window_hours', 0);
-        if ($windowHours === 0) {
-            return back()->withErrors(['grn' => 'GRN corrections are disabled. Enable them in Settings → Inventory.']);
+        // Shared brain — same window guard + reversal chain the mobile API
+        // uses (InventoryService::reverseLastGrn, consolidated 2026-07-14;
+        // expense-void matching broadened there to catch both source forms).
+        try {
+            app(\App\Services\Inventory\InventoryService::class)->reverseLastGrn($po);
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['grn' => $e->getMessage()]);
         }
-
-        // Get the most recent GRN for this PO
-        $grn = GoodsReceiptNote::where('purchase_order_id', $po->id)
-            ->latest()
-            ->first();
-
-        if (!$grn) {
-            return back()->withErrors(['grn' => 'No receipt found for this PO.']);
-        }
-
-        // Check if within the correction window
-        $cutoff = now()->subHours($windowHours);
-        if ($grn->created_at->lt($cutoff)) {
-            return back()->withErrors(['grn' => 'Correction window has expired. GRN ' . $grn->grn_number . ' was recorded more than ' . $windowHours . ' hour(s) ago.']);
-        }
-
-        \DB::transaction(function () use ($grn, $po) {
-            // 1. Reverse each stock movement created by this GRN
-            foreach ($grn->items as $grnItem) {
-                // Decrement qty_received on the PO line
-                $poItem = $po->items()
-                    ->where('inventory_item_id', $grnItem->inventory_item_id)
-                    ->first();
-                if ($poItem) {
-                    $newQty = max(0, $poItem->qty_received - $grnItem->qty_received);
-                    $poItem->update(['qty_received' => $newQty]);
-                }
-
-                // Delete the linked stock movement
-                if ($grnItem->stock_movement_id) {
-                    StockMovement::where('id', $grnItem->stock_movement_id)->delete();
-                }
-            }
-
-            // 2. Void the Finance expense linked to this GRN
-            FinanceExpense::where('grn_number', $grn->grn_number)->update([
-                'payment_status' => 'void',
-                'notes'          => 'Voided — GRN ' . $grn->grn_number . ' reversed on ' . now()->format('d M Y H:i') . '.',
-            ]);
-
-            // 3. Delete the GRN (items cascade via FK or manual)
-            $grn->items()->delete();
-            $grn->delete();
-
-            // 4. Recalculate PO status
-            $po->refresh();
-            $allItems = $po->items;
-            $allFullyReceived = $allItems->every(fn($i) => $i->qty_received >= $i->qty_ordered);
-            $anyPartial       = $allItems->some(fn($i)  => $i->qty_received > 0);
-
-            $po->update([
-                'status' => $allFullyReceived ? 'completed'
-                          : ($anyPartial ? 'partially_received' : 'ordered'),
-            ]);
-        });
 
         return back()->with('success', 'GRN reversed. Stock and Finance expense have been corrected for PO ' . $po->order_no . '.');
     }

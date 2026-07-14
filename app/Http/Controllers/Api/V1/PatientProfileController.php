@@ -216,6 +216,70 @@ class PatientProfileController extends ApiController
         ], '');
     }
 
+    /**
+     * PUT /api/v1/patients/{patient}/clinical-files/{file}
+     * Edit a clinical file's metadata — mirrors web
+     * ClinicalFileController::update() exactly (2026-07-14 parity; mobile
+     * could upload but never correct a wrong category/tooth/stage).
+     */
+    public function updateClinicalFile(Request $request, $patient, ClinicalFile $file): JsonResponse
+    {
+        $p = $this->find($request, $patient);
+
+        if ($file->patient_id !== $p->id) {
+            return $this->error('File does not belong to this patient.', [], 403);
+        }
+
+        $request->validate([
+            'visit_id'                 => ['nullable', 'integer', 'exists:treatment_visits,id'],
+            'procedure'                => ['nullable', 'string', 'max:255'],
+            'treatment_category'       => ['nullable', \Illuminate\Validation\Rule::in(array_keys(ClinicalFile::TREATMENT_CATEGORIES))],
+            'tooth_number'             => ['nullable', 'string', 'max:50'],
+            'stage'                    => ['nullable', \Illuminate\Validation\Rule::in(ClinicalFile::STAGES)],
+            'file_type'                => ['nullable', \Illuminate\Validation\Rule::in(ClinicalFile::FILE_TYPES)],
+            'title'                    => ['nullable', 'string', 'max:255'],
+            'notes'                    => ['nullable', 'string', 'max:5000'],
+            'captured_at'              => ['nullable', 'date'],
+            'tags'                     => ['nullable', 'array'],
+            'tags.*'                   => ['string', 'max:50'],
+            'is_marketing_eligible'    => ['nullable', 'boolean'],
+            'is_education_eligible'    => ['nullable', 'boolean'],
+            'is_teaching_eligible'     => ['nullable', 'boolean'],
+            'is_research_eligible'     => ['nullable', 'boolean'],
+            'is_case_library_eligible' => ['nullable', 'boolean'],
+            'consent_status'           => ['nullable', \Illuminate\Validation\Rule::in(['not_given', 'pending', 'given'])],
+            'marketing_status'         => ['nullable', \Illuminate\Validation\Rule::in(['pending', 'approved', 'rejected'])],
+            'content_rating'           => ['nullable', 'integer', 'min:1', 'max:5'],
+        ]);
+
+        $file->update($request->only([
+            'visit_id', 'procedure', 'treatment_category', 'tooth_number', 'stage', 'file_type',
+            'title', 'notes', 'captured_at', 'tags',
+            'is_marketing_eligible', 'is_education_eligible',
+            'is_teaching_eligible', 'is_research_eligible', 'is_case_library_eligible',
+            'consent_status', 'marketing_status', 'content_rating',
+        ]));
+
+        return $this->success(['id' => $file->id], 'File updated.');
+    }
+
+    /**
+     * DELETE /api/v1/patients/{patient}/clinical-files/{file}
+     * Soft delete — mirrors web ClinicalFileController::destroy().
+     */
+    public function deleteClinicalFile(Request $request, $patient, ClinicalFile $file): JsonResponse
+    {
+        $p = $this->find($request, $patient);
+
+        if ($file->patient_id !== $p->id) {
+            return $this->error('File does not belong to this patient.', [], 403);
+        }
+
+        $file->delete(); // soft delete only
+
+        return $this->success(null, 'File deleted.');
+    }
+
     public function documents(Request $request, $patient): JsonResponse
     {
         $p = $this->find($request, $patient);

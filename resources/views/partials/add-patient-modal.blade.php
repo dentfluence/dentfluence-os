@@ -11,11 +11,13 @@ $medicalPresets = ['Diabetes','Hypertension','Thyroid','Asthma','Heart Disease',
 $dentalPresets  = ['Missing Teeth','Crowding','Spacing','Caries','Bruxism','Gum Disease','Sensitive Teeth','Root Canal Treated','Implants Present','Dentures'];
 $habitPresets   = ['Tobacco (Chewing)','Gutkha','Smoking','Alcohol','Pan','Supari','Betel Nut'];
 $tagPresets     = ['Implant Prospect','AOCP Prospect','Family Patient','Pediatric','VIP','Senior Citizen','Referred Patient','Corporate Patient'];
+$alertPresets   = ['Blood Thinners / Anticoagulants','Diabetic on Insulin','Steroid Medication','Immunocompromised','Pacemaker / Cardiac Device','Allergic to Anaesthesia','Allergic to Penicillin','Latex Allergy','Bisphosphonate Therapy','Bleeding Disorder','Organ Transplant','Chemotherapy / Radiotherapy'];
 @endphp
 
 <div
     x-data="addPatientModal()"
     x-on:open-add-patient.window="openModal($event.detail ?? {})"
+    x-on:open-edit-patient.window="openEdit($event.detail ?? {})"
     x-show="open"
     x-cloak
     class="fixed inset-0 z-[60] flex items-center justify-center"
@@ -41,10 +43,12 @@ $tagPresets     = ['Implant Prospect','AOCP Prospect','Family Patient','Pediatri
         {{-- ── Header ── --}}
         <div class="flex items-center justify-between px-6 py-4 border-b border-[#e8d5f0] shrink-0 bg-white">
             <div>
-                <h2 class="text-xl font-semibold text-[#380740]" style="font-family:'Cormorant Garamond',serif;">
+                <h2 class="text-xl font-semibold text-[#380740]" style="font-family:'Cormorant Garamond',serif;"
+                    x-text="mode === 'edit' ? 'Edit Patient' : 'New Patient'">
                     New Patient
                 </h2>
-                <p class="text-xs text-gray-400 mt-0.5 uppercase tracking-widest">Register a patient in under 90 seconds</p>
+                <p class="text-xs text-gray-400 mt-0.5 uppercase tracking-widest"
+                   x-text="mode === 'edit' ? 'Update patient details' : 'Register a patient in under 90 seconds'">Register a patient in under 90 seconds</p>
             </div>
             <button x-on:click="closeModal()" class="text-gray-400 hover:text-[#6a0f70] transition p-1">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -111,7 +115,7 @@ $tagPresets     = ['Implant Prospect','AOCP Prospect','Family Patient','Pediatri
 
             {{-- ── 📷 SCAN PAPER FORM — fill the tabs from a photo (local AI, nothing leaves this PC) ── --}}
             @if(config('assistant.vision.enabled', true))
-            <div class="mb-4 bg-[#faf5fc] border border-dashed border-[#d8b8e2] p-3" style="border-radius:2px;">
+            <div x-show="mode === 'create'" class="mb-4 bg-[#faf5fc] border border-dashed border-[#d8b8e2] p-3" style="border-radius:2px;">
                 <div class="flex items-center justify-between gap-3">
                     <div>
                         <p class="text-xs font-semibold text-[#6a0f70]">📷 Scan paper form</p>
@@ -205,6 +209,25 @@ $tagPresets     = ['Implant Prospect','AOCP Prospect','Family Patient','Pediatri
                             <option value="other">Other</option>
                             <option value="prefer_not_to_say">Prefer not to say</option>
                         </select>
+                    </div>
+                </div>
+
+                {{-- Patient ID (edit mode only) + Occupation --}}
+                <div class="grid grid-cols-2 gap-3">
+                    <div x-show="mode === 'edit'">
+                        <label class="df-label">Patient ID</label>
+                        <input type="text" x-model="form.patient_id" placeholder="e.g. TDC-05122"
+                            @input="errors.patient_id = null"
+                            :class="errors.patient_id ? 'border-red-400' : 'border-gray-200'"
+                            class="df-input" />
+                        <template x-if="errors.patient_id">
+                            <p class="df-err" x-text="errors.patient_id[0]"></p>
+                        </template>
+                        <p class="text-[11px] text-gray-400 mt-1">Clinic register number — must be unique.</p>
+                    </div>
+                    <div>
+                        <label class="df-label">Occupation</label>
+                        <input type="text" x-model="form.occupation" placeholder="Optional" class="df-input border-gray-200" />
                     </div>
                 </div>
 
@@ -430,6 +453,32 @@ $tagPresets     = ['Implant Prospect','AOCP Prospect','Family Patient','Pediatri
                         </div>
                     </template>
                 </div>
+
+                {{-- Medical Alerts (clinical flags — shown prominently on profile) --}}
+                <div>
+                    <label class="df-label">Medical Alerts <span class="text-gray-400 font-normal normal-case text-xs">(shown prominently on profile)</span></label>
+                    <div class="flex flex-wrap gap-2 mb-2">
+                        @foreach($alertPresets as $alert)
+                        <button type="button"
+                            x-on:click="toggleArr('medical_alert_flags', '{{ $alert }}')"
+                            :class="form.medical_alert_flags.includes('{{ $alert }}')
+                                ? 'bg-red-500 text-white border-red-500'
+                                : 'bg-white text-gray-600 border-gray-200 hover:border-red-400 hover:text-red-500'"
+                            class="px-3 py-1.5 text-xs font-medium border transition-colors">
+                            {{ $alert }}
+                        </button>
+                        @endforeach
+                    </div>
+                    <input type="text" x-model="form.medical_alert_custom" placeholder="Other alert (optional)"
+                        class="df-input border-gray-200" />
+                </div>
+
+                {{-- Allergies --}}
+                <div>
+                    <label class="df-label">Allergies <span class="text-gray-400 font-normal normal-case text-xs">(comma separated)</span></label>
+                    <input type="text" x-model="form.allergies_text" placeholder="e.g. Penicillin, Latex, Aspirin"
+                        class="df-input border-gray-200" />
+                </div>
             </div>
 
             {{-- ════════════════════════════════════════════════
@@ -540,6 +589,7 @@ $tagPresets     = ['Implant Prospect','AOCP Prospect','Family Patient','Pediatri
                     {{-- Existing Patient: autocomplete --}}
                     <div x-show="form.referral_type === 'existing_patient'"
                          x-data="referralPatientSearch()"
+                         x-on:edit-referral-prefill.window="selectedPatient = $event.detail; searchQuery = $event.detail?.name ?? ''; results = []"
                          class="space-y-2">
                         <label class="df-label">Search Patient <span class="text-red-400">*</span></label>
                         <div class="relative">
@@ -638,8 +688,15 @@ $tagPresets     = ['Implant Prospect','AOCP Prospect','Family Patient','Pediatri
                         class="df-input border-gray-200" />
                 </div>
 
-                {{-- Notes --}}
+                {{-- Family notes --}}
                 <div>
+                    <label class="df-label">Family Notes</label>
+                    <input type="text" x-model="form.family_notes" placeholder="e.g. Mother also a patient, ID#123"
+                        class="df-input border-gray-200" />
+                </div>
+
+                {{-- Notes (registration only — profile notes live in the Notes tab) --}}
+                <div x-show="mode === 'create'">
                     <label class="df-label">General Notes</label>
                     <textarea x-model="form.notes" rows="3" placeholder="Any additional notes, preferences, or observations…"
                         class="df-input border-gray-200 resize-none"></textarea>
@@ -675,14 +732,28 @@ $tagPresets     = ['Implant Prospect','AOCP Prospect','Family Patient','Pediatri
             </div>
 
             <div class="flex gap-2 items-center">
-                {{-- Skip & Save — available from tab 1 onward --}}
-                <template x-if="currentTab > 0 && currentTab < 4">
+                {{-- Skip & Save — available from tab 1 onward (registration only) --}}
+                <template x-if="mode === 'create' && currentTab > 0 && currentTab < 4">
                     <button type="button"
                         dusk="patient-save"
                         x-on:click="submit()"
                         :disabled="loading"
                         class="text-xs text-gray-400 hover:text-[#6a0f70] transition px-2 py-1 disabled:opacity-40">
                         Save &amp; skip remaining →
+                    </button>
+                </template>
+
+                {{-- Edit mode: save from any tab --}}
+                <template x-if="mode === 'edit' && currentTab < 4">
+                    <button type="button"
+                        x-on:click="submit()"
+                        :disabled="loading"
+                        class="flex items-center gap-2 px-5 py-2 border border-[#6a0f70] text-[#6a0f70] text-xs font-semibold uppercase tracking-wider hover:bg-[#f5eef9] transition disabled:opacity-60">
+                        <svg x-show="loading" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                        </svg>
+                        <span x-text="loading ? 'Saving…' : 'Save Changes'"></span>
                     </button>
                 </template>
 
@@ -709,7 +780,7 @@ $tagPresets     = ['Implant Prospect','AOCP Prospect','Family Patient','Pediatri
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
                         </svg>
-                        <span x-text="loading ? 'Saving…' : 'Register Patient'"></span>
+                        <span x-text="loading ? 'Saving…' : (mode === 'edit' ? 'Save Changes' : 'Register Patient')"></span>
                     </button>
                 </template>
             </div>
@@ -740,6 +811,13 @@ function addPatientModal() {
         currentTab: 0,
         createdPatientId: null,
         createdPatientUrl: null,
+        // 'create' registers a new patient; 'edit' updates an existing one
+        // (opened via the window event 'open-edit-patient' with a prefill payload).
+        mode: 'create',
+        editPatientId: null,
+        editUpdatedAt: null,     // optimistic-lock stamp round-tripped to assertNotStale
+        editOriginalName: '',    // preserved when the patient has no structured name parts
+        alertPresets: @json($alertPresets),
         customMedical: '',
         customDental: '',
         customHabit: '',
@@ -753,16 +831,18 @@ function addPatientModal() {
 
         form: {
             title: '', first_name: '', middle_name: '', last_name: '', gender: '',
+            patient_id: '', occupation: '',
             dob: '', dob_text: '', dob_unknown: false, age_years: '', tags: [],
             mobile: '', alternate_phone: '', email: '',
             emergency_contact_name: '', emergency_contact_relationship: '', emergency_contact_number: '',
             address: '', area: '', city: '', pincode: '',
             medical_conditions: [], current_medications: '', dental_conditions: [],
+            medical_alert_flags: [], medical_alert_custom: '', allergies_text: '',
             habits: [], habit_frequency: {},
             source: '', source_referral_name: '', source_camp_name: '', source_campaign: '',
             referral_type: '', referred_patient_id: null,
             referrer_name: '', referrer_mobile: '', referrer_type: '', referrer_notes: '',
-            notes: '',
+            family_notes: '', notes: '',
         },
 
         openModal(prefill) {
@@ -771,6 +851,10 @@ function addPatientModal() {
                 Object.assign(this.form, prefill);
             }
             this.open = true;
+            // Clear any referral chip left over from a previous edit session.
+            this.$nextTick(() => {
+                window.dispatchEvent(new CustomEvent('edit-referral-prefill', { detail: null }));
+            });
         },
 
         closeModal() {
@@ -791,22 +875,100 @@ function addPatientModal() {
             this.scanning = false;
             this.scanMsg = '';
             this.scanErr = false;
+            this.mode = 'create';
+            this.editPatientId = null;
+            this.editUpdatedAt = null;
+            this.editOriginalName = '';
             this.form = {
                 title: '', first_name: '', middle_name: '', last_name: '', gender: '',
+                patient_id: '', occupation: '',
                 dob: '', dob_text: '', dob_unknown: false, age_years: '', tags: [],
                 mobile: '', alternate_phone: '', email: '',
                 emergency_contact_name: '', emergency_contact_relationship: '', emergency_contact_number: '',
                 address: '', area: '', city: '', pincode: '',
                 medical_conditions: [], current_medications: '', dental_conditions: [],
+                medical_alert_flags: [], medical_alert_custom: '', allergies_text: '',
                 habits: [], habit_frequency: {},
                 source: '', source_referral_name: '', source_camp_name: '', source_campaign: '',
                 referral_type: '', referred_patient_id: null,
                 referrer_name: '', referrer_mobile: '', referrer_type: '', referrer_notes: '',
-                notes: '',
+                family_notes: '', notes: '',
                 // Set to true only after the user acknowledges a duplicate-phone
                 // warning and chooses to register a new patient anyway.
                 confirm_duplicate: false,
             };
+        },
+
+        // ── Edit mode — open pre-filled from an existing patient ─────────────
+        openEdit(p) {
+            this.reset();
+            this.mode             = 'edit';
+            this.editPatientId    = p.id;
+            this.editUpdatedAt    = p.updated_at ?? null;
+            this.editOriginalName = p.name ?? '';
+
+            const f = this.form;
+            f.title       = p.title ?? '';
+            f.first_name  = p.first_name ?? '';
+            f.middle_name = p.middle_name ?? '';
+            f.last_name   = p.last_name ?? '';
+            f.gender      = p.gender ?? '';
+            f.patient_id  = p.patient_id ?? '';
+            f.occupation  = p.occupation ?? '';
+
+            f.dob_unknown = !!p.dob_unknown;
+            f.dob         = p.dob ?? '';
+            f.dob_text    = this.isoToDisplay(f.dob);
+            f.age_years   = p.age_years ?? '';
+            f.tags        = Array.isArray(p.tags) ? [...p.tags] : [];
+
+            f.mobile          = p.phone ?? '';
+            f.alternate_phone = p.alternate_phone ?? '';
+            f.email           = p.email ?? '';
+            f.emergency_contact_name         = p.emergency_contact_name ?? '';
+            f.emergency_contact_relationship = p.emergency_contact_relationship ?? '';
+            f.emergency_contact_number       = p.emergency_contact_number ?? '';
+            f.address = p.address ?? '';
+            f.area    = p.area ?? '';
+            f.city    = p.city ?? '';
+            f.pincode = p.pincode ?? '';
+
+            f.medical_conditions  = Array.isArray(p.medical_conditions) ? [...p.medical_conditions] : [];
+            f.current_medications = p.current_medications ?? '';
+            f.dental_conditions   = Array.isArray(p.dental_conditions) ? [...p.dental_conditions] : [];
+            f.habits              = Array.isArray(p.habits) ? [...p.habits] : [];
+            f.habit_frequency     = (p.habit_frequency && typeof p.habit_frequency === 'object' && !Array.isArray(p.habit_frequency))
+                ? {...p.habit_frequency} : {};
+
+            // medical_alert is stored as one comma-separated string —
+            // split into preset chips + free-text remainder.
+            const alerts = (p.medical_alert ?? '').split(',').map(s => s.trim()).filter(Boolean);
+            f.medical_alert_flags  = alerts.filter(a => this.alertPresets.includes(a));
+            f.medical_alert_custom = alerts.filter(a => !this.alertPresets.includes(a)).join(', ');
+
+            f.allergies_text = Array.isArray(p.allergies) ? p.allergies.join(', ') : '';
+            f.family_notes   = p.family_notes ?? '';
+
+            f.source = p.source ?? '';
+            if (f.source && !this.sources.includes(f.source)) this.sources.push(f.source);
+            f.source_camp_name = p.source_camp_name ?? '';
+            f.source_campaign  = p.source_campaign ?? '';
+
+            f.referral_type       = p.referral_type ?? '';
+            f.referred_patient_id = p.referred_patient_id ?? null;
+            f.referrer_name       = p.referrer_name ?? '';
+            f.referrer_mobile     = p.referrer_mobile ?? '';
+            f.referrer_type       = p.referrer_type ?? '';
+            f.referrer_notes      = p.referrer_notes ?? '';
+
+            this.open = true;
+
+            // Pre-fill the "Existing Patient" referral chip in the child component.
+            this.$nextTick(() => {
+                window.dispatchEvent(new CustomEvent('edit-referral-prefill', {
+                    detail: p.referred_patient ?? null,
+                }));
+            });
         },
 
         // ── 📅 Date of Birth: type DD/MM/YYYY or pick from calendar ──────────
@@ -988,12 +1150,37 @@ function addPatientModal() {
 
         async submit() {
             this.errors = {};
+
+            if (this.mode === 'edit') {
+                // Older / imported patients may only have a display name with no
+                // structured parts — allow saving as long as neither part is
+                // half-filled and a mobile number is present.
+                if ((this.form.first_name || this.form.last_name) && !(this.form.first_name && this.form.last_name)) {
+                    if (!this.form.first_name) { this.errors.first_name = ['Required']; this.currentTab = 0; return; }
+                    if (!this.form.last_name)  { this.errors.last_name  = ['Required']; this.currentTab = 0; return; }
+                }
+                if (!this.form.mobile) { this.errors.mobile = ['Required']; this.currentTab = 1; return; }
+                return this.submitEdit();
+            }
+
             if (!this.form.first_name) { this.errors.first_name = ['Required']; this.currentTab = 0; return; }
             if (!this.form.last_name)  { this.errors.last_name  = ['Required']; this.currentTab = 0; return; }
             if (!this.form.mobile)     { this.errors.mobile     = ['Required']; this.currentTab = 1; return; }
 
             this.loading = true;
             try {
+                // Same transform as edit: alert chips + custom → one string,
+                // comma-separated allergies text → array.
+                const payload = { ...this.form };
+                const createAlerts = [...payload.medical_alert_flags];
+                const createCustomAlert = (payload.medical_alert_custom || '').trim();
+                if (createCustomAlert) createAlerts.push(createCustomAlert);
+                payload.medical_alert = createAlerts.join(', ') || null;
+                payload.allergies = (payload.allergies_text || '').split(',').map(a => a.trim()).filter(Boolean);
+                delete payload.medical_alert_flags;
+                delete payload.medical_alert_custom;
+                delete payload.allergies_text;
+
                 const resp = await fetch('{{ route('patients.store') }}', {
                     method: 'POST',
                     headers: {
@@ -1001,7 +1188,7 @@ function addPatientModal() {
                         'X-CSRF-TOKEN': '{{ csrf_token() }}',
                         'Accept': 'application/json',
                     },
-                    body: JSON.stringify(this.form),
+                    body: JSON.stringify(payload),
                 });
                 const data = await resp.json();
 
@@ -1039,6 +1226,91 @@ function addPatientModal() {
                     if (this.errors.first_name || this.errors.last_name) this.currentTab = 0;
                     else if (this.errors.mobile || this.errors.area)     this.currentTab = 1;
                 }
+            } catch (e) {
+                this.errors = { _general: ['Network error. Please check your connection.'] };
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        // ── Edit mode: transform + PATCH to /patients/{id} ────────────────────
+        // Two fields need the same transform the old drawer did:
+        //   - medical_alert_flags[] + medical_alert_custom → one comma-separated string
+        //   - allergies_text (comma separated)             → allergies[] array
+        editPayload() {
+            const f = this.form;
+            const alerts = [...f.medical_alert_flags];
+            const customAlert = (f.medical_alert_custom || '').trim();
+            if (customAlert) alerts.push(customAlert);
+
+            const payload = {
+                title: f.title, middle_name: f.middle_name,
+                gender: f.gender, occupation: f.occupation, patient_id: f.patient_id,
+                phone: f.mobile, alternate_phone: f.alternate_phone, email: f.email,
+                dob: f.dob_unknown ? null : (f.dob || null),
+                dob_unknown: f.dob_unknown ? 1 : 0,
+                age_years: f.age_years || null,
+                tags: f.tags,
+                emergency_contact_name: f.emergency_contact_name,
+                emergency_contact_relationship: f.emergency_contact_relationship,
+                emergency_contact_number: f.emergency_contact_number,
+                address: f.address, area: f.area, city: f.city, pincode: f.pincode,
+                medical_conditions: f.medical_conditions,
+                current_medications: f.current_medications,
+                dental_conditions: f.dental_conditions,
+                habits: f.habits,
+                habit_frequency: f.habit_frequency,
+                medical_alert: alerts.join(', '),
+                allergies: (f.allergies_text || '').split(',').map(a => a.trim()).filter(Boolean),
+                family_notes: f.family_notes,
+                source: f.source,
+                source_camp_name: f.source_camp_name,
+                source_campaign: f.source_campaign,
+                referral_type: f.referral_type || null,
+                referred_patient_id: f.referred_patient_id ?? null,
+                referrer_name: f.referrer_name,
+                referrer_mobile: f.referrer_mobile,
+                referrer_type: f.referrer_type || null,
+                referrer_notes: f.referrer_notes,
+                updated_at: this.editUpdatedAt,   // optimistic lock (assertNotStale)
+            };
+
+            // Only rebuild the display name when structured parts exist —
+            // otherwise keep the original name untouched.
+            if (f.first_name || f.last_name) {
+                payload.first_name = f.first_name;
+                payload.last_name  = f.last_name;
+            } else {
+                payload.name = this.editOriginalName;
+            }
+            return payload;
+        },
+
+        async submitEdit() {
+            this.loading = true;
+            try {
+                const resp = await fetch('{{ url('/patients') }}/' + this.editPatientId, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify(this.editPayload()),
+                });
+                const data = await resp.json().catch(() => ({}));
+
+                if (resp.ok && data.success) {
+                    // Full reload — simplest way to make every tab (header name,
+                    // billing, referral display, etc.) reflect the update.
+                    window.location.reload();
+                    return;
+                }
+
+                this.errors = data.errors ?? { _general: [data.message ?? 'Something went wrong. Please try again.'] };
+                if (this.errors.phone) this.errors.mobile = this.errors.phone;
+                if (this.errors.first_name || this.errors.last_name || this.errors.patient_id) this.currentTab = 0;
+                else if (this.errors.mobile) this.currentTab = 1;
             } catch (e) {
                 this.errors = { _general: ['Network error. Please check your connection.'] };
             } finally {

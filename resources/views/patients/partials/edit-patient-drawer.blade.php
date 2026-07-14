@@ -53,6 +53,12 @@
                     <input type="text" name="name" value="{{ $patient->name }}" required
                            class="w-full text-sm border border-gray-200 px-3 py-2 focus:outline-none focus:border-[#6a0f70] focus:ring-1 focus:ring-[#6a0f70]">
                 </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Patient ID</label>
+                    <input type="text" name="patient_id" value="{{ $patient->patient_id }}"
+                           class="w-full text-sm border border-gray-200 px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                    <p class="text-[11px] text-gray-400 mt-1">Clinic register number — must be unique. Correct here if the imported ID is wrong.</p>
+                </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs text-gray-500 mb-1">Mobile <span class="text-red-400">*</span></label>
@@ -78,6 +84,12 @@
                                    class="accent-[#6a0f70]">
                             <span class="text-xs text-gray-400">DOB unknown</span>
                         </label>
+                        {{-- Approximate age — the only way to record age when DOB isn't known --}}
+                        <div class="mt-1.5" x-show="dobUnknown" style="display:none">
+                            <input type="number" name="age_years" min="0" max="150"
+                                   value="{{ $patient->age_years }}" placeholder="Approx. age (yrs)"
+                                   class="w-full text-sm border border-gray-200 px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                        </div>
                     </div>
                     <div>
                         <label class="block text-xs text-gray-500 mb-1">Gender</label>

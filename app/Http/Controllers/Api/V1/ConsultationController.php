@@ -88,6 +88,10 @@ class ConsultationController extends ApiController
             'primary_diagnosis'        => ['nullable', 'string'],
             'diagnosis_notes'          => ['nullable', 'string'],
             'finishing_notes'          => ['nullable', 'string'],
+            // Inline Rx + instructions — same columns the web form persists
+            // (it sends them as JSON strings; mobile sends native arrays).
+            'prescriptions'            => ['nullable', 'array'],
+            'instructions'             => ['nullable', 'array'],
         ]);
 
         $data['doctor_id'] = $data['doctor_id'] ?? $request->user()->id;
@@ -111,6 +115,8 @@ class ConsultationController extends ApiController
             'clinical_data'               => ['nullable', 'array'],
             'advice'                      => ['nullable', 'string'],
             'finishing_notes'             => ['nullable', 'string'],
+            'prescriptions'               => ['nullable', 'array'],
+            'instructions'                => ['nullable', 'array'],
         ]);
         $data['related_to_clinic_treatment'] = $data['related_to_clinic_treatment'] ?? false;
         $data['doctor_id'] = $data['doctor_id'] ?? $request->user()->id;
@@ -131,6 +137,8 @@ class ConsultationController extends ApiController
             'emergency_treatment_rendered' => ['required', 'string'],
             'advice'                       => ['nullable', 'string'],
             'finishing_notes'              => ['nullable', 'string'],
+            'prescriptions'                => ['nullable', 'array'],
+            'instructions'                 => ['nullable', 'array'],
         ]);
 
         $data['doctor_id'] = $data['doctor_id'] ?? $request->user()->id;
@@ -203,6 +211,24 @@ class ConsultationController extends ApiController
                 'findings' => $m->findings,
             ])->values(),
         ], '');
+    }
+
+    /**
+     * DELETE /api/v1/consultations/{consultation}
+     * Soft delete — mirrors web ConsultationController::destroy() exactly
+     * (2026-07-14 parity: mobile previously had no delete path at all).
+     */
+    public function destroy(Request $request, $consultation): JsonResponse
+    {
+        $c = Consultation::with('patient:id,branch_id')->whereKey($consultation)->first();
+        if (! $c || ! $c->patient ||
+            (int) $c->patient->branch_id !== (int) $request->user()->branch_id) {
+            return $this->error('Consultation not found.', [], 404);
+        }
+
+        $c->delete();
+
+        return $this->success(null, 'Consultation deleted.');
     }
 
     /** Update an existing consultation (any workflow). */

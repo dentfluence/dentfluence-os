@@ -101,6 +101,61 @@ class TreatmentPlanAcceptanceService
         });
     }
 
+    /**
+     * Un-accept a plan — the single revert door (added 2026-07-14; the API
+     * copy previously flipped the status with NO billing guard and NO audit,
+     * so a billed plan could be reverted from mobile with no trail).
+     *
+     * Guards (throw \RuntimeException with the user-facing message):
+     *   - plan must currently be accepted
+     *   - plan must have NO invoices (can't un-accept something billed)
+     *
+     * Writes the StaffActivityLog audit row with the mandatory reason.
+     */
+    public function revert(
+        TreatmentPlan $plan,
+        string $reason,
+        ?User $actor = null,
+        string $via = 'clinic'
+    ): TreatmentPlan {
+        if (is_null($plan->accepted_at)) {
+            throw new \RuntimeException('This plan is not accepted, so there is nothing to revert.');
+        }
+
+        if ($plan->invoices()->exists()) {
+            throw new \RuntimeException('Cannot revert: this plan already has invoices/billing against it.');
+        }
+
+        return DB::transaction(function () use ($plan, $reason, $actor, $via) {
+            $plan->load('patient');
+
+            $plan->update([
+                'accepted_at' => null,
+                'status'      => 'pending',
+            ]);
+
+            // Staff activity log (note column is varchar(255) — cap it).
+            $note = sprintf(
+                'Reverted treatment plan #%d (%s) for patient %s. Reason: %s%s',
+                $plan->id,
+                $plan->plan_name,
+                $plan->patient?->name ?? ('#' . $plan->patient_id),
+                $reason,
+                $via === 'mobile' ? ' [mobile]' : ''
+            );
+
+            \App\Models\StaffActivityLog::record(
+                $actor?->id,
+                'tp_reverted',
+                'accepted',
+                'pending',
+                mb_substr($note, 0, 255)
+            );
+
+            return $plan->fresh(['items', 'creator', 'patient']);
+        });
+    }
+
     private function acceptDescription(string $via): string
     {
         return match ($via) {

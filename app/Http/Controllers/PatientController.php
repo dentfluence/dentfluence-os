@@ -107,10 +107,13 @@ class PatientController extends Controller
             'area'        => ['nullable', 'string', 'max:150'],
             'city'        => ['nullable', 'string', 'max:100'],
             'pincode'     => ['nullable', 'string', 'max:10'],
+            'occupation'  => ['nullable', 'string', 'max:150'],
             // Tab 3 — Medical & Dental
             'medical_conditions'  => ['nullable', 'array'],
             'current_medications' => ['nullable', 'string'],
             'dental_conditions'   => ['nullable', 'array'],
+            'medical_alert'       => ['nullable', 'string'],
+            'allergies'           => ['nullable', 'array'],
             // Tab 4 — Habits
             'habits'         => ['nullable', 'array'],
             'habit_frequency'=> ['nullable', 'array'],
@@ -126,6 +129,7 @@ class PatientController extends Controller
             'referrer_mobile'      => ['nullable', 'string', 'max:20'],
             'referrer_type'        => ['nullable', 'in:Doctor,Friend,Family,Staff,Corporate,Other'],
             'referrer_notes'       => ['nullable', 'string', 'max:500'],
+            'family_notes'         => ['nullable', 'string', 'max:500'],
             'notes'                => ['nullable', 'string'],
             // Set by the "Register anyway" confirmation when a possible
             // duplicate was surfaced (families do share one mobile number).
@@ -211,6 +215,8 @@ class PatientController extends Controller
             'middle_name' => ['nullable', 'string', 'max:100'],
             'last_name'   => ['nullable', 'string', 'max:100'],
             'name'        => ['nullable', 'string', 'max:200'],
+            'patient_id'  => ['nullable', 'string', 'max:30',
+                              \Illuminate\Validation\Rule::unique('patients', 'patient_id')->ignore($patient->id)],
             'phone'       => ['required', 'string', 'max:20'],
             'alternate_phone' => ['nullable', 'string', 'max:20'],
             'email'       => ['nullable', 'email'],
@@ -251,6 +257,7 @@ class PatientController extends Controller
             'membership_expires_at'=> ['nullable', 'date'],
             'follow_up_status'     => ['nullable', 'in:none,due,pending,completed'],
             'follow_up_date'       => ['nullable', 'date'],
+            'tags'                 => ['nullable', 'array'],
         ]);
 
         // Optimistic lock — refuse the save if someone else edited this patient

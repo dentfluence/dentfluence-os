@@ -596,6 +596,25 @@ class InventoryController extends ApiController
     }
 
     /**
+     * DELETE /api/v1/inventory/purchase-orders/{po}/grn/last
+     * Undo the most recent GRN on a PO — window-gated, mirrors web
+     * reverseLastGrn exactly (shared InventoryService brain).
+     */
+    public function reverseLastGrn(Request $request, PurchaseOrder $po): JsonResponse
+    {
+        try {
+            $grn = $this->inventory->reverseLastGrn($po);
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), [], 422);
+        }
+
+        return $this->success(
+            ['grn_number' => $grn->grn_number, 'po_status' => $po->fresh()->status],
+            'GRN reversed. Stock and Finance expense have been corrected for PO ' . $po->order_no . '.'
+        );
+    }
+
+    /**
      * DELETE /api/v1/inventory/products/{item}
      * Archive a product — soft-disable (is_active=false), mirrors web
      * destroyProduct(): movement history is preserved, never a hard delete.
