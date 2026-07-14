@@ -185,16 +185,27 @@ class PatientProfileController extends ApiController
 
         $wallet = Wallet::forPatient($p->id);
 
+        // Real ledger columns (direction/credit_type/source/notes) — the old
+        // mapping read fields that don't exist on WalletTransaction, so the
+        // mobile ledger rendered blank rows (fixed 2026-07-14). The legacy
+        // 'type'/'description' keys are kept for older client builds.
         $tx = $wallet->transactions()
             ->latest()
             ->limit(50)
             ->get()
             ->map(fn ($t) => [
-                'id'          => $t->id,
-                'amount'      => $t->amount ?? null,
-                'type'        => $t->type ?? ($t->transaction_type ?? null),
-                'description' => $t->description ?? ($t->note ?? ($t->reason ?? null)),
-                'date'        => $t->created_at,
+                'id'             => $t->id,
+                'amount'         => (float) $t->amount,
+                'direction'      => $t->direction,      // credit | debit
+                'credit_type'    => $t->credit_type,    // permanent | promotional
+                'source'         => $t->source,         // advance, invoice_debit, refund, …
+                'invoice_number' => $t->invoice_number,
+                'payment_mode'   => $t->payment_mode,
+                'notes'          => $t->notes,
+                'date'           => $t->created_at,
+                // Legacy keys (pre-2026-07-14 client builds)
+                'type'           => $t->direction,
+                'description'    => $t->notes,
             ]);
 
         return $this->success([

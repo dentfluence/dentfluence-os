@@ -222,6 +222,7 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             Route::get('/lab/cases',                          [LabController::class, 'index']);
             Route::get('/lab/summary',                        [LabController::class, 'summary']);
             Route::get('/lab/templates',                      [LabController::class, 'templates']);
+            Route::get('/lab/form-options',                   [LabController::class, 'formOptions']);
             Route::get('/lab/cases/{id}',                     [LabController::class, 'show']);
         });
         // Writes use the same action as web (module:lab checks can_view for
@@ -430,6 +431,8 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             ->middleware('api.role:admin,front_desk');
         Route::post('/invoices/{invoice}/payments/{payment}/mark-provider-paid', [BillingController::class, 'markProviderPaid'])
             ->middleware('api.role:admin,front_desk');
+        Route::patch('/invoices/{invoice}/payments/{payment}/date', [BillingController::class, 'updatePaymentDate'])
+            ->middleware('api.role:admin,front_desk');
 
         // Direct-EMI instalment schedule — read + receivables "mark paid" (no
         // invoice/finance side effects; see EmiScheduleService).
@@ -490,6 +493,12 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             ->middleware('api.role:admin,front_desk');
 
         Route::patch('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel'])
+            ->middleware('api.role:admin,front_desk');
+
+        Route::patch('/appointments/{appointment}/reschedule', [AppointmentController::class, 'reschedule'])
+            ->middleware('api.role:admin,front_desk');
+
+        Route::delete('/appointments/{appointment}', [AppointmentController::class, 'destroy'])
             ->middleware('api.role:admin,front_desk');
 
         /*
@@ -567,6 +576,17 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::put('/inventory/items/{item}', [InventoryController::class, 'updateItem'])
             ->middleware('api.role:admin,front_desk');
         Route::post('/inventory/items/{item}/adjust', [InventoryController::class, 'adjustStock'])
+            ->middleware('api.role:admin,front_desk');
+
+        // Archive a product (soft-disable) — admin-only, same as web admin.only.
+        Route::delete('/inventory/products/{item}', [InventoryController::class, 'destroyProduct'])
+            ->middleware('api.role:admin');
+
+        // Vendor create + activate/deactivate (2026-07-14 parity — mobile
+        // could previously edit vendors but never add or deactivate one).
+        Route::post('/inventory/vendors', [InventorySettingsController::class, 'storeVendor'])
+            ->middleware('api.role:admin,front_desk');
+        Route::patch('/inventory/vendors/{vendor}/toggle', [InventorySettingsController::class, 'toggleVendor'])
             ->middleware('api.role:admin,front_desk');
 
         // Reverse a manual quick-adjustment (2026-07-08 web parity) —

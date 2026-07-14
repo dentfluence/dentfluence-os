@@ -32,11 +32,17 @@ class YesterdayReviewService
      *     missed_calls: array,
      * }
      */
-    public function generateYesterdayReview(): array
+    /**
+     * @param bool $includeDone  Action Board mode (2026-07-14): rows already
+     *                           handled today stay in the list (annotated as
+     *                           done by TodayActionsEngine / inline below)
+     *                           instead of being filtered out.
+     */
+    public function generateYesterdayReview(bool $includeDone = false): array
     {
         return [
-            'missed_appointments' => $this->missedAppointments(),
-            'missed_calls'        => $this->missedCalls(),
+            'missed_appointments' => $this->missedAppointments($includeDone),
+            'missed_calls'        => $this->missedCalls($includeDone),
         ];
     }
 
@@ -85,7 +91,7 @@ class YesterdayReviewService
      * Saturday (or Saturday+Sunday if the clinic happened to open that
      * Sunday), not a dark Sunday. See App\Support\ClinicFlowRange.
      */
-    private function missedAppointments(): array
+    private function missedAppointments(bool $includeDone = false): array
     {
         try {
             [$start, $end] = ClinicFlowRange::resolve();
@@ -95,9 +101,15 @@ class YesterdayReviewService
             // every other live-computed category uses. Fixed 2026-07-08: this
             // category previously had no such filter at all, so a logged call
             // always reappeared on refresh.
-            $dismissedIds = TodayActionDismissal::dismissedIdsFor(
-                'missed_appointments_yesterday', Appointment::class, Carbon::today()
-            );
+            // includeDone mode hides only TRUE dismissals — handled rows stay
+            // and get their 'done' annotation from TodayActionsEngine.
+            $dismissedIds = $includeDone
+                ? TodayActionDismissal::trueDismissedIdsFor(
+                    'missed_appointments_yesterday', Appointment::class, Carbon::today()
+                )
+                : TodayActionDismissal::dismissedIdsFor(
+                    'missed_appointments_yesterday', Appointment::class, Carbon::today()
+                );
 
             return Appointment::with('patient:id,name,phone,relationship_id')
                 ->whereBetween('appointment_date', [$start->toDateString(), $end->copy()->endOfDay()])
@@ -141,7 +153,7 @@ class YesterdayReviewService
      * These are calls that should have been made yesterday but weren't.
      * "Yesterday" resolves through ClinicFlowRange — see missedAppointments().
      */
-    private function missedCalls(): array
+    private function missedCalls(bool $includeDone = false): array
     {
         try {
             [$start, $end] = ClinicFlowRange::resolve();
@@ -154,7 +166,15 @@ class YesterdayReviewService
                     $q->whereBetween('follow_up_date', [$startDate, $endBound])
                       ->orWhereBetween('due_at', [$startDate, $endBound]);
                 })
-                ->where('status', 'pending')
+                ->where(function ($q) use ($includeDone) {
+                    $q->where('status', 'pending');
+                    // Action Board only: rows closed TODAY stay visible, faded,
+                    // with their logged outcome (2026-07-14).
+                    if ($includeDone) {
+                        $q->orWhere(fn ($q2) => $q2->where('status', 'closed')
+                            ->whereDate('updated_at', Carbon::today()));
+                    }
+                })
                 ->notIgnored() // Missed Calls (2026-07-05): honour per-item Ignore
                 ->orderByDesc('priority')
                 ->get()
@@ -163,6 +183,12 @@ class YesterdayReviewService
 
                     return [
                         'category'        => 'missed_calls_yesterday',
+                        'done'            => $item->status === 'closed' ? [
+                            'outcome' => $item->outcome ?? 'completed',
+                            'notes'   => $item->outcome_reason,
+                            'at'      => $item->updated_at?->format('g:i A'),
+                            'by'      => null,
+                        ] : null,
                         'patient_name'    => $patient?->name ?? $item->person_name ?? 'Unknown',
                         'patient_id'      => $item->patient_id,
                         'lead_id'         => null,

@@ -941,18 +941,8 @@ class InventoryController extends Controller
      */
     private function calculateCostPerUsage(array $data): float
     {
-        // Column is NOT NULL (default 0), so uncomputable cases resolve to
-        // 0 rather than null — the blade view already treats 0 as "hide this row".
-        $qty = (float) ($data['qty_in_packaging'] ?? 0);
-        if ($qty <= 0 || empty($data['average_purchase_price'])) {
-            return 0.0;
-        }
-        $costPerPiece = $data['average_purchase_price'] / $qty;
-        $uses = ($data['usage_type'] === 'multiple_use' && !empty($data['max_usage_count']))
-            ? (int) $data['max_usage_count']
-            : 1;
-
-        return round($costPerPiece / max(1, $uses), 4);
+        // Shared brain — same formula the mobile API create path uses.
+        return \App\Services\Inventory\InventoryService::costPerUsage($data);
     }
 
     public function storeItem(Request $request)
@@ -2459,45 +2449,14 @@ class InventoryController extends Controller
             'unit_price'  => 'nullable|numeric|min:0',
         ]);
 
-        $qty = (float) $data['qty'];
-
-        if ($data['type'] === 'remove') {
-            $stock = InventoryStock::where('inventory_item_id', $item->id)
-                ->where('location_id', $data['location_id'])
-                ->first();
-
-            if (!$stock || $stock->available_qty < $qty) {
-                return back()->withErrors(['qty' => 'Cannot remove more than available stock (' . ($stock->available_qty ?? 0) . ').']);
-            }
+        // Shared brain — same unit_price/cost handling as the mobile API
+        // (InventoryService::adjustStock; consolidated 2026-07-14).
+        try {
+            app(\App\Services\Inventory\InventoryService::class)
+                ->adjustStock($item, $data, $request->user());
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['qty' => $e->getMessage()]);
         }
-
-        // Price only ever moves with stock coming IN. If a fresh unit price was
-        // given, it becomes the item's new purchase price (same simple-overwrite
-        // convention already used by GRN receiving — see updateCatalogItem()).
-        // Leaving it blank keeps the last known price untouched, so a routine
-        // "add stock" for an item whose price hasn't changed stays one field.
-        $unitCost = (float) $item->average_purchase_price;
-        if ($data['type'] === 'add' && !empty($data['unit_price'])) {
-            $unitCost = (float) $data['unit_price'];
-            $item->last_purchase_price    = $unitCost;
-            $item->average_purchase_price = $unitCost;
-            $item->save();
-        }
-
-        // StockMovement::booted() → updateLiveStock() handles inventory_stocks update automatically.
-        StockMovement::create([
-            'inventory_item_id' => $item->id,
-            'to_location_id'    => $data['type'] === 'add'    ? $data['location_id'] : null,
-            'from_location_id'  => $data['type'] === 'remove' ? $data['location_id'] : null,
-            'movement_type'     => $data['type'] === 'add' ? 'stock_in' : 'stock_out',
-            'qty'               => $qty,
-            'unit_cost'         => $unitCost,
-            'total_cost'        => round($qty * $unitCost, 2),
-            'notes'             => $data['note'] ?? 'Manual adjustment',
-            'reference_type'    => 'manual_adjustment',
-            'reference_id'      => null,
-            'created_by'        => auth()->id(),
-        ]);
 
         return back()->with('success', 'Stock updated.');
     }

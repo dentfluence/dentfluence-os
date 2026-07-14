@@ -441,6 +441,9 @@ class InventoryController extends ApiController
 
         $data['item_code']              = 'ITEM-' . str_pad(InventoryItem::count() + 1, 4, '0', STR_PAD_LEFT);
         $data['average_purchase_price'] = $data['last_purchase_price'] ?? 0;
+        // Same formula as web storeItem — this path previously never set
+        // cost_per_usage, so mobile-created products costed at 0 (2026-07-14).
+        $data['cost_per_usage']         = \App\Services\Inventory\InventoryService::costPerUsage($data);
         $data['created_by']             = $request->user()->id;
 
         $item = InventoryItem::create($data);
@@ -592,6 +595,20 @@ class InventoryController extends ApiController
         return $this->success($this->mapProduct($this->inventory->findItem($item->id), true), 'Item updated.');
     }
 
+    /**
+     * DELETE /api/v1/inventory/products/{item}
+     * Archive a product — soft-disable (is_active=false), mirrors web
+     * destroyProduct(): movement history is preserved, never a hard delete.
+     * Route is admin-gated, same as web (admin.only).
+     */
+    public function destroyProduct(InventoryItem $item): JsonResponse
+    {
+        $name = $item->product_name;
+        $item->update(['is_active' => false]);
+
+        return $this->success(null, '"' . $name . '" removed from catalogue.');
+    }
+
     public function adjustStock(Request $request, InventoryItem $item): JsonResponse
     {
         $data = $request->validate([
@@ -599,6 +616,9 @@ class InventoryController extends ApiController
             'qty'         => 'required|integer|min:1',
             'location_id' => 'required|exists:inventory_locations,id',
             'note'        => 'nullable|string|max:255',
+            // Same rule as web — a fresh price on an "add" updates the item's
+            // purchase price (was dropped here, so mobile adds logged zero cost).
+            'unit_price'  => 'nullable|numeric|min:0',
         ]);
 
         try {

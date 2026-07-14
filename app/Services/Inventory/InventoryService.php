@@ -268,8 +268,38 @@ class InventoryService
     }
 
     /**
-     * Quick +/- stock adjust (mirrors web InventoryController@adjustStock).
-     * Relies on StockMovement's booted() hook to update inventory_stocks.
+     * Cost-per-usage for an item — the field that drives reusable /
+     * use-capped costing. Single implementation (extracted 2026-07-14 from
+     * web InventoryController::calculateCostPerUsage; the API create path
+     * previously never set it, so mobile-created products costed at 0).
+     *
+     * Column is NOT NULL (default 0), so uncomputable cases resolve to 0 —
+     * the views already treat 0 as "hide this row".
+     */
+    public static function costPerUsage(array $data): float
+    {
+        $qty = (float) ($data['qty_in_packaging'] ?? 0);
+        if ($qty <= 0 || empty($data['average_purchase_price'])) {
+            return 0.0;
+        }
+        $costPerPiece = $data['average_purchase_price'] / $qty;
+        $uses = (($data['usage_type'] ?? null) === 'multiple_use' && ! empty($data['max_usage_count']))
+            ? (int) $data['max_usage_count']
+            : 1;
+
+        return round($costPerPiece / max(1, $uses), 4);
+    }
+
+    /**
+     * Quick +/- stock adjust — THE single implementation (web controller now
+     * delegates here too, 2026-07-14). Relies on StockMovement's booted()
+     * hook to update inventory_stocks.
+     *
+     * Price only ever moves with stock coming IN: a fresh unit_price on an
+     * "add" becomes the item's new purchase price (same simple-overwrite
+     * convention GRN receiving uses); blank keeps the last known price. This
+     * path previously dropped unit_price entirely on the API, so mobile
+     * stock-adds never updated item cost and logged zero-cost movements.
      */
     public function adjustStock(InventoryItem $item, array $data, User $user): StockMovement
     {
@@ -286,12 +316,22 @@ class InventoryService
             }
         }
 
+        $unitCost = (float) $item->average_purchase_price;
+        if ($data['type'] === 'add' && ! empty($data['unit_price'])) {
+            $unitCost = (float) $data['unit_price'];
+            $item->last_purchase_price    = $unitCost;
+            $item->average_purchase_price = $unitCost;
+            $item->save();
+        }
+
         return StockMovement::create([
             'inventory_item_id' => $item->id,
             'to_location_id'    => $data['type'] === 'add'    ? $data['location_id'] : null,
             'from_location_id'  => $data['type'] === 'remove' ? $data['location_id'] : null,
             'movement_type'     => $data['type'] === 'add' ? 'stock_in' : 'stock_out',
             'qty'               => $qty,
+            'unit_cost'         => $unitCost,
+            'total_cost'        => round($qty * $unitCost, 2),
             'notes'             => $data['note'] ?? 'Manual adjustment',
             'reference_type'    => 'manual_adjustment',
             'reference_id'      => null,

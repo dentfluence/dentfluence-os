@@ -48,6 +48,18 @@ use Illuminate\Support\Facades\Log;
  */
 class TodayActionsEngine
 {
+    /**
+     * When true (Action Board only — see generate()), rows already handled
+     * today stay in their category annotated with a 'done' key instead of
+     * being filtered out, so staff can see WHICH calls are done and WHAT the
+     * response was. Default false keeps every other consumer (Huddle counts,
+     * projector, mobile API) on the original open-items-only behaviour.
+     */
+    private bool $includeDone = false;
+
+    /** Per-request cache: "category|modelClass" => Collection of today's TodayActionDismissal rows. */
+    private array $dismissalCache = [];
+
     public function __construct(
         private readonly YesterdayReviewService $yesterdayReview,
     ) {}
@@ -55,10 +67,20 @@ class TodayActionsEngine
     /**
      * Generate all today's actions, grouped by category.
      *
+     * @param bool $includeDone  Keep rows already handled today (logged call
+     *                           outcome that closed, explicit Close, birthday
+     *                           WhatsApp sent), annotated with a 'done' array
+     *                           ['outcome', 'notes', 'at', 'by'] — used by the
+     *                           Action Board so completed calls fade instead
+     *                           of vanishing. True dismissals ("wrong number",
+     *                           "shouldn't be on this list") stay hidden.
+     *
      * @return array<string, array>  Keys = category names; values = item arrays
      */
-    public function generate(): array
+    public function generate(bool $includeDone = false): array
     {
+        $this->includeDone = $includeDone;
+
         $groups = [];
 
         // Run all categories — each is fault-tolerant (errors return [])
@@ -89,13 +111,17 @@ class TodayActionsEngine
 
         // Yesterday review — returns two sub-categories
         try {
-            $yesterday = $this->yesterdayReview->generateYesterdayReview();
+            $yesterday = $this->yesterdayReview->generateYesterdayReview($this->includeDone);
             $groups['missed_calls_yesterday']        = $yesterday['missed_calls'];
             $groups['missed_appointments_yesterday'] = $yesterday['missed_appointments'];
         } catch (\Throwable $e) {
             Log::warning('TodayActionsEngine: yesterday review failed', ['error' => $e->getMessage()]);
             $groups['missed_calls_yesterday']        = [];
             $groups['missed_appointments_yesterday'] = [];
+        }
+
+        if ($this->includeDone) {
+            $this->annotateDone($groups);
         }
 
         return $groups;
@@ -242,12 +268,22 @@ class TodayActionsEngine
                   ->orWhere('purpose', 'recall_due')
                   ->orWhere('purpose', 'recall_birthday');
             })
-            ->where('status', 'pending')
+            ->where(function ($q) {
+                $q->where('status', 'pending');
+                // Action Board only: keep rows closed TODAY (a real call
+                // happened) so they render faded with their outcome instead
+                // of silently disappearing mid-morning.
+                if ($this->includeDone) {
+                    $q->orWhere(fn ($q2) => $q2->where('status', 'closed')
+                        ->whereDate('updated_at', Carbon::today()));
+                }
+            })
             ->orderBy('follow_up_date')
             ->limit($this->limit())
             ->get()
             ->map(fn (CommunicationQueue $item) => [
                 'category'        => 'recall_calls',
+                'done'            => $this->queueDone($item),
                 'patient_name'    => $item->patient?->name ?? $item->person_name ?? 'Unknown',
                 'patient_id'      => $item->patient_id,
                 'lead_id'         => null,
@@ -311,7 +347,13 @@ class TodayActionsEngine
                 'patient:id,name,phone,relationship_id',
                 'lead:id,name,phone,relationship_id',
             ])
-            ->where('status', 'pending')
+            ->where(function ($q) {
+                $q->where('status', 'pending');
+                if ($this->includeDone) {
+                    $q->orWhere(fn ($q2) => $q2->where('status', 'completed')
+                        ->whereDate('completed_at', Carbon::today()));
+                }
+            })
             ->whereDate('due_date', '<=', Carbon::today())
             ->orderBy('due_date')
             ->limit($this->limit())
@@ -321,6 +363,12 @@ class TodayActionsEngine
 
                 return [
                     'category'        => 'follow_up_calls',
+                    'done'            => $fu->status === 'completed' ? [
+                        'outcome' => 'completed',
+                        'notes'   => $fu->completion_note,
+                        'at'      => $fu->completed_at?->format('g:i A'),
+                        'by'      => null,
+                    ] : null,
                     'patient_name'    => $fu->subjectName(),
                     'patient_id'      => $fu->patient_id,
                     'lead_id'         => $fu->lead_id,
@@ -358,7 +406,13 @@ class TodayActionsEngine
     {
         return CommunicationQueue::with('patient:id,name,phone,relationship_id')
             ->where('source_engine', 'manual')
-            ->where('status', 'pending')
+            ->where(function ($q) {
+                $q->where('status', 'pending');
+                if ($this->includeDone) {
+                    $q->orWhere(fn ($q2) => $q2->where('status', 'closed')
+                        ->whereDate('updated_at', Carbon::today()));
+                }
+            })
             ->where(function ($q) {
                 $q->whereNull('purpose')
                   ->orWhere(function ($q2) {
@@ -373,6 +427,7 @@ class TodayActionsEngine
             ->get()
             ->map(fn (CommunicationQueue $item) => [
                 'category'        => 'logged_communications',
+                'done'            => $this->queueDone($item),
                 'patient_name'    => $item->patient?->name ?? $item->person_name ?? 'Unknown',
                 'patient_id'      => $item->patient_id,
                 'lead_id'         => null,
@@ -1025,9 +1080,128 @@ class TodayActionsEngine
      * categories with no CommunicationQueue row of their own (recall_calls /
      * missed_calls_yesterday use CommunicationQueue's own ignore()/dismiss()
      * instead — see docs/feature-specs/feature-spec-action-board-dismiss.md).
+     *
+     * 2026-07-14 (includeDone mode, Action Board only): TodayActionDismissal
+     * rows are written by TWO different flows that deserve different display —
+     *  - a true dismiss ("wrong number", "shouldn't be on this list"):
+     *    reason_key is a dismiss_reason from Settings → still hidden.
+     *  - a handled row (logAction() with a closes_task outcome, the explicit
+     *    Close tab's 'closed_manually', birthday 'whatsapp_sent'): the call
+     *    HAPPENED — keep it visible, faded, with the outcome (annotateDone()).
+     * Default mode excludes both, exactly as before.
      */
     private function dismissedIds(string $category, string $modelClass): array
     {
-        return TodayActionDismissal::dismissedIdsFor($category, $modelClass, Carbon::today());
+        if (! $this->includeDone) {
+            return TodayActionDismissal::dismissedIdsFor($category, $modelClass, Carbon::today());
+        }
+
+        return $this->todayDismissals($category, $modelClass)
+            ->filter(fn (TodayActionDismissal $d) => $this->isTrueDismissal($d))
+            ->pluck('subject_id')
+            ->all();
+    }
+
+    /** Today's dismissal rows for a category+model, cached per request. */
+    private function todayDismissals(string $category, string $modelClass): \Illuminate\Support\Collection
+    {
+        $key = $category . '|' . $modelClass;
+
+        return $this->dismissalCache[$key] ??= TodayActionDismissal::query()
+            ->with('dismissedByUser:id,name')
+            ->where('category', $category)
+            ->where('subject_type', $modelClass)
+            ->whereDate('dismissed_for_date', Carbon::today()->toDateString())
+            ->get();
+    }
+
+    /**
+     * A dismissal row is a TRUE dismiss (hide the row) when its reason_key is
+     * one of the configured dismiss reasons; anything else (call-outcome keys,
+     * 'closed_manually', 'whatsapp_sent') means the row was HANDLED and should
+     * render faded as done instead.
+     */
+    private function isTrueDismissal(TodayActionDismissal $d): bool
+    {
+        return in_array($d->reason_key, TodayActionDismissal::dismissReasonKeys(), true);
+    }
+
+    /** subject_id => done-info map for a category's handled-today rows. */
+    private function doneMap(string $category, string $modelClass): array
+    {
+        $map = [];
+
+        foreach ($this->todayDismissals($category, $modelClass) as $d) {
+            if ($this->isTrueDismissal($d)) {
+                continue;
+            }
+
+            $map[$d->subject_id] = [
+                'outcome' => $d->reason_key,
+                'notes'   => $d->notes,
+                'at'      => $d->updated_at?->format('g:i A'),
+                'by'      => $d->dismissedByUser?->name,
+            ];
+        }
+
+        return $map;
+    }
+
+    /**
+     * Post-pass (includeDone mode only): stamp a 'done' key onto every item
+     * whose subject was handled today via a TodayActionDismissal row. The
+     * queue-backed categories (recall_calls, logged_communications) and
+     * follow_up_calls annotate themselves inline from their own status
+     * columns and are not in this map.
+     */
+    private function annotateDone(array &$groups): void
+    {
+        $resolvers = [
+            'new_enquiries'                 => [Lead::class,                     fn ($i) => $i['lead_id'] ?? null],
+            'lead_followups'                => [Lead::class,                     fn ($i) => $i['lead_id'] ?? null],
+            'opportunities'                 => [TreatmentOpportunity::class,     fn ($i) => $i['meta']['id'] ?? null],
+            'pending_estimates'             => [TreatmentOpportunity::class,     fn ($i) => $i['meta']['id'] ?? null],
+            'appointment_reminders'         => [Appointment::class,              fn ($i) => $i['meta']['id'] ?? null],
+            'missed_appointments_yesterday' => [Appointment::class,              fn ($i) => $i['meta']['id'] ?? null],
+            'membership_renewals'           => [FinancePatientMembership::class, fn ($i) => $i['meta']['id'] ?? null],
+            'birthdays'                     => [Patient::class,                  fn ($i) => $i['patient_id'] ?? null],
+            'lab_ready'                     => [LabCase::class,                  fn ($i) => $i['meta']['id'] ?? null],
+            'payment_reminders'             => [Invoice::class,                  fn ($i) => $i['meta']['id'] ?? null],
+            'wellness_check_yesterday'      => [TreatmentVisit::class,           fn ($i) => $i['meta']['id'] ?? null],
+        ];
+
+        foreach ($resolvers as $category => [$modelClass, $resolver]) {
+            if (empty($groups[$category])) {
+                continue;
+            }
+
+            $done = $this->doneMap($category, $modelClass);
+            if (! $done) {
+                continue;
+            }
+
+            foreach ($groups[$category] as &$item) {
+                $id = $resolver($item);
+                if ($id !== null && isset($done[$id])) {
+                    $item['done'] = $done[$id];
+                }
+            }
+            unset($item);
+        }
+    }
+
+    /** Inline done-info for a CommunicationQueue-backed row closed today. */
+    private function queueDone(CommunicationQueue $item): ?array
+    {
+        if ($item->status !== 'closed') {
+            return null;
+        }
+
+        return [
+            'outcome' => $item->outcome ?? 'completed',
+            'notes'   => $item->outcome_reason,
+            'at'      => $item->updated_at?->format('g:i A'),
+            'by'      => null,
+        ];
     }
 }

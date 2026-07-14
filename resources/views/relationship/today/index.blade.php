@@ -504,6 +504,24 @@
     .ta-row:hover { background: #fdf9ff; }
     .ta-row.ta-row--actioned { opacity: 0.4; }
 
+    /* Done rows (call handled today) — faded but still readable on hover,
+       with the logged outcome shown in place of the reason line. */
+    .ta-row.ta-row--done { opacity: 0.5; }
+    .ta-row.ta-row--done:hover { opacity: 0.85; }
+
+    .ta-row-outcome {
+        font-size: 11px; color: #1a7a45; font-weight: 600;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* Last attempt on a still-open row (e.g. "No answer · 11:20 AM") */
+    .ta-row-attempt {
+        font-size: 11px; color: #a05c00; font-weight: 600;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    [x-cloak] { display: none !important; }
+
     .ta-row-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
     .ta-row-dot--high   { background: #b52020; }
     .ta-row-dot--medium { background: #a05c00; }
@@ -653,7 +671,7 @@
          never on how many items are inside one of them (a category with
          1,000+ items still fits in one card). Empty categories are skipped
          entirely rather than shown as dimmed collapsed sections. --}}
-    @php $nonEmptyGroups = collect($groups)->filter(fn($g) => $g['count'] > 0); @endphp
+    @php $nonEmptyGroups = collect($groups)->filter(fn($g) => $g['count'] > 0 || ($g['done_count'] ?? 0) > 0); @endphp
 
     @if($nonEmptyGroups->isNotEmpty())
     <div class="ta-grid">
@@ -663,6 +681,12 @@
                 <div class="ta-card-icon"><i class="ti {{ $group['icon'] }}"></i></div>
                 <span class="ta-card-label">{{ $group['label'] }}</span>
                 <span class="ta-card-count">{{ $group['count'] }}</span>
+                @if(($group['done_count'] ?? 0) > 0)
+                    <span class="ta-card-count" style="background:#e8f7ef;color:#1a7a45;"
+                          title="{{ $group['done_count'] }} already handled today">
+                        {{ $group['done_count'] }} <i class="ti ti-check"></i>
+                    </span>
+                @endif
                 @if($catKey === 'missed_calls_yesterday' && $mode === 'today')
                     {{-- This card only samples up to max_per_category rows — the full backlog lives here. --}}
                     <a href="{{ route('relationship.today.missed-calls') }}" title="View full missed-calls list"
@@ -673,21 +697,60 @@
             </div>
             <div class="ta-card-list">
                 @foreach($group['items'] as $idx => $item)
-                @php $itemId = $catKey . '_' . $idx; @endphp
+                @php
+                    $itemId   = $catKey . '_' . $idx;
+                    // 'done' — handled today (logged closing outcome / Close /
+                    // WhatsApp sent): row fades, outcome replaces the reason.
+                    // 'last_call' — an attempt was logged today but the row is
+                    // still open (No answer, still deciding...): show it so
+                    // staff know it was tried and what the response was.
+                    $done     = $item['done'] ?? null;
+                    $lastCall = $item['last_call'] ?? null;
+                @endphp
                 <div
-                    class="ta-row"
-                    :class="actioned['{{ $itemId }}'] ? 'ta-row--actioned' : ''"
+                    class="ta-row {{ $done ? 'ta-row--done' : '' }}"
+                    :class="actioned['{{ $itemId }}'] ? 'ta-row--done' : ''"
                     id="item-{{ $itemId }}"
                 >
                     <span class="ta-row-dot ta-row-dot--{{ $item['priority'] }}" title="{{ ucfirst($item['priority']) }} priority"></span>
 
                     <div class="ta-row-body">
                         <div class="ta-row-name">{{ $item['patient_name'] }}</div>
-                        <div class="ta-row-reason">{{ $item['reason'] }}</div>
+                        @if($done)
+                            <div class="ta-row-outcome"
+                                 title="{{ $done['label'] }}{{ !empty($done['at']) ? ' at ' . $done['at'] : '' }}{{ !empty($done['by']) ? ' by ' . $done['by'] : '' }}{{ !empty($done['notes']) ? ' — ' . $done['notes'] : '' }}">
+                                <i class="ti ti-check"></i>
+                                {{ $done['label'] }}{{ !empty($done['at']) ? ' · ' . $done['at'] : '' }}
+                            </div>
+                        @elseif($lastCall)
+                            <div class="ta-row-attempt" x-show="!lastResponse['{{ $itemId }}']"
+                                 title="{{ $item['reason'] }} — last attempt: {{ $lastCall['label'] }}{{ !empty($lastCall['at']) ? ' at ' . $lastCall['at'] : '' }}{{ !empty($lastCall['by']) ? ' by ' . $lastCall['by'] : '' }}{{ !empty($lastCall['notes']) ? ' — ' . $lastCall['notes'] : '' }}">
+                                <i class="ti ti-phone"></i>
+                                {{ $lastCall['label'] }}{{ !empty($lastCall['at']) ? ' · ' . $lastCall['at'] : '' }}
+                            </div>
+                            <div class="ta-row-outcome" x-show="lastResponse['{{ $itemId }}']" x-cloak>
+                                <i class="ti ti-check"></i>
+                                <span x-text="lastResponse['{{ $itemId }}']"></span>
+                            </div>
+                        @else
+                            <div class="ta-row-reason" x-show="!lastResponse['{{ $itemId }}']"
+                                 title="{{ $item['reason'] }}">{{ $item['reason'] }}</div>
+                            {{-- Live outcome line — appears the moment a call is
+                                 logged in this page load, no refresh needed --}}
+                            <div class="ta-row-outcome" x-show="lastResponse['{{ $itemId }}']" x-cloak>
+                                <i class="ti ti-check"></i>
+                                <span x-text="lastResponse['{{ $itemId }}']"></span>
+                            </div>
+                        @endif
                     </div>
 
                     <div class="ta-row-actions">
-                        @if($mode === 'past')
+                        @if($done)
+                            <span class="ta-row-btn-done"
+                                  title="Done — {{ $done['label'] }}{{ !empty($done['at']) ? ' at ' . $done['at'] : '' }}">
+                                <i class="ti ti-check"></i>
+                            </span>
+                        @elseif($mode === 'past')
                             {{-- Read-only history: show the logged outcome instead of a Call button --}}
                             @php $outcome = $item['meta']['outcome'] ?? null; @endphp
                             <span
@@ -738,7 +801,7 @@
     </div>
     @endif
 
-    @php $emptyCount = collect($groups)->filter(fn($g) => $g['count'] === 0)->count(); @endphp
+    @php $emptyCount = collect($groups)->filter(fn($g) => $g['count'] === 0 && ($g['done_count'] ?? 0) === 0)->count(); @endphp
     @if($emptyCount > 0)
     <p class="ta-empty-footnote">
         {{ $emptyCount }} other {{ Str::plural('category', $emptyCount) }} with nothing to
@@ -1174,6 +1237,11 @@ function todayActions() {
         // ── Per-item actioned tracker (itemId → bool) ───────────────────
         actioned: {},
 
+        // ── Per-item last logged response label (itemId → "Confirmed · 11:43 AM")
+        // Live within this page load; on refresh the server re-renders the
+        // same info from the activity log / dismissal rows. ──────────────
+        lastResponse: {},
+
         // ── Birthday WhatsApp send state (itemId → bool / message) ──────
         sendingWhatsapp: {},
         whatsappError:   {},
@@ -1384,6 +1452,8 @@ function todayActions() {
 
                 if (data.success) {
                     this.actioned[itemId] = true;
+                    this.lastResponse[itemId] = 'WhatsApp sent · '
+                        + new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
                 } else {
                     this.whatsappError[itemId] = data.message || 'Could not send. Please try again.';
                     alert(this.whatsappError[itemId]);
@@ -1459,12 +1529,18 @@ function todayActions() {
                 const data = await res.json();
 
                 if (data.success) {
-                    // 2026-07-10: whether the row disappears now depends on
-                    // the outcome — resolved outcomes (booked, confirmed,
+                    // 2026-07-10: whether the row fades as done now depends
+                    // on the outcome — resolved outcomes (booked, confirmed,
                     // declined...) auto-close server-side and report
                     // `closed: true`; "needs retry" outcomes (no answer,
                     // still deciding...) report `closed: false` and the row
                     // stays for staff to log again or Close manually later.
+                    // Either way the logged response shows on the row
+                    // immediately (2026-07-14) so staff can see the call
+                    // happened and what the patient said.
+                    this.lastResponse[itemId] =
+                        (this.responseOptions[this.form.response] || this.form.response)
+                        + ' · ' + new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
                     if (data.closed) {
                         this.actioned[itemId] = true;
                     }
@@ -1520,6 +1596,8 @@ function todayActions() {
 
                 if (data.success) {
                     this.actioned[itemId] = true;
+                    this.lastResponse[itemId] = 'Closed · '
+                        + new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
                     this.closeDrawer();
                 } else {
                     this.closeError = data.message || 'Could not close. Please try again.';

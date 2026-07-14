@@ -121,6 +121,9 @@ class BillingController extends ApiController
             'cc_convenience_threshold' => (float) AppSetting::get('cc_convenience_threshold', 10000),
             'cc_convenience_rate'      => (float) AppSetting::get('cc_convenience_rate', 2.5),
             'emi_providers'            => $providers,
+            // Available wallet credit so the payment form can offer
+            // "pay from wallet" (wallet_used) — same option the web form shows.
+            'wallet'                   => (new WalletService())->summary($inv->patient_id),
         ], '');
     }
 
@@ -194,6 +197,37 @@ class BillingController extends ApiController
             'invoice' => $this->invoiceSummary($result['invoice']->fresh()),
             'receipt' => $result['receipt'] ? $this->receiptPayload($result['receipt']->fresh()) : null,
         ], $result['message'], 201);
+    }
+
+    /* =========================================================================
+     | Edit payment date  PATCH /invoices/{invoice}/payments/{payment}/date
+     | Mirrors web BillingController::updatePayment — cascades to the linked
+     | Receipt + FinanceTransaction via the shared InvoicePaymentService.
+     |=========================================================================*/
+    public function updatePaymentDate(Request $request, $invoice, $payment): JsonResponse
+    {
+        $inv = $this->findInvoice($request, $invoice);
+        if ($inv instanceof JsonResponse) return $inv;
+
+        $pay = InvoicePayment::whereKey($payment)->first();
+        if (! $pay || $pay->invoice_id !== $inv->id) {
+            return $this->error('Payment does not belong to this invoice.', [], 404);
+        }
+
+        if ($inv->status === 'cancelled') {
+            return $this->error('Cannot edit a payment on a cancelled invoice.', [], 422);
+        }
+
+        $data = $request->validate([
+            'payment_date' => ['required', 'date', 'before_or_equal:today'],
+        ]);
+
+        $this->payments->updatePaymentDate($pay, $data['payment_date'], $request->user()->id);
+
+        return $this->success(
+            ['invoice' => $this->invoiceSummary($inv->fresh())],
+            'Payment date updated.'
+        );
     }
 
     /* =========================================================================

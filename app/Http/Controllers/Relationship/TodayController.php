@@ -169,7 +169,10 @@ class TodayController extends Controller
                     }
                 }
             } else {
-                $raw = $this->engine->generate();
+                // includeDone: rows already handled today come back annotated
+                // with a 'done' key so the board can render them faded with
+                // their outcome instead of silently dropping them (2026-07-14).
+                $raw = $this->engine->generate(includeDone: true);
             }
 
             // Split the single "appointment_reminders" bucket into "today" and
@@ -205,23 +208,38 @@ class TodayController extends Controller
             }
         }
 
+        $responseOpts = $this->buildResponseOptions();
+
+        if ($mode === 'today') {
+            // Stamp each open row with its most recent call.logged activity from
+            // today (if any) — so a "No answer" attempt is visible on the board —
+            // resolve human labels for both that and the engine's 'done' info,
+            // and sink done rows to the bottom of their card.
+            $this->annotateCallState($raw, $today, $responseOpts);
+        }
+
         // Build enriched groups array for the view
         $groups = [];
         foreach ($raw as $key => $items) {
+            $doneCount = count(array_filter($items, fn ($i) => ! empty($i['done'])));
+
             $groups[$key] = [
-                'key'      => $key,
-                'label'    => self::CATEGORY_LABELS[$key] ?? ucwords(str_replace('_', ' ', $key)),
-                'icon'     => self::CATEGORY_ICONS[$key] ?? 'ti-circle',
-                'items'    => $items,
-                'count'    => count($items),
-                'priority' => self::CATEGORY_PRIORITY[$key] ?? 99,
+                'key'        => $key,
+                'label'      => self::CATEGORY_LABELS[$key] ?? ucwords(str_replace('_', ' ', $key)),
+                'icon'       => self::CATEGORY_ICONS[$key] ?? 'ti-circle',
+                'items'      => $items,
+                'count'      => count($items) - $doneCount, // open items only
+                'done_count' => $doneCount,
+                'priority'   => self::CATEGORY_PRIORITY[$key] ?? 99,
             ];
         }
 
-        // Sort groups: non-empty first, then by priority
+        // Sort groups: non-empty first (a card with only done items still
+        // counts as non-empty — staff should see it finished, not gone),
+        // then by priority
         uasort($groups, function ($a, $b) {
-            $aEmpty = $a['count'] === 0;
-            $bEmpty = $b['count'] === 0;
+            $aEmpty = $a['count'] === 0 && ($a['done_count'] ?? 0) === 0;
+            $bEmpty = $b['count'] === 0 && ($b['done_count'] ?? 0) === 0;
 
             if ($aEmpty !== $bEmpty) {
                 return $aEmpty ? 1 : -1; // empty groups go to bottom
@@ -230,9 +248,8 @@ class TodayController extends Controller
             return $a['priority'] <=> $b['priority'];
         });
 
-        $totalCount    = array_sum(array_column($groups, 'count'));
+        $totalCount    = array_sum(array_column($groups, 'count')); // open items only
         $checklists    = config('relationship_rules.call_checklists', []);
-        $responseOpts  = $this->buildResponseOptions();
         $nextActions   = $this->buildNextActions();
         $requiresNotesMap = $this->buildRequiresNotesMap();
         $dismissReasons = ActionOptionList::query()->dismissReasons()->get()->values();
@@ -249,6 +266,103 @@ class TodayController extends Controller
             'mode',
             'today',
         ));
+    }
+
+    /**
+     * Board display state (2026-07-14): resolve human labels for the engine's
+     * 'done' annotations, and stamp still-open rows with the latest call.logged
+     * activity from today (a non-closing outcome like "No answer" keeps the
+     * row open — but staff should still see that an attempt happened and what
+     * the patient's response was). One batched query, no N+1.
+     */
+    private function annotateCallState(array &$raw, \Illuminate\Support\Carbon $today, array $responseOpts): void
+    {
+        // ── Collect subjects across the whole board ──────────────────────
+        $patientIds = [];
+        $leadIds    = [];
+        foreach ($raw as $items) {
+            foreach ($items as $item) {
+                if (! empty($item['patient_id'])) {
+                    $patientIds[] = $item['patient_id'];
+                } elseif (! empty($item['lead_id'])) {
+                    $leadIds[] = $item['lead_id'];
+                }
+            }
+        }
+
+        // ── Latest call.logged per (subject, category), today ────────────
+        $lastCalls = [];
+        if ($patientIds || $leadIds) {
+            Activity::query()
+                ->with('actor:id,name')
+                ->where('event', 'call.logged')
+                ->whereDate('occurred_at', $today->toDateString())
+                ->where(function ($q) use ($patientIds, $leadIds) {
+                    if ($patientIds) {
+                        $q->orWhere(fn ($q2) => $q2->where('subject_type', Patient::class)
+                            ->whereIn('subject_id', array_unique($patientIds)));
+                    }
+                    if ($leadIds) {
+                        $q->orWhere(fn ($q2) => $q2->where('subject_type', Lead::class)
+                            ->whereIn('subject_id', array_unique($leadIds)));
+                    }
+                })
+                ->orderBy('occurred_at') // chronological — the latest log wins below
+                ->get()
+                ->each(function (Activity $act) use (&$lastCalls) {
+                    $prefix = $act->subject_type === Patient::class ? 'P' : 'L';
+                    $key    = $prefix . ':' . $act->subject_id . '|' . ($act->metadata['category'] ?? '');
+
+                    $lastCalls[$key] = [
+                        'outcome' => $act->metadata['response'] ?? null,
+                        'notes'   => $act->metadata['notes'] ?? null,
+                        'at'      => $act->occurred_at?->format('g:i A'),
+                        'by'      => $act->actor?->name,
+                    ];
+                });
+        }
+
+        // ── Stamp items + resolve labels + sink done rows to the bottom ──
+        foreach ($raw as $groupKey => &$items) {
+            foreach ($items as &$item) {
+                $category = $item['category'] ?? $groupKey;
+
+                if (! empty($item['done'])) {
+                    $item['done']['label'] = $this->outcomeLabel($category, $item['done']['outcome'], $responseOpts);
+                    continue;
+                }
+
+                $subjectKey = ! empty($item['patient_id'])
+                    ? 'P:' . $item['patient_id']
+                    : (! empty($item['lead_id']) ? 'L:' . $item['lead_id'] : null);
+
+                if ($subjectKey && isset($lastCalls[$subjectKey . '|' . $category])) {
+                    $item['last_call'] = $lastCalls[$subjectKey . '|' . $category];
+                    $item['last_call']['label'] = $this->outcomeLabel($category, $item['last_call']['outcome'], $responseOpts);
+                }
+            }
+            unset($item);
+
+            usort($items, fn ($a, $b) => (int) ! empty($a['done']) <=> (int) ! empty($b['done']));
+        }
+        unset($items);
+    }
+
+    /** Human label for an outcome/reason key, using the same category => options map the drawer uses. */
+    private function outcomeLabel(string $category, ?string $key, array $responseOpts): string
+    {
+        if (blank($key)) {
+            return 'Completed';
+        }
+
+        return match ($key) {
+            'closed_manually' => 'Closed',
+            'whatsapp_sent'   => 'WhatsApp sent',
+            'completed'       => 'Completed',
+            default           => ($responseOpts[$category][$key]
+                ?? $responseOpts['default'][$key]
+                ?? ucwords(str_replace('_', ' ', $key))),
+        };
     }
 
     /**

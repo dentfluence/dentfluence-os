@@ -136,6 +136,38 @@ class AppointmentController extends ApiController
         return $this->success(new AppointmentResource($cancelled), 'Appointment cancelled.');
     }
 
+    /**
+     * Reschedule to a new date/time (optionally new duration). Same guards as
+     * booking — blocked slots hard-block, overlaps 422 unless allow_overlap.
+     * Mirrors web AppointmentController::reschedule() (drag-drop on the
+     * calendar); the mobile client uses a reschedule sheet instead.
+     */
+    public function reschedule(Request $request, $appointment): JsonResponse
+    {
+        $model = $this->findInBranch($request, $appointment);
+
+        $data = $request->validate([
+            'appointment_date' => ['required', 'date'],
+            'appointment_time' => ['required', 'date_format:H:i'],
+            'duration_minutes' => ['nullable', 'integer', 'min:10', 'max:480'],
+            'allow_overlap'    => ['nullable', 'boolean'],
+        ]);
+
+        $updated = $this->appointments->reschedule($model, $data, $request->user());
+
+        return $this->success(new AppointmentResource($updated), 'Appointment rescheduled.');
+    }
+
+    /** Delete (soft) — mirrors web AppointmentController::destroy(). */
+    public function destroy(Request $request, $appointment): JsonResponse
+    {
+        $model = $this->findInBranch($request, $appointment);
+
+        $this->appointments->delete($model);
+
+        return $this->success(null, 'Appointment deleted.');
+    }
+
     /** Walk-in: an immediately checked-in appointment (existing or new patient). */
     public function walkIn(WalkInRequest $request): JsonResponse
     {

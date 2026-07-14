@@ -262,12 +262,62 @@ class AppointmentService
         match ($status) {
             'checkin' => $this->activityLogger->checkedIn($appointment, $actor),
             'done'    => $this->activityLogger->completed($appointment, $actor),
+            // Direct cancel via the status route (no reason captured) — same
+            // log the web status dropdown writes. Without this, a mobile
+            // cancellation through /status left no timeline entry at all
+            // (2026-07-14 parity fix). Reasoned cancels use cancel() below.
+            'cancelled' => $this->activityLogger->cancelled($appointment, $actor),
             // Web parity — fires the missed_appointment_followup rule.
             'no_show' => $this->activityLogger->missed($appointment, $actor),
             default   => null,
         };
 
         return $appointment->fresh()->load(self::WITH);
+    }
+
+    /**
+     * Reschedule: move an appointment to a new date/time (optionally new
+     * duration). Runs the same blocked-slot + overlap guards as create(),
+     * excluding the appointment itself, with the same allow_overlap override.
+     * Mirrors web AppointmentController::reschedule().
+     */
+    public function reschedule(Appointment $appointment, array $in, User $actor): Appointment
+    {
+        $duration = (int) ($in['duration_minutes']
+            ?? $appointment->duration_minutes
+            ?? 30);
+
+        $this->assertSlotIsBookable(
+            doctorId:     $appointment->doctor_id,
+            branchId:     (int) $appointment->branch_id,
+            date:         $in['appointment_date'],
+            time:         $in['appointment_time'],
+            duration:     $duration,
+            allowOverlap: (bool) ($in['allow_overlap'] ?? false),
+            excludeId:    $appointment->id,
+        );
+
+        $update = [
+            'appointment_date' => $in['appointment_date'],
+            'appointment_time' => $in['appointment_time'],
+        ];
+        if (isset($in['duration_minutes'])) {
+            $update['duration_minutes'] = (int) $in['duration_minutes'];
+        }
+
+        $appointment->update($update);
+
+        return $appointment->fresh()->load(self::WITH);
+    }
+
+    /**
+     * Delete an appointment (soft delete). Mirrors web
+     * AppointmentController::destroy() — no guards beyond auth; the web UI
+     * offers this from the calendar's 3-dot menu.
+     */
+    public function delete(Appointment $appointment): void
+    {
+        $appointment->delete();
     }
 
     /** Cancel an appointment, recording the reason and who initiated it. */

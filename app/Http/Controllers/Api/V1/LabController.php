@@ -188,6 +188,40 @@ class LabController extends ApiController
         );
     }
 
+    /**
+     * GET /api/v1/lab/form-options
+     * Everything the mobile create-case form needs: work categories→subtypes
+     * (LabCase::WORK_CATEGORIES — same single source of truth the web form
+     * renders), active lab vendors, branch doctors, priorities.
+     */
+    public function formOptions(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $vendors = \App\Models\LabVendor::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn ($v) => ['id' => $v->id, 'name' => $v->name])
+            ->values();
+
+        $doctors = \App\Models\User::where('branch_id', $user->branch_id)
+            ->where('is_active', true)
+            ->where(fn ($q) => $q
+                ->whereIn('role', \App\Models\User::DOCTOR_ROLES)
+                ->orWhere('name', 'like', 'Dr.%'))
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])
+            ->values();
+
+        return $this->success([
+            'work_categories' => LabCase::WORK_CATEGORIES,
+            'vendors'         => $vendors,
+            'doctors'         => $doctors,
+            'priorities'      => ['normal', 'urgent', 'asap'],
+        ], '');
+    }
+
     // ── WRITE ───────────────────────────────────────────────────────────────
 
     /**

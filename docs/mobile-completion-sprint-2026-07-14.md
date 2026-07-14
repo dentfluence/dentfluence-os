@@ -31,20 +31,33 @@ Product decisions locked with Sumit:
 - `profile_screen.dart`: edit sheet now has phone, designation, current-password (required to change password).
 - `app_user.dart`: phone/designation fields.
 
-## Slice 3 — Appointments ◐ PARTIAL
-Done:
+## Slice 3 — Appointments ✅ CODE-COMPLETE (untested)
 - `allow_overlap` end-to-end: `createAppointment`/`createWalkIn` accept `allowOverlap`; `ApiClient.isOverlapConflict()` detects the server's overridable-overlap 422 (via the 'allow_overlap' token in the message — commented server-side in `AppointmentService::assertSlotIsBookable`); `add_appointment_screen` + `walk_in_screen` show "Book anyway?" / "Check in anyway?" confirms and retry with the override. `WalkInRequest` now validates `allow_overlap` (was impossible to override walk-ins).
-- `addWalletCredit` client updated for the new contract (sends `payment_date`, mode list already enum-valid).
+- Reschedule + delete: new `AppointmentService::reschedule()` (same guards as create, excludes self, allow_overlap override) + `delete()`; API `PATCH /appointments/{id}/reschedule` + `DELETE /appointments/{id}` (admin/front_desk); Flutter action-sheet entries with date/time pickers, "Reschedule anyway?" overlap confirm, and a delete confirm that steers reasoned cancellations to Cancel.
+- Status `cancelled` now logged by `AppointmentService::updateStatus` (was invisible on timeline when mobile cancelled via the status route — audit A2).
+- Doctor + status filters: filter sheet in `appointments_screen.dart` (ChoiceChips, badge on the filter icon); server params were already accepted, never passed.
+- DEFERRED (documented technical debt): full appointment EDIT (change patient/doctor/type) — reschedule covers date/time/duration; cancel+rebook covers the rest. Revisit only if front desk asks.
 
-REMAINING in Slice 3:
-- Reschedule/edit/delete appointment: extract web `AppointmentController::reschedule()/update()/destroy()` (lines ~544-658) into `AppointmentService`, expose `PATCH /api/v1/appointments/{id}/reschedule` + `PUT .../{id}` + `DELETE .../{id}`, add long-press actions in `appointments_screen.dart`.
-- Doctor/status filter UI in `appointments_screen.dart` (client params already exist, never passed).
-- `AppointmentService::updateStatus` must log `cancelled` like web (audit finding A2) or API should reject `cancelled` via status route.
+## Slice 4 — Money completion ✅ CODE-COMPLETE (untested)
+- **Pay from wallet**: `paymentOptions` API now returns `wallet` (WalletService::summary); `record_payment_screen` shows a "Pay from wallet" card when credit exists (Max button caps at min(balance, due)), sends `wallet_used`; server caps at min(requested, balance, balance_due) via the shared service.
+- **Payment-date edit**: API `PATCH /invoices/{invoice}/payments/{payment}/date` (mirrors web updatePayment guards: ownership, cancelled-invoice block, before_or_equal:today) → shared `InvoicePaymentService::updatePaymentDate` (cascades receipt + FinanceTransaction). Flutter: edit-calendar icon on each payment row in `invoice_detail_screen`.
+- **Wallet ledger fixed**: `PatientProfileController::wallet` transaction mapping read non-existent columns (blank rows on mobile) — now returns direction/credit_type/source/invoice_number/payment_mode/notes (+legacy keys). Profile wallet tab renders +/− with source labels.
+- **Top-up dialog enum fix**: mode list had 'neft' which the hardened advance validation would 422; now matches the server enum.
 
-## Slices 4-10 — NOT STARTED
-4. Money completion: wallet_used field in `record_payment_screen.dart` (server+service ready now); wallet ledger view; payment-date edit endpoint (`InvoicePaymentService::updatePaymentDate` exists, unrouted).
-5. Lab writes UI: endpoints live + now correct; build create-case/transition/attachment sheets in `lab_screen.dart`.
-6. Inventory/Vendors: vendor create/toggle endpoints; item archive; `cost_per_usage` on API product create; `unit_price` on API quick-adjust; GRN reversal.
+## Slice 5 — Lab writes on mobile ✅ CODE-COMPLETE (untested)
+- New API `GET /lab/form-options` (work_categories from `LabCase::WORK_CATEGORIES` — single source of truth, vendors, doctors, priorities).
+- Client: `getLabFormOptions/createLabCase/transitionLabCase`.
+- `lab_screen.dart`: "Move case forward" card on the detail (buttons from `next_statuses`, confirm dialogs — final_received explains the auto task + finance expense), list refreshes after transitions; FAB → new `LabCaseCreateScreen` (patient picker, category→subtype cascade keyed to rebuild, vendor/doctor, priority segmented, expected return, shade, est. cost, notes, draft-vs-order toggle).
+- DEFERRED: lab attachments UI — clinical photo capture already exists on the patient profile (per the existing-upload-paths rule); lab prescriptionSave UI (specialist workflow, low mobile frequency).
+
+## Slice 6 — Inventory/Vendors ◐ BACKEND + CLIENT COMPLETE, UI hooks pending
+- **`InventoryService::adjustStock` now THE single implementation** — gained web's unit_price/cost handling (mobile adds no longer log zero-cost movements); web `adjustStock` delegates to it. API validation accepts `unit_price`.
+- **`InventoryService::costPerUsage()`** — extracted from web `calculateCostPerUsage`; web delegates; API `storeProduct` now sets `cost_per_usage` (was always 0 for mobile-created products).
+- **New endpoints**: `POST /inventory/vendors` (storeVendor + Finance sync), `PATCH /inventory/vendors/{v}/toggle` (never hard-delete), `DELETE /inventory/products/{item}` (soft archive, admin-only — same as web admin.only).
+- **Client methods**: `createVendor/toggleVendor/archiveProduct`.
+- REMAINING (next session): UI affordances — "New vendor" button + form (9 fields, reuse the existing edit form in `inventory_settings_screens.dart`), activate/deactivate toggle on the vendor row, "Archive" in the product ⋯ menu (admin only). GRN reversal endpoint also still pending.
+
+## Slices 7-10 — NOT STARTED
 7. Reports parity: shared `ReportMetricsService` (outstanding: web=draft+partial vs API=all-non-cancelled; collections: 3 different source tables); date-range params; dashboard KPIs.
 8. Clinical gaps: consultation delete + inline Rx; clinical-file edit/delete; TP revert billing-guard+audit (extend `TreatmentPlanAcceptanceService`); TP store/update missing fields.
 9. PRE/Notifications: notifications API+screen; select_all bulk-dismiss; consent-gated WhatsApp send endpoint for mobile; profile Communication tab; delete orphan bulk-whatsapp route.
@@ -74,6 +87,19 @@ flutter pub get
 flutter analyze
 ```
 
+## Additional php -l files (Slices 3-6)
+```bash
+php -l app/Services/AppointmentService.php
+php -l app/Http/Controllers/Api/V1/AppointmentController.php
+php -l app/Http/Controllers/Api/V1/PatientProfileController.php
+php -l app/Http/Requests/Api/V1/WalkInRequest.php
+php -l app/Services/Inventory/InventoryService.php
+php -l app/Http/Controllers/InventoryController.php
+php -l app/Http/Controllers/Api/V1/InventoryController.php
+php -l app/Http/Controllers/Api/V1/InventorySettingsController.php
+php -l app/Http/Controllers/Api/V1/LabController.php
+```
+
 ## Behavioural changes to test manually
 1. Mobile vendor invoice against a received PO → ONE Finance expense (taken over), vendor outstanding delta-adjusted.
 2. Cancel a wallet-part-paid invoice from mobile → wallet credit returns.
@@ -85,3 +111,14 @@ flutter analyze
 8. Password change on mobile requires current password.
 9. Overlapping booking on mobile → "Book anyway?" flow works.
 10. Web regression: vendor-invoice create/delete, lab transitions, advance receive, invoice cancel/delete still behave identically (they now run through the shared services).
+11. Reschedule from mobile: pick date+time → moves; onto a clash → "Reschedule anyway?" works; onto doctor leave → hard-blocked.
+12. Delete appointment from mobile (soft delete, matches web calendar menu).
+13. Doctor/status filter on the mobile schedule.
+14. Record payment partly from wallet on mobile → wallet debited, receipt correct, web patient ledger agrees.
+15. Edit a payment date on mobile → receipt date + finance ledger date follow.
+16. Wallet tab on patient profile shows real ledger rows (was blank descriptions before).
+17. Create a lab case from mobile (draft + order-placed variants) → appears on web board; order_placed creates the dispatch task.
+18. Transition a lab case from mobile through to final_received → tasks roll, notifications fire, lab expense appears in Finance.
+19. Quick stock-add with a unit price from mobile → item purchase price updates, movement has cost (web + mobile identical now).
+20. Create a product from mobile → cost_per_usage computed (was 0).
+21. Create + deactivate a vendor via API (UI buttons come next session; test via existing edit screen path or curl).

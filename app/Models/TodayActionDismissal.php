@@ -42,4 +42,34 @@ class TodayActionDismissal extends Model
             ->pluck('subject_id')
             ->all();
     }
+
+    /** Dismiss-reason keys configured in Settings > Dismiss Reasons (cached per request). */
+    protected static ?array $dismissReasonKeyCache = null;
+
+    public static function dismissReasonKeys(): array
+    {
+        return static::$dismissReasonKeyCache ??= ActionOptionList::query()
+            ->where('option_type', 'dismiss_reason')
+            ->pluck('key')
+            ->all();
+    }
+
+    /**
+     * Like dismissedIdsFor(), but only rows written by a TRUE dismiss
+     * ("wrong number", "shouldn't be on this list" — reason_key is one of the
+     * configured dismiss reasons). Rows written by a logged call outcome,
+     * the explicit Close tab ('closed_manually'), or a birthday WhatsApp send
+     * ('whatsapp_sent') are excluded, so the Action Board can render those
+     * as DONE (faded, with the outcome) instead of hiding them (2026-07-14).
+     */
+    public static function trueDismissedIdsFor(string $category, string $subjectType, \Illuminate\Support\Carbon $date): array
+    {
+        return static::query()
+            ->where('category', $category)
+            ->where('subject_type', $subjectType)
+            ->whereDate('dismissed_for_date', $date->toDateString())
+            ->whereIn('reason_key', static::dismissReasonKeys())
+            ->pluck('subject_id')
+            ->all();
+    }
 }

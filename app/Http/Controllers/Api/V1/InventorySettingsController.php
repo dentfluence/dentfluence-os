@@ -356,4 +356,55 @@ class InventorySettingsController extends ApiController
 
         return $this->success(null, 'Vendor "' . $vendor->vendor_name . '" updated.');
     }
+
+    /**
+     * POST /api/v1/inventory/vendors
+     * Create a vendor — mirrors web InventoryController::storeVendor()
+     * including the Finance mirror sync. Mobile previously could edit
+     * vendors but never add one (2026-07-14 parity fix).
+     */
+    public function storeVendor(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'vendor_name'    => 'required|string|max:255',
+            'contact_person' => 'nullable|string|max:255',
+            'phone'          => 'nullable|string|max:20',
+            'whatsapp'       => 'nullable|string|max:20',
+            'email'          => 'nullable|email|max:255',
+            'gst_no'         => 'nullable|string|max:20',
+            'address'        => 'nullable|string|max:500',
+            'city'           => 'nullable|string|max:80',
+            'credit_days'    => 'nullable|integer|min:0',
+        ]);
+
+        $vendor = InventoryVendor::create($data);
+
+        // Auto-sync to Finance so the vendor appears in Finance > Vendors.
+        $vendor->syncToFinance();
+
+        return $this->success(
+            ['id' => $vendor->id, 'vendor_name' => $vendor->vendor_name],
+            'Vendor "' . $data['vendor_name'] . '" added and synced to Finance.',
+            201
+        );
+    }
+
+    /**
+     * PATCH /api/v1/inventory/vendors/{vendor}/toggle
+     * Deactivate/reactivate — never a hard delete (vendors are referenced by
+     * historical POs). Mirrors web toggleVendor() incl. the Finance mirror.
+     */
+    public function toggleVendor(InventoryVendor $vendor): JsonResponse
+    {
+        $vendor->update(['is_active' => ! $vendor->is_active]);
+
+        if ($vendor->finance_vendor_id) {
+            $vendor->financeVendor?->update(['is_active' => $vendor->is_active]);
+        }
+
+        return $this->success(
+            ['id' => $vendor->id, 'is_active' => (bool) $vendor->is_active],
+            $vendor->is_active ? 'Vendor reactivated.' : 'Vendor deactivated.'
+        );
+    }
 }
