@@ -68,6 +68,7 @@ class AppointmentController extends Controller
         $doctors = User::where('branch_id', $branchId)
             ->where('is_active', true)
             ->where(fn($q) => $q->whereIn('role', User::DOCTOR_ROLES)->orWhere('name', 'like', 'Dr.%'))
+            ->orderBy('id')
             ->get(['id', 'name']);
 
         $treatmentCategories = TreatmentCategory::active()

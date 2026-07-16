@@ -172,6 +172,23 @@
             ></span>
         </div>
 
+        {{-- Screen Guide toggle (state + styling managed by DFGuide.apply()
+             in components/help-guide.blade.php) --}}
+        <button
+            id="df-guide-toggle"
+            type="button"
+            onclick="window.DFGuide && DFGuide.toggle()"
+            aria-pressed="false"
+            aria-label="Toggle screen guide"
+            title="Screen guide"
+            style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid rgba(185,92,183,0.18);border-radius:3px;cursor:pointer;color:#b0a4bc;transition:color 140ms,border-color 140ms,background 140ms;"
+        >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/>
+                <path d="M9 20h6"/>
+            </svg>
+        </button>
+
         {{-- Notifications --}}
         <div style="position:relative;" id="df-notif-wrap">
             <button
@@ -289,7 +306,7 @@
                     [
                         'label' => 'Help & Support',
                         'icon'  => '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
-                        'href'  => '#',
+                        'href'  => route('help.index'),
                     ],
                 ];
                 @endphp

@@ -231,6 +231,7 @@ class HuddleBoardApiService
                 'appointments.amount_to_collect',
                 'appointments.prep_item',
                 'appointments.chairside_assistant_id',
+                'appointments.doctor_id',
                 'patients.name as patient_name',
                 'patients.medical_alert',
                 'doctors.name as doctor_name',
@@ -243,7 +244,10 @@ class HuddleBoardApiService
                 'id'                       => (int) $r->id,
                 'patient_id'               => (int) $r->patient_id,
                 'patient_name'             => $r->patient_name,
+                'doctor_id'                => $r->doctor_id ? (int) $r->doctor_id : null,
                 'doctor_name'              => $r->doctor_name,
+                // Doctor-wise card colour — same palette/order as web calendar
+                'doctor_color'             => \App\Support\DoctorColors::for($r->doctor_id, $branchId),
                 'treatment'                => $r->treatment_name,
                 'time'                     => $r->appointment_time
                     ? Carbon::parse($r->appointment_time)->format('h:i A')
@@ -278,6 +282,7 @@ class HuddleBoardApiService
                 'appointments.patient_id',
                 'appointments.appointment_time',
                 'appointments.status as appointment_status',
+                'appointments.doctor_id',
                 'patients.name as patient_name',
                 'patients.medical_alert',
                 'doctors.name as doctor_name',
@@ -331,7 +336,7 @@ class HuddleBoardApiService
 
         $skipped = ['cancelled', 'no_show'];
 
-        return $rows->map(function ($r) use ($consByAppt, $consByPat, $tvByAppt, $tvByPat, $skipped, $nextAppts) {
+        return $rows->map(function ($r) use ($consByAppt, $consByPat, $tvByAppt, $tvByPat, $skipped, $nextAppts, $branchId) {
             $hasConsult = isset($consByAppt[$r->id]) || isset($consByPat[$r->patient_id]);
             $hasVisit   = isset($tvByAppt[$r->id])   || isset($tvByPat[$r->patient_id]);
             $logged     = $hasConsult || $hasVisit;
@@ -351,7 +356,9 @@ class HuddleBoardApiService
                 'id'            => (int) $r->id,
                 'patient_id'    => (int) $r->patient_id,
                 'patient_name'  => $r->patient_name,
+                'doctor_id'     => $r->doctor_id ? (int) $r->doctor_id : null,
                 'doctor_name'   => $r->doctor_name,
+                'doctor_color'  => \App\Support\DoctorColors::for($r->doctor_id, $branchId),
                 'treatment'     => $r->treatment_name,
                 'status'        => $r->appointment_status,
                 'visit_logged'  => $logged,

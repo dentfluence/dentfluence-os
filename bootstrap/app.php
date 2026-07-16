@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::middleware('web')->group(base_path('routes/timeline.php'));      // has own auth inside
             Route::middleware('web')->group(base_path('routes/reviews.php'));        // PUBLIC patient rating pages (Phase B 2.4)
             Route::middleware('web')->group(base_path('routes/relationship.php')); // Relationship Engine (Phase 2: Today's Actions)
+            Route::middleware('web')->group(base_path('routes/hq.php'));            // Dentfluence HQ / command center — auth + superadmin inside
             // prescriptions.php — removed from here; already require'd inside web.php's auth group (line ~395)
             // Loading it here caused duplicate route registration with named routes overwritten without auth
         },
@@ -40,6 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'marketing.active'     => \App\Http\Middleware\EnsureMarketingActive::class,
             'api.role'             => \App\Http\Middleware\EnsureApiRole::class,   // API role gate (mobile/Tulip)
             'admin.only'           => \App\Http\Middleware\EnsureAdminRole::class, // hard admin-only gate (e.g. Roles & Permissions)
+            'superadmin'           => \App\Http\Middleware\EnsureIsSuperadmin::class, // Dentfluence-internal HQ gate (is_superadmin flag)
         ]);
 
         // Add standard security headers to every API response.

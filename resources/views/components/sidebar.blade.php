@@ -68,16 +68,10 @@
                     'icon'  => '<path d="M12 22 C12 22 5 17 5 11 C5 7 7.5 4 12 4 C16.5 4 19 7 19 11 C19 17 12 22 12 22Z"/>',
                 ])
             @endif
-            {{-- Smart Treatment Presentation (2026-07-09) — new, independent module.
-                 Sits right after Treatments to match the real workflow order
-                 (plan created → presented/explained → billed). --}}
-            @if($user->canAccess('presentations'))
-                @include('components.sidebar-item', [
-                    'href'  => route('presentations.index'),
-                    'label' => 'Smart Presentation',
-                    'icon'  => '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
-                ])
-            @endif
+            {{-- Smart Treatment Presentation RETIRED (2026-07-15) — replaced by the
+                 Case Acceptance Journey, which is opened per-plan from the Treatment
+                 Plan tab (no sidebar item by design). Module code kept but hidden;
+                 restore this block if the journey is ever rolled back. --}}
             @if($user->canAccess('patients') || $user->canAccess('treatments'))
                 @include('components.sidebar-item', [
                     'href'  => route('prescriptions.index'),

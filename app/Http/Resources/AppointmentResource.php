@@ -43,6 +43,9 @@ class AppointmentResource extends JsonResource
             // Doctor (flattened)
             'doctor_id'             => $this->doctor_id,
             'doctor_name'           => $this->doctor?->name ?? '—',
+            // Same palette/order as the web calendar — lets mobile colour
+            // cards doctor-wise identically to web.
+            'doctor_color'          => \App\Support\DoctorColors::for($this->doctor_id, $this->branch_id),
 
             // Treatment (flattened)
             'treatment_category_id' => $this->treatment_category_id,

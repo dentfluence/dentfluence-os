@@ -97,6 +97,17 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
             ->name('read');
     });
 
+    // ── Interactive Guide (staff training demo) ────────────────────────────
+    // Serves the self-contained clickable walkthrough (trilingual EN/HI/MR)
+    // from docs/relationship-engine-demo.html. Opened in an in-app modal from
+    // the PRE sub-nav "Guide" button. Static 2-segment path — no collision
+    // with the /{id} numeric wildcard at the bottom of this file.
+    Route::get('/guide/demo', function () {
+        $path = base_path('docs/relationship-engine-demo.html');
+        abort_unless(is_file($path), 404);
+        return response()->file($path, ['Content-Type' => 'text/html; charset=UTF-8']);
+    })->name('guide.demo');  // relationship.guide.demo
+
     // ── PRE Dashboard (Phase 1 · Workstream D) ─────────────────────────────
     // Static segment — declared before the /{id} wildcard below.
     Route::get('/dashboard', [RelationshipDashboardController::class, 'index'])

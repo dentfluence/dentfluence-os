@@ -4,13 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Models\AppSetting;
 use App\Models\Patient;
+use App\Models\PatientJourney;
 use App\Models\Presentation;
+use App\Models\TreatmentOpportunity;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentPlanItem;
 use App\Models\Treatment;
 use App\Services\Relationship\ActivityEngine;
 use App\Services\TreatmentPlan\ConsentDocumentService;
 use App\Services\TreatmentPlan\TreatmentPlanAcceptanceService;
+use App\Services\TreatmentPlan\TreatmentPlanOpportunitySync;
 use App\Support\QrCodeGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -47,15 +50,18 @@ class TreatmentPlanController extends Controller
             $plan->plan_letter = $letters[$idx] ?? ($idx + 1);
         }
 
-        // ── Phase 0 QR fix: if this plan has a live Smart Presentation link,
-        // put a "scan to view online" QR on the printout. Deliberately does
-        // NOT create a presentation/token here — only surfaces one that
-        // already exists, so a plan never printed through Smart Presentation
-        // just prints without the QR block, same as before. ──
-        foreach ($plans as $plan) {
-            if ($url = Presentation::activeLinkUrlForPlan($plan->id)) {
-                $plan->presentation_url = $url;
-                $plan->presentation_qr  = QrCodeGenerator::dataUri($url);
+        // ── Optional Case Journey QR ──────────────────────────────────────
+        // OPT-IN only: the "scan to explore your plan" QR is added to the
+        // printout ONLY when the print is requested with ?qr=1, AND a Case
+        // Journey has already been sent for that plan. Never creates a journey
+        // or token here — a plan with no sent journey just prints without a QR.
+        // (Smart Presentation retired 2026-07-15; the journey link replaces it.)
+        if ($request->boolean('qr')) {
+            foreach ($plans as $plan) {
+                if ($url = PatientJourney::activeLinkUrlForPlan($plan->id)) {
+                    $plan->presentation_url = $url;
+                    $plan->presentation_qr  = QrCodeGenerator::dataUri($url);
+                }
             }
         }
 
@@ -137,7 +143,7 @@ class TreatmentPlanController extends Controller
     public function index(Patient $patient): JsonResponse
     {
         $plans = $patient->treatmentPlans()
-            ->with(['items', 'creator'])
+            ->with(['items', 'creator', 'opportunity'])
             ->latest()
             ->get()
             ->map(fn($p) => $this->formatPlan($p));
@@ -153,6 +159,7 @@ class TreatmentPlanController extends Controller
             'plan_name'          => ['nullable', 'string', 'max:100'],
             'consultation_id'    => ['nullable', 'exists:consultations,id'],
             'doctor_id'          => ['nullable', 'exists:users,id'],
+            'plan_date'          => ['nullable', 'date'],
             'estimated_duration' => ['nullable', 'string', 'max:50'],
             'visit_count'        => ['nullable', 'integer', 'min:1'],
             'doctor_notes'       => ['nullable', 'string'],
@@ -176,6 +183,7 @@ class TreatmentPlanController extends Controller
                 'patient_id'         => $patient->id,
                 'consultation_id'    => $request->consultation_id,
                 'doctor_id'          => $request->doctor_id,
+                'plan_date'          => $request->plan_date ?: now()->toDateString(),
                 'plan_name'          => $request->plan_name ?? ('Treatment Option ' . ($existingCount + 1)),
                 'display_order'      => $existingCount + 1,
                 'status'             => 'pending',
@@ -218,6 +226,7 @@ class TreatmentPlanController extends Controller
         $request->validate([
             'plan_name'          => ['nullable', 'string', 'max:100'],
             'doctor_id'          => ['nullable', 'exists:users,id'],
+            'plan_date'          => ['nullable', 'date'],
             'estimated_duration' => ['nullable', 'string', 'max:50'],
             'visit_count'        => ['nullable', 'integer', 'min:1'],
             'doctor_notes'       => ['nullable', 'string'],
@@ -246,6 +255,12 @@ class TreatmentPlanController extends Controller
             // (null = fall back to consultation doctor on prints).
             if ($request->exists('doctor_id')) {
                 $plan->update(['doctor_id' => $request->doctor_id ?: null]);
+            }
+
+            // plan_date likewise set outside array_filter so it can be cleared
+            // (null = fall back to consultation date, then today, on prints).
+            if ($request->exists('plan_date')) {
+                $plan->update(['plan_date' => $request->plan_date ?: null]);
             }
 
             if ($request->has('items')) {
@@ -308,6 +323,27 @@ class TreatmentPlanController extends Controller
             'success' => true,
             'message' => 'Treatment option accepted.',
             'plan'    => $this->formatPlan($plan),
+        ]);
+    }
+
+    // ── Mark as Presented ─────────────────────────────────────────────────────
+    // Records that this plan's estimate was shown to the patient, which lands it
+    // in the Opportunity pipeline at "Estimate Given" and keeps it there until
+    // the plan is accepted (→ Converted) or declined. Idempotent — safe to click
+    // twice; the one-opportunity-per-plan guard lives in the sync service.
+    public function markPresented(TreatmentPlan $plan, TreatmentPlanOpportunitySync $sync): JsonResponse
+    {
+        $sync->syncStage($plan, 'quoted', [
+            'actor'       => Auth::user(),
+            'created_by'  => Auth::id(),
+            'source'      => 'treatment_plan_presented',
+            'description' => 'Treatment plan marked as presented — Estimate Given',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Plan marked as presented.',
+            'plan'    => $this->formatPlan($plan->fresh(['items', 'creator', 'opportunity'])),
         ]);
     }
 
@@ -612,10 +648,15 @@ class TreatmentPlanController extends Controller
             'display_order'      => (int)$plan->display_order,
             'status'             => $plan->status,
             'is_accepted'        => (bool)$plan->accepted_at,
+            // "Presented" = a linked Opportunity exists (Estimate Given onward).
+            'is_presented'       => $plan->relationLoaded('opportunity')
+                                        ? (bool) $plan->opportunity
+                                        : TreatmentOpportunity::where('treatment_plan_id', $plan->id)->exists(),
             'accepted_at'        => $plan->accepted_at?->format('d M Y'),
             'total'              => (float)$plan->total,
             'consultation_id'    => $plan->consultation_id,
             'doctor_id'          => $plan->doctor_id,
+            'plan_date'          => $plan->plan_date?->format('Y-m-d'),
             'estimated_duration' => $plan->estimated_duration,
             'visit_count'        => $plan->visit_count ? (int)$plan->visit_count : null,
             'doctor_notes'       => $plan->doctor_notes,

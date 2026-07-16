@@ -40,6 +40,65 @@ class PrescriptionController extends ApiController
 {
     public function __construct(private PrescriptionAlertService $alertService) {}
 
+    /**
+     * GET /api/v1/prescriptions
+     * Clinic-wide recent prescriptions with patient search — the mobile Rx
+     * module's list-first landing (2026-07-15 device feedback: the module
+     * should open on a searchable list, not a patient picker).
+     * Branch-scoped via the patient; ?search= matches patient name/phone/
+     * patient code or the Rx number.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $bid = $request->user()->branch_id;
+
+        $query = Prescription::with(['prescribedBy:id,name', 'patient:id,branch_id,name,patient_id,phone'])
+            ->withCount('items')
+            ->whereHas('patient', fn ($q) => $q->where('branch_id', $bid))
+            ->latest();
+
+        if ($search = trim((string) $request->query('search', ''))) {
+            $query->where(function ($q) use ($search) {
+                $q->where('prescription_number', 'like', "%{$search}%")
+                  ->orWhereHas('patient', fn ($p) => $p
+                      ->where('name', 'like', "%{$search}%")
+                      ->orWhere('phone', 'like', "%{$search}%")
+                      ->orWhere('patient_id', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($status = $request->query('status')) {
+            $query->where('status', $status);
+        }
+
+        $limit = max(1, min((int) $request->query('limit', 30), 100));
+        $page  = $query->paginate($limit)->appends($request->query());
+
+        $items = collect($page->items())->map(fn (Prescription $rx) => [
+            'id'           => $rx->id,
+            'number'       => $rx->prescription_number,
+            'date'         => $rx->created_at,
+            'status'       => $rx->status,
+            'diagnosis'    => $rx->diagnosis,
+            'doctor'       => $rx->prescribedBy?->name,
+            'items_count'  => (int) $rx->items_count,
+            'source'       => $rx->source,
+            'patient'      => $rx->patient ? [
+                'id'    => $rx->patient->id,
+                'name'  => $rx->patient->name,
+                'code'  => $rx->patient->patient_id,
+                'phone' => $rx->patient->phone,
+            ] : null,
+        ])->values();
+
+        return $this->success($items, '', 200, [
+            'current_page' => $page->currentPage(),
+            'per_page'     => $page->perPage(),
+            'total'        => $page->total(),
+            'last_page'    => $page->lastPage(),
+        ]);
+    }
+
     /** Quick patient-instruction chips (mirrors the web form chip list). */
     private const INSTRUCTION_CHIPS = [
         'Avoid hard/crunchy food for 24 hrs',

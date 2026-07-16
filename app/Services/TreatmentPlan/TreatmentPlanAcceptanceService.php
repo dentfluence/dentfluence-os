@@ -65,37 +65,17 @@ class TreatmentPlanAcceptanceService
                 description:    $this->acceptDescription($via),
             );
 
-            // Guarded: one Opportunity per plan, ever.
-            if (! TreatmentOpportunity::where('treatment_plan_id', $plan->id)->exists()) {
-                $firstItem = $plan->items->first();
-
-                $opportunity = TreatmentOpportunity::create([
-                    'patient_id'        => $plan->patient_id,
-                    'treatment_plan_id' => $plan->id,
-                    'relationship_id'   => $relationshipId,
-                    'type'              => 'other',
-                    'label'             => $firstItem?->treatment_name ?? $plan->plan_name,
-                    'status'            => 'prospect',
-                    'priority'          => 'medium',
-                    'created_by'        => $createdBy,
-                ]);
-
-                // Fires the already-enabled opportunity_nudge_7d rule
-                // (RulesEngine -> TaskEngine::autoCreate, dedup-guarded).
-                app(ActivityEngine::class)->log(
-                    subject:        $opportunity,
-                    event:          'opportunity.created',
-                    actor:          $actor,
-                    metadata:       [
-                        'stage'      => 'prospect',
-                        'patient_id' => $plan->patient_id,
-                        'source'     => 'treatment_plan_accepted',
-                        'via'        => $via,
-                    ],
-                    relationshipId: $relationshipId,
-                    description:    'Opportunity created from accepted treatment plan',
-                );
-            }
+            // Reflect the acceptance onto the plan's single linked Opportunity
+            // — created earlier if the plan was already "presented" (Estimate
+            // Given), or created now if it was accepted straight away. Accepted
+            // maps to 'completed' (Converted). One opportunity per plan, ever —
+            // the guard + stage mapping live in TreatmentPlanOpportunitySync.
+            app(TreatmentPlanOpportunitySync::class)->syncStage($plan, 'completed', [
+                'actor'       => $actor,
+                'created_by'  => $createdBy,
+                'source'      => 'treatment_plan_accepted',
+                'description' => 'Opportunity converted — treatment plan accepted (' . $via . ')',
+            ]);
 
             return $plan->fresh(['items', 'creator', 'patient']);
         });

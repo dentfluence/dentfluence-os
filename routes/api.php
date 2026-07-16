@@ -134,7 +134,14 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             // Consent-gated WhatsApp send (2026-07-14 product decision) —
             // replaces the mobile deep-link that bypassed the DPDP gate.
             Route::post('/patients/{patient}/whatsapp/send',   [\App\Http\Controllers\Api\V1\WhatsappController::class, 'send']);
+            Route::get('/patients/{patient}/whatsapp/thread',  [\App\Http\Controllers\Api\V1\WhatsappController::class, 'thread']);
         });
+
+        // ── In-app notifications (mobile face of the web bell/page) ──────────
+        Route::get('/notifications',                    [\App\Http\Controllers\Api\V1\NotificationsController::class, 'index']);
+        Route::get('/notifications/unread',             [\App\Http\Controllers\Api\V1\NotificationsController::class, 'unread']);
+        Route::patch('/notifications/{id}/read',        [\App\Http\Controllers\Api\V1\NotificationsController::class, 'markRead']);
+        Route::post('/notifications/mark-all-read',     [\App\Http\Controllers\Api\V1\NotificationsController::class, 'markAllRead']);
 
         // Consultation create — 4 workflows (mirrors web)
         Route::get('/patients/{patient}/consultations/same-issue-context', [ConsultationController::class, 'sameIssueContext']);
@@ -153,6 +160,10 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
 
         // Treatment plans
         Route::get('/treatments',                          [TreatmentPlanController::class, 'treatments']);
+        // Structured priced options (implant systems, crown materials, add-ons)
+        // for one treatment. Read-only; powers the Case Journey live-cost UI.
+        // See docs/plan-case-acceptance-engine.md §4.1.
+        Route::get('/treatment-pricing',                   [\App\Http\Controllers\Api\V1\TreatmentPricingController::class, 'index']);
         Route::get('/treatment-plans/{plan}',              [TreatmentPlanController::class, 'show']);
         Route::post('/patients/{patient}/treatment-plans', [TreatmentPlanController::class, 'store'])
             ->middleware('api.role:admin,front_desk');
@@ -193,6 +204,10 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::get('/rx/form-options',  [PrescriptionController::class, 'formOptions']);
         Route::post('/rx/check-alerts', [PrescriptionController::class, 'checkAlerts']);
         Route::post('/rx/check-repeat', [PrescriptionController::class, 'checkRepeat']);
+
+        // Clinic-wide list w/ patient search — the mobile Rx module landing
+        // (declared before "/prescriptions/{prescription}").
+        Route::get('/prescriptions', [PrescriptionController::class, 'index']);
 
         // Prescribing is a clinical act — doctors only (admin always passes).
         // Phase A role-gating (was: open to any authenticated staff).

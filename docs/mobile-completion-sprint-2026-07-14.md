@@ -76,10 +76,18 @@ Product decisions locked with Sumit:
 - **Consent-gated WhatsApp send (Sumit's decision)**: new `Api/V1/WhatsappController::send` → `OutboundMessageService::sendText` (consent gate runs inside) + Timeline log; route under module:patients. Flutter `_composeWhatsapp` sheet replaces the deep-link wherever a patient_id exists (Today's Actions, opportunities, recalls, missed calls); leads (no patient record → no consent to check) keep the deep-link fallback, documented in code.
 - **select_all bulk-dismiss**: API mirrors web (chunkById over the same filters); Flutter "Dismiss ALL matching" app-bar action with confirm — the 1,810-item backlog is now clearable from mobile.
 - **Orphan removed**: `bulk-whatsapp` route + method deleted (no web equivalent since 07-06, no caller).
-- REMAINING (next session): notifications API + mobile list screen; relationship-profile Communication tab (thread view via wa_threads — needs a thread-read API).
+- **Notifications (4th session)**: new `Api/V1/NotificationsController` (index auto-marks read like web, unread, markRead, markAllRead) + `notifications_screen.dart` + bell-with-badge on Home.
+- **Communication tab (4th session)**: new `GET /patients/{p}/whatsapp/thread` (wa_threads + messages + consentGate verdict, zeroes unread like web); new `whatsapp_chat_screen.dart` (bubbles, gate banner, consent-gated reply box); "Communication → Open chat" card on the relationship profile.
 
-## Slice 10 — NOT STARTED
-Final pass: flutter analyze fixes, UI states audit, final report per the sprint brief (completed modules, screens added, APIs added, backend changes, services, debt, web-only justifications, build verification, migration steps).
+## Device-testing feedback (2026-07-15, Sumit's phone) — ✅ ALL THREE FIXED (untested)
+1. **Reports chart** — `_BarChart` rewritten: >10 points switches to compact mode (no per-bar labels, 1px gaps, zero-days as flat gray stubs, 4-5 sparse horizontal "15 Jul"-style date labels); summary line "Total ₹X · Best <date> ₹Y" replaces the per-bar amounts; ≤7 points keeps the old per-bar day/value labels.
+2. **Prescriptions list-first** — new `GET /api/v1/prescriptions` (clinic-wide, branch-scoped, ?search= on patient name/phone/code/Rx number, paginated) + `PrescriptionsHomeScreen` (search bar, infinite list, status pills, tap→detail, "New Rx" FAB → old pick-patient→write-pad flow). Home tile now opens the list instead of a patient picker.
+3. **Bottom sheets hidden behind system nav bar** — new `sheetInsets(context)` helper in ui/widgets.dart (viewInsets.bottom + viewPadding.bottom); ALL ~29 sheet paddings across 14 screen files switched from bare `viewInsets.bottom` to it (add_appointment, create_invoice, huddle ×4, inventory_implant, inventory ×3, inventory_settings, invoice_detail, patient_list, patient_picker, profile, relationship ×10, treatment_plan ×2, prescription). Save/Cancel rows now clear gesture-nav and 3-button nav bars.
+4. **Calendar overlap (2nd round)** — `_DayColumn` appointment blocks were all full-width (`left:3,right:3`), so concurrent appointments painted on top of each other. Implemented web-calendar column-split: `_ApptLayout` + `_layoutAppointments()` (sort → transitive-overlap clusters → greedy first-free-column; ≥24-min visual window so tiny slots still split), `LayoutBuilder`-derived widths, slimmer padding/font when sharing width. Covers day AND 3-day views (same widget).
+5. **Prescriptions "unable to load" (open)** — no server exception logged → suspected 404 = phone pointed at a server without the new /prescriptions route (VPS?). Diagnostic sent: check app Server URL + open `<url>/prescriptions` in phone browser (Unauthenticated = route ok / 404 = wrong server). SIDE FINDING: laravel.log shows recurring `MissingAppKeyException` pairs (production channel, every few minutes — cron/scheduled artisan runs without .env/APP_KEY; e.g. cron/ scripts). Investigate separately — scheduled jobs are silently dying.
+
+## Slice 10 — ✅ Final report written
+`docs/mobile-completion-sprint-final-report.md` — completed modules, screens, APIs, backend changes, services, debt, web-only justifications, build verification, migration steps. flutter analyze re-run on Sumit's machine is the last gate.
 
 ## Verification needed (Sumit's machine — nothing run yet)
 ```bash

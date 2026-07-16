@@ -22,6 +22,7 @@ class TreatmentPlan extends Model
         'patient_id',
         'consultation_id',
         'doctor_id',          // treating doctor shown on the printed plan
+        'plan_date',          // date printed on the plan / base for validity window
         'plan_name',          // internal name e.g. "Treatment Plan A"
         'display_order',      // ordering within a consultation (1, 2, 3 …)
         'plan_type',
@@ -40,6 +41,7 @@ class TreatmentPlan extends Model
 
     protected $casts = [
         'rows'             => 'array',
+        'plan_date'        => 'date',
         'aocp'             => 'boolean',
         'total'            => 'decimal:2',
         'overall_disc_pct' => 'decimal:2',
@@ -86,6 +88,16 @@ class TreatmentPlan extends Model
     public function items(): HasMany
     {
         return $this->hasMany(TreatmentPlanItem::class)->orderBy('sort_order');
+    }
+
+    /**
+     * The single sales Opportunity linked to this plan (one per plan, ever —
+     * keyed by treatment_plan_id). Populated by TreatmentPlanOpportunitySync
+     * when the plan is presented / accepted / declined.
+     */
+    public function opportunity(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(TreatmentOpportunity::class);
     }
 
     public function billingPrompts(): HasMany

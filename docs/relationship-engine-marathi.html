@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relationship Engine — मराठीत सोपी माहिती (स्टाफसाठी)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1c2430; --muted:#5b6675;
+    --line:#e3e7ee; --brand:#7b2d63; --brand2:#b3247e; --brand-soft:#f7ecf4;
+    --green:#0f8a5f; --green-soft:#e7f5ee; --amber:#b26a00; --amber-soft:#fdf1de;
+    --blue:#1f5fa8; --blue-soft:#e8f0fb; --red:#c0392b; --red-soft:#fbe9e7;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Noto Sans Devanagari","Inter",system-ui,sans-serif;
+    line-height:1.65; font-size:16px;
+  }
+  .wrap{max-width:1040px; margin:0 auto; padding:28px 20px 64px;}
+  header.hero{
+    background:linear-gradient(135deg,var(--brand),var(--brand2));
+    color:#fff; border-radius:16px; padding:30px 30px 26px; margin-bottom:22px;
+  }
+  header.hero .eyebrow{font-size:13px; letter-spacing:.08em; text-transform:uppercase; opacity:.85; font-weight:600;}
+  header.hero h1{margin:6px 0 8px; font-size:30px; font-weight:700; line-height:1.25;}
+  header.hero p{margin:0; font-size:16px; opacity:.95; max-width:64ch;}
+  .kicker{
+    display:inline-block; margin-top:14px; background:rgba(255,255,255,.16);
+    padding:7px 14px; border-radius:999px; font-size:14px; font-weight:600;
+  }
+  section{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:22px 24px; margin-bottom:18px;
+  }
+  h2{font-size:21px; margin:0 0 6px; display:flex; align-items:center; gap:10px;}
+  h2 .num{
+    background:var(--brand-soft); color:var(--brand); font-size:14px; font-weight:700;
+    width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;
+  }
+  h3{font-size:17px; margin:18px 0 6px;}
+  p{margin:8px 0;}
+  .lead{color:var(--muted); font-size:15px; margin-top:2px;}
+  .analogy{
+    background:var(--brand-soft); border-left:4px solid var(--brand2);
+    border-radius:0 10px 10px 0; padding:14px 18px; margin:14px 0; font-size:15.5px;
+  }
+  .analogy b{color:var(--brand);}
+  /* workflow */
+  .flow{display:flex; flex-wrap:wrap; gap:12px; align-items:stretch; margin:18px 0 6px;}
+  .flow .step{
+    flex:1 1 150px; background:#fff; border:1px solid var(--line); border-radius:12px;
+    padding:14px; position:relative; min-width:150px;
+  }
+  .flow .step .s-ico{font-size:22px;}
+  .flow .step .s-t{font-weight:600; margin:6px 0 2px; font-size:15px;}
+  .flow .step .s-d{font-size:13px; color:var(--muted); line-height:1.5;}
+  .flow .arrow{align-self:center; color:var(--brand2); font-size:22px; font-weight:700;}
+  /* screen cards */
+  .cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-top:6px;}
+  .scard{border:1px solid var(--line); border-radius:12px; padding:16px; background:#fff;}
+  .scard .tag{
+    display:inline-block; font-size:12px; font-weight:600; padding:3px 9px; border-radius:6px; margin-bottom:8px;
+  }
+  .t-green{background:var(--green-soft); color:var(--green);}
+  .t-amber{background:var(--amber-soft); color:var(--amber);}
+  .t-blue{background:var(--blue-soft); color:var(--blue);}
+  .t-brand{background:var(--brand-soft); color:var(--brand);}
+  .t-red{background:var(--red-soft); color:var(--red);}
+  .scard h4{margin:0 0 4px; font-size:16px;}
+  .scard .en{font-size:12.5px; color:var(--muted); font-weight:500; letter-spacing:.02em;}
+  .scard p{font-size:14px; margin:8px 0 0;}
+  .scard .eg{
+    margin-top:10px; font-size:13.5px; background:#f9fafb; border:1px dashed var(--line);
+    border-radius:8px; padding:9px 11px; color:#33404f;
+  }
+  .scard .eg b{color:var(--brand);}
+  /* story */
+  .story{background:#fbfaff; border:1px solid var(--line); border-radius:12px; padding:6px 20px 14px;}
+  .story .turn{display:flex; gap:12px; padding:12px 0; border-bottom:1px dashed var(--line);}
+  .story .turn:last-child{border-bottom:none;}
+  .story .time{flex:0 0 62px; font-weight:700; color:var(--brand); font-size:14px; padding-top:1px;}
+  .story .txt{font-size:14.5px;}
+  .story .txt b{color:var(--ink);}
+  /* rules */
+  ol.rules{margin:8px 0 0; padding-left:0; list-style:none; counter-reset:r;}
+  ol.rules li{
+    counter-increment:r; padding:10px 12px 10px 46px; position:relative;
+    border:1px solid var(--line); border-radius:10px; margin-bottom:8px; font-size:15px; background:#fff;
+  }
+  ol.rules li::before{
+    content:counter(r); position:absolute; left:10px; top:10px;
+    width:26px; height:26px; background:var(--green); color:#fff; border-radius:7px;
+    display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;
+  }
+  .note{
+    background:var(--amber-soft); border:1px solid #f2d9a8; border-radius:10px;
+    padding:12px 16px; font-size:14.5px; margin-top:12px;
+  }
+  .note b{color:var(--amber);}
+  .why-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-top:8px;}
+  .why{border:1px solid var(--line); border-radius:10px; padding:14px; background:#fff;}
+  .why .w-ico{font-size:20px;}
+  .why b{display:block; margin:6px 0 2px; font-size:15px;}
+  .why span{font-size:13.5px; color:var(--muted);}
+  footer{text-align:center; color:var(--muted); font-size:13px; margin-top:26px;}
+  @media print{
+    body{background:#fff;} section,.scard,.flow .step{break-inside:avoid;}
+    header.hero{background:var(--brand)!important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow">Dentfluence · स्टाफ मार्गदर्शक</div>
+    <h1>Relationship Engine म्हणजे काय?</h1>
+    <p>रुग्णांशी नातं टिकवणारं आणि "परत बोलावण्याची" कामं आपोआप तयार करणारं इंजिन — रिसेप्शन आणि क्लिनिक स्टाफसाठी अगदी सोप्या मराठीत, उदाहरणांसह.</p>
+    <span class="kicker">कोणालाही काहीही लक्षात ठेवायची गरज नाही — सिस्टीम आठवण करते.</span>
+  </header>
+
+  <!-- 1 -->
+  <section>
+    <h2><span class="num">१</span> एका वाक्यात</h2>
+    <p><b>Relationship Engine</b> हे Dentfluence मधलं असं इंजिन आहे जे स्वतःहून ओळखतं की <b>कोणत्या रुग्णाला आज फोन/मेसेज करायला हवा</b> — आणि ती सगळी नावं एका यादीत (Action Board) समोर आणतं. स्टाफला फक्त ती यादी वरून खालपर्यंत पूर्ण करायची असते.</p>
+    <div class="analogy">
+      🧠 <b>सोपी उपमा:</b> हे एका हुशार रिसेप्शनिस्टसारखं आहे जी कधीच कोणाला विसरत नाही. "गेल्या महिन्यात ज्यांचं क्लीनिंग झालं होतं त्यांना ६ महिन्यांनी परत बोलवा", "ज्यांचा कॉल सुटला त्यांना परत करा", "ज्यांचं treatment अर्धवट राहिलं त्यांना आठवण करा" — हे सगळं ती <b>न सांगता</b> लक्षात ठेवते आणि रोज तुमच्यासमोर यादी ठेवते.
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section>
+    <h2><span class="num">२</span> हे का महत्त्वाचं आहे?</h2>
+    <p class="lead">परत येणारे (recall) आणि follow-up रुग्ण हे क्लिनिकसाठी सर्वात फायद्याचे रुग्ण असतात — त्यांना मिळवायला जाहिरातीचा खर्च लागत नाही. फक्त वेळेवर आठवण केली, तर ते परत येतात.</p>
+    <div class="why-grid">
+      <div class="why"><div class="w-ico">💰</div><b>उत्पन्न वाढतं</b><span>विसरलेला रुग्ण = बुडालेला पैसा. आठवण = परत आलेला रुग्ण.</span></div>
+      <div class="why"><div class="w-ico">⏱️</div><b>वेळ वाचतो</b><span>कोणाला फोन करायचा हे शोधावं लागत नाही — यादी तयार असते.</span></div>
+      <div class="why"><div class="w-ico">🎯</div><b>चुका होत नाहीत</b><span>कोणीही रुग्ण मधेच विसरला जात नाही.</span></div>
+      <div class="why"><div class="w-ico">❤️</div><b>रुग्ण खूश राहतात</b><span>"त्यांनी मला आठवणीने फोन केला" — विश्वास वाढतो.</span></div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section>
+    <h2><span class="num">३</span> हे आपोआप कसं चालतं? (मूळ कल्पना)</h2>
+    <p>क्लिनिकमध्ये रोज घडणाऱ्या गोष्टींमधून इंजिन <b>स्वतःहून</b> कामं तयार करतं. तुम्हाला काहीच वेगळं भरावं लागत नाही:</p>
+    <div class="flow">
+      <div class="step">
+        <div class="s-ico">🦷</div>
+        <div class="s-t">१. घटना घडते</div>
+        <div class="s-d">Treatment पूर्ण झालं / appointment चुकलं / plan स्वीकारला नाही / कॉल सुटला.</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <div class="s-ico">⚙️</div>
+        <div class="s-t">२. इंजिन ठरवतं</div>
+        <div class="s-d">"याला अमुक दिवसांनी परत बोलवायला हवं" — नियमांप्रमाणे कृती तयार होते.</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <div class="s-ico">📋</div>
+        <div class="s-t">३. यादीत येतं</div>
+        <div class="s-d">वेळ आली की तो रुग्ण <b>Action Board</b> वर कारणासह दिसतो.</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <div class="s-ico">📞</div>
+        <div class="s-t">४. स्टाफ कृती करतो</div>
+        <div class="s-d">फोन/WhatsApp करा, मग outcome नोंदवा — रो आपोआप बंद होतो किंवा पुढे ढकलतो.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section>
+    <h2><span class="num">४</span> स्टाफचं रोजचं काम (Daily Workflow)</h2>
+    <p class="lead">दररोज सकाळी हेच ३ पावलं — बस एवढंच पुरेसं आहे.</p>
+    <div class="flow">
+      <div class="step" style="border-color:#cfe6db;background:var(--green-soft)">
+        <div class="s-ico">☀️</div>
+        <div class="s-t">पाऊल १ — Action Board उघडा</div>
+        <div class="s-d">Relationships → <b>Today / आजची कामे</b>. आज कोणाला संपर्क करायचा त्याची पूर्ण यादी.</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step" style="border-color:#cfe6db;background:var(--green-soft)">
+        <div class="s-ico">📲</div>
+        <div class="s-t">पाऊल २ — वरून खालपर्यंत संपर्क करा</div>
+        <div class="s-d">प्रत्येक रो = एक रुग्ण + कारण. फोन करा किंवा WhatsApp पाठवा.</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step" style="border-color:#cfe6db;background:var(--green-soft)">
+        <div class="s-ico">✅</div>
+        <div class="s-t">पाऊल ३ — Outcome नोंदवा</div>
+        <div class="s-d">Booked / नंतर करा / Interested नाही / No answer. नोंदवल्यावर रो बंद किंवा पुन्हा शेड्युल होतो.</div>
+      </div>
+    </div>
+    <div class="note">💡 <b>महत्त्वाचं:</b> प्रत्येक कॉलनंतर outcome नोंदवायलाच हवा. नाहीतर सिस्टीमला कळत नाही की काम झालं का, आणि तोच रुग्ण पुन्हा-पुन्हा यादीत दिसत राहतो.</div>
+  </section>
+
+  <!-- 5 -->
+  <section>
+    <h2><span class="num">५</span> Relationship Engine मधले मुख्य स्क्रीन (सोप्या भाषेत)</h2>
+    <p class="lead">प्रत्येक स्क्रीन कशासाठी आहे आणि केव्हा वापरायचा — उदाहरणासह.</p>
+    <div class="cards">
+
+      <div class="scard">
+        <span class="tag t-brand">रोज वापरायचा</span>
+        <h4>आजची कामे <span class="en">Action Board / Today</span></h4>
+        <p>आज कोणाला फोन/मेसेज करायचा त्याची एकत्रित यादी — recalls, follow-ups आणि आलेले reply सगळं इथे.</p>
+        <div class="eg"><b>उदा.</b> यादीत दिसतं: "सुनीता पाटील — ६ महिन्यांचं cleaning recall due". फोन करा → outcome "Booked" → रो बंद.</div>
+      </div>
+
+      <div class="scard">
+        <span class="tag t-red">रोज तपासा</span>
+        <h4>सुटलेले कॉल <span class="en">Missed Calls</span></h4>
+        <p>क्लिनिकचा फोन ज्यांनी उचलला गेला नाही अशा सगळ्या नंबरांची यादी. एकही संभाव्य रुग्ण सुटू नये म्हणून.</p>
+        <div class="eg"><b>उदा.</b> दुपारी ३ चा सुटलेला कॉल दिसतो → परत फोन करा → कदाचित नवीन appointment मिळेल.</div>
+      </div>
+
+      <div class="scard">
+        <span class="tag t-green">आपोआप तयार होतं</span>
+        <h4>परत बोलावणे <span class="en">Recalls</span></h4>
+        <p>Treatment पूर्ण झाल्यावर सिस्टीम आपोआप ठरवते की या रुग्णाला किती दिवसांनी परत बोलवायचं (उदा. cleaning ला ६ महिने).</p>
+        <div class="eg"><b>उदा.</b> जानेवारीत scaling झालं → जुलैमध्ये तो रुग्ण आपोआप recall यादीत येतो.</div>
+      </div>
+
+      <div class="scard">
+        <span class="tag t-amber">पैसे इथे आहेत</span>
+        <h4>संधी <span class="en">Opportunities</span></h4>
+        <p>ज्या रुग्णांचं treatment सुचवलं पण पूर्ण झालं नाही / plan स्वीकारला नाही — त्यांचे follow-up. हे अर्धवट राहिलेले पैसे आहेत.</p>
+        <div class="eg"><b>उदा.</b> "रमेशला RCT सुचवलं, अजून केलं नाही" → follow-up करा → treatment accept होऊ शकतं.</div>
+      </div>
+
+      <div class="scard">
+        <span class="tag t-blue">नवीन चौकशी</span>
+        <h4>नवे लीड <span class="en">Lead Pipeline</span></h4>
+        <p>जाहिरात, फोन किंवा WhatsApp वरून आलेल्या नवीन चौकशी. इथे त्यांना follow-up करून <b>रुग्णात रूपांतरित</b> (Convert) करता येतं.</p>
+        <div class="eg"><b>उदा.</b> Instagram वरून "किती फी?" विचारणारा lead → reply → appointment → "Convert to Patient".</div>
+      </div>
+
+      <div class="scard">
+        <span class="tag t-green">संमतीनुसार</span>
+        <h4>WhatsApp संभाषणं <span class="en">WhatsApp</span></h4>
+        <p>रुग्णांचे आलेले WhatsApp मेसेज इथे दिसतात. फोन न उचलता इथूनच reply करता येतं. सगळी संभाषणं एका ठिकाणी.</p>
+        <div class="eg"><b>उदा.</b> "उद्याची वेळ बदलता येईल का?" → इथूनच reply → वेळ confirm.</div>
+      </div>
+
+      <div class="scard">
+        <span class="tag t-brand">एका क्लिकवर</span>
+        <h4>वाढदिवसाच्या शुभेच्छा <span class="en">Birthday Wishes</span></h4>
+        <p>आज ज्यांचा वाढदिवस आहे ते रुग्ण दिसतात. एका क्लिकवर WhatsApp शुभेच्छा पाठवा — नातं घट्ट होतं.</p>
+        <div class="eg"><b>उदा.</b> "आज ३ जणांचा वाढदिवस" → एक-एक क्लिक → शुभेच्छा गेल्या.</div>
+      </div>
+
+      <div class="scard">
+        <span class="tag t-blue">इतिहास पाहा</span>
+        <h4>रुग्णाचं नातं-प्रोफाइल <span class="en">Relationship Profile</span></h4>
+        <p>त्या रुग्णासोबत आजपर्यंत झालेला <b>प्रत्येक</b> मेसेज आणि कॉल एका ठिकाणी. फोन करण्याआधी संदर्भ बघायला उपयोगी.</p>
+        <div class="eg"><b>उदा.</b> फोन करण्याआधी बघा — "मागच्या वेळी 'नंतर बघतो' म्हणाले होते" → तसाच बोला.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section>
+    <h2><span class="num">६</span> एक खरं उदाहरण — रिसेप्शनिस्ट माधुरीचा दिवस</h2>
+    <div class="story">
+      <div class="turn"><div class="time">९:३०</div><div class="txt">माधुरी येते, <b>Today / Action Board</b> उघडते. आज १२ कामं दिसतात.</div></div>
+      <div class="turn"><div class="time">९:३५</div><div class="txt">पहिला रो: <b>"सुनीता — cleaning recall (६ महिने झाले)"</b>. फोन करते, appointment बुक होते → outcome <b>"Booked"</b> → रो आपोआप बंद. ✅</div></div>
+      <div class="turn"><div class="time">९:४०</div><div class="txt">पुढचा रो: <b>"रमेश — RCT सुचवलं पण केलं नाही"</b> (Opportunity). फोन उचलत नाही → outcome <b>"No answer"</b> → रो उघडाच राहतो, उद्या परत दिसेल.</div></div>
+      <div class="turn"><div class="time">१०:००</div><div class="txt">WhatsApp स्क्रीनवर नवा मेसेज: <b>"उद्याची वेळ मिळेल का?"</b> — फोन न उचलता इथूनच reply करते. 📲</div></div>
+      <div class="turn"><div class="time">१०:१०</div><div class="txt">Birthday यादीत २ नावं — दोन्हीला एका क्लिकवर WhatsApp शुभेच्छा. 🎂</div></div>
+      <div class="turn"><div class="time">१०:१५</div><div class="txt">Missed Calls मध्ये कालचा सुटलेला कॉल — परत करते, ती नवीन patient निघते → Lead म्हणून नोंद. 🎯</div></div>
+      <div class="turn"><div class="time">१०:३०</div><div class="txt">यादी संपली. माधुरीला <b>कोणालाही लक्षात ठेवायची गरज पडली नाही</b> — सिस्टीमने सगळं समोर आणलं.</div></div>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section>
+    <h2><span class="num">७</span> स्टाफसाठी सुवर्ण नियम</h2>
+    <ol class="rules">
+      <li><b>रोज सकाळी सर्वात आधी Action Board उघडा.</b> हीच दिवसाची सुरुवात.</li>
+      <li><b>प्रत्येक कॉलनंतर outcome नोंदवाच.</b> नोंदवलं नाही = काम अपूर्ण, रुग्ण पुन्हा-पुन्हा दिसेल.</li>
+      <li><b>यादी वरून खालपर्यंत पूर्ण करा.</b> एकही रो सोडू नका — प्रत्येक रो म्हणजे संभाव्य रुग्ण/पैसा.</li>
+      <li><b>फोन करण्याआधी प्रोफाइल बघा.</b> मागचा संदर्भ कळला की बोलणं सोपं होतं.</li>
+      <li><b>WhatsApp reply इथूनच करा.</b> सगळं एका ठिकाणी राहतं, कोणतंही संभाषण हरवत नाही.</li>
+    </ol>
+    <div class="note">🔒 <b>संमतीचा नियम (DPDP):</b> ज्या रुग्णाने मेसेज नको म्हटलंय, त्याला सिस्टीम आपोआप मेसेज पाठवत नाही. त्यामुळे नियम पाळले जातात — तुम्हाला काळजी करायची गरज नाही.</div>
+  </section>
+
+  <footer>
+    Dentfluence · Relationship Engine — स्टाफ मार्गदर्शक (मराठी) · अंतर्गत प्रशिक्षणासाठी
+  </footer>
+
+</div>
+</body>
+</html>

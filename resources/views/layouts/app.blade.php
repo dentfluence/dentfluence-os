@@ -791,6 +791,10 @@
                     </div>
                 @endif
 
+                {{-- ── Screen Guide (hint strip + panel + toggle logic) ── --}}
+                {{-- Content: resources/help/content.php · Toggle: topbar --}}
+                @include('components.help-guide')
+
                 {{-- ════════════════════════════════════════════
                      PAGE CONTENT — child views inject here
                 ════════════════════════════════════════════ --}}

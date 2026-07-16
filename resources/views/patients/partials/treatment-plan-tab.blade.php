@@ -1,10 +1,21 @@
 @php
     $consultationsList = $consultations ?? collect();
 
-    // Doctors for the "Treating Doctor" select on the plan form (printed on the plan)
-    $tpDoctors = \App\Models\User::whereIn('role', \App\Models\User::DOCTOR_ROLES)
+    // Doctors for the "Treating Doctor" select on the plan form (printed on the plan).
+    // Same active-doctor list HR / the appointment calendar use (App\Support\DoctorColors):
+    // active staff whose role is a doctor role, or whose name is prefixed "Dr.".
+    $tpDoctors = \App\Models\User::where('is_active', true)
+        ->where(fn ($q) => $q->whereIn('role', \App\Models\User::DOCTOR_ROLES)
+                             ->orWhere('name', 'like', 'Dr.%'))
         ->orderBy('name')
         ->get(['id', 'name']);
+
+    // Plans already carrying an Opportunity (presented → Estimate Given onward),
+    // fetched in one query so the map below can flag is_presented without N+1.
+    $presentedPlanIds = \App\Models\TreatmentOpportunity::whereIn(
+            'treatment_plan_id',
+            ($patient->treatmentPlans ?? collect())->pluck('id')
+        )->pluck('treatment_plan_id')->flip();
 
     // Build plans JSON — clinical fields only, no billing fields in this view
     $plansJson = ($patient->treatmentPlans ?? collect())
@@ -15,10 +26,12 @@
             'display_order'      => (int)$p->display_order,
             'status'             => $p->status,
             'is_accepted'        => !is_null($p->accepted_at),
+            'is_presented'       => isset($presentedPlanIds[$p->id]),
             'accepted_at'        => $p->accepted_at?->format('d M Y'),
             'total'              => (float)$p->total,
             'consultation_id'    => $p->consultation_id,
             'doctor_id'          => $p->doctor_id,
+            'plan_date'          => $p->plan_date?->format('Y-m-d'),
             'estimated_duration' => $p->estimated_duration,
             'visit_count'        => $p->visit_count ? (int)$p->visit_count : null,
             'doctor_notes'       => $p->doctor_notes,
@@ -445,12 +458,19 @@
             </div>
 
             {{-- Footer --}}
-            <div class="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50">
+            <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50">
+                {{-- Optional: add the patient's Case Journey QR to the printout --}}
+                <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none" title="Only appears if a Case Journey has already been sent for the plan">
+                    <input type="checkbox" x-model="includeQr" class="accent-[#6a0f70]">
+                    Add patient QR link
+                </label>
+                <div class="flex items-center gap-2">
                 <button @click="printPickerOpen=false" class="tp-btn tp-btn-ghost">Cancel</button>
                 <button @click="printSelectedPlans()" :disabled="!printSelected.length" class="tp-btn tp-btn-primary">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                     Print Selected
                 </button>
+                </div>
             </div>
         </div>
     </div>
@@ -571,13 +591,17 @@
 
         <div class="tp-form-body">
 
-            {{-- Row 1: Option name + Consultation + Treating doctor --}}
-            <div class="grid grid-cols-3 gap-4 mb-4">
+            {{-- Row 1: Option name + Date + Consultation + Treating doctor --}}
+            <div class="grid grid-cols-4 gap-4 mb-4">
                 <div class="tp-field-group">
                     <label class="tp-label">Option Name <span class="text-red-400">*</span></label>
                     <input type="text" x-model="form.plan_name" placeholder="e.g. Dental Implant, Fixed Bridge…"
                            dusk="tp-plan-name"
                            class="tp-input">
+                </div>
+                <div class="tp-field-group">
+                    <label class="tp-label">Plan Date</label>
+                    <input type="date" x-model="form.plan_date" class="tp-input">
                 </div>
                 <div class="tp-field-group">
                     <label class="tp-label">Link to Consultation</label>
@@ -1109,7 +1133,8 @@
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                     Accepted <span x-show="plan.accepted_at" x-text="plan.accepted_at ? '· ' + plan.accepted_at : ''"></span>
                                 </span>
-                                <span x-show="!plan.is_accepted" class="tp-badge-pending">Pending</span>
+                                <span x-show="!plan.is_accepted && !plan.is_presented" class="tp-badge-pending">Pending</span>
+                                <span x-show="!plan.is_accepted && plan.is_presented" class="tp-badge-pending" style="background:#eff6ff;color:#2563eb;">Estimate Given</span>
                                 {{-- Collapse / expand chevron --}}
                                 <span class="tp-collapse-toggle" :class="{ 'is-collapsed': isCollapsed(plan.id) }">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1165,6 +1190,19 @@
                                 <span x-text="accepting === plan.id ? 'Saving…' : 'Mark as Accepted'"></span>
                             </button>
 
+                            {{-- Mark as Presented → drops the plan into the Opportunity
+                                 pipeline at "Estimate Given" until it's accepted or
+                                 declined. Shown only for a pending plan not yet presented.
+                                 (Sharing via Smart Presentation does this automatically;
+                                 this button covers chair-side / verbal presentation.) --}}
+                            <button x-show="!plan.is_accepted && !plan.is_presented"
+                                    @click="markPresented(plan)"
+                                    :disabled="presenting === plan.id"
+                                    class="tp-btn tp-btn-outline">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                                <span x-text="presenting === plan.id ? 'Saving…' : 'Mark as Presented'"></span>
+                            </button>
+
                             {{-- Revert acceptance (only if already accepted) — reason logged --}}
                             <button x-show="plan.is_accepted"
                                     @click="openRevert(plan)"
@@ -1173,11 +1211,21 @@
                                 Revert Acceptance
                             </button>
 
-                            {{-- Print this option --}}
-                            <a :href="printUrl([plan])" target="_blank" class="tp-btn tp-btn-ghost">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                                Print
-                            </a>
+                            {{-- Print this option — plain, or with the patient Case Journey QR --}}
+                            <div class="relative inline-block" x-data="{ pmOpen: false }" @click.outside="pmOpen = false">
+                                <button type="button" @click="pmOpen = !pmOpen" class="tp-btn tp-btn-ghost">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                                    Print
+                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-left:2px"><polyline points="6 9 12 15 18 9"/></svg>
+                                </button>
+                                <div x-show="pmOpen" x-cloak x-transition.opacity
+                                     class="absolute right-0 bottom-full mb-1 w-52 bg-white border border-gray-200 rounded-lg shadow-lg z-[60] py-1">
+                                    <a :href="printUrl([plan])" target="_blank" @click="pmOpen=false"
+                                       class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">Print plan</a>
+                                    <a :href="printUrl([plan], true)" target="_blank" @click="pmOpen=false"
+                                       class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">Print with patient QR</a>
+                                </div>
+                            </div>
 
                             {{-- Generate Consent Form — Phase 2, docs/gap-analysis-treatment-planning-knowledge-bank.md.
                                  Always visible (2026-07-13 picker refinement): opens a picker
@@ -1189,14 +1237,15 @@
                                 Consent Form
                             </button>
 
-                            {{-- Create Smart Presentation — new, independent module (2026-07-09).
-                                 This is the ONLY touch point added to this file: a single link
-                                 into Smart Treatment Presentation, which imports this plan
-                                 read-only. See docs/plan-smart-treatment-presentation.md. --}}
-                            <a :href="'{{ url('presentations/create-from-plan') }}/' + plan.id" class="tp-btn tp-btn-outline">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                                Create Smart Presentation
+                            {{-- Case Acceptance Journey — replaces the retired Smart
+                                 Presentation module (2026-07-15). Flag-gated so it can be
+                                 switched off if needed. See docs/plan-case-acceptance-engine.md. --}}
+                            @if (\App\Support\Features\Feature::enabled('case_acceptance.enabled'))
+                            <a :href="'{{ url('case-journeys/create-from-plan') }}/' + plan.id" class="tp-btn tp-btn-outline">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                                Open Case Journey
                             </a>
+                            @endif
 
                             {{-- Bill from Plan (partial multi-tooth) — accepted plans only --}}
                             <a x-show="plan.is_accepted"
@@ -1266,6 +1315,7 @@ function treatmentPlanTab() {
 
         // ── Accept state ────────────────────────────────────────────────────
         accepting: null,
+        presenting: null,
 
         // ── Collapse / expand state (keyed by plan id) ──────────────────────
         collapsed: {},
@@ -1283,6 +1333,7 @@ function treatmentPlanTab() {
         // ── Print picker ────────────────────────────────────────────────────
         printPickerOpen: false,
         printSelected:   [],
+        includeQr:       false,   // opt-in: add the patient Case Journey QR to the print
 
         // ── Consent form picker (2026-07-13) ────────────────────────────────
         // Explodes each plan item into one row per tooth (mirrors
@@ -1549,9 +1600,11 @@ function treatmentPlanTab() {
         },
 
         // ── Print URL ─────────────────────────────────────────────────────────
-        printUrl(plans) {
+        printUrl(plans, withQr = false) {
             const ids = plans.map(p => p.id);
-            return '{{ url('/treatment-plans/print') }}?' + ids.map(id => 'ids[]=' + id).join('&');
+            let url = '{{ url('/treatment-plans/print') }}?' + ids.map(id => 'ids[]=' + id).join('&');
+            if (withQr) url += '&qr=1';
+            return url;
         },
 
         // ── Print picker ──────────────────────────────────────────────────────
@@ -1569,7 +1622,7 @@ function treatmentPlanTab() {
         printSelectedPlans() {
             if (!this.printSelected.length) return;
             const chosen = this.plans.filter(p => this.printSelected.includes(p.id));
-            window.open(this.printUrl(chosen), '_blank');
+            window.open(this.printUrl(chosen, this.includeQr), '_blank');
             this.printPickerOpen = false;
         },
 
@@ -1582,6 +1635,7 @@ function treatmentPlanTab() {
                 plan_name:          'Treatment Option ' + optNum,
                 consultation_id:    consultationId ?? '',
                 doctor_id:          '',
+                plan_date:          new Date().toLocaleDateString('en-CA'), // YYYY-MM-DD, local
                 estimated_duration: '',
                 visit_count:        '',
                 doctor_notes:       '',
@@ -1612,6 +1666,7 @@ function treatmentPlanTab() {
                     plan_name:          plan.plan_name ?? '',
                     consultation_id:    plan.consultation_id ?? '',
                     doctor_id:          plan.doctor_id ?? '',
+                    plan_date:          plan.plan_date ?? '',
                     estimated_duration: plan.estimated_duration ?? '',
                     visit_count:        plan.visit_count ?? '',
                     doctor_notes:       plan.doctor_notes ?? '',
@@ -1760,6 +1815,7 @@ function treatmentPlanTab() {
                         plan_name:          this.form.plan_name,
                         consultation_id:    this.form.consultation_id || null,
                         doctor_id:          this.form.doctor_id || null,
+                        plan_date:          this.form.plan_date || null,
                         estimated_duration: this.form.estimated_duration || null,
                         visit_count:        this.form.visit_count || null,
                         doctor_notes:       this.form.doctor_notes || null,
@@ -1806,6 +1862,30 @@ function treatmentPlanTab() {
                 alert(e.message);
             } finally {
                 this.accepting = null;
+            }
+        },
+
+        // ── Mark plan as presented → Opportunity (Estimate Given) ───────────────
+        async markPresented(plan) {
+            if (this.presenting === plan.id) return;
+            this.presenting = plan.id;
+            try {
+                const resp = await fetch(`{{ url('/treatment-plans') }}/${plan.id}/mark-presented`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                        'Accept': 'application/json',
+                    },
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(data.message || 'Could not mark as presented.');
+                const idx = this.plans.findIndex(p => p.id === plan.id);
+                if (idx > -1) this.plans[idx] = data.plan;
+            } catch (e) {
+                alert(e.message);
+            } finally {
+                this.presenting = null;
             }
         },
 

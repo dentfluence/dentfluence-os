@@ -431,6 +431,45 @@ return [
             'enabled'       => true,
         ],
 
+        /*
+         * 13. Case Acceptance — patient opened the journey but hasn't decided.
+         *     A warm nudge two days after they viewed their options, so a live
+         *     estimate doesn't go cold. Fires off 'case.opened' (logged by
+         *     PublicCaseController on first view). Config-only — no engine code.
+         */
+        'case_opened_followup_2d' => [
+            'trigger'       => 'case.opened',
+            'conditions'    => [],
+            'action'        => 'create_task',
+            'action_config' => [
+                'category'   => 'call',
+                'title'      => 'Case journey viewed — follow-up call',
+                'priority'   => 'medium',
+                'days_after' => 2,
+            ],
+            'cooldown_days' => 5,
+            'enabled'       => true,
+        ],
+
+        /*
+         * 14. Case Acceptance — patient asked for more time / a callback. An
+         *     active, warm request, so same-day + high priority (mirrors the
+         *     Smart Presentation callback rule above).
+         */
+        'case_more_time_requested' => [
+            'trigger'       => 'case.more_time_requested',
+            'conditions'    => [],
+            'action'        => 'create_task',
+            'action_config' => [
+                'category'   => 'call',
+                'title'      => 'Patient requested a callback — Case Journey',
+                'priority'   => 'high',
+                'days_after' => 0,
+            ],
+            'cooldown_days' => 1,
+            'enabled'       => true,
+        ],
+
     ], // end rules
 
 

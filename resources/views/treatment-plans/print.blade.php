@@ -232,9 +232,10 @@
     // Plain paper = pre-printed stationery already carrying clinic identity,
     // so we don't re-print the clinic name/logo here.
     $showClinic = $headerType !== 'plain';
-    // Plan's own treating doctor wins; older plans without one fall back
-    // to the consultation's doctor (previous behaviour).
-    $doctor   = $plans->first()?->doctor ?? $consultation?->doctor;
+    // Plan's own treating doctor wins; older plans without one fall back to
+    // the consultation's doctor, then to the logged-in user (whoever is
+    // printing) so the signature is never blank.
+    $doctor   = $plans->first()?->doctor ?? $consultation?->doctor ?? auth()->user();
 
     $patientCode = $patient?->patient_id
                    ?? ('P-' . str_pad($patient?->id ?? 0, 5, '0', STR_PAD_LEFT));
@@ -250,9 +251,13 @@
         $patient->city ?? null,
     ])), ', ');
 
-    $planDateRaw = $consultation?->consultation_date
-                   ? \Carbon\Carbon::parse($consultation->consultation_date)
-                   : now();
+    // Plan's own date wins; older/blank plans fall back to the consultation
+    // date, then today (previous behaviour).
+    $planDateRaw = $plans->first()?->plan_date
+                   ? \Carbon\Carbon::parse($plans->first()->plan_date)
+                   : ($consultation?->consultation_date
+                        ? \Carbon\Carbon::parse($consultation->consultation_date)
+                        : now());
     $planDate    = $planDateRaw->format('d M Y');
     $validDays   = max(1, (int) ($print['tp_valid_days'] ?? 15));
     $validUntil  = $planDateRaw->copy()->addDays($validDays)->format('d M Y');
@@ -295,12 +300,14 @@
         @if($addressLine)<div class="lh-line">{{ $addressLine }}</div>@endif
     </div>
 
-    {{-- Doctor / clinic (right). Clinic name only as a fallback, and never on
-         plain paper (the pre-printed sheet already shows clinic identity). --}}
+    {{-- Right column. Doctor identity now prints only in the signature block
+         at the bottom (per request); the top carries just the clinic name,
+         and only when the header type isn't plain / pre-printed stationery
+         (which already shows the clinic identity). --}}
     <div class="lh-right">
-        <div class="lh-doc">{{ $doctor?->doctor_name ?? ($showClinic ? ($clinic['clinic_name'] ?? '') : '') }}</div>
-        @if($doctor?->designation ?? null)<div class="lh-line">{{ $doctor->designation }}</div>@endif
-        @if($doctor?->registration_number ?? null)<div class="lh-line">Registration No.: {{ $doctor->registration_number }}</div>@endif
+        @if($showClinic && ($clinic['clinic_name'] ?? false))
+        <div class="lh-doc">{{ $clinic['clinic_name'] }}</div>
+        @endif
     </div>
 </div>
 

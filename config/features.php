@@ -97,5 +97,19 @@ return [
             'default'     => false,
             'description' => 'Marketing provider interfaces (Revenue/Patient/Treatment/Media/Review/Appointment) resolve to Integrated implementations instead of Standalone/manual ones.',
         ],
+
+        // ── Case Acceptance Engine (V1 — replaces Smart Presentation) ────
+        // Docs: docs/plan-case-acceptance-engine.md (FROZEN architecture) +
+        // docs/plan-case-acceptance-engine-implementation.md (milestones).
+        // OFF = the existing Smart Presentation module is the only presentation
+        // experience (unchanged). ON = the new Case Acceptance Engine (Case
+        // Journey builder + /p/{token} patient microsite) is exposed alongside
+        // it. Flip OFF at any time to instantly restore Smart Presentation —
+        // the engine's tables/services are additive and dormant while off.
+        // Stays OFF until validated on real patients.
+        'case_acceptance.enabled' => [
+            'default'     => (bool) env('FEATURE_CASE_ACCEPTANCE', false),
+            'description' => 'Case Acceptance Engine (Case Journey builder + /p/{token} patient microsite) coexists with Smart Presentation. OFF restores Smart Presentation instantly.',
+        ],
     ],
 ];

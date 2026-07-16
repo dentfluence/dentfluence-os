@@ -212,6 +212,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/treatment-plans/{plan}/consent',  [TreatmentPlanController::class, 'consentPrint'])->name('treatment-plans.consent');
         Route::put('/treatment-plans/{plan}',          [TreatmentPlanController::class, 'update'])->name('treatment-plans.update');
         Route::post('/treatment-plans/{plan}/accept',  [TreatmentPlanController::class, 'accept'])->name('treatment-plans.accept');
+        // Mark a plan as presented → lands it in the Opportunity pipeline (Estimate Given)
+        Route::post('/treatment-plans/{plan}/mark-presented', [TreatmentPlanController::class, 'markPresented'])->name('treatment-plans.mark-presented');
         Route::post('/treatment-plans/{plan}/revert',  [TreatmentPlanController::class, 'revert'])->name('treatment-plans.revert');
         Route::delete('/treatment-plans/{plan}',       [TreatmentPlanController::class, 'destroy'])->name('treatment-plans.destroy');
         Route::delete('/treatment-plan-items/{item}',  [TreatmentPlanController::class, 'destroyItem'])->name('treatment-plan-items.destroy');
@@ -707,6 +709,21 @@ Route::middleware('auth')->group(function () {
         Route::put('/settings',                            [$pc, 'settingsUpdate'])->name('settings.update');
     });
 
+    // ── Case Acceptance Engine (staff) — coexists with Smart Presentation,
+    //    gated by the `case_acceptance.enabled` flag inside the controller.
+    //    Reuses the presentations 'edit' permission (same operate rights).
+    //    Static 'create-from-plan' segment before the /{journey} wildcard. ──
+    Route::middleware('module:presentations,edit')->prefix('case-journeys')->name('case-journeys.')->group(function () {
+        $cjc = \App\Http\Controllers\CaseJourneyController::class;
+
+        Route::get('/create-from-plan/{plan}', [$cjc, 'createFromPlan'])->name('create-from-plan');
+        Route::get('/{journey}',               [$cjc, 'builder'])->name('builder');
+        Route::get('/{journey}/preview',       [$cjc, 'preview'])->name('preview');
+        Route::post('/{journey}/curation',     [$cjc, 'updateCuration'])->name('curation');
+        Route::post('/{journey}/options',      [$cjc, 'syncCustomOptions'])->name('options');
+        Route::post('/{journey}/send',         [$cjc, 'send'])->name('send');
+    });
+
     // ── Public patient-facing page (no login) — mirrors the existing
     // "token-based, no login" QR check-in pattern (see /hr/checkin/{token}
     // below) but scoped under /present so it never collides with the
@@ -718,6 +735,19 @@ Route::middleware('auth')->group(function () {
         Route::post('/{token}/accept',            [$ppc, 'accept'])->name('accept');
         Route::post('/{token}/decline',           [$ppc, 'decline'])->name('decline');
         Route::post('/{token}/request-callback',  [$ppc, 'requestCallback'])->name('request-callback');
+    });
+
+    // ── Case Acceptance Engine (public patient microsite, no login) —
+    //    scoped under /p so it never collides with /present or authenticated
+    //    routes. Gated by the feature flag inside PublicCaseController. ──
+    Route::withoutMiddleware('auth')->prefix('p')->name('case.public.')->group(function () {
+        $pcc = \App\Http\Controllers\PublicCaseController::class;
+
+        Route::get('/{token}',                    [$pcc, 'show'])->name('show');
+        Route::post('/{token}/select',            [$pcc, 'select'])->name('select');
+        Route::post('/{token}/accept',            [$pcc, 'accept'])->name('accept');
+        Route::post('/{token}/decline',           [$pcc, 'decline'])->name('decline');
+        Route::post('/{token}/request-callback',  [$pcc, 'requestCallback'])->name('request-callback');
     });
 
     /* ── Lab Module v2 ── */

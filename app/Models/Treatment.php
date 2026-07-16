@@ -117,6 +117,19 @@ class Treatment extends Model
         return $this->hasMany(DiagnosisTreatmentOption::class);
     }
 
+    /**
+     * Structured priced options (implant systems, crown materials, add-ons).
+     * The Treatment Module owns pricing; the Case Acceptance Engine reads these
+     * via TreatmentPricingService. Ordered for stable display.
+     */
+    public function options(): HasMany
+    {
+        return $this->hasMany(TreatmentOption::class)
+            ->orderBy('group')
+            ->orderBy('sort_order')
+            ->orderBy('name');
+    }
+
     // ── Scopes ────────────────────────────────────────────────────────────────
 
     public function scopeActive($query)

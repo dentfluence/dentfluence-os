@@ -25,6 +25,74 @@ use Illuminate\Http\Request;
  */
 class WhatsappController extends ApiController
 {
+    /**
+     * GET /api/v1/patients/{patient}/whatsapp/thread
+     * The patient's WhatsApp conversation — same wa_threads/wa_messages the
+     * web inbox and the Relationship-profile Communication tab read, plus
+     * the consent gate so the client knows whether a free-text reply is
+     * currently allowed (consent + 24h window). Read marks the thread's
+     * unread counter zero, same as opening it on web.
+     */
+    public function thread(
+        Request $request,
+        $patient,
+        OutboundMessageService $outbound
+    ): JsonResponse {
+        $pt = Patient::where('branch_id', $request->user()->branch_id)
+            ->whereKey($patient)->first();
+        if (! $pt) {
+            return $this->error('Patient not found.', [], 404);
+        }
+
+        $thread = \App\Models\WaThread::where('patient_id', $pt->id)
+            ->latest('updated_at')
+            ->first();
+
+        if (! $thread) {
+            return $this->success([
+                'thread'    => null,
+                'messages'  => [],
+                'can_reply' => true, // send() will still consent-gate the actual send
+                'gate'      => null,
+            ], '');
+        }
+
+        $messages = $thread->messages()
+            ->with('sentBy:id,name')
+            ->orderBy('created_at')
+            ->limit(200)
+            ->get()
+            ->map(fn ($m) => [
+                'id'            => $m->id,
+                'direction'     => $m->direction,   // inbound | outbound
+                'type'          => $m->type,
+                'body'          => $m->body,
+                'template_name' => $m->template_name,
+                'media_url'     => $m->media_url,
+                'status'        => $m->status,
+                'sent_by'       => $m->sentBy?->name,
+                'at'            => $m->created_at?->toIso8601String(),
+            ])
+            ->values();
+
+        if ($thread->unread_count > 0) {
+            $thread->update(['unread_count' => 0]);
+        }
+
+        $gate = $outbound->consentGate($thread, 'service');
+
+        return $this->success([
+            'thread' => [
+                'id'            => $thread->id,
+                'contact_phone' => $thread->contact_phone,
+                'contact_name'  => $thread->contact_name,
+            ],
+            'messages'  => $messages,
+            'can_reply' => (bool) ($gate['allowed'] ?? false),
+            'gate'      => ($gate['allowed'] ?? false) ? null : ($gate['reason'] ?? null),
+        ], '');
+    }
+
     public function send(
         Request $request,
         $patient,
