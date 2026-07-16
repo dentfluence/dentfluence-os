@@ -1,10 +1,10 @@
 <?php
 
-use App\Http\Controllers\Hq\ClinicController;
-use App\Http\Controllers\Hq\DashboardController;
-use App\Http\Controllers\Hq\PlanController;
-use App\Http\Controllers\Hq\SubscriptionController;
-use App\Http\Controllers\Hq\TicketController;
+use App\Modules\Hq\Controllers\ClinicController;
+use App\Modules\Hq\Controllers\DashboardController;
+use App\Modules\Hq\Controllers\PlanController;
+use App\Modules\Hq\Controllers\SubscriptionController;
+use App\Modules\Hq\Controllers\TicketController;
 use Illuminate\Support\Facades\Route;
 
 // Loaded from bootstrap/app.php inside Route::middleware('web')->group(...),

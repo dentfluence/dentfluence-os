@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Http\Controllers\Hq;
+namespace App\Modules\Hq\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\Plan;
+use App\Modules\Hq\Models\Plan;
 
 class PlanController extends Controller
 {

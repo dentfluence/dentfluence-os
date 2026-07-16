@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Http\Controllers\Hq;
+namespace App\Modules\Hq\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\Clinic;
+use App\Modules\Hq\Models\Clinic;
 use Illuminate\Http\Request;
 
 class ClinicController extends Controller

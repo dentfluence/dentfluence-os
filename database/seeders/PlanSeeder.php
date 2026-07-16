@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\Plan;
+use App\Modules\Hq\Models\Plan;
 use Illuminate\Database\Seeder;
 
 // Prices from 01_Strategy/product-pricing-tiers-2026.html (10 Jul 2026).

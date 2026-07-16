@@ -1,6 +1,9 @@
 @echo off
 title Dentfluence HQ - grant access to your real login
 cd /d "%~dp0"
+echo Clearing caches first...
+php artisan optimize:clear
+echo.
 echo Current users in the system:
 echo.
 php artisan tinker --execute="foreach(\App\Models\User::all(['id','name','email','role','is_superadmin']) as $u){echo $u->id.' | '.$u->email.' | role: '.($u->role ?? '-').' | superadmin: '.($u->is_superadmin ? 'YES' : 'no').PHP_EOL;}"

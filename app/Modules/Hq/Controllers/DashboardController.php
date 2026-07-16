@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Controllers\Hq;
+namespace App\Modules\Hq\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\Clinic;
-use App\Models\Subscription;
-use App\Models\Ticket;
+use App\Modules\Hq\Models\Clinic;
+use App\Modules\Hq\Models\Subscription;
+use App\Modules\Hq\Models\Ticket;
 
 class DashboardController extends Controller
 {

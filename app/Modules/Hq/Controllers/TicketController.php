@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Controllers\Hq;
+namespace App\Modules\Hq\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\Clinic;
-use App\Models\Ticket;
+use App\Modules\Hq\Models\Clinic;
+use App\Modules\Hq\Models\Ticket;
 use Illuminate\Http\Request;
 
 class TicketController extends Controller

@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Controllers\Hq;
+namespace App\Modules\Hq\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\Clinic;
-use App\Models\Plan;
-use App\Models\Subscription;
+use App\Modules\Hq\Models\Clinic;
+use App\Modules\Hq\Models\Plan;
+use App\Modules\Hq\Models\Subscription;
 use Illuminate\Http\Request;
 
 class SubscriptionController extends Controller
