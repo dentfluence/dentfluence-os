@@ -31,8 +31,8 @@
             {{ $opportunity->patient->name ?? 'Unknown' }}
         </h2>
         <span style="font-size:13px;color:#6b7280">
-            {{ $opportunity->patient->phone ?? '' }}
-            @if($opportunity->patient->phone && $opportunity->display_label) · @endif
+            {{ $opportunity->patient?->phone ?? '' }}
+            @if($opportunity->patient?->phone && $opportunity->display_label) · @endif
             {{ $opportunity->display_label }}
         </span>
     </div>

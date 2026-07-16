@@ -108,7 +108,7 @@
                     @forelse ($col['items'] as $opp)
                         @php
                             $rel          = $opp->relationship;
-                            $personName   = $rel->name ?? 'Unlinked opportunity';
+                            $personName   = $rel->name ?? $opp->patient?->name ?? 'Unlinked opportunity';
                             $journeyState = $showJourney ? ($journeyByOpportunity[$opp->id] ?? null) : null;
                             $isOverdue    = $opp->follow_up_date
                                 && $opp->follow_up_date->isPast()
