@@ -171,7 +171,7 @@
         }
         .rx-footer .follow-up { font-size: 10px; color: #475569; }
         .signature-area { text-align: center; }
-        .signature-area .line { width: 140px; border-bottom: 1px solid #94a3b8; margin-bottom: 4px; }
+        .signature-area .line { width: 140px; border-bottom: 1px solid #94a3b8; margin-top: 44px; margin-bottom: 4px; }
         .signature-area .sig-label { font-size: 9px; color: #64748b; }
 
         /* ── Print media ── */
@@ -315,12 +315,12 @@
                 <td style="text-align:center;">
                     @if($item->is_sos)<span class="sos-badge">SOS</span>@else —@endif
                 </td>
-                {{-- Morn / Noon / Night — use correct DB column names --}}
-                <td style="text-align:center;">{{ $item->morning ?: '—' }}</td>
-                <td style="text-align:center;">{{ $item->afternoon ?: '—' }}</td>
-                <td style="text-align:center;">{{ $item->night ?: '—' }}</td>
+                {{-- Morn / Noon / Night — "5 ml" for liquids, plain count otherwise --}}
+                <td style="text-align:center;">{{ $item->doseCell($item->morning) }}</td>
+                <td style="text-align:center;">{{ $item->doseCell($item->afternoon) }}</td>
+                <td style="text-align:center;">{{ $item->doseCell($item->night) }}</td>
                 <td>{{ $item->duration ? $item->duration . ' ' . ($item->duration_unit ?? 'days') : '—' }}</td>
-                <td style="text-align:center;font-weight:600;">{{ $item->quantity ?: '—' }}</td>
+                <td style="text-align:center;font-weight:600;">{{ $item->quantityLabel() }}</td>
             </tr>
             @endforeach
         </tbody>
@@ -348,7 +348,7 @@
         </div>
         <div class="signature-area">
             <div class="line"></div>
-            <div class="sig-label">{{ $prescription->prescribedBy?->doctor_name ?? '—' }}<br>@if($prescription->prescribedBy?->registration_number)Reg. No.: {{ $prescription->prescribedBy->registration_number }}<br>@endif Signature &amp; Stamp</div>
+            <div class="sig-label">{{ $prescription->prescribedBy?->doctor_name ?? '—' }}<br>@if($prescription->prescribedBy?->registration_number)Reg. No.: {{ $prescription->prescribedBy->registration_number }}<br>@endif Signature</div>
         </div>
     </div>
 

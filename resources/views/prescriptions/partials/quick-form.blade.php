@@ -20,17 +20,23 @@
     $rx = $prescription;
 
     $panelValue = $rx?->exists
-        ? $rx->items->map(fn ($item) => [
-            'drug'      => trim($item->drug_name . ($item->strength ? ' ' . $item->strength : '')),
-            'drug_id'   => $item->drug_id,
-            'form_type' => strtolower($item->dosage_form ?: 'tablet'),
-            'sos'       => (bool) $item->is_sos,
-            'morn'      => (float) $item->morning > 0,
-            'noon'      => (float) $item->afternoon > 0,
-            'night'     => (float) $item->night > 0,
-            'duration'  => (string) $item->duration,
-            'unit'      => $item->duration_unit ?? 'days',
-        ])->values()->toArray()
+        ? $rx->items->map(function ($item) {
+            // Liquids carry their millilitre amount through to the panel;
+            // solids collapse to a boolean so the checkbox re-highlights.
+            $liquid = in_array(strtolower((string) $item->dosage_form), ['syrup', 'suspension', 'drops'], true);
+            return [
+                'drug'      => trim($item->drug_name . ($item->strength ? ' ' . $item->strength : '')),
+                'drug_id'   => $item->drug_id,
+                'form_type' => strtolower($item->dosage_form ?: 'tablet'),
+                'food'      => $item->food_advice ?? '',
+                'sos'       => (bool) $item->is_sos,
+                'morn'      => $liquid ? (float) $item->morning   : ((float) $item->morning   > 0),
+                'noon'      => $liquid ? (float) $item->afternoon : ((float) $item->afternoon > 0),
+                'night'     => $liquid ? (float) $item->night     : ((float) $item->night     > 0),
+                'duration'  => (string) $item->duration,
+                'unit'      => $item->duration_unit ?? 'days',
+            ];
+        })->values()->toArray()
         : [];
 
     // General instructions were saved as free text (chips joined with "; " + a note,
@@ -101,6 +107,9 @@
         :collapsible="false"
         :start-open="true"
     />
+
+    {{-- Optional pediatric syrup dose helper (advisory mg/kg → ml calculator) --}}
+    @include('prescriptions.partials.pedo-dose-helper')
 
     {{-- Save button --}}
     <div class="mt-3 flex justify-end gap-2">

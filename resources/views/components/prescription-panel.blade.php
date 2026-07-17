@@ -33,14 +33,20 @@
     // or new format [{drug,drug_id,sos,morn,noon,night,duration,unit}]
     $normalised = collect((array) $value)->map(function ($row) {
         if (!is_array($row)) return null;
+        $formType = $row['form_type'] ?? 'tablet';
+        // Liquids (syrup/suspension/drops) are dosed in ml — keep the number.
+        // Everything else is a yes/no dose — keep the boolean.
+        $liquid = in_array($formType, ['syrup', 'suspension', 'drops'], true);
+        $dose = fn ($v) => $liquid ? (float) ($v ?? 0) : (bool) ($v ?? false);
         return [
             'drug'      => $row['drug']      ?? '',
             'drug_id'   => $row['drug_id']   ?? null,
-            'form_type' => $row['form_type'] ?? 'tablet',
+            'form_type' => $formType,
+            'food'      => $row['food']      ?? '',
             'sos'       => (bool) ($row['sos']   ?? false),
-            'morn'      => (bool) ($row['morn']  ?? false),
-            'noon'      => (bool) ($row['noon']  ?? false),
-            'night'     => (bool) ($row['night'] ?? false),
+            'morn'      => $dose($row['morn']  ?? null),
+            'noon'      => $dose($row['noon']  ?? null),
+            'night'     => $dose($row['night'] ?? null),
             'duration'  => (string) ($row['duration'] ?? ''),
             'unit'      => $row['unit'] ?? 'days',
         ];
@@ -127,18 +133,46 @@
         selectedInstr: {{ $instrJson }},
 
         addDrug() {
-            this.drugs.push({ drug:'', drug_id:null, form_type:'tablet', sos:false, morn:false, noon:false, night:false, duration:'', unit:'days' });
+            this.drugs.push({ drug:'', drug_id:null, form_type:'tablet', food:'', sos:false, morn:false, noon:false, night:false, duration:'', unit:'days' });
         },
 
         // Single-unit forms don't multiply by dose × duration
         isSingleUnit(row) {
             return ['gel','cream','mouthwash','rinse','brush','toothpaste','tube','lotion','ointment','spray'].includes(row.form_type);
         },
+        // Liquids are dosed in millilitres — the time-of-day cells take ml, not a tick.
+        isLiquid(row) {
+            return ['syrup','suspension','drops'].includes(row.form_type);
+        },
+        // Keep dose values the right type when the form changes: booleans for
+        // solids, numbers for liquids. Prevents a checkbox 'true' leaking into
+        // an ml field (and vice-versa).
+        onFormTypeChange(row) {
+            const liquid = this.isLiquid(row);
+            ['morn','noon','night'].forEach(k => {
+                if (liquid) {
+                    if (typeof row[k] === 'boolean') row[k] = '';
+                } else {
+                    if (typeof row[k] !== 'boolean') row[k] = (parseFloat(row[k]) || 0) > 0;
+                }
+            });
+        },
         removeDrug(idx) { this.drugs.splice(idx, 1); },
         calcTotal(row) {
             if (this.isSingleUnit(row)) return 1;
+            const duration = parseInt(row.duration) || 0;
+            if (this.isLiquid(row)) {
+                const mlPerDay = (parseFloat(row.morn) || 0) + (parseFloat(row.noon) || 0) + (parseFloat(row.night) || 0);
+                return Math.round(mlPerDay * duration * 10) / 10;   // total ml to dispense
+            }
             const doses = [row.sos, row.morn, row.noon, row.night].filter(Boolean).length;
-            return doses * (parseInt(row.duration) || 0);
+            return doses * duration;
+        },
+        // Total column label — appends the ml suffix for liquids.
+        totalLabel(row) {
+            const t = this.calcTotal(row);
+            if (t <= 0) return '';
+            return this.isLiquid(row) ? (t + ' ml') : t;
         },
         toggleInstr(txt) {
             const i = this.selectedInstr.indexOf(txt);
@@ -229,6 +263,8 @@
                                     row.duration = String(drug.default_duration);
                                     row.unit     = drug.default_duration_unit || 'days';
                                 }
+                                // Prefill the drug's default food advice (editable)
+                                if (drug.food_advice) row.food = drug.food_advice;
                                 // Auto-detect form type from dosage_form string
                                 if (drug.dosage_form) {
                                     const f = drug.dosage_form.toLowerCase();
@@ -244,6 +280,13 @@
                                     else if (f.includes('spray')) row.form_type = 'spray';
                                     else if (f.includes('injection') || f.includes('inj')) row.form_type = 'injection';
                                 }
+                                // Keep dose cells the right type for the detected form
+                                // (ml numbers for liquids, booleans for solids).
+                                const liquid = ['syrup','suspension','drops'].includes(row.form_type);
+                                ['morn','noon','night'].forEach(k => {
+                                    if (liquid) { if (typeof row[k] === 'boolean') row[k] = ''; }
+                                    else { if (typeof row[k] !== 'boolean') row[k] = (parseFloat(row[k]) || 0) > 0; }
+                                });
                                 this.q       = label;
                                 this.results = [];
                                 this.showDrop = false;
@@ -253,7 +296,7 @@
                         style="position:relative;">
 
                         {{-- Form type select (first — user picks type, then searches) --}}
-                        <select x-model="row.form_type"
+                        <select x-model="row.form_type" @change="onFormTypeChange(row)"
                                 style="margin-bottom:4px;width:100%;font-size:11px;border:1px solid #e5e7eb;border-radius:4px;padding:3px 6px;color:#374151;background:#fff;outline:none;">
                             <optgroup label="Solid">
                                 <option value="tablet">Tablet</option>
@@ -294,6 +337,18 @@
                                 ···
                             </span>
                         </div>
+
+                        {{-- Food advice (before/after food …) — prefilled from drug default, editable --}}
+                        <select x-model="row.food"
+                                style="margin-top:4px;width:100%;font-size:11px;border:1px solid #e5e7eb;border-radius:4px;padding:3px 6px;color:#374151;background:#fff;outline:none;">
+                            <option value="">Food advice…</option>
+                            <option value="After Food">After Food</option>
+                            <option value="Before Food">Before Food</option>
+                            <option value="With Food">With Food</option>
+                            <option value="Empty Stomach">Empty Stomach</option>
+                            <option value="At Bedtime">At Bedtime</option>
+                            <option value="Any Time">Any Time</option>
+                        </select>
 
                         {{-- Dropdown — positioned under the search input --}}
                         <div x-show="showDrop" x-cloak
@@ -345,17 +400,39 @@
                         <input type="checkbox" x-model="row.sos"
                                style="width:15px;height:15px;accent-color:#dc2626;cursor:pointer;">
                     </div>
+                    {{-- Morn / Noon / Night: ml number input for liquids, checkbox otherwise --}}
                     <div class="rx-checkbox-wrap">
-                        <input type="checkbox" x-model="row.morn"
-                               style="width:15px;height:15px;accent-color:#dc2626;cursor:pointer;">
+                        <template x-if="!isLiquid(row)">
+                            <input type="checkbox" x-model="row.morn"
+                                   style="width:15px;height:15px;accent-color:#dc2626;cursor:pointer;">
+                        </template>
+                        <template x-if="isLiquid(row)">
+                            <input type="number" min="0" step="0.5" x-model.number="row.morn"
+                                   placeholder="ml" title="ml per dose"
+                                   class="rx-input rx-input-center" style="padding:4px 2px;font-size:11px;">
+                        </template>
                     </div>
                     <div class="rx-checkbox-wrap">
-                        <input type="checkbox" x-model="row.noon"
-                               style="width:15px;height:15px;accent-color:#dc2626;cursor:pointer;">
+                        <template x-if="!isLiquid(row)">
+                            <input type="checkbox" x-model="row.noon"
+                                   style="width:15px;height:15px;accent-color:#dc2626;cursor:pointer;">
+                        </template>
+                        <template x-if="isLiquid(row)">
+                            <input type="number" min="0" step="0.5" x-model.number="row.noon"
+                                   placeholder="ml" title="ml per dose"
+                                   class="rx-input rx-input-center" style="padding:4px 2px;font-size:11px;">
+                        </template>
                     </div>
                     <div class="rx-checkbox-wrap">
-                        <input type="checkbox" x-model="row.night"
-                               style="width:15px;height:15px;accent-color:#dc2626;cursor:pointer;">
+                        <template x-if="!isLiquid(row)">
+                            <input type="checkbox" x-model="row.night"
+                                   style="width:15px;height:15px;accent-color:#dc2626;cursor:pointer;">
+                        </template>
+                        <template x-if="isLiquid(row)">
+                            <input type="number" min="0" step="0.5" x-model.number="row.night"
+                                   placeholder="ml" title="ml per dose"
+                                   class="rx-input rx-input-center" style="padding:4px 2px;font-size:11px;">
+                        </template>
                     </div>
 
                     <input type="number" class="rx-input rx-input-center"
@@ -369,8 +446,9 @@
                     </select>
 
                     <div class="rx-total">
-                        <span x-show="calcTotal(row) > 0" x-text="calcTotal(row)"></span>
-                        <span x-show="calcTotal(row) === 0" style="color:#d1d5db;">—</span>
+                        {{-- Liquids: no meaningful "total" — the per-dose ml says it all --}}
+                        <span x-show="!isLiquid(row) && calcTotal(row) > 0" x-text="totalLabel(row)"></span>
+                        <span x-show="isLiquid(row) || calcTotal(row) <= 0" style="color:#d1d5db;">—</span>
                     </div>
 
                     <button type="button" class="rx-remove-btn" @click="removeDrug(idx)">✕</button>

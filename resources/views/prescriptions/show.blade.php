@@ -200,15 +200,15 @@
                                         <span class="text-xs text-gray-300">—</span>
                                     @endif
                                 </div>
-                                {{-- Morn / Noon / Night --}}
-                                <p class="text-center font-semibold text-gray-700">{{ $item->morning ?: '—' }}</p>
-                                <p class="text-center font-semibold text-gray-700">{{ $item->afternoon ?: '—' }}</p>
-                                <p class="text-center font-semibold text-gray-700">{{ $item->night ?: '—' }}</p>
+                                {{-- Morn / Noon / Night — "5 ml" for liquids, plain count otherwise --}}
+                                <p class="text-center font-semibold text-gray-700">{{ $item->doseCell($item->morning) }}</p>
+                                <p class="text-center font-semibold text-gray-700">{{ $item->doseCell($item->afternoon) }}</p>
+                                <p class="text-center font-semibold text-gray-700">{{ $item->doseCell($item->night) }}</p>
                                 {{-- Duration --}}
                                 <p class="text-gray-700 text-xs">{{ $item->duration ? $item->duration.' '.($item->duration_unit ?? 'days') : '—' }}</p>
                                 {{-- Total --}}
                                 <p class="text-center font-bold text-gray-800">
-                                    {{ $item->quantity ?: '—' }}
+                                    {{ $item->quantityLabel() }}
                                     @if($item->quantity_manual)
                                         <span class="text-amber-400 text-xs" title="Manually set">✎</span>
                                     @endif

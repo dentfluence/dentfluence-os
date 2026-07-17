@@ -617,9 +617,10 @@ class PrescriptionController extends Controller
                 'generic_name'    => $drug?->generic?->name,
                 'strength'        => $drug?->strength,
                 'dosage_form'     => $drug?->dosage_form ?? ($row['form_type'] ?? null),
-                'morning'         => !empty($row['morn'])  ? 1.0 : 0.0,
-                'afternoon'       => !empty($row['noon'])  ? 1.0 : 0.0,
-                'night'           => !empty($row['night']) ? 1.0 : 0.0,
+                'food_advice'     => $row['food'] ?: ($drug?->defaultFoodInstruction?->label),
+                'morning'         => $this->doseValue($row['morn']  ?? null),
+                'afternoon'       => $this->doseValue($row['noon']  ?? null),
+                'night'           => $this->doseValue($row['night'] ?? null),
                 'is_sos'          => !empty($row['sos']),
                 'duration'        => (int) ($row['duration'] ?? 0),
                 'duration_unit'   => $row['unit'] ?? 'days',
@@ -630,6 +631,19 @@ class PrescriptionController extends Controller
             $item->quantity = $item->calculateQuantity();
             $item->save();
         }
+    }
+
+    /**
+     * Normalise a panel dose value into a stored amount.
+     * Solids send a boolean (checkbox) → 1 or 0; liquids send millilitres as a
+     * number → stored as-is (e.g. 5 ml). Blank/false becomes 0.
+     */
+    private function doseValue($value): float
+    {
+        if (is_bool($value)) {
+            return $value ? 1.0 : 0.0;
+        }
+        return is_numeric($value) ? (float) $value : 0.0;
     }
 
     private function audit(Prescription $prescription, string $action, ?string $notes = null): void

@@ -78,4 +78,36 @@ class PrescriptionItem extends Model
         $type = $this->dispensing_type ?? RxDrug::DISPENSING_UNIT;
         return in_array($type, [RxDrug::DISPENSING_UNIT, RxDrug::DISPENSING_VOLUME]);
     }
+
+    /** Liquid forms are dosed in millilitres (syrup / suspension / drops). */
+    public function isLiquidDose(): bool
+    {
+        return in_array(strtolower((string) $this->dosage_form), ['syrup', 'suspension', 'drops'], true);
+    }
+
+    /**
+     * Display a single time-of-day dose: "5 ml" for liquids, a plain trimmed
+     * number for solids, or "—" when nothing is prescribed at that time.
+     */
+    public function doseCell($value): string
+    {
+        if (! (float) $value) {
+            return '—';
+        }
+        $num = rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
+        return $this->isLiquidDose() ? $num . ' ml' : $num;
+    }
+
+    /**
+     * Total quantity label. Liquids show no total — the per-dose ml, frequency
+     * and duration already describe the order, and a raw volume like "31.5 ml"
+     * isn't a figure anyone dispenses against. Solids show the unit count.
+     */
+    public function quantityLabel(): string
+    {
+        if ($this->isLiquidDose() || ! $this->quantity) {
+            return '—';
+        }
+        return (string) $this->quantity;
+    }
 }

@@ -62,9 +62,39 @@
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-600 mb-1">Dosage Form</label>
-                    <input type="text" name="dosage_form" value="{{ old('dosage_form', $drug->dosage_form ?? '') }}"
-                           placeholder="Tablet, Capsule, Gel, Mouthwash…"
-                           class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                    @php
+                        $currentForm = old('dosage_form', $drug->dosage_form ?? '');
+                        $knownForms  = ['Tablet','Capsule','Lozenge','Syrup','Suspension','Drops','Mouthwash / Rinse','Gel','Cream / Ointment','Toothpaste','Brush / Applicator','Spray','Injection','Other'];
+                    @endphp
+                    <select name="dosage_form"
+                            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white">
+                        <option value="">— Select Form —</option>
+                        @if($currentForm && ! in_array($currentForm, $knownForms))
+                            <option value="{{ $currentForm }}" selected>{{ $currentForm }}</option>
+                        @endif
+                        <optgroup label="Solid">
+                            <option value="Tablet"  @selected($currentForm === 'Tablet')>Tablet</option>
+                            <option value="Capsule" @selected($currentForm === 'Capsule')>Capsule</option>
+                            <option value="Lozenge" @selected($currentForm === 'Lozenge')>Lozenge</option>
+                        </optgroup>
+                        <optgroup label="Liquid (dosed in ml)">
+                            <option value="Syrup"            @selected($currentForm === 'Syrup')>Syrup</option>
+                            <option value="Suspension"       @selected($currentForm === 'Suspension')>Suspension</option>
+                            <option value="Drops"            @selected($currentForm === 'Drops')>Drops</option>
+                            <option value="Mouthwash / Rinse" @selected($currentForm === 'Mouthwash / Rinse')>Mouthwash / Rinse</option>
+                        </optgroup>
+                        <optgroup label="Topical">
+                            <option value="Gel"                @selected($currentForm === 'Gel')>Gel</option>
+                            <option value="Cream / Ointment"   @selected($currentForm === 'Cream / Ointment')>Cream / Ointment</option>
+                            <option value="Toothpaste"         @selected($currentForm === 'Toothpaste')>Toothpaste</option>
+                            <option value="Brush / Applicator" @selected($currentForm === 'Brush / Applicator')>Brush / Applicator</option>
+                            <option value="Spray"              @selected($currentForm === 'Spray')>Spray</option>
+                        </optgroup>
+                        <optgroup label="Injectable / Other">
+                            <option value="Injection" @selected($currentForm === 'Injection')>Injection</option>
+                            <option value="Other"     @selected($currentForm === 'Other')>Other</option>
+                        </optgroup>
+                    </select>
                 </div>
                 <div class="sm:col-span-2">
                     <label class="block text-xs font-medium text-gray-600 mb-1">Composition</label>
