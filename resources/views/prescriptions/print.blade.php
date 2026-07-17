@@ -353,4 +353,10 @@
     </div>
 
     <script>
-        // Auto-print when opened via the Print button (query
+        // Auto-print when opened via the Print button (query param triggers it)
+        if (new URLSearchParams(window.location.search).get('auto') === '1') {
+            window.addEventListener('load', () => setTimeout(() => window.print(), 300));
+        }
+    </script>
+</body>
+</html>

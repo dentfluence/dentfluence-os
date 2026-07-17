@@ -174,4 +174,5 @@ class Prescription extends Model
     public function scopeIssued($q) { return $q->where('status', self::STATUS_ISSUED); }
 
     /** @deprecated — use scopeIssued(). Kept for backward compatibility. */
-    public function scopeFinalized($q) { return $this->scopeIssued
+    public function scopeFinalized($q) { return $this->scopeIssued($q); }
+}

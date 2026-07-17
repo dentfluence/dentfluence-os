@@ -637,4 +637,8 @@ class PrescriptionController extends Controller
         PrescriptionAuditLog::create([
             'prescription_id' => $prescription->id,
             'user_id'         => Auth::id(),
-            'action'  
+            'action'          => $action,
+            'notes'           => $notes,
+        ]);
+    }
+}

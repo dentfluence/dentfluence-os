@@ -355,4 +355,16 @@ function rxSendWhatsApp(btn) {
             return;
         }
         if (data.url) window.open(data.url, '_blank');
-        // Short delay so the new tab c
+        // Short delay so the new tab can open before the page reloads
+        setTimeout(() => window.location.reload(), 800);
+    })
+    .catch(err => {
+        console.error('WhatsApp send failed:', err);
+        alert('Something went wrong. Please try again.');
+        btn.disabled    = false;
+        btn.textContent = 'Send WhatsApp';
+    });
+}
+</script>
+
+@endsection
