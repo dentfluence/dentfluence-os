@@ -245,7 +245,7 @@
     </div>
 
     {{-- Clinical context --}}
-    @if($prescription->chief_complaint || $prescription->diagnosis)
+    @if($prescription->chief_complaint || $prescription->diagnosis || $prescription->weight)
     <div class="clinical-context">
         @if($prescription->chief_complaint)
         <div class="item">
@@ -257,6 +257,12 @@
         <div class="item">
             <div class="label">Diagnosis</div>
             <div class="value">{{ $prescription->diagnosis }}</div>
+        </div>
+        @endif
+        @if($prescription->weight)
+        <div class="item">
+            <div class="label">Weight</div>
+            <div class="value">{{ $prescription->weight }} kg</div>
         </div>
         @endif
     </div>
@@ -347,10 +353,4 @@
     </div>
 
     <script>
-        // Auto-print when opened via the Print button (query param triggers it)
-        if (new URLSearchParams(window.location.search).get('auto') === '1') {
-            window.addEventListener('load', () => setTimeout(() => window.print(), 300));
-        }
-    </script>
-</body>
-</html>
+        // Auto-print when opened via the Print button (query

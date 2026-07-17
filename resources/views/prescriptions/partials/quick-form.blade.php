@@ -64,6 +64,17 @@
                    placeholder="e.g. Acute pulpitis"
                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-300 bg-white">
         </div>
+        <div></div>
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Weight <span class="text-gray-400 font-normal">(optional)</span></label>
+            <div class="flex items-center gap-2">
+                <input type="text" name="weight" maxlength="20"
+                       value="{{ old('weight', $rx->weight ?? '') }}"
+                       placeholder="e.g. 15"
+                       class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-300 bg-white">
+                <span class="text-xs text-gray-400 shrink-0">kg</span>
+            </div>
+        </div>
         <div class="col-span-2">
             <label class="block text-xs font-medium text-gray-600 mb-1">Follow-up <span class="text-gray-400 font-normal">(optional)</span></label>
             <div class="flex items-center gap-2">
@@ -96,19 +107,4 @@
     <div class="mt-3 flex justify-end gap-2">
         @if($cancelUrl ?? null)
             <a href="{{ $cancelUrl }}"
-               class="text-sm px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition">
-                Cancel
-            </a>
-        @else
-            <button type="button" @click="activeForm = null"
-                    class="text-sm px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition">
-                Cancel
-            </button>
-        @endif
-        <button type="submit"
-                dusk="rx-save"
-                class="text-sm px-5 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition">
-            {{ $rx?->exists ? 'Save Changes' : 'Save Prescription' }}
-        </button>
-    </div>
-</form>
+               class="text-sm px-4 py-2 border bo

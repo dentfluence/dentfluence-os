@@ -45,7 +45,7 @@ class Prescription extends Model
         'prescription_number',
         'patient_id', 'visit_id', 'consultation_id',
         'prescribed_by',
-        'diagnosis', 'chief_complaint', 'follow_up_date', 'follow_up_after_days',
+        'diagnosis', 'chief_complaint', 'weight', 'follow_up_date', 'follow_up_after_days',
         'general_instructions', 'language',
         'source', 'status',
         'printed_at', 'print_count',
@@ -174,5 +174,4 @@ class Prescription extends Model
     public function scopeIssued($q) { return $q->where('status', self::STATUS_ISSUED); }
 
     /** @deprecated — use scopeIssued(). Kept for backward compatibility. */
-    public function scopeFinalized($q) { return $this->scopeIssued($q); }
-}
+    public function scopeFinalized($q) { return $this->scopeIssued

@@ -588,6 +588,7 @@ class PrescriptionController extends Controller
 
         $prescription->chief_complaint      = $request->input('chief_complaint') ?: null;
         $prescription->diagnosis            = $request->input('diagnosis') ?: null;
+        $prescription->weight               = $request->input('weight') ?: null;
         $prescription->follow_up_date       = $request->input('follow_up_date') ?: null;
         $prescription->follow_up_after_days = $request->input('follow_up_after_days') ?: null;
         $prescription->general_instructions = implode("\n", array_filter([$instrTxt, $note])) ?: null;
@@ -636,8 +637,4 @@ class PrescriptionController extends Controller
         PrescriptionAuditLog::create([
             'prescription_id' => $prescription->id,
             'user_id'         => Auth::id(),
-            'action'          => $action,
-            'notes'           => $notes,
-        ]);
-    }
-}
+            'action'  

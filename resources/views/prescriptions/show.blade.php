@@ -98,7 +98,7 @@
         <div class="lg:col-span-2 space-y-4">
 
             {{-- Clinical context --}}
-            @if($prescription->chief_complaint || $prescription->diagnosis || $prescription->follow_up_date || $prescription->follow_up_after_days)
+            @if($prescription->chief_complaint || $prescription->diagnosis || $prescription->weight || $prescription->follow_up_date || $prescription->follow_up_after_days)
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
                 <h2 class="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b border-gray-100">Clinical Context</h2>
                 <dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
@@ -112,6 +112,12 @@
                         <div>
                             <dt class="text-xs text-gray-400 font-medium">Diagnosis</dt>
                             <dd class="text-gray-800">{{ $prescription->diagnosis }}</dd>
+                        </div>
+                    @endif
+                    @if($prescription->weight)
+                        <div>
+                            <dt class="text-xs text-gray-400 font-medium">Weight</dt>
+                            <dd class="text-gray-800">{{ $prescription->weight }} kg</dd>
                         </div>
                     @endif
                     @if($prescription->follow_up_date || $prescription->follow_up_after_days)
@@ -349,16 +355,4 @@ function rxSendWhatsApp(btn) {
             return;
         }
         if (data.url) window.open(data.url, '_blank');
-        // Short delay so the new tab can open before the page reloads
-        setTimeout(() => window.location.reload(), 800);
-    })
-    .catch(err => {
-        console.error('WhatsApp send failed:', err);
-        alert('Something went wrong. Please try again.');
-        btn.disabled    = false;
-        btn.textContent = 'Send WhatsApp';
-    });
-}
-</script>
-
-@endsection
+        // Short delay so the new tab c
