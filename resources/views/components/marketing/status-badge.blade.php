@@ -20,6 +20,11 @@ $statuses = [
     'pending'   => ['label' => 'Pending',   'color' => '#d97706', 'bg' => 'rgba(217,119,6,0.10)',   'dot' => '#d97706', 'pulse' => false],
     'paused'    => ['label' => 'Paused',    'color' => '#9b6aad', 'bg' => 'rgba(155,106,173,0.12)', 'dot' => '#b95cb7', 'pulse' => false],
     'completed' => ['label' => 'Completed', 'color' => '#16a34a', 'bg' => 'rgba(22,163,74,0.10)',   'dot' => '#16a34a', 'pulse' => false],
+    // Blog Marketing Hub (Wave 1 Slice 5) — blog_posts.status has no
+    // 'archived' equivalent elsewhere in Marketing, so it was missing here;
+    // added rather than letting archived posts silently fall back to the
+    // 'draft' look below.
+    'archived'  => ['label' => 'Archived',  'color' => '#78716c', 'bg' => 'rgba(120,113,108,0.10)', 'dot' => '#a8a29e', 'pulse' => false],
 ];
 
 $s = $statuses[$status] ?? $statuses['draft'];

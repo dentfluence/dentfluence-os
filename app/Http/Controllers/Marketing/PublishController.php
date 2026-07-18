@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Marketing;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Marketing\Concerns\ResolvesClinicId;
 use App\Models\Marketing\MarketingPost;
+use App\Models\Marketing\PlatformConnection;
 use App\Models\Marketing\PostVariant;
 use App\Models\Marketing\PostSchedule;
 use App\Models\Marketing\MarketingActivityLog;
@@ -145,12 +146,30 @@ class PublishController extends Controller
             "Post \"" . ($post->title ?: substr($post->caption, 0, 40)) . "\" created"
         );
 
+        // Per-channel targeting honesty: tell the user up front which selected
+        // platforms have no connected PlatformConnection. The engine
+        // (ProcessScheduledPost) will never attempt those — it records them as
+        // skipped with a "not connected — nothing sent" reason, not published.
+        $connected = PlatformConnection::forClinic($this->currentClinicId())
+            ->connected()
+            ->pluck('platform')
+            ->all();
+        $unconnected = array_values(array_diff($validated['platforms'], $connected));
+
+        $notConnectedNote = $unconnected
+            ? ' Note: not connected, will be skipped: ' . implode(', ', $unconnected) . '.'
+            : '';
+
         if ($request->expectsJson()) {
-            return response()->json(['success' => true, 'post_id' => $post->id]);
+            return response()->json([
+                'success'               => true,
+                'post_id'               => $post->id,
+                'unconnected_platforms' => $unconnected,
+            ]);
         }
 
         return redirect()->route('marketing.calendar')
-            ->with('success', 'Post saved' . ($validated['scheduled_at'] ? ' and scheduled.' : ' as draft.'));
+            ->with('success', 'Post saved' . ($validated['scheduled_at'] ? ' and scheduled.' : ' as draft.') . $notConnectedNote);
     }
 
     // -------------------------------------------------------------------------

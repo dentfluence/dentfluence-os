@@ -23,7 +23,10 @@ use Illuminate\Support\Facades\Http;
  */
 class MetaConnector implements OAuthConnectorInterface
 {
-    private const GRAPH_VERSION = 'v19.0';
+    private function graphVersion(): string
+    {
+        return config('services.meta.graph_version', 'v23.0');
+    }
 
     public function providerName(): string
     {
@@ -51,7 +54,7 @@ class MetaConnector implements OAuthConnectorInterface
 
         $redirect = route('marketing.integrations.callback', ['platform' => $platform]);
 
-        return 'https://www.facebook.com/' . self::GRAPH_VERSION . '/dialog/oauth?' . http_build_query([
+        return 'https://www.facebook.com/' . $this->graphVersion() . '/dialog/oauth?' . http_build_query([
             'client_id'     => $appId,
             'redirect_uri'  => $redirect,
             'scope'         => $scopes,
@@ -66,7 +69,7 @@ class MetaConnector implements OAuthConnectorInterface
         $appId  = config('services.meta.app_id');
         $secret = config('services.meta.app_secret');
 
-        return Http::get('https://graph.facebook.com/' . self::GRAPH_VERSION . '/oauth/access_token', [
+        return Http::get('https://graph.facebook.com/' . $this->graphVersion() . '/oauth/access_token', [
             'client_id'     => $appId,
             'client_secret' => $secret,
             'redirect_uri'  => $redirectUri,
@@ -77,14 +80,14 @@ class MetaConnector implements OAuthConnectorInterface
     public function fetchAccountInfo(string $accessToken): array
     {
         return Http::withToken($accessToken)
-            ->get('https://graph.facebook.com/' . self::GRAPH_VERSION . '/me', ['fields' => 'id,name,picture'])
+            ->get('https://graph.facebook.com/' . $this->graphVersion() . '/me', ['fields' => 'id,name,picture'])
             ->throw()->json();
     }
 
     public function ping(string $accessToken): bool
     {
         $r = Http::withToken($accessToken)
-            ->get('https://graph.facebook.com/' . self::GRAPH_VERSION . '/me', ['fields' => 'id']);
+            ->get('https://graph.facebook.com/' . $this->graphVersion() . '/me', ['fields' => 'id']);
 
         return $r->successful() && isset($r->json()['id']);
     }
@@ -105,7 +108,7 @@ class MetaConnector implements OAuthConnectorInterface
     public function createInstagramContainer(string $igUserId, string $token, array $mediaPayload): array
     {
         $r    = Http::withToken($token)->timeout(20)
-            ->post('https://graph.facebook.com/' . self::GRAPH_VERSION . "/{$igUserId}/media", $mediaPayload);
+            ->post('https://graph.facebook.com/' . $this->graphVersion() . "/{$igUserId}/media", $mediaPayload);
         $json = $r->json() ?? [];
 
         if (! $r->successful() || ! ($json['id'] ?? null)) {
@@ -119,7 +122,7 @@ class MetaConnector implements OAuthConnectorInterface
     public function publishInstagramContainer(string $igUserId, string $token, string $containerId): array
     {
         $r    = Http::withToken($token)->timeout(20)
-            ->post('https://graph.facebook.com/' . self::GRAPH_VERSION . "/{$igUserId}/media_publish", ['creation_id' => $containerId]);
+            ->post('https://graph.facebook.com/' . $this->graphVersion() . "/{$igUserId}/media_publish", ['creation_id' => $containerId]);
         $json = $r->json() ?? [];
 
         if (! $r->successful() || ! ($json['id'] ?? null)) {
@@ -133,7 +136,7 @@ class MetaConnector implements OAuthConnectorInterface
     public function publishFacebookFeed(string $pageId, string $token, array $payload): array
     {
         $r    = Http::withToken($token)->timeout(20)
-            ->post('https://graph.facebook.com/' . self::GRAPH_VERSION . "/{$pageId}/feed", $payload);
+            ->post('https://graph.facebook.com/' . $this->graphVersion() . "/{$pageId}/feed", $payload);
         $json = $r->json() ?? [];
 
         if (! $r->successful()) {
@@ -146,8 +149,10 @@ class MetaConnector implements OAuthConnectorInterface
     // ── Lead Ads webhook ──────────────────────────────────────────────────────
 
     /** Fetch a lead's submitted answers by leadgen_id. Returns raw field_data array, or null on failure. Read-only/idempotent. */
-    public function fetchLeadFields(string $leadgenId, string $token, string $version = 'v19.0'): ?array
+    public function fetchLeadFields(string $leadgenId, string $token, ?string $version = null): ?array
     {
+        $version ??= $this->graphVersion();
+
         $resp = Http::timeout(15)->get("https://graph.facebook.com/{$version}/{$leadgenId}", [
             'access_token' => $token,
             'fields'       => 'field_data',

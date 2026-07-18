@@ -14,6 +14,7 @@ use App\Http\Controllers\Marketing\IntegrationController;
 use App\Http\Controllers\Marketing\AnalyticsController;
 use App\Http\Controllers\Marketing\SettingsController;
 use App\Http\Controllers\Marketing\ReviewsController;
+use App\Http\Controllers\Marketing\BlogController;
 
 Route::middleware(['marketing.active', 'module:marketing'])
     ->prefix('marketing')
@@ -26,6 +27,57 @@ Route::middleware(['marketing.active', 'module:marketing'])
         Route::post('/publish', [PublishController::class, 'store'])->name('publish.store');
         Route::post('/publish/draft', [PublishController::class, 'saveDraft'])->name('publish.draft');
         Route::put('/publish/{post}/variants/{platform}', [PublishController::class, 'updateVariant'])->name('publish.variant');
+
+        // ── Blog Marketing Hub (Wave 1) ──────────────────────────────────────
+        // Gated by Feature 'blog.hub' inside BlogController (404 when off).
+        // All {blog} params bind on the post's permanent uuid, never the slug
+        // or sequential id (BlogPost::getRouteKeyName). Slice 2 = CRUD + save/
+        // autosave/versioning; Slice 3 = editor; Slice 4 = SEO panel; Slice 5 =
+        // CMS list + calendar; publishing adapter lands in Slice 6
+        // (docs/blog-marketing-hub-masterplan.md §8).
+        Route::get('/blog',                 [BlogController::class, 'index'])->name('blog.index');
+        Route::post('/blog',                [BlogController::class, 'store'])->name('blog.store');
+
+        // Editor pages (Slice 3). `create` MUST precede the /blog/{blog} show
+        // route below — {blog} binds on uuid, so the literal "create" segment
+        // would otherwise be swallowed and 404 on uuid resolution.
+        Route::get('/blog/create',          [BlogController::class, 'create'])->name('blog.create');
+
+        // NOTE: the blog no longer has its own calendar view — scheduled/
+        // published posts surface in the single Marketing calendar
+        // (marketing.calendar / CalendarController::index) instead.
+
+        Route::get('/blog/{blog}/edit',     [BlogController::class, 'edit'])->name('blog.edit');
+
+        // Editor support endpoints (JSON): DAM image list + inline category/tag
+        // create. Namespaced under distinct prefixes so they never collide with
+        // the uuid-bound /blog/{blog} routes.
+        Route::get('/blog-media/assets',        [BlogController::class, 'assetsIndex'])->name('blog.assets');
+        Route::post('/blog-taxonomy/categories',[BlogController::class, 'categoriesStore'])->name('blog.categories.store');
+        Route::post('/blog-taxonomy/tags',      [BlogController::class, 'tagsStore'])->name('blog.tags.store');
+
+        Route::get('/blog/{blog}',          [BlogController::class, 'show'])->name('blog.show');
+        Route::put('/blog/{blog}',          [BlogController::class, 'update'])->name('blog.update');
+        Route::post('/blog/{blog}/draft',   [BlogController::class, 'draft'])->name('blog.draft');
+        Route::post('/blog/{blog}/autosave',[BlogController::class, 'autosave'])->name('blog.autosave');
+        Route::post('/blog/{blog}/duplicate',[BlogController::class, 'duplicate'])->name('blog.duplicate');
+        Route::post('/blog/{blog}/archive',  [BlogController::class, 'archive'])->name('blog.archive');
+        Route::post('/blog/{blog}/unarchive',[BlogController::class, 'unarchive'])->name('blog.unarchive');
+        Route::delete('/blog/{blog}',        [BlogController::class, 'destroy'])->name('blog.destroy');
+
+        // Version history (autosave/manual/scheduled/publish snapshots + restore)
+        Route::get('/blog/{blog}/versions',                    [BlogController::class, 'versionsIndex'])->name('blog.versions.index');
+        Route::post('/blog/{blog}/versions/{version}/restore', [BlogController::class, 'versionsRestore'])->name('blog.versions.restore');
+        Route::delete('/blog/{blog}/versions/{version}',       [BlogController::class, 'versionsDestroy'])->name('blog.versions.destroy');
+
+        // Website publishing (Slice 6) — adapter-driven publish/sync + status,
+        // retry-on-failure and delete-from-site, all via the blog_publications
+        // ledger (WordPress → queued job; standalone → inline). No live site
+        // connected resolves to the standalone adapter — never a faked success.
+        Route::get('/blog/{blog}/publications',                      [BlogController::class, 'publicationsIndex'])->name('blog.publications');
+        Route::post('/blog/{blog}/publish',                          [BlogController::class, 'publish'])->name('blog.publish');
+        Route::post('/blog/{blog}/publications/{publication}/retry', [BlogController::class, 'publicationRetry'])->name('blog.publication.retry');
+        Route::delete('/blog/{blog}/publications/{publication}',     [BlogController::class, 'publicationDestroy'])->name('blog.publication.destroy');
 
         Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar');
         Route::get('/calendar/export', [CalendarController::class, 'export'])->name('calendar.export');

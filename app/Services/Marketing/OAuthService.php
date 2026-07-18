@@ -176,7 +176,7 @@ class OAuthService
 
         $redirect = route('marketing.integrations.callback', ['platform' => $platform]);
 
-        $legacyUrl = 'https://www.facebook.com/v19.0/dialog/oauth?' . http_build_query([
+        $legacyUrl = 'https://www.facebook.com/' . config('services.meta.graph_version', 'v23.0') . '/dialog/oauth?' . http_build_query([
             'client_id'     => $appId,
             'redirect_uri'  => $redirect,
             'scope'         => $scopes,
@@ -210,7 +210,7 @@ class OAuthService
                 $secret = config('services.meta.app_secret');
 
                 // Exchange code for access token
-                $tokenResponse = Http::get('https://graph.facebook.com/v19.0/oauth/access_token', [
+                $tokenResponse = Http::get('https://graph.facebook.com/' . config('services.meta.graph_version', 'v23.0') . '/oauth/access_token', [
                     'client_id'     => $appId,
                     'client_secret' => $secret,
                     'redirect_uri'  => $redirect,
@@ -219,7 +219,7 @@ class OAuthService
 
                 // Get user/page info
                 $meResponse = Http::withToken($tokenResponse['access_token'])
-                    ->get('https://graph.facebook.com/v19.0/me', ['fields' => 'id,name,picture'])
+                    ->get('https://graph.facebook.com/' . config('services.meta.graph_version', 'v23.0') . '/me', ['fields' => 'id,name,picture'])
                     ->throw()->json();
             }
         } catch (\Throwable $e) {
@@ -262,7 +262,7 @@ class OAuthService
             $ok = app(IntegrationEngine::class)->meta()->ping($conn->access_token);
         } else {
             $r  = Http::withToken($conn->access_token)
-                ->get('https://graph.facebook.com/v19.0/me', ['fields' => 'id']);
+                ->get('https://graph.facebook.com/' . config('services.meta.graph_version', 'v23.0') . '/me', ['fields' => 'id']);
             $ok = $r->successful() && isset($r->json()['id']);
         }
 

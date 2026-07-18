@@ -71,8 +71,11 @@ return [
     // and https://console.cloud.google.com (for Google Business / Analytics)
 
     'meta' => [
-        'app_id'     => env('META_APP_ID'),
-        'app_secret' => env('META_APP_SECRET'),
+        'app_id'        => env('META_APP_ID'),
+        'app_secret'    => env('META_APP_SECRET'),
+        // Single source of truth for the Graph API version. Meta expires each
+        // version ~2 years after release; bump this one value to migrate.
+        'graph_version' => env('META_GRAPH_VERSION', 'v23.0'),
     ],
 
     'google' => [

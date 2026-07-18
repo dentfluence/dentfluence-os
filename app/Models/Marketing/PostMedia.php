@@ -4,6 +4,7 @@ namespace App\Models\Marketing;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 class PostMedia extends Model
 {
@@ -37,6 +38,30 @@ class PostMedia extends Model
     public function post(): BelongsTo
     {
         return $this->belongsTo(MarketingPost::class, 'post_id');
+    }
+
+    // -----------------------------------------------------------------------
+    // Accessors
+    // -----------------------------------------------------------------------
+
+    /**
+     * Public URL for this media file. ProcessScheduledPost reads
+     * $media->url for Instagram/Facebook/Google Business attachments, but no
+     * such column or accessor existed — it was always null, so images were
+     * silently dropped from every publish. file_path may hold a disk-relative
+     * path or a full URL; handle both.
+     */
+    public function getUrlAttribute(): ?string
+    {
+        if (! $this->file_path) {
+            return null;
+        }
+
+        if (str_starts_with($this->file_path, 'http://') || str_starts_with($this->file_path, 'https://')) {
+            return $this->file_path;
+        }
+
+        return Storage::disk('public')->url(ltrim($this->file_path, '/'));
     }
 
     // -----------------------------------------------------------------------

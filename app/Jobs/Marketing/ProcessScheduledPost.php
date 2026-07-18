@@ -8,6 +8,7 @@ use App\Models\Marketing\MarketingPost;
 use App\Models\Marketing\PlatformConnection;
 use App\Models\Marketing\PostSchedule;
 use App\Models\Marketing\PostVariant;
+use App\Services\Marketing\WordpressPublishService;
 use App\Support\Features\Feature;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -80,6 +81,7 @@ class ProcessScheduledPost implements ShouldQueue
                     'status'                 => $platformResult['success'] ? 'published' : 'failed',
                     'published_at'           => $platformResult['success'] ? now() : null,
                     'external_id'            => $platformResult['platform_post_id'] ?? null,
+                    'external_url'           => $platformResult['external_url'] ?? null,
                     'publish_error'          => $platformResult['error'] ?? null,
                     'platform_specific_meta' => array_merge($variant->platform_specific_meta ?? [], [
                         'publish_result' => $platformResult,
@@ -88,22 +90,33 @@ class ProcessScheduledPost implements ShouldQueue
             }
             // ─────────────────────────────────────────────────────────────────
 
-            // Mark master post as published
-            $post->update(['status' => 'published', 'updated_by' => null]);
+            // Honesty fix: the master post only counts as published if at
+            // least one channel actually went out. Previously this was set to
+            // 'published' unconditionally, so a post whose every channel was
+            // unconnected still showed as published.
+            $publishedCount = count(array_filter($results, fn (array $r) => $r['success']));
+            $skippedCount   = count(array_filter($results, fn (array $r) => ! $r['success'] && ($r['skipped'] ?? false)));
+            $failedCount    = count($results) - $publishedCount - $skippedCount;
 
-            // Mark schedule as done
+            $post->update([
+                'status'     => $publishedCount > 0 ? 'published' : 'failed',
+                'updated_by' => null,
+            ]);
+
+            // Mark schedule as done (it was processed, whatever the per-channel outcome)
             $schedule->update([
                 'status'       => 'done',
                 'processed_at' => now(),
             ]);
 
-            // Log activity
+            // Log activity with an honest per-channel summary
             MarketingActivityLog::log(
                 $post->clinic_id,
-                'post_published',
+                $publishedCount > 0 ? 'post_published' : 'post_publish_failed',
                 $post,
-                "Post \"" . ($post->title ?: substr($post->caption, 0, 40)) . "\" published (scheduled)",
-                ['schedule_id' => $this->scheduleId],
+                "Post \"" . ($post->title ?: substr($post->caption, 0, 40)) . "\" processed: "
+                    . "{$publishedCount} published, {$skippedCount} skipped (not connected), {$failedCount} failed",
+                ['schedule_id' => $this->scheduleId, 'results' => $results],
                 null
             );
 
@@ -161,10 +174,17 @@ class ProcessScheduledPost implements ShouldQueue
             ->where('status', 'connected')
             ->first();
 
-        // No connection — mark as "published" in the UI so the calendar works
+        // Honesty fix: no connection means NOTHING was sent — never report
+        // success (the old success:true here made the UI show unconnected
+        // channels as "published").
         if (! $conn) {
-            Log::info("ProcessScheduledPost: no {$platform} connection for clinic {$clinicId} — skipping live publish.");
-            return ['success' => true, 'platform_post_id' => null, 'note' => 'no_connection'];
+            Log::info("ProcessScheduledPost: no {$platform} connection for clinic {$clinicId} — skipped, nothing sent.");
+            return [
+                'success' => false,
+                'skipped' => true,
+                'error'   => ucfirst(str_replace('_', ' ', $platform))
+                    . ' is not connected — nothing was sent. Connect it in Marketing → Integrations or remove it from this post.',
+            ];
         }
 
         // Token expired — fail gracefully
@@ -178,7 +198,12 @@ class ProcessScheduledPost implements ShouldQueue
                 'facebook'         => $this->publishToFacebook($variant, $post, $conn),
                 'google_business'  => $this->publishToGoogleBusiness($variant, $post, $conn),
                 'wordpress'        => $this->publishToWordpress($variant, $post, $conn),
-                default            => ['success' => true, 'note' => 'platform_not_implemented'],
+                // Honesty fix: an unimplemented platform must not report success.
+                default            => [
+                    'success' => false,
+                    'skipped' => true,
+                    'error'   => "Publishing to {$platform} is not implemented yet — nothing was sent.",
+                ],
             };
         } catch (\Throwable $e) {
             Log::error("ProcessScheduledPost: {$platform} publish failed: " . $e->getMessage());
@@ -203,7 +228,7 @@ class ProcessScheduledPost implements ShouldQueue
     {
         $igUserId = $conn->external_account_id;
         $token    = $conn->access_token; // model should decrypt if encrypted
-        $base     = "https://graph.facebook.com/v19.0";
+        $base     = "https://graph.facebook.com/" . config('services.meta.graph_version', 'v23.0');
 
         if (! $igUserId || ! $token) {
             return ['success' => false, 'error' => 'Instagram account ID or token missing. Reconnect in Integrations.'];
@@ -219,9 +244,14 @@ class ProcessScheduledPost implements ShouldQueue
         if ($firstMedia && $firstMedia->url) {
             $mediaPayload['image_url'] = $firstMedia->url;
         } else {
-            // Instagram requires an image — skip live publish, mark as note
-            Log::info("ProcessScheduledPost: Instagram post #{$post->id} has no image; skipping live publish.");
-            return ['success' => true, 'platform_post_id' => null, 'note' => 'no_image_skipped'];
+            // Instagram requires an image — honesty fix: this used to return
+            // success:true, showing an unsent post as published.
+            Log::info("ProcessScheduledPost: Instagram post #{$post->id} has no image; nothing sent.");
+            return [
+                'success' => false,
+                'skipped' => true,
+                'error'   => 'Instagram requires an image — this post has none, so nothing was sent.',
+            ];
         }
 
         // Phase 7 (Integration boundary): routed through MetaConnector once
@@ -293,7 +323,7 @@ class ProcessScheduledPost implements ShouldQueue
 
     /**
      * Facebook Pages — Graph API page feed post.
-     * Real call: POST /v19.0/{page-id}/feed
+     * Real call: POST /{graph-version}/{page-id}/feed
      *
      * Requires on PlatformConnection:
      *   - external_account_id : Facebook Page ID
@@ -305,7 +335,7 @@ class ProcessScheduledPost implements ShouldQueue
     {
         $pageId = $conn->external_account_id;
         $token  = $conn->access_token;
-        $base   = "https://graph.facebook.com/v19.0";
+        $base   = "https://graph.facebook.com/" . config('services.meta.graph_version', 'v23.0');
 
         if (! $pageId || ! $token) {
             return ['success' => false, 'error' => 'Facebook Page ID or token missing. Reconnect in Integrations.'];
@@ -438,52 +468,28 @@ class ProcessScheduledPost implements ShouldQueue
     }
 
     /**
-     * WordPress — Post via WP REST API using app-password auth.
-     * meta['site_url'] and meta['username'] are stored on the PlatformConnection.
-     * access_token stores the app-password (encrypted).
+     * WordPress — creates the blog post as a DRAFT via the WP REST API
+     * (app-password auth). meta['site_url'] and meta['username'] live on the
+     * PlatformConnection; access_token stores the app password (encrypted,
+     * decrypted by the model accessor).
+     *
+     * All real logic (media upload, tags/category, HTML body, draft create)
+     * lives in WordpressPublishService — the single source of truth. Both the
+     * legacy path (integration.website OFF, the current default) and the
+     * connector path (flag ON) end up in that same service, so they cannot
+     * drift apart. The returned external_url is the wp-admin edit-post URL.
      */
     private function publishToWordpress(PostVariant $variant, MarketingPost $post, PlatformConnection $conn): array
     {
-        $siteUrl  = $conn->meta['site_url']  ?? null;
-        $username = $conn->meta['username']  ?? null;
-        $password = $conn->access_token;
-
-        if (! $siteUrl || ! $username || ! $password) {
-            return ['success' => false, 'error' => 'WordPress credentials incomplete. Re-connect in Integrations.'];
-        }
-
-        $payload = [
-            'title'   => $post->title ?: substr($post->caption, 0, 60),
-            'content' => $variant->caption ?: $post->caption,
-            'status'  => 'publish',
-        ];
-
-        // Phase 7: WordPress is the clinic's own website — routes through the
-        // new `integration.website` flag (Slice 3), separate from Meta/Google.
         $viaConnector = Feature::enabled('integration.website');
         $engine       = app(IntegrationEngine::class);
 
-        if ($viaConnector) {
-            $result = $engine->website()->publishWordpress($siteUrl, $username, $password, $payload);
-            $engine->logWebsitePublish(true, $result['success'], $result['error']);
+        $result = $viaConnector
+            ? $engine->website()->publishWordpressDraft($post, $variant, $conn)
+            : app(WordpressPublishService::class)->publishDraft($post, $variant, $conn);
 
-            return $result['success']
-                ? ['success' => true, 'platform_post_id' => $result['id']]
-                : ['success' => false, 'error' => 'WP API error: ' . $result['error']];
-        }
+        $engine->logWebsitePublish($viaConnector, $result['success'], $result['error'] ?? null);
 
-        // ── legacy inline call (unchanged) ──────────────────────────────────
-        $r = Http::withBasicAuth($username, $password)
-            ->post("{$siteUrl}/wp-json/wp/v2/posts", $payload);
-
-        if ($r->successful()) {
-            $engine->logWebsitePublish(false, true);
-            return ['success' => true, 'platform_post_id' => (string) $r->json('id')];
-        }
-
-        $err = $r->json('message') ?? ('HTTP ' . $r->status());
-        $engine->logWebsitePublish(false, false, $err);
-
-        return ['success' => false, 'error' => 'WP API error: ' . $err];
+        return $result;
     }
 }

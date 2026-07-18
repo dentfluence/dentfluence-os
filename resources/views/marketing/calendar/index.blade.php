@@ -12,20 +12,26 @@
 @php
     $marketingPageTitle = 'Calendar';
 
-    // ── June 2026 grid helpers ────────────────────────────────────────────
-    $year        = 2026;
-    $month       = 6;
-    $monthLabel  = 'June 2026';
-    $daysInMonth = 30;          // June has 30 days
+    // ── Month grid helpers — driven by CalendarController ($month / $year) ──
+    // (Was hardcoded to a June-2026 demo; now honours the controller's month
+    // so real scheduled/published social + blog posts land on their true
+    // dates. Week/List views below remain illustrative mock data.)
+    $year        = (int) ($year  ?? now()->year);
+    $month       = (int) ($month ?? now()->month);
+    $gridFirst   = \Carbon\Carbon::create($year, $month, 1);
+    $monthLabel  = $gridFirst->format('F Y');
+    $daysInMonth = $gridFirst->daysInMonth;
 
-    // June 1 2026 is a Monday → offset = 1 (Sun=0, Mon=1 … Sat=6)
-    $startOffset = 1;
+    // Leading blank cells before day 1 (Sun=0, Mon=1 … Sat=6).
+    $startOffset = $gridFirst->dayOfWeek;
 
-    // Days that are in the "missed posts" warning zone (days 7–11)
-    $warnDays = [7, 8, 9, 10, 11];
+    // "Missed posts" warning zone was demo-only — no longer applied.
+    $warnDays = [];
 
-    // Today highlighted
-    $todayDay = 14; // June 14 2026
+    // Highlight today only when the current month is on screen.
+    $todayDay = ($year === (int) now()->year && $month === (int) now()->month)
+        ? (int) now()->day
+        : null;
 
     // Platform meta (color, icon SVG path(s))
     $platformMeta = [
@@ -231,14 +237,14 @@
         flex-shrink: 0;
     ">
         <button @click="activeView='month'"
-                :style="activeView==='month' ? 'font-weight:600;color:#fff;background:linear-gradient(135deg,#6a0f70,#b95cb7);' : 'font-weight:400;color:#5a4868;background:#fff;'"
-                style="padding:5px 13px;font-family:'Inter',sans-serif;font-size:12.5px;border:none;cursor:pointer;border-right:1px solid rgba(185,92,183,0.2);">Month</button>
+                :style="activeView==='month' ? 'padding:7px 20px;font-weight:600;color:#fff;background:linear-gradient(135deg,#6a0f70,#b95cb7);' : 'padding:7px 20px;font-weight:400;color:#5a4868;background:#fff;'"
+                style="padding:7px 20px;font-family:'Inter',sans-serif;font-size:12.5px;letter-spacing:.01em;border:none;cursor:pointer;border-right:1px solid rgba(185,92,183,0.2);">Month</button>
         <button @click="activeView='week'"
-                :style="activeView==='week' ? 'font-weight:600;color:#fff;background:linear-gradient(135deg,#6a0f70,#b95cb7);' : 'font-weight:400;color:#5a4868;background:#fff;'"
-                style="padding:5px 13px;font-family:'Inter',sans-serif;font-size:12.5px;border:none;cursor:pointer;border-right:1px solid rgba(185,92,183,0.2);">Week</button>
+                :style="activeView==='week' ? 'padding:7px 20px;font-weight:600;color:#fff;background:linear-gradient(135deg,#6a0f70,#b95cb7);' : 'padding:7px 20px;font-weight:400;color:#5a4868;background:#fff;'"
+                style="padding:7px 20px;font-family:'Inter',sans-serif;font-size:12.5px;letter-spacing:.01em;border:none;cursor:pointer;border-right:1px solid rgba(185,92,183,0.2);">Week</button>
         <button @click="activeView='list'"
-                :style="activeView==='list' ? 'font-weight:600;color:#fff;background:linear-gradient(135deg,#6a0f70,#b95cb7);' : 'font-weight:400;color:#5a4868;background:#fff;'"
-                style="padding:5px 13px;font-family:'Inter',sans-serif;font-size:12.5px;border:none;cursor:pointer;">List</button>
+                :style="activeView==='list' ? 'padding:7px 20px;font-weight:600;color:#fff;background:linear-gradient(135deg,#6a0f70,#b95cb7);' : 'padding:7px 20px;font-weight:400;color:#5a4868;background:#fff;'"
+                style="padding:7px 20px;font-family:'Inter',sans-serif;font-size:12.5px;letter-spacing:.01em;border:none;cursor:pointer;">List</button>
     </div>
 
     {{-- Divider --}}
@@ -346,7 +352,7 @@
                 <span style="
                     font-family:'Inter',sans-serif; font-size:12px;
                     font-weight:600; color:#1e0a2c;
-                ">June 2026</span>
+                ">{{ $monthLabel }}</span>
                 <button onclick="return false" style="
                     width:22px; height:22px; border:none; background:none;
                     cursor:pointer; color:#6a0f70; display:flex; align-items:center; justify-content:center; padding:0;
@@ -604,7 +610,7 @@
                 @php
                     $isToday    = ($day === $todayDay);
                     $isWarnDay  = ($day !== null && in_array($day, $warnDays));
-                    $dateKey    = $day ? sprintf('2026-06-%02d', $day) : null;
+                    $dateKey    = $day ? sprintf('%04d-%02d-%02d', $year, $month, $day) : null;
                     $dayPosts   = ($dateKey && isset($postsByDate[$dateKey])) ? $postsByDate[$dateKey] : collect();
                     $isBlank    = $day === null;
                     $isSunday   = ($colIndex === 0);
@@ -661,8 +667,13 @@
                     @php
                         $pMeta = $platformMeta[$post['platform']] ?? ['color'=>'#999','icon'=>'','label'=>$post['platform']];
                         $sMeta = $statusMeta[$post['status']]     ?? ['color'=>'#999','label'=>$post['status']];
+                        // Blog entries (from CalendarController) carry a `url` and
+                        // render as a link straight to the editor; social chips
+                        // stay as plain (non-navigating) divs.
+                        $chipUrl = $post['url'] ?? null;
+                        $chipTag = $chipUrl ? 'a' : 'div';
                     @endphp
-                    <div style="
+                    <{{ $chipTag }} @if($chipUrl) href="{{ $chipUrl }}" @endif style="
                         display: flex;
                         align-items: center;
                         gap: 5px;
@@ -672,12 +683,13 @@
                         padding: 3px 6px 3px 5px;
                         margin-bottom: 3px;
                         cursor: pointer;
+                        text-decoration: none;
                         transition: background 100ms;
                         overflow: hidden;
-                    " title="{{ $post['title'] }} — {{ $post['time'] }}"
+                    " title="{{ ($pMeta['label'] ?? '') }} · {{ $post['title'] }} — {{ $post['time'] }}"
                        onmouseover="this.style.background='#f0e4f7'"
                        onmouseout="this.style.background='#f9f3fa'">
-                        {{-- Platform icon --}}
+                        {{-- Platform icon (blog uses its own colour/icon — a distinct chip) --}}
                         <span style="color:{{ $pMeta['color'] }}; flex-shrink:0;">{!! $pMeta['icon'] !!}</span>
                         {{-- Title truncated --}}
                         <span style="
@@ -691,7 +703,7 @@
                             font-family:'Inter',sans-serif; font-size:9.5px;
                             color:#9b6aad; flex-shrink:0;
                         ">{{ $post['time'] }}</span>
-                    </div>
+                    </{{ $chipTag }}>
                     @endforeach
 
                     {{-- "+N more" if more than 3 --}}
@@ -931,6 +943,7 @@
                     ['color'=>'#94a3b8', 'label'=>'Draft',            'filled'=>true],
                     ['color'=>'#f59e0b', 'label'=>'Pending Approval', 'filled'=>true],
                     ['color'=>'#ef4444', 'label'=>'Failed',           'filled'=>true],
+                    ['color'=>'#6366f1', 'label'=>'Blog',             'filled'=>true],
                     ['color'=>'#d8c4e0', 'label'=>'No Content',       'filled'=>false],
                 ];
             @endphp

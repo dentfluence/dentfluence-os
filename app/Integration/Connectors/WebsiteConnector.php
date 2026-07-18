@@ -2,6 +2,10 @@
 
 namespace App\Integration\Connectors;
 
+use App\Models\Marketing\MarketingPost;
+use App\Models\Marketing\PlatformConnection;
+use App\Models\Marketing\PostVariant;
+use App\Services\Marketing\WordpressPublishService;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -25,7 +29,24 @@ class WebsiteConnector
         return 'website';
     }
 
-    /** Publish a post to a WordPress site via its REST API (app-password auth). Normalized ['success','id','error','raw']. */
+    /**
+     * Blog publish engine (docs/blog-publish-engine-brief.md): create the
+     * marketing post as a WordPress DRAFT — media upload, tags/category,
+     * HTML body. Delegates to WordpressPublishService, the same single
+     * source of truth the legacy inline path uses, so the two paths cannot
+     * drift. Returns the normalized ProcessScheduledPost result shape
+     * (['success','platform_post_id','external_url','error',…]).
+     */
+    public function publishWordpressDraft(MarketingPost $post, PostVariant $variant, PlatformConnection $conn): array
+    {
+        return app(WordpressPublishService::class)->publishDraft($post, $variant, $conn);
+    }
+
+    /**
+     * Low-level raw-payload publish (kept for back-compat; the publish engine
+     * now goes through publishWordpressDraft() above).
+     * Normalized ['success','id','error','raw'].
+     */
     public function publishWordpress(string $siteUrl, string $username, string $password, array $payload): array
     {
         $r = Http::withBasicAuth($username, $password)

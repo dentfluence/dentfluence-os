@@ -98,7 +98,7 @@ class MetaLeadController extends Controller
         // same single-path pattern as every other Integration touchpoint for
         // consistency.
         $viaConnector = Feature::enabled('integration.meta');
-        $version      = config('prm.webhooks.meta.graph_version', 'v19.0');
+        $version      = config('prm.webhooks.meta.graph_version', config('services.meta.graph_version', 'v23.0'));
 
         try {
             if ($viaConnector) {

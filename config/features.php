@@ -111,5 +111,17 @@ return [
             'default'     => (bool) env('FEATURE_CASE_ACCEPTANCE', false),
             'description' => 'Case Acceptance Engine (Case Journey builder + /p/{token} patient microsite) coexists with Smart Presentation. OFF restores Smart Presentation instantly.',
         ],
+
+        // ── Blog Marketing Hub (Wave 1) ─────────────────────────────────
+        // Docs: docs/blog-marketing-hub-masterplan.md. OFF = the Blog Hub is
+        // completely hidden (no Marketing nav tab, /marketing/blog 404s) and
+        // the existing social/publish pipeline is untouched. ON = the
+        // dedicated Blog module (blog_posts schema, block editor, SEO,
+        // publishing ledger) is exposed under Marketing. Tables/services are
+        // additive and dormant while off. Stays OFF until Wave 1 slices land.
+        'blog.hub' => [
+            'default'     => (bool) env('FEATURE_BLOG_HUB', false),
+            'description' => 'Blog Marketing Hub (dedicated blog module under Marketing: block editor, SEO workspace, per-website publishing). OFF hides the nav tab and routes entirely.',
+        ],
     ],
 ];

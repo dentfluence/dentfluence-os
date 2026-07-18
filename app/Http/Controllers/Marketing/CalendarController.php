@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Marketing\Concerns\ResolvesClinicId;
+use App\Models\Blog\BlogPost;
 use App\Models\Marketing\MarketingPost;
 use App\Models\Marketing\PostSchedule;
 use App\Models\Marketing\Campaign;
+use App\Support\Features\Feature;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
@@ -75,10 +77,70 @@ class CalendarController extends Controller
             ]);
         }
 
+        // ── Blog posts (Blog Marketing Hub) ──────────────────────────────
+        // The blog no longer has its own calendar — its scheduled/published
+        // posts surface here, on the ONE marketing calendar, as read-only
+        // "Blog" chips that link straight to the blog editor. Scheduled posts
+        // sit on scheduled_at, published posts on published_at (each on the
+        // field its own status actually uses). Gated on the blog.hub feature.
+        if (Feature::enabled('blog.hub')) {
+            foreach ($this->blogCalendarEntries($clinicId, $year, $month) as $entry) {
+                $posts->push($entry);
+            }
+        }
+
         // Group by date for calendar rendering
         $postsByDate = $posts->groupBy('date');
 
         return view('marketing.calendar.index', compact('posts', 'postsByDate', 'month', 'year', 'draftPosts'));
+    }
+
+    /**
+     * Blog-post calendar chips for the given month, in the same flat shape the
+     * calendar view renders social chips with. Read-only: each carries a `url`
+     * to the blog editor (no drag-drop reschedule). Scheduled posts are placed
+     * on scheduled_at, published posts on published_at.
+     *
+     * @return array<int, array<string,mixed>>
+     */
+    private function blogCalendarEntries(int $clinicId, int $year, int $month): array
+    {
+        $start = Carbon::create($year, $month, 1)->startOfMonth();
+        $end   = $start->copy()->endOfMonth();
+
+        $scheduled = BlogPost::query()
+            ->where('clinic_id', $clinicId)
+            ->where('status', 'scheduled')
+            ->whereBetween('scheduled_at', [$start, $end])
+            ->get()
+            ->map(fn (BlogPost $p) => $this->blogCalendarEntry($p, $p->scheduled_at));
+
+        $published = BlogPost::query()
+            ->where('clinic_id', $clinicId)
+            ->where('status', 'published')
+            ->whereBetween('published_at', [$start, $end])
+            ->get()
+            ->map(fn (BlogPost $p) => $this->blogCalendarEntry($p, $p->published_at));
+
+        return $scheduled->concat($published)->all();
+    }
+
+    /** Flatten one blog post into a calendar chip (matches social chip keys). */
+    private function blogCalendarEntry(BlogPost $post, $at): array
+    {
+        return [
+            'id'             => 'blog-' . $post->uuid,
+            'date'           => optional($at)->toDateString(),
+            'time'           => optional($at)->format('H:i'),
+            'platform'       => 'blog',
+            'title'          => $post->title ?: '(untitled)',
+            'content_type'   => 'blog',
+            'status'         => $post->status,
+            'campaign_color' => '#6366f1',
+            // Presence of `url` is what marks a chip as a (linked) blog entry
+            // in the view; social chips have no url.
+            'url'            => route('marketing.blog.edit', ['blog' => $post->uuid]),
+        ];
     }
 
     // -------------------------------------------------------------------------
