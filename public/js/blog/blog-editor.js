@@ -39,7 +39,7 @@ const DEPS = '?deps=@tiptap/pm@' + TIPTAP_VERSION;
 const cdn = (pkg) => `https://esm.sh/@tiptap/${pkg}@${TIPTAP_VERSION}${DEPS}`;
 
 const [
-    { Editor },
+    { Editor, Extension },
     Document,
     Paragraph,
     Text,
@@ -61,9 +61,21 @@ const [
 ]);
 
 // Single-paragraph document so a paragraph block never splits into multiple
-// block-level nodes (Enter → hard break); getHTML() therefore yields exactly
-// one <p>…</p> whose inner inline markup we persist.
+// block-level nodes; getHTML() therefore yields exactly one <p>…</p> whose
+// inner inline markup we persist.
 const InlineDocument = Document.extend({ content: 'paragraph' });
+
+// HardBreak (below) only binds Mod-Enter/Shift-Enter by default. Since this
+// document's schema allows exactly one paragraph, plain Enter has nothing to
+// split into and is otherwise a no-op — which reads as "the box won't grow
+// when I press Enter". This extension makes plain Enter insert a line break
+// too, matching what users expect from a normal paragraph field.
+const EnterAsHardBreak = Extension.create({
+    name: 'enterAsHardBreak',
+    addKeyboardShortcuts() {
+        return { Enter: () => this.editor.commands.setHardBreak() };
+    },
+});
 
 // ---------------------------------------------------------------------------
 // Boot data + small helpers
@@ -179,8 +191,8 @@ function defaultData(type) {
     }
 }
 
-function addBlock(type, atIndex) {
-    const block = { id: uid(), type, data: defaultData(type) };
+function addBlock(type, atIndex, initialData) {
+    const block = { id: uid(), type, data: initialData || defaultData(type) };
     const index = atIndex == null ? state.blocks.length : atIndex;
     state.blocks.splice(index, 0, block);
 
@@ -330,6 +342,127 @@ function renderParagraph(block, body) {
     body.append(toolbar, mount);
 }
 
+// ---------------------------------------------------------------------------
+// Paragraph paste handling
+// ---------------------------------------------------------------------------
+// Matches the paragraph block's own schema (Bold/Italic/Link marks only —
+// see the extensions list below) so what the user sees while editing matches
+// what actually gets typed/saved: inline formatting survives, everything
+// else (color/font/class/style/spans/divs/headings…) is unwrapped down to
+// plain text rather than dropped.
+const PASTE_INLINE_TAGS = { strong: 'strong', b: 'strong', em: 'em', i: 'em', a: 'a' };
+// Any of these ending is treated as a paragraph boundary (new block), not a
+// same-block line break — matches how browsers/Word/Google Docs mark up
+// pasted paragraphs (<p>, <div> per line, list items, headings, etc.).
+const PASTE_BLOCK_TAGS = new Set(['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'tr', 'section', 'article', 'header', 'footer', 'pre']);
+
+// Walks pasted HTML and returns an array of sanitised inner-HTML fragments —
+// one per resulting paragraph block. Never truncates: every text node is kept
+// (junk wrapper tags are unwrapped, not deleted).
+function sanitizePastedHtmlToFragments(html) {
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    // Word/Google Docs pastes often carry a full document shell; browsers'
+    // fragment parser can leave <style>/<script>/<meta> as literal elements
+    // in the tree. Drop them outright (not unwrap) so their raw text never
+    // leaks into the paragraph.
+    container.querySelectorAll('style, script, meta, link, title').forEach((n) => n.remove());
+
+    const fragments = [];
+    let current = document.createElement('div');
+    let trailingBr = false; // used to collapse a double <br><br> into a paragraph break
+
+    function flush() {
+        const inner = current.innerHTML
+            .replace(/^(<br\s*\/?>)+/i, '')
+            .replace(/(<br\s*\/?>)+$/i, '')
+            .trim();
+        if (inner) fragments.push(inner);
+        current = document.createElement('div');
+        trailingBr = false;
+    }
+
+    function appendInto(target, node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            if (node.textContent) target.appendChild(document.createTextNode(node.textContent));
+            trailingBr = false;
+            return;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+        const tag = node.tagName.toLowerCase();
+
+        if (tag === 'br') {
+            if (trailingBr) { flush(); return; } // 2nd consecutive <br> = paragraph break
+            target.appendChild(document.createElement('br'));
+            trailingBr = true;
+            return;
+        }
+
+        if (PASTE_BLOCK_TAGS.has(tag)) {
+            node.childNodes.forEach((child) => appendInto(current, child));
+            flush();
+            return;
+        }
+
+        if (PASTE_INLINE_TAGS[tag]) {
+            const clean = document.createElement(PASTE_INLINE_TAGS[tag]);
+            if (tag === 'a') {
+                const href = node.getAttribute('href');
+                if (href) clean.setAttribute('href', href);
+            }
+            target.appendChild(clean);
+            node.childNodes.forEach((child) => appendInto(clean, child));
+            trailingBr = false;
+            return;
+        }
+
+        // Unknown/junk wrapper (span, font, table, img, style attrs, etc.) —
+        // unwrap it: keep its text/children, drop the tag itself.
+        node.childNodes.forEach((child) => appendInto(target, child));
+    }
+
+    container.childNodes.forEach((child) => appendInto(current, child));
+    flush();
+    return fragments;
+}
+
+// Plain-text fallback (no text/html on the clipboard): blank-line-separated
+// blocks of text become separate paragraphs, single newlines become <br>.
+function plainTextToFragments(text) {
+    return text
+        .split(/\r?\n\s*\r?\n/)
+        .map((p) => esc(p.trim()).replace(/\r?\n/g, '<br>'))
+        .filter((p) => p !== '');
+}
+
+function handleParagraphPaste(editor, block, event) {
+    const cd = event.clipboardData;
+    if (!cd) return false;
+    const html = cd.getData('text/html');
+    const text = cd.getData('text/plain');
+    if (!html && !text) return false;
+
+    const fragments = html ? sanitizePastedHtmlToFragments(html) : plainTextToFragments(text);
+    if (!fragments.length) return false; // nothing usable — let the default (no-op) happen
+
+    event.preventDefault();
+
+    // First fragment inserts inline at the cursor, same as a normal paste
+    // (replaces any current selection, keeps surrounding text intact).
+    editor.chain().focus().insertContent(fragments[0]).run();
+
+    // Any further paragraphs become new sibling blocks right after this one,
+    // in order, instead of being merged/lost.
+    if (fragments.length > 1) {
+        let index = state.blocks.findIndex((b) => b.id === block.id);
+        for (let i = 1; i < fragments.length; i++) {
+            index += 1;
+            addBlock('paragraph', index, { html: fragments[i] });
+        }
+    }
+    return true;
+}
+
 function mountParagraphEditor(block, root) {
     const toolbar = root.querySelector('[data-role="toolbar"]');
     const mount = root.querySelector('[data-role="mount"]');
@@ -346,10 +479,23 @@ function mountParagraphEditor(block, root) {
             Bold,
             Italic,
             HardBreak,
+            EnterAsHardBreak,
             History,
             Link.configure({ openOnClick: false, autolink: false }),
         ],
         content: initial,
+        editorProps: {
+            // Intercept paste ourselves: the schema allows exactly one
+            // paragraph node per block, so ProseMirror's own paste handling
+            // would otherwise squash every pasted block-level element (extra
+            // <p>/<div>/<h*>/<li>…) together with no separator, reading as
+            // "paste collapses into one blob". We sanitise the clipboard HTML
+            // down to the paragraph schema's allowed inline tags, keep every
+            // paragraph/line break, and — when the paste contained more than
+            // one paragraph — split the extras out into their own sibling
+            // paragraph blocks instead of losing the structure.
+            handlePaste: (view, event) => handleParagraphPaste(editor, block, event),
+        },
         onUpdate: ({ editor }) => {
             // Persist inner inline HTML only — BlogBlockRenderer wraps it in <p>
             // and sanitises to the allowed inline tag set.

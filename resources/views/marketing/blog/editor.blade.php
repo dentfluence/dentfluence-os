@@ -331,13 +331,17 @@
     .bp-row + .bp-row { margin-top:8px; }
     .bp-field-label { display:block; font-size:11px; color:#8a7b96; margin:0 0 3px; }
 
-    /* TipTap paragraph surface */
+    /* TipTap paragraph surface — auto-grows with content. min-height keeps a
+       comfortable starting size (~4 lines); there is deliberately no
+       max-height/overflow anywhere in this block so the box always grows to
+       fit what's typed or pasted, never clips, never inner-scrolls. */
     .bp-rt-toolbar { display:flex; gap:4px; margin-bottom:6px; }
     .bp-rt-btn { font-size:12px; min-width:26px; padding:3px 6px; border:1px solid rgba(185,92,183,0.22); border-radius:6px; background:#fff; cursor:pointer; color:#5a4868; }
     .bp-rt-btn.is-active { background:#6a0f70; color:#fff; border-color:#6a0f70; }
-    .bp-rt-editor { border:1px solid rgba(185,92,183,0.22); border-radius:8px; padding:8px 10px; min-height:44px; font-size:14px; line-height:1.55; }
+    .bp-rt-editor { border:1px solid rgba(185,92,183,0.22); border-radius:8px; padding:8px 10px; min-height:96px; height:auto; overflow:visible; font-size:14px; line-height:1.55; }
     .bp-rt-editor:focus-within { border-color:#b95cb7; }
-    .bp-rt-editor .ProseMirror { outline:none; }
+    .bp-rt-editor .ProseMirror { outline:none; height:auto; min-height:inherit; overflow:visible; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .bp-rt-editor .ProseMirror p { margin:0; }
     .bp-rt-editor .ProseMirror a { color:#6a0f70; text-decoration:underline; }
 
     /* Table block */
