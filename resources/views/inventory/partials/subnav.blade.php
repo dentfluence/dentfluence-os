@@ -192,6 +192,19 @@
         </div>
     </div>
     @endif
+
+    {{-- Interactive Guide (trilingual EN/हिंदी/मराठी) --}}
+    <a href="{{ route('inventory.guide.demo') }}" target="_blank" rel="noopener"
+       style="display:inline-flex;align-items:center;gap:6px;padding:10px 12px;flex-shrink:0;
+              margin-left:{{ count($moreVisible) ? '4px' : 'auto' }};
+              font-family:'Inter',sans-serif;font-size:13px;color:#7a6884;text-decoration:none;white-space:nowrap;"
+       title="Interactive Guide — English / हिंदी / मराठी"
+       onmouseover="this.style.color='#6a0f70'" onmouseout="this.style.color='#7a6884'">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+             stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Guide
+    </a>
 </div>
 
 <script>
