@@ -193,21 +193,46 @@
     </div>
     @endif
 
-    {{-- Interactive Guide (trilingual EN/हिंदी/मराठी) --}}
-    <a href="{{ route('inventory.guide.demo') }}" target="_blank" rel="noopener"
-       style="display:inline-flex;align-items:center;gap:6px;padding:10px 12px;flex-shrink:0;
+    {{-- Interactive Guide (trilingual EN/हिंदी/मराठी) — opens as an in-app popup --}}
+    <button type="button" onclick="openInvGuide()"
+       style="display:inline-flex;align-items:center;gap:6px;padding:10px 12px;flex-shrink:0;background:none;border:none;cursor:pointer;
               margin-left:{{ count($moreVisible) ? '4px' : 'auto' }};
-              font-family:'Inter',sans-serif;font-size:13px;color:#7a6884;text-decoration:none;white-space:nowrap;"
+              font-family:'Inter',sans-serif;font-size:13px;color:#7a6884;white-space:nowrap;"
        title="Interactive Guide — English / हिंदी / मराठी"
        onmouseover="this.style.color='#6a0f70'" onmouseout="this.style.color='#7a6884'">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
              stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/>
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         Guide
-    </a>
+    </button>
+</div>
+
+{{-- ── Interactive Guide popup — lazy-loads the walkthrough iframe on first open ── --}}
+<div id="inv-guide-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(26,3,32,.55);align-items:center;justify-content:center;padding:24px;">
+    <div style="width:min(1200px,96vw);height:92vh;background:#fff;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.35);">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;background:linear-gradient(135deg,#4e0a53,#6a0f70);color:#fff;flex-shrink:0;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <div style="flex:1;min-width:0;">
+                <div style="font-family:'Cormorant Garamond',Georgia,serif;font-size:18px;font-weight:600;line-height:1.1;">Inventory Module — Interactive Guide</div>
+                <div style="font-size:11.5px;opacity:.8;">Clickable walkthrough · English / हिंदी / मराठी</div>
+            </div>
+            <button type="button" onclick="closeInvGuide()" style="background:rgba(255,255,255,.16);border:none;border-radius:7px;color:#fff;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;">&times; Close</button>
+        </div>
+        <iframe id="inv-guide-frame" src="about:blank" title="Inventory Module Guide" style="flex:1;width:100%;border:0;display:block;"></iframe>
+    </div>
 </div>
 
 <script>
+function openInvGuide(){
+    var m=document.getElementById('inv-guide-modal'), f=document.getElementById('inv-guide-frame');
+    if(f && f.getAttribute('src')==='about:blank'){ f.setAttribute('src','{{ route('inventory.guide.demo') }}'); }
+    m.style.display='flex'; document.body.style.overflow='hidden';
+}
+function closeInvGuide(){
+    document.getElementById('inv-guide-modal').style.display='none'; document.body.style.overflow='';
+}
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeInvGuide(); });
+
 function dfInvToggleMore(e) {
     e.stopPropagation();
     var m = document.getElementById('inv-more-menu');

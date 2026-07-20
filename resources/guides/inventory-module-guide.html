@@ -449,6 +449,13 @@ function applyStatic(){document.querySelectorAll('[data-t]').forEach(el=>el.text
 function setLang(l){LANG=l;document.body.classList.toggle('lang-dev',l==='hi'||l==='mr');document.documentElement.lang=l;
   document.querySelectorAll('.langsw button').forEach(b=>b.classList.toggle('on',b.getAttribute('data-lang')===l));
   applyStatic();render();}
+// When shown inside the in-app popup (iframe), the modal already shows the title,
+// so hide the guide's own title/subtitle and keep just the language toggle bar.
+if (window.self !== window.top) {
+  var _td = document.querySelector('.ghead > div:first-child');
+  if (_td) _td.style.display = 'none';
+  document.querySelector('.ghead').style.justifyContent = 'flex-end';
+}
 applyStatic();render();
 </script>
 </body>
