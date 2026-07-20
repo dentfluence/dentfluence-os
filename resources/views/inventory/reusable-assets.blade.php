@@ -8,17 +8,11 @@
 @section('title', 'Reusable Assets')
 
 @section('content')
-@include('inventory.partials.subnav')
 
-{{-- ── Page header ── --}}
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+<div class="df-page-header">
     <div>
-        <h1 style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;color:#1a0a1e;margin:0 0 2px;">
-            Reusable Assets
-        </h1>
-        <p style="font-family:'Inter',sans-serif;font-size:13px;color:#7a6884;margin:0;">
-            Track instruments, drills & equipment — usage cycles, sterilization & maintenance
-        </p>
+        <div class="df-page-title" style="font-size:22px;">Inventory</div>
+        <div class="df-page-subtitle">Assets · Instruments, drills &amp; equipment — usage, sterilization &amp; maintenance</div>
     </div>
     <button onclick="document.getElementById('modal-add-asset').style.display='flex'"
             style="background:#6a0f70;color:#fff;border:none;border-radius:6px;padding:9px 18px;
@@ -30,6 +24,8 @@
         Add Asset
     </button>
 </div>
+
+@include('inventory.partials.subnav')
 
 {{-- Flash messages --}}
 @if(session('success'))

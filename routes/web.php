@@ -578,6 +578,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/stock-in',      [InventoryController::class, 'storeStockIn'])->name('stock-in.store');
         Route::get('/stock-out',      [InventoryController::class, 'stockOut'])->name('stock-out');
         Route::post('/stock-out',     [InventoryController::class, 'storeStockOut'])->name('stock-out.store');
+        // Stock Movement — plain-language timeline of every stock change
+        Route::get('/stock-movement', [InventoryController::class, 'stockMovements'])->name('stock-movement');
 
         // Other sections
         Route::get('/purchase',       [InventoryController::class, 'purchase'])->name('purchase');
@@ -592,7 +594,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/reports',        [InventoryController::class, 'reports'])->name('reports');
 
         // Settings (admin-only) — GET redirects to unified Settings module
-        Route::get('/settings', fn() => redirect()->route('settings.index', ['tab' => 'inventory']))->name('settings');
+        Route::get('/settings',                      [InventoryController::class, 'settings'])->name('settings');
         Route::post('/settings',                     [InventoryController::class, 'updateSettings'])->name('settings.update');
 
         // Categories CRUD (admin-only)
@@ -624,6 +626,11 @@ Route::middleware('auth')->group(function () {
         // GRN — receive against PO
         Route::post('/purchase/{po}/receive',        [InventoryController::class, 'receivePO'])->name('purchase.receive');
         Route::patch('/purchase/{po}/mark-ordered', [InventoryController::class, 'markOrdered'])->name('purchase.markOrdered');
+        // Print a Purchase Order (print-to-PDF via browser, same as invoices)
+        Route::get('/purchase/{po}/print',          [InventoryController::class, 'printPO'])->name('purchase.print');
+        // Received Stock — dentist-friendly report over GRN records
+        Route::get('/received-stock',               [InventoryController::class, 'receivedStock'])->name('received-stock');
+        Route::get('/received-stock/{grn}/print',   [InventoryController::class, 'receivedStockPrint'])->name('received-stock.print');
         // PO Edit / Delete
         Route::patch('/purchase/{po}',              [InventoryController::class, 'updatePO'])->name('purchase.update');
         Route::delete('/purchase/{po}',             [InventoryController::class, 'destroyPO'])->name('purchase.destroy');

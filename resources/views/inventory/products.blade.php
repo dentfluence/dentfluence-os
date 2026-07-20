@@ -50,6 +50,39 @@
 @endsection
 
 @section('content')
+
+<div class="df-page-header">
+    <div>
+        <div class="df-page-title" style="font-size:22px;">Inventory</div>
+        <div class="df-page-subtitle">Items · {{ $products->total() }} products</div>
+    </div>
+    @if(auth()->user()?->role === 'admin')
+    <div class="df-page-actions" style="position:relative;display:flex;gap:0;">
+        <button onclick="openAddProduct()"
+                style="background:#6a0f70;color:#fff;border:none;border-radius:6px 0 0 6px;padding:9px 16px;
+                       font-size:13px;font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;
+                       display:flex;align-items:center;gap:6px;white-space:nowrap;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>Add Product
+        </button>
+        <button type="button" aria-label="More add options"
+                onclick="var m=document.getElementById('add-more-menu');m.style.display=m.style.display==='block'?'none':'block';event.stopPropagation();"
+                style="background:#590c5f;color:#fff;border:none;border-left:1px solid rgba(255,255,255,0.2);border-radius:0 6px 6px 0;padding:9px 10px;cursor:pointer;font-size:11px;">▾</button>
+        <div id="add-more-menu"
+             style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #ede4f3;
+                    border-radius:8px;box-shadow:0 6px 20px rgba(14,1,24,.12);min-width:200px;z-index:50;overflow:hidden;">
+            <a href="{{ route('inventory.products.import') }}"
+               style="display:flex;align-items:center;gap:8px;padding:11px 14px;font-size:13px;color:#1e0a2c;text-decoration:none;"
+               onmouseover="this.style.background='#faf5fb'" onmouseout="this.style.background='#fff'">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Import from spreadsheet
+            </a>
+        </div>
+    </div>
+    @endif
+</div>
+
 @include('inventory.partials.subnav')
 
 {{-- Flash messages --}}
@@ -66,47 +99,6 @@
 </div>
 @endif
 
-{{-- ── Top bar: search + view toggle + add ── --}}
-<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
-    <form method="GET" action="{{ route('inventory.products') }}" style="display:flex;flex:1;min-width:200px;">
-        <div class="inv-search-wrap">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-            </svg>
-            <input type="text" name="q" value="{{ $search }}" placeholder="Search products, brands, codes…"
-                   id="inv-search-input" autocomplete="off">
-        </div>
-        @if($catId)       <input type="hidden" name="category_id" value="{{ $catId }}">@endif
-        @if($subTypeId)   <input type="hidden" name="sub_type_id" value="{{ $subTypeId }}">@endif
-        @if($brandFilter) <input type="hidden" name="brand" value="{{ $brandFilter }}">@endif
-        @if($locationId)  <input type="hidden" name="location_id" value="{{ $locationId }}">@endif
-        @if($stockLevel)  <input type="hidden" name="stock_level" value="{{ $stockLevel }}">@endif
-    </form>
-    <div style="flex-shrink:0;">
-        <span style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#1a0a1e;">Inventory</span>
-        <span style="font-size:12px;color:#9a85aa;font-family:'Inter',sans-serif;margin-left:8px;">{{ $products->total() }} products</span>
-    </div>
-    @if(auth()->user()?->role === 'admin')
-    <a href="{{ route('inventory.products.import') }}"
-            style="background:#fff;color:#6a0f70;border:1px solid #d8c8e4;border-radius:6px;padding:9px 16px;
-                   font-size:13px;font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;
-                   display:flex;align-items:center;gap:6px;white-space:nowrap;text-decoration:none;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>Import
-    </a>
-    <button onclick="openAddProduct()"
-            style="background:#6a0f70;color:#fff;border:none;border-radius:6px;padding:9px 16px;
-                   font-size:13px;font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;
-                   display:flex;align-items:center;gap:6px;white-space:nowrap;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>Add Product
-    </button>
-    @endif
-</div>
-
-
 {{-- ══════════════════════════════════════════════════
      TABLE VIEW
      (header/button/flash-messages above already cover this —
@@ -121,8 +113,8 @@
              padding:14px 16px;margin-bottom:12px;">
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
         {{-- Search --}}
-        <input type="text" name="q" value="{{ $search }}"
-               placeholder="Search name, brand, code…"
+        <input type="text" name="q" value="{{ $search }}" id="inv-search-input" autocomplete="off"
+               placeholder="Search products, code, brand…"
                style="flex:1;min-width:180px;max-width:260px;padding:7px 11px;
                       border:1px solid #d8c8e4;border-radius:6px;font-size:13px;
                       font-family:'DM Sans',sans-serif;outline:none;">
@@ -157,11 +149,12 @@
         <select name="stock_level"
                 style="padding:7px 11px;border:1px solid #d8c8e4;border-radius:6px;
                        font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;min-width:120px;">
-            <option value="">All Stock</option>
-            <option value="healthy"  @selected($stockLevel === 'healthy')>Healthy</option>
-            <option value="low"      @selected($stockLevel === 'low')>Low</option>
-            <option value="critical" @selected($stockLevel === 'critical')>Critical</option>
+            <option value="">All Stock Status</option>
+            <option value="in_stock" @selected($stockLevel === 'in_stock')>In Stock</option>
+            <option value="low"      @selected($stockLevel === 'low')>Low Stock</option>
+            <option value="critical" @selected($stockLevel === 'critical')>Critical Stock</option>
             <option value="out"      @selected($stockLevel === 'out')>Out of Stock</option>
+            <option value="min_not_set" @selected($stockLevel === 'min_not_set')>Minimum Stock Not Set</option>
         </select>
         {{-- Location --}}
         <select name="location_id"
@@ -196,15 +189,21 @@
 </form>
 
 {{-- ── Stock legend ── --}}
-<div style="display:flex;gap:16px;align-items:center;margin-bottom:12px;font-family:'DM Sans',sans-serif;font-size:11.5px;color:#9a85aa;">
+<div style="display:flex;gap:16px;align-items:center;margin-bottom:12px;flex-wrap:wrap;font-family:'DM Sans',sans-serif;font-size:11.5px;color:#9a85aa;">
     <span style="display:flex;align-items:center;gap:5px;">
-        <span style="width:8px;height:8px;border-radius:50%;background:#1a7a45;display:inline-block;"></span> Healthy
+        <span style="width:8px;height:8px;border-radius:50%;background:#1a7a45;display:inline-block;"></span> In Stock
     </span>
     <span style="display:flex;align-items:center;gap:5px;">
-        <span style="width:8px;height:8px;border-radius:50%;background:#d97706;display:inline-block;"></span> Low
+        <span style="width:8px;height:8px;border-radius:50%;background:#a05c00;display:inline-block;"></span> Low
     </span>
     <span style="display:flex;align-items:center;gap:5px;">
-        <span style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block;"></span> Critical / Out
+        <span style="width:8px;height:8px;border-radius:50%;background:#d97706;display:inline-block;"></span> Critical
+    </span>
+    <span style="display:flex;align-items:center;gap:5px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:#b52020;display:inline-block;"></span> Out of Stock
+    </span>
+    <span style="display:flex;align-items:center;gap:5px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:#7a6884;display:inline-block;"></span> Minimum Stock Not Set
     </span>
 </div>
 
@@ -228,18 +227,12 @@
         <tbody>
             @forelse($products as $product)
             @php
-                $qty         = (float) ($product->total_qty ?? 0);
-                $reorder     = (float) ($product->reorder_level ?? 0);
-                $threshold   = $reorder > 0 ? $reorder : 5;
-                if ($qty <= 0) {
-                    $stockDot = '#dc2626'; $stockLabel = 'Out';
-                } elseif ($qty <= $threshold) {
-                    $stockDot = '#dc2626'; $stockLabel = 'Critical';
-                } elseif ($qty <= $threshold * 2) {
-                    $stockDot = '#d97706'; $stockLabel = 'Low';
-                } else {
-                    $stockDot = '#1a7a45'; $stockLabel = 'Healthy';
-                }
+                $qty        = (float) ($product->total_qty ?? 0);
+                // Canonical stock status — same definition as every other screen.
+                $status     = app(\App\Services\Inventory\StockStatusService::class)
+                                  ->classify($qty, $product->minimum_qty);
+                $stockDot   = $status->color();
+                $stockLabel = $status->label();
                 // Locations for this product
                 $stockLocs  = $product->stocks->filter(fn($s) => $s->available_qty > 0);
                 $firstLocId = $product->stocks->first()?->location_id ?? 0;
@@ -872,7 +865,7 @@ document.addEventListener('click', closeDotMenus);
                         </div>
                         <div style="display:flex;flex-direction:column;gap:11px;">
                             <div>
-                                <label class="pml-label">Minimum Stock (Alert) *</label>
+                                <label class="pml-label">Minimum Stock *</label>
                                 <div style="display:flex;gap:6px;">
                                     <input type="number" name="minimum_qty" id="fp-minimum_qty" required
                                            min="0" step="0.01" placeholder="0"
@@ -1117,12 +1110,6 @@ document.addEventListener('click', closeDotMenus);
                                     <label class="pml-label">MRP (₹)</label>
                                     <input type="number" name="mrp" id="fp-mrp"
                                            min="0" step="0.01" placeholder="0.00"
-                                           style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
-                                </div>
-                                <div>
-                                    <label class="pml-label">Reorder Level</label>
-                                    <input type="number" name="reorder_level" id="fp-reorder_level"
-                                           min="0" step="0.01" placeholder="0"
                                            style="width:100%;padding:8px 10px;border:1px solid #d8c8e4;border-radius:5px;font-size:13px;font-family:'DM Mono',monospace;box-sizing:border-box;">
                                 </div>
                             </div>
@@ -1562,7 +1549,6 @@ function openEditProduct(p) {
     document.getElementById('fp-purchase_price').value  = p.last_purchase_price || '';
     document.getElementById('fp-mrp').value             = p.mrp             || '';
     document.getElementById('fp-minimum_qty').value     = p.minimum_qty     || '';
-    document.getElementById('fp-reorder_level').value   = p.reorder_level   || '';
     document.getElementById('fp-product_notes').value   = p.product_notes   || '';
     document.getElementById('fp-is_active').checked     = p.is_active;
 

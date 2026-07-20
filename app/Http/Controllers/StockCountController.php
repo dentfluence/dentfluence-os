@@ -45,10 +45,13 @@ class StockCountController extends Controller
             ? Carbon::parse($lastCompleted->completed_at)->addDays(15)->toDateString()
             : now()->toDateString();
 
-        // Quick summary counts for the info bar
-        $totalItems   = InventoryItem::where('is_active', true)->count();
-        $lowCount     = $this->countLowItems();
-        $criticalCount = $this->countCriticalItems();
+        // Quick summary counts — canonical stock status (same source as
+        // Dashboard and Alerts, so the numbers always match). "Critical / Out"
+        // card intentionally combines Critical + Out of Stock.
+        $totalItems    = InventoryItem::where('is_active', true)->count();
+        $statusCounts  = app(\App\Services\Inventory\StockStatusService::class)->counts();
+        $lowCount      = $statusCounts['low'];
+        $criticalCount = $statusCounts['critical'] + $statusCounts['out'];
 
         return view('inventory.stock-count-index', compact(
             'sessions', 'activeSession', 'nextDue',

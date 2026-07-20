@@ -14,6 +14,28 @@
 
 @include('inventory.partials.subnav')
 
+{{-- Named reports hub — plain-language entry points --}}
+@php
+    $reportLinks = [
+        ['label' => 'Received Stock', 'desc' => 'What came into the clinic', 'href' => route('inventory.received-stock')],
+        ['label' => 'Purchase Report', 'desc' => 'All purchase orders',       'href' => route('inventory.purchase')],
+        ['label' => 'Stock Report',    'desc' => 'Current stock on hand',      'href' => route('inventory.products')],
+        ['label' => 'Stock Value',     'desc' => 'Money sitting on the shelf', 'href' => '#stock-value'],
+        ['label' => 'Stock Adjustments','desc' => 'Manual corrections',        'href' => route('inventory.stock-movement', ['kind' => 'adjustment'])],
+    ];
+@endphp
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;">
+    @foreach($reportLinks as $rl)
+    <a href="{{ $rl['href'] }}"
+       style="display:block;background:#fff;border:1px solid rgba(185,92,183,0.14);border-radius:6px;padding:14px 16px;text-decoration:none;transition:border-color 150ms,box-shadow 150ms;"
+       onmouseover="this.style.borderColor='#6a0f70';this.style.boxShadow='0 4px 14px rgba(106,15,112,0.08)';"
+       onmouseout="this.style.borderColor='rgba(185,92,183,0.14)';this.style.boxShadow='none';">
+        <div style="font-size:13.5px;font-weight:600;color:#1e0a2c;margin-bottom:3px;">{{ $rl['label'] }}</div>
+        <div style="font-size:11.5px;color:#9a85aa;line-height:1.4;">{{ $rl['desc'] }}</div>
+    </a>
+    @endforeach
+</div>
+
 @php
 use App\Models\Inventory\InventoryItem;
 use App\Models\Inventory\StockMovement;
@@ -82,7 +104,7 @@ for($d=13;$d>=0;$d--){
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
 
     {{-- Category Valuation --}}
-    <div class="df-card">
+    <div class="df-card" id="stock-value">
         <div class="df-card-header"><span style="font-size:12.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#4e0a53;">Stock Value by Category</span></div>
         <div class="df-card-body">
             @forelse($categoryValuation as $cv)

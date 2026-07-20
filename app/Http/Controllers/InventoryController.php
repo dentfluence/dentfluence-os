@@ -64,17 +64,10 @@ class InventoryController extends Controller
 
         $totalItems = InventoryItem::where('is_active', true)->count();
 
-        $lowStock = DB::table('inventory_items as i')
-            ->join('inventory_stocks as s', 'i.id', '=', 's.inventory_item_id')
-            ->where('i.is_active', true)
-            ->whereRaw('s.available_qty > 0')
-            ->whereRaw('s.available_qty <= i.minimum_qty')
-            ->distinct('i.id')
-            ->count('i.id');
-
-        $outOfStock = InventoryItem::where('is_active', true)
-            ->whereDoesntHave('stocks', fn($q) => $q->where('available_qty', '>', 0))
-            ->count();
+        // Canonical stock-status counts — the ONE source used by every screen.
+        $status     = app(\App\Services\Inventory\StockStatusService::class)->counts();
+        $lowStock   = $status['low'];
+        $outOfStock = $status['out'];
 
         $expiringSoon = StockMovement::whereNotNull('expiry_date')
             ->where('expiry_date', '>=', today())
@@ -106,16 +99,16 @@ class InventoryController extends Controller
             [
                 'label'   => 'Low Stock',
                 'value'   => $lowStock,
-                'insight' => 'Below minimum threshold',
+                'insight' => 'At or below Minimum Stock',
                 'icon'    => 'M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01',
                 'color'   => '#a05c00',
                 'bg'      => '#fff4e0',
                 'alert'   => $lowStock > 0,
             ],
             [
-                'label'   => 'Critical / OOS',
+                'label'   => 'Out of Stock',
                 'value'   => $outOfStock,
-                'insight' => 'Out of stock items',
+                'insight' => 'Nothing on hand',
                 'icon'    => 'M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01',
                 'color'   => '#b52020',
                 'bg'      => '#fdeaea',
@@ -148,28 +141,14 @@ class InventoryController extends Controller
 
     private function buildStockStatus(): array
     {
-        $items = InventoryItem::where('is_active', true)->with('stocks')->get();
-
-        $healthy = $low = $critical = $out = 0;
-
-        foreach ($items as $item) {
-            $qty = $item->stocks->sum('available_qty');
-            if ($qty <= 0) {
-                $out++;
-            } elseif ($item->minimum_qty > 0 && $qty <= $item->minimum_qty) {
-                $critical++;
-            } elseif ($item->minimum_qty > 0 && $qty <= $item->minimum_qty * 1.5) {
-                $low++;
-            } else {
-                $healthy++;
-            }
-        }
+        // Canonical counts — identical to every other screen.
+        $c = app(\App\Services\Inventory\StockStatusService::class)->counts();
 
         return [
-            ['label' => 'Healthy',  'value' => $healthy,  'color' => '#1a7a45'],
-            ['label' => 'Low',      'value' => $low,      'color' => '#a05c00'],
-            ['label' => 'Critical', 'value' => $critical, 'color' => '#d97706'],
-            ['label' => 'Out',      'value' => $out,      'color' => '#b52020'],
+            ['label' => 'In Stock', 'value' => $c['in_stock'], 'color' => '#1a7a45'],
+            ['label' => 'Low',      'value' => $c['low'],      'color' => '#a05c00'],
+            ['label' => 'Critical', 'value' => $c['critical'], 'color' => '#d97706'],
+            ['label' => 'Out',      'value' => $c['out'],      'color' => '#b52020'],
         ];
     }
 
@@ -234,11 +213,14 @@ class InventoryController extends Controller
 
     private function buildCriticalItems(): \Illuminate\Support\Collection
     {
-        return InventoryItem::where('is_active', true)
-            ->with(['stocks', 'category'])
-            ->get()
-            ->filter(fn($item) => $item->total_stock <= $item->minimum_qty)
-            ->sortBy('total_stock')
+        // Items needing attention (Out / Critical / Low), lowest on-hand first.
+        return app(\App\Services\Inventory\StockStatusService::class)
+            ->itemsByStatus(
+                \App\Enums\StockStatus::Out,
+                \App\Enums\StockStatus::Critical,
+                \App\Enums\StockStatus::Low,
+            )
+            ->sortBy('on_hand')
             ->take(8)
             ->values();
     }
@@ -297,19 +279,10 @@ class InventoryController extends Controller
     {
         $totalActive = InventoryItem::where('is_active', true)->count() ?: 1;
 
-        // Out-of-stock count
-        $oos = InventoryItem::where('is_active', true)
-            ->whereDoesntHave('stocks', fn($q) => $q->where('available_qty', '>', 0))
-            ->count();
-
-        // Low-stock count (qty > 0 but <= minimum_qty)
-        $low = DB::table('inventory_items as i')
-            ->join('inventory_stocks as s', 'i.id', '=', 's.inventory_item_id')
-            ->where('i.is_active', true)
-            ->whereRaw('s.available_qty > 0')
-            ->whereRaw('s.available_qty <= i.minimum_qty')
-            ->distinct('i.id')
-            ->count('i.id');
+        // Canonical stock-status counts (same source as every other screen).
+        $status = app(\App\Services\Inventory\StockStatusService::class)->counts();
+        $oos = $status['out'];   // Out of Stock (managed items with a Minimum Stock)
+        $low = $status['low'];   // Low Stock
 
         // Critically expiring (<=30 days) distinct items
         $critExpiry = StockMovement::whereNotNull('expiry_date')
@@ -429,8 +402,9 @@ class InventoryController extends Controller
             ->whereDate('expected_date', today())
             ->count();
 
-        // Implant stock health (catalog size — placements tracked separately)
-        $implantLow   = 0; // ImplantCatalog has no per-item stock columns; use placements view for detail
+        // Implant catalog size. NOTE: ImplantCatalog has no per-item stock columns,
+        // so we can't honestly report "stock health" — we report the real catalog
+        // count instead of a fabricated all-stocked figure.
         $implantTotal = \App\Models\Inventory\ImplantCatalog::where('is_active', true)->count();
 
         return [
@@ -471,13 +445,13 @@ class InventoryController extends Controller
                 'alert'   => false,
             ],
             [
-                'label'   => 'Implant Stock Health',
-                'value'   => $implantTotal > 0 ? ($implantTotal - $implantLow) . '/' . $implantTotal : '—',
-                'insight' => $implantLow > 0 ? $implantLow . ' running low' : 'All implants stocked',
+                'label'   => 'Implant Catalog',
+                'value'   => $implantTotal > 0 ? $implantTotal : '—',
+                'insight' => $implantTotal > 0 ? 'Components in catalog' : 'No implants added',
                 'icon'    => 'M12 2a5 5 0 0 1 5 5c0 5-5 11-5 11S7 12 7 7a5 5 0 0 1 5-5z',
-                'color'   => $implantLow > 0 ? '#d97706' : '#15803d',
-                'bg'      => $implantLow > 0 ? '#fffbeb' : '#f0fdf4',
-                'alert'   => $implantLow > 0,
+                'color'   => '#2563eb',
+                'bg'      => '#eff6ff',
+                'alert'   => false,
             ],
         ];
     }
@@ -530,11 +504,10 @@ class InventoryController extends Controller
             ];
         }
 
-        // Critical OOS items
-        $oosItems = InventoryItem::where('is_active', true)
-            ->whereDoesntHave('stocks', fn($q) => $q->where('available_qty', '>', 0))
-            ->take(3)
-            ->get();
+        // Out-of-stock items (managed items with a Minimum Stock, per canonical status)
+        $oosItems = app(\App\Services\Inventory\StockStatusService::class)
+            ->itemsByStatus(\App\Enums\StockStatus::Out)
+            ->take(3);
 
         foreach ($oosItems as $item) {
             $actions[] = [
@@ -584,18 +557,19 @@ class InventoryController extends Controller
         if ($locationId) {
             $query->whereHas('stocks', fn($q) => $q->where('location_id', $locationId)->where('available_qty', '>', 0));
         }
-        if ($stockLevel === 'out') {
-            $query->where(function ($q) {
-                $q->doesntHave('stocks')
-                  ->orWhereHas('stocks', fn($sq) => $sq->havingRaw('SUM(available_qty) <= 0'));
-            });
-        } elseif ($stockLevel === 'critical') {
-            $query->whereHas('stocks', fn($q) => $q->havingRaw('SUM(available_qty) <= 0'));
-        } elseif ($stockLevel === 'low') {
-            $query->whereHas('stocks', fn($q) => $q->havingRaw('SUM(available_qty) > 0'))
-                  ->whereRaw('(SELECT SUM(available_qty) FROM inventory_stocks WHERE inventory_item_id = inventory_items.id) <= inventory_items.minimum_qty');
-        } elseif ($stockLevel === 'healthy') {
-            $query->whereRaw('(SELECT SUM(available_qty) FROM inventory_stocks WHERE inventory_item_id = inventory_items.id) > inventory_items.minimum_qty * 2');
+        // Stock-level filter — canonical definitions (App\Enums\StockStatus),
+        // identical to StockStatusService so the list agrees with every KPI.
+        if (in_array($stockLevel, ['out', 'critical', 'low', 'in_stock', 'min_not_set'], true)) {
+            $onHand = '(SELECT COALESCE(SUM(available_qty),0) FROM inventory_stocks WHERE inventory_item_id = inventory_items.id)';
+            $min    = 'COALESCE(inventory_items.minimum_qty,0)';
+            match ($stockLevel) {
+                'min_not_set' => $query->whereRaw("$min <= 0"),
+                'out'         => $query->whereRaw("$min > 0")->whereRaw("$onHand = 0"),
+                'critical'    => $query->whereRaw("$min > 0")->whereRaw("$onHand > 0")->whereRaw("$onHand <= $min / 2"),
+                'low'         => $query->whereRaw("$min > 0")->whereRaw("$onHand > $min / 2")->whereRaw("$onHand <= $min"),
+                'in_stock'    => $query->whereRaw("$min > 0")->whereRaw("$onHand > $min"),
+                default       => null,
+            };
         }
 
         $products = $query->orderBy('product_name')->paginate($perPage)->withQueryString();
@@ -1796,6 +1770,67 @@ class InventoryController extends Controller
             : "Vendor \"{$vendor->vendor_name}\" deactivated.");
     }
 
+    /**
+     * Print-friendly view of a Purchase Order.
+     * Mirrors the invoice print (billing.print): clinic letterhead pulled from
+     * AppSetting + line items + totals, styled to the Dentfluence print theme.
+     * Called via GET /inventory/purchase/{po}/print
+     */
+    public function printPO(PurchaseOrder $po)
+    {
+        $po->load(['vendor', 'items.item']);
+
+        $clinic = AppSetting::whereIn('key', [
+            'clinic_name', 'clinic_address', 'clinic_phone', 'clinic_email', 'clinic_gst_no',
+        ])->pluck('value', 'key');
+
+        return view('inventory.purchase-print', compact('po', 'clinic'));
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       Received Stock — dentist-friendly view over GRN records
+       (internally still GoodsReceiptNote; the UI never says "GRN")
+    ───────────────────────────────────────────────────────── */
+
+    /**
+     * Received Stock list — everything that has arrived against a PO.
+     * Called via GET /inventory/received-stock
+     */
+    public function receivedStock(Request $request)
+    {
+        $query = \App\Models\Procurement\GoodsReceiptNote::with(['vendor', 'purchaseOrder', 'items'])
+            ->withCount('items')
+            ->orderByDesc('received_date')
+            ->orderByDesc('id');
+
+        if ($search = trim((string) $request->get('q'))) {
+            $query->where(function ($w) use ($search) {
+                $w->where('grn_number', 'like', "%{$search}%")
+                  ->orWhereHas('vendor', fn($v) => $v->where('vendor_name', 'like', "%{$search}%"))
+                  ->orWhereHas('purchaseOrder', fn($p) => $p->where('order_no', 'like', "%{$search}%"));
+            });
+        }
+
+        $receipts = $query->paginate(30)->withQueryString();
+
+        return view('inventory.received-stock', compact('receipts'));
+    }
+
+    /**
+     * Print-friendly view of a single Received Stock record.
+     * Called via GET /inventory/received-stock/{grn}/print
+     */
+    public function receivedStockPrint(\App\Models\Procurement\GoodsReceiptNote $grn)
+    {
+        $grn->load(['vendor', 'purchaseOrder', 'items.item', 'createdBy']);
+
+        $clinic = AppSetting::whereIn('key', [
+            'clinic_name', 'clinic_address', 'clinic_phone', 'clinic_email', 'clinic_gst_no',
+        ])->pluck('value', 'key');
+
+        return view('inventory.received-stock-print', compact('grn', 'clinic'));
+    }
+
     /* ─────────────────────────────────────────────────────────
        GRN — Receive Against PO
     ───────────────────────────────────────────────────────── */
@@ -1906,6 +1941,10 @@ class InventoryController extends Controller
             'lines.*.expiry'    => 'nullable|date',
         ]);
 
+        // P0 #1 (Product Audit): make GRN-receive atomic — GRN header, stock
+        // movements, PO line/price updates and the auto-created vendor invoice
+        // must all commit together or roll back (the API twin already does this).
+        return \DB::transaction(function () use ($request, $po) {
         $locationId   = $request->location_id;
         $receivedDate = $request->received_date;
         $anyReceived  = false;
@@ -2038,6 +2077,7 @@ class InventoryController extends Controller
 
         return redirect()->route('inventory.purchase')
             ->with('success', 'GRN recorded for PO# ' . $po->order_no . '. Stock updated. Pending bill added to Finance.');
+        });
     }
 
     /* ─────────────────────────────────────────────────────────
@@ -2076,25 +2116,12 @@ class InventoryController extends Controller
     {
         $today = now()->toDateString();
 
-        // Critical stock: at or below half of minimum_qty (or zero)
-        $criticalStock = InventoryItem::with(['category', 'stocks.location'])
-            ->withSum('stocks as total_qty', 'available_qty')
-            ->where('is_active', true)
-            ->whereNotNull('minimum_qty')
-            ->where('minimum_qty', '>', 0)
-            ->havingRaw('total_qty <= (minimum_qty / 2)')
-            ->orderBy('product_name')
-            ->get();
-
-        // Low stock: above half but at or below minimum_qty
-        $lowStock = InventoryItem::with(['category', 'stocks.location'])
-            ->withSum('stocks as total_qty', 'available_qty')
-            ->where('is_active', true)
-            ->whereNotNull('minimum_qty')
-            ->where('minimum_qty', '>', 0)
-            ->havingRaw('total_qty > (minimum_qty / 2) AND total_qty <= minimum_qty')
-            ->orderBy('product_name')
-            ->get();
+        // Canonical stock status — same source as every other screen.
+        $statusSvc     = app(\App\Services\Inventory\StockStatusService::class);
+        $outOfStock    = $statusSvc->itemsByStatus(\App\Enums\StockStatus::Out);
+        $criticalStock = $statusSvc->itemsByStatus(\App\Enums\StockStatus::Critical);
+        $lowStock      = $statusSvc->itemsByStatus(\App\Enums\StockStatus::Low);
+        $statusCounts  = $statusSvc->counts();
 
         // Expiring within 90 days — based on stock_in movements with expiry dates
         $expiringSoon = StockMovement::with(['item.category', 'toLocation'])
@@ -2133,16 +2160,18 @@ class InventoryController extends Controller
             ->get();
 
         $summary = [
-            'critical' => $criticalStock->count(),
-            'low'      => $lowStock->count(),
-            'expiring' => $expiringSoon->count(),
-            'expired'  => $expiredItems->count(),
-            'dead'     => $deadStock->count(),
-            'pending'  => $pendingDeliveries->count(),
+            'out'         => $outOfStock->count(),
+            'critical'    => $criticalStock->count(),
+            'low'         => $lowStock->count(),
+            'min_not_set' => $statusCounts['min_not_set'],
+            'expiring'    => $expiringSoon->count(),
+            'expired'     => $expiredItems->count(),
+            'dead'        => $deadStock->count(),
+            'pending'     => $pendingDeliveries->count(),
         ];
 
         return view('inventory.alerts', compact(
-            'criticalStock', 'lowStock', 'expiringSoon', 'expiredItems',
+            'outOfStock', 'criticalStock', 'lowStock', 'expiringSoon', 'expiredItems',
             'deadStock', 'pendingDeliveries', 'summary'
         ));
     }
@@ -2381,6 +2410,42 @@ class InventoryController extends Controller
         $placement->update($data);
 
         return back()->with('success', 'Placement updated.');
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       STOCK MOVEMENT — plain-language timeline (all items)
+    ═══════════════════════════════════════════════════════════ */
+
+    /**
+     * Global stock movement timeline. Shows every change in plain words —
+     * Purchased / Used / Adjustment / Correction / Moved — not ERP jargon.
+     * Called via GET /inventory/stock-movement
+     */
+    public function stockMovements(Request $request)
+    {
+        $query = StockMovement::with(['item', 'fromLocation', 'toLocation', 'createdBy'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        // Plain-language filter buckets
+        $buckets = [
+            'purchased'  => ['stock_in', 'opening_stock'],
+            'used'       => ['stock_out', 'treatment_usage', 'retail_sale'],
+            'adjustment' => ['adjustment'],
+            'other'      => ['transfer', 'expired', 'damaged'],
+        ];
+        $filter = $request->get('kind');
+        if ($filter && isset($buckets[$filter])) {
+            $query->whereIn('movement_type', $buckets[$filter]);
+        }
+
+        if ($itemId = $request->get('item_id')) {
+            $query->where('inventory_item_id', $itemId);
+        }
+
+        $movements = $query->paginate(40)->withQueryString();
+
+        return view('inventory.stock-movement', compact('movements', 'filter'));
     }
 
     /* ═══════════════════════════════════════════════════════════

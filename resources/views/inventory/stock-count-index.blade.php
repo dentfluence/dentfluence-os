@@ -8,18 +8,13 @@
 @section('title', 'Stock Count')
 
 @section('content')
-@include('inventory.partials.subnav')
 
-{{-- ── Page header ── --}}
-<div style="display:flex;align-items:flex-start;justify-content:space-between;
-            flex-wrap:wrap;gap:12px;margin-bottom:24px;">
+<div class="df-page-header">
     <div>
-        <h1 style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;
-                   color:#1a0a1e;margin:0 0 4px;">Stock Count</h1>
-        <p style="font-family:'Inter',sans-serif;font-size:13px;color:#7a6884;margin:0;">
-            15-day physical count cycle — count stock, apply corrections, flag reorders
-        </p>
+        <div class="df-page-title" style="font-size:22px;">Inventory</div>
+        <div class="df-page-subtitle">Stock Count · 15-day physical count cycle</div>
     </div>
+    <div class="df-page-actions">
 
     @if($activeSession)
         {{-- Resume open session --}}
@@ -49,7 +44,10 @@
             </button>
         </form>
     @endif
+    </div>
 </div>
+
+@include('inventory.partials.subnav')
 
 {{-- Flash messages --}}
 @if(session('success'))

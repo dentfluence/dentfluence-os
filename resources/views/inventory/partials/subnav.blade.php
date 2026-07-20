@@ -1,21 +1,17 @@
 {{--
 |==========================================================================
-| Inventory OS — Horizontal Sub-Navigation  (Phase 1 upgrade)
+| Inventory OS — Horizontal Sub-Navigation
 |
-| New tab structure:
-|   Dashboard · Inventory · Orders · Alerts · Implants · Assets · Reports · Settings
+| Primary tabs (daily work):  Dashboard · Items · Purchase Orders ·
+|                             Stock Movement · Stock Count
+| Secondary (in "More" menu):  Alerts · Received Stock · Reports ·
+|                             Implants · Assets · Inventory Settings
 |
-| Role-based visibility:
-|   assistant / front_desk  → Dashboard, Inventory, Orders, Alerts
-|   manager / accounts      → Dashboard, Inventory, Orders, Alerts, Implants, Assets, Reports
+| Role visibility:
+|   assistant / front_desk  → daily primary tabs + Alerts/Received Stock
+|   manager / accounts      → + Reports / Implants / Assets
 |   doctor / dentist roles  → Dashboard only (exec view)
-|   admin                   → All 8 tabs
-|
-| Terminology (UI label → backend):
-|   Inventory  = products/catalogue page
-|   Orders     = purchase orders
-|   Alerts     = new hub (critical stock, expiry, dead stock, suggestions)
-|   Assets     = reusable assets
+|   admin                   → everything + Settings
 |==========================================================================
 --}}
 @php
@@ -23,46 +19,64 @@
     $user         = auth()->user();
     $userRole     = $user?->role ?? '';
 
-    // ── Role tier helpers ─────────────────────────────────────────────────
-    $isAdmin    = $user?->isAdmin() ?? false;
-    $isDoctor   = in_array($userRole, \App\Models\User::DOCTOR_ROLES);
-    $isManager  = in_array($userRole, ['manager', 'accounts']);
+    $isAdmin     = $user?->isAdmin() ?? false;
+    $isManager   = in_array($userRole, ['manager', 'accounts']);
     $isAssistant = in_array($userRole, ['assistant', 'front_desk']);
 
-    // Dentist/Owner sees Dashboard only; everyone else gets at least 4 tabs
-    $showOperational = $isAdmin || $isManager || $isAssistant;
-    $showExtended    = $isAdmin || $isManager;  // Implants, Assets, Reports
+    $showOperational = $isAdmin || $isManager || $isAssistant;  // daily tabs
+    $showExtended    = $isAdmin || $isManager;                  // Reports/Implants/Assets
     $showSettings    = $isAdmin;
 
-    // ── Active detection helpers ──────────────────────────────────────────
     $r = $currentRoute ?? '';
 
-    // ── Full tab definitions (all 8) ─────────────────────────────────────
-    // Each entry: route, label, icon path(s), active-check closure flag, visible flag
-    $allTabs = [
+    // ── Primary tabs (always shown in the bar) ──
+    $primaryTabs = [
         [
             'route'   => 'inventory.index',
             'label'   => 'Dashboard',
             'icon'    => 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
             'active'  => in_array($r, ['inventory.index', 'inventory.dashboard']),
-            'visible' => true,  // everyone
+            'visible' => true,
         ],
         [
             'route'   => 'inventory.products',
-            'label'   => 'Inventory',
+            'label'   => 'Items',
             'icon'    => 'M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z',
-            // also active on stock-in / stock-out / stock-count (sub-actions of the Inventory tab)
-            'active'  => in_array($r, ['inventory.products', 'inventory.items', 'inventory.stock-in', 'inventory.stock-out', 'inventory.stock-check'])
-                         || str_starts_with($r, 'inventory.stock-count'),
+            'active'  => in_array($r, ['inventory.products', 'inventory.items', 'inventory.stock-in', 'inventory.stock-out', 'inventory.stock-check']),
             'visible' => $showOperational,
         ],
         [
             'route'   => 'inventory.purchase',
-            'label'   => 'Orders',
+            'label'   => 'Purchase Orders',
             'icon'    => 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2',
             'active'  => in_array($r, ['inventory.purchase', 'inventory.vendors']),
             'visible' => $showOperational,
         ],
+        [
+            'route'   => 'inventory.stock-movement',
+            'label'   => 'Stock Movement',
+            'icon'    => 'M3 12h18M3 6h18M3 18h18',
+            'active'  => $r === 'inventory.stock-movement',
+            'visible' => $showOperational,
+        ],
+        [
+            'route'   => 'inventory.stock-count.index',
+            'label'   => 'Stock Count',
+            'icon'    => 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
+            'active'  => str_starts_with($r, 'inventory.stock-count'),
+            'visible' => $showOperational,
+        ],
+        [
+            'route'   => 'inventory.implants',
+            'label'   => 'Implants',
+            'icon'    => 'M12 2a5 5 0 0 1 5 5c0 5-5 11-5 11S7 12 7 7a5 5 0 0 1 5-5z',
+            'active'  => $r === 'inventory.implants',
+            'visible' => $showExtended,
+        ],
+    ];
+
+    // ── Secondary tabs (inside the "More" menu) ──
+    $moreTabs = [
         [
             'route'   => 'inventory.alerts',
             'label'   => 'Alerts',
@@ -71,10 +85,17 @@
             'visible' => $showOperational,
         ],
         [
-            'route'   => 'inventory.implants',
-            'label'   => 'Implants',
-            'icon'    => 'M12 2a5 5 0 0 1 5 5c0 5-5 11-5 11S7 12 7 7a5 5 0 0 1 5-5z',
-            'active'  => $r === 'inventory.implants',
+            'route'   => 'inventory.received-stock',
+            'label'   => 'Received Stock',
+            'icon'    => 'M20 6L9 17l-5-5',
+            'active'  => $r === 'inventory.received-stock',
+            'visible' => $showOperational,
+        ],
+        [
+            'route'   => 'inventory.reports',
+            'label'   => 'Reports',
+            'icon'    => 'M9 19v-6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2zm0 0V9a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v10m-6 0a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2m0 0V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z',
+            'active'  => in_array($r, ['inventory.reports', 'inventory.expiry']),
             'visible' => $showExtended,
         ],
         [
@@ -85,16 +106,17 @@
             'visible' => $showExtended,
         ],
         [
-            'route'   => 'inventory.reports',
-            'label'   => 'Reports',
-            'icon'    => 'M9 19v-6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2zm0 0V9a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v10m-6 0a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2m0 0V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z',
-            'active'  => in_array($r, ['inventory.reports', 'inventory.expiry']),
-            'visible' => $showExtended,
+            'route'   => 'inventory.settings',
+            'label'   => 'Inventory Settings',
+            'icon'    => 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
+            'active'  => $r === 'inventory.settings',
+            'visible' => $showSettings,
         ],
     ];
 
-    // Visible tabs only
-    $visibleTabs = array_filter($allTabs, fn($t) => $t['visible']);
+    $primaryVisible = array_filter($primaryTabs, fn($t) => $t['visible']);
+    $moreVisible    = array_filter($moreTabs, fn($t) => $t['visible']);
+    $moreActive     = collect($moreVisible)->contains(fn($t) => $t['active']);
 @endphp
 
 <div class="inv-subnav" style="
@@ -110,64 +132,84 @@
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
 ">
-
-    @foreach($visibleTabs as $tab)
+    @foreach($primaryVisible as $tab)
         @php $isActive = $tab['active']; @endphp
         <a href="{{ route($tab['route']) }}"
-           style="
-               display: inline-flex; align-items: center; gap: 6px;
-               padding: 10px 14px;
-               font-family: 'Inter', sans-serif; font-size: 13px;
-               font-weight: {{ $isActive ? '600' : '400' }};
-               color: {{ $isActive ? '#6a0f70' : '#7a6884' }};
-               text-decoration: none;
-               border-bottom: 2px solid {{ $isActive ? '#6a0f70' : 'transparent' }};
-               white-space: nowrap;
-               transition: color 150ms, border-color 150ms;
-               flex-shrink: 0;
-           "
+           style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;
+                  font-family:'Inter',sans-serif;font-size:13px;
+                  font-weight:{{ $isActive ? '600' : '400' }};
+                  color:{{ $isActive ? '#6a0f70' : '#7a6884' }};
+                  text-decoration:none;
+                  border-bottom:2px solid {{ $isActive ? '#6a0f70' : 'transparent' }};
+                  white-space:nowrap;flex-shrink:0;transition:color 150ms,border-color 150ms;"
            onmouseover="if(!{{ $isActive ? 'true' : 'false' }})this.style.color='#4e0a53'"
-           onmouseout="if(!{{ $isActive ? 'true' : 'false' }})this.style.color='#7a6884'"
-        >
+           onmouseout="if(!{{ $isActive ? 'true' : 'false' }})this.style.color='#7a6884'">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                 stroke="{{ $isActive ? '#6a0f70' : '#a090b0' }}"
-                 stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
-                 style="flex-shrink:0;">
+                 stroke="{{ $isActive ? '#6a0f70' : '#a090b0' }}" stroke-width="1.75"
+                 stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
                 <path d="{{ $tab['icon'] }}"/>
             </svg>
             {{ $tab['label'] }}
         </a>
     @endforeach
 
-    {{-- ── Settings — admin only, pinned to the right ── --}}
-    @if($showSettings)
-        <div style="width:1px;height:20px;background:rgba(185,92,183,0.15);margin:0 4px 0 auto;flex-shrink:0;"></div>
-        @php $isSettingsActive = str_starts_with($r, 'settings.') && request()->get('tab') === 'inventory'; @endphp
-        <a href="{{ route('settings.index', ['tab' => 'inventory']) }}"
-           style="
-               display: inline-flex; align-items: center; gap: 6px;
-               padding: 10px 14px;
-               font-family: 'Inter', sans-serif; font-size: 13px;
-               font-weight: {{ $isSettingsActive ? '600' : '400' }};
-               color: {{ $isSettingsActive ? '#6a0f70' : '#7a6884' }};
-               text-decoration: none;
-               border-bottom: 2px solid {{ $isSettingsActive ? '#6a0f70' : 'transparent' }};
-               white-space: nowrap; flex-shrink: 0;
-               transition: color 150ms, border-color 150ms;
-           "
-           onmouseover="if(!{{ $isSettingsActive ? 'true' : 'false' }})this.style.color='#4e0a53'"
-           onmouseout="if(!{{ $isSettingsActive ? 'true' : 'false' }})this.style.color='#7a6884'"
-           title="Inventory Settings"
-        >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                 stroke="{{ $isSettingsActive ? '#6a0f70' : '#a090b0' }}"
-                 stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
-                 style="flex-shrink:0;">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-            Settings
-        </a>
+    {{-- ── "More" menu — secondary sections ── --}}
+    @if(count($moreVisible))
+    <div id="inv-more-wrap" style="position:relative;margin-left:auto;flex-shrink:0;">
+        <button type="button" onclick="dfInvToggleMore(event)"
+                style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;background:none;
+                       border:none;cursor:pointer;font-family:'Inter',sans-serif;font-size:13px;
+                       font-weight:{{ $moreActive ? '600' : '400' }};
+                       color:{{ $moreActive ? '#6a0f70' : '#7a6884' }};
+                       border-bottom:2px solid {{ $moreActive ? '#6a0f70' : 'transparent' }};white-space:nowrap;">
+            More
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                 stroke="{{ $moreActive ? '#6a0f70' : '#a090b0' }}" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div id="inv-more-menu"
+             style="display:none;position:fixed;background:#fff;
+                    border:1px solid #ede4f3;border-radius:8px;box-shadow:0 8px 24px rgba(14,1,24,.14);
+                    width:210px;z-index:1000;overflow:hidden;padding:4px 0;">
+            @foreach($moreVisible as $tab)
+                @php $isActive = $tab['active']; @endphp
+                <a href="{{ route($tab['route']) }}"
+                   style="display:flex;align-items:center;gap:9px;padding:10px 14px;
+                          font-family:'Inter',sans-serif;font-size:13px;text-decoration:none;
+                          color:{{ $isActive ? '#6a0f70' : '#4e2060' }};
+                          font-weight:{{ $isActive ? '600' : '400' }};
+                          background:{{ $isActive ? '#faf5fb' : '#fff' }};"
+                   onmouseover="this.style.background='#faf5fb'"
+                   onmouseout="this.style.background='{{ $isActive ? '#faf5fb' : '#fff' }}'">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="{{ $isActive ? '#6a0f70' : '#a090b0' }}" stroke-width="1.75"
+                         stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+                        <path d="{{ $tab['icon'] }}"/>
+                    </svg>
+                    {{ $tab['label'] }}
+                </a>
+            @endforeach
+        </div>
+    </div>
     @endif
-
 </div>
+
+<script>
+function dfInvToggleMore(e) {
+    e.stopPropagation();
+    var m = document.getElementById('inv-more-menu');
+    var b = e.currentTarget;
+    if (!m) return;
+    if (m.style.display === 'block') { m.style.display = 'none'; return; }
+    var r = b.getBoundingClientRect();
+    // position:fixed so the menu escapes the subnav's overflow clipping
+    m.style.top  = (r.bottom + 2) + 'px';
+    m.style.left = Math.max(8, r.right - 210) + 'px';
+    m.style.display = 'block';
+}
+document.addEventListener('click', function (e) {
+    var wrap = document.getElementById('inv-more-wrap');
+    var menu = document.getElementById('inv-more-menu');
+    if (menu && wrap && !wrap.contains(e.target)) menu.style.display = 'none';
+});
+</script>

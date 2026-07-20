@@ -8,18 +8,13 @@
 @section('title', 'Implant Registry')
 
 @section('content')
-@include('inventory.partials.subnav')
 
-{{-- ── Page header ── --}}
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+<div class="df-page-header">
     <div>
-        <h1 style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;
-                   color:#1a0a1e;margin:0 0 2px;">Implant Registry</h1>
-        <p style="font-family:'Inter',sans-serif;font-size:13px;color:#7a6884;margin:0;">
-            Catalog of implant components + per-patient placement traceability
-        </p>
+        <div class="df-page-title" style="font-size:22px;">Inventory</div>
+        <div class="df-page-subtitle">Implants · Catalog + per-patient placement traceability</div>
     </div>
-    <div style="display:flex;gap:8px;">
+    <div class="df-page-actions" style="display:flex;gap:8px;">
         <button onclick="document.getElementById('modal-add-catalog').style.display='flex'"
                 style="background:#6a0f70;color:#fff;border:none;border-radius:6px;
                        padding:8px 16px;font-size:13px;font-family:'Inter',sans-serif;
@@ -38,6 +33,8 @@
         </button>
     </div>
 </div>
+
+@include('inventory.partials.subnav')
 
 {{-- Flash messages --}}
 @if(session('success'))

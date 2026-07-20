@@ -6,12 +6,18 @@ use App\Models\Finance\FinanceVendor;
 use App\Models\Procurement\GoodsReceiptNote;
 use App\Models\Procurement\VendorInvoice;
 use App\Models\User;
+use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PurchaseOrder extends Model
 {
+    use Auditable;
+
+    /** Tag audit_logs entries so they surface under the Inventory module. */
+    protected $auditModule = 'inventory';
+
     protected $table = 'purchase_orders';
 
     protected $fillable = [

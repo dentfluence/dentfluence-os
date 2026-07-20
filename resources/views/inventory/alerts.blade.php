@@ -13,15 +13,9 @@
 <style>
     .alerts-summary-grid {
         display: grid;
-        grid-template-columns: repeat(6, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
         gap: 12px;
-        margin-bottom: 24px;
-    }
-    @media (max-width: 900px) {
-        .alerts-summary-grid { grid-template-columns: repeat(3, 1fr); }
-    }
-    @media (max-width: 540px) {
-        .alerts-summary-grid { grid-template-columns: repeat(2, 1fr); }
+        margin-bottom: 16px;
     }
 
     .alert-kpi {
@@ -163,30 +157,33 @@
 @endsection
 
 @section('content')
-@include('inventory.partials.subnav')
 
-{{-- ── Page Header ── --}}
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+<div class="df-page-header">
     <div>
-        <h2 style="font-size:20px;font-weight:700;color:#2a1a3a;margin:0 0 2px;">Alerts</h2>
-        <p style="font-size:13px;color:#7a6884;margin:0;">
-            Items that need your attention today
-            <span style="color:#b8a8c8;">· Updated {{ now()->format('d M Y, h:i A') }}</span>
-        </p>
+        <div class="df-page-title" style="font-size:22px;">Inventory</div>
+        <div class="df-page-subtitle">Alerts · Items that need your attention today</div>
     </div>
+    <div class="df-page-actions">
     <a href="{{ route('inventory.index') }}" class="action-btn btn-ghost" style="font-size:12px;">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
         </svg>
         Dashboard
     </a>
+    </div>
 </div>
+
+@include('inventory.partials.subnav')
 
 {{-- ── Summary KPI Bar ── --}}
 <div class="alerts-summary-grid">
     <div class="alert-kpi">
-        <div class="kpi-num kpi-red">{{ $summary['critical'] }}</div>
+        <div class="kpi-num kpi-red">{{ $summary['out'] }}</div>
         <div class="kpi-label">Out of Stock</div>
+    </div>
+    <div class="alert-kpi">
+        <div class="kpi-num" style="color:#d97706;">{{ $summary['critical'] }}</div>
+        <div class="kpi-label">Critical Stock</div>
     </div>
     <div class="alert-kpi">
         <div class="kpi-num kpi-amber">{{ $summary['low'] }}</div>
@@ -210,6 +207,17 @@
     </div>
 </div>
 
+{{-- ── Minimum Stock Not Set — informational nudge ── --}}
+@if(($summary['min_not_set'] ?? 0) > 0)
+<div style="display:flex;align-items:center;gap:10px;background:#f3f0f6;border:1px solid #e2dae9;border-radius:8px;padding:12px 16px;margin-bottom:24px;font-size:13px;color:#5a4a6a;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7a6884" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+    </svg>
+    <span><strong>{{ $summary['min_not_set'] }}</strong> item{{ $summary['min_not_set'] === 1 ? '' : 's' }} don't have a Minimum Stock level configured. Set one to enable stock alerts for {{ $summary['min_not_set'] === 1 ? 'it' : 'them' }}.</span>
+    <a href="{{ route('inventory.products') }}" class="action-btn btn-ghost" style="margin-left:auto;flex-shrink:0;">Review Items</a>
+</div>
+@endif
+
 {{-- ═══════ SECTION 1: OUT OF STOCK ═══════ --}}
 <div class="alert-section">
     <div class="alert-section-header">
@@ -217,40 +225,76 @@
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
         <h3>Out of Stock</h3>
-        <span class="badge-count badge-red">{{ $summary['critical'] }}</span>
+        <span class="badge-count badge-red">{{ $summary['out'] }}</span>
         <span style="font-size:11.5px;color:#9a85aa;margin-left:auto;">Immediate action required</span>
     </div>
-    @if($criticalStock->isEmpty())
+    @if($outOfStock->isEmpty())
         <div class="empty-state">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            <div>All items are in stock — great!</div>
+            <div>Nothing is out of stock — great!</div>
         </div>
     @else
         <table class="alert-table">
             <thead>
                 <tr>
                     <th>Item</th>
-                    <th>Unit</th>
-                    <th>Min. Level</th>
-                    <th>Reorder Qty</th>
+                    <th>On Hand</th>
+                    <th>Minimum Stock</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($outOfStock as $item)
+                <tr>
+                    <td>
+                        <span class="status-dot dot-red"></span>
+                        <strong>{{ $item->product_name }}</strong>
+                    </td>
+                    <td style="color:#b91c1c;font-weight:600;">0 <span style="color:#9a85aa;font-size:11px;font-weight:400;">{{ $item->consumption_unit }}</span></td>
+                    <td style="color:#7a6884;">{{ rtrim(rtrim(number_format($item->minimum_qty, 2), '0'), '.') }}</td>
+                    <td>
+                        <a href="{{ route('inventory.purchase') }}" class="action-btn btn-ghost">
+                            Order Now
+                        </a>
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @endif
+</div>
+
+{{-- ═══════ SECTION 1b: CRITICAL STOCK ═══════ --}}
+<div class="alert-section">
+    <div class="alert-section-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <h3>Critical Stock</h3>
+        <span class="badge-count badge-amber">{{ $summary['critical'] }}</span>
+        <span style="font-size:11.5px;color:#9a85aa;margin-left:auto;">Very low — reorder today</span>
+    </div>
+    @if($criticalStock->isEmpty())
+        <div class="empty-state">
+            <div>Nothing critically low</div>
+        </div>
+    @else
+        <table class="alert-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>On Hand</th>
+                    <th>Minimum Stock</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach($criticalStock as $item)
                 <tr>
-                    <td>
-                        <span class="status-dot dot-red"></span>
-                        <strong>{{ $item->product_name }}</strong>
-                    </td>
-                    <td style="color:#7a6884;">{{ $item->consumption_unit ?? '—' }}</td>
-                    <td>{{ $item->minimum_qty ?? '—' }}</td>
-                    <td>{{ $item->reorder_level ?? '—' }}</td>
-                    <td>
-                        <a href="{{ route('inventory.purchase') }}" class="action-btn btn-ghost">
-                            Order Now
-                        </a>
-                    </td>
+                    <td><span class="status-dot dot-amber"></span><strong>{{ $item->product_name }}</strong></td>
+                    <td><strong style="color:#d97706;">{{ rtrim(rtrim(number_format($item->on_hand, 2), '0'), '.') }}</strong> <span style="color:#9a85aa;font-size:11px;">{{ $item->consumption_unit }}</span></td>
+                    <td style="color:#7a6884;">{{ rtrim(rtrim(number_format($item->minimum_qty, 2), '0'), '.') }}</td>
+                    <td><a href="{{ route('inventory.purchase') }}" class="action-btn btn-ghost">Order Now</a></td>
                 </tr>
                 @endforeach
             </tbody>
@@ -279,9 +323,8 @@
             <thead>
                 <tr>
                     <th>Item</th>
-                    <th>Current Stock</th>
-                    <th>Min. Level</th>
-                    <th>Reorder Qty</th>
+                    <th>On Hand</th>
+                    <th>Minimum Stock</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -293,11 +336,10 @@
                         {{ $item->product_name }}
                     </td>
                     <td>
-                        <strong style="color:#d97706;">{{ $item->total_qty }}</strong>
+                        <strong style="color:#d97706;">{{ rtrim(rtrim(number_format($item->on_hand, 2), '0'), '.') }}</strong>
                         <span style="color:#9a85aa;font-size:11px;"> {{ $item->consumption_unit }}</span>
                     </td>
-                    <td style="color:#7a6884;">{{ $item->minimum_qty ?? '—' }}</td>
-                    <td style="color:#7a6884;">{{ $item->reorder_level ?? '—' }}</td>
+                    <td style="color:#7a6884;">{{ rtrim(rtrim(number_format($item->minimum_qty, 2), '0'), '.') }}</td>
                     <td>
                         <a href="{{ route('inventory.purchase') }}" class="action-btn btn-ghost">
                             Order
