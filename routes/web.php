@@ -631,9 +631,10 @@ Route::middleware('auth')->group(function () {
         // Received Stock — dentist-friendly report over GRN records
         Route::get('/received-stock',               [InventoryController::class, 'receivedStock'])->name('received-stock');
         Route::get('/received-stock/{grn}/print',   [InventoryController::class, 'receivedStockPrint'])->name('received-stock.print');
-        // Interactive Guide (trilingual staff-training walkthrough) — self-contained HTML
+        // Interactive Guide (trilingual staff-training walkthrough) — self-contained HTML.
+        // Served from resources/ (NOT docs/, which is excluded from the Docker image).
         Route::get('/guide/demo', function () {
-            $path = base_path('docs/inventory-module-guide.html');
+            $path = resource_path('guides/inventory-module-guide.html');
             abort_unless(is_file($path), 404);
             return response()->file($path, ['Content-Type' => 'text/html; charset=UTF-8']);
         })->name('guide.demo');

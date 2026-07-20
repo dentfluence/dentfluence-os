@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory Module — Interactive Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{--p:#6a0f70;--pl:#faf5fb;--ink:#1e0a2c;--sub:#7a6884;--line:rgba(185,92,183,0.14);}
+  body{font-family:'Inter','DM Sans',sans-serif;background:#efe7f2;color:var(--ink);}
+  body.lang-dev{font-family:'Noto Sans Devanagari','Inter',sans-serif;}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 14px 50px;}
+
+  /* Header bar (the purple guide chrome) */
+  .ghead{background:linear-gradient(120deg,#4e0a53,#6a0f70 55%,#8a2b90);color:#fff;padding:16px 24px;
+         display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+  .ghead h1{font-size:19px;font-weight:700;}
+  .ghead p{font-size:12px;opacity:.85;margin-top:2px;}
+  .langsw{display:flex;gap:5px;background:rgba(255,255,255,.12);padding:4px;border-radius:9px;}
+  .langsw button{border:none;background:none;color:rgba(255,255,255,.75);font:inherit;font-size:13px;font-weight:600;
+                 padding:6px 13px;border-radius:6px;cursor:pointer;}
+  .langsw button.on{background:#fff;color:var(--p);}
+
+  /* App canvas */
+  .app{background:#fff;border-radius:0 0 12px 12px;box-shadow:0 14px 40px rgba(30,10,44,.18);overflow:hidden;}
+  .app-top{padding:20px 26px 0;}
+  .ph{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  .ph .title{font-family:'Cormorant Garamond','DM Sans',serif;}
+  .ph h2{font-size:21px;font-weight:700;color:#1a0a1e;}
+  .ph .sub{font-size:12.5px;color:var(--sub);margin-top:1px;}
+  .btn{border:none;border-radius:6px;padding:8px 15px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;
+       display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+  .btn.p{background:var(--p);color:#fff;}
+  .btn.o{background:#fff;color:var(--p);border:1px solid #d8c8e4;}
+
+  /* Sub-nav (real inventory tabs) */
+  .subnav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;border:1px solid var(--line);border-radius:6px;
+          padding:0 4px;margin:16px 0 6px;}
+  .subnav::-webkit-scrollbar{display:none;}
+  .tab{display:inline-flex;align-items:center;gap:6px;padding:11px 13px;font-size:13px;color:var(--sub);cursor:pointer;
+       white-space:nowrap;flex-shrink:0;border-bottom:2px solid transparent;}
+  .tab svg{width:13px;height:13px;stroke:#a090b0;fill:none;stroke-width:1.75;}
+  .tab.on{color:var(--p);font-weight:600;border-bottom-color:var(--p);}
+  .tab.on svg{stroke:var(--p);}
+  .tab .mb{font-size:8.5px;text-transform:uppercase;letter-spacing:.05em;background:rgba(122,104,132,.16);color:var(--sub);
+           padding:1px 4px;border-radius:4px;}
+
+  /* Coach callout */
+  .coach{display:flex;gap:9px;align-items:flex-start;background:#eaf6fb;border:1px solid #cfe8f2;border-radius:8px;
+         padding:11px 14px;margin:14px 26px;font-size:13.5px;line-height:1.5;color:#155e75;}
+  .coach b{color:#0e4a5e;}
+
+  .body{padding:6px 26px 26px;}
+
+  /* KPI cards */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0 16px;}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px;}
+  .kpi .v{font-size:20px;font-weight:700;}
+  .kpi .l{font-size:11.5px;color:var(--sub);margin-top:2px;}
+  .kpi .s{font-size:10.5px;color:#b09cbe;margin-top:1px;}
+  .kpi.alert{border-left:3px solid #b52020;}
+
+  /* health */
+  .health{display:flex;align-items:center;gap:16px;background:#eff6ff;border:1px solid #cfe0fb;border-radius:10px;
+          padding:14px 18px;margin-bottom:14px;}
+  .health .ring{width:54px;height:54px;border-radius:50%;border:4px solid #2563eb;display:flex;align-items:center;
+                justify-content:center;font-weight:800;color:#2563eb;font-size:15px;flex-shrink:0;}
+  .health .g{font-size:15px;font-weight:700;color:#2563eb;}
+  .pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;}
+
+  /* tables */
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  thead th{background:#faf5fb;text-align:left;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+           color:#9a85aa;padding:9px 12px;}
+  thead th.r{text-align:right;}thead th.c{text-align:center;}
+  tbody td{padding:10px 12px;border-bottom:1px solid #f4eef7;color:#33223f;vertical-align:middle;}
+  tbody td.r{text-align:right;}tbody td.c{text-align:center;}
+  tbody tr:last-child td{border-bottom:none;}
+  .tbl-wrap{border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .code{font-size:10.5px;color:#9a85aa;}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle;}
+  .chip{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;}
+  .adjust b{display:inline-flex;width:24px;height:24px;border-radius:5px;align-items:center;justify-content:center;
+            font-weight:700;margin:0 2px;cursor:default;}
+  .plus{background:#e8f7ef;color:#1a7a45;}.minus{background:#fdeaea;color:#b52020;}
+
+  /* filter row */
+  .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);
+           border-radius:8px;padding:12px 14px;margin-bottom:12px;}
+  .inp,.sel{padding:7px 11px;border:1px solid #d8c8e4;border-radius:6px;font:inherit;font-size:12.5px;color:#4e2060;
+            background:#fff;}
+  .inp{min-width:190px;}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;}
+  .fchip{padding:6px 13px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid rgba(185,92,183,.18);
+         background:#fff;color:#4e2060;}
+  .fchip.on{background:var(--p);color:#fff;border-color:var(--p);}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin:6px 0 12px;font-size:11.5px;color:var(--sub);}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+
+  .cards5{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px;}
+  .rcard{background:#fff;border:1px solid var(--line);border-radius:8px;padding:13px 15px;}
+  .rcard .t{font-size:13.5px;font-weight:600;color:#1a0a1e;}
+  .rcard .d{font-size:11.5px;color:#9a85aa;margin-top:2px;}
+  .sect-h{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin:16px 0 8px;
+          display:flex;align-items:center;gap:8px;}
+  .badge{background:#fee2e2;color:#b91c1c;font-size:11px;font-weight:700;border-radius:20px;padding:1px 8px;}
+  .infocard{display:flex;align-items:center;gap:10px;background:#f3f0f6;border:1px solid #e2dae9;border-radius:8px;
+            padding:11px 14px;margin-bottom:14px;font-size:12.5px;color:#5a4a6a;}
+  .valbar{height:6px;background:rgba(185,92,183,.08);border-radius:3px;overflow:hidden;margin-top:4px;}
+  .valbar i{display:block;height:100%;border-radius:3px;}
+  .footer{text-align:center;color:#9a85aa;font-size:12px;margin-top:20px;}
+</style>
+</head>
+<body>
+
+<div class="ghead">
+  <div><h1 data-t="title"></h1><p data-t="subtitle"></p></div>
+  <div class="langsw">
+    <button data-lang="en" class="on" onclick="setLang('en')">English</button>
+    <button data-lang="hi" onclick="setLang('hi')">हिंदी</button>
+    <button data-lang="mr" onclick="setLang('mr')">मराठी</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="app">
+    <div class="app-top">
+      <div class="ph">
+        <div class="title"><h2>Inventory</h2><div class="sub" id="phsub"></div></div>
+        <div id="phact"></div>
+      </div>
+      <div class="subnav" id="subnav"></div>
+    </div>
+    <div class="coach"><span>💡</span><span id="coach"></span></div>
+    <div class="body" id="screen"></div>
+  </div>
+  <div class="footer" data-t="footer"></div>
+</div>
+
+<script>
+let LANG='en', ACTIVE='dashboard';
+function L(o){return (o&&(o[LANG]||o.en))||'';}
+// t(en,hi,mr) shorthand
+function t(en,hi,mr){return {en,hi,mr};}
+
+const D = {
+  title:t('Inventory Module — Interactive Guide','इन्वेंट्री मॉड्यूल — इंटरैक्टिव गाइड','इन्व्हेंटरी मॉड्यूल — इंटरॅक्टिव्ह मार्गदर्शक'),
+  subtitle:t('Walkable walkthrough · click the tabs · English / हिंदी / मराठी','चलने-योग्य वॉकथ्रू · टैब पर क्लिक करें · English / हिंदी / मराठी','चालण्याजोगे मार्गदर्शन · टॅबवर क्लिक करा · English / हिंदी / मराठी'),
+  footer:t('This is a training demo with sample data — it does not touch your real inventory.','यह नमूना डेटा के साथ एक प्रशिक्षण डेमो है — यह आपकी असली इन्वेंट्री को नहीं छूता।','हे नमुना डेटासह एक प्रशिक्षण डेमो आहे — तो तुमच्या खऱ्या इन्व्हेंटरीला स्पर्श करत नाही.'),
+  inMore:t('More','More','More'),
+  // common labels
+  addProduct:t('Add Product','आइटम जोड़ें','आयटम जोडा'),
+  createPO:t('Create PO','PO बनाएँ','PO तयार करा'),
+  receive:t('↓ Receive','↓ प्राप्त करें','↓ स्वीकारा'),
+  orderNow:t('Order Now','अभी ऑर्डर करें','आता ऑर्डर करा'),
+  startCount:t('Start New Count','नई गिनती शुरू करें','नवीन मोजणी सुरू करा'),
+  filter:t('Filter','फ़िल्टर','फिल्टर'),
+  searchPH:t('Search products, code, brand…','प्रोडक्ट, कोड, ब्रांड खोजें…','प्रोडक्ट, कोड, ब्रँड शोधा…'),
+  print:t('View / Print','देखें / प्रिंट','पाहा / प्रिंट'),
+  // status
+  inStock:t('In Stock','इन स्टॉक','इन स्टॉक'), low:t('Low','लो','लो'), critical:t('Critical','क्रिटिकल','क्रिटिकल'),
+  out:t('Out of Stock','आउट ऑफ स्टॉक','आउट ऑफ स्टॉक'), minNot:t('Minimum Stock Not Set','Minimum Stock सेट नहीं','Minimum Stock सेट नाही'),
+  draft:t('Draft','ड्राफ्ट','ड्राफ्ट'), ordered:t('Ordered','ऑर्डर्ड','ऑर्डर्ड'), partial:t('Partial','पार्शियल','पार्शियल'),
+  completed:t('Completed','पूर्ण','पूर्ण'), received:t('Received','प्राप्त','मिळाले'),
+  purchased:t('Purchased','खरीदा','खरेदी'), used:t('Used','उपयोग','वापर'), adjustment:t('Adjustment','समायोजन','समायोजन'),
+  // column headers
+  cProduct:t('Product','प्रोडक्ट','प्रोडक्ट'), cBrand:t('Brand','ब्रांड','ब्रँड'), cLoc:t('Location','लोकेशन','लोकेशन'),
+  cStock:t('Stock','स्टॉक','स्टॉक'), cPrice:t('Last Price','अंतिम मूल्य','शेवटची किंमत'), cValue:t('Value','वैल्यू','व्हॅल्यू'),
+  cStatus:t('Status','स्थिति','स्थिती'), cAdjust:t('Adjust','बदलें','बदला'),
+  cOrderNo:t('Order No','ऑर्डर नंबर','ऑर्डर क्र.'), cVendor:t('Vendor','वेंडर','व्हेंडर'), cOrderDate:t('Order Date','ऑर्डर तारीख','ऑर्डर तारीख'),
+  cExpected:t('Expected','अपेक्षित','अपेक्षित'), cTotal:t('Total','कुल','एकूण'), cActions:t('Actions','क्रिया','क्रिया'),
+  cWhen:t('When','कब','केव्हा'), cAction:t('Action','क्रिया','क्रिया'), cItem:t('Item','आइटम','आयटम'),
+  cChange:t('Change','बदलाव','बदल'), cBy:t('By','द्वारा','कोणी'), cNote:t('Note','नोट','नोंद'),
+  cReceiptNo:t('Receipt No','रसीद नंबर','पावती क्र.'), cDate:t('Date','तारीख','तारीख'), cSupplier:t('Supplier','सप्लायर','पुरवठादार'),
+  cPO:t('Purchase Order','परचेज़ ऑर्डर','पर्चेस ऑर्डर'), cItems:t('Items','आइटम','आयटम'), cQty:t('Qty','मात्रा','प्रमाण'),
+  cAmount:t('Amount','राशि','रक्कम'), cOnHand:t('On Hand','उपलब्ध','उपलब्ध'), cMinStock:t('Minimum Stock','Minimum Stock','Minimum Stock'),
+  allStock:t('All Stock Status','सभी स्टॉक स्थिति','सर्व स्टॉक स्थिती'), allCat:t('All Categories','सभी श्रेणियाँ','सर्व श्रेणी'), allBrand:t('All Brands','सभी ब्रांड','सर्व ब्रँड'),
+  all:t('All','सभी','सर्व'), other:t('Other','अन्य','इतर'),
+};
+
+const TABS = [
+  {k:'dashboard',p:1,svg:'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',lab:t('Dashboard','डैशबोर्ड','डॅशबोर्ड')},
+  {k:'items',p:1,svg:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>',lab:t('Items','आइटम','आयटम')},
+  {k:'purchase',p:1,svg:'<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/>',lab:t('Purchase Orders','परचेज़ ऑर्डर','पर्चेस ऑर्डर')},
+  {k:'movement',p:1,svg:'<path d="M3 6h18M3 12h18M3 18h18"/>',lab:t('Stock Movement','स्टॉक मूवमेंट','स्टॉक हालचाल')},
+  {k:'count',p:1,svg:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',lab:t('Stock Count','स्टॉक काउंट','स्टॉक मोजणी')},
+  {k:'implants',p:1,svg:'<path d="M12 2a5 5 0 0 1 5 5c0 5-5 11-5 11S7 12 7 7a5 5 0 0 1 5-5z"/>',lab:t('Implants','इम्प्लांट','इम्प्लांट')},
+  {k:'alerts',p:0,svg:'<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',lab:t('Alerts','अलर्ट','अलर्ट')},
+  {k:'received',p:0,svg:'<path d="M20 6L9 17l-5-5"/>',lab:t('Received Stock','प्राप्त स्टॉक','मिळालेला स्टॉक')},
+  {k:'reports',p:0,svg:'<path d="M18 20V10M12 20V4M6 20v-6"/>',lab:t('Reports','रिपोर्ट','अहवाल')},
+  {k:'assets',p:0,svg:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/>',lab:t('Assets','एसेट्स','ॲसेट्स')},
+  {k:'settings',p:0,svg:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82 2 2 0 1 1-2.83 2.83 1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0 1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33 2 2 0 1 1-2.83-2.83 1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4 1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82 2 2 0 1 1 2.83-2.83 1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0 1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33 2 2 0 1 1 2.83 2.83 1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4z"/>',lab:t('Inventory Settings','इन्वेंट्री सेटिंग्स','इन्व्हेंटरी सेटिंग्ज')},
+];
+
+const COACH = {
+  dashboard:t('Open this first every day. The health score and the red/amber numbers tell you what needs attention now.','हर दिन सबसे पहले यही खोलें। हेल्थ स्कोर और लाल/पीले नंबर बताते हैं कि अभी किस पर ध्यान देना है।','दररोज सर्वात आधी हेच उघडा. हेल्थ स्कोअर व लाल/पिवळे आकडे आत्ता कशाकडे लक्ष द्यायचे ते सांगतात.'),
+  items:t('Every product lives here. The colour dot is its stock status. Set a Minimum Stock on each item so alerts can work.','हर प्रोडक्ट यहाँ है। रंगीन बिंदु उसकी स्टॉक स्थिति है। हर आइटम पर Minimum Stock सेट करें ताकि अलर्ट काम करें।','प्रत्येक प्रोडक्ट इथे आहे. रंगीत बिंदू त्याची स्टॉक स्थिती आहे. प्रत्येक आयटमवर Minimum Stock सेट करा म्हणजे अलर्ट काम करतील.'),
+  purchase:t('Create a PO, mark it Ordered, then Receive when stock arrives. Receiving adds stock + a Received Stock record + a bill in Finance.','PO बनाएँ, Ordered करें, फिर स्टॉक आने पर Receive करें। Receive करने से स्टॉक + Received Stock रिकॉर्ड + Finance में बिल जुड़ता है।','PO तयार करा, Ordered करा, मग स्टॉक आल्यावर Receive करा. Receive केल्याने स्टॉक + Received Stock नोंद + Finance मध्ये बिल जोडले जाते.'),
+  movement:t('A plain-language timeline of every change — Purchased, Used, Adjustment, Correction. Reversals show here too; nothing is hidden.','हर बदलाव की आसान टाइमलाइन — खरीदा, उपयोग, समायोजन, सुधार। रिवर्सल भी यहाँ दिखते हैं; कुछ छिपा नहीं।','प्रत्येक बदलाची सोपी टाइमलाइन — खरेदी, वापर, समायोजन, दुरुस्ती. रिव्हर्सलही इथे दिसतात; काहीही लपलेले नाही.'),
+  count:t('Every 15 days, count what is physically on the shelf. Enter the real numbers; the system fixes mismatches and flags reorders.','हर 15 दिन में शेल्फ पर जो है उसे गिनें। असली संख्या दर्ज करें; सिस्टम अंतर ठीक करता है और रीऑर्डर चिह्नित करता है।','दर 15 दिवसांनी शेल्फवर जे आहे ते मोजा. खरे आकडे भरा; सिस्टीम फरक दुरुस्त करते व रीऑर्डर खुणावते.'),
+  implants:t('Your implant catalogue and per-patient placement records — full recall and warranty traceability by patient.','आपका इम्प्लांट कैटलॉग और प्रति-मरीज़ प्लेसमेंट रिकॉर्ड — मरीज़ अनुसार पूरी रिकॉल और वारंटी ट्रेसबिलिटी।','तुमचा इम्प्लांट कॅटलॉग व प्रति-रुग्ण प्लेसमेंट नोंदी — रुग्णानुसार पूर्ण रिकॉल व वॉरंटी ट्रेसेबिलिटी.'),
+  alerts:t('Everything needing attention in one place. Work Out of Stock and Critical first. Set a Minimum Stock on flagged items to get earlier warnings.','ध्यान देने योग्य सब कुछ एक जगह। पहले आउट ऑफ स्टॉक और क्रिटिकल निपटाएँ। चिह्नित आइटम पर Minimum Stock सेट करें।','लक्ष देण्याजोगे सर्व एका ठिकाणी. आधी आउट ऑफ स्टॉक व क्रिटिकल हाताळा. खुणावलेल्या आयटमवर Minimum Stock सेट करा.'),
+  received:t('A record of every delivery received against a PO — created automatically. Open View / Print for a clean document.','PO के लिए प्राप्त हर डिलीवरी का रिकॉर्ड — अपने आप बनता है। साफ़ दस्तावेज़ के लिए View / Print खोलें।','PO साठी मिळालेल्या प्रत्येक डिलिव्हरीची नोंद — आपोआप तयार होते. स्वच्छ दस्तऐवजासाठी View / Print उघडा.'),
+  reports:t('Look-back reports on stock and spending. "Stock Value" shows how much money is sitting on your shelves right now.','स्टॉक और खर्च पर रिपोर्ट। "Stock Value" बताता है कि अभी आपकी शेल्फ पर कितना पैसा है।','स्टॉक व खर्चावर अहवाल. "Stock Value" तुमच्या शेल्फवर आत्ता किती पैसा आहे ते दाखवते.'),
+  assets:t('Track reusable instruments — usage, sterilization and servicing. Items due for service show on the Dashboard.','पुन: उपयोग उपकरण ट्रैक करें — उपयोग, स्टरलाइज़ेशन, सर्विसिंग। सर्विस बाकी आइटम Dashboard पर दिखते हैं।','पुनर्वापर उपकरणे ट्रॅक करा — वापर, निर्जंतुकीकरण, सर्व्हिसिंग. सर्व्हिस बाकी आयटम Dashboard वर दिसतात.'),
+  settings:t('Set up the building blocks — categories, storage locations and thresholds. Good setup makes searching and counting faster (admin only).','बुनियादी चीज़ें सेट करें — श्रेणियाँ, लोकेशन, थ्रेशोल्ड। अच्छा सेटअप खोजना-गिनना तेज़ करता है (केवल एडमिन)।','मूलभूत घटक सेट करा — श्रेणी, लोकेशन, थ्रेशोल्ड. चांगला सेटअप शोध व मोजणी वेगवान करतो (फक्त ॲडमिन).'),
+};
+
+const SUB = {
+  dashboard:t('Clinical Resource Operating System','क्लिनिकल रिसोर्स ऑपरेटिंग सिस्टम','क्लिनिकल रिसोर्स ऑपरेटिंग सिस्टीम'),
+  items:t('Items · 44 products','आइटम · 44 प्रोडक्ट','आयटम · 44 प्रोडक्ट'),
+  purchase:t('Purchase Orders · 4 orders','परचेज़ ऑर्डर · 4 ऑर्डर','पर्चेस ऑर्डर · 4 ऑर्डर'),
+  movement:t('Stock Movement · 20 entries','स्टॉक मूवमेंट · 20 प्रविष्टियाँ','स्टॉक हालचाल · 20 नोंदी'),
+  count:t('Stock Count · 15-day physical count cycle','स्टॉक काउंट · 15-दिन गिनती चक्र','स्टॉक मोजणी · 15-दिवस मोजणी चक्र'),
+  implants:t('Implants · Catalog + placement traceability','इम्प्लांट · कैटलॉग + प्लेसमेंट','इम्प्लांट · कॅटलॉग + प्लेसमेंट'),
+  alerts:t('Alerts · Items that need attention today','अलर्ट · आज ध्यान देने योग्य आइटम','अलर्ट · आज लक्ष देण्याजोगे आयटम'),
+  received:t('Received Stock · 6 receipts','प्राप्त स्टॉक · 6 रसीदें','मिळालेला स्टॉक · 6 पावत्या'),
+  reports:t('Reports · Stock valuation & analysis','रिपोर्ट · स्टॉक मूल्यांकन व विश्लेषण','अहवाल · स्टॉक मूल्यांकन व विश्लेषण'),
+  assets:t('Assets · Reusable instruments','एसेट्स · पुन: उपयोग उपकरण','ॲसेट्स · पुनर्वापर उपकरणे'),
+  settings:t('Inventory Settings · Admin only','इन्वेंट्री सेटिंग्स · केवल एडमिन','इन्व्हेंटरी सेटिंग्ज · फक्त ॲडमिन'),
+};
+
+function statusChip(kind){
+  const m={inStock:['#e8f7ef','#1a7a45',D.inStock],low:['#fff4e0','#a05c00',D.low],critical:['#fff1e0','#d97706',D.critical],
+    out:['#fdeaea','#b52020',D.out],minNot:['#f3f0f6','#7a6884',D.minNot]};
+  const s=m[kind];return `<span class="chip" style="background:${s[0]};color:${s[1]}">${L(s[2])}</span>`;}
+function poChip(kind){const m={draft:['#fff4e0','#a05c00',D.draft],ordered:['#e8f0fb','#1a5ea8',D.ordered],
+    partial:['#fff8ec','#7a4a00',D.partial],completed:['#e8f7ef','#1a7a45',D.completed]};
+  const s=m[kind];return `<span class="chip" style="background:${s[0]};color:${s[1]}">${L(s[2])}</span>`;}
+function dotColor(k){return {inStock:'#1a7a45',low:'#a05c00',critical:'#d97706',out:'#b52020',minNot:'#7a6884'}[k];}
+
+/* mock item rows: [name,code,brand,loc,qty,price,value,status] */
+const ITEMS=[
+ ['AH Plus Root Canal Sealer','ENDO-0010','Dentsply Maillefer','Operatory 1',13,'1,800','23,400','inStock'],
+ ['C-Pilot Files #8 & #10','ENDO-0003','Dentsply Maillefer','Main Store',8,'100','800','inStock'],
+ ['Filtek Z350 Composite A2','COMP-0002','3M','Operatory 1',2,'2,400','4,800','critical'],
+ ['Cotton Pellets — Jar of 2000','DISP-0004','Dentsply','—',0,'180','—','out'],
+ ['Dental Bibs — Box of 500','DISP-0006','Medicom','—',0,'480','—','out'],
+ ['Alginate Impression Powder','IMP-0002','Zhermack','Main Store',4,'350','1,400','low'],
+];
+
+function renderScreens(){
+  const S=document.getElementById('screen');
+  switch(ACTIVE){
+    case 'dashboard': S.innerHTML=scrDashboard(); break;
+    case 'items': S.innerHTML=scrItems(); break;
+    case 'purchase': S.innerHTML=scrPurchase(); break;
+    case 'movement': S.innerHTML=scrMovement(); break;
+    case 'count': S.innerHTML=scrCount(); break;
+    case 'implants': S.innerHTML=scrImplants(); break;
+    case 'alerts': S.innerHTML=scrAlerts(); break;
+    case 'received': S.innerHTML=scrReceived(); break;
+    case 'reports': S.innerHTML=scrReports(); break;
+    case 'assets': S.innerHTML=scrAssets(); break;
+    case 'settings': S.innerHTML=scrSettings(); break;
+  }
+}
+
+function kpi(v,l,s,alert){return `<div class="kpi${alert?' alert':''}"><div class="v">${v}</div><div class="l">${l}</div>${s?`<div class="s">${s}</div>`:''}</div>`;}
+
+function scrDashboard(){
+  return `<div class="health"><div class="ring">73</div>
+      <div><div class="g">${L(t('Inventory Health: Good','इन्वेंट्री हेल्थ: अच्छी','इन्व्हेंटरी हेल्थ: चांगली'))}</div>
+      <div style="margin-top:5px"><span class="pill" style="background:#fdeaea;color:#b52020">● 31 ${L(D.out)}</span>
+      <span class="pill" style="background:#fff4e0;color:#a05c00">● 3 ${L(D.low)}</span></div></div></div>
+    <div class="kpis">
+      ${kpi('₹54,135',L(t('Inventory Value','इन्वेंट्री वैल्यू','इन्व्हेंटरी व्हॅल्यू')),L(t('Total stock at cost','कुल स्टॉक लागत','एकूण स्टॉक किंमत')))}
+      ${kpi('44',L(t('Total Items','कुल आइटम','एकूण आयटम')),L(t('Active items','सक्रिय आइटम','सक्रिय आयटम')))}
+      ${kpi('3',L(D.low),L(t('At or below Minimum Stock','Minimum Stock पर या नीचे','Minimum Stock वर किंवा खाली')),true)}
+      ${kpi('31',L(D.out),L(t('Nothing on hand','कुछ उपलब्ध नहीं','काहीही उपलब्ध नाही')),true)}
+      ${kpi('0',L(t('Expiring Soon','जल्द एक्सपायर','लवकर एक्सपायर')),L(t('Within 90 days','90 दिनों में','90 दिवसांत')))}
+      ${kpi('5',L(t('Implant Catalog','इम्प्लांट कैटलॉग','इम्प्लांट कॅटलॉग')),L(t('Components','कंपोनेंट','कंपोनंट')))}
+    </div>
+    <div class="sect-h">${L(t('Stock Status','स्टॉक स्थिति','स्टॉक स्थिती'))}</div>
+    <div class="legend">
+      <span><span class="dot" style="background:#1a7a45"></span>${L(D.inStock)} 6</span>
+      <span><span class="dot" style="background:#a05c00"></span>${L(D.low)} 3</span>
+      <span><span class="dot" style="background:#d97706"></span>${L(D.critical)} 1</span>
+      <span><span class="dot" style="background:#b52020"></span>${L(D.out)} 31</span>
+      <span><span class="dot" style="background:#7a6884"></span>${L(D.minNot)} 3</span>
+    </div>`;
+}
+
+function itemRow(r){
+  return `<tr><td><strong>${r[0]}</strong><div class="code">${r[1]}</div></td><td>${r[2]}</td>
+    <td>${r[3]}</td><td><span class="dot" style="background:${dotColor(r[7])}"></span><b>${r[4]}</b></td>
+    <td class="r">₹${r[5]}</td><td class="r">${r[6]==='—'?'—':'₹'+r[6]}</td><td class="c">${statusChip(r[7])}</td>
+    <td class="c adjust"><b class="plus">+</b><b class="minus">−</b></td></tr>`;
+}
+function scrItems(){
+  return `<div class="filters"><input class="inp" placeholder="${L(D.searchPH)}">
+      <select class="sel"><option>${L(D.allCat)}</option></select>
+      <select class="sel"><option>${L(D.allBrand)}</option></select>
+      <select class="sel"><option>${L(D.allStock)}</option></select>
+      <button class="btn p">${L(D.filter)}</button></div>
+    <div class="legend">
+      <span><span class="dot" style="background:#1a7a45"></span>${L(D.inStock)}</span>
+      <span><span class="dot" style="background:#a05c00"></span>${L(D.low)}</span>
+      <span><span class="dot" style="background:#d97706"></span>${L(D.critical)}</span>
+      <span><span class="dot" style="background:#b52020"></span>${L(D.out)}</span>
+      <span><span class="dot" style="background:#7a6884"></span>${L(D.minNot)}</span></div>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th>${L(D.cProduct)}</th><th>${L(D.cBrand)}</th><th>${L(D.cLoc)}</th><th>${L(D.cStock)}</th>
+      <th class="r">${L(D.cPrice)}</th><th class="r">${L(D.cValue)}</th><th class="c">${L(D.cStatus)}</th><th class="c">${L(D.cAdjust)}</th>
+    </tr></thead><tbody>${ITEMS.map(itemRow).join('')}</tbody></table></div>`;
+}
+
+const POS=[['PO-2026-0004','Dent World Distributors','03 Jul 2026','—','16,880','completed'],
+ ['PO-2026-0003','Dentalkart','19 Jul 2026','—','500','ordered'],
+ ['PO-2026-0002','Dentalkart','20 Jun 2026','23 Jun 2026','4,880','partial'],
+ ['PO-2026-0001','Aatmaja Dental Pvt Ltd','20 Jun 2026','23 Jun 2026','8,280','draft']];
+function scrPurchase(){
+  const chips=['all','draft','ordered','partial','completed'];
+  const chipLab={all:D.all,draft:D.draft,ordered:D.ordered,partial:D.partial,completed:D.completed};
+  return `<div class="chips">${chips.map((c,i)=>`<span class="fchip${i===0?' on':''}">${L(chipLab[c])}</span>`).join('')}</div>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th>${L(D.cOrderNo)}</th><th>${L(D.cVendor)}</th><th>${L(D.cOrderDate)}</th><th>${L(D.cExpected)}</th>
+      <th class="r">${L(D.cTotal)}</th><th class="c">${L(D.cStatus)}</th><th class="c">${L(D.cActions)}</th></tr></thead>
+      <tbody>${POS.map(p=>`<tr><td><strong style="color:#6a0f70">${p[0]}</strong></td><td>${p[1]}</td>
+        <td>${p[2]}</td><td>${p[3]}</td><td class="r"><strong>₹${p[4]}</strong></td><td class="c">${poChip(p[5])}</td>
+        <td class="c">${p[5]==='ordered'||p[5]==='partial'?`<button class="btn o" style="padding:5px 12px">${L(D.receive)}</button>`:'⋮'}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+const MOVES=[['20 Jul 2026','07:58 AM','purchased','K-Files Stainless #15-40','ENDO-0001','+4','#1a7a45','Main Store','Dr. Sumit Firke','GRN# GRN-2026-0006 — PO# PO-2026-0004'],
+ ['20 Jul 2026','07:58 AM','purchased','Herculite Composite A3.5','COMP-0006','+4','#1a7a45','Main Store','Dr. Sumit Firke','GRN# GRN-2026-0006'],
+ ['07 Jul 2026','12:16 AM','adjustment','AH Plus Root Canal Sealer','ENDO-0010','+5','#a05c00','Operatory 1','Dr. Sumit Firke','Manual adjustment'],
+ ['05 Jul 2026','06:20 PM','used','Cotton Pellets — Jar of 2000','DISP-0004','−10','#b52020','Main Store','Runali','Consumed in treatment']];
+function scrMovement(){
+  const chips=[['all',D.all,'#6a0f70'],['purchased',D.purchased],['used',D.used],['adjustment',D.adjustment],['other',D.other]];
+  const lab={purchased:D.purchased,adjustment:D.adjustment,used:D.used};
+  return `<div class="chips">${chips.map((c,i)=>`<span class="fchip${i===0?' on':''}">${L(c[1])}</span>`).join('')}</div>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th>${L(D.cWhen)}</th><th>${L(D.cAction)}</th><th>${L(D.cItem)}</th><th class="r">${L(D.cChange)}</th>
+      <th>${L(D.cLoc)}</th><th>${L(D.cBy)}</th><th>${L(D.cNote)}</th></tr></thead>
+      <tbody>${MOVES.map(m=>`<tr><td>${m[0]}<div class="code">${m[1]}</div></td>
+        <td><span class="chip" style="background:${m[6]}22;color:${m[6]}">${L(lab[m[2]])}</span></td>
+        <td>${m[3]}<div class="code">${m[4]}</div></td><td class="r" style="font-weight:700;color:${m[6]}">${m[5]}</td>
+        <td>${m[7]}</td><td>${m[8]}</td><td class="code">${m[9]}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function scrCount(){
+  return `<div class="kpis">
+      ${kpi('44',L(t('Total Items','कुल आइटम','एकूण आयटम')),'')}
+      ${kpi('<span style="color:#a05c00">3</span>',L(t('Low Stock','लो स्टॉक','लो स्टॉक')),'')}
+      ${kpi('<span style="color:#b52020">32</span>',L(t('Critical / Out','क्रिटिकल / आउट','क्रिटिकल / आउट')),'')}
+      ${kpi('<span style="color:#1a7a45;font-size:15px">20 Jul 2026</span>',L(t('Next Count Due','अगली गिनती','पुढील मोजणी')),'')}
+    </div>
+    <div class="sect-h">${L(t('Count History','गिनती इतिहास','मोजणी इतिहास'))}</div>
+    <div class="tbl-wrap"><table><thead><tr><th>${L(t('Session','सत्र','सत्र'))}</th><th>${L(D.cDate)}</th><th>${L(D.cStatus)}</th><th class="r">${L(D.cItems)}</th></tr></thead>
+      <tbody><tr><td><strong>SCS-2026-001</strong></td><td>20 Jul 2026</td><td><span class="chip" style="background:#fff4e0;color:#a05c00">${L(t('In Progress','जारी','सुरू'))}</span></td><td class="r">—</td></tr></tbody></table></div>`;
+}
+
+function scrImplants(){
+  const IMP=[['Dentium — Superline','Cover Screw','—','—','0'],['Osstem TS System','Cover Screw','—','—','10'],
+   ['Dentium — Superline','Fixture','A25KS42957','ø4 × 10mm','—'],['Dentium — Superline','Healing Abutment','—','ø4.5 × 2mm','0']];
+  return `<div class="chips"><span class="fchip on">${L(t('Component Catalog','कंपोनेंट कैटलॉग','कंपोनंट कॅटलॉग'))} · 5</span><span class="fchip">${L(t('Placement History','प्लेसमेंट हिस्ट्री','प्लेसमेंट हिस्ट्री'))} · 0</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>${L(t('Brand / System','ब्रांड / सिस्टम','ब्रँड / सिस्टीम'))}</th><th>${L(t('Type','प्रकार','प्रकार'))}</th><th>${L(t('Product Code','प्रोडक्ट कोड','प्रोडक्ट कोड'))}</th><th>${L(t('Dimensions','आयाम','परिमाण'))}</th><th class="c">${L(D.cStock)}</th></tr></thead>
+      <tbody>${IMP.map(i=>`<tr><td><strong>${i[0]}</strong></td><td><span class="chip" style="background:#f3e8ff;color:#6a0f70">${i[1]}</span></td><td class="code">${i[2]}</td><td>${i[3]}</td><td class="c"><b>${i[4]}</b></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function scrAlerts(){
+  return `<div class="kpis">
+      ${kpi('<span style="color:#b52020">31</span>',L(D.out),'')}
+      ${kpi('<span style="color:#d97706">1</span>',L(D.critical),'')}
+      ${kpi('<span style="color:#a05c00">3</span>',L(D.low),'')}
+      ${kpi('0',L(t('Expiring Soon','जल्द एक्सपायर','लवकर एक्सपायर')),'')}
+      ${kpi('0',L(t('Dead Stock','डेड स्टॉक','डेड स्टॉक')),'')}
+      ${kpi('0',L(t('Pending Deliveries','बकाया डिलीवरी','बाकी डिलिव्हरी')),'')}</div>
+    <div class="infocard"><span>ℹ️</span><span><strong>3</strong> ${L(t("items don't have a Minimum Stock level configured. Set one to enable stock alerts.","आइटम पर Minimum Stock सेट नहीं है। अलर्ट चालू करने के लिए इसे सेट करें।","आयटमवर Minimum Stock सेट नाही. अलर्ट सुरू करण्यासाठी तो सेट करा."))}</span></div>
+    <div class="sect-h"><span style="color:#b52020">⛔ ${L(D.out)}</span> <span class="badge">31</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>${L(D.cItem)}</th><th>${L(D.cOnHand)}</th><th>${L(D.cMinStock)}</th><th class="c">${L(D.cActions)}</th></tr></thead>
+      <tbody>
+      <tr><td><span class="dot" style="background:#b52020"></span><strong>Cotton Pellets — Jar of 2000</strong></td><td style="color:#b91c1c;font-weight:600">0</td><td>3</td><td class="c"><button class="btn o" style="padding:5px 12px">${L(D.orderNow)}</button></td></tr>
+      <tr><td><span class="dot" style="background:#b52020"></span><strong>Dental Bibs — Box of 500</strong></td><td style="color:#b91c1c;font-weight:600">0</td><td>5</td><td class="c"><button class="btn o" style="padding:5px 12px">${L(D.orderNow)}</button></td></tr>
+      </tbody></table></div>`;
+}
+
+function scrReceived(){
+  const R=[['GRN-2026-0006','20 Jul 2026','Dent World Distributors','PO-2026-0004','3','10','16,880'],
+   ['GRN-2026-0005','19 Jul 2026','Dentalkart','PO-2026-0003','1','5','500'],
+   ['GRN-2026-0001','20 Jun 2026','Aatmaja Dental Pvt Ltd','PO-2026-0001','3','7','5,280']];
+  return `<div class="tbl-wrap"><table><thead><tr>
+      <th>${L(D.cReceiptNo)}</th><th>${L(D.cDate)}</th><th>${L(D.cSupplier)}</th><th>${L(D.cPO)}</th>
+      <th class="c">${L(D.cItems)}</th><th class="r">${L(D.cQty)}</th><th class="r">${L(D.cAmount)}</th><th class="c">${L(D.cStatus)}</th><th></th></tr></thead>
+      <tbody>${R.map(r=>`<tr><td><strong>${r[0]}</strong></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td>
+        <td class="c">${r[4]}</td><td class="r">${r[5]}</td><td class="r"><strong>₹${r[6]}</strong></td>
+        <td class="c"><span class="chip" style="background:#e8f7ef;color:#1a7a45">${L(D.received)}</span></td>
+        <td class="c"><button class="btn o" style="padding:4px 10px;font-size:12px">${L(D.print)}</button></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function scrReports(){
+  const cards=[[t('Received Stock','प्राप्त स्टॉक','मिळालेला स्टॉक'),t('What came into the clinic','क्लिनिक में क्या आया','क्लिनिकमध्ये काय आले')],
+   [t('Purchase Report','खरीद रिपोर्ट','खरेदी अहवाल'),t('All purchase orders','सभी परचेज़ ऑर्डर','सर्व पर्चेस ऑर्डर')],
+   [t('Stock Report','स्टॉक रिपोर्ट','स्टॉक अहवाल'),t('Current stock on hand','वर्तमान उपलब्ध स्टॉक','सध्याचा उपलब्ध स्टॉक')],
+   [t('Stock Value','स्टॉक वैल्यू','स्टॉक व्हॅल्यू'),t('Money on the shelf','शेल्फ पर पैसा','शेल्फवरील पैसा')],
+   [t('Stock Adjustments','स्टॉक समायोजन','स्टॉक समायोजन'),t('Manual corrections','मैनुअल सुधार','मॅन्युअल दुरुस्त्या')]];
+  const val=[['Endodontics','29,340',54,'#6a0f70'],['Composites','19,600',36,'#8a2b90'],['Consumables','3,455',6,'#b07fc0'],['Implant Systems','1,740',3,'#c9a8d4']];
+  return `<div class="cards5">${cards.map(c=>`<div class="rcard"><div class="t">${L(c[0])}</div><div class="d">${L(c[1])}</div></div>`).join('')}</div>
+    <div class="kpis">${kpi('₹54,135',L(t('Total Stock Value','कुल स्टॉक वैल्यू','एकूण स्टॉक व्हॅल्यू')),'')}
+      ${kpi('4',L(t('Categories','श्रेणियाँ','श्रेणी')),'')}${kpi('7',L(t('Movements (30d)','मूवमेंट (30द)','हालचाली (30द)')),'')}</div>
+    <div class="sect-h">${L(t('Stock Value by Category','श्रेणी अनुसार स्टॉक वैल्यू','श्रेणीनुसार स्टॉक व्हॅल्यू'))}</div>
+    <div style="border:1px solid var(--line);border-radius:8px;padding:16px">
+      ${val.map(v=>`<div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12.5px"><span>${v[0]}</span><span style="color:#9a85aa">₹${v[1]} (${v[2]}%)</span></div><div class="valbar"><i style="width:${v[2]}%;background:${v[3]}"></i></div></div>`).join('')}</div>`;
+}
+
+function scrAssets(){
+  const A=[['Autoclave Cassette A','Sterilization',120,'150','#1a7a45'],['Diamond Bur Kit','Operatory 1',88,'100','#a05c00'],['Extraction Forceps Set','Sterilization',45,'—','#1a7a45']];
+  return `<div class="tbl-wrap"><table><thead><tr><th>${L(t('Asset','एसेट','ॲसेट'))}</th><th>${L(D.cLoc)}</th><th class="r">${L(t('Uses','उपयोग','वापर'))}</th><th class="r">${L(t('Service At','सर्विस पर','सर्व्हिस'))}</th><th class="c">${L(D.cStatus)}</th></tr></thead>
+    <tbody>${A.map(a=>`<tr><td><strong>${a[0]}</strong></td><td>${a[1]}</td><td class="r">${a[2]}</td><td class="r">${a[3]}</td><td class="c"><span class="dot" style="background:${a[4]}"></span></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function scrSettings(){
+  const cats=['Endodontics','Composites','Consumables','Impression Materials','Disposables'];
+  const locs=['Main Store','Operatory 1','Operatory 2','Sterilization','Implant Drawer'];
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div style="border:1px solid var(--line);border-radius:8px;padding:16px"><div class="sect-h" style="margin-top:0">${L(t('Item Categories','आइटम श्रेणियाँ','आयटम श्रेणी'))} · 31</div>
+      ${cats.map(c=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f4eef7;font-size:12.5px"><span>● ${c}</span><span class="code">Edit</span></div>`).join('')}</div>
+    <div style="border:1px solid var(--line);border-radius:8px;padding:16px"><div class="sect-h" style="margin-top:0">${L(t('Storage Locations','स्टोरेज लोकेशन','स्टोरेज लोकेशन'))}</div>
+      ${locs.map(c=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f4eef7;font-size:12.5px"><span>📍 ${c}</span><span class="code">Edit</span></div>`).join('')}</div></div>`;
+}
+
+/* page actions per tab */
+function phAction(){
+  if(ACTIVE==='items') return `<button class="btn p">+ ${L(D.addProduct)}</button>`;
+  if(ACTIVE==='purchase') return `<button class="btn p">+ ${L(D.createPO)}</button>`;
+  if(ACTIVE==='count') return `<button class="btn p">⟳ ${L(D.startCount)}</button>`;
+  if(ACTIVE==='implants') return `<button class="btn p">+ ${L(t('Add to Catalog','कैटलॉग में जोड़ें','कॅटलॉगमध्ये जोडा'))}</button>`;
+  if(ACTIVE==='assets') return `<button class="btn p">+ ${L(t('Add Asset','एसेट जोड़ें','ॲसेट जोडा'))}</button>`;
+  return '';
+}
+
+function renderTabs(){
+  document.getElementById('subnav').innerHTML = TABS.map(x=>{
+    const badge = x.p ? '' : `<span class="mb">${L(D.inMore)}</span>`;
+    return `<span class="tab${x.k===ACTIVE?' on':''}" onclick="setTab('${x.k}')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">${x.svg}</svg>${L(x.lab)}${badge}</span>`;
+  }).join('');
+}
+function setTab(k){ACTIVE=k;render();}
+function render(){
+  document.getElementById('phsub').textContent = L(SUB[ACTIVE]);
+  document.getElementById('phact').innerHTML = phAction();
+  document.getElementById('coach').innerHTML = '<b>'+L(t('Coach:','गाइड:','मार्गदर्शक:'))+'</b> '+L(COACH[ACTIVE]);
+  renderTabs(); renderScreens();
+}
+function applyStatic(){document.querySelectorAll('[data-t]').forEach(el=>el.textContent=L(D[el.getAttribute('data-t')]));}
+function setLang(l){LANG=l;document.body.classList.toggle('lang-dev',l==='hi'||l==='mr');document.documentElement.lang=l;
+  document.querySelectorAll('.langsw button').forEach(b=>b.classList.toggle('on',b.getAttribute('data-lang')===l));
+  applyStatic();render();}
+applyStatic();render();
+</script>
+</body>
+</html>
