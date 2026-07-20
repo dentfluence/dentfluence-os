@@ -99,11 +99,15 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
 
     // ── Interactive Guide (staff training demo) ────────────────────────────
     // Serves the self-contained clickable walkthrough (trilingual EN/HI/MR)
-    // from docs/relationship-engine-demo.html. Opened in an in-app modal from
-    // the PRE sub-nav "Guide" button. Static 2-segment path — no collision
-    // with the /{id} numeric wildcard at the bottom of this file.
+    // from resources/guides/relationship-engine-demo.html. Opened in an in-app
+    // modal from the PRE sub-nav "Guide" button. Static 2-segment path — no
+    // collision with the /{id} numeric wildcard at the bottom of this file.
+    //
+    // NOTE: this file MUST live under a path copied into the production Docker
+    // image. `docs/` is excluded via .dockerignore, so the demo is kept in
+    // resources/ (which ships) — otherwise the route 404s in production.
     Route::get('/guide/demo', function () {
-        $path = base_path('docs/relationship-engine-demo.html');
+        $path = resource_path('guides/relationship-engine-demo.html');
         abort_unless(is_file($path), 404);
         return response()->file($path, ['Content-Type' => 'text/html; charset=UTF-8']);
     })->name('guide.demo');  // relationship.guide.demo
