@@ -81,7 +81,17 @@ class PatientController extends ApiController
             'auditable_id'   => $model->id,
         ]);
 
-        return $this->success(new PatientResource($model->load(['tags', 'referredPatient'])), '');
+        $model->load(['tags', 'referredPatient']);
+
+        // Phase 3 Slice 5 — read-only family graph on the DETAIL endpoint only.
+        // One FamilyLinkService call (no N+1); attached as a loaded relation so
+        // PatientResource::whenLoaded gates it — list responses never carry it.
+        $model->setRelation(
+            'familyGraph',
+            app(\App\Services\Patient\FamilyLinkService::class)->linksFor($model)
+        );
+
+        return $this->success(new PatientResource($model), '');
     }
 
     /** Create a patient. */

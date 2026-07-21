@@ -93,6 +93,27 @@ class PatientResource extends JsonResource
                 'phone'      => $this->referredPatient->phone,
             ] : null),
 
+            // Family graph (Phase 3 Slice 5) — DETAIL endpoint only: present only
+            // when the controller attached the FamilyLinkService graph. Guardians
+            // are simply linked_members where is_guardian is true — no separate
+            // guardians[] array (single representation).
+            'linked_members' => $this->whenLoaded('familyGraph', fn () => collect($this->familyGraph)->map(fn ($m) => [
+                'id'           => $m['counterpart']->id,
+                'name'         => $m['counterpart']->name,
+                'relationship' => $m['label'],
+                'is_guardian'  => (bool) $m['is_guardian'],
+                'is_ward'      => (bool) $m['is_ward'],
+                'is_minor'     => (bool) $m['counterpart']->isMinor(),
+            ])->values()),
+            'is_minor' => $this->when(
+                $this->relationLoaded('familyGraph'),
+                fn () => $this->isMinor()
+            ),
+            'guardian_required' => $this->when(
+                $this->relationLoaded('familyGraph'),
+                fn () => $this->isMinor() && ! collect($this->familyGraph)->contains(fn ($m) => $m['is_guardian'])
+            ),
+
             'created_at' => optional($this->created_at)->toIso8601String(),
             'updated_at' => optional($this->updated_at)->toIso8601String(),
         ];
