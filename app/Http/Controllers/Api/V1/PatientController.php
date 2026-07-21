@@ -87,7 +87,7 @@ class PatientController extends ApiController
     /** Create a patient. */
     public function store(StorePatientRequest $request): JsonResponse
     {
-        $patient = $this->patients->createFromInput($request->validated(), $request->user());
+        $patient = $this->patients->register($request->validated(), $request->user());
 
         return $this->success(
             new PatientResource($patient->load('tags')),

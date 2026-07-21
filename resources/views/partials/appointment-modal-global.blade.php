@@ -153,7 +153,7 @@
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
                             </svg>
                         </div>
-                        <div x-show="patientResults.length > 0"
+                        <div x-show="patientResults.length > 0 && !showAddPatient"
                              class="absolute z-50 w-full bg-white border border-[#e8d5f0] shadow-lg mt-0.5 max-h-48 overflow-y-auto">
                             <template x-for="p in patientResults" :key="p.id">
                                 <button type="button"
@@ -171,13 +171,13 @@
                         </div>
 
                         {{-- No results found → offer to add new patient --}}
-                        <div x-show="!patientLoading && patientResults.length === 0 && appt.patientSearch.length >= 2"
+                        <div x-show="!patientLoading && patientResults.length === 0 && appt.patientSearch.length >= 2 && !showAddPatient"
                              class="absolute z-50 w-full bg-white border border-[#e8d5f0] shadow-lg mt-0.5">
                             <div class="px-3 py-2.5 text-xs text-gray-400 border-b border-[#f0e4f5]" style="font-family:'Inter',sans-serif">
                                 No patient found for "<span x-text="appt.patientSearch" class="font-medium text-gray-600"></span>"
                             </div>
                             <button type="button"
-                                x-on:click="showAddPatient = true"
+                                x-on:click="showAddPatient = true; { const _p = (appt.patientSearch||'').trim().split(/\s+/); newPt.firstName = _p[0]||''; newPt.lastName = _p.slice(1).join(' ')||''; }"
                                 class="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-[#faf5fc] text-left transition text-sm font-medium text-[#6a0f70]"
                                 style="font-family:'Inter',sans-serif">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

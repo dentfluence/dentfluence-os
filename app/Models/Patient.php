@@ -108,6 +108,10 @@ class Patient extends Model
         'deactivation_reason',
         'deleted_reason',
         'deactivated_by',
+        // Merge (archive / redirect)
+        'merged_into_id',
+        'merged_at',
+        'merged_by',
     ];
 
     // ── Casts ─────────────────────────────────────────────────────────────────
@@ -123,6 +127,7 @@ class Patient extends Model
         'is_active'             => 'boolean',
         'contact_invalid_at'      => 'datetime',
         'automations_disabled_at' => 'datetime',
+        'merged_at'               => 'datetime',
         'habits'                => 'array',
         'habit_frequency'       => 'array',
         'total_billed'          => 'decimal:2',
@@ -215,6 +220,32 @@ class Patient extends Model
     public function referredPatient()
     {
         return $this->belongsTo(Patient::class, 'referred_patient_id');
+    }
+
+    // ── Merge (archive / redirect) ─────────────────────────────────────────────
+
+    /** The surviving (master) record this one was merged into, if any. */
+    public function mergedInto()
+    {
+        return $this->belongsTo(Patient::class, 'merged_into_id');
+    }
+
+    /** Records that were merged into this one. */
+    public function mergedFrom()
+    {
+        return $this->hasMany(Patient::class, 'merged_into_id');
+    }
+
+    /** True when this record has been merged away (archived) into a master. */
+    public function isMerged(): bool
+    {
+        return ! is_null($this->merged_into_id);
+    }
+
+    /** Exclude records that were merged away — the default for lists/search. */
+    public function scopeNotMerged($query)
+    {
+        return $query->whereNull('merged_into_id');
     }
 
     /** Patients this patient has referred. */

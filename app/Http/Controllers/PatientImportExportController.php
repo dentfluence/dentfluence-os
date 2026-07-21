@@ -177,7 +177,10 @@ class PatientImportExportController extends Controller
         $seenPatientIds = [];   // source IDs already inserted in THIS file
         $seenPhones     = [];   // phones already inserted in THIS file
 
-        $linker = app(\App\Services\Relationship\PatientRelationshipLinker::class);
+        // Canonical mint: bulk import registers each row through the ONE entry
+        // point (register() also does the Master-Relationship link internally).
+        $patients = app(\App\Services\PatientService::class);
+        $actor    = Auth::user();
 
         // ── Import in chunks ─────────────────────────────────────────────────
         // One transaction per chunk instead of one for the whole file: a large
@@ -186,7 +189,7 @@ class PatientImportExportController extends Controller
         // the entire import back.
         foreach (collect($rows)->chunk(self::IMPORT_CHUNK_SIZE) as $chunk) {
             DB::transaction(function () use (
-                $chunk, $skipDupes, $branchId, $userId, $linker,
+                $chunk, $skipDupes, $branchId, $userId, $patients, $actor,
                 $existingPhones, $existingPatientIds,
                 &$seenPatientIds, &$seenPhones, &$imported, &$skipped
             ) {
@@ -252,15 +255,10 @@ class PatientImportExportController extends Controller
                     $data['branch_id']  = $branchId;
                     $data['created_by'] = $userId;
 
-                    $patient = Patient::create($data);
-
-                    // Link to the Master Relationship — exactly as the web "Add
-                    // Patient" path does via PatientService. The import used to
-                    // call Patient::create() directly and skip this, which is
-                    // how bulk-imported patients ended up with no relationship
-                    // shell (the orphan rows found in the audit).
-                    // Flag-gated + never throws; a no-op when the flag is off.
-                    $linker->link($patient);
+                    // Mint through the canonical entry point. register() preserves
+                    // the source patient_id (model boot only auto-assigns a TDC
+                    // when none is supplied) and does the Master-Relationship link.
+                    $patient = $patients->register($data, $actor);
 
                     if ($phone) {
                         $seenPhones[$phone] = true;

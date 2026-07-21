@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Appointment;
 use App\Models\Patient;
 use App\Models\Tag;
 use App\Models\User;
@@ -181,7 +182,17 @@ class PatientService
      * Create a full patient record from form/API input.
      * Handles display-name assembly, DOB-unknown logic, and tag syncing.
      */
-    public function createFromInput(array $in, User $actor): Patient
+    /**
+     * register() — the SINGLE canonical entry point that mints a Patient
+     * (record + auto Patient ID via the model boot). Every path (web, API,
+     * quick-add, and the future Appointment→Arrived→Registration flow) goes
+     * through here so a patient is never created two different ways.
+     *
+     * $fromAppointment readies the lifecycle: when Registration is reached from
+     * an arrived appointment, the appointment is linked back. The Appointments
+     * module wires that later — it is a safe no-op until a caller passes one.
+     */
+    public function register(array $in, User $actor, ?Appointment $fromAppointment = null): Patient
     {
         $displayName = $in['name'] ?? $this->buildName($in);
 
@@ -189,6 +200,9 @@ class PatientService
         $dob        = $in['date_of_birth'] ?? $in['dob'] ?? null;
 
         $patient = Patient::create([
+            // External/source ID (migration/import only). Omitted on normal
+            // registration → the model boot auto-assigns the TDC number.
+            'patient_id'  => $in['patient_id'] ?? null,
             // Identity
             'title'       => $in['title'] ?? null,
             'first_name'  => $in['first_name'] ?? null,
@@ -210,6 +224,7 @@ class PatientService
             'address' => $in['address'] ?? null,
             'area'    => $in['area'] ?? null,
             'city'    => $in['city'] ?? null,
+            'state'   => $in['state'] ?? null,
             'pincode' => $in['pincode'] ?? null,
             'occupation'      => $in['occupation'] ?? null,
             // Clinical
@@ -224,6 +239,7 @@ class PatientService
             'habit_frequency' => $in['habit_frequency'] ?? [],
             // Source
             'source'               => $in['source'] ?? null,
+            'referred_by'          => $in['referred_by'] ?? null,
             'source_referral_name' => $in['source_referral_name'] ?? null,
             'source_camp_name'     => $in['source_camp_name'] ?? null,
             'source_campaign'      => $in['source_campaign'] ?? null,
@@ -247,7 +263,19 @@ class PatientService
         // 'identity.link_patient' feature flag is on; never breaks creation.
         app(\App\Services\Relationship\PatientRelationshipLinker::class)->link($patient);
 
+        // Lifecycle link-back: an arrived appointment adopts the new patient.
+        if ($fromAppointment && is_null($fromAppointment->patient_id)) {
+            $fromAppointment->patient_id = $patient->id;
+            $fromAppointment->save();
+        }
+
         return $patient->fresh(['tags']);
+    }
+
+    /** @deprecated Use register(). Thin alias kept for backward compatibility. */
+    public function createFromInput(array $in, User $actor): Patient
+    {
+        return $this->register($in, $actor);
     }
 
     /**
@@ -274,37 +302,6 @@ class PatientService
             ->orderBy('name')
             ->limit(5)
             ->get(['id', 'name', 'phone', 'date_of_birth']);
-    }
-
-    /**
-     * Minimal "quick add" (e.g. from the appointment modal): name + phone only.
-     * Returns ['duplicate' => Patient] if the phone already exists in this
-     * branch, otherwise ['patient' => Patient].
-     */
-    public function quickCreate(array $in, User $actor): array
-    {
-        $phone = trim((string) ($in['phone'] ?? ''));
-
-        $existing = $this->findDuplicatesByPhone($phone, (int) $actor->branch_id)->first();
-
-        if ($existing) {
-            return ['duplicate' => $existing];
-        }
-
-        $patient = Patient::create([
-            'first_name' => $in['first_name'] ?? null,
-            'last_name'  => $in['last_name'] ?? null,
-            'name'       => trim(($in['first_name'] ?? '') . ' ' . ($in['last_name'] ?? '')),
-            'phone'      => $phone,
-            'branch_id'  => $actor->branch_id,
-            'created_by' => $actor->id,
-        ]);
-
-        // Phase 1 (Workstream A) — link to Master Relationship. NO-OP unless the
-        // 'identity.link_patient' feature flag is on; never breaks creation.
-        app(\App\Services\Relationship\PatientRelationshipLinker::class)->link($patient);
-
-        return ['patient' => $patient];
     }
 
     /**

@@ -25,7 +25,15 @@ use Illuminate\Support\Facades\Schema;
  */
 class MergeService
 {
-    /** Tables whose `relationship_id` must move on a merge. */
+    /**
+     * Tables whose `relationship_id` must move on a merge.
+     *
+     * The last four were added 2026-07-20: they carry `relationship_id` but were
+     * previously omitted, so any merge silently orphaned Action-Board items,
+     * insight signals, in-flight workflows and case journeys against the
+     * soft-deleted duplicate relationship. Each is Schema-guarded below, so the
+     * list is safe on installs where a table doesn't exist.
+     */
     private const TARGET_TABLES = [
         'leads',
         'patients',
@@ -36,6 +44,10 @@ class MergeService
         'relationship_notifications',
         'relationship_contact_log',
         'relationship_rule_logs',
+        'today_actions',
+        'insight_signals',
+        'workflow_instances',
+        'patient_journeys',
     ];
 
     public function __construct(private readonly DomainEventBus $bus)

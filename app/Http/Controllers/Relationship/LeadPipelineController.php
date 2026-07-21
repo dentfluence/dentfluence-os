@@ -303,7 +303,8 @@ class LeadPipelineController extends Controller
             : null;
 
         if (! $patient) {
-            $patient = Patient::create([
+            // Canonical mint — every registration goes through PatientService::register().
+            $patient = app(\App\Services\PatientService::class)->register([
                 'name'            => $lead->name,
                 'phone'           => $lead->phone,
                 'alternate_phone' => $lead->alt_phone,
@@ -315,13 +316,10 @@ class LeadPipelineController extends Controller
                 'referred_by'     => $lead->referred_by,
                 'source'          => $lead->source ?: $lead->lead_source,
                 'chief_complaint' => $lead->treatment,
-                'branch_id'       => auth()->user()->branch_id ?? 1,
-                'created_by'      => auth()->id(),
-            ]);
+            ], auth()->user());
 
-            // Explicitly reuse the lead's known relationship_id (same reasoning
-            // as PrmController::convertToPatient — we already have the
-            // authoritative link, no need for fuzzy PatientRelationshipLinker).
+            // Reuse the lead's authoritative relationship link (overrides the
+            // flag-gated fuzzy linker register() runs; a no-op when off).
             if ($lead->relationship_id) {
                 $patient->relationship_id = $lead->relationship_id;
                 $patient->save();
