@@ -91,6 +91,13 @@
 @section('content')
 <div x-data="patientProfile()" x-init="init()">
 
+@if(session('merged_notice'))
+    <div class="mx-6 mt-3 flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-800 text-sm px-4 py-2 rounded">
+        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7v8a2 2 0 0 0 2 2h6"/><path d="m16 13 4 4-4 4"/><circle cx="5" cy="5" r="3"/></svg>
+        <span>{{ session('merged_notice') }}</span>
+    </div>
+@endif
+
 {{-- ══════════════════════════════════════════════════════════
      HEADER (sticky)
 ══════════════════════════════════════════════════════════ --}}
@@ -179,6 +186,13 @@
                             class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">
                         Delete Patient Record
                     </button>
+                    @if(auth()->user()?->isAdminRole())
+                    <div class="border-t border-gray-100 my-1"></div>
+                    <a href="{{ route('patients.merge.create', $patient) }}"
+                       class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                        Merge Duplicate…
+                    </a>
+                    @endif
                 </div>
             </div>
         </div>
@@ -271,6 +285,16 @@
                     </svg>
                     {{ $patient->phone }}
                 </span>
+                @if($patient->phone)
+                <button type="button" onclick="patientWhatsApp({{ $patient->id }}, this)"
+                        class="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded px-2 py-0.5"
+                        title="Message this patient on WhatsApp">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12.04 2c-5.46 0-9.9 4.44-9.9 9.9 0 1.75.46 3.45 1.32 4.95L2 22l5.3-1.39c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.9-4.44 9.9-9.9S17.5 2 12.04 2m0 18.15c-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.36c0-4.54 3.7-8.24 8.25-8.24 4.54 0 8.24 3.7 8.24 8.24s-3.7 8.24-8.24 8.24"/>
+                    </svg>
+                    WhatsApp
+                </button>
+                @endif
                 @if($patient->area || $patient->city)
                 <span class="flex items-center gap-1 text-sm text-gray-500">
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -300,6 +324,9 @@
             $totalCollectedHdr = ($invoices ?? collect())->sum(fn($inv) => (float) $inv->paid_amount);
             $totalOutstandingHdr = ($invoices ?? collect())->sum(fn($inv) => (float) $inv->balance_due);
             $collectedPct  = $totalBilled > 0 ? round(($totalCollectedHdr / $totalBilled) * 100, 1) : 0;
+            // Advance / credit sitting in the wallet — money paid but not yet applied to an invoice.
+            // Promotional credit is a discount liability, not the patient's money, so it is excluded.
+            $advanceOnFile = (float) ($wallet->balance_permanent ?? 0);
             $acceptedOpps  = $opportunities->whereIn('status',['accepted','completed'])->count();
             $totalOpps     = $opportunities->count();
             $acceptPct     = $totalOpps > 0 ? round(($acceptedOpps/$totalOpps)*100) : 0;
@@ -316,7 +343,9 @@
             <div class="stat-card bg-white border border-gray-200 rounded-lg px-4 py-3 min-w-[120px] flex flex-col">
                 <div class="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Total Collected</div>
                 <div class="text-sm font-bold text-gray-800">Rs.  {{ number_format($totalCollectedHdr,0) }}</div>
+                @if($totalBilled > 0)
                 <div class="text-[10px] text-green-600 font-semibold mt-auto pt-1">{{ $collectedPct }}% collected</div>
+                @endif
             </div>
 
             {{-- Outstanding --}}
@@ -326,6 +355,15 @@
                     Rs.  {{ number_format($totalOutstandingHdr,0) }}
                 </div>
             </div>
+
+            {{-- Advance on file (credit wallet only) — shown only when the patient has prepaid --}}
+            @if($advanceOnFile > 0)
+            <div class="stat-card bg-white border border-purple-200 rounded-lg px-4 py-3 min-w-[120px] flex flex-col">
+                <div class="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Advance</div>
+                <div class="text-sm font-bold text-[#6a0f70]">Rs.  {{ number_format($advanceOnFile,0) }}</div>
+                <div class="text-[10px] text-gray-400 font-medium mt-auto pt-1">On file · unbilled</div>
+            </div>
+            @endif
 
             {{-- Recall Status --}}
             <div class="stat-card bg-white border border-gray-200 rounded-lg px-4 py-3 min-w-[120px] flex flex-col">
@@ -3635,6 +3673,29 @@ function patientProfile() {
                 console.error(e);
             }
         },
+    }
+}
+
+/**
+ * Open WhatsApp (click-to-chat) for this patient via the single consent-gated
+ * endpoint. Context 'generic' = no pre-filled template; staff types their message.
+ */
+async function patientWhatsApp(patientId, btn) {
+    const token = document.querySelector('meta[name="csrf-token"]')?.content;
+    if (btn) btn.disabled = true;
+    try {
+        const res = await fetch(@js(route('communication.whatsapp.link')), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+            body: JSON.stringify({ context: 'generic', patient_id: patientId })
+        });
+        const data = await res.json();
+        if (res.ok && data.success && data.url) { window.open(data.url, '_blank', 'noopener'); }
+        else { alert(data.message || 'Could not open WhatsApp for this patient.'); }
+    } catch (e) {
+        alert('Could not reach WhatsApp send. Please try again.');
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 </script>
