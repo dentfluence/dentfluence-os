@@ -10,7 +10,7 @@
 |---|---|
 | **Module** | Patients |
 | **Phase** | 3 — Family / Guardian |
-| **Status** | 🔒 FROZEN (pending final green test run — see §13) |
+| **Status** | 🔒 FROZEN (final run green 2026-07-22: 44 tests + 4 guard commands) |
 | **Module Owner** | Dentfluence Core |
 | **Last Updated** | 22 July 2026 |
 
@@ -79,8 +79,8 @@ Typed links re-parented with precedence rules; guardian authority never dropped 
 
 ## 13. Regression results
 
-Green as of the last executed runs: `FamilyGuardianFoundationTest` 8/8 · `FamilyLinkServiceTest` 10/10 (now 13 with F1 tests) · `FamilyContactsSectionTest` 10/10 (now 13 with F1–F3 tests) · `ConsentGuardianAnchorTest` 5/5 · `patients:merge-smoketest` 16/16 · `patients:register-smoketest` 5/5 · `patients:merge-coverage` ✓ · `patients:invariant-check` ✓.
-**Final freeze condition:** one full re-run including the new hardening + API tests (commands in the final report) must be green. New/updated in this session: +3 service tests (F1), +3 web tests (F1–F3), +5 API tests (Slice 5).
+**Final run (2026-07-22) — ALL GREEN:** `FamilyLinkServiceTest` 13/13 · `FamilyContactsSectionTest` 13/13 · `ConsentGuardianAnchorTest` 5/5 · `FamilyGuardianFoundationTest` 8/8 · `PatientFamilyApiTest` 5/5 · `patients:merge-smoketest` 16/16 · `patients:register-smoketest` 5/5 · `patients:invariant-check` ✓ · `patients:merge-coverage` ✓ (51 + 15 tables classified).
+Commits: `fd3b6d5` (foundation, Slices 1–2), `73fbbf9` (Slice 3), `12506f1` (Slice 4), `6860480` (hardening F1–F3), `8fda676` (Slices 5–6).
 
 ## 14. Known technical debt (P2/P3 only — accepted)
 
@@ -146,7 +146,7 @@ Profile refactor: Family & Contacts becomes a lazy per-tab component; fold FD-01
 - [x] Controllers thin (validate + delegate)
 - [x] Blade presentation-only
 - [x] Backward compatibility (adults/consent/legacy column unchanged)
-- [ ] Final full test run green (user-executed — commands in final report)
+- [x] Final full test run green (2026-07-22, 44 tests + 4 guard commands)
 
 ## 18. Final scorecard
 
@@ -163,4 +163,4 @@ Profile refactor: Family & Contacts becomes a lazy per-tab component; fold FD-01
 
 ## Freeze statement
 
-**Phase 3 — Family / Guardian is frozen** upon the final green test run. No further modifications unless a production bug or an approved architectural change requires it. Next: Phase 4 — Profile refactor (+ Journey Timeline).
+**Phase 3 — Family / Guardian is FROZEN (2026-07-22).** No further modifications unless a production bug or an approved architectural change requires it. Next: Phase 4 — Profile refactor (+ Journey Timeline).
