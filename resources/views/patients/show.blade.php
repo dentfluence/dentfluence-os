@@ -498,6 +498,9 @@
         {{-- ══ LEFT COLUMN ══ --}}
         <div class="space-y-4">
 
+            {{-- Family & Contacts (Phase 3, Slice 3) --}}
+            @include('patients.partials.family-contacts')
+
             {{-- Patient Details & Rapport --}}
             <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
                 <div class="px-5 py-3.5 border-b border-gray-100">

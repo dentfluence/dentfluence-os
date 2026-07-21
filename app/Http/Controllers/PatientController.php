@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ChecksStaleUpdates;
+use App\Http\Requests\Patient\StorePatientRequest;
+use App\Http\Requests\Patient\UpdatePatientRequest;
 use App\Models\Patient;
 use App\Services\PatientProfileService;
 use App\Services\PatientService;
@@ -83,67 +85,20 @@ class PatientController extends Controller
         }
     }
 
-    public function store(Request $request)
+    public function store(StorePatientRequest $request)
     {
-        $request->validate([
-            // Tab 1 — Basic Info
-            'title'       => ['nullable', 'string', 'max:10'],
-            'first_name'  => ['required', 'string', 'max:100'],
-            'middle_name' => ['nullable', 'string', 'max:100'],
-            'last_name'   => ['required', 'string', 'max:100'],
-            'gender'      => ['nullable', 'in:male,female,other,prefer_not_to_say'],
-            'dob'         => ['nullable', 'date', 'required_if:dob_unknown,0'],
-            'dob_unknown' => ['nullable', 'boolean'],
-            'age_years'   => ['nullable', 'integer', 'min:0', 'max:150'],
-            'tags'        => ['nullable', 'array'],
-            // Tab 2 — Contact
-            'mobile'                         => ['required', 'string', 'max:20'],
-            'alternate_phone'                => ['nullable', 'string', 'max:20'],
-            'email'                          => ['nullable', 'email', 'max:255'],
-            'emergency_contact_name'         => ['nullable', 'string', 'max:100'],
-            'emergency_contact_relationship' => ['nullable', 'string', 'max:50'],
-            'emergency_contact_number'       => ['nullable', 'string', 'max:20'],
-            'address'     => ['nullable', 'string', 'max:500'],
-            'area'        => ['nullable', 'string', 'max:150'],
-            'city'        => ['nullable', 'string', 'max:100'],
-            'pincode'     => ['nullable', 'string', 'max:10'],
-            'occupation'  => ['nullable', 'string', 'max:150'],
-            // Tab 3 — Medical & Dental
-            'medical_conditions'  => ['nullable', 'array'],
-            'current_medications' => ['nullable', 'string'],
-            'dental_conditions'   => ['nullable', 'array'],
-            'medical_alert'       => ['nullable', 'string'],
-            'allergies'           => ['nullable', 'array'],
-            // Tab 4 — Habits
-            'habits'         => ['nullable', 'array'],
-            'habit_frequency'=> ['nullable', 'array'],
-            // Tab 5 — Source & Notes
-            'source'               => ['nullable', 'string', 'max:100'],
-            'source_referral_name' => ['nullable', 'string', 'max:150'],
-            'source_camp_name'     => ['nullable', 'string', 'max:150'],
-            'source_campaign'      => ['nullable', 'string', 'max:150'],
-            // Structured referral
-            'referral_type'        => ['nullable', 'in:existing_patient,other'],
-            'referred_patient_id'  => ['nullable', 'integer', 'exists:patients,id'],
-            'referrer_name'        => ['nullable', 'string', 'max:150'],
-            'referrer_mobile'      => ['nullable', 'string', 'max:20'],
-            'referrer_type'        => ['nullable', 'in:Doctor,Friend,Family,Staff,Corporate,Other'],
-            'referrer_notes'       => ['nullable', 'string', 'max:500'],
-            'family_notes'         => ['nullable', 'string', 'max:500'],
-            'notes'                => ['nullable', 'string'],
-            // Set by the "Register anyway" confirmation when a possible
-            // duplicate was surfaced (families do share one mobile number).
-            'confirm_duplicate'    => ['nullable', 'boolean'],
-        ]);
+        // Validation is the shared StorePatientRequest (web + API). It normalises
+        // legacy aliases (mobile→phone, dob→date_of_birth, notes→chief_complaint)
+        // so the whole app validates one canonical vocabulary.
 
         // ── Duplicate-phone guard ────────────────────────────────────────
         // Only quickCreate() checked for duplicates before, so the main
         // registration form silently created a second record for returning
         // patients — splitting their visit history, billing and recalls.
         // This is a soft warning, not a block: staff can confirm and proceed.
-        if (! $request->boolean('confirm_duplicate')) {
+        if (! $request->boolean('confirm_duplicate') && ! $request->filled('link_to_patient_id')) {
             $dupes = $this->patients->findDuplicatesByPhone(
-                $request->input('mobile'),
+                $request->input('phone'),
                 (int) Auth::user()->branch_id
             );
 
@@ -171,7 +126,32 @@ class PatientController extends Controller
 
         // The form sends `mobile`/`dob`/`notes`; the service maps those and
         // handles display-name assembly + tag syncing in one place.
-        $patient = $this->patients->createFromInput($request->all(), Auth::user());
+        $patient = $this->patients->register($request->validated(), Auth::user());
+
+        // Duplicate-screen "Register + link family" (Phase 3, Slice 3): the new
+        // patient shares a number with an existing one → link them through the
+        // canonical FamilyLinkService. A link failure never fails registration.
+        if ($request->filled('link_to_patient_id')) {
+            $existing = Patient::withoutGlobalScope(\App\Models\Scopes\BranchScope::class)
+                ->find($request->integer('link_to_patient_id'));
+            if ($existing && $existing->id !== $patient->id) {
+                $type = $request->input('link_relationship_type', 'other');
+                if (! in_array($type, \App\Services\Patient\FamilyLinkService::RELATIONSHIP_TYPES, true)) {
+                    $type = 'other';
+                }
+                try {
+                    app(\App\Services\Patient\FamilyLinkService::class)->addLink(
+                        $patient,
+                        $existing,
+                        $type,
+                        ['as_guardian' => $request->boolean('link_as_guardian')],
+                        Auth::user()
+                    );
+                } catch (\InvalidArgumentException $e) {
+                    // Patient is registered; a link error must not roll that back.
+                }
+            }
+        }
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -189,6 +169,17 @@ class PatientController extends Controller
 
     public function show(Patient $patient)
     {
+        // Merged (archived) record → redirect its old URL to the surviving master.
+        if ($patient->merged_into_id) {
+            return redirect()->route('patients.show', $patient->merged_into_id)
+                ->with('merged_notice', "Record {$patient->patient_id} ({$patient->name}) was merged into this patient.");
+        }
+
+        // Soft-deleted for any other reason (deleted record) stays a 404.
+        if (method_exists($patient, 'trashed') && $patient->trashed()) {
+            abort(404);
+        }
+
         // Access trail (Phase A) — who opened which patient record, when.
         \App\Models\AuditLog::event('viewed', auth()->id(), [], [
             'module'         => 'patients',
@@ -197,6 +188,24 @@ class PatientController extends Controller
         ]);
 
         $data = $this->profileService->loadProfile($patient);
+
+        // Family & Contacts (Phase 3, Slice 3) — read-only data for the profile section.
+        $family          = app(\App\Services\Patient\FamilyLinkService::class);
+        $activeMembership = $data['activeMembership'] ?? null;
+        $data['familyLinks']          = $family->linksFor($patient);
+        $data['familyGuardians']      = $family->guardiansFor($patient);
+        $data['isMinor']              = $patient->isMinor();
+        $data['householdCount']       = $patient->relationship_id
+            ? Patient::withoutGlobalScope(\App\Models\Scopes\BranchScope::class)
+                ->where('relationship_id', $patient->relationship_id)
+                ->where('id', '!=', $patient->id)
+                ->count()
+            : 0;
+        $data['membershipFamilyName'] = $activeMembership
+            ? ($activeMembership->family_name ?: optional($activeMembership->familyHead)->family_name)
+            : null;
+        $data['canEditFamily']        = (bool) optional(auth()->user())->canAccess('patients', 'edit');
+
         return view('patients.show', $data);
     }
 
@@ -207,58 +216,10 @@ class PatientController extends Controller
         return view('patients.edit', compact('patient'));
     }
 
-    public function update(Request $request, Patient $patient)
+    public function update(UpdatePatientRequest $request, Patient $patient)
     {
-        $request->validate([
-            'title'       => ['nullable', 'string', 'max:10'],
-            'first_name'  => ['nullable', 'string', 'max:100'],
-            'middle_name' => ['nullable', 'string', 'max:100'],
-            'last_name'   => ['nullable', 'string', 'max:100'],
-            'name'        => ['nullable', 'string', 'max:200'],
-            'patient_id'  => ['nullable', 'string', 'max:30',
-                              \Illuminate\Validation\Rule::unique('patients', 'patient_id')->ignore($patient->id)],
-            'phone'       => ['required', 'string', 'max:20'],
-            'alternate_phone' => ['nullable', 'string', 'max:20'],
-            'email'       => ['nullable', 'email'],
-            'dob'         => ['nullable', 'date'],
-            'dob_unknown' => ['nullable', 'boolean'],
-            'age_years'   => ['nullable', 'integer', 'min:0', 'max:150'],
-            'gender'      => ['nullable', 'in:male,female,other,prefer_not_to_say'],
-            'occupation'  => ['nullable', 'string', 'max:150'],
-            'address'     => ['nullable', 'string'],
-            'area'        => ['nullable', 'string', 'max:150'],
-            'city'        => ['nullable', 'string', 'max:100'],
-            'state'       => ['nullable', 'string', 'max:100'],
-            'pincode'     => ['nullable', 'string', 'max:10'],
-            'emergency_contact_name'         => ['nullable', 'string', 'max:100'],
-            'emergency_contact_relationship' => ['nullable', 'string', 'max:50'],
-            'emergency_contact_number'       => ['nullable', 'string', 'max:20'],
-            'medical_alert'      => ['nullable', 'string'],
-            'medical_conditions' => ['nullable', 'array'],
-            'current_medications'=> ['nullable', 'string'],
-            'dental_conditions'  => ['nullable', 'array'],
-            'habits'             => ['nullable', 'array'],
-            'habit_frequency'    => ['nullable', 'array'],
-            'allergies'          => ['nullable', 'array'],
-            'family_notes'       => ['nullable', 'string', 'max:500'],
-            'source'             => ['nullable', 'string', 'max:100'],
-            'referred_by'        => ['nullable', 'string'],
-            'source_referral_name' => ['nullable', 'string', 'max:150'],
-            'source_camp_name'     => ['nullable', 'string', 'max:150'],
-            'source_campaign'      => ['nullable', 'string', 'max:150'],
-            // Structured referral
-            'referral_type'        => ['nullable', 'in:existing_patient,other'],
-            'referred_patient_id'  => ['nullable', 'integer', 'exists:patients,id'],
-            'referrer_name'        => ['nullable', 'string', 'max:150'],
-            'referrer_mobile'      => ['nullable', 'string', 'max:20'],
-            'referrer_type'        => ['nullable', 'in:Doctor,Friend,Family,Staff,Corporate,Other'],
-            'referrer_notes'       => ['nullable', 'string', 'max:500'],
-            'membership_status'    => ['nullable', 'in:not_enrolled,active,expired'],
-            'membership_expires_at'=> ['nullable', 'date'],
-            'follow_up_status'     => ['nullable', 'in:none,due,pending,completed'],
-            'follow_up_date'       => ['nullable', 'date'],
-            'tags'                 => ['nullable', 'array'],
-        ]);
+        // Validation is the shared UpdatePatientRequest (web + API); legacy
+        // aliases (mobile/dob/notes) are normalised there. Partial update.
 
         // Optimistic lock — refuse the save if someone else edited this patient
         // since the form was loaded, instead of silently overwriting them.
@@ -266,7 +227,7 @@ class PatientController extends Controller
         $this->assertNotStale($request, $patient);
 
         // Service rebuilds the display name and writes only the provided fields.
-        $patient = $this->patients->updateFromInput($patient, $request->all());
+        $patient = $this->patients->updateFromInput($patient, $request->validated());
 
         if ($request->expectsJson()) {
             return response()->json(['success' => true, 'patient' => $patient]);
@@ -277,6 +238,9 @@ class PatientController extends Controller
 
     public function destroy(Patient $patient, \Illuminate\Http\Request $request)
     {
+        // Backstop for the route-level `module:patients,delete` gate.
+        abort_unless(Auth::user()?->canAccess('patients', 'delete'), 403);
+
         // Require password confirmation and a reason
         $request->validate([
             'reason'   => ['required', 'string', 'min:5', 'max:500'],
@@ -423,17 +387,31 @@ class PatientController extends Controller
      */
     public function quickStore(Request $request)
     {
+        // ⚠ TECH DEBT (Appointment→Arrived→Registration redesign):
+        // Booking still mints a full Patient + TDC number, so no-shows consume a TDC.
+        // This affects ALL appointment-booking paths, not just this one:
+        //   • PatientController::quickStore()   (this method)
+        //   • AppointmentController::store()     (Patient::create, ~line 160)
+        //   • AppointmentService  (create/book)  (Patient::create, ~line 364)
+        // Per the locked lifecycle a booking must create only an appointment lead
+        // (name + phone); the Patient + TDC are minted at Registration/Arrival.
+        // When the Appointments module is built, REMOVE patient-minting from ALL
+        // THREE paths — booking must not create a Patient. Deferred intentionally
+        // (Sumit, 2026-07-20); no interim logic added to the Patients module.
         $request->validate([
             'first_name' => ['required', 'string', 'max:100'],
             'last_name'  => ['required', 'string', 'max:100'],
             'phone'      => ['required', 'string', 'max:20'],
         ]);
 
-        $result = $this->patients->quickCreate($request->all(), Auth::user());
+        // Dedup then mint through the ONE canonical entry point (register()).
+        $existing = $this->patients->findDuplicatesByPhone(
+            $request->input('phone'),
+            (int) Auth::user()->branch_id
+        )->first();
 
         // Phone already belongs to someone in this branch -> 409.
-        if (isset($result['duplicate'])) {
-            $existing = $result['duplicate'];
+        if ($existing) {
             return response()->json([
                 'duplicate' => true,
                 'patient'   => [
@@ -444,7 +422,7 @@ class PatientController extends Controller
             ], 409);
         }
 
-        $patient = $result['patient'];
+        $patient = $this->patients->register($request->only(['first_name', 'last_name', 'phone']), Auth::user());
 
         return response()->json([
             'ok'      => true,

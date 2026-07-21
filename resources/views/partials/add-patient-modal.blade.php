@@ -40,6 +40,43 @@ $alertPresets   = ['Blood Thinners / Anticoagulants','Diabetic on Insulin','Ster
         x-on:click.stop
     >
 
+        {{-- ── Duplicate-phone: register + link family (Phase 3, Slice 3) ── --}}
+        <div x-show="dup.open" x-cloak class="absolute inset-0 z-30 bg-white flex flex-col" style="border-radius:2px;">
+            <div class="px-6 py-4 border-b border-[#e8d5f0] shrink-0">
+                <h2 class="text-xl font-semibold text-[#380740]" style="font-family:'Cormorant Garamond',serif;">Possible duplicate</h2>
+                <p class="text-xs text-gray-400 mt-0.5 uppercase tracking-widest">This mobile number is already registered</p>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto">
+                <div class="text-sm text-gray-600">A patient with this number already exists:</div>
+                <template x-for="p in dup.list" :key="p.id">
+                    <div class="flex items-center justify-between border border-gray-200 rounded px-3 py-2">
+                        <span class="text-sm text-gray-800" x-text="p.name + ' · ' + p.phone"></span>
+                        <a :href="p.url" class="text-xs text-[#6a0f70] underline">Open record</a>
+                    </div>
+                </template>
+
+                <div class="border-t border-gray-100 pt-4">
+                    <div class="text-sm font-medium text-gray-800 mb-2">Family member sharing this number</div>
+                    <div class="flex flex-wrap gap-1.5 mb-2">
+                        <template x-for="t in dupTypes" :key="t">
+                            <button type="button" @click="dup.relationship = t"
+                                :class="dup.relationship === t ? 'bg-[#6a0f70] text-white border-[#6a0f70]' : 'border-gray-200 text-gray-600'"
+                                class="text-xs px-2.5 py-1 rounded border"
+                                x-text="t.charAt(0).toUpperCase() + t.slice(1)"></button>
+                        </template>
+                    </div>
+                    <label class="flex items-center gap-1.5 text-xs text-gray-600 mb-3">
+                        <input type="checkbox" x-model="dup.asGuardian"> Also the legal guardian
+                    </label>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" @click="registerAndLink()" class="text-xs bg-[#6a0f70] text-white px-3 py-1.5 rounded">Register &amp; link family</button>
+                        <button type="button" @click="registerAnyway()" class="text-xs text-gray-700 border border-gray-200 px-3 py-1.5 rounded">Register as new (not family)</button>
+                        <button type="button" @click="dup.open = false; loading = false" class="text-xs text-gray-400 px-2">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {{-- ── Header ── --}}
         <div class="flex items-center justify-between px-6 py-4 border-b border-[#e8d5f0] shrink-0 bg-white">
             <div>
@@ -273,6 +310,7 @@ $alertPresets   = ['Blood Thinners / Anticoagulants','Diabetic on Insulin','Ster
                             class="df-input border-gray-200 w-28" />
                         <span class="text-sm text-gray-400">years</span>
                     </div>
+                    <p x-show="errors.age_years" x-text="errors.age_years?.[0]" class="text-xs text-red-600 mt-1"></p>
                 </div>
 
                 {{-- Tags --}}
@@ -829,6 +867,10 @@ function addPatientModal() {
         tabs: ['Basic Info', 'Contact', 'Medical & Dental', 'Habits', 'Source & Notes'],
         sources: ['Google','Instagram','Facebook','Referral','Walk-In','Camp','Website','Other'],
 
+        // Duplicate-phone → "Register + link family" (Phase 3, Slice 3)
+        dup: { open: false, list: [], relationship: 'other', asGuardian: false },
+        dupTypes: ['mother','father','spouse','child','sibling','other'],
+
         form: {
             title: '', first_name: '', middle_name: '', last_name: '', gender: '',
             patient_id: '', occupation: '',
@@ -896,6 +938,9 @@ function addPatientModal() {
                 // Set to true only after the user acknowledges a duplicate-phone
                 // warning and chooses to register a new patient anyway.
                 confirm_duplicate: false,
+                // Duplicate-screen "link family": which existing patient to link
+                // to, the chosen relationship, and whether they're the guardian.
+                link_to_patient_id: null, link_relationship_type: 'other', link_as_guardian: false,
             };
         },
 
@@ -1166,6 +1211,7 @@ function addPatientModal() {
             if (!this.form.first_name) { this.errors.first_name = ['Required']; this.currentTab = 0; return; }
             if (!this.form.last_name)  { this.errors.last_name  = ['Required']; this.currentTab = 0; return; }
             if (!this.form.mobile)     { this.errors.mobile     = ['Required']; this.currentTab = 1; return; }
+            if (!this.form.dob && !this.form.age_years) { this.errors.age_years = ['Enter date of birth or age']; this.currentTab = 0; return; }
 
             this.loading = true;
             try {
@@ -1196,24 +1242,15 @@ function addPatientModal() {
                 // share a number, so this is a decision, not a hard block: show
                 // who it is and let the user open them or register anyway.
                 if (resp.status === 409 && data.duplicate) {
-                    const list = (data.duplicates || [])
-                        .map(p => `• ${p.name} (${p.phone})`)
-                        .join('\n');
-                    const proceed = confirm(
-                        `A patient with this mobile number already exists:\n\n${list}\n\n` +
-                        `Click Cancel to open the existing record instead, or OK to register a NEW patient ` +
-                        `(e.g. a family member sharing the number).`
-                    );
-
-                    if (!proceed) {
-                        const first = (data.duplicates || [])[0];
-                        if (first?.url) window.location.href = first.url;
-                        return;
-                    }
-
-                    this.form.confirm_duplicate = true;
+                    // Families share numbers — show a picker rather than a blunt
+                    // confirm(): open the existing record, register + link as
+                    // family (relationship + guardian), or register as new.
+                    this.dup.list = data.duplicates || [];
+                    this.dup.relationship = 'other';
+                    this.dup.asGuardian = false;
+                    this.dup.open = true;
                     this.loading = false;
-                    return this.submit();
+                    return;
                 }
 
                 if (resp.ok && data.success) {
@@ -1224,13 +1261,31 @@ function addPatientModal() {
                 } else {
                     this.errors = data.errors ?? { _general: ['Something went wrong. Please try again.'] };
                     if (this.errors.first_name || this.errors.last_name) this.currentTab = 0;
-                    else if (this.errors.mobile || this.errors.area)     this.currentTab = 1;
+                    else if (this.errors.phone || this.errors.mobile || this.errors.area) this.currentTab = 1;
                 }
             } catch (e) {
                 this.errors = { _general: ['Network error. Please check your connection.'] };
             } finally {
                 this.loading = false;
             }
+        },
+
+        // ── Duplicate-screen actions (Phase 3, Slice 3) ───────────────────────
+        registerAndLink() {
+            const first = this.dup.list[0];
+            if (!first) { this.dup.open = false; return; }
+            this.form.link_to_patient_id = first.id;
+            this.form.link_relationship_type = this.dup.relationship;
+            this.form.link_as_guardian = this.dup.asGuardian;
+            this.form.confirm_duplicate = true;
+            this.dup.open = false;
+            return this.submit();
+        },
+        registerAnyway() {
+            this.form.link_to_patient_id = null;
+            this.form.confirm_duplicate = true;
+            this.dup.open = false;
+            return this.submit();
         },
 
         // ── Edit mode: transform + PATCH to /patients/{id} ────────────────────

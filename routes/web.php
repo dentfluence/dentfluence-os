@@ -129,14 +129,25 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/create',         [PatientController::class, 'create'])->name('create');
         Route::post('/scan-form',     [PatientController::class, 'scanForm'])->name('scan-form'); // 📷 read a paper intake form
-        Route::post('/',              [PatientController::class, 'store'])->name('store');
-        Route::post('/quick-store',   [PatientController::class, 'quickStore'])->name('quick-store');
-        Route::get('/{patient}',      [PatientController::class, 'show'])->name('show');
+        Route::post('/',              [PatientController::class, 'store'])->name('store')->middleware('module:patients,edit');
+        Route::post('/quick-store',   [PatientController::class, 'quickStore'])->name('quick-store')->middleware('module:patients,edit');
+        Route::get('/{patient}',      [PatientController::class, 'show'])->name('show')->withTrashed();
         Route::get('/{patient}/edit', [PatientController::class, 'edit'])->name('edit');
-        Route::patch('/{patient}',    [PatientController::class, 'update'])->name('update');
-        Route::delete('/{patient}',           [PatientController::class, 'destroy'])->name('destroy');
-        Route::post('/{patient}/deactivate',  [PatientController::class, 'deactivate'])->name('deactivate');
-        Route::post('/{patient}/reactivate',  [PatientController::class, 'reactivate'])->name('reactivate');
+        Route::patch('/{patient}',    [PatientController::class, 'update'])->name('update')->middleware('module:patients,edit');
+        Route::delete('/{patient}',           [PatientController::class, 'destroy'])->name('destroy')->middleware('module:patients,delete');
+        Route::post('/{patient}/deactivate',  [PatientController::class, 'deactivate'])->name('deactivate')->middleware('module:patients,edit');
+        Route::post('/{patient}/reactivate',  [PatientController::class, 'reactivate'])->name('reactivate')->middleware('module:patients,edit');
+
+        // ── Family & Contacts (Phase 3, Slice 3) — writes gated by module:patients,edit ──
+        Route::post  ('/{patient}/family/links',        [\App\Http\Controllers\Patient\FamilyController::class, 'storeLink'])->name('family.links.store')->middleware('module:patients,edit');
+        Route::patch ('/{patient}/family/links/{link}', [\App\Http\Controllers\Patient\FamilyController::class, 'updateLink'])->name('family.links.update')->middleware('module:patients,edit');
+        Route::delete('/{patient}/family/links/{link}', [\App\Http\Controllers\Patient\FamilyController::class, 'destroyLink'])->name('family.links.destroy')->middleware('module:patients,edit');
+        Route::post  ('/{patient}/family/guardians',    [\App\Http\Controllers\Patient\FamilyController::class, 'storeGuardian'])->name('family.guardians.store')->middleware('module:patients,edit');
+
+        // ── Duplicate Merge (admin-only) ──
+        Route::get ('/{patient}/merge',         [\App\Http\Controllers\PatientMergeController::class, 'create'])->name('merge.create')->middleware('admin.only');
+        Route::get ('/{patient}/merge/preview',  [\App\Http\Controllers\PatientMergeController::class, 'preview'])->name('merge.preview')->middleware('admin.only');
+        Route::post('/{patient}/merge',         [\App\Http\Controllers\PatientMergeController::class, 'store'])->name('merge.store')->middleware('admin.only');
 
         // ── ABHA / Health ID capture (local, no live ABDM) ──
         Route::get  ('/{patient}/abha', [\App\Http\Controllers\Abdm\PatientAbhaController::class, 'edit'])->name('abha.edit');
