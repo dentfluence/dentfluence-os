@@ -169,6 +169,58 @@ class FamilyLinkService
     }
 
     /**
+     * Intentionally EDIT an existing link: sets relationship_type and — unlike
+     * addLink() — sets is_guardian to exactly what the caller passed, so an
+     * explicit edit can DEMOTE a guardian (F1). addLink()'s OR-union and the
+     * merge OR-union are unchanged; this is the only demotion path.
+     *
+     * @param  array{as_guardian?:bool,notes?:?string}  $opts
+     * @throws \InvalidArgumentException on invalid type or when no link exists
+     */
+    public function updateLink(Patient $patient, Patient $relative, string $type, array $opts, User $actor): PatientLink
+    {
+        $this->assertValidType($type);
+
+        $link = $this->existingLink($patient, $relative);
+        if (! $link) {
+            throw new \InvalidArgumentException('No family link exists between these patients.');
+        }
+
+        $asGuardian = (bool) ($opts['as_guardian'] ?? false);
+
+        if ((int) $link->patient_id === $patient->id) {
+            $link->relationship_type = $type;
+        } elseif ($asGuardian) {
+            // Guardian direction requires this orientation — re-orient the row.
+            $link->patient_id        = $patient->id;
+            $link->linked_patient_id = $relative->id;
+            $link->relationship_type = $type;
+        } else {
+            $link->relationship_type = $this->storedInverse($type, $patient);
+        }
+
+        // Explicit set — an intentional edit may clear guardianship.
+        if ((int) $link->patient_id === $patient->id || $asGuardian) {
+            $link->is_guardian = $asGuardian;
+        }
+        if (array_key_exists('notes', $opts)) {
+            $link->notes = $opts['notes'];
+        }
+        $link->save();
+
+        $this->activity->log(
+            $patient,
+            'family.link_updated',
+            $actor,
+            ['linked_patient_id' => $relative->id, 'relationship_type' => $type, 'is_guardian' => $asGuardian],
+            $patient->relationship_id,
+            "Updated family link with {$relative->name}.",
+        );
+
+        return $link;
+    }
+
+    /**
      * Remove the link between two patients (either direction). Returns true if a
      * link was removed.
      */

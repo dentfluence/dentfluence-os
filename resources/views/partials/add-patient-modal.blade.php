@@ -130,6 +130,10 @@ $alertPresets   = ['Blood Thinners / Anticoagulants','Diabetic on Insulin','Ster
             </div>
             <p class="text-xl font-semibold text-[#380740] mb-1" style="font-family:'Cormorant Garamond',serif;">Patient Registered!</p>
             <p class="text-sm text-gray-500 mb-6" x-text="'ID: ' + (createdPatientId ?? '')"></p>
+            {{-- F3: a failed family link is reported, never silent --}}
+            <div x-show="linkWarning" x-cloak class="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs max-w-sm">
+                <span x-text="linkWarning"></span>
+            </div>
             <div class="flex gap-3">
                 <button x-on:click="goToProfile()" class="px-5 py-2 bg-[#6a0f70] text-white text-sm font-semibold hover:bg-[#380740] transition">
                     Open Profile →
@@ -870,6 +874,7 @@ function addPatientModal() {
         // Duplicate-phone → "Register + link family" (Phase 3, Slice 3)
         dup: { open: false, list: [], relationship: 'other', asGuardian: false },
         dupTypes: ['mother','father','spouse','child','sibling','other'],
+        linkWarning: null,   // F3 — set from the store response, shown on the success panel
 
         form: {
             title: '', first_name: '', middle_name: '', last_name: '', gender: '',
@@ -1256,6 +1261,7 @@ function addPatientModal() {
                 if (resp.ok && data.success) {
                     this.createdPatientId = data.patient?.patient_id ?? ('#' + data.patient?.id);
                     this.createdPatientUrl = data.patient_url;
+                    this.linkWarning = data.link_warning ?? null;
                     this.success = true;
                     window.dispatchEvent(new CustomEvent('patient-added', { detail: data.patient }));
                 } else {

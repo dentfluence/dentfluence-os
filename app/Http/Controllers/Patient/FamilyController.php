@@ -61,7 +61,8 @@ class FamilyController extends Controller
         $relative = $this->counterpart($patient, $link);
 
         try {
-            $this->family->addLink($patient, $relative, $data['relationship_type'], [
+            // updateLink (not addLink): an explicit edit may demote a guardian (F1).
+            $this->family->updateLink($patient, $relative, $data['relationship_type'], [
                 'as_guardian' => (bool) ($data['as_guardian'] ?? false),
             ], $request->user());
         } catch (\InvalidArgumentException $e) {

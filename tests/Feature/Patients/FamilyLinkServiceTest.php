@@ -183,6 +183,49 @@ class FamilyLinkServiceTest extends TestCase
         }
     }
 
+    // ── updateLink (F1 — explicit edit may demote a guardian) ────────────────
+
+    public function test_update_link_demotes_guardian_when_unchecked(): void
+    {
+        $minor    = $this->patient('Minor', 'male', 8);
+        $guardian = $this->patient('Guardian', 'female', 40);
+        $this->svc()->attachGuardian($minor, $guardian, ['relationship_type' => 'mother'], $this->actor);
+        $this->assertTrue($this->svc()->guardiansFor($minor)->contains('id', $guardian->id));
+
+        // Explicit edit with as_guardian=false → guardianship is REMOVED.
+        $link = $this->svc()->updateLink($minor, $guardian, 'mother', ['as_guardian' => false], $this->actor);
+
+        $this->assertFalse($link->fresh()->is_guardian);
+        $this->assertFalse($this->svc()->guardiansFor($minor)->contains('id', $guardian->id));
+        // Relationship itself survives the demotion.
+        $this->assertSame('mother', $link->fresh()->relationship_type);
+    }
+
+    public function test_update_link_can_also_promote_and_add_link_still_never_demotes(): void
+    {
+        $a = $this->patient('A', 'male', 30);
+        $b = $this->patient('B', 'female', 55);
+
+        $this->svc()->addLink($a, $b, 'mother', [], $this->actor);
+
+        // Promote via explicit edit.
+        $this->svc()->updateLink($a, $b, 'mother', ['as_guardian' => true], $this->actor);
+        $this->assertTrue($this->svc()->guardiansFor($a)->contains('id', $b->id));
+
+        // addLink (the non-edit path) keeps its OR-union: it can never demote.
+        $this->svc()->addLink($a, $b, 'mother', ['as_guardian' => false], $this->actor);
+        $this->assertTrue($this->svc()->guardiansFor($a)->contains('id', $b->id), 'addLink must never silently drop guardianship.');
+    }
+
+    public function test_update_link_requires_an_existing_link(): void
+    {
+        $a = $this->patient('A');
+        $b = $this->patient('B');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->svc()->updateLink($a, $b, 'spouse', [], $this->actor);
+    }
+
     // ── removeLink ────────────────────────────────────────────────────────────
 
     public function test_remove_link_works_in_either_direction(): void

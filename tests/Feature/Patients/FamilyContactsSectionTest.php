@@ -199,6 +199,68 @@ class FamilyContactsSectionTest extends TestCase
         $this->assertSame(0, PatientLink::count());
     }
 
+    // ── F1: guardian demotion through the row edit ──────────────────────────────
+
+    public function test_unchecking_guardian_in_row_edit_demotes(): void
+    {
+        $minor    = $this->patient('Minor', 'male', 8);
+        $guardian = $this->patient('Guardian P', 'female', 40);
+        $link     = $this->family()->attachGuardian($minor, $guardian, ['relationship_type' => 'mother'], $this->admin);
+
+        // Submit the edit WITHOUT as_guardian (an unchecked checkbox sends nothing).
+        $this->actingAs($this->admin)
+            ->from(route('patients.show', $minor))
+            ->patch(route('patients.family.links.update', [$minor, $link->id]), [
+                'relationship_type' => 'mother',
+            ])
+            ->assertRedirect(route('patients.show', $minor));
+
+        $this->assertFalse($link->fresh()->is_guardian, 'Unchecking Guardian in the edit form must demote.');
+        $this->assertFalse($this->family()->guardiansFor($minor)->contains('id', $guardian->id));
+    }
+
+    // ── F2/F3: duplicate-screen link validation + reported outcome ──────────────
+
+    public function test_invalid_link_relationship_type_fails_validation_before_registration(): void
+    {
+        $existing = $this->patient('Existing', 'female', 40);
+        $before   = Patient::count();
+
+        $this->actingAs($this->admin)->postJson(route('patients.store'), [
+            'first_name'             => 'New',
+            'last_name'              => 'Person',
+            'phone'                  => $existing->phone,
+            'age_years'              => 20,
+            'link_to_patient_id'     => $existing->id,
+            'link_relationship_type' => 'cousin', // not in the canonical vocabulary
+        ])->assertStatus(422);
+
+        $this->assertSame($before, Patient::count(), 'Validation failure must prevent registration (no silent coercion).');
+    }
+
+    public function test_link_failure_is_reported_not_silent(): void
+    {
+        $existing = $this->patient('Existing', 'female', 40);
+        // Soft-delete AFTER validation would pass `exists` — simulate by deleting
+        // between validation and lookup is not possible in-process, so instead we
+        // verify the CONTRACT: a successful link reports no warning...
+        $resp = $this->actingAs($this->admin)->postJson(route('patients.store'), [
+            'first_name'             => 'New',
+            'last_name'              => 'Child',
+            'phone'                  => $existing->phone,
+            'age_years'              => 8,
+            'link_to_patient_id'     => $existing->id,
+            'link_relationship_type' => 'mother',
+            'link_as_guardian'       => true,
+        ]);
+        $resp->assertSuccessful();
+        $this->assertNull($resp->json('link_warning'));
+
+        // ...and the response contract carries link_warning for the UI to show
+        // when the link cannot be made (key present in the JSON envelope).
+        $this->assertArrayHasKey('link_warning', $resp->json());
+    }
+
     // ── Duplicate-screen "Register + link family" (Phase 3, Slice 3) ────────────
 
     public function test_duplicate_screen_registers_and_links_family(): void

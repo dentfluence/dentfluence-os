@@ -91,6 +91,15 @@ class PatientController extends Controller
         // legacy aliases (mobile→phone, dob→date_of_birth, notes→chief_complaint)
         // so the whole app validates one canonical vocabulary.
 
+        // Duplicate-screen "link family" fields — request-SHAPE validation only
+        // (F2). The vocabulary list is owned by FamilyLinkService; no coercion,
+        // no duplicated business rule. Fails fast, before any patient is minted.
+        $request->validate([
+            'link_to_patient_id'     => ['nullable', 'integer', 'exists:patients,id'],
+            'link_relationship_type' => ['nullable', \Illuminate\Validation\Rule::in(\App\Services\Patient\FamilyLinkService::RELATIONSHIP_TYPES)],
+            'link_as_guardian'       => ['nullable', 'boolean'],
+        ]);
+
         // ── Duplicate-phone guard ────────────────────────────────────────
         // Only quickCreate() checked for duplicates before, so the main
         // registration form silently created a second record for returning
@@ -130,39 +139,42 @@ class PatientController extends Controller
 
         // Duplicate-screen "Register + link family" (Phase 3, Slice 3): the new
         // patient shares a number with an existing one → link them through the
-        // canonical FamilyLinkService. A link failure never fails registration.
+        // canonical FamilyLinkService. A link failure never fails registration,
+        // but it is REPORTED, never silent (F3).
+        $linkWarning = null;
         if ($request->filled('link_to_patient_id')) {
             $existing = Patient::withoutGlobalScope(\App\Models\Scopes\BranchScope::class)
                 ->find($request->integer('link_to_patient_id'));
-            if ($existing && $existing->id !== $patient->id) {
-                $type = $request->input('link_relationship_type', 'other');
-                if (! in_array($type, \App\Services\Patient\FamilyLinkService::RELATIONSHIP_TYPES, true)) {
-                    $type = 'other';
-                }
+            if (! $existing) {
+                $linkWarning = 'The selected family member could not be found — no link was created.';
+            } else {
                 try {
                     app(\App\Services\Patient\FamilyLinkService::class)->addLink(
                         $patient,
                         $existing,
-                        $type,
+                        $request->input('link_relationship_type', 'other'),
                         ['as_guardian' => $request->boolean('link_as_guardian')],
                         Auth::user()
                     );
                 } catch (\InvalidArgumentException $e) {
-                    // Patient is registered; a link error must not roll that back.
+                    // Patient stays registered; the failed link is surfaced below.
+                    $linkWarning = 'Patient registered, but the family link failed: ' . $e->getMessage();
                 }
             }
         }
 
         if ($request->expectsJson()) {
             return response()->json([
-                'success'    => true,
-                'patient'    => $patient->fresh(['tags']),
-                'patient_url'=> route('patients.show', $patient),
+                'success'      => true,
+                'patient'      => $patient->fresh(['tags']),
+                'patient_url'  => route('patients.show', $patient),
+                'link_warning' => $linkWarning,
             ]);
         }
 
         return redirect()->route('patients.show', $patient)
-            ->with('success', 'Patient registered successfully.');
+            ->with('success', 'Patient registered successfully.')
+            ->with('warning', $linkWarning);
     }
 
     // ── Profile (show) ────────────────────────────────────────────────────────
