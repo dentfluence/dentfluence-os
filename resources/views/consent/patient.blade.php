@@ -80,20 +80,55 @@
             </div>
 
             @if($patient->isMinor())
-                @php $lastGuardian = optional($state->firstWhere(fn($r) => $r['consent']))['consent']; @endphp
-                <div style="background:#eef4ff; border:1px solid #b9cdf0; color:#274690; padding:12px 14px; border-radius:10px; margin-top:16px;">
+                @php
+                    // Precedence for the consenting-party prefill (Phase 3 Slice 4):
+                    // linked guardian (family graph) → previous consent snapshot → blank.
+                    $lastGuardian = optional($state->firstWhere(fn($r) => $r['consent']))['consent'];
+                    $guardians    = ($guardianLinks ?? collect())->map(fn ($g) => [
+                        'name' => $g['counterpart']->name,
+                        'rel'  => $g['label'] === 'other' ? 'Legal guardian' : ucfirst($g['label']),
+                    ])->values();
+                    $prefillName = $guardians->isNotEmpty() ? $guardians[0]['name'] : optional($lastGuardian)->guardian_name;
+                    $prefillRel  = $guardians->isNotEmpty() ? $guardians[0]['rel']  : optional($lastGuardian)->guardian_relationship;
+                @endphp
+                <div style="background:#eef4ff; border:1px solid #b9cdf0; color:#274690; padding:12px 14px; border-radius:10px; margin-top:16px;"
+                     x-data="{ pick(n, r) { $refs.gname.value = n; $refs.grel.value = r; } }">
                     <div style="font-weight:600; margin-bottom:10px;">👤 This patient is a minor — consent must be given by a parent or guardian.</div>
+
+                    @if($guardians->count() === 1)
+                        <div style="font-size:13px; margin-bottom:10px;">
+                            Consenting guardian: <strong>{{ $guardians[0]['name'] }}</strong> ({{ $guardians[0]['rel'] }}) — from the family record.
+                        </div>
+                    @elseif($guardians->count() > 1)
+                        <div style="font-size:13px; margin-bottom:10px;">
+                            <div style="font-weight:600; margin-bottom:4px;">Consenting guardian:</div>
+                            @foreach($guardians as $i => $g)
+                                <label style="display:flex; align-items:center; gap:8px; padding:3px 0; cursor:pointer;">
+                                    <input type="radio" name="_guardian_pick" @checked($i === 0)
+                                           @change="pick({{ Js::from($g['name']) }}, {{ Js::from($g['rel']) }})">
+                                    <span>{{ $g['name'] }} · {{ $g['rel'] }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                    @else
+                        <div style="font-size:12px; margin-bottom:10px; color:#4a5f8f;">
+                            No guardian is linked to this minor.
+                            <a href="{{ route('patients.show', $patient) }}" style="color:#274690; text-decoration:underline;">Add one from Family &amp; Contacts</a>,
+                            or enter the guardian's details below.
+                        </div>
+                    @endif
+
                     <div style="display:flex; gap:12px; flex-wrap:wrap;">
                         <div style="flex:1; min-width:200px;">
                             <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">Guardian name</label>
-                            <input type="text" name="guardian_name" required maxlength="120"
-                                   value="{{ optional($lastGuardian)->guardian_name }}"
+                            <input type="text" name="guardian_name" required maxlength="120" x-ref="gname"
+                                   value="{{ $prefillName }}"
                                    style="width:100%; padding:9px 12px; border:1px solid #b9cdf0; border-radius:8px;">
                         </div>
                         <div style="flex:1; min-width:160px;">
                             <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">Relationship</label>
-                            <input type="text" name="guardian_relationship" required maxlength="60" placeholder="Parent / Legal guardian"
-                                   value="{{ optional($lastGuardian)->guardian_relationship }}"
+                            <input type="text" name="guardian_relationship" required maxlength="60" placeholder="Parent / Legal guardian" x-ref="grel"
+                                   value="{{ $prefillRel }}"
                                    style="width:100%; padding:9px 12px; border:1px solid #b9cdf0; border-radius:8px;">
                         </div>
                     </div>

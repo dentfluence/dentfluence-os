@@ -68,7 +68,16 @@ class ConsentController extends Controller
     public function patient(Patient $patient)
     {
         $state = $this->consent->stateFor($patient);
-        return view('consent.patient', compact('patient', 'state'));
+
+        // Phase 3 Slice 4 — minor→guardian consent anchor: linked guardian(s)
+        // from the canonical family graph prefill the consenting-party fields.
+        // Read-only; free-text capture and persistence are unchanged.
+        $guardianLinks = $patient->isMinor()
+            ? app(\App\Services\Patient\FamilyLinkService::class)
+                ->linksFor($patient)->where('is_guardian', true)->values()
+            : collect();
+
+        return view('consent.patient', compact('patient', 'state', 'guardianLinks'));
     }
 
     public function updatePatient(Request $request, Patient $patient)
