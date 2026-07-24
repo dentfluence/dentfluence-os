@@ -21,6 +21,7 @@ use App\Models\TreatmentVisit;
 use App\Services\Relationship\ActivityEngine;
 use App\Services\Relationship\TodayActionsEngine;
 use App\Services\Relationship\TodayActionsProjector;
+use App\Services\Communication\WhatsAppLinkService;
 use App\Services\Whatsapp\OutboundMessageService;
 use App\Support\Features\Feature;
 use Illuminate\Database\Eloquent\Model;
@@ -930,7 +931,7 @@ class TodayController extends Controller
     // logging/checklist — send, and the row is marked done.
     // ─────────────────────────────────────────────────────────────────────
 
-    public function sendBirthdayWhatsapp(Request $request, OutboundMessageService $outbound): JsonResponse
+    public function sendBirthdayWhatsapp(Request $request, WhatsAppLinkService $link): JsonResponse
     {
         $validated = $request->validate([
             'patient_id' => ['required', 'integer'],
@@ -961,18 +962,19 @@ class TodayController extends Controller
                 ? $template->renderBody($tokens)
                 : "Happy Birthday, {$tokens['PatientFirstName']}! Wishing you a wonderful year ahead from all of us at {$tokens['ClinicName']}.";
 
-            $result = $outbound->sendText($patient->phone, $body, [
-                'category'     => 'service',
-                'patient_id'   => $patient->id,
-                'contact_name' => $patient->name,
-            ]);
-
-            if (! $result['ok']) {
+            // Interim click-to-chat: instead of the (parked) WhatsApp Cloud API,
+            // return a wa.me link for staff to send from their own WhatsApp.
+            // Consent is still enforced exactly as the API path would have been
+            // (shadow-logged unless guard.consent_required is on).
+            $decision = $link->guardDecision($patient, 'service');
+            if (! $decision['allowed']) {
                 return response()->json([
                     'success' => false,
-                    'message' => $result['reason'] ?? 'Could not send WhatsApp message (consent not granted or send failed).',
+                    'message' => $decision['reason'] ?? 'WhatsApp consent required before sending.',
                 ], 422);
             }
+
+            $waUrl = $link->url($patient->phone, $body);
 
             $this->activityEngine->log(
                 subject       : $patient,
@@ -1004,7 +1006,7 @@ class TodayController extends Controller
                 ]
             );
 
-            return response()->json(['success' => true]);
+            return response()->json(['success' => true, 'url' => $waUrl]);
         } catch (\Throwable $e) {
             Log::error('TodayController::sendBirthdayWhatsapp failed', [
                 'patient_id' => $validated['patient_id'],

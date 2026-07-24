@@ -1557,7 +1557,8 @@ class RelationshipController extends ApiController
             : null;
 
         if (! $patient) {
-            $patient = Patient::create([
+            // Canonical mint — every registration goes through PatientService::register().
+            $patient = app(\App\Services\PatientService::class)->register([
                 'name'            => $leadModel->name,
                 'phone'           => $leadModel->phone,
                 'alternate_phone' => $leadModel->alt_phone,
@@ -1569,10 +1570,10 @@ class RelationshipController extends ApiController
                 'referred_by'     => $leadModel->referred_by,
                 'source'          => $leadModel->source ?: $leadModel->lead_source,
                 'chief_complaint' => $leadModel->treatment,
-                'branch_id'       => $request->user()->branch_id ?? 1,
-                'created_by'      => $request->user()->id,
-            ]);
+            ], $request->user());
 
+            // Reuse the lead's authoritative relationship link (overrides the
+            // flag-gated fuzzy linker register() runs; a no-op when off).
             if ($leadModel->relationship_id) {
                 $patient->relationship_id = $leadModel->relationship_id;
                 $patient->save();

@@ -229,6 +229,17 @@
                                 </a>
                                 @endif
 
+                                @if($phone)
+                                <x-communication.whatsapp-button
+                                    context="recall"
+                                    :patient-id="$patient?->id"
+                                    :number="$phone"
+                                    class="rl-action-btn"
+                                    title="Send recall reminder on WhatsApp">
+                                    <i class="ti ti-brand-whatsapp"></i>
+                                </x-communication.whatsapp-button>
+                                @endif
+
                                 @if($patient && $recall->status !== 'closed')
                                 <button type="button" class="rl-action-btn" title="Convert to Opportunity"
                                         onclick="rlOpenConvert({{ $recall->id }}, '{{ addslashes($patient->name) }}')">

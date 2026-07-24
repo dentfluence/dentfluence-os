@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Patient;
+use App\Services\Communication\WhatsAppLinkService;
 use App\Services\Relationship\ActivityEngine;
+use App\Services\Relationship\CommunicationGuard;
 use App\Services\Whatsapp\OutboundMessageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -138,5 +140,57 @@ class WhatsappController extends ApiController
         );
 
         return $this->success(null, 'WhatsApp message sent.');
+    }
+
+    /**
+     * POST /api/v1/patients/{patient}/whatsapp/link
+     *
+     * Interim click-to-chat (wa.me) parity for mobile. Until the WhatsApp Cloud
+     * API is approved, the app opens the returned URL with url_launcher and the
+     * staff member sends from their own WhatsApp. Same consent gate, phone
+     * normalization, templates and contact logging as the web endpoint — it
+     * shares WhatsAppLinkService, so copy and rules never drift between web and
+     * mobile.
+     *
+     * Body: { context, message?, params?, type? }
+     * Returns: { url, phone }
+     */
+    public function link(
+        Request $request,
+        $patient,
+        WhatsAppLinkService $link
+    ): JsonResponse {
+        $pt = Patient::where('branch_id', $request->user()->branch_id)
+            ->whereKey($patient)->first();
+        if (! $pt) {
+            return $this->error('Patient not found.', [], 404);
+        }
+        if (! $pt->phone) {
+            return $this->error('Patient has no phone number on file.', [], 422);
+        }
+
+        $data = $request->validate([
+            'context' => ['required', 'string', 'max:50'],
+            'message' => ['nullable', 'string', 'max:2000'],
+            'params'  => ['nullable', 'array'],
+            'type'    => ['nullable', 'string', 'max:30'],
+        ]);
+
+        $params = $link->prepareParams($data['context'], $pt, $data['params'] ?? [], $data['message'] ?? null);
+
+        $result = $link->resolve($pt, $pt->phone, $data['context'], $params, $data['type'] ?? 'service');
+
+        if (! $result['allowed']) {
+            return $this->error($result['reason'] ?? 'This message was blocked by the communication guard.', [], 422);
+        }
+
+        if ($pt->relationship_id) {
+            app(CommunicationGuard::class)->log($pt->relationship_id, 'whatsapp', $data['context']);
+        }
+
+        return $this->success([
+            'url'   => $result['url'],
+            'phone' => $result['phone'],
+        ], '');
     }
 }

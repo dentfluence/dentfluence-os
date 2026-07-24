@@ -1451,8 +1451,11 @@ function todayActions() {
                 const data = await res.json();
 
                 if (data.success) {
+                    // Interim click-to-chat: open WhatsApp with the greeting
+                    // pre-filled so staff can press send from their own account.
+                    if (data.url) { window.open(data.url, '_blank', 'noopener'); }
                     this.actioned[itemId] = true;
-                    this.lastResponse[itemId] = 'WhatsApp sent · '
+                    this.lastResponse[itemId] = 'WhatsApp opened · '
                         + new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
                 } else {
                     this.whatsappError[itemId] = data.message || 'Could not send. Please try again.';

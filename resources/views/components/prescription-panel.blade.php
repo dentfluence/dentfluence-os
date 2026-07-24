@@ -338,17 +338,11 @@
                             </span>
                         </div>
 
-                        {{-- Food advice (before/after food …) — prefilled from drug default, editable --}}
-                        <select x-model="row.food"
-                                style="margin-top:4px;width:100%;font-size:11px;border:1px solid #e5e7eb;border-radius:4px;padding:3px 6px;color:#374151;background:#fff;outline:none;">
-                            <option value="">Food advice…</option>
-                            <option value="After Food">After Food</option>
-                            <option value="Before Food">Before Food</option>
-                            <option value="With Food">With Food</option>
-                            <option value="Empty Stomach">Empty Stomach</option>
-                            <option value="At Bedtime">At Bedtime</option>
-                            <option value="Any Time">Any Time</option>
-                        </select>
+                        {{-- Food advice / custom instruction — pick a preset or type your own.
+                             Prefilled from the drug's default, fully editable per drug. --}}
+                        <input type="text" x-model="row.food" list="rx-food-options" maxlength="240"
+                               placeholder="Food advice / instruction…"
+                               style="margin-top:4px;width:100%;font-size:11px;border:1px solid #e5e7eb;border-radius:4px;padding:4px 6px;color:#374151;background:#fff;outline:none;">
 
                         {{-- Dropdown — positioned under the search input --}}
                         <div x-show="showDrop" x-cloak
@@ -463,6 +457,16 @@
                 </svg>
                 Add Drug
             </button>
+
+            {{-- Shared preset list for the per-drug food advice / instruction field --}}
+            <datalist id="rx-food-options">
+                <option value="After Food"></option>
+                <option value="Before Food"></option>
+                <option value="With Food"></option>
+                <option value="Empty Stomach"></option>
+                <option value="At Bedtime"></option>
+                <option value="Any Time"></option>
+            </datalist>
         </div>
 
         {{-- Patient Instructions --}}
