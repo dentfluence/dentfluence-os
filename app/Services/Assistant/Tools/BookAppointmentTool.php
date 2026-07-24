@@ -84,32 +84,27 @@ class BookAppointmentTool implements ConfirmableTool
         $duration = (int) ($args['duration'] ?? 30);
         if ($duration < 10) $duration = 30;
 
-        // Basic slot conflict check (same doctor, same date, same start time).
-        $clash = Appointment::whereDate('appointment_date', $date)
-            ->where('doctor_id', $doctor->id)
-            ->whereNotIn('status', ['cancelled', 'no_show'])
-            ->where('appointment_time', 'like', $time . '%')
-            ->exists();
-
-        if ($clash) {
+        // Canonical booking path (Slice 5): delegate to AppointmentService so
+        // the AI books through the SAME guards (blocked-slot + real interval
+        // overlap, not just an exact start-time match), timeline logging and
+        // transaction as the web/API. A conflict surfaces as a friendly message.
+        try {
+            $appt = app(\App\Services\AppointmentService::class)->create([
+                'patient_id'       => $patient->id,
+                'doctor_id'        => $doctor->id,
+                'appointment_date' => $date,
+                'appointment_time' => $time,
+                'duration_minutes' => $duration,
+                'type'             => $this->normalizeType($args['visit_type'] ?? null),
+                'notes'            => $args['notes'] ?? null,
+            ], $user);
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return [
-                'summary' => "Book appointment — slot taken",
-                'content' => "{$doctor->name} already has an appointment at {$time} on " . Carbon::parse($date)->format('d M') . ". Please pick another time.",
+                'summary' => 'Book appointment — slot unavailable',
+                'content' => $e->validator->errors()->first('appointment_time')
+                    ?: "{$doctor->name} isn't available then. Please pick another time.",
             ];
         }
-
-        $appt = Appointment::create([
-            'patient_id'       => $patient->id,
-            'doctor_id'        => $doctor->id,
-            'branch_id'        => $user->branch_id ?? $patient->branch_id,
-            'created_by'       => $user->id,
-            'appointment_date' => $date,
-            'appointment_time' => $time,
-            'duration_minutes' => $duration,
-            'type'             => $this->normalizeType($args['visit_type'] ?? null),
-            'status'           => 'scheduled',
-            'notes'            => $args['notes'] ?? null,
-        ]);
 
         return [
             'summary' => "Booked appointment for {$patient->patient_id} with {$doctor->name}",

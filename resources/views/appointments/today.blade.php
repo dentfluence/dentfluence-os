@@ -267,7 +267,7 @@ document.addEventListener('alpine:init', () => {
 
         statusLabel(s) {
             const map = {
-                scheduled: 'Scheduled', checkin: 'Waiting',
+                scheduled: 'Scheduled', checkin: 'Checked In',
                 in_chair: 'In Chair',   checkout: 'Done',
                 done: 'Done',           cancelled: 'Cancelled',
                 no_show: 'No Show',

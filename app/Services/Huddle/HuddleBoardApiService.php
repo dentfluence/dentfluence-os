@@ -158,7 +158,7 @@ class HuddleBoardApiService
 
     private function kpis(int $branchId, Carbon $today, Collection $schedule, Collection $yesterday, Collection $tasks, array $labs = [], ?Collection $comms = null): array
     {
-        $todayDone = $schedule->whereIn('status', ['done', 'checkout', 'completed'])->count();
+        $todayDone = $schedule->whereIn('status', \App\Enums\AppointmentStatus::completedValues())->count();
 
         // Yesterday: how many treated, and how many are missing their visit log
         $yTreated = $yesterday->where('visit_logged', true)->count();
@@ -320,7 +320,7 @@ class HuddleBoardApiService
             ->where('appointments.branch_id', $branchId)
             ->whereIn('appointments.patient_id', $patIds)
             ->whereDate('appointments.appointment_date', '>', $dateStr)
-            ->whereNotIn('appointments.status', ['cancelled', 'no_show'])
+            ->whereNotIn('appointments.status', \App\Enums\AppointmentStatus::terminalValues())
             ->select([
                 'appointments.patient_id',
                 'appointments.appointment_date',
@@ -334,7 +334,7 @@ class HuddleBoardApiService
             ->groupBy('patient_id')
             ->map(fn ($g) => $g->first());   // earliest next appt per patient
 
-        $skipped = ['cancelled', 'no_show'];
+        $skipped = \App\Enums\AppointmentStatus::terminalValues();
 
         return $rows->map(function ($r) use ($consByAppt, $consByPat, $tvByAppt, $tvByPat, $skipped, $nextAppts, $branchId) {
             $hasConsult = isset($consByAppt[$r->id]) || isset($consByPat[$r->patient_id]);
@@ -628,7 +628,7 @@ class HuddleBoardApiService
             ->leftJoin('users as dr', 'dr.id', '=', 'appointments.doctor_id')
             ->where('appointments.branch_id', $branchId)
             ->whereDate('appointments.appointment_date', $todayStr)
-            ->whereNotIn('appointments.status', ['cancelled', 'no_show'])
+            ->whereNotIn('appointments.status', \App\Enums\AppointmentStatus::terminalValues())
             ->select([
                 'appointments.id', 'appointments.patient_id', 'appointments.appointment_time',
                 'appointments.type', 'patients.name as patient_name', 'patients.phone',
@@ -657,7 +657,7 @@ class HuddleBoardApiService
             ->leftJoin('treatment_types', 'treatment_types.id', '=', 'appointments.treatment_id')
             ->where('appointments.branch_id', $branchId)
             ->whereDate('appointments.appointment_date', $yesterdayStr)
-            ->whereIn('appointments.status', ['done', 'checkout', 'completed'])
+            ->whereIn('appointments.status', \App\Enums\AppointmentStatus::completedValues())
             ->whereNotExists(function ($q) use ($yesterdayStr) {
                 $q->from('follow_ups')
                   ->whereColumn('follow_ups.patient_id', 'appointments.patient_id')

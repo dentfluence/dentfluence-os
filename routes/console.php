@@ -269,8 +269,15 @@ Schedule::command('app:crawl-routes', [
 Schedule::command('relationship:appointment-reminders')
     ->dailyAt('08:00')
     ->withoutOverlapping()
-    ->runInBackground()
-    ->appendOutputTo(storage_path('logs/appointment-reminders.log'));
+    // Foreground (not runInBackground) so a non-zero exit code reaches
+    // onFailure — matches audit:verify. This job had been failing silently.
+    ->appendOutputTo(storage_path('logs/appointment-reminders.log'))
+    ->onFailure(function () {
+        \Illuminate\Support\Facades\Log::critical(
+            'Appointment reminder job FAILED — no reminder tasks were generated for tomorrow\'s appointments. '
+            . 'Check storage/logs/appointment-reminders.log.'
+        );
+    });
 
 /*
 |--------------------------------------------------------------------------

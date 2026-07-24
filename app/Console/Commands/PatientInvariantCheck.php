@@ -38,17 +38,12 @@ class PatientInvariantCheck extends Command
     ];
 
     /**
-     * ⚠ TEMPORARY production exceptions — appointment booking still mints a
-     * Patient + TDC at booking. These MUST be REMOVED from this whitelist when
-     * the Appointments module implements:
-     *     Appointment → Arrived → Registration → Patient Created → TDC Generated
-     * (booking should create only an appointment lead; the patient/TDC are
-     * minted at Registration). Do not add new entries here.
+     * Appointment booking now mints walk-in patients through
+     * PatientService::register() (Slice 6), so the Appointments module no
+     * longer needs a whitelist exception. Kept empty as a deliberate marker
+     * that the exception was retired — do not add new entries here.
      */
-    private const TEMP_APPOINTMENT = [
-        'app/Http/Controllers/AppointmentController.php',
-        'app/Services/AppointmentService.php',
-    ];
+    private const TEMP_APPOINTMENT = [];
 
     /** Diagnostic smoke-test commands (test fixtures: dummies in a rolled-back tx). */
     private const TEST_TOOLING = [

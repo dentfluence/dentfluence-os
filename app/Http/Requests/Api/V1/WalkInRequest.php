@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Api\V1;
 
 use App\Http\Requests\Api\ApiFormRequest;
+use App\Services\AppointmentService;
 
 /**
  * WalkInRequest
@@ -23,7 +24,7 @@ class WalkInRequest extends ApiFormRequest
             'doctor_id'             => ['nullable', 'integer', 'exists:users,id'],
             'appointment_date'      => ['nullable', 'date'],
             'appointment_time'      => ['nullable', 'string', 'max:8'],
-            'duration_minutes'      => ['nullable', 'integer', 'min:5', 'max:480'],
+            'duration_minutes'      => AppointmentService::durationRule(),
             'treatment_category_id' => ['nullable', 'integer', 'exists:treatment_categories,id'],
             'treatment_id'          => ['nullable', 'integer', 'exists:treatments,id'],
             'operatory_id'          => ['nullable', 'integer', 'exists:operatories,id'],

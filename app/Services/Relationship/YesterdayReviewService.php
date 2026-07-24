@@ -113,7 +113,7 @@ class YesterdayReviewService
 
             return Appointment::with('patient:id,name,phone,relationship_id')
                 ->whereBetween('appointment_date', [$start->toDateString(), $end->copy()->endOfDay()])
-                ->whereIn('status', ['no_show', 'cancelled'])
+                ->whereIn('status', \App\Enums\AppointmentStatus::terminalValues())
                 ->whereNotIn('id', $dismissedIds)
                 ->orderBy('appointment_date')
                 ->get()

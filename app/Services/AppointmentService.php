@@ -2,13 +2,16 @@
 
 namespace App\Services;
 
+use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use App\Models\DoctorBlockedSlot;
 use App\Models\Patient;
+use App\Models\TreatmentCategory;
 use App\Models\User;
 use App\Services\Relationship\AppointmentActivityLogger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -29,6 +32,100 @@ class AppointmentService
     /** The eager-loads every appointment payload needs. */
     private const WITH = ['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'];
 
+    /**
+     * Parse a slot start from separate date + time request strings.
+     *
+     * Controllers validate these with date_format:H:i, but this is the
+     * belt-and-braces guard: a malformed value here becomes a 422 instead of
+     * an uncaught 500 out of Carbon::parse().
+     */
+    private function parseSlotStart(string $date, string $time): Carbon
+    {
+        try {
+            // Keep the original lenient parse (unchanged behaviour for valid
+            // input); only convert a parse failure into a clean 422.
+            return Carbon::parse("$date $time");
+        } catch (\Throwable $e) {
+            throw ValidationException::withMessages([
+                'appointment_time' => 'Invalid appointment time. Use HH:MM (24-hour).',
+            ]);
+        }
+    }
+
+    /* ── Canonical booking rules (Slice 6) ─────────────────────────────
+       One home for the duration bounds/default and the allowed types, so every
+       booking path (web, API, walk-in, AI) validates and defaults identically. */
+
+    /** Duration bounds shared by every appointment write path (minutes). */
+    public const DURATION_MIN = 10;
+    public const DURATION_MAX = 480;
+
+    /** The appointment types the schedule accepts (mirrors the DB enum). */
+    public const TYPES = ['consultation', 'treatment', 'follow-up'];
+
+    /** Laravel rule for an optional duration field. */
+    public static function durationRule(): string
+    {
+        return 'nullable|integer|min:' . self::DURATION_MIN . '|max:' . self::DURATION_MAX;
+    }
+
+    /** Laravel `in:` rule for the appointment type field. */
+    public static function typeRule(): string
+    {
+        return 'in:' . implode(',', self::TYPES);
+    }
+
+    /**
+     * Canonical duration resolution: an explicit value wins; otherwise fall
+     * back to the treatment-category default (the web calendar's long-standing
+     * behaviour), or 30 minutes when there is no category hint. Replaces the old
+     * per-controller autoDuration() and the flat "?? 30" API fallback.
+     */
+    public function resolveDuration(?int $provided, ?int $categoryId): int
+    {
+        if ($provided) {
+            return $provided;
+        }
+
+        if (! $categoryId) {
+            return 30;
+        }
+
+        $category = TreatmentCategory::find($categoryId);
+        if (! $category) {
+            return 30;
+        }
+
+        $map = [
+            'consultation'  => 30,
+            'rct'           => 60,
+            'root canal'    => 60,
+            'implant'       => 90,
+            'surgery'       => 90,
+            'cleaning'      => 45,
+            'scaling'       => 45,
+            'follow'        => 30,
+            'crown'         => 60,
+            'extraction'    => 30,
+            'filling'       => 45,
+            'orthodontic'   => 30,
+            'braces'        => 30,
+            'xray'          => 15,
+            'x-ray'         => 15,
+            'whitening'     => 60,
+            'veneer'        => 90,
+        ];
+
+        $nameLower = strtolower($category->name);
+        foreach ($map as $keyword => $minutes) {
+            if (str_contains($nameLower, $keyword)) {
+                return $minutes;
+            }
+        }
+
+        return 30;
+    }
+
     public function __construct(private AppointmentActivityLogger $activityLogger) {}
 
     // ── Scheduling guards (shared by web + API) ──────────────────────────────
@@ -42,7 +139,7 @@ class AppointmentService
     {
         if (! $doctorId) return null;
 
-        $start = Carbon::parse("$date $time");
+        $start = $this->parseSlotStart($date, $time);
         $end   = $start->copy()->addMinutes($duration);
 
         return DoctorBlockedSlot::with('doctor')
@@ -112,24 +209,28 @@ class AppointmentService
     ): ?Appointment {
         if (! $doctorId) return null;
 
-        $start = Carbon::parse("$date $time");
+        $start = $this->parseSlotStart($date, $time);
         $end   = $start->copy()->addMinutes($duration);
 
+        // Slice 10: the interval-overlap math now runs in SQL instead of loading
+        // the doctor's whole day into PHP and looping. Same semantics as before
+        // (strict inequalities, same status exclusion via active(), same
+        // excludeId, default 30-min duration): overlap iff
+        //   existing.start < new.end  AND  existing.end > new.start
+        // where existing.start = TIMESTAMP(appointment_date, appointment_time)
+        //   and existing.end   = that + duration_minutes.
         return Appointment::with('patient')
             ->where('branch_id', $branchId)
             ->where('doctor_id', $doctorId)
             ->whereDate('appointment_date', $date)
-            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->active()
             ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
-            ->get()
-            ->first(function (Appointment $apt) use ($start, $end) {
-                // appointment_date is cast to a Carbon date — naive string concat
-                // yields "Y-m-d 00:00:00 H:i:s", which Carbon::parse throws on.
-                $aptStart = Carbon::parse($apt->appointment_date->toDateString() . ' ' . $apt->appointment_time);
-                $aptEnd   = $aptStart->copy()->addMinutes($apt->duration_minutes ?? 30);
-
-                return $start->lt($aptEnd) && $end->gt($aptStart);
-            });
+            ->whereRaw('TIMESTAMP(appointment_date, appointment_time) < ?', [$end->format('Y-m-d H:i:s')])
+            ->whereRaw(
+                'DATE_ADD(TIMESTAMP(appointment_date, appointment_time), INTERVAL COALESCE(duration_minutes, 30) MINUTE) > ?',
+                [$start->format('Y-m-d H:i:s')]
+            )
+            ->first();
     }
 
     /**
@@ -143,32 +244,34 @@ class AppointmentService
      */
     public function filteredQuery(int $branchId, array $filters = []): Builder
     {
+        // Canonical read: branch + date via the same model scopes the web
+        // calendar uses (Slice 9). Behaviour unchanged.
         $query = Appointment::with(self::WITH)
-            ->where('branch_id', $branchId);
+            ->forBranch($branchId);
 
         $scope = $filters['scope'] ?? null;
 
         if (! empty($filters['date'])) {
-            $query->whereDate('appointment_date', $filters['date']);
+            $query->forDate($filters['date']);
         } elseif (! empty($filters['date_from']) || ! empty($filters['date_to'])) {
             $from = $filters['date_from'] ?? today()->toDateString();
             $to   = $filters['date_to'] ?? today()->addDays(60)->toDateString();
-            $query->whereBetween('appointment_date', [$from, $to]);
+            $query->inDateRange($from, $to);
         } elseif ($scope === 'today') {
-            $query->whereDate('appointment_date', today());
+            $query->today();
         } elseif ($scope === 'upcoming') {
             $query->whereDate('appointment_date', '>=', today())
-                  ->whereIn('status', ['scheduled', 'checkin', 'in_chair']);
+                  ->whereIn('status', AppointmentStatus::inProgressValues());
         } elseif ($scope !== 'all') {
             // Default: a useful window around today.
-            $query->whereBetween('appointment_date', [
+            $query->inDateRange(
                 today()->subDays(7)->toDateString(),
                 today()->addDays(60)->toDateString(),
-            ]);
+            );
         }
 
         if (! empty($filters['doctor_id'])) {
-            $query->where('doctor_id', $filters['doctor_id']);
+            $query->forDoctor($filters['doctor_id']);
         }
         if (! empty($filters['patient_id'])) {
             $query->where('patient_id', $filters['patient_id']);
@@ -183,8 +286,7 @@ class AppointmentService
     /** Today's live status counters for a branch (used by the dashboard). */
     public function todayCounts(int $branchId): array
     {
-        $base = Appointment::where('branch_id', $branchId)
-            ->whereDate('appointment_date', today());
+        $base = Appointment::forBranch($branchId)->today();
 
         return [
             'total'     => (clone $base)->count(),
@@ -204,39 +306,51 @@ class AppointmentService
      */
     public function create(array $in, User $actor): Appointment
     {
-        // Scheduling guards (2026-07-14): the API path previously ran NO
-        // conflict checks at all, so the mobile app could book a doctor onto
-        // their leave or on top of another patient. Deliberate double-booking
-        // stays possible via allow_overlap, matching the web modals.
-        $this->assertSlotIsBookable(
-            doctorId:     (int) $in['doctor_id'],
-            branchId:     (int) $actor->branch_id,
-            date:         $in['appointment_date'],
-            time:         $in['appointment_time'],
-            duration:     (int) ($in['duration_minutes'] ?? 30),
-            allowOverlap: (bool) ($in['allow_overlap'] ?? false),
-        );
+        // Atomic: the slot guard + insert + timeline log commit together, so a
+        // failure never leaves a half-written booking (Slice 5).
+        return DB::transaction(function () use ($in, $actor) {
+            // Canonical duration (Slice 6): explicit value, else category default,
+            // else 30. Resolved once so the guard and the insert always agree.
+            $duration = $this->resolveDuration(
+                isset($in['duration_minutes']) ? (int) $in['duration_minutes'] : null,
+                $in['treatment_category_id'] ?? null
+            );
 
-        $appointment = Appointment::create([
-            'patient_id'            => $in['patient_id'],
-            'doctor_id'             => $in['doctor_id'],
-            'branch_id'             => $actor->branch_id,
-            'created_by'            => $actor->id,
-            'appointment_date'      => $in['appointment_date'],
-            'appointment_time'      => $in['appointment_time'],
-            'duration_minutes'      => $in['duration_minutes'] ?? 30,
-            'type'                  => $in['type'] ?? 'consultation',
-            'status'                => 'scheduled',
-            'treatment_category_id' => $in['treatment_category_id'] ?? null,
-            'treatment_id'          => $in['treatment_id'] ?? null,
-            'operatory_id'          => $in['operatory_id'] ?? null,
-            'notes'                 => $in['notes'] ?? null,
-            'chief_complaint'       => $in['chief_complaint'] ?? null,
-        ]);
+            // Scheduling guards (2026-07-14): the API path previously ran NO
+            // conflict checks at all, so the mobile app could book a doctor onto
+            // their leave or on top of another patient. Deliberate double-booking
+            // stays possible via allow_overlap, matching the web modals.
+            $this->assertSlotIsBookable(
+                doctorId:     (int) $in['doctor_id'],
+                branchId:     (int) $actor->branch_id,
+                date:         $in['appointment_date'],
+                time:         $in['appointment_time'],
+                duration:     $duration,
+                allowOverlap: (bool) ($in['allow_overlap'] ?? false),
+            );
 
-        $this->activityLogger->booked($appointment, $actor);
+            $appointment = Appointment::create([
+                'patient_id'            => $in['patient_id'],
+                'doctor_id'             => $in['doctor_id'],
+                'branch_id'             => $actor->branch_id,
+                'created_by'            => $actor->id,
+                'appointment_date'      => $in['appointment_date'],
+                'appointment_time'      => $in['appointment_time'],
+                'duration_minutes'      => $duration,
+                'type'                  => $in['type'] ?? 'consultation',
+                'status'                => 'scheduled',
+                'treatment_category_id' => $in['treatment_category_id'] ?? null,
+                'treatment_id'          => $in['treatment_id'] ?? null,
+                'operatory_id'          => $in['operatory_id'] ?? null,
+                'chair_number'          => $in['chair_number'] ?? null,
+                'notes'                 => $in['notes'] ?? null,
+                'chief_complaint'       => $in['chief_complaint'] ?? null,
+            ]);
 
-        return $appointment->load(self::WITH);
+            $this->activityLogger->booked($appointment, $actor);
+
+            return $appointment->load(self::WITH);
+        });
     }
 
     /**
@@ -245,34 +359,36 @@ class AppointmentService
      */
     public function updateStatus(Appointment $appointment, string $status, ?User $actor = null): Appointment
     {
-        $update = [
-            'previous_status' => $appointment->status,
-            'status'          => $status,
-        ];
+        return DB::transaction(function () use ($appointment, $status, $actor) {
+            $update = [
+                'previous_status' => $appointment->status,
+                'status'          => $status,
+            ];
 
-        match ($status) {
-            'checkin'  => $update['checked_in_at'] = now(),
-            'in_chair' => $update['in_chair_at']   = now(),
-            'done'     => $update['completed_at']  = now(),
-            default    => null,
-        };
+            match ($status) {
+                'checkin'  => $update['checked_in_at'] = now(),
+                'in_chair' => $update['in_chair_at']   = now(),
+                'done'     => $update['completed_at']  = now(),
+                default    => null,
+            };
 
-        $appointment->update($update);
+            $appointment->update($update);
 
-        match ($status) {
-            'checkin' => $this->activityLogger->checkedIn($appointment, $actor),
-            'done'    => $this->activityLogger->completed($appointment, $actor),
-            // Direct cancel via the status route (no reason captured) — same
-            // log the web status dropdown writes. Without this, a mobile
-            // cancellation through /status left no timeline entry at all
-            // (2026-07-14 parity fix). Reasoned cancels use cancel() below.
-            'cancelled' => $this->activityLogger->cancelled($appointment, $actor),
-            // Web parity — fires the missed_appointment_followup rule.
-            'no_show' => $this->activityLogger->missed($appointment, $actor),
-            default   => null,
-        };
+            match ($status) {
+                'checkin' => $this->activityLogger->checkedIn($appointment, $actor),
+                'done'    => $this->activityLogger->completed($appointment, $actor),
+                // Direct cancel via the status route (no reason captured) — same
+                // log the web status dropdown writes. Without this, a mobile
+                // cancellation through /status left no timeline entry at all
+                // (2026-07-14 parity fix). Reasoned cancels use cancel() below.
+                'cancelled' => $this->activityLogger->cancelled($appointment, $actor),
+                // Web parity — fires the missed_appointment_followup rule.
+                'no_show' => $this->activityLogger->missed($appointment, $actor),
+                default   => null,
+            };
 
-        return $appointment->fresh()->load(self::WITH);
+            return $appointment->fresh()->load(self::WITH);
+        });
     }
 
     /**
@@ -283,31 +399,41 @@ class AppointmentService
      */
     public function reschedule(Appointment $appointment, array $in, User $actor): Appointment
     {
-        $duration = (int) ($in['duration_minutes']
-            ?? $appointment->duration_minutes
-            ?? 30);
+        return DB::transaction(function () use ($appointment, $in, $actor) {
+            $duration = (int) ($in['duration_minutes']
+                ?? $appointment->duration_minutes
+                ?? 30);
 
-        $this->assertSlotIsBookable(
-            doctorId:     $appointment->doctor_id,
-            branchId:     (int) $appointment->branch_id,
-            date:         $in['appointment_date'],
-            time:         $in['appointment_time'],
-            duration:     $duration,
-            allowOverlap: (bool) ($in['allow_overlap'] ?? false),
-            excludeId:    $appointment->id,
-        );
+            $this->assertSlotIsBookable(
+                doctorId:     $appointment->doctor_id,
+                branchId:     (int) $appointment->branch_id,
+                date:         $in['appointment_date'],
+                time:         $in['appointment_time'],
+                duration:     $duration,
+                allowOverlap: (bool) ($in['allow_overlap'] ?? false),
+                excludeId:    $appointment->id,
+            );
 
-        $update = [
-            'appointment_date' => $in['appointment_date'],
-            'appointment_time' => $in['appointment_time'],
-        ];
-        if (isset($in['duration_minutes'])) {
-            $update['duration_minutes'] = (int) $in['duration_minutes'];
-        }
+            // Capture the old slot before the write, for the lifecycle event.
+            $fromDate = $appointment->appointment_date instanceof Carbon
+                ? $appointment->appointment_date->toDateString()
+                : (string) $appointment->appointment_date;
+            $fromTime = (string) $appointment->appointment_time;
 
-        $appointment->update($update);
+            $update = [
+                'appointment_date' => $in['appointment_date'],
+                'appointment_time' => $in['appointment_time'],
+            ];
+            if (isset($in['duration_minutes'])) {
+                $update['duration_minutes'] = (int) $in['duration_minutes'];
+            }
 
-        return $appointment->fresh()->load(self::WITH);
+            $appointment->update($update);
+
+            $this->activityLogger->rescheduled($appointment, $actor, $fromDate, $fromTime);
+
+            return $appointment->fresh()->load(self::WITH);
+        });
     }
 
     /**
@@ -315,24 +441,87 @@ class AppointmentService
      * AppointmentController::destroy() — no guards beyond auth; the web UI
      * offers this from the calendar's 3-dot menu.
      */
-    public function delete(Appointment $appointment): void
+    public function delete(Appointment $appointment, ?User $actor = null): void
     {
-        $appointment->delete();
+        DB::transaction(function () use ($appointment, $actor) {
+            $appointment->delete();
+            $this->activityLogger->deleted($appointment, $actor);
+        });
     }
 
     /** Cancel an appointment, recording the reason and who initiated it. */
     public function cancel(Appointment $appointment, string $reason, ?string $cancelledParty = null, ?User $actor = null): Appointment
     {
-        $appointment->update([
-            'previous_status' => $appointment->status,
-            'status'          => 'cancelled',
-            'cancel_reason'   => $reason,
-            'cancelled_party' => $cancelledParty,
-        ]);
+        return DB::transaction(function () use ($appointment, $reason, $cancelledParty, $actor) {
+            $appointment->update([
+                'previous_status' => $appointment->status,
+                'status'          => 'cancelled',
+                'cancel_reason'   => $reason,
+                'cancelled_party' => $cancelledParty,
+            ]);
 
-        $this->activityLogger->cancelled($appointment, $actor, $reason, $cancelledParty);
+            $this->activityLogger->cancelled($appointment, $actor, $reason, $cancelledParty);
 
-        return $appointment->fresh()->load(self::WITH);
+            return $appointment->fresh()->load(self::WITH);
+        });
+    }
+
+    /**
+     * Full-field edit of an existing appointment (web edit form). The caller
+     * has already validated + guarded (blocked-slot / overlap); this owns the
+     * atomic write. Mirrors the old AppointmentController::update() write.
+     */
+    public function update(Appointment $appointment, array $data): Appointment
+    {
+        return DB::transaction(function () use ($appointment, $data) {
+            $appointment->update($data);
+
+            return $appointment->fresh()->load(self::WITH);
+        });
+    }
+
+    /**
+     * Revert an appointment to its previous status (the calendar "undo"), and
+     * clear the revert/cancel bookkeeping. Callers guard that a previous_status
+     * exists before invoking.
+     */
+    public function revert(Appointment $appointment, ?User $actor = null): Appointment
+    {
+        return DB::transaction(function () use ($appointment, $actor) {
+            $fromStatus = (string) $appointment->status;
+            $toStatus   = (string) $appointment->previous_status;
+
+            $appointment->update([
+                'status'          => $appointment->previous_status,
+                'previous_status' => null,
+                'cancel_reason'   => null,
+                'cancelled_party' => null,
+            ]);
+
+            $this->activityLogger->reverted($appointment, $actor, $fromStatus, $toStatus);
+
+            return $appointment->fresh()->load(self::WITH);
+        });
+    }
+
+    /** Soft-hide a (cancelled) appointment from the calendar day sheet. */
+    public function hide(Appointment $appointment): Appointment
+    {
+        return DB::transaction(function () use ($appointment) {
+            $appointment->update(['hidden_from_calendar' => true]);
+
+            return $appointment->fresh()->load(self::WITH);
+        });
+    }
+
+    /** Assign (or clear) the operatory / chair for an appointment. */
+    public function assignOperatory(Appointment $appointment, ?int $operatoryId): Appointment
+    {
+        return DB::transaction(function () use ($appointment, $operatoryId) {
+            $appointment->update(['operatory_id' => $operatoryId ?: null]);
+
+            return $appointment->fresh()->load(self::WITH);
+        });
     }
 
     /**
@@ -342,59 +531,69 @@ class AppointmentService
      */
     public function createWalkIn(array $in, User $actor): Appointment
     {
-        $branchId = $actor->branch_id;
+        // Atomic: patient (if new) + appointment + timeline log commit together,
+        // so a failed booking never leaves an orphan patient behind (Slice 5).
+        return DB::transaction(function () use ($in, $actor) {
+            $branchId = $actor->branch_id;
 
-        $doctorIdForCheck = $in['doctor_id']
-            ?? User::where('branch_id', $branchId)->where('is_active', true)->value('id');
+            $duration = $this->resolveDuration(
+                isset($in['duration_minutes']) ? (int) $in['duration_minutes'] : null,
+                $in['treatment_category_id'] ?? null
+            );
 
-        // Guards run BEFORE the patient is created, so a rejected walk-in never
-        // leaves an orphan patient record behind.
-        $this->assertSlotIsBookable(
-            doctorId:     $doctorIdForCheck ? (int) $doctorIdForCheck : null,
-            branchId:     (int) $branchId,
-            date:         $in['appointment_date'] ?? today()->toDateString(),
-            time:         $in['appointment_time'] ?? now()->format('H:i'),
-            duration:     (int) ($in['duration_minutes'] ?? 30),
-            allowOverlap: (bool) ($in['allow_overlap'] ?? false),
-        );
+            $doctorIdForCheck = $in['doctor_id']
+                ?? User::where('branch_id', $branchId)->where('is_active', true)->value('id');
 
-        if (! empty($in['patient_id'])) {
-            $patient = Patient::find($in['patient_id']);
-        } else {
-            $patient = Patient::create([
-                'first_name' => $in['first_name'] ?? null,
-                'last_name'  => $in['last_name'] ?? null,
-                'name'       => trim(($in['first_name'] ?? '') . ' ' . ($in['last_name'] ?? '')),
-                'phone'      => $in['phone'] ?? null,
-                'branch_id'  => $branchId,
-                'created_by' => $actor->id,
+            // Guards run BEFORE the patient is created, so a rejected walk-in never
+            // leaves an orphan patient record behind.
+            $this->assertSlotIsBookable(
+                doctorId:     $doctorIdForCheck ? (int) $doctorIdForCheck : null,
+                branchId:     (int) $branchId,
+                date:         $in['appointment_date'] ?? today()->toDateString(),
+                time:         $in['appointment_time'] ?? now()->format('H:i'),
+                duration:     $duration,
+                allowOverlap: (bool) ($in['allow_overlap'] ?? false),
+            );
+
+            if (! empty($in['patient_id'])) {
+                $patient = Patient::find($in['patient_id']);
+            } else {
+                // Slice 6: new walk-in patients go through the canonical mint
+                // point so they get a TDC number AND are linked into the
+                // Relationship engine, exactly like a front-desk registration.
+                $patient = app(PatientService::class)->register([
+                    'first_name' => $in['first_name'] ?? null,
+                    'last_name'  => $in['last_name'] ?? null,
+                    'name'       => trim(($in['first_name'] ?? '') . ' ' . ($in['last_name'] ?? '')),
+                    'phone'      => $in['phone'] ?? null,
+                ], $actor);
+            }
+
+            $doctorId = $in['doctor_id']
+                ?? User::where('branch_id', $branchId)->where('is_active', true)->value('id');
+
+            $appointment = Appointment::create([
+                'patient_id'            => $patient->id,
+                'doctor_id'             => $doctorId,
+                'branch_id'             => $branchId,
+                'created_by'            => $actor->id,
+                'appointment_date'      => $in['appointment_date'] ?? today()->toDateString(),
+                'appointment_time'      => $in['appointment_time'] ?? now()->format('H:i'),
+                'duration_minutes'      => $duration,
+                'type'                  => $in['type'] ?? 'consultation',
+                'status'                => 'checkin',
+                'is_walkin'             => true,
+                'checked_in_at'         => now(),
+                'treatment_category_id' => $in['treatment_category_id'] ?? null,
+                'treatment_id'          => $in['treatment_id'] ?? null,
+                'operatory_id'          => $in['operatory_id'] ?? null,
+                'notes'                 => $in['notes'] ?? 'Walk-in',
             ]);
-        }
 
-        $doctorId = $in['doctor_id']
-            ?? User::where('branch_id', $branchId)->where('is_active', true)->value('id');
+            $this->activityLogger->booked($appointment, $actor);
 
-        $appointment = Appointment::create([
-            'patient_id'            => $patient->id,
-            'doctor_id'             => $doctorId,
-            'branch_id'             => $branchId,
-            'created_by'            => $actor->id,
-            'appointment_date'      => $in['appointment_date'] ?? today()->toDateString(),
-            'appointment_time'      => $in['appointment_time'] ?? now()->format('H:i'),
-            'duration_minutes'      => $in['duration_minutes'] ?? 30,
-            'type'                  => 'consultation',
-            'status'                => 'checkin',
-            'is_walkin'             => true,
-            'checked_in_at'         => now(),
-            'treatment_category_id' => $in['treatment_category_id'] ?? null,
-            'treatment_id'          => $in['treatment_id'] ?? null,
-            'operatory_id'          => $in['operatory_id'] ?? null,
-            'notes'                 => $in['notes'] ?? 'Walk-in',
-        ]);
-
-        $this->activityLogger->booked($appointment, $actor);
-
-        return $appointment->load(self::WITH);
+            return $appointment->load(self::WITH);
+        });
     }
 
     /** Block a doctor's time slot (personal time, leave, etc.). */

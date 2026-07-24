@@ -18,20 +18,25 @@ bash scripts/lock-feature.sh appointments
 ## 🔒 LOCKED FEATURES
 
 ### appointments
-**Locked on:** 2026-06-20
-**Reason:** Feature complete and stable
+**Locked on:** 2026-07-24
+**Reason:** Corrective plan (CEO #004 → #015) Slices 1–12 COMPLETE and FROZEN.
+Canonical: AppointmentService = write SSoT; AppointmentStatus = status SSoT;
+model scopes = read SSoT; PatientService::register() = walk-in patient minting.
+See docs/appointments-module-master.md. The four dead booking modals
+(_modal, components/appointment-modal, partials/add-appointment-modal,
+partials/appointment-booking-modal) were removed in Slice 11 — the single live
+modal is partials/appointment-modal-global.blade.php.
 **Files:**
 - app/Http/Controllers/AppointmentController.php
+- app/Http/Controllers/Api/V1/AppointmentController.php
+- app/Services/AppointmentService.php
+- app/Enums/AppointmentStatus.php
 - app/Models/Appointment.php
-- resources/views/appointments/_modal.blade.php
 - resources/views/appointments/create.blade.php
 - resources/views/appointments/edit.blade.php
 - resources/views/appointments/index.blade.php
 - resources/views/appointments/show.blade.php
 - resources/views/appointments/today.blade.php
-- resources/views/components/appointment-modal.blade.php
-- resources/views/partials/add-appointment-modal.blade.php
-- resources/views/partials/appointment-booking-modal.blade.php
 - resources/views/partials/appointment-modal-global.blade.php
 
 ---

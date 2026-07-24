@@ -1237,7 +1237,7 @@ function dfAppointmentModal() {
             this.treatments = [];
             this.appt = {
                 patientId: '', patientName: '', patientPhone: '', patientSearch: '',
-                doctorId: '', date: new Date().toISOString().split('T')[0],
+                doctorId: '', date: new Date().toLocaleDateString('en-CA'),
                 time: new Date().toTimeString().slice(0, 5),
                 duration: '30', type: 'consultation',
                 treatmentCategoryId: '', treatmentId: '', notes: '',
@@ -1250,7 +1250,7 @@ function dfAppointmentModal() {
                 treatmentCategoryId: '', notes: '',
             };
             this.blk = {
-                doctorId: '', date: new Date().toISOString().split('T')[0],
+                doctorId: '', date: new Date().toLocaleDateString('en-CA'),
                 startTime: '', endTime: '', reason: '', blockType: 'unavailable',
             };
         },

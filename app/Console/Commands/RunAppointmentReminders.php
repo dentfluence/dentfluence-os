@@ -2,9 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\Automation\AutomationEngine;
 use App\Services\Automation\ReminderAutomationRunner;
-use App\Services\Relationship\AppointmentReminderEngine;
 use Illuminate\Console\Command;
 
 /**
@@ -23,7 +21,7 @@ class RunAppointmentReminders extends Command
     protected $signature   = 'relationship:appointment-reminders {--dry-run : Preview only, no tasks created}';
     protected $description = 'Auto-create reminder call tasks for appointments scheduled for tomorrow';
 
-    public function handle(AppointmentReminderEngine $engine): int
+    public function handle(ReminderAutomationRunner $runner): int
     {
         $this->newLine();
         $this->line('  <fg=cyan;options=bold>📅 Appointment Reminder Engine</> — ' . now()->format('D d M Y, H:i'));
@@ -38,16 +36,14 @@ class RunAppointmentReminders extends Command
         $this->line('  Generating reminder tasks for tomorrow\'s appointments...');
         $this->newLine();
 
-        // ── Phase 2, Slice 5 — reminders cutover ───────────────────────────────
-        // When automation.engine is ON, the Automation runner owns appointment
-        // reminders (and fixes the legacy created_by=null bug). When OFF (default),
-        // the legacy engine runs exactly as before. Instant rollback = flag off.
-        if (app(AutomationEngine::class)->enabled()) {
-            $this->line('  <fg=magenta>Automation Engine owns this reminder path.</>');
-            $result = app(ReminderAutomationRunner::class)->generateAppointmentReminders();
-        } else {
-            $result = $engine->generateReminders();
-        }
+        // ── Slice 8 — one canonical reminder producer ──────────────────────────
+        // Appointment-reminder generation ALWAYS runs through
+        // ReminderAutomationRunner, which supplies a valid created_by + branch_id
+        // (fixing the legacy null-created_by defect). This is decoupled from the
+        // automation.engine flag on purpose: that flag still governs recall/retry
+        // and other automation, which this slice does not touch. The broken legacy
+        // AppointmentReminderEngine has been retired.
+        $result = $runner->generateAppointmentReminders();
 
         $this->table(
             ['Result', 'Count'],

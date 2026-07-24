@@ -18,11 +18,44 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
             <div>
                 <label style="font-size:12px;font-weight:600;color:#4b0e59;display:block;margin-bottom:4px;">Patient</label>
-                <select name="patient_id" required style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
-                    @foreach($patients as $p)
-                    <option value="{{ $p->id }}" {{ $appointment->patient_id == $p->id ? 'selected' : '' }}>{{ $p->name }}</option>
-                    @endforeach
-                </select>
+                {{-- Slice 10: typeahead reusing the same /patients/search the booking
+                     modal uses — no longer loads the entire branch patient list. --}}
+                <input type="text" id="appt-patient-search" list="appt-patient-options" autocomplete="off"
+                       value="{{ $appointment->patient?->name }}"
+                       placeholder="Search patient by name or phone…"
+                       style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
+                <input type="hidden" name="patient_id" id="appt-patient-id" value="{{ $appointment->patient_id }}">
+                <datalist id="appt-patient-options"></datalist>
+                <script>
+                (function () {
+                    var s = document.getElementById('appt-patient-search'),
+                        h = document.getElementById('appt-patient-id'),
+                        dl = document.getElementById('appt-patient-options'),
+                        map = {}, t;
+                    function sync() { if (map[s.value] !== undefined) h.value = map[s.value]; }
+                    s.addEventListener('input', function () {
+                        sync();
+                        clearTimeout(t);
+                        var q = s.value.trim();
+                        if (q.length < 2) return;
+                        t = setTimeout(function () {
+                            fetch('/patients/search?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } })
+                                .then(function (r) { return r.json(); })
+                                .then(function (list) {
+                                    dl.innerHTML = ''; map = {};
+                                    (list || []).forEach(function (p) {
+                                        var label = p.phone ? (p.name + ' — ' + p.phone) : p.name;
+                                        map[label] = p.id;
+                                        var o = document.createElement('option'); o.value = label; dl.appendChild(o);
+                                    });
+                                    sync();
+                                })
+                                .catch(function () {});
+                        }, 250);
+                    });
+                    s.addEventListener('change', sync);
+                })();
+                </script>
             </div>
             <div>
                 <label style="font-size:12px;font-weight:600;color:#4b0e59;display:block;margin-bottom:4px;">Doctor</label>

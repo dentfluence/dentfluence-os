@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use App\Models\AppSetting;
 use App\Models\DoctorBlockedSlot;
@@ -10,7 +11,6 @@ use App\Models\Patient;
 use App\Models\TreatmentCategory;
 use App\Models\User;
 use App\Services\AppointmentService;
-use App\Services\Relationship\AppointmentActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
@@ -20,7 +20,6 @@ class AppointmentController extends Controller
     use \App\Http\Controllers\Concerns\ChecksStaleUpdates;
 
     public function __construct(
-        private AppointmentActivityLogger $activityLogger,
         private AppointmentService $appointments,
     ) {}
 
@@ -29,9 +28,11 @@ class AppointmentController extends Controller
     {
         $branchId = Auth::user()->branch_id;
 
+        // Canonical calendar read (Slice 9): branch-scoped + calendar-visible via
+        // model scopes. Same records, same ordering as before.
         $query = Appointment::with(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'])
-            ->where('branch_id', $branchId)
-            ->where('hidden_from_calendar', false)   // exclude soft-hidden cancelled appointments
+            ->forBranch($branchId)
+            ->visibleOnCalendar()
             ->orderBy('appointment_date')
             ->orderBy('appointment_time');
 
@@ -42,23 +43,23 @@ class AppointmentController extends Controller
             if ($view === 'week') {
                 $start = Carbon::parse($date)->startOfWeek(Carbon::SUNDAY);
                 $end   = $start->copy()->addDays(6);
-                $query->whereBetween('appointment_date', [$start->toDateString(), $end->toDateString()]);
+                $query->inDateRange($start->toDateString(), $end->toDateString());
             } elseif ($view === 'month') {
                 $start = Carbon::parse($date)->startOfMonth();
                 $end   = Carbon::parse($date)->endOfMonth();
-                $query->whereBetween('appointment_date', [$start->toDateString(), $end->toDateString()]);
+                $query->inDateRange($start->toDateString(), $end->toDateString());
             } else {
-                $query->whereDate('appointment_date', $date);
+                $query->forDate($date);
             }
         } else {
-            $query->whereBetween('appointment_date', [
+            $query->inDateRange(
                 today()->subDays(7)->toDateString(),
                 today()->addDays(60)->toDateString(),
-            ]);
+            );
         }
 
         if ($request->filled('doctor_id')) {
-            $query->where('doctor_id', $request->doctor_id);
+            $query->forDoctor($request->doctor_id);
         }
 
         if ($request->filled('status')) {
@@ -86,8 +87,8 @@ class AppointmentController extends Controller
 
         // Today's queue for sidebar
         $todayAppointments = Appointment::with(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'])
-            ->where('branch_id', $branchId)
-            ->whereDate('appointment_date', today())
+            ->forBranch($branchId)
+            ->today()
             ->orderBy('appointment_time')
             ->get()
             ->map(fn($a) => $this->formatAppointment($a))
@@ -125,7 +126,7 @@ class AppointmentController extends Controller
                 'last_name'            => 'required|string|max:100',
                 'mobile'               => 'required|string|max:20',
                 'appointment_date'     => 'required|date',
-                'appointment_time'     => 'required',
+                'appointment_time'     => 'required|date_format:H:i',
                 'notes'                => 'nullable|string|max:1000',
                 'treatment_category_id'=> 'nullable|exists:treatment_categories,id',
                 'treatment_id'         => 'nullable|exists:treatments,id',
@@ -135,11 +136,11 @@ class AppointmentController extends Controller
                 ? $request->doctor_id
                 : User::where('branch_id', $branchId)->where('is_active', true)->value('id');
 
-            $duration = $this->autoDuration($request->treatment_category_id);
+            $duration = $this->appointments->resolveDuration(null, $request->treatment_category_id);
 
             // ── Guards run BEFORE the patient is created ───────────
-            // Previously Patient::create() ran first, so a rejected booking
-            // left an orphan patient record behind on every failed attempt.
+            // The service creates the walk-in (patient + appointment) atomically
+            // inside a transaction, so a rejected booking never leaves an orphan.
 
             // Blocked slot (doctor on leave) — hard block.
             if ($err = $this->blockedSlotConflict($doctorId, $request->appointment_date, $request->appointment_time, $duration)) {
@@ -156,31 +157,22 @@ class AppointmentController extends Controller
                     : back()->withErrors($err['message'])->withInput();
             }
 
-            // Always create a new patient — multiple family members can share a phone number
-            $patient = Patient::create([
-                'name'      => trim($request->first_name . ' ' . $request->last_name),
-                'phone'     => $request->mobile,
-                'branch_id' => $branchId,
-            ]);
-
-            $appointment = Appointment::create([
-                'patient_id'           => $patient->id,
-                'doctor_id'            => $doctorId,
-                'branch_id'            => $branchId,
-                'created_by'           => Auth::id(),
-                'appointment_date'     => $request->appointment_date,
-                'appointment_time'     => $request->appointment_time,
-                'duration_minutes'     => $duration,
-                'type'                 => 'consultation',
-                'status'               => 'checkin',
-                'notes'                => $request->notes ?? 'Walk-in',
-                'treatment_category_id'=> $request->treatment_category_id,
-                'treatment_id'         => $request->treatment_id,
-                'is_walkin'            => true,
-                'checked_in_at'        => now(),
-            ]);
-
-            $this->activityLogger->booked($appointment, Auth::user());
+            // Booking (patient mint + appointment + timeline) is owned by the
+            // service and runs atomically. Patient is always new here — multiple
+            // family members can share a phone number.
+            $appointment = $this->appointments->createWalkIn([
+                'first_name'            => $request->first_name,
+                'last_name'             => $request->last_name,
+                'phone'                 => $request->mobile,
+                'doctor_id'             => $doctorId,
+                'appointment_date'      => $request->appointment_date,
+                'appointment_time'      => $request->appointment_time,
+                'duration_minutes'      => $duration,
+                'notes'                 => $request->notes,
+                'treatment_category_id' => $request->treatment_category_id,
+                'treatment_id'          => $request->treatment_id,
+                'allow_overlap'         => $request->boolean('allow_overlap'),
+            ], Auth::user());
 
             if ($request->expectsJson()) {
                 return response()->json([
@@ -200,7 +192,7 @@ class AppointmentController extends Controller
             $request->validate([
                 'patient_id'           => 'required|exists:patients,id',
                 'appointment_date'     => 'required|date',
-                'appointment_time'     => 'required',
+                'appointment_time'     => 'required|date_format:H:i',
                 'notes'                => 'nullable|string|max:1000',
                 'treatment_category_id'=> 'nullable|exists:treatment_categories,id',
             ]);
@@ -210,7 +202,7 @@ class AppointmentController extends Controller
                 : User::where('branch_id', $branchId)->where('is_active', true)->value('id');
 
             // ── Blocked slot check ─────────────────────────────────
-            $wiDuration = $this->autoDuration($request->treatment_category_id);
+            $wiDuration = $this->appointments->resolveDuration(null, $request->treatment_category_id);
             if ($err = $this->blockedSlotConflict($doctorId, $request->appointment_date, $request->appointment_time, $wiDuration)) {
                 return $request->expectsJson()
                     ? response()->json($err, 422)
@@ -225,23 +217,17 @@ class AppointmentController extends Controller
                     : back()->withErrors($err['message'])->withInput();
             }
 
-            $appointment = Appointment::create([
-                'patient_id'           => $request->patient_id,
-                'doctor_id'            => $doctorId,
-                'branch_id'            => $branchId,
-                'created_by'           => Auth::id(),
-                'appointment_date'     => $request->appointment_date,
-                'appointment_time'     => $request->appointment_time,
-                'duration_minutes'     => $this->autoDuration($request->treatment_category_id),
-                'type'                 => $request->type ?? 'consultation',
-                'status'               => 'checkin',
-                'notes'                => $request->notes ?? 'Walk-in',
-                'treatment_category_id'=> $request->treatment_category_id,
-                'is_walkin'            => true,
-                'checked_in_at'        => now(),
-            ]);
-
-            $this->activityLogger->booked($appointment, Auth::user());
+            $appointment = $this->appointments->createWalkIn([
+                'patient_id'            => $request->patient_id,
+                'doctor_id'             => $doctorId,
+                'appointment_date'      => $request->appointment_date,
+                'appointment_time'      => $request->appointment_time,
+                'duration_minutes'      => $wiDuration,
+                'type'                  => $request->type,
+                'notes'                 => $request->notes,
+                'treatment_category_id' => $request->treatment_category_id,
+                'allow_overlap'         => $request->boolean('allow_overlap'),
+            ], Auth::user());
 
             if ($request->expectsJson()) {
                 return response()->json([
@@ -261,9 +247,9 @@ class AppointmentController extends Controller
             'patient_id'           => 'required|exists:patients,id',
             'doctor_id'            => 'required|exists:users,id',
             'appointment_date'     => 'required|date',
-            'appointment_time'     => 'required',
-            'duration_minutes'     => 'nullable|integer|min:10|max:240',
-            'type'                 => 'required|in:consultation,treatment,follow-up',
+            'appointment_time'     => 'required|date_format:H:i',
+            'duration_minutes'     => AppointmentService::durationRule(),
+            'type'                 => 'required|' . AppointmentService::typeRule(),
             'notes'                => 'nullable|string|max:1000',
             'treatment_category_id'=> 'nullable|exists:treatment_categories,id',
             'treatment_id'         => 'nullable|exists:treatments,id',
@@ -274,8 +260,10 @@ class AppointmentController extends Controller
         $data['branch_id']        = $branchId;
         $data['created_by']       = Auth::id();
         $data['status']           = 'scheduled';
-        $data['duration_minutes'] = $data['duration_minutes']
-            ?? $this->autoDuration($data['treatment_category_id'] ?? null);
+        $data['duration_minutes'] = $this->appointments->resolveDuration(
+            $data['duration_minutes'] ?? null,
+            $data['treatment_category_id'] ?? null
+        );
 
         // ── Blocked slot check ─────────────────────────────────────
         if ($err = $this->blockedSlotConflict($data['doctor_id'], $data['appointment_date'], $data['appointment_time'], $data['duration_minutes'])) {
@@ -292,9 +280,10 @@ class AppointmentController extends Controller
                 : back()->withErrors($err['message'])->withInput();
         }
 
-        $appointment = Appointment::create($data);
-
-        $this->activityLogger->booked($appointment, Auth::user());
+        // Guards passed above (web error shape); the atomic write is owned by
+        // the service. Duration was already resolved into $data.
+        $data['allow_overlap'] = $request->boolean('allow_overlap');
+        $appointment = $this->appointments->create($data, Auth::user());
 
         $date = $appointment->appointment_date instanceof Carbon
             ? $appointment->appointment_date->format('Y-m-d')
@@ -318,37 +307,11 @@ class AppointmentController extends Controller
     public function updateStatus(Request $request, Appointment $appointment)
     {
         $request->validate([
-            'status' => 'required|in:scheduled,checkin,in_chair,checkout,done,cancelled,no_show',
+            'status' => 'required|' . AppointmentStatus::validationRule(),
         ]);
 
-        $update = [
-            'previous_status' => $appointment->status, // save for revert
-            'status'          => $request->status,
-        ];
-
-        match ($request->status) {
-            'checkin'  => $update['checked_in_at'] = now(),
-            'in_chair' => $update['in_chair_at']   = now(),
-            'done'     => $update['completed_at']  = now(),
-            default    => null,
-        };
-
-        $appointment->update($update);
-
-        match ($request->status) {
-            'checkin' => $this->activityLogger->checkedIn($appointment, Auth::user()),
-            'done'    => $this->activityLogger->completed($appointment, Auth::user()),
-            // Direct cancel via the status dropdown (no reason captured) — the
-            // calendar's "Cancel Appointment" modal uses cancelWithReason() below instead.
-            'cancelled' => $this->activityLogger->cancelled($appointment, Auth::user()),
-            // Fires 'appointment.missed' → the enabled missed_appointment_followup
-            // rule auto-creates the reschedule call task. Nothing emitted this
-            // event before, so that rule could never fire.
-            'no_show'   => $this->activityLogger->missed($appointment, Auth::user()),
-            default   => null,
-        };
-
-        $fresh = $appointment->fresh()->load(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory']);
+        // Write owned by AppointmentService (timestamps + timeline log, atomic).
+        $fresh = $this->appointments->updateStatus($appointment, $request->status, Auth::user());
 
         return response()->json([
             'ok'          => true,
@@ -366,16 +329,12 @@ class AppointmentController extends Controller
             'cancelled_party' => 'required|in:patient,clinic',
         ]);
 
-        $appointment->update([
-            'previous_status' => $appointment->status,
-            'status'          => 'cancelled',
-            'cancel_reason'   => $request->cancel_reason,
-            'cancelled_party' => $request->cancelled_party,
-        ]);
-
-        $this->activityLogger->cancelled($appointment, Auth::user(), $request->cancel_reason, $request->cancelled_party);
-
-        $fresh = $appointment->fresh()->load(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory']);
+        $fresh = $this->appointments->cancel(
+            $appointment,
+            $request->cancel_reason,
+            $request->cancelled_party,
+            Auth::user()
+        );
 
         return response()->json([
             'ok'          => true,
@@ -387,22 +346,11 @@ class AppointmentController extends Controller
     // ── Revert to previous status (PATCH /appointments/{id}/revert) ──────────
     public function revertStatus(Appointment $appointment)
     {
-        $prev = $appointment->previous_status;
-
-        if (! $prev) {
+        if (! $appointment->previous_status) {
             return response()->json(['ok' => false, 'message' => 'No previous status to revert to.'], 422);
         }
 
-        $update = [
-            'status'          => $prev,
-            'previous_status' => null,
-            'cancel_reason'   => null,
-            'cancelled_party' => null,
-        ];
-
-        $appointment->update($update);
-
-        $fresh = $appointment->fresh()->load(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory']);
+        $fresh = $this->appointments->revert($appointment, Auth::user());
 
         return response()->json([
             'ok'          => true,
@@ -420,9 +368,10 @@ class AppointmentController extends Controller
             'operatory_id' => 'nullable|exists:operatories,id',
         ]);
 
-        $appointment->update(['operatory_id' => $request->operatory_id ?: null]);
-
-        $fresh = $appointment->fresh()->load(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory']);
+        $fresh = $this->appointments->assignOperatory(
+            $appointment,
+            $request->operatory_id ? (int) $request->operatory_id : null
+        );
 
         return response()->json([
             'ok'          => true,
@@ -436,12 +385,12 @@ class AppointmentController extends Controller
         $branchId = Auth::user()->branch_id;
 
         $query = Appointment::with(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'])
-            ->where('branch_id', $branchId)
-            ->whereDate('appointment_date', today())
+            ->forBranch($branchId)
+            ->today()
             ->orderBy('appointment_time');
 
         if ($request->filled('doctor_id')) {
-            $query->where('doctor_id', $request->doctor_id);
+            $query->forDoctor($request->doctor_id);
         }
 
         if ($request->filled('status')) {
@@ -523,7 +472,9 @@ class AppointmentController extends Controller
     {
         $branchId = Auth::user()->branch_id;
 
-        $patients = Patient::where('branch_id', $branchId)->orderBy('name')->get(['id', 'name', 'phone']);
+        // Slice 10: the patient field is a typeahead (reusing /patients/search),
+        // so we no longer load the entire branch patient list into a <select>.
+        $appointment->loadMissing('patient');
         $doctors  = User::where('branch_id', $branchId)->where('is_active', true)->where(fn($q) => $q->whereIn('role', User::DOCTOR_ROLES)->orWhere('name', 'like', 'Dr.%'))->get(['id', 'name']);
         $treatmentCategories = TreatmentCategory::active()
             ->orderBy('name')
@@ -538,7 +489,7 @@ class AppointmentController extends Controller
 
         $operatories = Operatory::forBranch($branchId)->active()->ordered()->get(['id', 'name']);
 
-        return view('appointments.edit', compact('appointment', 'patients', 'doctors', 'timeSlots', 'treatmentCategories', 'operatories'));
+        return view('appointments.edit', compact('appointment', 'doctors', 'timeSlots', 'treatmentCategories', 'operatories'));
     }
 
     // ── Update ──────────────────────────────────────────────────
@@ -548,9 +499,9 @@ class AppointmentController extends Controller
             'patient_id'           => 'required|exists:patients,id',
             'doctor_id'            => 'required|exists:users,id',
             'appointment_date'     => 'required|date',
-            'appointment_time'     => 'required',
-            'duration_minutes'     => 'nullable|integer|min:10|max:240',
-            'type'                 => 'required|in:consultation,treatment,follow-up',
+            'appointment_time'     => 'required|date_format:H:i',
+            'duration_minutes'     => AppointmentService::durationRule(),
+            'type'                 => 'required|' . AppointmentService::typeRule(),
             'notes'                => 'nullable|string|max:1000',
             'treatment_category_id'=> 'nullable|exists:treatment_categories,id',
             'treatment_id'         => 'nullable|exists:treatments,id',
@@ -564,7 +515,7 @@ class AppointmentController extends Controller
 
         $duration = $data['duration_minutes']
             ?? $appointment->duration_minutes
-            ?? $this->autoDuration($data['treatment_category_id'] ?? null);
+            ?? $this->appointments->resolveDuration(null, $data['treatment_category_id'] ?? null);
 
         // ── Blocked slot + double-booking guards ───────────────────
         // The edit form could previously move an appointment onto a doctor's
@@ -582,18 +533,20 @@ class AppointmentController extends Controller
                 : back()->withErrors($err['message'])->withInput();
         }
 
-        $appointment->update($data);
+        // Guards passed above (web error shape); the atomic write is owned by
+        // the service.
+        $fresh = $this->appointments->update($appointment, $data);
 
         if ($request->expectsJson()) {
             return response()->json([
                 'ok'          => true,
-                'appointment' => $this->formatAppointment($appointment->fresh()->load(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'])),
+                'appointment' => $this->formatAppointment($fresh),
             ]);
         }
 
-        $date = $appointment->appointment_date instanceof Carbon
-            ? $appointment->appointment_date->format('Y-m-d')
-            : substr($appointment->appointment_date, 0, 10);
+        $date = $fresh->appointment_date instanceof Carbon
+            ? $fresh->appointment_date->format('Y-m-d')
+            : substr($fresh->appointment_date, 0, 10);
 
         return redirect()
             ->route('appointments.index', ['date' => $date])
@@ -606,7 +559,7 @@ class AppointmentController extends Controller
         $data = $request->validate([
             'appointment_date' => 'required|date',
             'appointment_time' => 'required|date_format:H:i',
-            'duration_minutes' => 'nullable|integer|min:10|max:480',
+            'duration_minutes' => AppointmentService::durationRule(),
         ]);
 
         $duration = $data['duration_minutes'] ?? $appointment->duration_minutes ?? 30;
@@ -625,20 +578,25 @@ class AppointmentController extends Controller
             return response()->json($err, 422);
         }
 
-        $appointment->update($data);
+        // Guards passed above (web error shape); the atomic write is owned by
+        // the service. allow_overlap is carried through so its guard agrees with
+        // the pre-check we just ran.
+        $fresh = $this->appointments->reschedule(
+            $appointment,
+            array_merge($data, ['allow_overlap' => $request->boolean('allow_overlap')]),
+            Auth::user()
+        );
 
         return response()->json([
             'ok'          => true,
-            'appointment' => $this->formatAppointment(
-                $appointment->fresh()->load(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'])
-            ),
+            'appointment' => $this->formatAppointment($fresh),
         ]);
     }
 
     // ── Destroy ──────────────────────────────────────────────────
     public function destroy(Request $request, Appointment $appointment)
     {
-        $appointment->delete();
+        $this->appointments->delete($appointment, Auth::user());
 
         if ($request->boolean('json') || $request->wantsJson()) {
             return response()->json(['ok' => true]);
@@ -650,11 +608,9 @@ class AppointmentController extends Controller
     // ── Hide from calendar (PATCH /appointments/{id}/hide) ───────
     public function hideFromCalendar(Appointment $appointment)
     {
-        $appointment->update(['hidden_from_calendar' => true]);
-
         return response()->json([
             'ok'          => true,
-            'appointment' => $this->formatAppointment($appointment->fresh()->load(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'])),
+            'appointment' => $this->formatAppointment($this->appointments->hide($appointment)),
         ]);
     }
 
@@ -664,7 +620,7 @@ class AppointmentController extends Controller
         $request->validate([
             'doctor_id'        => 'required',
             'appointment_date' => 'required|date',
-            'appointment_time' => 'required',
+            'appointment_time' => 'required|date_format:H:i',
             'duration_minutes' => 'nullable|integer',
             'exclude_id'       => 'nullable|integer',
         ]);
@@ -703,10 +659,11 @@ class AppointmentController extends Controller
             'block_type' => 'nullable|in:unavailable,break,emergency',
         ]);
 
-        $data['created_by'] = Auth::id();
+        // Keep the web default (the service's own default differs); the service
+        // owns the write.
         $data['block_type'] = $data['block_type'] ?? 'unavailable';
 
-        $slot = DoctorBlockedSlot::create($data);
+        $slot = $this->appointments->blockSlot($data, Auth::user());
 
         return response()->json([
             'ok'   => true,
@@ -827,19 +784,15 @@ class AppointmentController extends Controller
 
     private function getTodayStatusCounts(int $branchId): array
     {
-        $base = Appointment::where('branch_id', $branchId)
-            ->whereDate('appointment_date', today());
+        // The 8 status/walk-in counters are the canonical AppointmentService::
+        // todayCounts(); chair utilization is a web-only KPI merged on top
+        // (unchanged). Same keys, same values as before.
+        $base = Appointment::forBranch($branchId)->today();
 
-        return array_merge([
-            'total'     => (clone $base)->count(),
-            'scheduled' => (clone $base)->where('status', 'scheduled')->count(),
-            'checkin'   => (clone $base)->where('status', 'checkin')->count(),
-            'in_chair'  => (clone $base)->where('status', 'in_chair')->count(),
-            'done'      => (clone $base)->where('status', 'done')->count(),
-            'cancelled' => (clone $base)->where('status', 'cancelled')->count(),
-            'no_show'   => (clone $base)->where('status', 'no_show')->count(),
-            'walkin'    => (clone $base)->where('is_walkin', true)->count(),
-        ], $this->getChairUtilization($branchId, $base));
+        return array_merge(
+            $this->appointments->todayCounts($branchId),
+            $this->getChairUtilization($branchId, $base)
+        );
     }
 
     /**
@@ -859,7 +812,7 @@ class AppointmentController extends Controller
     private function getChairUtilization(int $branchId, $baseQuery): array
     {
         $bookedMinutes = (clone $baseQuery)
-            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->active()
             ->get(['duration_minutes'])
             ->sum(fn ($a) => $a->duration_minutes ?? 30);
 
@@ -923,40 +876,5 @@ class AppointmentController extends Controller
             'treatment_color'      => $a->treatmentCategory?->color ?? null,
             'doctor_color'         => $a->doctor?->color ?? null,
         ];
-    }
-
-    private function autoDuration(?int $categoryId): int
-    {
-        if (! $categoryId) return 30;
-
-        $cat = TreatmentCategory::find($categoryId);
-        if (! $cat) return 30;
-
-        $map = [
-            'consultation'  => 30,
-            'rct'           => 60,
-            'root canal'    => 60,
-            'implant'       => 90,
-            'surgery'       => 90,
-            'cleaning'      => 45,
-            'scaling'       => 45,
-            'follow'        => 30,
-            'crown'         => 60,
-            'extraction'    => 30,
-            'filling'       => 45,
-            'orthodontic'   => 30,
-            'braces'        => 30,
-            'xray'          => 15,
-            'x-ray'         => 15,
-            'whitening'     => 60,
-            'veneer'        => 90,
-        ];
-
-        $nameLower = strtolower($cat->name);
-        foreach ($map as $keyword => $minutes) {
-            if (str_contains($nameLower, $keyword)) return $minutes;
-        }
-
-        return 30;
     }
 }

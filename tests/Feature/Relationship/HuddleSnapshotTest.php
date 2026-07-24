@@ -27,7 +27,9 @@ class HuddleSnapshotTest extends TestCase
     {
         return new class($groups) extends TodayActionsEngine {
             public function __construct(public array $groups) {}
-            public function generate(): array { return $this->groups; }
+            // Signature must match the parent's generate(bool $includeDone = false): array
+            // (the $includeDone param was added later; the stub was never updated).
+            public function generate(bool $includeDone = false): array { return $this->groups; }
         };
     }
 

@@ -132,6 +132,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/',              [PatientController::class, 'store'])->name('store')->middleware('module:patients,edit');
         Route::post('/quick-store',   [PatientController::class, 'quickStore'])->name('quick-store')->middleware('module:patients,edit');
         Route::get('/{patient}',      [PatientController::class, 'show'])->name('show')->withTrashed();
+        Route::get('/{patient}/tab/{tab}', [PatientController::class, 'tab'])->name('tab'); // Phase 4 lazy tab fragments
+        Route::get('/{patient}/timeline',  [PatientController::class, 'timeline'])->name('timeline'); // Phase 4 Journey Timeline
         Route::get('/{patient}/edit', [PatientController::class, 'edit'])->name('edit');
         Route::patch('/{patient}',    [PatientController::class, 'update'])->name('update')->middleware('module:patients,edit');
         Route::delete('/{patient}',           [PatientController::class, 'destroy'])->name('destroy')->middleware('module:patients,delete');
@@ -153,14 +155,15 @@ Route::middleware('auth')->group(function () {
         Route::get  ('/{patient}/abha', [\App\Http\Controllers\Abdm\PatientAbhaController::class, 'edit'])->name('abha.edit');
         Route::patch('/{patient}/abha', [\App\Http\Controllers\Abdm\PatientAbhaController::class, 'update'])->name('abha.update');
 
-        // Relationship notes
-        Route::post('/{patient}/relationship-notes',          [PatientController::class, 'storeRelationshipNote'])->name('relationship-notes.store');
-        Route::delete('/{patient}/relationship-notes/{note}', [PatientController::class, 'destroyRelationshipNote'])->name('relationship-notes.destroy');
+        // Relationship notes — writes gated by module:patients,edit (Phase 4 fix:
+        // these previously required only module view, letting view-only users write)
+        Route::post('/{patient}/relationship-notes',          [PatientController::class, 'storeRelationshipNote'])->name('relationship-notes.store')->middleware('module:patients,edit');
+        Route::delete('/{patient}/relationship-notes/{note}', [PatientController::class, 'destroyRelationshipNote'])->name('relationship-notes.destroy')->middleware('module:patients,edit');
 
-        // Treatment opportunities
-        Route::post('/{patient}/opportunities',         [PatientController::class, 'storeOpportunity'])->name('opportunities.store');
-        Route::patch('/{patient}/opportunities/{opp}',  [PatientController::class, 'updateOpportunity'])->name('opportunities.update');
-        Route::delete('/{patient}/opportunities/{opp}', [PatientController::class, 'destroyOpportunity'])->name('opportunities.destroy');
+        // Treatment opportunities — writes gated by module:patients,edit (Phase 4 fix)
+        Route::post('/{patient}/opportunities',         [PatientController::class, 'storeOpportunity'])->name('opportunities.store')->middleware('module:patients,edit');
+        Route::patch('/{patient}/opportunities/{opp}',  [PatientController::class, 'updateOpportunity'])->name('opportunities.update')->middleware('module:patients,edit');
+        Route::delete('/{patient}/opportunities/{opp}', [PatientController::class, 'destroyOpportunity'])->name('opportunities.destroy')->middleware('module:patients,edit');
 
         // Patient notes
         Route::post('/{patient}/notes',          [PatientNoteController::class, 'store'])->name('notes.store');
@@ -258,28 +261,34 @@ Route::middleware('auth')->group(function () {
 
     }); // end module:patients (clinical context)
 
-    /* ── Appointments ── */
-    Route::middleware('module:appointments')->prefix('appointments')->name('appointments.')->group(function () {
-        Route::get('/today',                    [AppointmentController::class, 'today'])->name('today');
-        Route::get('/',                         [AppointmentController::class, 'index'])->name('index');
-        Route::get('/create',                   [AppointmentController::class, 'create'])->name('create');
-        Route::post('/',                        [AppointmentController::class, 'store'])->name('store');
-        Route::get('/queue/today',              [AppointmentController::class, 'todayQueue'])->name('queue.today');
-        Route::get('/status-counts',            [AppointmentController::class, 'statusCounts'])->name('status.counts');
-        Route::get('/check-conflict',           [AppointmentController::class, 'checkConflict'])->name('check.conflict');
-        Route::post('/block-slot',             [AppointmentController::class, 'storeBlockedSlot'])->name('block.slot');
-        Route::get('/blocked-slots',           [AppointmentController::class, 'indexBlockedSlots'])->name('blocked.slots');
-        Route::get('/{appointment}',            [AppointmentController::class, 'show'])->name('show');
-        Route::get('/{appointment}/quick',      [AppointmentController::class, 'quickView'])->name('quick');
-        Route::get('/{appointment}/edit',       [AppointmentController::class, 'edit'])->name('edit');
-        Route::patch('/{appointment}',          [AppointmentController::class, 'update'])->name('update');
-        Route::delete('/{appointment}',         [AppointmentController::class, 'destroy'])->name('destroy');
-        Route::patch('/{appointment}/status',    [AppointmentController::class, 'updateStatus'])->name('updateStatus');
-        Route::patch('/{appointment}/cancel',    [AppointmentController::class, 'cancelWithReason'])->name('cancel');
-        Route::patch('/{appointment}/revert',    [AppointmentController::class, 'revertStatus'])->name('revert');
-        Route::patch('/{appointment}/operatory', [AppointmentController::class, 'assignOperatory'])->name('assignOperatory');
-        Route::patch('/{appointment}/hide',       [AppointmentController::class, 'hideFromCalendar'])->name('hide');
-        Route::patch('/{appointment}/reschedule', [AppointmentController::class, 'reschedule'])->name('reschedule');
+    /* ── Appointments ──
+     | Per-action authorization (Slice 3): reads require module:appointments
+     | (view), writes require module:appointments,edit, delete requires
+     | module:appointments,delete. Gating moved from the group to each route so
+     | each action is checked independently (an edit permission no longer
+     | rides in on a view grant). Route order is unchanged.
+     */
+    Route::prefix('appointments')->name('appointments.')->group(function () {
+        Route::get('/today',                    [AppointmentController::class, 'today'])->name('today')->middleware('module:appointments');
+        Route::get('/',                         [AppointmentController::class, 'index'])->name('index')->middleware('module:appointments');
+        Route::get('/create',                   [AppointmentController::class, 'create'])->name('create')->middleware('module:appointments');
+        Route::post('/',                        [AppointmentController::class, 'store'])->name('store')->middleware('module:appointments,edit');
+        Route::get('/queue/today',              [AppointmentController::class, 'todayQueue'])->name('queue.today')->middleware('module:appointments');
+        Route::get('/status-counts',            [AppointmentController::class, 'statusCounts'])->name('status.counts')->middleware('module:appointments');
+        Route::get('/check-conflict',           [AppointmentController::class, 'checkConflict'])->name('check.conflict')->middleware('module:appointments');
+        Route::post('/block-slot',             [AppointmentController::class, 'storeBlockedSlot'])->name('block.slot')->middleware('module:appointments,edit');
+        Route::get('/blocked-slots',           [AppointmentController::class, 'indexBlockedSlots'])->name('blocked.slots')->middleware('module:appointments');
+        Route::get('/{appointment}',            [AppointmentController::class, 'show'])->name('show')->middleware('module:appointments');
+        Route::get('/{appointment}/quick',      [AppointmentController::class, 'quickView'])->name('quick')->middleware('module:appointments');
+        Route::get('/{appointment}/edit',       [AppointmentController::class, 'edit'])->name('edit')->middleware('module:appointments');
+        Route::patch('/{appointment}',          [AppointmentController::class, 'update'])->name('update')->middleware('module:appointments,edit');
+        Route::delete('/{appointment}',         [AppointmentController::class, 'destroy'])->name('destroy')->middleware('module:appointments,delete');
+        Route::patch('/{appointment}/status',    [AppointmentController::class, 'updateStatus'])->name('updateStatus')->middleware('module:appointments,edit');
+        Route::patch('/{appointment}/cancel',    [AppointmentController::class, 'cancelWithReason'])->name('cancel')->middleware('module:appointments,edit');
+        Route::patch('/{appointment}/revert',    [AppointmentController::class, 'revertStatus'])->name('revert')->middleware('module:appointments,edit');
+        Route::patch('/{appointment}/operatory', [AppointmentController::class, 'assignOperatory'])->name('assignOperatory')->middleware('module:appointments,edit');
+        Route::patch('/{appointment}/hide',       [AppointmentController::class, 'hideFromCalendar'])->name('hide')->middleware('module:appointments,edit');
+        Route::patch('/{appointment}/reschedule', [AppointmentController::class, 'reschedule'])->name('reschedule')->middleware('module:appointments,edit');
     });
 
 

@@ -104,7 +104,7 @@ class RiskSignalCalculator
             return 0.0;
         }
 
-        $missed = $recent->filter(fn ($status) => in_array($status, ['no_show', 'cancelled'], true))->count();
+        $missed = $recent->filter(fn ($status) => in_array($status, \App\Enums\AppointmentStatus::terminalValues(), true))->count();
 
         return min(1.0, $missed / $recent->count());
     }

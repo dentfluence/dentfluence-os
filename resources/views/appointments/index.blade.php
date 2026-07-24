@@ -1107,7 +1107,7 @@ window.__APPT_DATA = {
                                                 @click.stop="confirmCancel(apt.id)">✕</button>
                                     </template>
                                     <button class="q-action-btn q-btn-wa"
-                                            @click.stop="waContact(apt.patient_phone)"
+                                            @click.stop="waContact(apt)"
                                             x-show="apt.patient_phone">
                                         WA
                                     </button>
@@ -1384,15 +1384,9 @@ const TREAT_FILLS = {
     default:      '#f8fafc',
 };
 
-const STATUS_META = {
-    scheduled: { label: 'Scheduled',   color: '#2563eb', bg: '#eff6ff' },
-    checkin:   { label: 'Checked In',  color: '#92400e', bg: '#fef3c7' },
-    in_chair:  { label: 'In Chair',    color: '#5b21b6', bg: '#ede9fe' },
-    done:      { label: 'Completed',   color: '#14532d', bg: '#dcfce7' },
-    cancelled: { label: 'Cancelled',   color: '#991b1b', bg: '#fee2e2' },
-    no_show:   { label: 'No Show',     color: '#374151', bg: '#f1f5f9' },
-    checkout:  { label: 'Checked Out', color: '#14532d', bg: '#dcfce7' },
-};
+// Single source of truth: App\Enums\AppointmentStatus::calendarMeta().
+// Same label/colour data as before — no longer hard-coded here.
+const STATUS_META = @json(\App\Enums\AppointmentStatus::calendarMeta());
 
 // Map doctor id → color index
 const doctorColorMap = {};
@@ -1539,8 +1533,10 @@ function initCalendar(appointments) {
 window.addEventListener('df:slot-blocked', function() {
     if (!calendar) return;
     const view  = calendar.view;
-    const start = view.activeStart.toISOString().split('T')[0];
-    const end   = view.activeEnd.toISOString().split('T')[0];
+    // en-CA gives LOCAL YYYY-MM-DD; toISOString() is UTC and shifts the date
+    // back a day for IST (UTC+5:30) local-midnight boundaries.
+    const start = view.activeStart.toLocaleDateString('en-CA');
+    const end   = view.activeEnd.toLocaleDateString('en-CA');
     fetchAndRenderBlockedSlots(start, end);
 });
 
@@ -1956,7 +1952,7 @@ function showQuickView(apt, event) {
     if (apt.status === 'scheduled') makeBtn('✓ Check In','#92400e','#fef3c7',() => { hideQuickView(); window._apptApp.checkInWithOperatory(apt,'checkin'); });
     if (apt.status === 'checkin')   makeBtn('In Chair','#5b21b6','#ede9fe',() => { hideQuickView(); window._apptApp.checkInWithOperatory(apt,'in_chair'); });
     if (apt.status === 'in_chair')  makeBtn('✓ Done','#14532d','#dcfce7',() => { window._apptApp.updateStatus(apt.id,'done'); hideQuickView(); });
-    if (apt.patient_phone) makeBtn('WA','#15803d','#dcfce7',() => window._apptApp.waContact(apt.patient_phone));
+    if (apt.patient_phone) makeBtn('WA','#15803d','#dcfce7',() => window._apptApp.waContact(apt));
 
     // Position — make visible off-screen first to measure real height
     qvc.style.visibility = 'hidden';
@@ -2180,9 +2176,10 @@ function appointmentApp() {
             // Re-render blocked slots
             if (blockedSlotSource) {
                 const v = calendar.view;
+                // Local date (en-CA) — toISOString() is UTC and shifts a day in IST.
                 fetchAndRenderBlockedSlots(
-                    v.activeStart.toISOString().split('T')[0],
-                    v.activeEnd.toISOString().split('T')[0]
+                    v.activeStart.toLocaleDateString('en-CA'),
+                    v.activeEnd.toLocaleDateString('en-CA')
                 );
             }
         },
@@ -2232,11 +2229,47 @@ function appointmentApp() {
             }
         },
 
-        waContact(phone) {
+        // Appointment reminder via the single consent-gated WhatsApp endpoint.
+        // Accepts the full apt object so the message template can include the
+        // patient name, date, time and doctor. Backward-compatible: a bare phone
+        // string still works (falls back to a plain reminder with no details).
+        async waContact(apt) {
+            const isObj = apt && typeof apt === 'object';
+            const phone = isObj ? apt.patient_phone : apt;
             if (!phone) return;
-            const clean = phone.replace(/\D/g, '');
-            const num   = clean.startsWith('91') ? clean : '91' + clean;
-            window.open(`https://wa.me/${num}`, '_blank');
+
+            const token = document.querySelector('meta[name="csrf-token"]')?.content;
+            const payload = {
+                context:    'appointment_reminder',
+                patient_id: isObj ? (apt.patient_id ?? null) : null,
+                phone:      phone,
+                params:     isObj ? {
+                    patient: apt.patient_name || 'there',
+                    date:    apt.appointment_date_human || apt.appointment_date || '',
+                    time:    apt.appointment_time || '',
+                    doctor:  apt.doctor_name || '',
+                } : {},
+            };
+
+            try {
+                const res  = await fetch(@js(route('communication.whatsapp.link')), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': token,
+                    },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (res.ok && data.success && data.url) {
+                    window.open(data.url, '_blank', 'noopener');
+                } else {
+                    alert(data.message || 'Could not open WhatsApp for this patient.');
+                }
+            } catch (e) {
+                alert('Could not reach WhatsApp send. Please try again.');
+            }
         },
 
         openOperatoryPicker(apt) {

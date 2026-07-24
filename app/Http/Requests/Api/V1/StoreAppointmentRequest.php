@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Api\V1;
 
 use App\Http\Requests\Api\ApiFormRequest;
+use App\Services\AppointmentService;
 
 /**
  * StoreAppointmentRequest
@@ -19,8 +20,10 @@ class StoreAppointmentRequest extends ApiFormRequest
             'doctor_id'             => ['required', 'integer', 'exists:users,id'],
             'appointment_date'      => ['required', 'date'],
             'appointment_time'      => ['required', 'string', 'max:8'],
-            'duration_minutes'      => ['nullable', 'integer', 'min:5', 'max:480'],
-            'type'                  => ['nullable', 'in:consultation,treatment'],
+            // Canonical duration + type rules (Slice 6) — shared with the web so
+            // the API accepts the same bounds and the same types (incl. follow-up).
+            'duration_minutes'      => AppointmentService::durationRule(),
+            'type'                  => ['nullable', AppointmentService::typeRule()],
             'treatment_category_id' => ['nullable', 'integer', 'exists:treatment_categories,id'],
             'treatment_id'          => ['nullable', 'integer', 'exists:treatments,id'],
             'operatory_id'          => ['nullable', 'integer', 'exists:operatories,id'],

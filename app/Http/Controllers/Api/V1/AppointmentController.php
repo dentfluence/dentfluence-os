@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\AppointmentStatus;
 use App\Http\Controllers\Api\ApiController;
 use App\Http\Requests\Api\V1\StoreAppointmentRequest;
 use App\Http\Requests\Api\V1\WalkInRequest;
@@ -108,7 +109,7 @@ class AppointmentController extends ApiController
         $model = $this->findInBranch($request, $appointment);
 
         $data = $request->validate([
-            'status' => ['required', 'in:scheduled,checkin,in_chair,checkout,done,cancelled,no_show'],
+            'status' => ['required', AppointmentStatus::validationRule()],
         ]);
 
         $updated = $this->appointments->updateStatus($model, $data['status'], $request->user());
@@ -149,7 +150,7 @@ class AppointmentController extends ApiController
         $data = $request->validate([
             'appointment_date' => ['required', 'date'],
             'appointment_time' => ['required', 'date_format:H:i'],
-            'duration_minutes' => ['nullable', 'integer', 'min:10', 'max:480'],
+            'duration_minutes' => AppointmentService::durationRule(),
             'allow_overlap'    => ['nullable', 'boolean'],
         ]);
 
@@ -163,7 +164,7 @@ class AppointmentController extends ApiController
     {
         $model = $this->findInBranch($request, $appointment);
 
-        $this->appointments->delete($model);
+        $this->appointments->delete($model, $request->user());
 
         return $this->success(null, 'Appointment deleted.');
     }

@@ -87,7 +87,7 @@ class LabCaseObserver
         if ($newStatus === 'final_received' && $case->patient_id) {
             $hasUpcomingAppointment = Appointment::where('patient_id', $case->patient_id)
                 ->whereDate('appointment_date', '>=', now()->toDateString())
-                ->whereNotIn('status', ['cancelled', 'no_show'])
+                ->whereNotIn('status', \App\Enums\AppointmentStatus::terminalValues())
                 ->exists();
 
             $patient = Patient::find($case->patient_id);

@@ -6,27 +6,27 @@ use App\Models\Appointment;
 use App\Models\Patient;
 use App\Models\Task;
 use App\Models\User;
-use App\Services\Relationship\AppointmentReminderEngine;
-use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * CHARACTERIZATION TEST — pins the CURRENT behaviour of AppointmentReminderEngine
- * so Phase 2 (Automation Engine) cannot change it by accident. These assertions
- * describe how the engine behaves TODAY. Safety net, not a target spec.
+ * Appointment reminder generation — canonical behaviour.
  *
- * ⚠️ KNOWN LATENT BUG PINNED HERE (discovered 2026-07-02, Sprint 1):
- * AppointmentReminderEngine::generateReminders() hardcodes `created_by => null`
- * when creating the "Reminder call" task, but `tasks.created_by` is NOT NULL with
- * an FK to users (see 2025_01_01_000001_create_tasks_table). So for a real
- * appointment tomorrow the task INSERT throws a QueryException — the engine
- * currently cannot create reminder tasks. The "cancelled" path is safe only
- * because it returns before the insert.
+ * ⚠️ SLICE 8 CHANGE (approved defect fix): this file previously PINNED a latent
+ * bug — the legacy AppointmentReminderEngine hardcoded `created_by => null`
+ * (tasks.created_by is NOT NULL), so it THREW and created nothing. The original
+ * docblock explicitly said: "When Phase 2 fixes this … flip test_reminder_task_
+ * creation_* from expecting a throw to expecting a successfully-created,
+ * deduplicated task."
  *
- * When Phase 2 fixes this (system tasks need a system actor / nullable creator),
- * flip test_reminder_task_creation_* below from expecting a throw to expecting
- * a successfully-created, deduplicated task. See docs/phase-2/automation-inventory.md §4.
+ * Slice 8 is that fix. The canonical producer is now ReminderAutomationRunner
+ * (valid created_by + branch_id), run unconditionally by the
+ * `relationship:appointment-reminders` command. These tests now characterise the
+ * FIXED behaviour via that command.
+ *
+ *   OLD → engine threw QueryException, 0 tasks persisted.
+ *   NEW → command creates exactly one valid, deduplicated reminder task.
+ *   WHY → the reminder defect (R1) is the approved target of Slice 8.
  */
 class AppointmentReminderCharacterizationTest extends TestCase
 {
@@ -56,42 +56,34 @@ class AppointmentReminderCharacterizationTest extends TestCase
         return [$doctor, $patient, $appt];
     }
 
-    /**
-     * CURRENT behaviour: with a real appointment tomorrow the engine throws when
-     * it tries to insert a task with a null created_by. Pins the latent bug so a
-     * future fix is a deliberate, visible change to this test.
-     */
-    public function test_reminder_task_creation_currently_throws_on_null_created_by(): void
+    /** NEW: reminder generation now creates a valid task (no throw). */
+    public function test_reminder_generation_creates_a_valid_task(): void
     {
-        $this->makeTomorrowAppointment();
+        [, $patient] = $this->makeTomorrowAppointment();
 
-        $this->expectException(QueryException::class);
+        $this->artisan('relationship:appointment-reminders')->assertSuccessful();
 
-        (new AppointmentReminderEngine())->generateReminders();
+        $task = Task::where('patient_id', $patient->id)->where('category', 'call')->first();
+        $this->assertNotNull($task, 'a reminder task is now created');
+        $this->assertNotNull($task->created_by, 'created_by is a valid actor, never null');
     }
 
-    /** No reminder task is ever persisted under today's behaviour. */
-    public function test_no_reminder_task_is_persisted_today(): void
+    /** NEW: exactly one reminder task is persisted (was 0 under the old throw). */
+    public function test_reminder_task_is_persisted_exactly_once(): void
     {
         $this->makeTomorrowAppointment('scheduled', '9000000202');
 
-        try {
-            (new AppointmentReminderEngine())->generateReminders();
-        } catch (QueryException) {
-            // expected today — see class docblock
-        }
+        $this->artisan('relationship:appointment-reminders')->assertSuccessful();
 
-        $this->assertSame(0, Task::where('category', 'call')->count());
+        $this->assertSame(1, Task::where('category', 'call')->count());
     }
 
-    /** A cancelled appointment tomorrow short-circuits before any insert — no throw, no task. */
+    /** UNCHANGED: a cancelled appointment tomorrow generates no reminder. */
     public function test_cancelled_appointment_gets_no_reminder(): void
     {
         [, $patient] = $this->makeTomorrowAppointment('cancelled', '9000000203');
 
-        $result = (new AppointmentReminderEngine())->generateReminders();
-
-        $this->assertSame(0, $result['created'], 'Cancelled appointments must not generate reminders.');
+        $this->artisan('relationship:appointment-reminders')->assertSuccessful();
 
         $this->assertDatabaseMissing('tasks', [
             'patient_id' => $patient->id,

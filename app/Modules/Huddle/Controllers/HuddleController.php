@@ -103,7 +103,7 @@ class HuddleController extends Controller
         $yesterdayAppts = DB::table('appointments')
             ->where('branch_id', $branchId)
             ->whereBetween('appointment_date', $flowRange)
-            ->whereIn('status', ['done', 'checkout'])
+            ->whereIn('status', \App\Enums\AppointmentStatus::completedValues())
             ->select('treatment_id')
             ->get();
 
@@ -172,7 +172,7 @@ class HuddleController extends Controller
 
         $yesterdaysAppointments = $yesterdaysAppointments
             ->map(function ($row) use ($consByAppt, $consByPat, $tvByAppt, $tvByPat) {
-                $skippedStatuses = ['cancelled', 'no_show'];
+                $skippedStatuses = \App\Enums\AppointmentStatus::terminalValues();
 
                 $hasConsult = $row->consultation_id !== null
                     || isset($consByAppt[$row->id])
@@ -202,7 +202,7 @@ class HuddleController extends Controller
                 ->whereIn('appointments.patient_id', $yesterdayPatientIds)
                 ->where('appointments.branch_id', $branchId)
                 ->whereDate('appointments.appointment_date', '>', $yesterday->toDateString())
-                ->whereNotIn('appointments.status', ['cancelled', 'no_show'])
+                ->whereNotIn('appointments.status', \App\Enums\AppointmentStatus::terminalValues())
                 ->select([
                     'appointments.patient_id',
                     'appointments.appointment_date',
@@ -507,7 +507,7 @@ class HuddleController extends Controller
             ->leftJoin('users as dr', 'dr.id', '=', 'appointments.doctor_id')
             ->where('appointments.branch_id', $branchId)
             ->whereDate('appointments.appointment_date', $today->toDateString())
-            ->whereNotIn('appointments.status', ['cancelled', 'no_show'])
+            ->whereNotIn('appointments.status', \App\Enums\AppointmentStatus::terminalValues())
             ->select([
                 'appointments.id',
                 'appointments.patient_id',
@@ -541,7 +541,7 @@ class HuddleController extends Controller
             ->leftJoin('treatment_types', 'treatment_types.id', '=', 'appointments.treatment_id')
             ->where('appointments.branch_id', $branchId)
             ->whereBetween('appointments.appointment_date', $flowRange)
-            ->whereIn('appointments.status', ['done', 'checkout', 'completed'])
+            ->whereIn('appointments.status', \App\Enums\AppointmentStatus::completedValues())
             // skip if a FollowUp already exists for this patient+trigger
             ->whereNotExists(function ($q) use ($flowStart) {
                 $q->from('follow_ups')
@@ -849,7 +849,7 @@ class HuddleController extends Controller
             ->whereBetween('appointment_date', [$fromDate, $toDate]);
 
         $apptTotal     = (clone $apptBase)->count();
-        $apptDone      = (clone $apptBase)->whereIn('status', ['done', 'checkout', 'completed'])->count();
+        $apptDone      = (clone $apptBase)->whereIn('status', \App\Enums\AppointmentStatus::completedValues())->count();
         $apptCancelled = (clone $apptBase)->where('status', 'cancelled')->count();
         $apptNoShow    = (clone $apptBase)->where('status', 'no_show')->count();
 
@@ -861,7 +861,7 @@ class HuddleController extends Controller
             ->where('branch_id', $branchId)
             ->whereBetween('appointment_date', [$prevFromDate, $prevToDate]);
         $prevApptTotal     = (clone $prevApptBase)->count();
-        $prevApptDone      = (clone $prevApptBase)->whereIn('status', ['done', 'checkout', 'completed'])->count();
+        $prevApptDone      = (clone $prevApptBase)->whereIn('status', \App\Enums\AppointmentStatus::completedValues())->count();
         $prevApptCancelled = (clone $prevApptBase)->where('status', 'cancelled')->count();
         $prevApptNoShow    = (clone $prevApptBase)->where('status', 'no_show')->count();
 

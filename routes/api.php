@@ -135,6 +135,9 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             // replaces the mobile deep-link that bypassed the DPDP gate.
             Route::post('/patients/{patient}/whatsapp/send',   [\App\Http\Controllers\Api\V1\WhatsappController::class, 'send']);
             Route::get('/patients/{patient}/whatsapp/thread',  [\App\Http\Controllers\Api\V1\WhatsappController::class, 'thread']);
+            // Interim click-to-chat (wa.me) link builder — parity with the web
+            // communication.whatsapp.link endpoint; app opens the URL via url_launcher.
+            Route::post('/patients/{patient}/whatsapp/link',   [\App\Http\Controllers\Api\V1\WhatsappController::class, 'link']);
         });
 
         // ── In-app notifications (mobile face of the web bell/page) ──────────
@@ -507,26 +510,31 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::get('/appointments',                [AppointmentController::class, 'index']);
         Route::get('/appointments/{appointment}',  [AppointmentController::class, 'show']);
 
+        // Slice 3: writes gated by the appointments module EDIT permission
+        // (via the existing EnsureApiRole `module:` mode → User::canAccess),
+        // the same table the web middleware uses. Replaces the admin,front_desk
+        // role list so a Doctor (who holds appointments edit) is no longer
+        // locked out of the mobile app. Admins still pass unconditionally.
         Route::post('/appointments', [AppointmentController::class, 'store'])
-            ->middleware('api.role:admin,front_desk');
+            ->middleware('api.role:module:appointments,edit');
 
         Route::post('/appointments/walk-in', [AppointmentController::class, 'walkIn'])
-            ->middleware('api.role:admin,front_desk');
+            ->middleware('api.role:module:appointments,edit');
 
         Route::post('/appointments/block-slot', [AppointmentController::class, 'blockSlot'])
-            ->middleware('api.role:admin,front_desk');
+            ->middleware('api.role:module:appointments,edit');
 
         Route::patch('/appointments/{appointment}/status', [AppointmentController::class, 'updateStatus'])
-            ->middleware('api.role:admin,front_desk');
+            ->middleware('api.role:module:appointments,edit');
 
         Route::patch('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel'])
-            ->middleware('api.role:admin,front_desk');
+            ->middleware('api.role:module:appointments,edit');
 
         Route::patch('/appointments/{appointment}/reschedule', [AppointmentController::class, 'reschedule'])
-            ->middleware('api.role:admin,front_desk');
+            ->middleware('api.role:module:appointments,edit');
 
         Route::delete('/appointments/{appointment}', [AppointmentController::class, 'destroy'])
-            ->middleware('api.role:admin,front_desk');
+            ->middleware('api.role:module:appointments,delete');
 
         /*
          | -------- Daily Huddle (mobile morning board + task layer) --------

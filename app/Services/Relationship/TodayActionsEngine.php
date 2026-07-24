@@ -463,7 +463,7 @@ class TodayActionsEngine
         return Appointment::with('patient:id,name,phone,relationship_id')
             ->whereDate('appointment_date', '<=', $cutoff)
             ->whereDate('appointment_date', '>=', Carbon::today()->toDateString())
-            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->whereNotIn('status', \App\Enums\AppointmentStatus::terminalValues())
             ->whereNotIn('id', $this->dismissedIds('appointment_reminders', Appointment::class))
             ->orderBy('appointment_date')
             ->limit($this->limit())
@@ -667,7 +667,7 @@ class TodayActionsEngine
 
         // Patient IDs who have an upcoming scheduled appointment (exclude them)
         $patientsWithAppt = Appointment::whereDate('appointment_date', '>=', Carbon::today())
-            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->whereNotIn('status', \App\Enums\AppointmentStatus::terminalValues())
             ->pluck('patient_id')
             ->unique()
             ->toArray();
@@ -988,7 +988,7 @@ class TodayActionsEngine
     {
         return Appointment::with('patient:id,name,phone,relationship_id')
             ->whereDate('appointment_date', $date)
-            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->whereNotIn('status', \App\Enums\AppointmentStatus::terminalValues())
             ->limit($this->limit())
             ->get()
             ->map(fn (Appointment $appt) => [

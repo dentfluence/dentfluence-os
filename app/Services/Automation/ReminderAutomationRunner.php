@@ -43,7 +43,7 @@ class ReminderAutomationRunner
 
         Appointment::query()
             ->whereDate('appointment_date', $tomorrow)
-            ->whereNotIn('status', ['cancelled', 'no_show', 'noshow'])
+            ->whereNotIn('status', \App\Enums\AppointmentStatus::terminalValues())
             ->with('patient')
             ->chunk(100, function ($appointments) use (&$created, &$skipped, $createdBy) {
                 foreach ($appointments as $appointment) {
@@ -71,7 +71,8 @@ class ReminderAutomationRunner
                         'due_date'    => today(),
                         'patient_id'  => $patient->id,
                         'created_by'  => $createdBy, // ← the fix: valid system actor, never null
-                        'branch_id'   => $appointment->branch_id ?? $patient->branch_id ?? 1,
+                        'branch_id'   => $appointment->branch_id, // NOT NULL on appointments — correct branch, no hardcode
+
                         'description' => "Auto-reminder. Appointment tomorrow{$appointmentTime}. " .
                                          "Patient: {$patient->name} | Phone: {$patient->phone}. " .
                                          "Appointment ID: #{$appointment->id}.",
@@ -103,7 +104,7 @@ class ReminderAutomationRunner
 
         Appointment::query()
             ->whereDate('appointment_date', $tomorrow)
-            ->whereNotIn('status', ['cancelled', 'no_show', 'noshow'])
+            ->whereNotIn('status', \App\Enums\AppointmentStatus::terminalValues())
             ->with('patient')
             ->chunk(100, function ($appointments) use (&$would) {
                 foreach ($appointments as $appointment) {

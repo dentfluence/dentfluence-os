@@ -4,6 +4,7 @@ namespace App\Models;
  
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Enums\AppointmentStatus;
 use App\Traits\Auditable;
 use Carbon\Carbon;
 
@@ -41,11 +42,11 @@ class Appointment extends Model
         'checked_in_at',
         'in_chair_at',
         'completed_at',
-        'queue_position',
-        'estimated_wait_minutes',
         'chair_number',
         // Operatory layer (Phase: Operatory)
         'operatory_id',
+        // Soft-hide a cancelled appointment from the calendar day sheet
+        'hidden_from_calendar',
     ];
  
     protected $casts = [
@@ -55,6 +56,7 @@ class Appointment extends Model
         'in_chair_at'       => 'datetime',
         'completed_at'      => 'datetime',
         'amount_to_collect' => 'decimal:2',
+        'hidden_from_calendar' => 'boolean',
     ];
  
     // ── Relationships ─────────────────────────────────────────────
@@ -83,12 +85,45 @@ class Appointment extends Model
     {
         return $query->where('doctor_id', $doctorId);
     }
+
+    /**
+     * Live/active appointments — everything except the terminal
+     * (cancelled / no-show) statuses. Canonical replacement for the
+     * `whereNotIn('status', ['cancelled','no_show'])` that was copy-pasted
+     * across the app.
+     */
+    public function scopeActive($query)
+    {
+        return $query->whereNotIn('status', AppointmentStatus::terminalValues());
+    }
+
+    /** Appointments on a specific date (Y-m-d string or Carbon). */
+    public function scopeForDate($query, $date)
+    {
+        return $query->whereDate('appointment_date', $date);
+    }
+
+    /** Appointments within an inclusive date range. */
+    public function scopeInDateRange($query, $from, $to)
+    {
+        return $query->whereBetween('appointment_date', [$from, $to]);
+    }
+
+    /**
+     * Appointments the calendar shows — a cancelled appointment hidden via the
+     * calendar's 3-dot "hide" action is excluded. Canonical replacement for the
+     * copy-pasted `where('hidden_from_calendar', false)`.
+     */
+    public function scopeVisibleOnCalendar($query)
+    {
+        return $query->where('hidden_from_calendar', false);
+    }
  
     // ── Helpers ───────────────────────────────────────────────────
  
     public function isActive(): bool
     {
-        return in_array($this->status, ['scheduled', 'checkin', 'in_chair']);
+        return in_array($this->status, AppointmentStatus::inProgressValues(), true);
     }
  
     public function getEndTimeAttribute(): string

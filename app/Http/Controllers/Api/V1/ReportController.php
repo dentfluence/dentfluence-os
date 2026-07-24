@@ -47,15 +47,15 @@ class ReportController extends ApiController
         // ── Appointments ──────────────────────────────────────────────────────
         $appt = fn () => Appointment::where('branch_id', $bid);
         $apptToday = $appt()->whereDate('appointment_date', $today)
-            ->whereNotIn('status', ['cancelled', 'no_show'])->count();
+            ->whereNotIn('status', \App\Enums\AppointmentStatus::terminalValues())->count();
         $apptWeek = $appt()
             ->whereBetween('appointment_date', [$weekStart, $weekEnd])
-            ->whereNotIn('status', ['cancelled', 'no_show'])->count();
+            ->whereNotIn('status', \App\Enums\AppointmentStatus::terminalValues())->count();
         // Appointments' terminal status is 'done' — 'completed' does not exist
         // on the appointments enum and always counted 0 here.
         $apptCompletedMonth = $appt()->where('status', 'done')
             ->whereDate('appointment_date', '>=', $monthStart)->count();
-        $apptCancelledMonth = $appt()->whereIn('status', ['cancelled', 'no_show'])
+        $apptCancelledMonth = $appt()->whereIn('status', \App\Enums\AppointmentStatus::terminalValues())
             ->whereDate('appointment_date', '>=', $monthStart)->count();
 
         // ── Finance — shared ReportMetricsService (2026-07-14): same tables
@@ -75,7 +75,7 @@ class ReportController extends ApiController
         // ── Selected-range block + collections series ─────────────────────────
         $rangeAppointments = Appointment::where('branch_id', $bid)
             ->whereBetween('appointment_date', [$from, $to])
-            ->whereNotIn('status', ['cancelled', 'no_show'])->count();
+            ->whereNotIn('status', \App\Enums\AppointmentStatus::terminalValues())->count();
 
         $range = [
             'from'               => $from->toDateString(),

@@ -86,6 +86,53 @@ class AppointmentActivityLogger
         $this->log($appointment, 'appointment.completed', $actor, $who ? "Visit completed by {$who}" : 'Visit completed');
     }
 
+    /**
+     * Appointment moved to a new date/time (drag-drop on the calendar or the
+     * mobile reschedule sheet). Captures the old slot so the Timeline / audit /
+     * Copilot can show what changed. (Slice 7 — previously emitted nothing.)
+     */
+    public function rescheduled(Appointment $appointment, ?User $actor, string $fromDate, string $fromTime): void
+    {
+        $appointment->loadMissing('doctor');
+        $to   = $this->when($appointment);
+        $from = trim($fromDate . ' ' . $fromTime);
+
+        $this->log($appointment, 'appointment.rescheduled', $actor, "Rescheduled from {$from} to {$to}", [
+            'doctor_id' => $appointment->doctor_id,
+            'from_date' => $fromDate,
+            'from_time' => $fromTime,
+            'to_date'   => (string) $appointment->appointment_date,
+            'to_time'   => $appointment->appointment_time,
+        ]);
+    }
+
+    /**
+     * The calendar "undo" — status put back to what it was. (Slice 7 — previously
+     * emitted nothing.)
+     */
+    public function reverted(Appointment $appointment, ?User $actor, string $fromStatus, string $toStatus): void
+    {
+        $who = $actor?->name ?? 'Staff';
+        $this->log($appointment, 'appointment.reverted', $actor, "{$who} reverted status from {$fromStatus} to {$toStatus}", [
+            'from_status' => $fromStatus,
+            'to_status'   => $toStatus,
+        ]);
+    }
+
+    /**
+     * Appointment removed from the calendar (soft delete). (Slice 7 — previously
+     * emitted nothing; the audit_logs trail via Auditable is a separate concern.)
+     */
+    public function deleted(Appointment $appointment, ?User $actor): void
+    {
+        $who = $actor?->name ?? 'System';
+        $this->log($appointment, 'appointment.deleted', $actor, "Appointment deleted by {$who}", [
+            'doctor_id'        => $appointment->doctor_id,
+            'appointment_date' => (string) $appointment->appointment_date,
+            'appointment_time' => $appointment->appointment_time,
+        ]);
+    }
+
     private function when(Appointment $appointment): string
     {
         $date = $appointment->appointment_date instanceof \Carbon\Carbon

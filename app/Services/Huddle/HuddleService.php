@@ -78,7 +78,7 @@ class HuddleService
 
     protected function scheduleSection(Collection $appts, Carbon $day): array
     {
-        $active = $appts->whereNotIn('status', ['cancelled', 'no_show']);
+        $active = $appts->whereNotIn('status', \App\Enums\AppointmentStatus::terminalValues());
 
         $lines = [];
         if ($active->isEmpty()) {
@@ -263,7 +263,7 @@ class HuddleService
 
         $appts = Appointment::whereBetween('appointment_date', [$start->toDateString(), $end->copy()->endOfDay()])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->whereIn('status', ['no_show', 'cancelled'])
+            ->whereIn('status', \App\Enums\AppointmentStatus::terminalValues())
             ->with('patient:id,name')->get();
 
         if ($appts->isEmpty()) {

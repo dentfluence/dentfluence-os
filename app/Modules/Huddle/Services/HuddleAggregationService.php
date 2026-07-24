@@ -45,7 +45,7 @@ class HuddleAggregationService
             inChair:           $stats['appointments']['in_chair'],  // FIX #4
             done:              $stats['appointments']['done'],       // FIX #4
             cancelled:         $stats['appointments']['cancelled'],
-            noShow:            0,
+            noShow:            $stats['appointments']['no_show'],
             pendingTasks:      $stats['tasks']['open'],
             overdueTasks:      $stats['tasks']['overdue'],
             escalatedTasks:    $stats['tasks']['high_priority'],
@@ -189,7 +189,8 @@ class HuddleAggregationService
                 SUM(CASE WHEN status = 'checkin'   THEN 1 ELSE 0 END) as arrived,
                 SUM(CASE WHEN status = 'in_chair'  THEN 1 ELSE 0 END) as in_chair,
                 SUM(CASE WHEN status = 'done'      THEN 1 ELSE 0 END) as done,
-                SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled
+                SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled,
+                SUM(CASE WHEN status = 'no_show'   THEN 1 ELSE 0 END) as no_show
             ")
             ->first();
 
@@ -219,6 +220,7 @@ class HuddleAggregationService
                 'in_chair'  => (int) ($appointmentStats->in_chair  ?? 0),
                 'done'      => (int) ($appointmentStats->done      ?? 0),
                 'cancelled' => (int) ($appointmentStats->cancelled ?? 0),
+                'no_show'   => (int) ($appointmentStats->no_show   ?? 0),
             ],
             'tasks' => [
                 'open'          => (int) ($taskStats->open_tasks    ?? 0),
