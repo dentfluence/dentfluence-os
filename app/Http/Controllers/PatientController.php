@@ -199,26 +199,77 @@ class PatientController extends Controller
             'auditable_id'   => $patient->id,
         ]);
 
-        $data = $this->profileService->loadProfile($patient);
+        // Phase 4, Slice 1 — the eager page loads only the core view-model;
+        // every other tab is fetched lazily through tab() below.
+        $data = $this->profileService->coreProfile($patient);
 
-        // Family & Contacts (Phase 3, Slice 3) — read-only data for the profile section.
-        $family          = app(\App\Services\Patient\FamilyLinkService::class);
-        $activeMembership = $data['activeMembership'] ?? null;
-        $data['familyLinks']          = $family->linksFor($patient);
-        $data['familyGuardians']      = $family->guardiansFor($patient);
-        $data['isMinor']              = $patient->isMinor();
-        $data['householdCount']       = $patient->relationship_id
-            ? Patient::withoutGlobalScope(\App\Models\Scopes\BranchScope::class)
-                ->where('relationship_id', $patient->relationship_id)
-                ->where('id', '!=', $patient->id)
-                ->count()
-            : 0;
-        $data['membershipFamilyName'] = $activeMembership
-            ? ($activeMembership->family_name ?: optional($activeMembership->familyHead)->family_name)
-            : null;
-        $data['canEditFamily']        = (bool) optional(auth()->user())->canAccess('patients', 'edit');
+        // Family & Contacts (Phase 3) — view-model owned by the service since Phase 4.
+        $data += $this->profileService->familyPanel($patient, $data['activeMembership'] ?? null);
 
         return view('patients.show', $data);
+    }
+
+    /**
+     * Lazy tab fragment (Phase 4, Slice 1).
+     *
+     * GET /patients/{patient}/tab/{tab} — returns the rendered HTML for one
+     * profile tab. Fetched by ensureTab() in patients/show.blade.php the
+     * first time a tab is activated, then cached client-side.
+     */
+    public function tab(Patient $patient, string $tab)
+    {
+        abort_unless(in_array($tab, PatientProfileService::LAZY_TABS, true), 404);
+
+        // Same guards as show(): merged records and deleted records have no tabs.
+        if ($patient->merged_into_id) abort(404);
+        if (method_exists($patient, 'trashed') && $patient->trashed()) abort(404);
+
+        $data = $this->profileService->tabData($patient, $tab);
+
+        return view('patients.tabs._fragment', $data + ['tab' => $tab]);
+    }
+
+    /**
+     * Journey Timeline page (Phase 4, Slice 2).
+     *
+     * GET /patients/{patient}/timeline?group=all|clinical|financial|comms|consent|reviews
+     *                                 &before=ISO8601
+     *
+     * Returns JSON: { html, next_cursor, count } — html is the rendered event
+     * list, consumed by the journey-timeline card on the Profile tab.
+     * Data comes exclusively from PatientJourneyService (the canonical
+     * patient-history read model); events the viewer lacks permission for are
+     * already filtered out.
+     */
+    public function timeline(Request $request, Patient $patient, \App\Services\Patient\PatientJourneyService $journey)
+    {
+        if ($patient->merged_into_id) abort(404);
+        if (method_exists($patient, 'trashed') && $patient->trashed()) abort(404);
+
+        $before = null;
+        if ($request->filled('before')) {
+            try {
+                $before = \Carbon\Carbon::parse($request->query('before'));
+            } catch (\Throwable $e) {
+                $before = null;
+            }
+        }
+
+        $page = $journey->for(
+            $patient,
+            $request->user(),
+            (string) $request->query('group', 'all'),
+            $before,
+        );
+
+        return response()->json([
+            'html'        => view('patients.profile.journey-timeline-events', [
+                'events'  => $page['events'],
+                'patient' => $patient,
+            ])->render(),
+            'next_cursor' => $page['next_cursor'],
+            'count'       => $page['events']->count(),
+        ]);
     }
 
     // ── Edit / Update ─────────────────────────────────────────────────────────
@@ -383,7 +434,7 @@ class PatientController extends Controller
                     'meta'       => $meta,
                     // patient_id/phone are also returned as their own keys (not just
                     // folded into `meta`) because the referral picker on the patient
-                    // edit form (edit-patient-drawer.blade.php) reads these directly
+                    // edit form (shared add-patient-modal referral picker) reads these directly
                     // for the selected-patient chip.
                     'patient_id' => $p->patient_id,
                     'phone'      => $p->phone,
