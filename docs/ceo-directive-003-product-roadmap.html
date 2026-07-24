@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CEO Directive #003 — Dentfluence Product Roadmap (LOCKED)</title>
+<style>
+  :root{
+    --plum:#6a0f70; --magenta:#b95cb7; --ink:#1e0a2c; --muted:#6b5a77;
+    --line:rgba(185,92,183,.18); --bg:#faf7fb; --card:#ffffff;
+    --amber:#b8860b; --green:#2e7d32;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:'Inter',-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:860px;margin:0 auto;padding:40px 24px 80px}
+  header.doc{background:linear-gradient(135deg,#4a0a4f,#6a0f70 55%,#b95cb7);
+    color:#fff;border-radius:16px;padding:30px 32px;box-shadow:0 12px 40px rgba(60,10,60,.25)}
+  header.doc .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.85;margin:0 0 8px}
+  header.doc h1{margin:0;font-size:26px;line-height:1.25;font-weight:700}
+  .lockbadge{display:inline-flex;align-items:center;gap:7px;margin-top:14px;
+    background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);
+    padding:6px 13px;border-radius:999px;font-size:12.5px;font-weight:600;letter-spacing:.03em}
+  .meta{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;margin:22px 0 0;
+    background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 20px;font-size:14px}
+  .meta dt{color:var(--muted);font-weight:600}
+  .meta dd{margin:0}
+  h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--magenta);
+    margin:44px 0 10px;font-weight:700}
+  h2.roadmap{font-size:16px;letter-spacing:.06em;color:var(--plum);border-top:1px solid var(--line);
+    padding-top:26px;margin-top:40px}
+  h3{font-size:19px;margin:0 0 4px;color:var(--ink)}
+  p{margin:0 0 12px}
+  .lead{font-size:15.5px}
+  strong{color:var(--plum)}
+  .philosophy{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--magenta);
+    border-radius:12px;padding:18px 22px}
+  .phase{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:22px 24px;margin:16px 0;position:relative;overflow:hidden}
+  .phase::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--plum)}
+  .phase.v15::before{background:#7c4dff}
+  .phase.v2::before{background:#2196c9}
+  .phase.v3::before{background:#e0912f}
+  .phase.v4::before{background:#c0392b}
+  .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:3px 9px;margin-bottom:10px}
+  .obj{font-size:14px;color:var(--muted);margin:0 0 12px}
+  .obj b{color:var(--ink)}
+  ul{margin:8px 0 12px;padding-left:22px}
+  li{margin:4px 0}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 28px}
+  @media(max-width:560px){.cols{grid-template-columns:1fr}}
+  .note{background:#fff8ec;border:1px solid #f0d9a8;border-radius:10px;padding:12px 16px;
+    font-size:13.5px;color:#7a5a10;margin:12px 0}
+  .dod{background:#f3fbf3;border:1px solid #cbe8cb;border-radius:10px;padding:14px 18px;margin:12px 0}
+  .dod .dod-h{font-weight:700;color:var(--green);font-size:13px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 8px}
+  .principles{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 24px}
+  .principles li{margin:6px 0}
+  .lock{background:linear-gradient(135deg,#2a0730,#4a0a4f);color:#fff;border-radius:14px;
+    padding:22px 26px;margin-top:20px}
+  .lock h2{color:#e6b3e4;margin-top:0}
+  .lock strong{color:#f3d6f1}
+  .rule{background:var(--card);border:1px dashed var(--magenta);border-radius:12px;
+    padding:16px 20px;margin-top:24px;font-size:14px;font-style:italic;color:var(--ink)}
+  .rule b{font-style:normal;color:var(--plum)}
+  footer{margin-top:40px;text-align:center;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="doc">
+    <p class="eyebrow">CEO Directive #003</p>
+    <h1>Dentfluence Product Roadmap</h1>
+    <span class="lockbadge">🔒 LOCKED PRODUCT DIRECTION · Effective Immediately</span>
+  </header>
+
+  <dl class="meta">
+    <dt>To</dt><dd>Principal Engineer (Claude)</dd>
+    <dt>From</dt><dd>CEO &amp; CTO</dd>
+    <dt>Status</dt><dd>Locked product direction</dd>
+    <dt>Effective</dt><dd>Immediately</dd>
+  </dl>
+
+  <h2>Purpose</h2>
+  <p class="lead">This document officially locks the product roadmap for Dentfluence. From this point onward, all engineering decisions — refactoring, architecture, UI work, database changes, and technical-debt reduction — must support this roadmap.</p>
+  <p>This roadmap is the product vision and should not be changed or expanded without explicit CEO approval. <strong>The goal is execution excellence, not continuous roadmap expansion.</strong></p>
+
+  <h2>Core Product Philosophy</h2>
+  <div class="philosophy">
+    <p>Dentfluence is <strong>not</strong> being built as another Dental PMS. Dentfluence is being built as the <strong>Operating System for Dental Practices</strong>.</p>
+    <p style="margin:0">Every module must strengthen one integrated operating system rather than becoming an isolated product. Future AI capabilities must <b>consume</b> the existing engines — not replace them.</p>
+  </div>
+
+  <h2 class="roadmap">Locked Roadmap</h2>
+
+  <div class="phase">
+    <span class="tag">Phase 1</span>
+    <h3>Dentfluence OS</h3>
+    <p class="obj"><b>Objective —</b> Deliver a polished, production-ready operating system that Tulip Dental can use daily.</p>
+    <p style="font-size:14px;margin:0 0 6px"><b>Scope —</b> Complete and polish every Phase 1 module already planned. Focus on:</p>
+    <ul class="cols">
+      <li>completing unfinished workflows</li>
+      <li>removing duplicated business logic</li>
+      <li>eliminating architectural red flags</li>
+      <li>enabling mature feature flags</li>
+      <li>improving performance</li>
+      <li>improving usability</li>
+      <li>improving stability</li>
+      <li>ensuring every engine is production-ready</li>
+    </ul>
+    <div class="note">Communication during Phase 1 uses <b>WhatsApp Web only</b>. Meta WhatsApp Cloud API is intentionally excluded until company registration and compliance are complete.</div>
+    <div class="dod">
+      <p class="dod-h">Definition of Done — complete only when</p>
+      <ul style="margin:0">
+        <li>Tulip Dental operates entirely on Dentfluence.</li>
+        <li>Staff can use the system without workarounds.</li>
+        <li>There are no critical production blockers.</li>
+        <li>Existing modules feel polished rather than experimental.</li>
+        <li>Existing engines are ready to support future AI.</li>
+        <li>Product quality takes precedence over adding new modules.</li>
+      </ul>
+    </div>
+    <p style="margin:0;font-size:13.5px;color:var(--muted)"><b>No major new functional modules</b> should be introduced during this phase.</p>
+  </div>
+
+  <div class="phase v15">
+    <span class="tag">Version 1.5</span>
+    <h3>Connected Platform</h3>
+    <p class="obj"><b>Objective —</b> Connect Dentfluence with external services.</p>
+    <ul>
+      <li>Meta WhatsApp Cloud API</li>
+      <li>Google integrations</li>
+      <li>Official authentication</li>
+      <li>Automated Communication Engine</li>
+      <li>Automated Marketing Engine</li>
+      <li>Production messaging infrastructure</li>
+    </ul>
+    <p style="margin:0;font-size:14px">Transforms Dentfluence from standalone software into a <strong>connected platform</strong>.</p>
+  </div>
+
+  <div class="phase v2">
+    <span class="tag">Version 2</span>
+    <h3>Clinical Cloud</h3>
+    <p class="obj"><b>Objective —</b> Create the clinic's secure clinical knowledge repository.</p>
+    <ul class="cols">
+      <li>secure cloud storage</li>
+      <li>images</li>
+      <li>videos</li>
+      <li>clinical documents</li>
+      <li>future CBCT support</li>
+      <li>watermark-controlled downloads</li>
+      <li>permission-based access</li>
+      <li>intelligent search</li>
+      <li>chairside presentation</li>
+      <li>clinical media organization</li>
+    </ul>
+    <p style="margin:0;font-size:14px">Not merely cloud storage — Dentfluence's <strong>Clinical Knowledge Platform</strong>.</p>
+  </div>
+
+  <div class="phase v3">
+    <span class="tag">Version 3 · after V1, V1.5 &amp; V2 are production-ready</span>
+    <h3>Dentfluence Copilot</h3>
+    <p class="obj"><b>Objective —</b> Introduce AI as the primary intelligent interface.</p>
+    <ul class="cols">
+      <li>natural language interaction</li>
+      <li>voice commands</li>
+      <li>workflow orchestration</li>
+      <li>clinical assistance</li>
+      <li>business intelligence</li>
+      <li>chairside support</li>
+      <li>intelligent recommendations</li>
+    </ul>
+    <p style="margin:0;font-size:14px">Copilot must <strong>orchestrate existing engines</strong> rather than duplicating business logic.</p>
+  </div>
+
+  <div class="phase v4">
+    <span class="tag">Version 4</span>
+    <h3>AI Practice Secretary</h3>
+    <p class="obj"><b>Objective —</b> Deliver a continuously operating autonomous practice assistant.</p>
+    <ul class="cols">
+      <li>appointment handling</li>
+      <li>patient communication</li>
+      <li>treatment follow-up</li>
+      <li>recall management</li>
+      <li>reporting</li>
+      <li>administrative coordination</li>
+      <li>routine workflow execution</li>
+      <li>24×7 clinic support</li>
+    </ul>
+    <p style="margin:0;font-size:14px">Dentfluence's transition from an intelligent assistant to an <strong>autonomous operational partner</strong>.</p>
+  </div>
+
+  <h2>Engineering Principles</h2>
+  <div class="principles">
+    <ul style="margin:0">
+      <li><strong>No duplicate implementations of business logic.</strong></li>
+      <li>One canonical implementation for every business capability.</li>
+      <li>Controllers remain transport layers only.</li>
+      <li>Business rules belong in services and engines.</li>
+      <li>Every capability reusable by <b>Web, Mobile, API, Automation, Voice, and future Copilot</b>.</li>
+      <li>Product quality has priority over product breadth.</li>
+      <li>Refactoring should improve future AI readiness without delaying a production-ready Phase 1.</li>
+    </ul>
+  </div>
+
+  <div class="lock">
+    <h2>Decision Lock</h2>
+    <p>This roadmap is <strong>locked</strong>. No additional major product initiatives, modules, or roadmap changes should be proposed unless explicitly requested by the CEO. Engineering should optimize execution against this roadmap rather than expanding it.</p>
+    <p style="margin:0">The success metric is <strong>not</strong> the number of features built — it is delivering the best <strong>AI-ready Dental Operating System</strong> through disciplined execution of this roadmap.</p>
+  </div>
+
+  <div class="rule">
+    <b>Operating rule:</b> When reviewing architecture or proposing work, first identify which roadmap version the work belongs to. If a suggestion belongs to a future version, do not implement it early unless it materially simplifies or strengthens the current version.
+  </div>
+
+  <footer>Dentfluence — CEO Directive #003 · Locked Product Direction</footer>
+</div>
+</body>
+</html>

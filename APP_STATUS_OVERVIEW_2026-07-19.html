@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dentfluence — App Status Overview</title>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171b21; --panel2:#1d222a; --line:#2a313b;
+    --ink:#e7ebf0; --muted:#9aa5b1; --dim:#6b7684;
+    --green:#3ecf8e; --amber:#f0b429; --red:#f0616d; --blue:#5b9bff; --violet:#b98bff;
+    --greenbg:rgba(62,207,142,.12); --amberbg:rgba(240,180,41,.12);
+    --redbg:rgba(240,97,109,.12); --bluebg:rgba(91,155,255,.12); --violetbg:rgba(185,139,255,.12);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 24px 80px}
+  header.top{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:24px}
+  h1{font-size:26px;margin:0 0 6px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:13.5px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px;font-size:12.5px;color:var(--dim)}
+  .meta b{color:var(--ink);font-weight:600}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:22px 0}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .kpi .n{font-size:22px;font-weight:700;letter-spacing:-.02em}
+  .kpi .l{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+  nav.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:26px 0 20px;position:sticky;top:0;
+    background:var(--bg);padding:10px 0;z-index:5;border-bottom:1px solid var(--line)}
+  .tab{background:var(--panel);border:1px solid var(--line);color:var(--muted);
+    padding:7px 14px;border-radius:20px;font-size:13px;cursor:pointer;transition:.15s}
+  .tab:hover{color:var(--ink);border-color:var(--dim)}
+  .tab.active{background:var(--bluebg);border-color:var(--blue);color:#cfe0ff}
+  section.page{display:none;animation:fade .2s ease}
+  section.page.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  h2{font-size:19px;margin:8px 0 4px;letter-spacing:-.01em}
+  h2 .em{color:var(--dim);font-weight:400;font-size:14px}
+  .lead{color:var(--muted);margin:0 0 18px;font-size:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}
+  .card.g{border-left:3px solid var(--green)}
+  .card.a{border-left:3px solid var(--amber)}
+  .card.r{border-left:3px solid var(--red)}
+  .card.b{border-left:3px solid var(--blue)}
+  .card.v{border-left:3px solid var(--violet)}
+  .card h3{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:9px}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .dot.g{background:var(--green)}.dot.a{background:var(--amber)}.dot.r{background:var(--red)}
+  .dot.b{background:var(--blue)}.dot.v{background:var(--violet)}
+  ul.clean{margin:0;padding:0;list-style:none}
+  ul.clean li{padding:8px 0 8px 22px;position:relative;border-top:1px solid var(--line);font-size:14px}
+  ul.clean li:first-child{border-top:none}
+  ul.clean li:before{content:"";position:absolute;left:4px;top:15px;width:6px;height:6px;
+    border-radius:50%;background:var(--dim)}
+  li b{color:var(--ink)}
+  .tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 8px;border-radius:20px;
+    margin-left:6px;vertical-align:middle;white-space:nowrap}
+  .tag.g{background:var(--greenbg);color:var(--green)}
+  .tag.a{background:var(--amberbg);color:var(--amber)}
+  .tag.r{background:var(--redbg);color:var(--red)}
+  .tag.b{background:var(--bluebg);color:var(--blue)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:6px 0}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+  td.state{white-space:nowrap;font-weight:600}
+  .on{color:var(--green)}.off{color:var(--dim)}.prod{color:var(--amber)}
+  .callout{background:var(--redbg);border:1px solid rgba(240,97,109,.35);border-radius:12px;
+    padding:16px 18px;margin:16px 0}
+  .callout.blue{background:var(--bluebg);border-color:rgba(91,155,255,.35)}
+  .callout h3{margin:0 0 6px;font-size:15px}
+  .callout p{margin:0;font-size:14px;color:var(--ink)}
+  .steps{counter-reset:s;margin:0;padding:0;list-style:none}
+  .steps li{counter-increment:s;position:relative;padding:12px 0 12px 44px;border-top:1px solid var(--line);font-size:14px}
+  .steps li:first-child{border-top:none}
+  .steps li:before{content:counter(s);position:absolute;left:0;top:11px;width:28px;height:28px;
+    border-radius:8px;background:var(--panel2);border:1px solid var(--line);color:var(--blue);
+    font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}.meta{gap:6px 12px}}
+  code{background:var(--panel2);padding:1px 6px;border-radius:5px;font-size:12.5px;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:#d7c4ff}
+  .foot{color:var(--dim);font-size:12px;margin-top:30px;border-top:1px solid var(--line);padding-top:16px}
+  .phase{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--dim);margin:22px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>Dentfluence — App Status Overview</h1>
+  <div class="sub">Dental Clinic Operating System · full-app health snapshot</div>
+  <div class="meta">
+    <span>📅 <b>2026-07-19</b></span>
+    <span>🌿 branch <b>main @ 703393a</b> (local == origin)</span>
+    <span>🖥️ VPS <b>Hostinger Docker</b> · srv1791841.hstgr.cloud</span>
+    <span>💻 Local <b>Laragon</b></span>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="n">~1,200</div><div class="l">Web + API routes</div></div>
+    <div class="kpi"><div class="n">183</div><div class="l">Models</div></div>
+    <div class="kpi"><div class="n">408</div><div class="l">Migrations</div></div>
+    <div class="kpi"><div class="n">40+</div><div class="l">Service classes</div></div>
+    <div class="kpi"><div class="n">7</div><div class="l">Core modules</div></div>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <div class="tab active" data-t="big">The Big Picture</div>
+  <div class="tab" data-t="working">✅ Working</div>
+  <div class="tab" data-t="untested">🟡 Untested</div>
+  <div class="tab" data-t="fragile">🔴 Fragile</div>
+  <div class="tab" data-t="wiring">🔌 Wiring</div>
+  <div class="tab" data-t="drift">☁️ VPS vs Local</div>
+  <div class="tab" data-t="next">🎯 What's Next</div>
+  <div class="tab" data-t="commercial">💼 Commercial</div>
+</nav>
+
+<!-- BIG PICTURE -->
+<section class="page on" data-p="big">
+  <h2>The one thing to understand first</h2>
+  <p class="lead">The engine is built. The switches are off.</p>
+  <div class="card b">
+    <p style="margin:0">Dentfluence has a genuinely strong backbone — an <b>ActivityEngine / RulesEngine</b> event spine, a <b>CommunicationEngine + Guard</b>, a <b>Workflow</b> and <b>Automation</b> engine, <b>TaskEngine</b>, <b>RelationshipEngine</b>, <b>IdentityResolver</b> and more. The internal review calls this backbone "fail-safe and well-designed." <b>But most of it is gated behind feature flags that are still OFF</b>, so the app largely runs on older legacy paths while the new engines run in shadow or lie dormant.</p>
+    <p style="margin:12px 0 0;color:var(--muted)">Your risk isn't missing code — it's <b style="color:var(--amber)">untested cutovers</b> and the gap between "exists" and "wired live."</p>
+  </div>
+
+  <div class="phase">Feature-flag reality today (config/features.php)</div>
+  <div class="card">
+    <table>
+      <tr><th>Flag</th><th>State</th><th>Meaning</th></tr>
+      <tr><td><code>identity.link_patient</code></td><td class="state on">ON</td><td>New patients auto-link to a Master Relationship</td></tr>
+      <tr><td><code>guard.consent_required</code></td><td class="state prod">ON in prod</td><td>Consent enforced on sends; never overridden by urgency</td></tr>
+      <tr><td><code>automation.engine</code> · <code>rules.single_engine</code></td><td class="state off">OFF</td><td>Recall/reminders on legacy path; new engine in shadow</td></tr>
+      <tr><td><code>today.projection</code> · <code>tasks.human_system_split</code></td><td class="state off">OFF</td><td>Today's Actions still read live across 12 domains</td></tr>
+      <tr><td><code>comm.single_gateway</code> · <code>guard.full_8factor</code></td><td class="state off">OFF</td><td>Sends not yet all routed through one gateway</td></tr>
+      <tr><td><code>workflow.engine</code> · <code>insights.signals</code> · <code>search.index</code></td><td class="state off">OFF</td><td>Workflow / insights / index projections dormant</td></tr>
+      <tr><td><code>integration.*</code> (whatsapp/google/meta/…)</td><td class="state off">OFF</td><td>Integration boundary dormant</td></tr>
+      <tr><td><code>marketing.integrated_providers</code></td><td class="state off">OFF</td><td>Marketing reads manual data, not live records</td></tr>
+      <tr><td><code>case_acceptance.enabled</code></td><td class="state off">OFF</td><td>Smart Presentation is still the live experience</td></tr>
+      <tr><td><code>blog.hub</code></td><td class="state off">OFF</td><td>Blog Marketing Hub hidden; routes 404 until flipped</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- WORKING -->
+<section class="page" data-p="working">
+  <h2>Working perfectly <span class="em">— mature, daily-usable cores</span></h2>
+  <p class="lead">The battle-tested foundation. Review verdict: "the finance chain is transactional and audit-trailed, the API layer is disciplined, the backbone is fail-safe."</p>
+  <div class="grid2">
+    <div class="card g"><h3><span class="dot g"></span>Finance / Billing</h3><ul class="clean">
+      <li>Invoice → payment → receipt → ledger → paid: transactional + audit-trailed</li>
+      <li>Coupon / wallet / membership discounts recomputed <b>server-side</b></li>
+      <li>EMI schedules, wallet, patient ledger functioning</li>
+    </ul></div>
+    <div class="card g"><h3><span class="dot g"></span>Patients &amp; Appointments</h3><ul class="clean">
+      <li>Unified create/edit wizard, 12-tab profile, tags, alerts</li>
+      <li>Booking with server-enforced overlap / blocked-slot guards</li>
+      <li>Carbon 500 booking bug fixed</li>
+    </ul></div>
+    <div class="card g"><h3><span class="dot g"></span>Clinical</h3><ul class="clean">
+      <li>Consultations — 4 workflows (New / Same Issue / Minor / Emergency)</li>
+      <li>Prescriptions — food advice, syrup ml dosing, weight/pediatric helper</li>
+      <li>Treatment plans — accept/revert/print, shared acceptance service</li>
+    </ul></div>
+    <div class="card g"><h3><span class="dot g"></span>Ops / Supply</h3><ul class="clean">
+      <li>Inventory + Procurement (PO → GRN → Vendor Invoice → AP)</li>
+      <li>Lab v2 (Phases 1–5)</li>
+      <li>Reviews / reputation (needs <code>REVIEWS_GOOGLE_URL</code>)</li>
+    </ul></div>
+    <div class="card g"><h3><span class="dot g"></span>Platform / Security</h3><ul class="clean">
+      <li>Phase A: private files, MFA/2FA, tamper-evident audit chain</li>
+      <li>Self-test: <code>php artisan security:selftest</code></li>
+      <li>API <code>/api/v1</code> — Sanctum, uniform envelope, RBAC (237 routes)</li>
+    </ul></div>
+    <div class="card g"><h3><span class="dot g"></span>PRE (Phases 0–8)</h3><ul class="clean">
+      <li>Patient Relationship Engine marked complete</li>
+      <li>WhatsApp two-way was live + tested at the Phase 7 milestone</li>
+    </ul></div>
+  </div>
+  <div class="callout blue"><h3>Caveat</h3><p>Server-side money-recompute fixes are code-verified but only <b>route-crawl tested</b> — see the Untested tab.</p></div>
+</section>
+
+<!-- UNTESTED -->
+<section class="page" data-p="untested">
+  <h2>Code-complete but UNTESTED <span class="em">— the biggest category</span></h2>
+  <p class="lead">It compiles, migrations exist, route-crawl passes — but it has <b>not</b> been exercised on real data or real users. Do not assume it works until tested.</p>
+  <div class="card a"><h3><span class="dot a"></span>Hardening sprint (2026-07-14)<span class="tag r">highest stakes</span></h3><ul class="clean">
+    <li>All applicable Critical + High findings fixed in code — <b>"untested beyond route crawl"</b></li>
+    <li>Includes money-safety fixes, appointment guards, XSS fixes, audit-chain fix</li>
+    <li><b>Top of the test list.</b></li>
+  </ul></div>
+  <div class="card a"><h3><span class="dot a"></span>Mobile (Flutter) app <span class="tag a">~50% parity</span></h3><ul class="clean">
+    <li>Whole modules ported but untested on device: Inventory, PRE, Treatment Plan/Visit, Accounts/Finance, consultation create, patient profile</li>
+    <li>Membership tab <b>is</b> tested working; "Infinity OS" reskin untested</li>
+    <li>Parity audit found <b>5 API money bugs + a 2FA lockout</b></li>
+  </ul></div>
+  <div class="grid2">
+    <div class="card a"><h3><span class="dot a"></span>Staged features (flags OFF)</h3><ul class="clean">
+      <li><b>Case Acceptance Engine</b> — frozen, dormant, not validated on real patients</li>
+      <li><b>Blog Marketing Hub</b> (Wave 1) — hidden; editor still iterating</li>
+      <li>PRE consolidations — inline WhatsApp chat, comms/recall settings</li>
+    </ul></div>
+    <div class="card a"><h3><span class="dot a"></span>Backend + smaller</h3><ul class="clean">
+      <li>Orchestration slices; <code>payment.received</code> wired without dedupe</li>
+      <li><b>Gotcha:</b> RulesEngine silently skips rules without explicit <code>relationship_id</code></li>
+      <li>HR role fix, TP doctor/date, pediatric charting, visit vitals — several unmigrated</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- FRAGILE -->
+<section class="page" data-p="fragile">
+  <h2>Fragile / on eggshells <span class="em">— known sharp edges</span></h2>
+  <p class="lead">Touch carefully. These are the places most likely to bite.</p>
+  <div class="callout"><h3>🚧 Multi-tenancy is NOT done — the #1 blocker to scale</h3><p>Onboarding clinic #2 today would <b>leak clinic #1's PHI</b>. <code>clinic_id</code> isolation is a multi-week hardening effort and a hard prerequisite before any second clinic.</p></div>
+  <div class="grid2">
+    <div class="card r"><h3><span class="dot r"></span>PHI encryption (H16) open</h3><ul class="clean">
+      <li><code>name</code> / <code>phone</code> / <code>email</code> not encrypted at rest</li>
+      <li><code>phone</code> is indexed → needs blind-index + backfill + search rewrite</li>
+      <li>Deliberately PARKED until near public launch (target Level 1)</li>
+    </ul></div>
+    <div class="card r"><h3><span class="dot r"></span>Uncommitted WhatsApp engine</h3><ul class="clean">
+      <li><code>WhatsAppLinkService</code> + controller + upgraded button component</li>
+      <li>Interim <code>wa.me</code> send engine before Meta API</li>
+      <li><b>Uncommitted &amp; undeployed</b> — exists only on your PC. Web slice untested.</li>
+    </ul></div>
+    <div class="card r"><h3><span class="dot r"></span>Live production data</h3><ul class="clean">
+      <li><b>1,810-item recall backlog</b> live; <code>recall.effective_from</code> added, old rows unresolved</li>
+      <li><b>17 orphan relationship rows</b> from bulk import — fix: <code>relationship:backfill --apply</code></li>
+    </ul></div>
+    <div class="card r"><h3><span class="dot r"></span>Brittle files &amp; gotchas</h3><ul class="clean">
+      <li><code>patients/show.blade.php</code> Alpine scope fragile — read before editing</li>
+      <li>Billing form JS had repeated load-order 500s (fixed, brittle)</li>
+      <li>Sandbox shows stale files; no PHP in sandbox; <b>commit from Windows</b></li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- WIRING -->
+<section class="page" data-p="wiring">
+  <h2>Backend wiring &amp; connections <span class="em">— how the pieces talk</span></h2>
+  <p class="lead">The bus exists; the gap is producers that emit into it.</p>
+  <div class="card v"><h3><span class="dot v"></span>The event spine</h3>
+    <p style="margin:0"><code>ActivityEngine</code> + <code>RulesEngine</code> + the <code>ActivityRecorded</code> event already <b>are</b> the internal event bus. Flow is producer → event → rules → action. The real gap is <b>missing producer calls</b> — the bus works, but not every module emits into it yet. The hardening sprint wired 4 previously-dead rules that had no producers.</p>
+  </div>
+  <div class="grid2">
+    <div class="card b"><h3><span class="dot b"></span>Communication path</h3><ul class="clean">
+      <li><code>CommunicationEngine</code> sends wrapped by <code>CommunicationGuard</code> (consent + factors)</li>
+      <li><code>guard.consent_required</code> ON in prod</li>
+      <li>End-state <code>comm.single_gateway</code> is OFF → multiple send paths still exist</li>
+    </ul></div>
+    <div class="card b"><h3><span class="dot b"></span>PRE is the sole front door</h3><ul class="clean">
+      <li>Never GET-link into <code>routes/communication.php</code> from anywhere</li>
+      <li>Forms POSTing to <code>communication.*</code> are fine</li>
+    </ul></div>
+    <div class="card b"><h3><span class="dot b"></span>Relationship identity</h3><ul class="clean">
+      <li>One Relationship per patient, always (<code>findOrCreateForPatient()</code>)</li>
+      <li>New patients auto-linked; history needs <code>relationship:backfill --apply --force</code></li>
+    </ul></div>
+    <div class="card b"><h3><span class="dot b"></span>Marketing</h3><ul class="clean">
+      <li>Provider pattern: Standalone/manual vs Integrated</li>
+      <li>Meta/Google connect PARKED (biz registration + approvals); WordPress works</li>
+      <li>Graph API pinned to v23</li>
+    </ul></div>
+  </div>
+  <div class="card"><h3><span class="dot v"></span>Modules &amp; the SaaS control plane</h3><ul class="clean">
+    <li><b>Modules (app/Modules/):</b> Appointment, Hq, Huddle, Lab, Patient, PracticeProtocols, Treatment — loosely coupled, each designed to become a standalone/premium product</li>
+    <li><b>HQ / SaaS layer:</b> <code>clinics</code>, <code>plans</code>, <code>subscriptions</code>, <code>tickets</code> tables + <code>is_superadmin</code> exist (2026-07-16). Schema present — <b>isolation NOT yet enforced.</b></li>
+  </ul></div>
+</section>
+
+<!-- DRIFT -->
+<section class="page" data-p="drift">
+  <h2>VPS vs Local drift <span class="em">— what's live vs only on your PC</span></h2>
+  <p class="lead">The VPS only changes when you run <code>deploy.sh</code>. Git is fully synced; the drift is elsewhere.</p>
+  <div class="card b"><h3><span class="dot b"></span>Deploy model</h3>
+    <p style="margin:0"><code>bash deploy.sh</code> in <code>/opt/dentfluence</code> → <code>git pull --ff-only</code> from main → rebuild Docker → <code>migrate --force</code> → cache config/views. <code>route:cache</code> intentionally skipped (closure redirects). No PHP on the host — all in the <code>app</code> container. <b>Always check <code>docker compose ps</code> after every deploy</b> (queue worker has crash-looped before).</p>
+  </div>
+  <div class="card g"><h3><span class="dot g"></span>Git state</h3>
+    <p style="margin:0">Local <code>main</code> == <code>origin/main</code> (0 ahead / 0 behind). Every <b>committed</b> feature is pushed and deployable.</p>
+  </div>
+  <div class="phase">The actual drift — two kinds</div>
+  <div class="card a"><h3><span class="dot a"></span>1 · Uncommitted local work</h3>
+    <p style="margin:0">The WhatsApp Click-to-Chat engine + blog editor tweaks + marketing calendar/subtabs — edits across ~16 files. <b>Not on GitHub, not on the VPS.</b> Exists only on your PC.</p>
+  </div>
+  <div class="card a"><h3><span class="dot a"></span>2 · Pushed but maybe not deployed</h3>
+    <p style="margin:0">Several items are flagged "NEEDS <code>bash deploy.sh</code>" (Carbon 500 fix, prescription weight field). Anything committed after the last deploy is live on GitHub but not yet on the VPS. <b>Cannot be verified from here</b> — SSH in and check the deployed commit hash against <code>703393a</code>.</p>
+  </div>
+  <div class="callout"><h3>⚠️ Two live-data facts</h3><p>The 1,810-item recall backlog and the 17 orphan relationship rows are in the <b>production</b> DB — real cleanup, not local test noise. And the next deploy after recent commits carries real schema changes (<code>migrate --force</code> auto-applies them) — review before deploying.</p></div>
+</section>
+
+<!-- NEXT -->
+<section class="page" data-p="next">
+  <h2>What to work on next <span class="em">— prioritized by ROI</span></h2>
+
+  <div class="phase">Now — unblocks confidence &amp; revenue safety</div>
+  <div class="card b"><ol class="steps">
+    <li><b>Test the hardening sprint on real data</b> — money paths especially (coupon/wallet/membership recompute, payment idempotency, invoice lock). Highest-stakes untested code in the app.</li>
+    <li><b>Commit + deploy the WhatsApp Click-to-Chat engine</b> — finished locally and stranded. Commit from Windows, run <code>deploy.sh</code>, verify <code>docker compose ps</code>.</li>
+    <li><b>Reconcile VPS with main</b> — SSH in, confirm deployed commit, run pending migrations deliberately.</li>
+    <li><b>Throttle the live recall backlog</b> (1,810) and run <code>relationship:backfill --apply</code> for the 17 orphans before anything bulk-fires.</li>
+  </ol></div>
+
+  <div class="phase">Next — unblocks clinic #2 / the SaaS business</div>
+  <div class="card a"><ol class="steps" start="5" style="counter-reset:s 4">
+    <li><b>Multi-tenant <code>clinic_id</code> isolation</b> — hard prerequisite for a second clinic. Multi-week, evolutionary, not a rewrite.</li>
+    <li><b>PHI encryption Level 1</b> — encrypt-at-rest + PHI fields (blind-index for phone). Unpark near public launch.</li>
+  </ol></div>
+
+  <div class="phase">Then — growth / differentiation (validate before switching on)</div>
+  <div class="card v"><ol class="steps" style="counter-reset:s 6">
+    <li><b>Flip and validate the staged engines</b> — automation/workflow/single-gateway cutovers, one flag at a time, on real shadow data.</li>
+    <li><b>Validate Case Acceptance Engine</b> on real patients (prereq: Treatment <code>treatment_options</code> pricing), then decide cutover vs Smart Presentation.</li>
+    <li><b>Mobile parity to ~100%</b> — fix the 5 API money bugs + 2FA lockout first, then device-test the ported modules.</li>
+    <li><b>Blog Marketing Hub Wave 2+</b> once Wave 1 is validated behind the flag.</li>
+  </ol></div>
+</section>
+
+<!-- COMMERCIAL -->
+<section class="page" data-p="commercial">
+  <h2>Commercial summary <span class="em">— for anyone outside the build</span></h2>
+  <div class="card">
+    <p style="margin:0 0 12px"><b>Dentfluence is a Laravel-based Dental Clinic Operating System</b>, well past MVP for a single clinic. The bones are strong: a transactional, audit-trailed finance chain; a disciplined API layer (Sanctum + shared services) that already powers a companion Flutter mobile app; a consent-aware communication engine (DPDP-oriented); and a modular architecture where each module (PRE, Marketing, Inventory, Lab, Membership, Case Acceptance, Blog Hub) is designed to stand alone as a premium/subscription product.</p>
+    <p style="margin:0 0 12px"><b>Shippable today:</b> a full clinic operating loop — patients, appointments, consultations, treatment planning, prescriptions, billing/finance, inventory, lab, and a patient-relationship + recall engine. Enough to run a real single clinic end-to-end, and much of it is deployed on the Hostinger VPS.</p>
+    <p style="margin:0"><b>Where it's heading (built, staged behind flags):</b> a unified communication gateway, an automation/workflow engine, a Case Acceptance patient-microsite experience, a Blog Marketing Hub, and multi-clinic SaaS (HQ control plane with plans/subscriptions/tickets). The sophistication is already coded — the roadmap is largely about validating and switching it on, not building from scratch.</p>
+  </div>
+  <div class="callout blue"><h3>Honest maturity line</h3><p>Production-ready for <b>clinic #1</b> after the critical-fix list is tested (~1–2 weeks of focused QA). <b>Not yet safe for clinic #2</b> until multi-tenant <code>clinic_id</code> isolation and PHI encryption land — that's the gating work between "one clinic" and "SaaS."</p></div>
+</section>
+
+<div class="foot">
+  Prepared from a fresh crawl of the mounted codebase (routes, migrations, services, feature flags, git state, deploy config) cross-checked against project history. VPS-side deployment state is inferred from the deploy model and could not be confirmed from a live VPS connection — verify the deployed commit hash directly.
+</div>
+
+</div>
+<script>
+  const tabs=document.querySelectorAll('.tab');
+  const pages=document.querySelectorAll('.page');
+  tabs.forEach(t=>t.addEventListener('click',()=>{
+    tabs.forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    const id=t.dataset.t;
+    pages.forEach(p=>p.classList.toggle('on',p.dataset.p===id));
+    window.scrollTo({top:0,behavior:'smooth'});
+  }));
+</script>
+</body>
+</html>
