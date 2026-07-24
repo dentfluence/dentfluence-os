@@ -126,11 +126,41 @@
         closeMenu();
         if (wasOpen) return;
 
-        menu.hidden = false; // show first so we can measure its width
-        const r = btn.getBoundingClientRect();
+        // Take the menu out of flow (fixed, parked off-screen) BEFORE
+        // unhiding it. .bl-kebab-wrap is `display:flex; justify-content:
+        // flex-end`, so if we unhid the menu while it was still statically
+        // positioned it would become a second flex item and briefly push the
+        // ⋮ button itself sideways — and that's exactly the moment the old
+        // code read the button's rect, so every menu was anchored to a
+        // shifted, wrong position (it read as "floating" near the middle of
+        // the row/page). Fixed-positioning it first means unhiding it can
+        // never perturb the row's layout, so the button rect we measure next
+        // is the real one.
         menu.style.position = 'fixed';
-        menu.style.top = (r.bottom + 4) + 'px';
-        menu.style.left = Math.max(8, r.right - menu.offsetWidth) + 'px';
+        menu.style.top = '-9999px';
+        menu.style.left = '-9999px';
+        menu.hidden = false;
+
+        const r = btn.getBoundingClientRect();
+        const mw = menu.offsetWidth;
+        const mh = menu.offsetHeight;
+        const vw = document.documentElement.clientWidth;
+        const vh = document.documentElement.clientHeight;
+
+        // Right-edge align to the button, clamped inside the viewport.
+        let left = r.right - mw;
+        left = Math.min(Math.max(8, left), vw - mw - 8);
+
+        // Below the button by default; flip above if it would overflow the
+        // viewport's bottom edge.
+        let top = r.bottom + 4;
+        if (top + mh > vh - 8) {
+            top = r.top - mh - 4;
+        }
+        top = Math.max(8, top);
+
+        menu.style.top = top + 'px';
+        menu.style.left = left + 'px';
         menu._btn = btn;
         btn.setAttribute('aria-expanded', 'true');
         openMenu = menu;

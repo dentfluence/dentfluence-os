@@ -33,6 +33,8 @@ namespace App\Services\Blog;
  *   cta       { label: string, url: string, style?: 'button'|'link' }
  *   faq       { items: [ { q: string, a: string } ] }
  *   divider   { }
+ *   list      { style: 'bullet'|'number', items: string[] }  (each item = limited inline html, same allowlist as paragraph)
+ *   richtext  { html: string }  (a full word-processor document — one flowing block; block-level allowlist, sanitized on render)
  *
  * Evolution rule: NEW block types are added by extending TYPES + the
  * renderer + an editor node — never by a data-model change. Renderers must
@@ -53,6 +55,11 @@ class BlogBlockSchema
         'cta',
         'faq',
         'divider',
+        'list',
+        // Single flowing word-processor document (Wix/Docs-style editor). The
+        // whole post body lives in ONE richtext block; legacy typed blocks above
+        // stay valid so older drafts still open/round-trip.
+        'richtext',
     ];
 
     /**
@@ -167,6 +174,30 @@ class BlogBlockSchema
 
                 case 'divider':
                     // no required fields
+                    break;
+
+                case 'list':
+                    $style = $data['style'] ?? null;
+                    if (! in_array($style, ['bullet', 'number'], true)) {
+                        $errors[] = "{$label} (list): \"style\" must be \"bullet\" or \"number\".";
+                    }
+                    if (! isset($data['items']) || ! is_array($data['items']) || $data['items'] === []) {
+                        $errors[] = "{$label} (list): missing a non-empty \"items\" array.";
+                        break;
+                    }
+                    foreach ($data['items'] as $j => $item) {
+                        if (! is_string($item)) {
+                            $errors[] = "{$label} (list): item #" . ($j + 1) . ' must be a string.';
+                        }
+                    }
+                    break;
+
+                case 'richtext':
+                    // The entire document HTML — sanitized (block-level allowlist)
+                    // at render time by BlogBlockRenderer. Only shape is checked here.
+                    if (! isset($data['html']) || ! is_string($data['html'])) {
+                        $errors[] = "{$label} (richtext): missing string \"html\".";
+                    }
                     break;
             }
         }

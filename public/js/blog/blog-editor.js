@@ -1,34 +1,27 @@
 /*
- * Blog Marketing Hub — block editor (Wave 1 Slice 3)
+ * Blog Marketing Hub — single-surface rich-text editor
  * ===========================================================================
- * Loading path: pinned ESM CDN (esm.sh). The app renders interactive pages
- * with CDN libraries (Alpine, Tailwind, flatpickr are all pulled from CDNs in
- * layouts/app.blade.php) rather than a shared Vite bundle, so TipTap follows
- * the same pattern — no npm install / no second bundler. All @tiptap/*
- * packages are pinned to one version and share a single ProseMirror via the
- * `?deps=@tiptap/pm@…` query so no duplicate-plugin errors occur.
+ * Wix / Google-Docs-style writing experience: a title + slug, a persistent
+ * word-processor toolbar, and ONE flowing TipTap document (no per-block
+ * cards, no "+ Add block"). The whole post body is stored as a SINGLE
+ * canonical block:
  *
- * Responsibilities:
- *   - Hydrate the editor from canonical block-JSON (body_json is the source of
- *     truth; we never read/write body_html here — the server renders that).
- *   - Drive the block canvas: add / reorder (drag + up/down) / delete, plus a
- *     dedicated editor per block type.
- *   - Serialise editor state back to block-JSON on save/autosave.
- *   - Debounced autosave, manual Save draft / Save / Publish, DAM image picker,
- *     inline category/tag create. Surfaces 422 validation inline.
+ *   body_json = { version:1, blocks:[ { id, type:'richtext', data:{ html } } ] }
  *
- * TipTap is used ONLY for the rich inline layer inside paragraph blocks
- * (bold / italic / link — exactly the schema's paragraph contract). Every
- * other block type is a plain structured editor. This keeps the block engine
- * editor-agnostic: paragraph blocks persist `{ html }` (limited inline markup)
- * which BlogBlockRenderer sanitises server-side.
+ * The backend is unchanged in shape: BlogBlockRenderer turns that richtext
+ * block into sanitised, portable HTML (block-level allowlist) exactly the way
+ * it already renders every other block type, so the WordPress/publish path is
+ * unaffected. Legacy multi-block drafts still open here — they are converted
+ * to one HTML document client-side on load (see legacyBlocksToHtml) and
+ * re-saved as a richtext block.
  *
- * SEO panel (Slice 4) lives in the companion module ./blog-seo.js — kept
- * self-contained so it is never tangled into the block-canvas logic above.
- * This file only wires it in three places: importing initSeoPanel, folding
- * its collect() output into the `seo` key of every save/autosave payload,
- * and telling it when a save round-trip lands (bp:saved) so its previews can
- * pick up server-derived values (e.g. the auto-filled excerpt).
+ * Loading path: pinned ESM CDN (esm.sh), same pattern the whole app uses.
+ * Every @tiptap/* package is pinned to one version and shares a single
+ * ProseMirror via `?deps=@tiptap/pm@…` so no duplicate-plugin errors occur.
+ *
+ * The SEO panel (./blog-seo.js) and website-publishing panel (./blog-publish.js)
+ * bind by element id and are wired in unchanged — this rewrite preserves every
+ * id they depend on.
  */
 
 import { initSeoPanel } from './blog-seo.js';
@@ -38,14 +31,29 @@ const TIPTAP_VERSION = '2.11.5';
 const DEPS = '?deps=@tiptap/pm@' + TIPTAP_VERSION;
 const cdn = (pkg) => `https://esm.sh/@tiptap/${pkg}@${TIPTAP_VERSION}${DEPS}`;
 
+// Full word-processor extension set. All pinned to one version + a shared
+// ProseMirror. Color depends on TextStyle; Highlight renders <mark>.
 const [
-    { Editor, Extension },
+    { Editor },
     Document,
     Paragraph,
     Text,
+    Heading,
     Bold,
     Italic,
+    Underline,
+    Strike,
+    Code,
+    Blockquote,
+    BulletList,
+    OrderedList,
+    ListItem,
     Link,
+    Image,
+    TextAlign,
+    TextStyle,
+    Color,
+    Highlight,
     History,
     HardBreak,
 ] = await Promise.all([
@@ -53,29 +61,25 @@ const [
     import(cdn('extension-document')).then((m) => m.default),
     import(cdn('extension-paragraph')).then((m) => m.default),
     import(cdn('extension-text')).then((m) => m.default),
+    import(cdn('extension-heading')).then((m) => m.default),
     import(cdn('extension-bold')).then((m) => m.default),
     import(cdn('extension-italic')).then((m) => m.default),
+    import(cdn('extension-underline')).then((m) => m.default),
+    import(cdn('extension-strike')).then((m) => m.default),
+    import(cdn('extension-code')).then((m) => m.default),
+    import(cdn('extension-blockquote')).then((m) => m.default),
+    import(cdn('extension-bullet-list')).then((m) => m.default),
+    import(cdn('extension-ordered-list')).then((m) => m.default),
+    import(cdn('extension-list-item')).then((m) => m.default),
     import(cdn('extension-link')).then((m) => m.default),
+    import(cdn('extension-image')).then((m) => m.default),
+    import(cdn('extension-text-align')).then((m) => m.default),
+    import(cdn('extension-text-style')).then((m) => m.default),
+    import(cdn('extension-color')).then((m) => m.default),
+    import(cdn('extension-highlight')).then((m) => m.default),
     import(cdn('extension-history')).then((m) => m.default),
     import(cdn('extension-hard-break')).then((m) => m.default),
 ]);
-
-// Single-paragraph document so a paragraph block never splits into multiple
-// block-level nodes; getHTML() therefore yields exactly one <p>…</p> whose
-// inner inline markup we persist.
-const InlineDocument = Document.extend({ content: 'paragraph' });
-
-// HardBreak (below) only binds Mod-Enter/Shift-Enter by default. Since this
-// document's schema allows exactly one paragraph, plain Enter has nothing to
-// split into and is otherwise a no-op — which reads as "the box won't grow
-// when I press Enter". This extension makes plain Enter insert a line break
-// too, matching what users expect from a normal paragraph field.
-const EnterAsHardBreak = Extension.create({
-    name: 'enterAsHardBreak',
-    addKeyboardShortcuts() {
-        return { Enter: () => this.editor.commands.setHardBreak() };
-    },
-});
 
 // ---------------------------------------------------------------------------
 // Boot data + small helpers
@@ -94,20 +98,17 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
 ));
 const uid = () => 'blk_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3);
 
-const BLOCK_LABELS = {
-    heading: 'Heading', paragraph: 'Paragraph', image: 'Image', quote: 'Quote',
-    table: 'Table', cta: 'Call to action', faq: 'FAQ', divider: 'Divider',
-};
-
 // ---------------------------------------------------------------------------
-// Editor state (single source of truth mirrored into block-JSON on save)
+// Editor state
 // ---------------------------------------------------------------------------
 
 const state = {
     postUuid: BOOT.post?.uuid || null,
     slugLocked: !!BOOT.post?.slug_locked,
     slugDirty: false,
-    blocks: [],                 // [{ id, type, data }]
+    // Stable id for the single richtext block (kept across saves; reused from an
+    // existing richtext doc so the block id is stable across the post's life).
+    bodyBlockId: uid(),
     tagIds: [...(BOOT.post?.tag_ids || [])],
     categoryId: BOOT.post?.category_id || null,
     featuredAssetId: BOOT.post?.featured_asset_id || null,
@@ -117,17 +118,48 @@ const state = {
     autosaveTimer: null,
 };
 
-const nodes = new Map(); // block id -> { root, editor?(tiptap) }
+let editor = null; // the single TipTap Editor (created in mountEditor)
+
+// ---------------------------------------------------------------------------
+// Selection preservation for "focus-stealing" toolbar controls
+// ---------------------------------------------------------------------------
+// Plain toolbar BUTTONS keep the editor's selection intact by preventDefault-
+// ing mousedown, so a click never blurs the ProseMirror view in the first
+// place. Controls that must themselves take native focus — the block-type
+// <select>, the native <input type=color>, window.prompt() for links, and
+// the DAM picker modal for images — can't use that trick: interacting with
+// them blurs the editor for real. TipTap's `.focus()` is documented to
+// restore "the last selection", but that was confirmed unreliable here
+// (selecting text then choosing "Heading 2" left it a plain paragraph), so
+// instead we track the selection ourselves on every selectionUpdate/blur
+// while the editor has it, and explicitly re-apply it with setTextSelection
+// before running any command triggered from outside the editor.
+let savedSelection = null;
+
+function captureSelection() {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    savedSelection = { from, to };
+}
+
+// Runs build(chain) against a chain that is focused AND has the
+// previously-captured selection explicitly re-applied, then executes it.
+function withSelection(build) {
+    if (!editor) return;
+    let chain = editor.chain().focus();
+    if (savedSelection) {
+        const max = editor.state.doc.content.size;
+        const from = Math.min(savedSelection.from, max);
+        const to = Math.min(savedSelection.to, max);
+        chain = chain.setTextSelection({ from, to });
+    }
+    build(chain).run();
+}
+
 const assetById = (id) => state.assets.find((a) => Number(a.id) === Number(id));
 
-// Set once during init (see bottom of file) to the object returned by
-// blog-seo.js's initSeoPanel(). Kept nullable so collectPayload() is safe to
-// call (defensively) before wiring completes.
+// Set during init to the objects returned by blog-seo.js / blog-publish.js.
 let SeoPanel = null;
-
-// Set once during init to the object returned by blog-publish.js's
-// initPublishPanel(). Nullable so the toolbar's publish handler is safe if a
-// click somehow races init.
 let PublishPanel = null;
 
 // ---------------------------------------------------------------------------
@@ -154,589 +186,364 @@ async function api(url, method, body) {
 // ---------------------------------------------------------------------------
 // Serialisation (editor -> block-JSON)
 // ---------------------------------------------------------------------------
-
-// A block is only persisted when it satisfies the schema's required fields, so
-// an in-progress (e.g. image with no source yet) block never fails validation
-// on autosave. It stays in the editor and is persisted once completed.
-function isPersistable(b) {
-    if (b.type === 'image') return !!(b.data.asset_id || b.data.url);
-    if (b.type === 'cta') return !!(b.data.label && b.data.url);
-    return true;
-}
+// The document is ONE richtext block: the server (BlogBlockRenderer) sanitises
+// the html to a block-level allowlist and outputs it verbatim, so the stored
+// contract and the publish path stay identical for every render target.
 
 function serialize() {
+    const html = editor ? editor.getHTML() : '';
     return {
         version: 1,
-        blocks: state.blocks
-            .filter(isPersistable)
-            .map((b) => ({ id: b.id, type: b.type, data: b.data })),
+        blocks: [{ id: state.bodyBlockId, type: 'richtext', data: { html } }],
     };
 }
 
 // ---------------------------------------------------------------------------
-// Block factory
+// Legacy conversion: old multi-block drafts -> one HTML document
 // ---------------------------------------------------------------------------
+// Mirrors BlogBlockRenderer's output closely so an older draft opens seamlessly
+// in the single surface. It will re-save as a richtext block on the next save.
+// Notes:
+//   - divider: dropped (the richtext allowlist / editor schema has no <hr>).
+//   - table: flattened to paragraphs (no Table extension / not in the
+//     allowlist) so the text survives rather than being stripped.
 
-function defaultData(type) {
-    switch (type) {
-        case 'heading': return { level: 2, text: '' };
-        case 'paragraph': return { html: '' };
-        case 'image': return { asset_id: null, url: '', alt: '', caption: '' };
-        case 'quote': return { text: '', cite: '' };
-        case 'table': return { rows: [['', ''], ['', '']] };
-        case 'cta': return { label: '', url: '', style: 'button' };
-        case 'faq': return { items: [{ q: '', a: '' }] };
-        case 'divider': return {};
-        default: return {};
+function legacyBlocksToHtml(blocks) {
+    return blocks.map(legacyBlockToHtml).filter(Boolean).join('\n');
+}
+
+function legacyBlockToHtml(b) {
+    const d = b.data || {};
+    switch (b.type) {
+        case 'richtext':
+            return typeof d.html === 'string' ? d.html : '';
+
+        case 'heading': {
+            const lvl = Math.min(4, Math.max(2, Number(d.level) || 2)); // editor supports h2–h4
+            const t = String(d.text || '').trim();
+            return t ? `<h${lvl}>${esc(t)}</h${lvl}>` : '';
+        }
+
+        case 'paragraph': {
+            if (d.html) return `<p>${d.html}</p>`; // inner inline html (already limited)
+            const t = String(d.text || '').trim();
+            return t ? `<p>${esc(t).replace(/\r?\n/g, '<br>')}</p>` : '';
+        }
+
+        case 'quote': {
+            const t = String(d.text || '').trim();
+            if (!t) return '';
+            const cite = String(d.cite || '').trim();
+            const body = esc(t).replace(/\r?\n/g, '<br>');
+            return `<blockquote><p>${body}</p>${cite ? `<p>— ${esc(cite)}</p>` : ''}</blockquote>`;
+        }
+
+        case 'list': {
+            const items = Array.isArray(d.items) ? d.items : [];
+            const lis = items
+                .filter((x) => typeof x === 'string' && x.trim() !== '')
+                .map((x) => `<li>${x}</li>`) // item html carries the same allowlisted marks
+                .join('');
+            if (!lis) return '';
+            return d.style === 'number' ? `<ol>${lis}</ol>` : `<ul>${lis}</ul>`;
+        }
+
+        case 'image': {
+            const a = d.asset_id ? assetById(d.asset_id) : null;
+            const src = a?.url || d.url || '';
+            if (!src) return '';
+            const img = `<img src="${esc(src)}" alt="${esc(d.alt || '')}">`;
+            const cap = String(d.caption || '').trim();
+            return cap ? `<figure>${img}<figcaption>${esc(cap)}</figcaption></figure>` : `<figure>${img}</figure>`;
+        }
+
+        case 'cta': {
+            const label = String(d.label || '').trim();
+            const url = String(d.url || '').trim();
+            return (label && url) ? `<p><a href="${esc(url)}">${esc(label)}</a></p>` : '';
+        }
+
+        case 'faq': {
+            const items = Array.isArray(d.items) ? d.items : [];
+            return items.map((it) => {
+                const q = String(it?.q || '').trim();
+                const a = String(it?.a || '').trim();
+                if (!q || !a) return '';
+                return `<p><strong>${esc(q)}</strong></p><p>${esc(a).replace(/\r?\n/g, '<br>')}</p>`;
+            }).filter(Boolean).join('');
+        }
+
+        case 'table': {
+            const rows = Array.isArray(d.rows) ? d.rows : [];
+            return rows
+                .map((r) => (Array.isArray(r) ? r : []).map((c) => esc(String(c ?? ''))).join(' — '))
+                .filter((line) => line.trim() !== '')
+                .map((line) => `<p>${line}</p>`)
+                .join('');
+        }
+
+        case 'divider':
+            return ''; // no <hr> in the richtext allowlist / editor schema
+
+        default:
+            return '';
     }
 }
 
-function addBlock(type, atIndex, initialData) {
-    const block = { id: uid(), type, data: initialData || defaultData(type) };
-    const index = atIndex == null ? state.blocks.length : atIndex;
-    state.blocks.splice(index, 0, block);
-
-    const built = buildBlock(block);
-    const canvas = $('bp-canvas');
-    const ref = canvas.children[index] || null;
-    canvas.insertBefore(built, ref);
-    nodes.set(block.id, { root: built });
-    if (block.type === 'paragraph') mountParagraphEditor(block, built);
-    markDirty();
-}
-
-function removeBlock(id) {
-    const i = state.blocks.findIndex((b) => b.id === id);
-    if (i === -1) return;
-    const rec = nodes.get(id);
-    if (rec?.editor) rec.editor.destroy();
-    rec?.root.remove();
-    nodes.delete(id);
-    state.blocks.splice(i, 1);
-    markDirty();
-}
-
-function moveBlock(id, dir) {
-    const i = state.blocks.findIndex((b) => b.id === id);
-    const j = i + dir;
-    if (i === -1 || j < 0 || j >= state.blocks.length) return;
-    [state.blocks[i], state.blocks[j]] = [state.blocks[j], state.blocks[i]];
-    // Re-attach every root in the new array order (appendChild moves nodes).
-    const canvas = $('bp-canvas');
-    state.blocks.forEach((b) => canvas.appendChild(nodes.get(b.id).root));
-    markDirty();
-}
-
-// Build the outer shell (header + body) for a block; delegates the body to a
-// per-type renderer.
-function buildBlock(block) {
-    const root = el('div', 'bp-block');
-    root.dataset.id = block.id;
-    root.setAttribute('draggable', 'false');
-
-    const head = el('div', 'bp-block-head');
-    const drag = el('span', 'bp-drag', '⠿');
-    drag.title = 'Drag to reorder';
-    const label = el('span', 'bp-block-type', esc(BLOCK_LABELS[block.type] || block.type));
-    const tools = el('div', 'bp-block-tools');
-    const up = iconBtn('↑', 'Move up', () => moveBlock(block.id, -1));
-    const down = iconBtn('↓', 'Move down', () => moveBlock(block.id, 1));
-    const del = iconBtn('🗑', 'Delete block', () => removeBlock(block.id));
-    tools.append(up, down, del);
-    head.append(drag, label, tools);
-
-    const body = el('div', 'bp-block-body');
-    renderBody(block, body);
-
-    root.append(head, body);
-    setupDrag(root, drag, block);
-    return root;
-}
-
-function iconBtn(glyph, title, onClick) {
-    const b = el('button', 'bp-icon-btn', glyph);
-    b.type = 'button';
-    b.title = title;
-    b.addEventListener('click', onClick);
-    return b;
-}
-
-// Drag-and-drop reordering via the header handle (up/down buttons remain the
-// keyboard-friendly path).
-function setupDrag(root, handle, block) {
-    handle.addEventListener('mousedown', () => root.setAttribute('draggable', 'true'));
-    root.addEventListener('mouseup', () => root.setAttribute('draggable', 'false'));
-    root.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData('text/plain', block.id);
-        e.dataTransfer.effectAllowed = 'move';
-    });
-    root.addEventListener('dragover', (e) => { e.preventDefault(); root.classList.add('bp-dragover'); });
-    root.addEventListener('dragleave', () => root.classList.remove('bp-dragover'));
-    root.addEventListener('drop', (e) => {
-        e.preventDefault();
-        root.classList.remove('bp-dragover');
-        const draggedId = e.dataTransfer.getData('text/plain');
-        if (!draggedId || draggedId === block.id) return;
-        reorderTo(draggedId, block.id);
-    });
-}
-
-function reorderTo(draggedId, targetId) {
-    const from = state.blocks.findIndex((b) => b.id === draggedId);
-    const to = state.blocks.findIndex((b) => b.id === targetId);
-    if (from === -1 || to === -1) return;
-    const [moved] = state.blocks.splice(from, 1);
-    state.blocks.splice(to, 0, moved);
-    // Re-attach DOM in the new array order.
-    const canvas = $('bp-canvas');
-    state.blocks.forEach((b) => canvas.appendChild(nodes.get(b.id).root));
-    markDirty();
+// Resolve the initial document HTML from the boot payload.
+function computeInitialHtml() {
+    const post = BOOT.post;
+    if (!post) return '';
+    const blocks = post.body_json?.blocks || [];
+    if (blocks.length === 1 && blocks[0]?.type === 'richtext') {
+        if (blocks[0].id) state.bodyBlockId = blocks[0].id; // keep the stable id
+        return typeof blocks[0].data?.html === 'string' ? blocks[0].data.html : '';
+    }
+    if (blocks.length) return legacyBlocksToHtml(blocks); // legacy typed blocks
+    return '';
 }
 
 // ---------------------------------------------------------------------------
-// Per-type block bodies
+// Editor + toolbar
 // ---------------------------------------------------------------------------
 
-function renderBody(block, body) {
-    switch (block.type) {
-        case 'heading': return renderHeading(block, body);
-        case 'paragraph': return renderParagraph(block, body);
-        case 'image': return renderImage(block, body);
-        case 'quote': return renderQuote(block, body);
-        case 'table': return renderTable(block, body);
-        case 'cta': return renderCta(block, body);
-        case 'faq': return renderFaq(block, body);
-        case 'divider': return renderDivider(block, body);
-    }
-}
-
-function renderHeading(block, body) {
-    const row = el('div', 'bp-row');
-    const level = el('select', 'bp-block-select');
-    level.style.flex = '0 0 84px';
-    [2, 3, 4, 5, 6].forEach((l) => {
-        const o = el('option', null, 'H' + l);
-        o.value = l;
-        if (Number(block.data.level) === l) o.selected = true;
-        level.append(o);
-    });
-    level.addEventListener('change', () => { block.data.level = Number(level.value); markDirty(); });
-
-    const text = el('input', 'bp-input');
-    text.type = 'text';
-    text.placeholder = 'Heading text';
-    text.value = block.data.text || '';
-    text.addEventListener('input', () => { block.data.text = text.value; markDirty(); });
-
-    row.append(level, text);
-    body.append(row);
-}
-
-function renderParagraph(block, body) {
-    // Toolbar + mount point; the TipTap instance is attached in
-    // mountParagraphEditor once the node is in the DOM.
-    const toolbar = el('div', 'bp-rt-toolbar');
-    toolbar.dataset.role = 'toolbar';
-    const mount = el('div', 'bp-rt-editor');
-    mount.dataset.role = 'mount';
-    body.append(toolbar, mount);
-}
-
-// ---------------------------------------------------------------------------
-// Paragraph paste handling
-// ---------------------------------------------------------------------------
-// Matches the paragraph block's own schema (Bold/Italic/Link marks only —
-// see the extensions list below) so what the user sees while editing matches
-// what actually gets typed/saved: inline formatting survives, everything
-// else (color/font/class/style/spans/divs/headings…) is unwrapped down to
-// plain text rather than dropped.
-const PASTE_INLINE_TAGS = { strong: 'strong', b: 'strong', em: 'em', i: 'em', a: 'a' };
-// Any of these ending is treated as a paragraph boundary (new block), not a
-// same-block line break — matches how browsers/Word/Google Docs mark up
-// pasted paragraphs (<p>, <div> per line, list items, headings, etc.).
-const PASTE_BLOCK_TAGS = new Set(['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'tr', 'section', 'article', 'header', 'footer', 'pre']);
-
-// Walks pasted HTML and returns an array of sanitised inner-HTML fragments —
-// one per resulting paragraph block. Never truncates: every text node is kept
-// (junk wrapper tags are unwrapped, not deleted).
-function sanitizePastedHtmlToFragments(html) {
-    const container = document.createElement('div');
-    container.innerHTML = html;
-    // Word/Google Docs pastes often carry a full document shell; browsers'
-    // fragment parser can leave <style>/<script>/<meta> as literal elements
-    // in the tree. Drop them outright (not unwrap) so their raw text never
-    // leaks into the paragraph.
-    container.querySelectorAll('style, script, meta, link, title').forEach((n) => n.remove());
-
-    const fragments = [];
-    let current = document.createElement('div');
-    let trailingBr = false; // used to collapse a double <br><br> into a paragraph break
-
-    function flush() {
-        const inner = current.innerHTML
-            .replace(/^(<br\s*\/?>)+/i, '')
-            .replace(/(<br\s*\/?>)+$/i, '')
-            .trim();
-        if (inner) fragments.push(inner);
-        current = document.createElement('div');
-        trailingBr = false;
-    }
-
-    function appendInto(target, node) {
-        if (node.nodeType === Node.TEXT_NODE) {
-            if (node.textContent) target.appendChild(document.createTextNode(node.textContent));
-            trailingBr = false;
-            return;
-        }
-        if (node.nodeType !== Node.ELEMENT_NODE) return;
-        const tag = node.tagName.toLowerCase();
-
-        if (tag === 'br') {
-            if (trailingBr) { flush(); return; } // 2nd consecutive <br> = paragraph break
-            target.appendChild(document.createElement('br'));
-            trailingBr = true;
-            return;
-        }
-
-        if (PASTE_BLOCK_TAGS.has(tag)) {
-            node.childNodes.forEach((child) => appendInto(current, child));
-            flush();
-            return;
-        }
-
-        if (PASTE_INLINE_TAGS[tag]) {
-            const clean = document.createElement(PASTE_INLINE_TAGS[tag]);
-            if (tag === 'a') {
-                const href = node.getAttribute('href');
-                if (href) clean.setAttribute('href', href);
-            }
-            target.appendChild(clean);
-            node.childNodes.forEach((child) => appendInto(clean, child));
-            trailingBr = false;
-            return;
-        }
-
-        // Unknown/junk wrapper (span, font, table, img, style attrs, etc.) —
-        // unwrap it: keep its text/children, drop the tag itself.
-        node.childNodes.forEach((child) => appendInto(target, child));
-    }
-
-    container.childNodes.forEach((child) => appendInto(current, child));
-    flush();
-    return fragments;
-}
-
-// Plain-text fallback (no text/html on the clipboard): blank-line-separated
-// blocks of text become separate paragraphs, single newlines become <br>.
-function plainTextToFragments(text) {
-    return text
-        .split(/\r?\n\s*\r?\n/)
-        .map((p) => esc(p.trim()).replace(/\r?\n/g, '<br>'))
-        .filter((p) => p !== '');
-}
-
-function handleParagraphPaste(editor, block, event) {
-    const cd = event.clipboardData;
-    if (!cd) return false;
-    const html = cd.getData('text/html');
-    const text = cd.getData('text/plain');
-    if (!html && !text) return false;
-
-    const fragments = html ? sanitizePastedHtmlToFragments(html) : plainTextToFragments(text);
-    if (!fragments.length) return false; // nothing usable — let the default (no-op) happen
-
-    event.preventDefault();
-
-    // First fragment inserts inline at the cursor, same as a normal paste
-    // (replaces any current selection, keeps surrounding text intact).
-    editor.chain().focus().insertContent(fragments[0]).run();
-
-    // Any further paragraphs become new sibling blocks right after this one,
-    // in order, instead of being merged/lost.
-    if (fragments.length > 1) {
-        let index = state.blocks.findIndex((b) => b.id === block.id);
-        for (let i = 1; i < fragments.length; i++) {
-            index += 1;
-            addBlock('paragraph', index, { html: fragments[i] });
-        }
-    }
-    return true;
-}
-
-function mountParagraphEditor(block, root) {
-    const toolbar = root.querySelector('[data-role="toolbar"]');
-    const mount = root.querySelector('[data-role="mount"]');
-
-    const initial = block.data.html ? `<p>${block.data.html}</p>`
-        : (block.data.text ? `<p>${esc(block.data.text)}</p>` : '<p></p>');
-
-    const editor = new Editor({
-        element: mount,
+function mountEditor(html) {
+    editor = new Editor({
+        element: $('bp-editor'),
         extensions: [
-            InlineDocument,
+            Document,
             Paragraph,
             Text,
+            Heading.configure({ levels: [2, 3, 4] }),
             Bold,
             Italic,
-            HardBreak,
-            EnterAsHardBreak,
-            History,
+            Underline,
+            Strike,
+            Code,
+            Blockquote,
+            BulletList,
+            OrderedList,
+            ListItem,
             Link.configure({ openOnClick: false, autolink: false }),
+            Image.configure({ inline: false }),
+            TextAlign.configure({ types: ['heading', 'paragraph'] }),
+            TextStyle,
+            Color,
+            Highlight,
+            History,
+            HardBreak,
         ],
-        content: initial,
-        editorProps: {
-            // Intercept paste ourselves: the schema allows exactly one
-            // paragraph node per block, so ProseMirror's own paste handling
-            // would otherwise squash every pasted block-level element (extra
-            // <p>/<div>/<h*>/<li>…) together with no separator, reading as
-            // "paste collapses into one blob". We sanitise the clipboard HTML
-            // down to the paragraph schema's allowed inline tags, keep every
-            // paragraph/line break, and — when the paste contained more than
-            // one paragraph — split the extras out into their own sibling
-            // paragraph blocks instead of losing the structure.
-            handlePaste: (view, event) => handleParagraphPaste(editor, block, event),
-        },
-        onUpdate: ({ editor }) => {
-            // Persist inner inline HTML only — BlogBlockRenderer wraps it in <p>
-            // and sanitises to the allowed inline tag set.
-            const html = editor.getHTML().replace(/^<p>/, '').replace(/<\/p>$/, '');
-            block.data = { html };
-            markDirty();
-        },
+        content: html || '',
+        onUpdate: () => markDirty(),
+        onSelectionUpdate: () => { captureSelection(); updateToolbar(); },
+        onTransaction: () => updateToolbar(),
+        onBlur: () => captureSelection(),
     });
 
-    const mk = (glyph, title, run, isActive) => {
-        const b = el('button', 'bp-rt-btn', glyph);
-        b.type = 'button';
-        b.title = title;
-        b.addEventListener('click', () => { run(); syncMarks(); editor.commands.focus(); });
-        b._active = isActive;
-        return b;
-    };
-    const bBold = mk('B', 'Bold', () => editor.chain().focus().toggleBold().run(), () => editor.isActive('bold'));
-    bBold.style.fontWeight = '700';
-    const bItalic = mk('i', 'Italic', () => editor.chain().focus().toggleItalic().run(), () => editor.isActive('italic'));
-    bItalic.style.fontStyle = 'italic';
-    const bLink = mk('🔗', 'Link', () => {
-        const prev = editor.getAttributes('link').href || '';
-        const url = window.prompt('Link URL', prev);
-        if (url === null) return;
-        if (url === '') editor.chain().focus().unsetLink().run();
-        else editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-    }, () => editor.isActive('link'));
+    // Defensive: a global app shortcut hijacks "/" (confirmed). Stop the event
+    // bubbling to document-level handlers while the caret is inside the document
+    // so typing a slash never triggers it. (Insertion is toolbar-only anyway.)
+    editor.view.dom.addEventListener('keydown', (e) => {
+        if (e.key === '/') e.stopPropagation();
+    });
 
-    const buttons = [bBold, bItalic, bLink];
-    toolbar.append(...buttons);
-    function syncMarks() { buttons.forEach((b) => b.classList.toggle('is-active', !!b._active())); }
-    editor.on('selectionUpdate', syncMarks);
-    editor.on('transaction', syncMarks);
-
-    nodes.get(block.id).editor = editor;
+    wireToolbarControls();
+    updateToolbar();
 }
 
-function renderImage(block, body) {
-    const preview = el('div');
-    const renderPreview = () => {
-        preview.innerHTML = '';
-        const a = block.data.asset_id ? assetById(block.data.asset_id) : null;
-        const src = a?.url || block.data.url || '';
-        if (src) {
-            const img = el('img', 'bp-img-preview');
-            img.src = src;
-            preview.append(img);
+function promptLink() {
+    const prev = editor.getAttributes('link').href || '';
+    // window.prompt() is a native modal — it blurs the editor for the
+    // duration, same class of problem as the select/color controls, so the
+    // eventual command goes through withSelection() too.
+    const url = window.prompt('Link URL', prev);
+    if (url === null) return; // cancelled
+    if (url.trim() === '') { withSelection((chain) => chain.extendMarkRange('link').unsetLink()); return; }
+    withSelection((chain) => chain.extendMarkRange('link').setLink({ href: url.trim() }));
+}
+
+// Toolbar image button -> EXISTING DAM picker -> insert <img src alt> at the
+// cursor. No "/" involved (see the keydown guard above). The DAM modal opens
+// and stays open across several clicks before the user picks an asset, so by
+// the time this callback runs the editor has long since lost focus — restore
+// the selection captured before the modal opened.
+function insertImageFromDam() {
+    openDam((asset) => {
+        const src = asset.url || '';
+        if (!src) return;
+        const alt = asset.alt || asset.name || '';
+        withSelection((chain) => chain.setImage({ src, alt }));
+        markDirty();
+    });
+}
+
+function wireToolbarControls() {
+    const bar = $('bp-toolbar');
+
+    // Chain-command buttons — all run through withSelection() so they apply
+    // to the selection that was live when the toolbar was interacted with,
+    // not whatever the (possibly-collapsed) selection happens to be by the
+    // time the command actually executes.
+    const chainCmds = {
+        bold: (chain) => chain.toggleBold(),
+        italic: (chain) => chain.toggleItalic(),
+        underline: (chain) => chain.toggleUnderline(),
+        strike: (chain) => chain.toggleStrike(),
+        code: (chain) => chain.toggleCode(),
+        blockquote: (chain) => chain.toggleBlockquote(),
+        bulletList: (chain) => chain.toggleBulletList(),
+        orderedList: (chain) => chain.toggleOrderedList(),
+        highlight: (chain) => chain.toggleHighlight(),
+        'align-left': (chain) => chain.setTextAlign('left'),
+        'align-center': (chain) => chain.setTextAlign('center'),
+        'align-right': (chain) => chain.setTextAlign('right'),
+    };
+    // Standalone controls that need more than a single chained command
+    // (native prompt / DAM modal) but still apply via withSelection internally.
+    const standaloneCmds = { link: promptLink, image: insertImageFromDam };
+
+    bar.querySelectorAll('[data-cmd]').forEach((btn) => {
+        // preventDefault on mousedown keeps the document's selection intact —
+        // otherwise the click would blur the editor and collapse the range
+        // before the command runs. (withSelection() below is a second,
+        // belt-and-braces layer in case focus is lost anyway.)
+        btn.addEventListener('mousedown', (e) => e.preventDefault());
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const name = btn.dataset.cmd;
+            if (chainCmds[name]) {
+                withSelection(chainCmds[name]);
+                updateToolbar();
+                return;
+            }
+            const fn = standaloneCmds[name];
+            if (fn) { fn(); updateToolbar(); }
+        });
+    });
+
+    // Block-type dropdown (Paragraph / Heading 2 / 3 / 4). Choosing an option
+    // in a native <select> blurs the editor before "change" fires, so the
+    // command is applied via withSelection() (focus + explicit
+    // setTextSelection of the range captured before the select took focus),
+    // not a bare chain().focus() (confirmed unreliable on its own).
+    const blockSel = $('bp-tb-block');
+    blockSel.addEventListener('change', () => {
+        const v = blockSel.value;
+        withSelection((chain) => (
+            v === 'paragraph' ? chain.setParagraph() : chain.setHeading({ level: Number(v.slice(1)) })
+        ));
+        updateToolbar();
+    });
+
+    // Text colour. The native colour input steals focus for real; same fix
+    // as the block-type select — restore the captured selection explicitly
+    // rather than relying on chain().focus() alone.
+    const color = $('bp-tb-color');
+    color.addEventListener('input', () => {
+        withSelection((chain) => chain.setColor(color.value));
+        $('bp-tb-color-bar').style.background = color.value;
+        updateToolbar();
+    });
+}
+
+function updateToolbar() {
+    if (!editor) return;
+    const bar = $('bp-toolbar');
+    const on = (name, active) => {
+        const btn = bar.querySelector(`[data-cmd="${name}"]`);
+        if (btn) btn.classList.toggle('is-active', !!active);
+    };
+
+    on('bold', editor.isActive('bold'));
+    on('italic', editor.isActive('italic'));
+    on('underline', editor.isActive('underline'));
+    on('strike', editor.isActive('strike'));
+    on('code', editor.isActive('code'));
+    on('blockquote', editor.isActive('blockquote'));
+    on('bulletList', editor.isActive('bulletList'));
+    on('orderedList', editor.isActive('orderedList'));
+    on('highlight', editor.isActive('highlight'));
+    on('link', editor.isActive('link'));
+    on('align-left', editor.isActive({ textAlign: 'left' }));
+    on('align-center', editor.isActive({ textAlign: 'center' }));
+    on('align-right', editor.isActive({ textAlign: 'right' }));
+
+    // Block-type select reflects the node under the caret.
+    let v = 'paragraph';
+    if (editor.isActive('heading', { level: 2 })) v = 'h2';
+    else if (editor.isActive('heading', { level: 3 })) v = 'h3';
+    else if (editor.isActive('heading', { level: 4 })) v = 'h4';
+    $('bp-tb-block').value = v;
+
+    // Current text-colour swatch.
+    const c = editor.getAttributes('textStyle').color;
+    if (c) {
+        $('bp-tb-color-bar').style.background = c;
+        if (/^#[0-9a-f]{3,8}$/i.test(c)) $('bp-tb-color').value = c;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DAM picker modal (reused for featured / OG / inline images)
+// ---------------------------------------------------------------------------
+
+let damSelect = null;
+
+function openDam(onSelect) {
+    damSelect = onSelect;
+    $('bp-dam-modal').hidden = false;
+    $('bp-dam-search').value = '';
+    drawDamGrid('');
+}
+
+function closeDam() { $('bp-dam-modal').hidden = true; damSelect = null; }
+
+function drawDamGrid(term) {
+    const grid = $('bp-dam-grid');
+    grid.innerHTML = '';
+    const q = term.toLowerCase();
+    state.assets
+        .filter((a) => !q || (a.name || '').toLowerCase().includes(q))
+        .forEach((a) => {
+            const cell = el('div', 'bp-dam-cell');
+            const img = el('img');
+            img.src = a.url;
+            img.loading = 'lazy';
+            cell.append(img, el('span', null, esc(a.name)));
+            cell.addEventListener('click', () => { if (damSelect) damSelect(a); closeDam(); });
+            grid.append(cell);
+        });
+    if (!grid.children.length) grid.append(el('div', 'bp-muted-note', 'No images yet — upload one.'));
+}
+
+function wireDam() {
+    $('bp-dam-close').addEventListener('click', closeDam);
+    $('bp-dam-modal').addEventListener('click', (e) => { if (e.target === $('bp-dam-modal')) closeDam(); });
+    $('bp-dam-search').addEventListener('input', (e) => drawDamGrid(e.target.value));
+
+    $('bp-dam-upload').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch(BOOT.endpoints.assetUpload, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': BOOT.csrf, 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+            body: fd,
+        });
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && json.asset) {
+            // AssetController returns the public URL under `file_path`.
+            const asset = { id: json.asset.id, name: json.asset.name, url: json.asset.file_path, alt: '' };
+            state.assets.unshift(asset);
+            drawDamGrid($('bp-dam-search').value);
         }
-    };
-    renderPreview();
-
-    const choose = el('button', 'bp-btn bp-btn-sm bp-choose-btn', block.data.asset_id || block.data.url ? 'Replace image' : 'Choose from library');
-    choose.type = 'button';
-    choose.addEventListener('click', () => openDam((asset) => {
-        block.data.asset_id = asset.id;
-        block.data.url = '';
-        if (!block.data.alt) block.data.alt = asset.alt || '';
-        renderPreview();
-        alt.value = block.data.alt || '';
-        markDirty();
-    }));
-
-    const urlRow = el('div', 'bp-row');
-    urlRow.style.marginTop = '8px';
-    const url = el('input', 'bp-input');
-    url.type = 'text';
-    url.placeholder = '…or paste an image URL';
-    url.value = block.data.url || '';
-    url.addEventListener('input', () => {
-        block.data.url = url.value.trim();
-        if (block.data.url) block.data.asset_id = null;
-        renderPreview();
-        markDirty();
-    });
-    urlRow.append(url);
-
-    const alt = el('input', 'bp-input');
-    alt.type = 'text';
-    alt.placeholder = 'Alt text (accessibility / SEO)';
-    alt.value = block.data.alt || '';
-    alt.style.marginTop = '8px';
-    alt.addEventListener('input', () => { block.data.alt = alt.value; markDirty(); });
-
-    const caption = el('input', 'bp-input');
-    caption.type = 'text';
-    caption.placeholder = 'Caption (optional)';
-    caption.value = block.data.caption || '';
-    caption.style.marginTop = '8px';
-    caption.addEventListener('input', () => { block.data.caption = caption.value; markDirty(); });
-
-    body.append(preview, choose, urlRow, alt, caption);
-}
-
-function renderQuote(block, body) {
-    const text = el('textarea', 'bp-textarea');
-    text.placeholder = 'Quote text';
-    text.value = block.data.text || '';
-    text.addEventListener('input', () => { block.data.text = text.value; markDirty(); });
-
-    const cite = el('input', 'bp-input');
-    cite.type = 'text';
-    cite.placeholder = 'Attribution (optional)';
-    cite.value = block.data.cite || '';
-    cite.style.marginTop = '8px';
-    cite.addEventListener('input', () => { block.data.cite = cite.value; markDirty(); });
-
-    body.append(text, cite);
-}
-
-function renderTable(block, body) {
-    const wrap = el('div');
-    const draw = () => {
-        wrap.innerHTML = '';
-        const table = el('table', 'bp-tbl');
-        block.data.rows.forEach((row, ri) => {
-            const tr = el('tr');
-            row.forEach((cell, ci) => {
-                const td = el('td');
-                const inp = el('input');
-                inp.type = 'text';
-                inp.value = cell;
-                inp.placeholder = ri === 0 ? 'Header' : '';
-                inp.addEventListener('input', () => { block.data.rows[ri][ci] = inp.value; markDirty(); });
-                td.append(inp);
-                tr.append(td);
-            });
-            table.append(tr);
-        });
-        wrap.append(table);
-    };
-    draw();
-
-    const tools = el('div', 'bp-tbl-tools');
-    const addRow = el('button', 'bp-btn bp-btn-sm', '+ Row');
-    addRow.type = 'button';
-    addRow.addEventListener('click', () => {
-        const cols = block.data.rows[0]?.length || 2;
-        block.data.rows.push(Array(cols).fill(''));
-        draw(); markDirty();
-    });
-    const addCol = el('button', 'bp-btn bp-btn-sm', '+ Column');
-    addCol.type = 'button';
-    addCol.addEventListener('click', () => { block.data.rows.forEach((r) => r.push('')); draw(); markDirty(); });
-    const delRow = el('button', 'bp-btn bp-btn-sm', '− Row');
-    delRow.type = 'button';
-    delRow.addEventListener('click', () => { if (block.data.rows.length > 1) { block.data.rows.pop(); draw(); markDirty(); } });
-    const delCol = el('button', 'bp-btn bp-btn-sm', '− Column');
-    delCol.type = 'button';
-    delCol.addEventListener('click', () => {
-        if ((block.data.rows[0]?.length || 0) > 1) { block.data.rows.forEach((r) => r.pop()); draw(); markDirty(); }
-    });
-    tools.append(addRow, addCol, delRow, delCol);
-    body.append(wrap, tools);
-}
-
-function renderCta(block, body) {
-    const label = el('input', 'bp-input');
-    label.type = 'text';
-    label.placeholder = 'Button label';
-    label.value = block.data.label || '';
-    label.addEventListener('input', () => { block.data.label = label.value; markDirty(); });
-
-    const url = el('input', 'bp-input');
-    url.type = 'text';
-    url.placeholder = 'Destination URL';
-    url.value = block.data.url || '';
-    url.style.marginTop = '8px';
-    url.addEventListener('input', () => { block.data.url = url.value.trim(); markDirty(); });
-
-    const style = el('select', 'bp-block-select');
-    style.style.marginTop = '8px';
-    [['button', 'Button'], ['link', 'Text link']].forEach(([v, t]) => {
-        const o = el('option', null, t);
-        o.value = v;
-        if ((block.data.style || 'button') === v) o.selected = true;
-        style.append(o);
-    });
-    style.addEventListener('change', () => { block.data.style = style.value; markDirty(); });
-
-    body.append(label, url, style);
-}
-
-function renderFaq(block, body) {
-    const list = el('div');
-    const draw = () => {
-        list.innerHTML = '';
-        block.data.items.forEach((item, i) => {
-            const card = el('div', 'bp-faq-item');
-            const q = el('input', 'bp-input');
-            q.type = 'text';
-            q.placeholder = 'Question';
-            q.value = item.q || '';
-            q.addEventListener('input', () => { item.q = q.value; markDirty(); });
-            const a = el('textarea', 'bp-textarea');
-            a.placeholder = 'Answer';
-            a.value = item.a || '';
-            a.style.marginTop = '6px';
-            a.addEventListener('input', () => { item.a = a.value; markDirty(); });
-            const rm = el('button', 'bp-btn bp-btn-sm', 'Remove');
-            rm.type = 'button';
-            rm.style.marginTop = '6px';
-            rm.addEventListener('click', () => {
-                if (block.data.items.length > 1) { block.data.items.splice(i, 1); draw(); markDirty(); }
-            });
-            card.append(q, a, rm);
-            list.append(card);
-        });
-    };
-    draw();
-
-    const add = el('button', 'bp-btn bp-btn-sm', '+ Question');
-    add.type = 'button';
-    add.addEventListener('click', () => { block.data.items.push({ q: '', a: '' }); draw(); markDirty(); });
-    body.append(list, add);
-}
-
-function renderDivider(block, body) {
-    body.append(el('div', 'bp-muted-note', 'Horizontal divider'));
-}
-
-// ---------------------------------------------------------------------------
-// Add-block menu
-// ---------------------------------------------------------------------------
-
-function buildAddMenu() {
-    const menu = $('bp-add-menu');
-    (BOOT.blockTypes || Object.keys(BLOCK_LABELS)).forEach((type) => {
-        const b = el('button', 'bp-add-item', esc(BLOCK_LABELS[type] || type));
-        b.type = 'button';
-        b.addEventListener('click', () => { addBlock(type); menu.hidden = true; });
-        menu.append(b);
-    });
-    $('bp-add-block').addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
-    document.addEventListener('click', (e) => {
-        if (!menu.hidden && !menu.contains(e.target) && e.target !== $('bp-add-block')) menu.hidden = true;
+        e.target.value = '';
     });
 }
 
 // ---------------------------------------------------------------------------
-// Sidebar: featured image, category, tags, schedule
+// Settings modal: featured image, category, tags
 // ---------------------------------------------------------------------------
 
 function renderFeatured() {
@@ -823,65 +630,6 @@ function wireTagCreate() {
 }
 
 // ---------------------------------------------------------------------------
-// DAM picker modal
-// ---------------------------------------------------------------------------
-
-let damSelect = null;
-
-function openDam(onSelect) {
-    damSelect = onSelect;
-    $('bp-dam-modal').hidden = false;
-    $('bp-dam-search').value = '';
-    drawDamGrid('');
-}
-
-function closeDam() { $('bp-dam-modal').hidden = true; damSelect = null; }
-
-function drawDamGrid(term) {
-    const grid = $('bp-dam-grid');
-    grid.innerHTML = '';
-    const q = term.toLowerCase();
-    state.assets
-        .filter((a) => !q || (a.name || '').toLowerCase().includes(q))
-        .forEach((a) => {
-            const cell = el('div', 'bp-dam-cell');
-            const img = el('img');
-            img.src = a.url;
-            img.loading = 'lazy';
-            cell.append(img, el('span', null, esc(a.name)));
-            cell.addEventListener('click', () => { if (damSelect) damSelect(a); closeDam(); });
-            grid.append(cell);
-        });
-    if (!grid.children.length) grid.append(el('div', 'bp-muted-note', 'No images yet — upload one.'));
-}
-
-function wireDam() {
-    $('bp-dam-close').addEventListener('click', closeDam);
-    $('bp-dam-modal').addEventListener('click', (e) => { if (e.target === $('bp-dam-modal')) closeDam(); });
-    $('bp-dam-search').addEventListener('input', (e) => drawDamGrid(e.target.value));
-
-    $('bp-dam-upload').addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const fd = new FormData();
-        fd.append('file', file);
-        const res = await fetch(BOOT.endpoints.assetUpload, {
-            method: 'POST',
-            headers: { 'X-CSRF-TOKEN': BOOT.csrf, 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
-            body: fd,
-        });
-        const json = await res.json().catch(() => ({}));
-        if (res.ok && json.asset) {
-            // AssetController returns the public URL under `file_path`.
-            const asset = { id: json.asset.id, name: json.asset.name, url: json.asset.file_path, alt: '' };
-            state.assets.unshift(asset);
-            drawDamGrid($('bp-dam-search').value);
-        }
-        e.target.value = '';
-    });
-}
-
-// ---------------------------------------------------------------------------
 // Slug
 // ---------------------------------------------------------------------------
 
@@ -925,8 +673,8 @@ function collectPayload(kind) {
         category_id: state.categoryId,
         tag_ids: state.tagIds,
         featured_asset_id: state.featuredAssetId,
-        // SEO workspace (blog_post_seo) — always included so every
-        // autosave/save cycle keeps it current, same as body_json/tag_ids.
+        // SEO workspace (blog_post_seo) — always included so every autosave/save
+        // cycle keeps it current, same as body_json/tag_ids.
         seo: SeoPanel ? SeoPanel.collect() : {},
     };
     if (!state.slugLocked) {
@@ -955,14 +703,11 @@ function adoptPost(post) {
     if (post.slug_locked && !state.slugLocked) { state.slugLocked = true; }
     applySlugLock();
 
-    // Keep BOOT.post's server-derived fields fresh (e.g. the auto-filled
-    // excerpt used by the SEO panel's meta-description fallback), then tell
-    // the SEO module a save landed so it can refresh its previews/lock state.
+    // Keep BOOT.post fresh (e.g. the auto-filled excerpt used by the SEO panel),
+    // then tell the SEO module a save landed so its previews can refresh.
     BOOT.post = { ...(BOOT.post || {}), ...post };
     document.dispatchEvent(new CustomEvent('bp:saved', { detail: post }));
 
-    // The post may have just gained a uuid or changed status — let the website
-    // publishing panel re-evaluate whether "Publish to website" is available.
     if (PublishPanel) PublishPanel.refreshButton();
 }
 
@@ -996,7 +741,6 @@ async function persist(kind) {
                 return false;
             }
             adoptPost(r.json.post);
-            // Autosave/draft are complete once the content is stored.
             if (kind === 'autosave' || kind === 'draft') { stampSaved(); return true; }
             // save/publish: fall through to apply the status change.
         }
@@ -1037,41 +781,16 @@ function showErrors(errors) {
 // Hydration + wiring
 // ---------------------------------------------------------------------------
 
-function hydrate() {
+function hydrateMeta() {
     const post = BOOT.post;
     if (post) {
         $('bp-title').value = post.title || '';
         $('bp-slug').value = post.slug || '';
         if (post.status) $('bp-status').value = post.status;
-        const blocks = post.body_json?.blocks || [];
-        blocks.forEach((b) => {
-            const block = { id: b.id || uid(), type: b.type, data: b.data || defaultData(b.type) };
-            // Only hydrate types this editor knows; unknown/future types are
-            // preserved in state (round-tripped) but rendered as a read-only note.
-            state.blocks.push(block);
-            const built = (BLOCK_LABELS[block.type]) ? buildBlock(block) : buildUnknownBlock(block);
-            $('bp-canvas').append(built);
-            nodes.set(block.id, { root: built });
-            if (block.type === 'paragraph') mountParagraphEditor(block, built);
-        });
-        setStatusIndicator('saved', 'Loaded');
     }
     applySlugLock();
     renderFeatured();
     renderTagChips();
-}
-
-// Preserve (round-trip) block types this V1 editor doesn't render, so opening
-// and saving a doc authored by a newer editor never drops content.
-function buildUnknownBlock(block) {
-    const root = el('div', 'bp-block');
-    root.dataset.id = block.id;
-    const head = el('div', 'bp-block-head');
-    head.append(el('span', 'bp-block-type', esc(block.type)));
-    const body = el('div', 'bp-block-body');
-    body.append(el('div', 'bp-muted-note', 'This block type isn’t editable in this view; it will be preserved on save.'));
-    root.append(head, body);
-    return root;
 }
 
 function wireToolbar() {
@@ -1093,8 +812,7 @@ function wireToolbar() {
             : `Publish this post? This locks the URL, marks it Published in Dentfluence, and pushes it to ${site}.`;
         if (!window.confirm(msg)) return;
 
-        // Save + set the Dentfluence status first; only then push to the
-        // website (so the ledger reflects the just-saved content/status).
+        // Save + set the Dentfluence status first; only then push to the website.
         const saved = await persist('publish');
         if (saved && PublishPanel) PublishPanel.publishToWebsite();
     });
@@ -1111,17 +829,17 @@ function wireToolbar() {
 // Init
 // ---------------------------------------------------------------------------
 
-buildAddMenu();
 buildCategorySelect();
 wireTagCreate();
 wireDam();
 wireToolbar();
-hydrate();
+hydrateMeta();
+mountEditor(computeInitialHtml());
+setStatusIndicator(BOOT.post ? 'saved' : 'idle', BOOT.post ? 'Loaded' : 'Not saved yet');
 
-// SEO panel wiring — deliberately handed only the four things it needs from
-// this module (autosave scheduling, the shared DAM picker, live asset
-// lookup, and the live featured-image id for its OG-image fallback). It
-// reads #bp-title/#bp-slug directly and owns #bp-seo-anchor's DOM itself.
+// SEO panel wiring — handed only the four things it needs (autosave scheduling,
+// the shared DAM picker, live asset lookup, and the live featured-image id for
+// its OG-image fallback). It reads #bp-title/#bp-slug directly.
 SeoPanel = initSeoPanel({
     markDirty,
     openDam,
@@ -1129,14 +847,11 @@ SeoPanel = initSeoPanel({
     getFeaturedAssetId: () => state.featuredAssetId,
 });
 
-// Website publishing panel (Slice 6). Handed only what it needs: the live post
-// uuid and editorial status. It owns #bp-publish-panel's DOM and talks to the
-// blog_publications ledger endpoints itself — content/SEO stay adapter-agnostic.
+// Website publishing panel — handed only the live post uuid + editorial status.
 PublishPanel = initPublishPanel({
     getPostUuid: () => state.postUuid,
     getStatus: () => $('bp-status').value,
 });
 
-// Re-evaluate the publish button whenever the status selector changes (only
-// Published/Scheduled posts can be pushed to a website).
+// Re-evaluate the publish button whenever the status selector changes.
 $('bp-status').addEventListener('change', () => PublishPanel && PublishPanel.refreshButton());

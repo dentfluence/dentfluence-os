@@ -43,8 +43,60 @@
     <div id="bp-error" class="bp-error" hidden></div>
 
     <div class="bp-layout">
-        {{-- ═══════════════ Main writing column ═══════════════ --}}
+        {{-- ═══════════════ Main writing column ═══════════════
+             Single continuous rich-text document (Wix / Google-Docs style):
+             title + slug, then a persistent word-processor toolbar, then ONE
+             flowing TipTap surface. No per-block cards, no "+ Add block".
+             The toolbar controls are wired by data-cmd in blog-editor.js and
+             reflect the active selection's marks/nodes. --}}
         <div class="bp-main">
+
+            {{-- Persistent formatting toolbar (sticks under the top bar). --}}
+            <div id="bp-toolbar" class="bp-toolbar" role="toolbar" aria-label="Formatting" aria-controls="bp-editor">
+                <select id="bp-tb-block" class="bp-tb-block" title="Text style" aria-label="Text style">
+                    <option value="paragraph">Paragraph</option>
+                    <option value="h2">Heading 2</option>
+                    <option value="h3">Heading 3</option>
+                    <option value="h4">Heading 4</option>
+                </select>
+
+                <span class="bp-tb-sep"></span>
+
+                <button type="button" class="bp-tb-btn" data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold"><b>B</b></button>
+                <button type="button" class="bp-tb-btn" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic"><i>I</i></button>
+                <button type="button" class="bp-tb-btn" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"><u>U</u></button>
+                <button type="button" class="bp-tb-btn" data-cmd="strike" title="Strikethrough" aria-label="Strikethrough"><s>S</s></button>
+
+                <span class="bp-tb-sep"></span>
+
+                <label class="bp-tb-btn bp-tb-color" title="Text colour" aria-label="Text colour">
+                    A<span class="bp-tb-color-bar" id="bp-tb-color-bar"></span>
+                    <input type="color" id="bp-tb-color" value="#6a0f70" aria-hidden="true">
+                </label>
+                <button type="button" class="bp-tb-btn" data-cmd="highlight" title="Highlight" aria-label="Highlight"><span class="bp-tb-hl">H</span></button>
+
+                <span class="bp-tb-sep"></span>
+
+                <button type="button" class="bp-tb-btn" data-cmd="link" title="Link" aria-label="Link">&#128279;</button>
+                <button type="button" class="bp-tb-btn" data-cmd="blockquote" title="Quote" aria-label="Quote">&#8220;</button>
+                <button type="button" class="bp-tb-btn" data-cmd="code" title="Inline code" aria-label="Inline code">&lt;/&gt;</button>
+
+                <span class="bp-tb-sep"></span>
+
+                <button type="button" class="bp-tb-btn" data-cmd="bulletList" title="Bulleted list" aria-label="Bulleted list">&#8226;&#8801;</button>
+                <button type="button" class="bp-tb-btn" data-cmd="orderedList" title="Numbered list" aria-label="Numbered list">1.&#8801;</button>
+
+                <span class="bp-tb-sep"></span>
+
+                <button type="button" class="bp-tb-btn bp-tb-align bp-tb-align-l" data-cmd="align-left" title="Align left" aria-label="Align left"><span></span></button>
+                <button type="button" class="bp-tb-btn bp-tb-align bp-tb-align-c" data-cmd="align-center" title="Align centre" aria-label="Align centre"><span></span></button>
+                <button type="button" class="bp-tb-btn bp-tb-align bp-tb-align-r" data-cmd="align-right" title="Align right" aria-label="Align right"><span></span></button>
+
+                <span class="bp-tb-sep"></span>
+
+                <button type="button" class="bp-tb-btn" data-cmd="image" title="Insert image" aria-label="Insert image">&#128247;</button>
+            </div>
+
           <div class="bp-doc">
             <input type="text" id="bp-title" class="bp-title-input" placeholder="Post title" autocomplete="off">
 
@@ -54,13 +106,8 @@
                 <span class="bp-slug-lock" id="bp-slug-lock" hidden title="The URL locks once a post is first published.">locked</span>
             </div>
 
-            {{-- Blocks render here (built by the editor module) --}}
-            <div id="bp-canvas" class="bp-canvas" aria-label="Content blocks"></div>
-
-            <div class="bp-add-wrap">
-                <button type="button" id="bp-add-block" class="bp-add-btn">+ Add block</button>
-                <div id="bp-add-menu" class="bp-add-menu" hidden role="menu"></div>
-            </div>
+            {{-- The single flowing document mounts here (TipTap, blog-editor.js). --}}
+            <div id="bp-editor" class="bp-editor" aria-label="Post body"></div>
           </div>{{-- /.bp-doc --}}
         </div>{{-- /.bp-main --}}
     </div>{{-- /.bp-layout --}}
@@ -312,17 +359,119 @@
     .bp-slug-input:disabled { color:#9b8aa6; }
     .bp-slug-lock { font-size:11px; background:#f3e9f4; color:#8a5a8f; border-radius:3px; padding:2px 6px; margin-left:6px; }
 
-    /* Blocks */
-    .bp-canvas { display:flex; flex-direction:column; gap:10px; }
-    .bp-block { border:1px solid rgba(185,92,183,0.16); border-radius:10px; background:#fff; }
-    .bp-block.bp-dragover { border-color:#b95cb7; }
-    .bp-block-head { display:flex; align-items:center; gap:6px; padding:6px 8px; border-bottom:1px solid rgba(185,92,183,0.10); background:#faf6fb; border-radius:10px 10px 0 0; }
-    .bp-block-type { font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:#8a5a8f; }
+    /* ─────────────── Word-processor toolbar (single-surface editor) ───────────────
+       Slim persistent bar above the document; sticks just under the top bar so
+       formatting is always in reach while scrolling a long post. */
+    .bp-toolbar {
+        display:flex; align-items:center; flex-wrap:wrap; gap:3px;
+        background:#fff; border:1px solid rgba(185,92,183,0.18); border-radius:12px;
+        padding:6px 8px; margin-bottom:14px;
+        position:sticky; top:100px; z-index:14;
+        box-shadow:0 1px 4px rgba(106,15,112,0.05);
+    }
+    .bp-tb-sep { width:1px; align-self:stretch; margin:3px 3px; background:rgba(185,92,183,0.2); }
+    .bp-tb-btn {
+        font-family:inherit; font-size:13.5px; line-height:1; color:#5a4868;
+        min-width:30px; height:30px; padding:0 8px;
+        display:inline-flex; align-items:center; justify-content:center;
+        border:1px solid transparent; border-radius:7px; background:transparent; cursor:pointer;
+    }
+    .bp-tb-btn:hover { background:#f5ecf6; color:#6a0f70; }
+    .bp-tb-btn.is-active { background:#6a0f70; color:#fff; }
+    .bp-tb-block {
+        font-family:inherit; font-size:13px; color:#1e0a2c; height:30px;
+        border:1px solid rgba(185,92,183,0.24); border-radius:7px; background:#fff; padding:0 6px; cursor:pointer;
+    }
+    /* Text-colour control: a swatch under the "A" reflects the current colour. */
+    .bp-tb-color { position:relative; flex-direction:column; gap:0; font-weight:700; overflow:hidden; }
+    .bp-tb-color-bar { display:block; width:16px; height:3px; border-radius:2px; background:#6a0f70; margin-top:1px; }
+    .bp-tb-color input[type="color"] {
+        position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; border:none; padding:0;
+    }
+    .bp-tb-hl { background:#ffe58a; border-radius:2px; padding:0 3px; }
+    /* Alignment icons drawn in CSS: three stacked lines whose short middle line
+       shifts to hint left / centre / right. */
+    .bp-tb-align span { position:relative; display:block; width:15px; height:11px; }
+    .bp-tb-align span::before,
+    .bp-tb-align span::after { content:''; position:absolute; height:1.5px; background:currentColor; border-radius:1px; }
+    .bp-tb-align span::before { top:0; left:0; width:15px; }         /* full top line */
+    .bp-tb-align span::after  { bottom:0; left:0; width:15px; }      /* full bottom line */
+    /* Middle line via a box-shadow trick on ::before would collide; use outline
+       lines instead: add a middle short line through a background gradient. */
+    .bp-tb-align span { background:
+        linear-gradient(currentColor, currentColor) center 4.75px / 9px 1.5px no-repeat; }
+    .bp-tb-align-l span { background-position:left 0 top 4.75px; }
+    .bp-tb-align-c span { background-position:center top 4.75px; }
+    .bp-tb-align-r span { background-position:right 0 top 4.75px; }
+
+    /* ─────────────── The single flowing document surface ───────────────
+       Borderless, flush, centred with a comfortable measure; readable body
+       typography with styled headings/lists/quotes. */
+    .bp-editor { margin-top:4px; }
+    .bp-editor .ProseMirror {
+        outline:none; min-height:440px;
+        font-size:16px; line-height:1.7; color:#241033;
+    }
+    .bp-editor .ProseMirror:focus { outline:none; }
+    .bp-editor .ProseMirror > * { margin:0 0 0.85em; }
+    .bp-editor .ProseMirror > *:last-child { margin-bottom:0; }
+    .bp-editor .ProseMirror h2 { font-size:25px; font-weight:700; line-height:1.25; color:#1e0a2c; margin:1.2em 0 0.5em; }
+    .bp-editor .ProseMirror h3 { font-size:20px; font-weight:700; line-height:1.3; color:#1e0a2c; margin:1.1em 0 0.45em; }
+    .bp-editor .ProseMirror h4 { font-size:17px; font-weight:600; line-height:1.35; color:#2a1240; margin:1em 0 0.4em; }
+    .bp-editor .ProseMirror ul,
+    .bp-editor .ProseMirror ol { padding-left:1.5em; }
+    .bp-editor .ProseMirror li { margin:0.2em 0; }
+    .bp-editor .ProseMirror li > p { margin:0; }
+    .bp-editor .ProseMirror blockquote {
+        border-left:3px solid #b95cb7; margin:1em 0; padding:0.2em 0 0.2em 1em; color:#5a4868; font-style:italic;
+    }
+    .bp-editor .ProseMirror a { color:#6a0f70; text-decoration:underline; }
+    .bp-editor .ProseMirror code {
+        font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:0.9em;
+        background:#f3e9f4; color:#6a0f70; border-radius:4px; padding:1px 5px;
+    }
+    .bp-editor .ProseMirror pre {
+        background:#2a1240; color:#f6eefb; border-radius:10px; padding:12px 14px; overflow:auto;
+        font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13.5px; line-height:1.5;
+    }
+    .bp-editor .ProseMirror pre code { background:none; color:inherit; padding:0; }
+    .bp-editor .ProseMirror img { max-width:100%; height:auto; border-radius:10px; display:block; margin:1em 0; }
+    .bp-editor .ProseMirror img.ProseMirror-selectednode { outline:2px solid #b95cb7; }
+    .bp-editor .ProseMirror mark { background:#ffe58a; border-radius:2px; padding:0 1px; }
+    /* Empty-doc hint (no Placeholder extension — pure CSS on the first empty node). */
+    .bp-editor .ProseMirror p.is-empty:first-child::before,
+    .bp-editor .ProseMirror > p:only-child:empty::before {
+        content:'Write your post…'; color:#c3aecd; float:left; height:0; pointer-events:none;
+    }
+
+    /* Blocks — Feature 3: read like one flowing document, not stacked cards.
+       No card border/grey head bar by default; the type label + drag/move/
+       delete controls fade in only on hover/focus. Generous vertical rhythm
+       between blocks; the body sits flush (no card padding) like document
+       text — consistent with the title/slug above it. */
+    .bp-canvas { display:flex; flex-direction:column; gap:30px; }
+    .bp-block { border:1px solid transparent; border-radius:8px; background:transparent; position:relative; }
+    .bp-block.bp-dragover { border-color:#b95cb7; background:#faf6fb; }
+    .bp-block-head { display:flex; align-items:center; gap:6px; padding:0 2px 4px; min-height:18px; border-bottom:none; background:transparent; border-radius:0; opacity:0; transition:opacity .15s ease; }
+    .bp-block:hover .bp-block-head, .bp-block:focus-within .bp-block-head { opacity:1; }
+    .bp-block-type { font-size:10.5px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:#b39cbd; }
     .bp-block-tools { margin-left:auto; display:flex; align-items:center; gap:2px; }
-    .bp-drag { cursor:grab; color:#b39cbd; font-size:14px; padding:0 4px; }
+    .bp-drag { cursor:grab; color:#c9b6d1; font-size:14px; padding:0 4px; }
     .bp-icon-btn { border:none; background:transparent; cursor:pointer; color:#9b6aad; font-size:14px; padding:3px 6px; border-radius:6px; line-height:1; }
     .bp-icon-btn:hover { background:#efe3f0; color:#6a0f70; }
-    .bp-block-body { padding:10px 12px; }
+    .bp-block-body { padding:0; position:relative; }
+
+    /* List block (Feature 1) */
+    .bp-list { display:flex; flex-direction:column; gap:4px; margin-top:8px; }
+    .bp-list-row { display:flex; align-items:flex-start; gap:8px; }
+    .bp-list-marker { flex:0 0 18px; text-align:right; color:#8a5a8f; font-size:14px; line-height:1.55; user-select:none; }
+    .bp-list-item { flex:1; min-width:0; font-size:14px; line-height:1.55; color:#1e0a2c; outline:none; padding:2px 0; }
+    .bp-list-item:empty::before { content:'List item'; color:#c3aecd; }
+
+    /* Slash "/" insert menu (Feature 2) — anchored to .bp-block-body */
+    .bp-slash-menu { position:absolute; top:100%; left:0; margin-top:4px; background:#fff; border:1px solid rgba(185,92,183,0.2); border-radius:10px; box-shadow:0 8px 24px rgba(60,10,60,0.12); padding:6px; min-width:220px; max-height:260px; overflow-y:auto; z-index:40; }
+    .bp-slash-item { display:block; width:100%; text-align:left; font-size:13px; padding:7px 10px; border:none; background:transparent; cursor:pointer; border-radius:8px; color:#1e0a2c; }
+    .bp-slash-item:hover, .bp-slash-item.is-active { background:#f5ecf6; }
 
     .bp-input, .bp-textarea, .bp-block-select, .bp-inline-input { font-family:inherit; font-size:14px; color:#1e0a2c; border:1px solid rgba(185,92,183,0.22); border-radius:8px; padding:7px 9px; background:#fff; width:100%; box-sizing:border-box; }
     .bp-textarea { resize:vertical; min-height:64px; }

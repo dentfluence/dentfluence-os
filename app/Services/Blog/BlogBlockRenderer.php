@@ -26,6 +26,25 @@ class BlogBlockRenderer
     private const ALLOWED_INLINE_TAGS = '<strong><b><em><i><u><s><a><br><code><sup><sub>';
 
     /**
+     * Block-level allowlist for the single-surface `richtext` document (the
+     * Wix/Docs-style editor). Everything not on this list is unwrapped (its text
+     * survives) or, for <img>, dropped if its src is unsafe. See sanitizeBlockHtml().
+     */
+    private const RICHTEXT_TAGS = [
+        'p', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'blockquote',
+        'strong', 'b', 'em', 'i', 'u', 's', 'a', 'code', 'pre', 'br',
+        'img', 'figure', 'figcaption',
+        // 'mark' (highlight, no attributes) and 'span' (text colour — only a
+        // vetted color/background-color declaration survives, see
+        // allowedTextColorStyle()) so the editor's colour/highlight marks
+        // persist into the published HTML instead of being stripped.
+        'span', 'mark',
+    ];
+
+    /** Block-level tags allowed to carry a vetted text-align style. */
+    private const RICHTEXT_ALIGNABLE = ['p', 'h2', 'h3', 'h4', 'blockquote', 'li'];
+
+    /**
      * Render a full body_json document to HTML.
      */
     public function render(array $bodyJson): string
@@ -49,6 +68,8 @@ class BlogBlockRenderer
                 'cta'       => $this->cta($data),
                 'faq'       => $this->faq($data),
                 'divider'   => "<hr>\n",
+                'list'      => $this->list($data),
+                'richtext'  => $this->richtext($data),
                 default     => '', // unknown/future type: skip gracefully
             };
 
@@ -99,6 +120,23 @@ class BlogBlockRenderer
 
                 case 'cta':
                     $parts[] = (string) ($data['label'] ?? '');
+                    break;
+
+                case 'list':
+                    foreach (($data['items'] ?? []) as $item) {
+                        if (is_string($item)) {
+                            $parts[] = strip_tags($item);
+                        }
+                    }
+                    break;
+
+                case 'richtext':
+                    // One flowing document — strip its tags to plain text for
+                    // excerpt/reading-time. Insert spaces where tags used to be so
+                    // adjacent block text doesn't run together ("a</p><p>b" -> "a b").
+                    if (isset($data['html']) && is_string($data['html'])) {
+                        $parts[] = strip_tags(str_replace('<', ' <', $data['html']));
+                    }
                     break;
 
                 case 'faq':
@@ -246,9 +284,249 @@ class BlogBlockRenderer
         return $html === '' ? '' : '<section class="blog-faq">' . $html . "</section>\n";
     }
 
+    /**
+     * `list` block: bulleted (<ul>) or numbered (<ol>). Each item runs through
+     * the SAME inline-html allowlist sanitizer as paragraph blocks, so bold/
+     * italic/link marks made in the editor survive; anything else is stripped.
+     */
+    private function list(array $data): string
+    {
+        $items = array_values(array_filter((array) ($data['items'] ?? []), 'is_string'));
+
+        $lis = [];
+        foreach ($items as $item) {
+            $inner = $this->sanitizeInlineHtml($item);
+            if ($inner === '') {
+                continue;
+            }
+            $lis[] = '<li>' . $inner . '</li>';
+        }
+        if ($lis === []) {
+            return '';
+        }
+
+        $tag = ($data['style'] ?? 'bullet') === 'number' ? 'ol' : 'ul';
+
+        return "<{$tag}>" . implode('', $lis) . "</{$tag}>\n";
+    }
+
+    /**
+     * `richtext` block: the whole post body as one word-processor document.
+     * Ships the editor's own HTML through a strict block-level allowlist
+     * (sanitizeBlockHtml) so the stored/published markup stays portable and safe.
+     */
+    private function richtext(array $data): string
+    {
+        $html = isset($data['html']) && is_string($data['html']) ? $data['html'] : '';
+        if (trim($html) === '') {
+            return '';
+        }
+
+        $clean = $this->sanitizeBlockHtml($html);
+
+        return $clean === '' ? '' : $clean . "\n";
+    }
+
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * Sanitize the single-surface editor's document HTML against a block-level
+     * allowlist (RICHTEXT_TAGS). Uses DOMDocument to walk the tree — safer than
+     * regex for nested block markup with attributes:
+     *   - unknown/disallowed elements are UNWRAPPED (their text is kept)
+     *   - all attributes are dropped except a vetted href on <a>, src/alt on
+     *     <img>, a `text-align: left|center|right` style on block elements,
+     *     and a vetted `color`/`background-color` style on <span> (see
+     *     allowedTextColorStyle()) — <mark> carries no attributes at all
+     *   - unsafe <img> (javascript:/data:/relative-scheme src) are dropped
+     *   - all text is escaped
+     * Not a general HTML sanitizer — it only needs to cover our editor's output.
+     */
+    private function sanitizeBlockHtml(string $html): string
+    {
+        if (trim($html) === '') {
+            return '';
+        }
+
+        $dom = new \DOMDocument();
+        $prev = libxml_use_internal_errors(true);
+        // NOIMPLIED/NODEFDTD stop DOMDocument from injecting <html>/<body>/DOCTYPE;
+        // the explicit <body> wrapper gives us a single, known root to walk.
+        $dom->loadHTML(
+            '<?xml encoding="UTF-8"><body>' . $html . '</body>',
+            LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
+        );
+        libxml_clear_errors();
+        libxml_use_internal_errors($prev);
+
+        $body = $dom->getElementsByTagName('body')->item(0);
+        if (! $body) {
+            return '';
+        }
+
+        $out = '';
+        foreach (iterator_to_array($body->childNodes) as $child) {
+            $out .= $this->sanitizeNode($child);
+        }
+
+        return trim($out);
+    }
+
+    /** Recursively sanitize one DOM node into an allowlisted HTML string. */
+    private function sanitizeNode(\DOMNode $node): string
+    {
+        if ($node->nodeType === XML_TEXT_NODE) {
+            return e($node->textContent);
+        }
+        if ($node->nodeType !== XML_ELEMENT_NODE) {
+            return ''; // comments, PIs, etc.
+        }
+
+        $tag = strtolower($node->nodeName);
+
+        // Disallowed element: unwrap it — keep its (sanitized) children so no
+        // authored text is lost, drop the tag itself.
+        if (! in_array($tag, self::RICHTEXT_TAGS, true)) {
+            return $this->sanitizeChildren($node);
+        }
+
+        if ($tag === 'br') {
+            return '<br>';
+        }
+
+        if ($tag === 'img') {
+            $src = $this->safeUrl((string) $node->getAttribute('src'));
+            if ($src === null) {
+                return '';
+            }
+            $alt = e((string) $node->getAttribute('alt'));
+
+            return '<img src="' . e($src) . '" alt="' . $alt . '">';
+        }
+
+        // 'span' only ever carries the editor's text-colour mark (TextStyle +
+        // Color: <span style="color:#hex">). Keep ONLY a vetted color/
+        // background-color declaration; every other attribute/style is
+        // dropped. A span with no valid colour left is unwrapped — it has
+        // nothing left worth keeping the wrapper for.
+        if ($tag === 'span') {
+            $colorStyle = $this->allowedTextColorStyle((string) $node->getAttribute('style'));
+            if ($colorStyle === null) {
+                return $this->sanitizeChildren($node);
+            }
+
+            return '<span style="' . e($colorStyle) . '">' . $this->sanitizeChildren($node) . '</span>';
+        }
+
+        // Assemble the allowed attributes for this tag.
+        $attrs = '';
+
+        if ($tag === 'a') {
+            $href = $this->safeUrl(html_entity_decode((string) $node->getAttribute('href')));
+            $attrs .= $href === null ? '' : ' href="' . e($href) . '" rel="noopener"';
+        }
+
+        if (in_array($tag, self::RICHTEXT_ALIGNABLE, true)) {
+            $align = $this->allowedTextAlign((string) $node->getAttribute('style'));
+            if ($align !== null) {
+                $attrs .= ' style="text-align:' . $align . '"';
+            }
+        }
+
+        return "<{$tag}{$attrs}>" . $this->sanitizeChildren($node) . "</{$tag}>";
+    }
+
+    /** Concatenate the sanitized output of a node's children. */
+    private function sanitizeChildren(\DOMNode $node): string
+    {
+        $out = '';
+        foreach (iterator_to_array($node->childNodes) as $child) {
+            $out .= $this->sanitizeNode($child);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Extract a whitelisted text-align value (left|center|right) from a style
+     * attribute; everything else in the style string is discarded.
+     */
+    private function allowedTextAlign(string $style): ?string
+    {
+        if ($style === '') {
+            return null;
+        }
+        if (preg_match('/text-align\s*:\s*(left|center|right)\b/i', $style, $m)) {
+            return strtolower($m[1]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract a vetted `color` (and optional `background-color`) declaration
+     * from a <span> style attribute; everything else in the style string
+     * (or an unrecognised/invalid colour value) is discarded. Returns null
+     * when nothing valid is present.
+     */
+    private function allowedTextColorStyle(string $style): ?string
+    {
+        if ($style === '') {
+            return null;
+        }
+
+        $declarations = [];
+
+        if (preg_match('/(?:^|;)\s*color\s*:\s*([^;]+)/i', $style, $m)) {
+            $value = trim($m[1]);
+            if ($this->isValidCssColorValue($value)) {
+                $declarations[] = 'color:' . $value;
+            }
+        }
+
+        if (preg_match('/(?:^|;)\s*background-color\s*:\s*([^;]+)/i', $style, $m)) {
+            $value = trim($m[1]);
+            if ($this->isValidCssColorValue($value)) {
+                $declarations[] = 'background-color:' . $value;
+            }
+        }
+
+        return $declarations === [] ? null : implode(';', $declarations);
+    }
+
+    /**
+     * Validate a single CSS colour value: hex (#rgb/#rgba/#rrggbb/#rrggbbaa),
+     * rgb()/rgba() with numeric channels only, or a plain alphabetic named
+     * colour (e.g. "red", "tomato", "currentColor"). Anything else — a
+     * `url(...)`, an `expression(...)`, extra tokens like `!important`, etc.
+     * — is rejected outright so no stray CSS/markup can ride through a style
+     * attribute.
+     */
+    private function isValidCssColorValue(string $value): bool
+    {
+        if ($value === '') {
+            return false;
+        }
+
+        if (preg_match('/^#[0-9a-f]{3}$|^#[0-9a-f]{4}$|^#[0-9a-f]{6}$|^#[0-9a-f]{8}$/i', $value)) {
+            return true;
+        }
+
+        if (preg_match('/^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1|0?\.\d+)\s*)?\)$/i', $value)) {
+            return true;
+        }
+
+        // Named colour keyword — letters only (no digits/punctuation), so
+        // e.g. "red", "tomato", "currentColor" pass while anything with
+        // parens/semicolons/urls does not.
+        if (preg_match('/^[a-z]{3,20}$/i', $value)) {
+            return true;
+        }
+
+        return false;
+    }
 
     /**
      * Image source: a DAM asset id (preferred — mkt_assets on the public
