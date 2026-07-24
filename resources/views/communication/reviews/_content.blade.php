@@ -71,7 +71,21 @@
                   }, 300);
               },
               select(p) { this.selected = p; this.query = p.name; this.results = []; },
-              clear() { this.selected = null; this.query = ''; this.results = []; }
+              clear() { this.selected = null; this.query = ''; this.results = []; },
+              async waReview() {
+                  if (!this.selected) return;
+                  const token = document.querySelector('meta[name=&quot;csrf-token&quot;]')?.content;
+                  try {
+                      const res = await fetch('{{ route('communication.whatsapp.link') }}', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+                          body: JSON.stringify({ context: 'review_request', patient_id: this.selected.id })
+                      });
+                      const data = await res.json();
+                      if (res.ok && data.success && data.url) { window.open(data.url, '_blank', 'noopener'); }
+                      else { alert(data.message || 'Could not open WhatsApp for this patient.'); }
+                  } catch (e) { alert('Could not reach WhatsApp send. Please try again.'); }
+              }
           }"
           style="background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px 16px; margin-bottom:18px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
         @csrf
@@ -105,6 +119,11 @@
         <button type="submit" :disabled="!selected"
                 :style="!selected ? 'background:#9ca3af; color:#fff; border:none; border-radius:9px; padding:10px 16px; font-size:14px; font-weight:600; cursor:not-allowed; display:inline-flex; gap:6px; align-items:center;' : 'background:#0F6E56; color:#fff; border:none; border-radius:9px; padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer; display:inline-flex; gap:6px; align-items:center;'">
             <i class="ti ti-send"></i> Send review request
+        </button>
+        <button type="button" @click="waReview()" :disabled="!selected"
+                :style="!selected ? 'background:#e5e7eb; color:#9ca3af; border:none; border-radius:9px; padding:10px 16px; font-size:14px; font-weight:600; cursor:not-allowed; display:inline-flex; gap:6px; align-items:center;' : 'background:#25D366; color:#fff; border:none; border-radius:9px; padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer; display:inline-flex; gap:6px; align-items:center;'"
+                title="Open WhatsApp with the review request pre-filled — you press send">
+            <i class="ti ti-brand-whatsapp"></i> WhatsApp now
         </button>
         <span style="font-size:11px; color:#9ca3af;">Requires the patient's WhatsApp consent (DPDP).</span>
     </form>

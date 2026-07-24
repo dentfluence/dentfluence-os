@@ -198,6 +198,12 @@ Route::prefix('communication')
 
         // ── Phase B 1.2: WhatsApp two-way Inbox ───────────────────────────
         Route::prefix('whatsapp')->name('whatsapp.')->group(function () {
+            // Click-to-chat link builder — single consent-gated endpoint used by
+            // every text send point (appointments, reviews, recalls, patient
+            // profile). Declared before the /{thread} wildcard so it isn't
+            // swallowed by it. See WhatsAppLinkController + WhatsAppLinkService.
+            Route::post('/link',           [\App\Http\Controllers\Communication\WhatsAppLinkController::class, 'build'])->name('link');
+
             Route::get('/',                [\App\Http\Controllers\Communication\WhatsAppInboxController::class, 'index'])->name('index');
             Route::get('/{thread}',           [\App\Http\Controllers\Communication\WhatsAppInboxController::class, 'show'])->name('show');
             Route::post('/{thread}/reply',    [\App\Http\Controllers\Communication\WhatsAppInboxController::class, 'reply'])->name('reply');

@@ -199,13 +199,59 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | WhatsApp — current phase: open web only
+    | WhatsApp — current phase: click-to-chat (open web only)
     |--------------------------------------------------------------------------
+    | Until the WhatsApp Cloud API (Meta) is approved, all transactional sends
+    | go through click-to-chat deep links (wa.me). Staff tap the WhatsApp icon,
+    | their own WhatsApp opens with the message pre-filled, they hit send.
+    | No template pre-approval, no business verification required.
+    |
+    | One service (App\Services\Communication\WhatsAppLinkService) is the single
+    | source of truth for phone normalization, consent gating and message copy.
+    | When 'mode' flips to 'api', callers keep working — only the service changes.
     */
     'whatsapp' => [
-        'mode'       => 'web_open',  // future: 'api'
-        'web_url'    => 'https://wa.me/',
-        'api_ready'  => false,
+        'mode'         => 'web_open',   // future: 'api'
+        'web_url'      => 'https://wa.me/',
+        'country_code' => env('WHATSAPP_DEFAULT_CC', '91'), // India; prepended to 10-digit numbers
+        'api_ready'    => false,
+        'review_url'   => env('REVIEWS_GOOGLE_URL'), // default {review_url} for review_request sends
+
+        /*
+        | Message templates for click-to-chat sends. Placeholders in {braces}
+        | are filled at send time. {clinic} defaults to config('app.clinic_name').
+        | Keep copy short — this is the text the patient receives on WhatsApp.
+        | 'generic' has no template: the caller-supplied message is used as-is.
+        | Structure is locale-ready: a value may be a plain string (current) or
+        | later an array keyed by locale without changing any caller.
+        */
+        'templates' => [
+            'appointment_reminder' =>
+                "🦷 *{clinic}*\n".
+                "Hi {patient}, a reminder for your dental appointment on *{date}* at *{time}*{doctor}.\n".
+                "Please reply here to confirm or reschedule.",
+
+            'appointment_confirmation' =>
+                "🦷 *{clinic}*\n".
+                "Hi {patient}, your appointment is confirmed for *{date}* at *{time}*{doctor}.\n".
+                "See you then!",
+
+            'review_request' =>
+                "🦷 *{clinic}*\n".
+                "Hi {patient}, thank you for visiting us! If you had a good experience, ".
+                "we'd really appreciate a quick review:\n{review_url}",
+
+            'recall' =>
+                "🦷 *{clinic}*\n".
+                "Hi {patient}, it's time for your dental check-up. ".
+                "Reply here and we'll help you book a convenient slot.",
+
+            'birthday' =>
+                "🎂 Happy Birthday, {patient}!\n".
+                "Wishing you a healthy, bright smile all year. — *{clinic}*",
+
+            'generic' => null,
+        ],
     ],
 
     /*
