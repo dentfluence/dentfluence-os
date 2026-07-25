@@ -121,15 +121,17 @@ class TreatmentController extends Controller
         // ── P2C8: Intelligence tab — performance insights ─────────────────────
         $intelligenceData = [];
         if ($tab === 'intelligence') {
+            // Slice 0.3 fix: column is unit_price — selecting 'price' threw an
+            // unknown-column QueryException and crashed the Intelligence tab.
             $tpItems = DB::table('treatment_plan_items')
                 ->where('treatment_name', $treatment->name)
-                ->select('price', 'created_at', 'treatment_plan_id')
+                ->select('unit_price', 'created_at', 'treatment_plan_id')
                 ->orderByDesc('created_at')
                 ->limit(100)
                 ->get();
 
             // Revenue stats
-            $prices = $tpItems->pluck('price')->filter()->map(fn($p) => (float) $p);
+            $prices = $tpItems->pluck('unit_price')->filter()->map(fn($p) => (float) $p);
             $intelligenceData = [
                 'total_uses'          => $tpItems->count(),
                 'revenue_total'       => $prices->sum(),
