@@ -70,17 +70,39 @@ class ApiAccessParityCharacterizationTest extends TestCase
 
     public function test_role_name_list_gates_ignore_owner_settings(): void
     {
+        // Mechanism-level characterization of EnsureApiRole with a name list
+        // ('admin','front_desk') — the pattern on 55+ API routes. The SAME
+        // zero-grant owner configuration passes or fails based purely on the
+        // user's legacy role string / role slug, never on Settings.
+        $middleware = new \App\Http\Middleware\EnsureApiRole();
+        $pass       = fn () => response()->json(['ok' => true]);
+
+        $call = function ($user) use ($middleware, $pass) {
+            $request = \Illuminate\Http\Request::create('/characterization', 'GET');
+            $request->setUserResolver(fn () => $user);
+
+            return $middleware->handle($request, $pass, 'admin', 'front_desk')->getStatusCode();
+        };
+
+        // Zero grants + 'assistant' string → 403.
+        $this->assertSame(403, $call($this->zeroPermUser('assistant')));
+
+        // Identical zero grants + 'front_desk' string → passes (200).
+        $this->assertSame(200, $call($this->zeroPermUser('front_desk')),
+            'front_desk legacy string passes a role-name-list gate with zero owner-configured grants (current reality)');
+    }
+
+    public function test_billing_discount_preview_reads_are_ungated(): void
+    {
+        // Discovered during 1.1: these two billing reads carry NO middleware
+        // beyond auth:sanctum (routes/api.php ~482-483) — any token holder
+        // reads membership-benefit/coupon data regardless of owner Settings.
         $patient = $this->patient();
-        $url     = "/api/v1/patients/{$patient->id}/membership-benefit-preview"; // api.role:admin,front_desk
-
-        // Same ZERO-grant role configuration, two legacy strings:
-        // 'assistant' → denied by the name list.
         Sanctum::actingAs($this->zeroPermUser('assistant'), ['*']);
-        $this->getJson($url)->assertForbidden();
 
-        // 'front_desk' → passes the name list despite zero owner grants.
-        Sanctum::actingAs($this->zeroPermUser('front_desk'), ['*']);
-        $this->assertNotSame(403, $this->getJson($url)->getStatusCode(),
-            'front_desk legacy string passed a role-name-list gate with zero owner-configured grants (current reality)');
+        $this->assertNotSame(403,
+            $this->getJson("/api/v1/patients/{$patient->id}/membership-benefit-preview")->getStatusCode());
+        $this->assertNotSame(403,
+            $this->getJson('/api/v1/coupons/validate?code=NOPE')->getStatusCode());
     }
 }
