@@ -528,6 +528,10 @@ class HuddleController extends Controller
                 'patient_name' => $r->patient_name,
                 'phone'        => $r->phone ?? '—',
                 'label'        => 'Appointment Reminder',
+                // Slice 0.3 fix: commList items carried no 'status' key, so the
+                // "N pending" pill counting where('status','pending') was
+                // permanently 0. Sections 1–3 are open work by construction.
+                'status'       => 'pending',
                 'note'         => 'Remind for ' . ($r->type ? ucfirst(str_replace('_', ' ', $r->type)) : 'appointment')
                                   . ' at ' . ($r->appointment_time ? \Carbon\Carbon::parse($r->appointment_time)->format('h:i A') : '—')
                                   . ' with Dr. ' . ($r->doctor_name ?? '—'),
@@ -570,6 +574,7 @@ class HuddleController extends Controller
                 'patient_name' => $r->patient_name,
                 'phone'        => $r->phone ?? '—',
                 'label'        => 'Treatment Follow-up',
+                'status'       => 'pending', // Slice 0.3 — see reminders map
                 'note'         => 'Follow up on ' . ($r->treatment_name ?? ($r->type ? ucfirst(str_replace('_', ' ', $r->type)) : 'treatment'))
                                   . ' with Dr. ' . ($r->doctor_name ?? '—') . ' (yesterday)',
                 'selected'     => true,
@@ -599,6 +604,7 @@ class HuddleController extends Controller
                 'patient_name' => $f->subjectName(),
                 'phone'        => $f->subjectPhone() ?? '—',
                 'label'        => 'Follow-up Call',
+                'status'       => 'pending', // Slice 0.3 — see reminders map
                 'note'         => ($f->note ?: $f->label)
                                   . ($f->due_date->isToday() ? '' : ' — overdue since ' . $f->due_date->format('d M')),
                 'selected'     => true,
@@ -623,6 +629,7 @@ class HuddleController extends Controller
                 'patient_name' => $c->person_name ?? '—',
                 'phone'        => $c->phone ?? '—',
                 'label'        => $c->comm_type_label ?? ucfirst(str_replace('_', ' ', $c->comm_type ?? 'Communication')),
+                'status'       => $c->status, // Slice 0.3 — real queue status (pending/waiting_for_patient)
                 'note'         => ($c->next_action ? 'Next: ' . ucfirst(str_replace('_', ' ', $c->next_action)) . ' · ' : '')
                                   . ucfirst($c->channel ?? '') . ($c->status === 'overdue' ? ' · ⚠ Overdue' : ''),
                 'selected'     => false,  // not pre-checked — staff picks which to action

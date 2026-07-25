@@ -84,8 +84,13 @@ class HuddleController extends Controller
                                         ->where('due_date', '>', today()->addDays(7))
                                         ->count(),
 
-            // Treatment visits currently in progress
-            'ongoing_treatments'  => TreatmentVisit::where('status', 'ongoing')->count(),
+            // Treatment visits currently in progress.
+            // Slice 0.3 fix: 'ongoing' is not a TreatmentVisit status (vocab:
+            // scheduled/in_chair/completed/cancelled/no_show) so this widget
+            // was permanently 0. "In progress right now" = in_chair today.
+            'ongoing_treatments'  => TreatmentVisit::where('status', 'in_chair')
+                                        ->whereDate('visit_date', today())
+                                        ->count(),
         ];
     }
 
