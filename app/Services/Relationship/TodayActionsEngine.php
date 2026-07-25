@@ -100,12 +100,16 @@ class TodayActionsEngine
             'logged_communications'        => fn () => $this->loggedCommunications(),
         ];
 
+        $health = [];
+
         foreach ($categories as $key => $resolver) {
             try {
                 $groups[$key] = $resolver();
+                $health[$key] = $this->healthEntry(true, count($groups[$key]));
             } catch (\Throwable $e) {
                 Log::warning("TodayActionsEngine: category [{$key}] failed", ['error' => $e->getMessage()]);
                 $groups[$key] = [];
+                $health[$key] = $this->healthEntry(false, 0, $e->getMessage());
             }
         }
 
@@ -114,11 +118,17 @@ class TodayActionsEngine
             $yesterday = $this->yesterdayReview->generateYesterdayReview($this->includeDone);
             $groups['missed_calls_yesterday']        = $yesterday['missed_calls'];
             $groups['missed_appointments_yesterday'] = $yesterday['missed_appointments'];
+            $health['missed_calls_yesterday']        = $this->healthEntry(true, count($yesterday['missed_calls']));
+            $health['missed_appointments_yesterday'] = $this->healthEntry(true, count($yesterday['missed_appointments']));
         } catch (\Throwable $e) {
             Log::warning('TodayActionsEngine: yesterday review failed', ['error' => $e->getMessage()]);
             $groups['missed_calls_yesterday']        = [];
             $groups['missed_appointments_yesterday'] = [];
+            $health['missed_calls_yesterday']        = $this->healthEntry(false, 0, $e->getMessage());
+            $health['missed_appointments_yesterday'] = $this->healthEntry(false, 0, $e->getMessage());
         }
+
+        $this->recordHealth($health);
 
         if ($this->includeDone) {
             $this->annotateDone($groups);
@@ -137,7 +147,10 @@ class TodayActionsEngine
 
     // ═══════════════════════════════════════════════════════════════════════
     // CATEGORY 1 — New Enquiries
-    // Leads created in last 24 hours, stage = new_enquiry
+    // Leads created in last 24 hours, stage = new_lead.
+    // Slice 0.3 fix: this filtered on 'new_enquiry', a stage value nothing
+    // ever writes (every writer sets 'new_lead') — the category was
+    // permanently empty and silently dropped every fresh lead.
     // ═══════════════════════════════════════════════════════════════════════
 
     private function newEnquiries(): array
@@ -145,7 +158,7 @@ class TodayActionsEngine
         $cutoff = Carbon::now()->subHours(24);
 
         return Lead::query()
-            ->where('stage', 'new_enquiry')
+            ->where('stage', 'new_lead')
             ->where('created_at', '>=', $cutoff)
             ->whereNotIn('id', $this->dismissedIds('new_enquiries', Lead::class))
             ->orderByDesc('created_at')
@@ -240,7 +253,10 @@ class TodayActionsEngine
                 'reason'          => $opp->follow_up_date->isToday()
                     ? 'Opportunity follow-up due today'
                     : 'Opportunity overdue — ' . $opp->follow_up_date->diffForHumans(now(), true) . ' ago',
-                'priority'        => $opp->isOverdue() ? 'high' : 'medium',
+                // Slice 0.3 fix: isOverdue() method never existed (accessor is
+                // is_overdue) — the BadMethodCallException killed the whole
+                // category via the per-category try/catch.
+                'priority'        => $opp->is_overdue ? 'high' : 'medium',
                 'suggested_action'=> 'Call and confirm if patient wants to proceed',
                 'link'            => route('patients.show', $opp->patient_id),
                 'meta'            => [
@@ -556,7 +572,9 @@ class TodayActionsEngine
                 'relationship_id' => $m->patient?->relationship_id ?? null,
                 'reason'          => 'Membership expires in ' . Carbon::today()->diffInDays($m->end_date) . ' days ('
                     . $m->end_date->format('d M Y') . ')',
-                'priority'        => $m->daysUntilExpiry() <= 7 ? 'high' : 'medium',
+                // Slice 0.3 fix: daysUntilExpiry() never existed (accessor is
+                // days_remaining) — same silent category death as opportunities.
+                'priority'        => $m->days_remaining <= 7 ? 'high' : 'medium',
                 'suggested_action'=> 'Call to renew membership before expiry',
                 'link'            => route('patients.show', $m->patient_id),
                 'meta'            => [
@@ -564,7 +582,7 @@ class TodayActionsEngine
                     'phone'    => $m->patient?->phone,
                     'end_date' => $m->end_date->format('d M Y'),
                     'plan'     => $m->plan?->name ?? null,
-                    'days_left'=> $m->daysUntilExpiry(),
+                    'days_left'=> $m->days_remaining,
                 ],
             ])
             ->toArray();
@@ -1072,6 +1090,36 @@ class TodayActionsEngine
     private function limit(): int
     {
         return (int) config('relationship_rules.today_actions.max_per_category', 50);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Category health (Slice 0.3) — the three dead categories above died
+    // SILENTLY for weeks because per-category try/catch swallows errors.
+    // Every generate() now records last run/status/count/error per category
+    // so silent death is unrepeatable. Cache-backed (no schema change);
+    // surfaced by `php artisan today-actions:health`.
+    // ─────────────────────────────────────────────────────────────────────
+
+    public const HEALTH_CACHE_KEY = 'today_actions.category_health';
+
+    private function healthEntry(bool $ok, int $count, ?string $error = null): array
+    {
+        return [
+            'ok'       => $ok,
+            'count'    => $count,
+            'error'    => $error ? mb_substr($error, 0, 300) : null,
+            'last_run' => Carbon::now()->toDateTimeString(),
+        ];
+    }
+
+    private function recordHealth(array $health): void
+    {
+        try {
+            \Illuminate\Support\Facades\Cache::forever(self::HEALTH_CACHE_KEY, $health);
+        } catch (\Throwable $e) {
+            // Health recording must never break the board itself.
+            Log::warning('TodayActionsEngine: health record failed', ['error' => $e->getMessage()]);
+        }
     }
 
     /**
