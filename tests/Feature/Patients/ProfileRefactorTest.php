@@ -48,7 +48,7 @@ class ProfileRefactorTest extends TestCase
 
         $resp->assertOk();
         $resp->assertSee('Journey Timeline');                 // Slice 2 card replaced the Visit Log
-        $resp->assertSee('Patient Details &amp; Rapport', false);
+        $resp->assertSee('Patient Details & Rapport', false); // heading is raw HTML in tab-profile.blade.php (& is not entity-encoded)
         foreach (PatientProfileService::LAZY_TABS as $tab) {
             $resp->assertSee('dusk="tab-' . $tab . '"', false);     // tab nav intact
             $resp->assertSee('id="tab-panel-' . $tab . '"', false); // lazy container present
