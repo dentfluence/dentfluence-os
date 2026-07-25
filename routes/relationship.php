@@ -66,6 +66,15 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     Route::get('/today/summary', [TodayController::class, 'summary'])
         ->name('today.summary');
 
+    // ── Reception Dashboard (Phase 1 · Workstream E, slice E3) ─────────────
+    // Slice 0.3 (2026-07-25): registration RESTORED — the controller, view
+    // and ReceptionDashboardTest all existed (and the import above survived),
+    // but the route itself was lost in the V1.3-PRE overhaul, 404ing the page.
+    // The stale-stub fatal in the test hid this until Slice 0.3 fixed the
+    // stubs. Read-only projection reader; static segment before /{id}.
+    Route::get('/reception', [ReceptionController::class, 'index'])
+        ->name('reception');  // relationship.reception
+
     // ── Missed Calls — full paginated backlog list (2026-07-05) ────────────
     // The dashboard widget only samples ~50 rows for "yesterday"; this page
     // is the full backlog behind badges like "910". Static segments — all
@@ -124,9 +133,11 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
 
     // ── PRE Lead Pipeline (Phase 1 · Workstream D, slice 2) ────────────────
     // Relationship-centric lead board grouped by the reliable legacy stage.
-    // The legacy PRM board was retired in Phase 8 · Slice 5 (moved to
-    // under_review/phase8_prm_retirement/, not deleted). This is now the
-    // only lead-pipeline surface. Static segment — must stay above the
+    // The legacy PRM board was retired in Phase 8 · Slice 5. (Corrected
+    // 2026-07-25, Slice 0.3: no under_review/phase8_prm_retirement/ directory
+    // exists — the routes were deleted outright; app/Services/Prm/* survives
+    // as PRE's live lead backend. See docs/legacy-prm-audit.md.) This is now
+    // the only lead-pipeline surface. Static segment — must stay above the
     // /{id} wildcard below.
     Route::get('/pipeline', [LeadPipelineController::class, 'index'])
         ->name('pipeline');  // relationship.pipeline
