@@ -19,7 +19,7 @@ Later slices must NOT claim ownership of any defect listed here.
   - `tests/Feature/TreatmentCreateTest` — 1 passed
   - `tests/Feature/Automation` — 14 passed
   - `tests/Feature/Characterization` — 16 passed
-  - `tests/Feature/Relationship` — 45 passed, 1 failed, 2 fatals (BD-1..BD-3 below); `TodayReadCutoverTest` run separately (result in Slice 0.1 report)
+  - `tests/Feature/Relationship` — 45 passed, 1 failed, 2 fatals (BD-1..BD-3 below); `TodayReadCutoverTest` fatals standalone (see BD-2 addendum)
 
 ## Fixed in Slice 0.1 (authorized)
 
@@ -29,7 +29,7 @@ Later slices must NOT claim ownership of any defect listed here.
 
 **BD-1 — Stale test double (fatal):** `tests/Feature/Relationship/ReceptionDashboardTest.php:30` — anonymous stub declares `generate(): array`, incompatible with `TodayActionsEngine::generate(bool $includeDone = false): array` (signature changed by Action Board Done-state work). PHP fatal aborts any directory-wide run of `tests/Feature/Relationship` at this class.
 
-**BD-2 — Same stale stub (fatal):** `tests/Feature/Relationship/TodayActionsProjectorTest.php:28` — identical incompatible stub; second fatal blocks `TodayReadCutoverTest` in directory-wide runs.
+**BD-2 — Same stale stub (fatal):** `tests/Feature/Relationship/TodayActionsProjectorTest.php:28` **and** `tests/Feature/Relationship/TodayReadCutoverTest.php:32` — identical incompatible stubs. Addendum (2026-07-25, post-tag): TodayReadCutoverTest was confirmed to carry the stub itself and fatals even standalone — it is a third defective file, not merely blocked by BD-1/BD-2. Three files total carry the stale `generate(): array` double.
 
 **BD-3 — Missing factory (test error):** `tests/Feature/Relationship/RecallPipelineTest.php` `test_convert_to_opportunity_creates_opportunity_and_closes_recall` — calls `Patient::factory()` but no `Database\Factories\PatientFactory` exists (patients are minted only via `PatientService::register()`; sibling tests use `Patient::create()`). Error: `Class "Database\Factories\PatientFactory" not found`.
 
