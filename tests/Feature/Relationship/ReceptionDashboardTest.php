@@ -27,7 +27,7 @@ class ReceptionDashboardTest extends TestCase
     {
         return new class($groups) extends TodayActionsEngine {
             public function __construct(public array $groups) {}
-            public function generate(): array { return $this->groups; }
+            public function generate(bool $includeDone = false): array { return $this->groups; }
         };
     }
 

@@ -145,7 +145,13 @@ class RecallPipelineTest extends TestCase
 
     public function test_convert_to_opportunity_creates_opportunity_and_closes_recall(): void
     {
-        $patient = Patient::factory()->create();
+        // No PatientFactory exists by design (patients are minted via
+        // PatientService::register(); tests use Patient::create like siblings).
+        $patient = Patient::create([
+            'name'      => 'Recall Convert Patient',
+            'phone'     => '9' . random_int(100000000, 999999999),
+            'branch_id' => 1,
+        ]);
         $recall  = $this->recall(['person_name' => $patient->name, 'patient_id' => $patient->id]);
 
         $this->actingAs($this->user())
