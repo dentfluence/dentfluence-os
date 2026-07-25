@@ -67,12 +67,13 @@ Route::prefix('communication')
             Route::post('/{id}/close',   [CommunicationController::class, 'closeWithOutcome'])->name('close');
         });
 
-        // ── PRM Pipeline ─────────────────────────────────────────────────
-        // NOTE: The PRM routes now live in routes/prm.php (named `prm.*`),
-        // which is the single source of truth and carries the full feature
-        // set (inbox, reports, source-analytics, AI enrich/reply, etc.).
-        // The old duplicate stub group that was here (named `communication.prm.*`)
-        // was removed 2026-06-26 — all references were migrated to `prm.*`.
+        // ── PRM Pipeline (RETIRED) ───────────────────────────────────────
+        // NOTE (corrected 2026-07-25, Slice 0.3): routes/prm.php NO LONGER
+        // EXISTS — the PRM board was fully retired (routes deleted, `prm`
+        // module permission dropped in migration 2026_07_06_200002). Lead/
+        // relationship work now lives under routes/relationship.php (PRE).
+        // The old duplicate stub group that was here (`communication.prm.*`)
+        // was removed 2026-06-26. See docs/legacy-prm-audit.md.
 
         // ── Follow-up Engine (Session 4) ─────────────────────────────────
         Route::prefix('followup')->name('followup.')->group(function () {

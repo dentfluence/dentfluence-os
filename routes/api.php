@@ -272,10 +272,13 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
 
         // ── Relationship Engine / PRE (Phase 7, extended for full mobile parity) ──
         // All endpoints use the same Sanctum auth as the rest of /api/v1/.
-        // PRM no longer exists anywhere in this codebase (hard-deleted
-        // 2026-07-04) — PRE is the only lead/relationship engine on web and
-        // mobile. Static segments (today, search, pipelines, recalls) MUST
-        // come before /{id} to avoid the wildcard swallowing them.
+        // PRE is the only lead/relationship engine on web and mobile. The PRM
+        // BOARD/routes are retired, but app/Services/Prm/* remains the LIVE
+        // backend of PRE's lead pipeline (LeadObserver → routing/enrichment/
+        // follow-up services) — badly named, not deleted. See
+        // docs/legacy-prm-audit.md (2026-07-25). Static segments (today,
+        // search, pipelines, recalls) MUST come before /{id} to avoid the
+        // wildcard swallowing them.
         Route::prefix('relationships')->name('api.relationships.')->group(function () {
             // Today's actions — mobile equivalent of /relationship/today
             Route::get('/today',           [RelationshipController::class, 'today'])
