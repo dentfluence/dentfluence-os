@@ -30,6 +30,14 @@ class PatientRelationshipLinkerTest extends TestCase
 
     public function test_flag_off_is_a_noop(): void
     {
+        // Corrected 2026-07-26 (test-only). `identity.link_patient` now ships
+        // DEFAULT ON (config/features.php — auto-linking new patients to a
+        // Master Relationship went live deliberately), so this test can no
+        // longer rely on the ambient default to represent "off". It sets the
+        // flag off explicitly and still proves the gate: flag off ⇒ the engine
+        // is never touched. Production behaviour is unchanged.
+        Feature::set('identity.link_patient', false);
+
         $engine = new SpyRelationshipEngine();
         $linker = new PatientRelationshipLinker($engine, app(DomainEventBus::class));
 
