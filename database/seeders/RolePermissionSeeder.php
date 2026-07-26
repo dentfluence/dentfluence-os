@@ -35,16 +35,22 @@ class RolePermissionSeeder extends Seeder
                 // with the existing 1-17 sequence; its real sidebar position is
                 // hardcoded directly in components/sidebar.blade.php (after Treatments).
                 ['Smart Presentation', 'presentations', '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>', 100],
+                // Phase 1 · Slice 1.3 (2026-07-25) — prescriptions became owner-configurable.
+                ['Prescriptions', 'prescriptions', '<path d="M4 3h6a4 4 0 0 1 0 8H4z"/><path d="M4 11v10"/><path d="M10 11l8 10"/><path d="M14 15l6-6"/>', 102],
             ],
             'communication' => [
                 // PRM was retired in Phase 8 (2026-07-03) — routes/prm.php removed,
                 // every lead-pipeline write now goes through PRE. Communication OS
                 // (routes/communication.php) is the live module here instead.
-                // Relationships (PRE) itself is deliberately ungated — see
-                // components/sidebar.blade.php — so it has no row here, same as
-                // Prescriptions doesn't either.
+                // (Corrected 2026-07-25, Slice 1.3: PRE and Prescriptions are no
+                // longer ungated — both now have catalogue rows below so the
+                // Clinic Owner configures them in Settings like any module.)
                 ['Communication (PRE)', 'communication', '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', 7],
                 ['Marketing',     'marketing',     '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>', 8],
+                // Phase 1 · Slice 1.3 (2026-07-25) — PRE became owner-configurable.
+                // Registered in the catalogue by migration
+                // 2026_07_25_120000_register_relationship_and_prescriptions_modules.
+                ['Relationships (PRE)', 'relationship', '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M20 8v6"/><path d="M23 11h-6"/>', 101],
             ],
             'operations'  => [
                 ['Accounts & Finance', 'finance',  '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', 9],
@@ -108,6 +114,7 @@ class RolePermissionSeeder extends Seeder
                 'reports'     => [1,1,1], 'analytics'    => [1,1,1],
                 'settings'    => [1,1,1],
                 'presentations' => [1,1,1],
+                'relationship' => [1,1,1], 'prescriptions' => [1,1,1],
             ],
             Role::MANAGER => [
                 'daily_huddle' => [1,1,0], 'patients'    => [1,1,0],
@@ -120,6 +127,8 @@ class RolePermissionSeeder extends Seeder
                 'practice_protocols' => [1,1,1],
                 'reports'      => [1,0,0],
                 'presentations' => [1,1,0],
+                // Slice 1.3 defaults mirror this role's communication/patients grants.
+                'relationship' => [1,1,0], 'prescriptions' => [1,1,0],
             ],
             Role::DOCTOR => [
                 'daily_huddle' => [1,1,0], 'patients'   => [1,1,0],
@@ -132,6 +141,7 @@ class RolePermissionSeeder extends Seeder
                 // authoring the AI summary/doctor message is additionally role-gated in the
                 // controller to Doctor/Admin only, regardless of this module-level flag.
                 'presentations' => [1,1,1],
+                'relationship' => [1,1,0], 'prescriptions' => [1,1,0],
             ],
             Role::ASSISTANT => [
                 'appointments' => [1,0,0], 'patients' => [1,0,0],
@@ -139,6 +149,7 @@ class RolePermissionSeeder extends Seeder
                 'hr'           => [1,1,0], 'cms'      => [1,0,0],
                 'communication' => [1,1,0],
                 'presentations' => [1,0,0], // view only
+                'relationship' => [1,1,0], 'prescriptions' => [1,0,0],
             ],
             Role::FRONT_DESK => [
                 'appointments' => [1,1,0], 'patients' => [1,1,0],
@@ -147,12 +158,14 @@ class RolePermissionSeeder extends Seeder
                 'hr'           => [1,1,0], 'cms'      => [1,1,0],
                 // Operate (send/resend/follow-up/mark-accepted in later slices), never author.
                 'presentations' => [1,1,0],
+                'relationship' => [1,1,0], 'prescriptions' => [1,1,0],
             ],
             Role::ACCOUNTS => [
                 'finance'  => [1,1,0], 'reports' => [1,0,0],
                 'patients' => [1,0,0],
                 'hr'       => [1,1,0], 'cms'     => [1,0,0],
                 'communication' => [1,1,0],
+                'relationship' => [1,1,0], 'prescriptions' => [1,0,0],
             ],
         ];
 
