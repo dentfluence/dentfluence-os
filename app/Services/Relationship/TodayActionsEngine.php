@@ -371,6 +371,10 @@ class TodayActionsEngine
                 }
             })
             ->whereDate('due_date', '<=', Carbon::today())
+            // 2026-07-26: honour "dismissed for today" the same way every other
+            // dismissible category does — without this the card reappeared
+            // immediately after a successful dismiss.
+            ->whereNotIn('id', $this->dismissedIds('follow_up_calls', FollowUp::class))
             ->orderBy('due_date')
             ->limit($this->limit())
             ->get()

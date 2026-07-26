@@ -725,6 +725,14 @@ class TodayController extends Controller
         'wellness_check_yesterday'      => TreatmentVisit::class,
         'new_enquiries'                 => Lead::class,
         'lead_followups'                => Lead::class,
+        // 2026-07-26: follow_up_calls was missing here, so an individual
+        // Dismiss on a Follow-up Call card was rejected with "This category
+        // cannot be dismissed" even for a user holding relationship,edit.
+        // Dismiss ≠ complete: it suppresses the card for TODAY via
+        // TodayActionDismissal (auditable, reason + actor recorded) and leaves
+        // the FollowUp row pending, so a still-due follow-up returns tomorrow.
+        // Completing it remains the Log/Close path (closeUnderlyingRecord).
+        'follow_up_calls'               => FollowUp::class,
     ];
 
     /** category keys whose Today's Actions row is backed by a communication_queue record. */
@@ -761,7 +769,12 @@ class TodayController extends Controller
         try {
             // CommunicationQueue-backed categories — reuse the existing, already-
             // proven ignore/dismiss path (Missed Calls / Recall Pipeline).
-            if ($validated['category'] === 'recall_calls' || $validated['category'] === 'missed_calls_yesterday') {
+            // 2026-07-26: this used to hardcode 'recall_calls' and
+            // 'missed_calls_yesterday' while the QUEUE_BACKED_CATEGORIES
+            // constant (used by logAction/closeAction) already listed three —
+            // so dismissing a Logged Communication was refused outright. One
+            // constant now governs all three actions.
+            if (in_array($validated['category'], self::QUEUE_BACKED_CATEGORIES, true)) {
                 $queueItem = CommunicationQueue::find($validated['subject_id']);
                 if (! $queueItem) {
                     return response()->json(['success' => false, 'message' => 'Item not found — it may already be handled.'], 404);

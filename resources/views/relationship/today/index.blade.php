@@ -1371,6 +1371,31 @@ function todayActions() {
         },
 
         // ─────────────────────────────────────────────────────────────────
+        // Which record backs this card? ONE resolver, used by Log, Close and
+        // Dismiss alike, mirroring the server's category→record mapping:
+        //   queue-backed (recall_calls / missed_calls_yesterday /
+        //     logged_communications)      → meta.comm_queue_id
+        //   follow_up_calls               → meta.follow_up_id
+        //   new_enquiries / lead_followups→ lead_id   (Lead-keyed)
+        //   birthdays                     → patient_id (Patient-keyed)
+        //   everything else               → meta.id
+        // Added 2026-07-26 during the Phase 1 dismiss defect fix, so the three
+        // actions can never drift apart again.
+        // ─────────────────────────────────────────────────────────────────
+        subjectIdFor(item) {
+            if (!item) return null;
+
+            const queueBacked = ['recall_calls', 'missed_calls_yesterday', 'logged_communications'];
+            if (queueBacked.includes(item.category))       return item.meta?.comm_queue_id ?? null;
+            if (item.category === 'follow_up_calls')       return item.meta?.follow_up_id ?? null;
+            if (item.category === 'new_enquiries' ||
+                item.category === 'lead_followups')        return item.lead_id ?? null;
+            if (item.category === 'birthdays')             return item.patient_id ?? null;
+
+            return item.meta?.id ?? null;
+        },
+
+        // ─────────────────────────────────────────────────────────────────
         // Submit a Dismiss instead of a logged call outcome.
         // ─────────────────────────────────────────────────────────────────
         async confirmDismiss() {
@@ -1383,8 +1408,14 @@ function todayActions() {
             const item   = this.drawer.item;
             const itemId = this.drawer.itemId;
 
-            const isQueueBacked = (item.category === 'recall_calls' || item.category === 'missed_calls_yesterday');
-            const subjectId = isQueueBacked ? item.meta?.comm_queue_id : item.meta?.id;
+            // Subject resolution MUST mirror the server's category→record map
+            // (TodayController: QUEUE_BACKED_CATEGORIES / follow_up_calls /
+            // DISMISSIBLE_MODELS). Fixed 2026-07-26: this used a two-way check
+            // that omitted logged_communications and follow_up_calls, and never
+            // handled the lead- and patient-keyed categories — so Dismiss failed
+            // with "missing reference id" on five of the fifteen categories.
+            // logAction()/confirmClose() already resolve via subjectIdFor().
+            const subjectId = this.subjectIdFor(item);
 
             if (!subjectId) {
                 this.dismissError = 'This item cannot be dismissed (missing reference id).';
@@ -1503,12 +1534,10 @@ function todayActions() {
             // the server can auto-close it when the logged outcome's
             // closes_task is true (2026-07-10). Mirrors confirmClose()'s
             // identical subject resolution just below.
-            const isQueueBacked = (item.category === 'recall_calls' || item.category === 'missed_calls_yesterday' || item.category === 'logged_communications');
-            const subjectId = isQueueBacked
-                ? (item.meta?.comm_queue_id ?? null)
-                : (item.category === 'follow_up_calls'
-                    ? (item.meta?.follow_up_id ?? null)
-                    : (item.meta?.id ?? null));
+            // One shared resolver — see subjectIdFor(). Previously duplicated
+            // here and in confirmClose(), and a third (stale) copy in
+            // confirmDismiss() caused the "missing reference id" defect.
+            const subjectId = this.subjectIdFor(item);
 
             const payload = {
                 _token:          document.querySelector('meta[name="csrf-token"]').content,
@@ -1573,12 +1602,10 @@ function todayActions() {
             const item   = this.drawer.item;
             const itemId = this.drawer.itemId;
 
-            const isQueueBacked = (item.category === 'recall_calls' || item.category === 'missed_calls_yesterday' || item.category === 'logged_communications');
-            const subjectId = isQueueBacked
-                ? (item.meta?.comm_queue_id ?? null)
-                : (item.category === 'follow_up_calls'
-                    ? (item.meta?.follow_up_id ?? null)
-                    : (item.meta?.id ?? null));
+            // One shared resolver — see subjectIdFor(). Previously duplicated
+            // here and in confirmClose(), and a third (stale) copy in
+            // confirmDismiss() caused the "missing reference id" defect.
+            const subjectId = this.subjectIdFor(item);
 
             try {
                 const res = await fetch('{{ route('relationship.today.close') }}', {
