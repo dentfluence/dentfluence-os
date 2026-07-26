@@ -42,4 +42,38 @@ class UserFactory extends Factory
             'email_verified_at' => null,
         ]);
     }
+
+    /**
+     * Phase 1 · Slice 1.2 — test-infrastructure only.
+     *
+     * The legacy "role string 'admin' with no role_id ⇒ full access" bypass was
+     * retired from User::canAccess(). Production users all carry a role_id (VPS
+     * census: 12/12), and RolePermissionSeeder assigns the Admin role to any
+     * `role = 'admin'` user. Older tests, however, build admins as
+     * `User::factory()->create(['role' => 'admin'])` and relied on the bypass.
+     *
+     * This hook gives such users the REAL Admin role row instead, so those tests
+     * keep exercising production authorization rather than a removed shortcut.
+     * It never runs for non-admin roles and never touches production code paths.
+     */
+    public function configure(): static
+    {
+        return $this->afterCreating(function (User $user) {
+            if ($user->role !== 'admin' || $user->role_id !== null) {
+                return;
+            }
+
+            $role = \App\Models\Role::firstOrCreate(
+                ['slug' => \App\Models\Role::ADMIN],
+                [
+                    'name'      => 'Admin',
+                    'category'  => \App\Models\Role::CATEGORY_STAFF,
+                    'is_system' => true,
+                ]
+            );
+
+            $user->forceFill(['role_id' => $role->id])->saveQuietly();
+            $user->setRelation('roleModel', $role);
+        });
+    }
 }

@@ -200,16 +200,28 @@ class User extends Authenticatable
      */
     public function canAccess(string $module, string $action = 'view'): bool
     {
-        // Admin (by old role string) always gets full access during transition
-        if ($this->role === 'admin' && ! $this->role_id) {
-            return true;
-        }
-
         $role = $this->relationLoaded('roleModel')
             ? $this->roleModel
             : $this->roleModel()->with('permissions.module')->first();
 
-        if (! $role) return false;
+        if (! $role) {
+            // Phase 1 · Slice 1.2 (2026-07-25): the legacy transition bypass
+            // (`role === 'admin'` with NO role_id ⇒ full access to everything,
+            // including modules that don't exist) is RETIRED. A read-only VPS
+            // census confirmed ZERO production users depended on it (0 of 12;
+            // every user carries a role_id). A user with no assigned role now
+            // has no access until the Clinic Owner assigns one in Settings.
+            return false;
+        }
+
+        // Clinic Owner / Admin ROLE keeps full access — a legitimate
+        // system-level exception (owner-equivalent), and it is still driven by
+        // the assigned role, not by a legacy job-title string. This also means
+        // a newly registered module is immediately usable by the owner before
+        // they configure it for anyone else.
+        if ($role->slug === Role::ADMIN) {
+            return true;
+        }
 
         return $role->can($module, $action);
     }
