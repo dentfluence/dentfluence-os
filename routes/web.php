@@ -128,7 +128,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/search',         [PatientController::class, 'search'])->name('search');
 
         Route::get('/create',         [PatientController::class, 'create'])->name('create');
-        Route::post('/scan-form',     [PatientController::class, 'scanForm'])->name('scan-form'); // 📷 read a paper intake form
+        Route::post('/scan-form',     [PatientController::class, 'scanForm'])->name('scan-form')->middleware('module:patients,edit'); // 📷 read a paper intake form (feeds registration → edit)
         Route::post('/',              [PatientController::class, 'store'])->name('store')->middleware('module:patients,edit');
         Route::post('/quick-store',   [PatientController::class, 'quickStore'])->name('quick-store')->middleware('module:patients,edit');
         Route::get('/{patient}',      [PatientController::class, 'show'])->name('show')->withTrashed();
@@ -153,7 +153,7 @@ Route::middleware('auth')->group(function () {
 
         // ── ABHA / Health ID capture (local, no live ABDM) ──
         Route::get  ('/{patient}/abha', [\App\Http\Controllers\Abdm\PatientAbhaController::class, 'edit'])->name('abha.edit');
-        Route::patch('/{patient}/abha', [\App\Http\Controllers\Abdm\PatientAbhaController::class, 'update'])->name('abha.update');
+        Route::patch('/{patient}/abha', [\App\Http\Controllers\Abdm\PatientAbhaController::class, 'update'])->name('abha.update')->middleware('module:patients,edit');
 
         // Relationship notes — writes gated by module:patients,edit (Phase 4 fix:
         // these previously required only module view, letting view-only users write)
@@ -165,56 +165,61 @@ Route::middleware('auth')->group(function () {
         Route::patch('/{patient}/opportunities/{opp}',  [PatientController::class, 'updateOpportunity'])->name('opportunities.update')->middleware('module:patients,edit');
         Route::delete('/{patient}/opportunities/{opp}', [PatientController::class, 'destroyOpportunity'])->name('opportunities.destroy')->middleware('module:patients,edit');
 
-        // Patient notes
-        Route::post('/{patient}/notes',          [PatientNoteController::class, 'store'])->name('notes.store');
-        Route::delete('/{patient}/notes/{note}', [PatientNoteController::class, 'destroy'])->name('notes.destroy');
+        // Patient notes — Slice 1.2: writes require edit, delete requires delete
+        Route::post('/{patient}/notes',          [PatientNoteController::class, 'store'])->name('notes.store')->middleware('module:patients,edit');
+        Route::delete('/{patient}/notes/{note}', [PatientNoteController::class, 'destroy'])->name('notes.destroy')->middleware('module:patients,delete');
 
-        // Communications
+        // Communications — Slice 1.2: view stays on the group gate, writes gated
         Route::get   ('/{patient}/communications',                        [PatientCommunicationController::class, 'index'])->name('communications.index');
-        Route::post  ('/{patient}/communications',                        [PatientCommunicationController::class, 'store'])->name('communications.store');
-        Route::delete('/{patient}/communications/{communication}',        [PatientCommunicationController::class, 'destroy'])->name('communications.destroy');
+        Route::post  ('/{patient}/communications',                        [PatientCommunicationController::class, 'store'])->name('communications.store')->middleware('module:patients,edit');
+        Route::delete('/{patient}/communications/{communication}',        [PatientCommunicationController::class, 'destroy'])->name('communications.destroy')->middleware('module:patients,delete');
 
-        // Tags
+        // Tags — Slice 1.2
         Route::get('/{patient}/tags',          [TagController::class, 'forPatient'])->name('tags.index');
-        Route::post('/{patient}/tags/attach',  [TagController::class, 'attach'])->name('tags.attach');
-        Route::delete('/{patient}/tags/{tag}', [TagController::class, 'detach'])->name('tags.detach');
+        Route::post('/{patient}/tags/attach',  [TagController::class, 'attach'])->name('tags.attach')->middleware('module:patients,edit');
+        Route::delete('/{patient}/tags/{tag}', [TagController::class, 'detach'])->name('tags.detach')->middleware('module:patients,edit');
 
         // Consultations nested under patient
         Route::get('/{patient}/consultations/create', [ConsultationController::class, 'create'])->name('consultations.create');
         Route::get('/{patient}/consultations',        [ConsultationController::class, 'forPatient'])->name('consultations.index');
 
         // ── Typed consultation routes (must come before resource wildcard) ────
+        // Slice 1.2: clinical creates require edit (were view-gated).
         Route::get ('/{patient}/consultations/same-issue',  [ConsultationController::class, 'sameIssueCreate'])->name('consultations.same-issue.create');
-        Route::post('/{patient}/consultations/same-issue',  [ConsultationController::class, 'sameIssueStore'])->name('consultations.same-issue.store');
+        Route::post('/{patient}/consultations/same-issue',  [ConsultationController::class, 'sameIssueStore'])->name('consultations.same-issue.store')->middleware('module:patients,edit');
         Route::get ('/{patient}/consultations/minor-visit', [ConsultationController::class, 'minorVisitCreate'])->name('consultations.minor-visit.create');
-        Route::post('/{patient}/consultations/minor-visit', [ConsultationController::class, 'minorVisitStore'])->name('consultations.minor-visit.store');
+        Route::post('/{patient}/consultations/minor-visit', [ConsultationController::class, 'minorVisitStore'])->name('consultations.minor-visit.store')->middleware('module:patients,edit');
         Route::get ('/{patient}/consultations/emergency',   [ConsultationController::class, 'emergencyCreate'])->name('consultations.emergency.create');
-        Route::post('/{patient}/consultations/emergency',   [ConsultationController::class, 'emergencyStore'])->name('consultations.emergency.store');
+        Route::post('/{patient}/consultations/emergency',   [ConsultationController::class, 'emergencyStore'])->name('consultations.emergency.store')->middleware('module:patients,edit');
     });
 
     // ── Patient-context clinical routes (all gated under patients module) ──────
     Route::middleware('module:patients')->group(function () {
 
-        /* ── Consultations (standalone) ── */
+        /* ── Consultations (standalone) ──
+         | Slice 1.2: clinical writes require module:patients,edit and deletes
+         | require ,delete. Previously the group's view gate authorized all of
+         | them, so a view-only role could create/edit/delete clinical records.
+         */
         Route::prefix('consultations')->name('consultations.')->group(function () {
-            Route::post('/',                   [ConsultationController::class, 'store'])->name('store');
+            Route::post('/',                   [ConsultationController::class, 'store'])->name('store')->middleware('module:patients,edit');
             Route::get('/{consultation}',      [ConsultationController::class, 'show'])->name('show');
             Route::get('/{consultation}/edit', [ConsultationController::class, 'editStandalone'])->name('edit');
-            Route::put('/{consultation}',      [ConsultationController::class, 'updateStandalone'])->name('update');
-            Route::delete('/{consultation}',   [ConsultationController::class, 'destroy'])->name('destroy');
+            Route::put('/{consultation}',      [ConsultationController::class, 'updateStandalone'])->name('update')->middleware('module:patients,edit');
+            Route::delete('/{consultation}',   [ConsultationController::class, 'destroy'])->name('destroy')->middleware('module:patients,delete');
         });
 
-        // Clinical Files (Documents tab) — patient scoped
-        Route::post  ('/patients/{patient}/clinical-files',        [\App\Http\Controllers\ClinicalFileController::class, 'store'])->name('clinical-files.store');
+        // Clinical Files (Documents tab) — patient scoped. Slice 1.2 gates.
+        Route::post  ('/patients/{patient}/clinical-files',        [\App\Http\Controllers\ClinicalFileController::class, 'store'])->name('clinical-files.store')->middleware('module:patients,edit');
         Route::get   ('/patients/{patient}/clinical-files',        [\App\Http\Controllers\ClinicalFileController::class, 'index'])->name('clinical-files.index');
         Route::get   ('/patients/{patient}/clinical-files/{file}', [\App\Http\Controllers\ClinicalFileController::class, 'show'])->name('clinical-files.show');
-        Route::put   ('/patients/{patient}/clinical-files/{file}', [\App\Http\Controllers\ClinicalFileController::class, 'update'])->name('clinical-files.update');
-        Route::delete('/patients/{patient}/clinical-files/{file}', [\App\Http\Controllers\ClinicalFileController::class, 'destroy'])->name('clinical-files.destroy');
+        Route::put   ('/patients/{patient}/clinical-files/{file}', [\App\Http\Controllers\ClinicalFileController::class, 'update'])->name('clinical-files.update')->middleware('module:patients,edit');
+        Route::delete('/patients/{patient}/clinical-files/{file}', [\App\Http\Controllers\ClinicalFileController::class, 'destroy'])->name('clinical-files.destroy')->middleware('module:patients,delete');
 
-        // Treatment Plans — patient scoped
-        Route::post('/patients/{patient}/treatment-plans',            [TreatmentPlanController::class, 'store'])->name('treatment-plans.store');
+        // Treatment Plans — patient scoped. Slice 1.2 gates.
+        Route::post('/patients/{patient}/treatment-plans',            [TreatmentPlanController::class, 'store'])->name('treatment-plans.store')->middleware('module:patients,edit');
         Route::get('/patients/{patient}/treatment-plans',             [TreatmentPlanController::class, 'index'])->name('treatment-plans.index');
-        Route::post('/patients/{patient}/treatment-plans/ai-suggest', [TreatmentPlanController::class, 'aiSuggest'])->name('treatment-plans.ai-suggest');
+        Route::post('/patients/{patient}/treatment-plans/ai-suggest', [TreatmentPlanController::class, 'aiSuggest'])->name('treatment-plans.ai-suggest')->middleware('module:patients,edit');
         // P2C10c: handoff from consultation → pre-fill treatment plan form
         Route::get('/patients/{patient}/treatment-plans/from-consultation/{consultation}', [TreatmentPlanController::class, 'createFromConsultation'])->name('treatment-plans.from-consultation');
 
@@ -224,18 +229,18 @@ Route::middleware('auth')->group(function () {
         Route::get('/treatment-plans/{plan}/items',    [TreatmentPlanController::class, 'getItems'])->name('treatment-plans.items');
         // Phase 2 — Clinical consent print (docs/gap-analysis-treatment-planning-knowledge-bank.md)
         Route::get('/treatment-plans/{plan}/consent',  [TreatmentPlanController::class, 'consentPrint'])->name('treatment-plans.consent');
-        Route::put('/treatment-plans/{plan}',          [TreatmentPlanController::class, 'update'])->name('treatment-plans.update');
-        Route::post('/treatment-plans/{plan}/accept',  [TreatmentPlanController::class, 'accept'])->name('treatment-plans.accept');
+        Route::put('/treatment-plans/{plan}',          [TreatmentPlanController::class, 'update'])->name('treatment-plans.update')->middleware('module:patients,edit');
+        Route::post('/treatment-plans/{plan}/accept',  [TreatmentPlanController::class, 'accept'])->name('treatment-plans.accept')->middleware('module:patients,edit');
         // Mark a plan as presented → lands it in the Opportunity pipeline (Estimate Given)
-        Route::post('/treatment-plans/{plan}/mark-presented', [TreatmentPlanController::class, 'markPresented'])->name('treatment-plans.mark-presented');
-        Route::post('/treatment-plans/{plan}/revert',  [TreatmentPlanController::class, 'revert'])->name('treatment-plans.revert');
-        Route::delete('/treatment-plans/{plan}',       [TreatmentPlanController::class, 'destroy'])->name('treatment-plans.destroy');
-        Route::delete('/treatment-plan-items/{item}',  [TreatmentPlanController::class, 'destroyItem'])->name('treatment-plan-items.destroy');
+        Route::post('/treatment-plans/{plan}/mark-presented', [TreatmentPlanController::class, 'markPresented'])->name('treatment-plans.mark-presented')->middleware('module:patients,edit');
+        Route::post('/treatment-plans/{plan}/revert',  [TreatmentPlanController::class, 'revert'])->name('treatment-plans.revert')->middleware('module:patients,edit');
+        Route::delete('/treatment-plans/{plan}',       [TreatmentPlanController::class, 'destroy'])->name('treatment-plans.destroy')->middleware('module:patients,delete');
+        Route::delete('/treatment-plan-items/{item}',  [TreatmentPlanController::class, 'destroyItem'])->name('treatment-plan-items.destroy')->middleware('module:patients,delete');
 
-        // Treatment Visits
-        Route::post('/patients/{patient}/visits', [App\Http\Controllers\TreatmentVisitController::class, 'store'])->name('visits.store');
-        Route::put('/visits/{visit}',             [App\Http\Controllers\TreatmentVisitController::class, 'update'])->name('visits.update');
-        Route::delete('/visits/{visit}',          [App\Http\Controllers\TreatmentVisitController::class, 'destroy'])->name('visits.destroy');
+        // Treatment Visits — Slice 1.2 gates.
+        Route::post('/patients/{patient}/visits', [App\Http\Controllers\TreatmentVisitController::class, 'store'])->name('visits.store')->middleware('module:patients,edit');
+        Route::put('/visits/{visit}',             [App\Http\Controllers\TreatmentVisitController::class, 'update'])->name('visits.update')->middleware('module:patients,edit');
+        Route::delete('/visits/{visit}',          [App\Http\Controllers\TreatmentVisitController::class, 'destroy'])->name('visits.destroy')->middleware('module:patients,delete');
         Route::get('/visits/{visit}/print',       [App\Http\Controllers\TreatmentVisitController::class, 'print'])->name('visits.print');
 
         // ── Consult Assist (AJAX) ──────────────────────────────────────────────
@@ -254,9 +259,9 @@ Route::middleware('auth')->group(function () {
         // ── COHA (Comprehensive Oral Health Assessment) ───────────────────────
         // Dedicated routes — COHA is a separate workflow from standard consultations.
         Route::get('/patients/{patient}/coha/create',                      [App\Http\Controllers\ConsultationController::class, 'cohaCreate'])->name('coha.create');
-        Route::post('/patients/{patient}/coha',                            [App\Http\Controllers\ConsultationController::class, 'cohaStore'])->name('coha.store');
+        Route::post('/patients/{patient}/coha',                            [App\Http\Controllers\ConsultationController::class, 'cohaStore'])->name('coha.store')->middleware('module:patients,edit');
         Route::get('/patients/{patient}/coha/{consultation}/edit',         [App\Http\Controllers\ConsultationController::class, 'cohaEdit'])->name('coha.edit');
-        Route::put('/patients/{patient}/coha/{consultation}',              [App\Http\Controllers\ConsultationController::class, 'cohaUpdate'])->name('coha.update');
+        Route::put('/patients/{patient}/coha/{consultation}',              [App\Http\Controllers\ConsultationController::class, 'cohaUpdate'])->name('coha.update')->middleware('module:patients,edit');
         Route::get('/patients/{patient}/coha/{consultation}/report',       [App\Http\Controllers\ConsultationController::class, 'cohaReport'])->name('coha.report');
 
     }); // end module:patients (clinical context)
@@ -293,9 +298,19 @@ Route::middleware('auth')->group(function () {
 
 
 
+    // Slice 1.2: the nested consultation resource is split so writes carry
+    // ,edit and destroy carries ,delete instead of riding the view gate.
     Route::middleware('module:patients')->group(function () {
         Route::resource('patients.consultations', ConsultationController::class)
-            ->only(['create', 'store', 'show', 'edit', 'update', 'destroy']);
+            ->only(['create', 'show', 'edit']);
+    });
+    Route::middleware('module:patients,edit')->group(function () {
+        Route::resource('patients.consultations', ConsultationController::class)
+            ->only(['store', 'update']);
+    });
+    Route::middleware('module:patients,delete')->group(function () {
+        Route::resource('patients.consultations', ConsultationController::class)
+            ->only(['destroy']);
     });
 
     /* ── Treatment Categories (part of treatments module) ── */
