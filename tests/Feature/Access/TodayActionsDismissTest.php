@@ -208,7 +208,7 @@ class TodayActionsDismissTest extends TestCase
         $cases = [
             'new_enquiries'         => $lead->id,       // Lead-keyed
             'lead_followups'        => $lead->id,       // Lead-keyed
-            'birthdays'             => $patient->id,    // Patient-keyed
+            // 'birthdays' retired from the board 2026-07-26 — no longer dismissible.
             'recall_calls'          => $queueRow->id,   // queue-backed
             'logged_communications' => $queueRow->id,   // queue-backed
         ];

@@ -54,7 +54,6 @@ class TodayController extends Controller
         'missed_appointments_yesterday'=> 'Yesterday\'s Missed Appointments',
         'pending_estimates'            => 'Pending Estimates',
         'membership_renewals'          => 'Membership Renewals',
-        'birthdays'                    => 'Birthday Wishes',
         'lab_ready'                    => 'Lab Work Ready',
         'payment_reminders'            => 'Payment Reminders',
         'appointment_reminders_tomorrow'=> "Tomorrow Morning's Appointments",
@@ -82,7 +81,6 @@ class TodayController extends Controller
         'missed_appointments_yesterday'=> 'ti-calendar-x',
         'pending_estimates'            => 'ti-file-invoice',
         'membership_renewals'          => 'ti-id-badge',
-        'birthdays'                    => 'ti-cake',
         'lab_ready'                    => 'ti-flask',
         'payment_reminders'            => 'ti-receipt-2',
         'appointment_reminders_tomorrow'=> 'ti-calendar-event',
@@ -112,7 +110,6 @@ class TodayController extends Controller
         'pending_estimates'            => 11, // estimate awaiting approval
         'payment_reminders'            => 12, // collections
         'membership_renewals'          => 13, // plan renewal reminder
-        'birthdays'                    => 14, // relationship touch — least urgent
         'appointment_reminders'        => 14, // fallback bucket, only used if today/tomorrow split fails
         'appointment_reminders_tomorrow'=> 15, // confirm tomorrow morning's sessions — last
     ];
@@ -719,7 +716,8 @@ class TodayController extends Controller
         'missed_appointments_yesterday' => Appointment::class,
         'pending_estimates'             => TreatmentOpportunity::class,
         'membership_renewals'           => FinancePatientMembership::class,
-        'birthdays'                     => Patient::class,
+        // 'birthdays' retired from the board (2026-07-26) — a category that
+        // cannot appear cannot be dismissed.
         'lab_ready'                     => LabCase::class,
         'payment_reminders'             => Invoice::class,
         'wellness_check_yesterday'      => TreatmentVisit::class,

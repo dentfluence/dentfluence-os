@@ -26,11 +26,18 @@ class TodayActionsCategoriesTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** Every category key generate() must emit — the current board contract. */
+    /**
+     * Every category key generate() must emit — the current board contract.
+     *
+     * 'birthdays' was RETIRED 2026-07-26 (CEO): a birthday greeting is not
+     * work that needs a human today. 14 categories, not 15 — the reader is
+     * preserved for the future WhatsApp automation, but the board no longer
+     * carries a card for it.
+     */
     private const ALL_CATEGORIES = [
         'new_enquiries', 'lead_followups', 'opportunities', 'recall_calls',
         'follow_up_calls', 'appointment_reminders', 'pending_estimates',
-        'membership_renewals', 'birthdays', 'lab_ready', 'payment_reminders',
+        'membership_renewals', 'lab_ready', 'payment_reminders',
         'wellness_check_yesterday', 'logged_communications',
         'missed_calls_yesterday', 'missed_appointments_yesterday',
     ];

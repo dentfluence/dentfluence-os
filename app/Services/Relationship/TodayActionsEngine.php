@@ -93,7 +93,16 @@ class TodayActionsEngine
             'appointment_reminders'        => fn () => $this->appointmentReminders(),
             'pending_estimates'            => fn () => $this->pendingEstimates(),
             'membership_renewals'          => fn () => $this->membershipRenewals(),
-            'birthdays'                    => fn () => $this->birthdays(),
+            // 'birthdays' RETIRED as a human-work category (2026-07-26, CEO
+            // decision). Today's Actions must only carry work that needs a
+            // human today; a birthday greeting is automation's job. The
+            // birthdays() reader below is intentionally preserved so the
+            // future WhatsApp automation layer can consume it, and the
+            // one-click send endpoint + templates remain untouched.
+            // NOTE: birthday RECALL rows queued by RecallEngineService
+            // (purpose = recall_birthday) still surface under recall_calls —
+            // that is the recall engine's output, governed by the
+            // recall.birthday_enabled setting, not this category.
             'lab_ready'                    => fn () => $this->labReady(),
             'payment_reminders'            => fn () => $this->paymentReminders(),
             'wellness_check_yesterday'     => fn () => $this->wellnessCheckYesterday(),
@@ -593,8 +602,17 @@ class TodayActionsEngine
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // CATEGORY 8 — Birthdays
-    // Patients with birthday today ± window
+    // RETIRED CATEGORY — Birthdays (2026-07-26, CEO decision)
+    //
+    // No longer registered in generate()/generateUpcoming(): a birthday
+    // greeting is not work that needs a human today. The intended future flow
+    // is: birthday → automation → WhatsApp sent → Activity logged → NO card;
+    // only a FAILED send becomes a human exception on this board.
+    //
+    // This reader is deliberately KEPT (not deleted) so the future automation
+    // layer has a ready, tested source of "whose birthday falls in the window",
+    // together with the AppSetting flags it already honours. Nothing calls it
+    // today.
     // ═══════════════════════════════════════════════════════════════════════
 
     private function birthdays(): array
@@ -841,7 +859,7 @@ class TodayActionsEngine
             'opportunities'         => fn () => $this->opportunitiesOnDate($date),
             'appointment_reminders' => fn () => $this->appointmentsOnDate($date),
             'membership_renewals'   => fn () => $this->membershipOnDate($date),
-            'birthdays'             => fn () => $this->birthdaysOnDate($date),
+            // birthdays retired from the board — see generate() above.
         ];
 
         foreach ($categories as $key => $resolver) {
@@ -1216,7 +1234,7 @@ class TodayActionsEngine
             'appointment_reminders'         => [Appointment::class,              fn ($i) => $i['meta']['id'] ?? null],
             'missed_appointments_yesterday' => [Appointment::class,              fn ($i) => $i['meta']['id'] ?? null],
             'membership_renewals'           => [FinancePatientMembership::class, fn ($i) => $i['meta']['id'] ?? null],
-            'birthdays'                     => [Patient::class,                  fn ($i) => $i['patient_id'] ?? null],
+            // 'birthdays' removed — the category no longer reaches the board.
             'lab_ready'                     => [LabCase::class,                  fn ($i) => $i['meta']['id'] ?? null],
             'payment_reminders'             => [Invoice::class,                  fn ($i) => $i['meta']['id'] ?? null],
             'wellness_check_yesterday'      => [TreatmentVisit::class,           fn ($i) => $i['meta']['id'] ?? null],
