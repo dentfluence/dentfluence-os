@@ -28,6 +28,8 @@ class TreatmentPlan extends Model
         'plan_type',
         'status',
         'accepted_at',        // null = not accepted; set when patient confirms
+        'presented_at',       // Slice 2.2 — FIRST time the patient was shown this plan.
+                              // Never overwritten; never implies a decision.
         'rows',               // legacy JSON — kept for backward compat
         'total',
         'overall_disc_pct',
@@ -46,6 +48,7 @@ class TreatmentPlan extends Model
         'total'            => 'decimal:2',
         'overall_disc_pct' => 'decimal:2',
         'accepted_at'      => 'datetime',
+        'presented_at'     => 'datetime',
     ];
 
     // ── Boot — auto-assign uuid + display_order ───────────────────────────────
@@ -116,6 +119,24 @@ class TreatmentPlan extends Model
     public function getIsAcceptedAttribute(): bool
     {
         return !is_null($this->accepted_at);
+    }
+
+    /** Slice 2.2 — has the patient actually been shown this plan? */
+    public function getIsPresentedAttribute(): bool
+    {
+        return ! is_null($this->presented_at);
+    }
+
+    /**
+     * Slice 2.2 — presented but no decision recorded yet.
+     *
+     * Conceptual only until Slice 2.3 gives decisions their own record:
+     * today "no decision" is approximated by "not accepted". Never read this
+     * as rejection — a pending decision is a legitimate, long-lived state.
+     */
+    public function getIsDecisionPendingAttribute(): bool
+    {
+        return $this->is_presented && ! $this->is_accepted && $this->status !== 'cancelled';
     }
 
     public function getComputedTotalAttribute(): float

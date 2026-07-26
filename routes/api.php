@@ -196,6 +196,10 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             ->middleware('api.role:module:patients,edit');
         Route::post('/treatment-plans/{plan}/accept',      [TreatmentPlanController::class, 'accept'])
             ->middleware('api.role:module:patients,edit');
+        // Slice 2.2 — presentation is a clinical mutation, so it carries the
+        // same owner-configured patients,edit gate as the web route.
+        Route::post('/treatment-plans/{plan}/mark-presented', [TreatmentPlanController::class, 'markPresented'])
+            ->middleware('api.role:module:patients,edit');
         Route::post('/treatment-plans/{plan}/revert',      [TreatmentPlanController::class, 'revert'])
             ->middleware('api.role:module:patients,edit');
         Route::get('/treatment-plans/{plan}/billable-teeth', [TreatmentPlanController::class, 'billableTeeth']);

@@ -331,19 +331,25 @@ class TreatmentPlanController extends Controller
     // in the Opportunity pipeline at "Estimate Given" and keeps it there until
     // the plan is accepted (→ Converted) or declined. Idempotent — safe to click
     // twice; the one-opportunity-per-plan guard lives in the sync service.
-    public function markPresented(TreatmentPlan $plan, TreatmentPlanOpportunitySync $sync): JsonResponse
+    public function markPresented(TreatmentPlan $plan, \App\Services\TreatmentPlan\TreatmentPlanPresentationService $presentation): JsonResponse
     {
-        $sync->syncStage($plan, 'quoted', [
-            'actor'       => Auth::user(),
-            'created_by'  => Auth::id(),
-            'source'      => 'treatment_plan_presented',
-            'description' => 'Treatment plan marked as presented — Estimate Given',
-        ]);
+        // Slice 2.2: routed through the canonical presentation service, which
+        // records the CLINICAL fact (presented_at, first time only) and then
+        // projects it onto the Opportunity board exactly as before — so staff
+        // workflow is unchanged while clinical truth stops depending on a
+        // sales stage. The API uses this same service.
+        try {
+            $result = $presentation->markPresented($plan, Auth::user(), 'clinic');
+        } catch (\RuntimeException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'success' => true,
-            'message' => 'Plan marked as presented.',
-            'plan'    => $this->formatPlan($plan->fresh(['items', 'creator', 'opportunity'])),
+            'message' => $result['first_presentation']
+                ? 'Plan marked as presented.'
+                : 'Plan presented again — the original presentation date is unchanged.',
+            'plan'    => $this->formatPlan($result['plan']->fresh(['items', 'creator', 'opportunity'])),
         ]);
     }
 
@@ -648,10 +654,17 @@ class TreatmentPlanController extends Controller
             'display_order'      => (int)$plan->display_order,
             'status'             => $plan->status,
             'is_accepted'        => (bool)$plan->accepted_at,
-            // "Presented" = a linked Opportunity exists (Estimate Given onward).
-            'is_presented'       => $plan->relationLoaded('opportunity')
-                                        ? (bool) $plan->opportunity
-                                        : TreatmentOpportunity::where('treatment_plan_id', $plan->id)->exists(),
+            // Slice 2.2: "Presented" is now the CLINICAL fact. Historical plans
+            // (presented before this slice) have no presented_at, so the old
+            // Opportunity-based signal is kept as a read-only fallback purely
+            // so existing rows don't suddenly display as never-presented.
+            // Nothing is backfilled — see docs/patient-journey-v1_1-phase2.
+            'is_presented'       => $plan->presented_at !== null
+                                        || ($plan->relationLoaded('opportunity')
+                                            ? (bool) $plan->opportunity
+                                            : TreatmentOpportunity::where('treatment_plan_id', $plan->id)->exists()),
+            'presented_at'       => $plan->presented_at?->format('d M Y'),
+            'decision_pending'   => $plan->is_decision_pending,
             'accepted_at'        => $plan->accepted_at?->format('d M Y'),
             'total'              => (float)$plan->total,
             'consultation_id'    => $plan->consultation_id,

@@ -152,14 +152,24 @@ class ClinicalTruthCharacterizationTest extends TestCase
             'FINDING: clinical acceptance maps to opportunity "completed" (= sale converted, NOT treatment finished)');
     }
 
-    // ── 3. There is no clinical "presented" fact ─────────────────────────────
+    // ── 3. Presentation ──────────────────────────────────────────────────────
+    //
+    // SUPERSEDED BY SLICE 2.2. This test originally asserted that NO clinical
+    // presentation fact existed and that presentation was observable only as a
+    // sales-pipeline stage ('quoted'). Slice 2.2 deliberately ended that: the
+    // clinical fact now lives on treatment_plans.presented_at, and the
+    // opportunity stage became a downstream projection of it.
+    //
+    // What is retained here is the half that is still TRUE and still worth
+    // guarding — presentation is not a decision, and no patient-decision record
+    // exists yet (that remains open for a later slice).
 
-    public function test_plan_has_no_presented_column_presentation_lives_only_as_opportunity_stage(): void
+    public function test_presentation_remains_undecided_and_no_decision_record_exists_yet(): void
     {
-        $this->assertFalse(Schema::hasColumn('treatment_plans', 'presented_at'),
-            'no clinical presentation fact exists today');
+        $this->assertTrue(Schema::hasColumn('treatment_plans', 'presented_at'),
+            'SLICE 2.2: the clinical presentation fact now exists');
         $this->assertFalse(Schema::hasTable('plan_decisions'),
-            'no patient-decision record exists today');
+            'no patient-decision record exists yet — deferred to a later slice');
 
         $plan = $this->planWithItems($this->patient());
 
@@ -167,8 +177,13 @@ class ClinicalTruthCharacterizationTest extends TestCase
             ->postJson(route('treatment-plans.mark-presented', $plan))
             ->assertOk();
 
-        // Presentation is observable ONLY through the sales pipeline.
+        // The clinical fact is written…
+        $this->assertNotNull($plan->fresh()->presented_at);
+
+        // …the opportunity stage still follows it (compatibility projection)…
         $this->assertSame('quoted', TreatmentOpportunity::where('treatment_plan_id', $plan->id)->value('status'));
+
+        // …and presentation still decides nothing.
         $this->assertNull($plan->fresh()->accepted_at);
         $this->assertSame('pending', $plan->fresh()->status);
     }

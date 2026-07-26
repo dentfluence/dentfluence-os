@@ -173,6 +173,34 @@ class TreatmentPlanController extends ApiController
             'Treatment option accepted.');
     }
 
+    /**
+     * Phase 2 · Slice 2.2 — record that the plan was presented to the patient.
+     *
+     * Closes the parity gap found in Slice 2.1: presentation existed on web
+     * only, so a plan explained to a patient chairside from the mobile app
+     * could not be recorded at all. Same canonical service, same validation,
+     * same Activity event, same owner-configured permission as the web route.
+     */
+    public function markPresented(Request $request, $plan): JsonResponse
+    {
+        $p = $this->findPlan($request, $plan);
+        if ($p instanceof JsonResponse) return $p;
+
+        try {
+            $result = app(\App\Services\TreatmentPlan\TreatmentPlanPresentationService::class)
+                ->markPresented($p, $request->user(), 'mobile');
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), [], 422);
+        }
+
+        return $this->success(
+            $this->payload($result['plan']->fresh(['items', 'creator'])),
+            $result['first_presentation']
+                ? 'Treatment plan marked as presented.'
+                : 'Plan presented again — the original presentation date is unchanged.'
+        );
+    }
+
     public function revert(Request $request, $plan): JsonResponse
     {
         $p = $this->findPlan($request, $plan);

@@ -351,6 +351,20 @@ class UnifiedTimelineService
                         ]);
                     }
 
+                    // Presented (Phase 2 · Slice 2.2) — a distinct clinical fact
+                    // from "created". Historical plans have no presented_at and
+                    // simply show no presentation entry; nothing is backfilled.
+                    if ($plan->presented_at) {
+                        $entries->push([
+                            'date' => $this->toCarbon($plan->presented_at), 'type' => 'treatment.presented', 'icon_type' => 'plan',
+                            'title' => 'Treatment plan presented to patient — ' . $name,
+                            'description' => trim($total, ' ·') ?: null,
+                            'actor' => $plan->doctor_id ? $this->userName($plan->doctor_id) : null,
+                            'meta' => $plan->accepted_at ? null : 'Awaiting decision',
+                            'group' => 'clinical', 'permission' => 'patients.view', 'link' => $link, 'color' => 'blue',
+                        ]);
+                    }
+
                     // Accepted (Amendment 1, event 18)
                     if ($plan->accepted_at) {
                         $entries->push([
@@ -371,8 +385,13 @@ class UnifiedTimelineService
                         ]);
                     }
 
-                    // Deferred — derived at read time (Amendment 1, event 20)
-                    $planDate = $this->toCarbon($plan->plan_date);
+                    // Pending decision — derived at read time (Amendment 1, event 20).
+                    // Slice 2.2: this always described itself as "days after
+                    // presentation" while actually measuring from plan_date (the
+                    // creation date). Now it prefers the real presented_at when
+                    // one exists and only falls back to plan_date for historical
+                    // plans that predate presentation truth.
+                    $planDate = $this->toCarbon($plan->presented_at) ?? $this->toCarbon($plan->plan_date);
                     if ($plan->status === 'pending' && ! $plan->accepted_at
                         && $planDate && $planDate->lte(now()->subDays(14))) {
                         $entries->push([
