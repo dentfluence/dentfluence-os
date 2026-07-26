@@ -75,29 +75,44 @@ class RoleManagementCharacterizationTest extends TestCase
         }
     }
 
-    public function test_legacy_admin_string_without_role_id_bypasses_every_module_check(): void
+    public function test_legacy_admin_bypass_is_retired(): void
     {
-        // CURRENT transition backdoor (User::canAccess line ~204). Documented
-        // for the 1.1 CEO gate — classification pending (close vs keep).
-        $legacy = $this->legacyAdminUser();
+        // Slice 1.2: the transition backdoor (role string 'admin' + NO role_id
+        // ⇒ full access to everything, including modules that don't exist) is
+        // gone. VPS census confirmed 0 of 12 production users depended on it.
+        // A user with no assigned role now has no access at all.
+        $roleless = \App\Models\User::factory()->create([
+            'role'      => 'assistant', // any non-admin legacy string
+            'role_id'   => null,
+            'branch_id' => 1,
+        ]);
 
-        $this->assertTrue($legacy->canAccess('patients', 'delete'));
-        $this->assertTrue($legacy->canAccess('billing', 'edit'));
-        $this->assertTrue($legacy->canAccess('nonexistent_module', 'view'));
-        $this->assertTrue($legacy->isAdminRole());
+        $this->assertFalse($roleless->canAccess('patients', 'view'));
+        $this->assertFalse($roleless->canAccess('patients', 'delete'));
+        $this->assertFalse($roleless->canAccess('nonexistent_module', 'view'));
     }
 
-    public function test_module_catalogue_has_no_relationship_or_prescriptions_entry(): void
+    public function test_admin_role_keeps_owner_level_access(): void
     {
-        // CURRENT gap: PRE and prescriptions cannot be configured in Settings
-        // at all because no module row exists. Slice 1.3 (post-approval) is
-        // expected to add the catalogue entries — this test will then be
-        // deliberately inverted.
+        // The remaining exception is role-BACKED (Clinic Owner), not a legacy
+        // job-title string — so a newly registered module is usable by the
+        // owner before they configure it for anyone else.
+        $admin = $this->legacyAdminUser(); // factory attaches the real Admin role
+
+        $this->assertNotNull($admin->fresh()->role_id, 'admin user has no role row');
+        $this->assertTrue($this->fresh($admin)->canAccess('patients', 'delete'));
+        $this->assertTrue($this->fresh($admin)->canAccess('relationship', 'edit'));
+    }
+
+    public function test_relationship_and_prescriptions_are_configurable_modules(): void
+    {
+        // Slice 1.3: the two approved catalogue registrations. Before this,
+        // neither surface could be configured in Settings at all.
         $this->seedAccessRoles();
 
-        $this->assertNull(Module::where('slug', 'relationship')->first());
-        $this->assertNull(Module::where('slug', 'relationships')->first());
-        $this->assertNull(Module::where('slug', 'pre')->first());
-        $this->assertNull(Module::where('slug', 'prescriptions')->first());
+        $this->assertNotNull(Module::where('slug', 'relationship')->first(),
+            'relationship module row missing — PRE would be unconfigurable');
+        $this->assertNotNull(Module::where('slug', 'prescriptions')->first(),
+            'prescriptions module row missing');
     }
 }

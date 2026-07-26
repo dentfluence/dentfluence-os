@@ -22,9 +22,37 @@ class OpportunityPipelineTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Phase 1 · Slice 1.3: PRE surfaces are now gated by the owner-configured
+     * `relationship` module. Test actors therefore need a role that grants it —
+     * the role NAME is deliberately arbitrary (authorization must never depend
+     * on job titles). Full view+edit+delete keeps these suites testing their
+     * own subject matter rather than permissions.
+     */
+    private function preRole(): \App\Models\Role
+    {
+        $role = \App\Models\Role::firstOrCreate(
+            ['slug' => 'pre_test_actor'],
+            ['name' => 'PRE Test Actor', 'category' => \App\Models\Role::CATEGORY_STAFF, 'is_system' => false]
+        );
+
+        foreach (['relationship', 'patients', 'daily_huddle', 'tasks'] as $slug) {
+            $module = \App\Models\Module::firstOrCreate(
+                ['slug' => $slug],
+                ['name' => ucfirst($slug), 'section' => 'clinical', 'sort_order' => 90]
+            );
+            \App\Models\RoleModulePermission::updateOrCreate(
+                ['role_id' => $role->id, 'module_id' => $module->id],
+                ['can_view' => true, 'can_edit' => true, 'can_delete' => true]
+            );
+        }
+
+        return $role;
+    }
+
     private function user(): User
     {
-        return User::factory()->create(['branch_id' => 1]);
+        return User::factory()->create(['branch_id' => 1, 'role_id' => $this->preRole()->id]);
     }
 
     private function opportunity(string $relName, string $status, string $phone): TreatmentOpportunity

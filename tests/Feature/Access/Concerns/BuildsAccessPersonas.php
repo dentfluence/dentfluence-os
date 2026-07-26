@@ -81,6 +81,39 @@ trait BuildsAccessPersonas
         ]);
     }
 
+    /** A user whose single custom role carries TWO module permission triples. */
+    protected function userWithTwoModulePerms(
+        string $moduleA, array $tripleA,
+        string $moduleB, array $tripleB,
+        string $roleName = null
+    ): User {
+        $this->seedAccessRoles();
+
+        $role = Role::create([
+            'name'      => $roleName ?? ('AccessTest2 ' . uniqid()),
+            'slug'      => 'access_test2_' . uniqid(),
+            'category'  => Role::CATEGORY_STAFF,
+            'is_system' => false,
+        ]);
+
+        foreach ([[$moduleA, $tripleA], [$moduleB, $tripleB]] as [$slug, [$v, $e, $d]]) {
+            RoleModulePermission::create([
+                'role_id'    => $role->id,
+                'module_id'  => Module::where('slug', $slug)->firstOrFail()->id,
+                'can_view'   => $v,
+                'can_edit'   => $e,
+                'can_delete' => $d,
+            ]);
+        }
+
+        return User::factory()->create([
+            'role'      => 'assistant',
+            'role_id'   => $role->id,
+            'branch_id' => 1,
+            'is_active' => true,
+        ]);
+    }
+
     /** The legacy transition bypass: role string 'admin' with NO role_id. */
     protected function legacyAdminUser(): User
     {

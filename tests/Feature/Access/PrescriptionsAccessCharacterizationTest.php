@@ -3,44 +3,47 @@
 namespace Tests\Feature\Access;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Route;
 use Tests\Feature\Access\Concerns\BuildsAccessPersonas;
 use Tests\TestCase;
 
 /**
- * Phase 1 · Slice 1.1 — CURRENT prescriptions access reality.
- *
- * routes/prescriptions.php is wrapped in bare auth middleware: no module
- * gate exists (and no prescriptions module row exists to gate with).
- * Will be flipped in Slice 1.3 after the CEO approves semantics.
+ * Phase 1 · Slice 1.3 — prescriptions access ENFORCEMENT (flipped from the
+ * 1.1 characterization, which recorded that the whole file was auth-only).
  */
 class PrescriptionsAccessCharacterizationTest extends TestCase
 {
     use RefreshDatabase;
     use BuildsAccessPersonas;
 
-    public function test_zero_permission_user_can_open_prescription_settings(): void
+    public function test_zero_permission_user_is_denied_prescription_settings(): void
     {
-        $user = $this->zeroPermUser();
+        $response = $this->actingAs($this->zeroPermUser())->get(route('rx.settings.index'));
 
-        $this->actingAs($user)
-            ->get(route('rx.settings.index'))
-            ->assertOk(); // CURRENT: 200 with zero grants
+        $this->assertContains($response->getStatusCode(), [302, 403]);
     }
 
-    public function test_no_prescription_route_carries_a_module_gate(): void
+    public function test_view_grant_opens_prescription_settings(): void
     {
-        $rxRoutes = collect(Route::getRoutes()->getRoutes())
-            ->filter(fn ($r) => str_starts_with((string) $r->getName(), 'rx.'));
+        $user = $this->userWithModulePerm('prescriptions', true, false, false, 'Rx Reader ' . uniqid());
 
-        $this->assertTrue($rxRoutes->isNotEmpty(), 'rx.* routes missing');
+        $this->actingAs($user)->get(route('rx.settings.index'))->assertOk();
+    }
 
-        foreach ($rxRoutes as $r) {
-            $moduleGates = array_filter($r->gatherMiddleware(),
-                fn ($m) => is_string($m) && str_starts_with($m, 'module:'));
+    public function test_view_only_user_cannot_write_prescription_masters(): void
+    {
+        $user = $this->userWithModulePerm('prescriptions', true, false, false);
 
-            $this->assertSame([], array_values($moduleGates),
-                "Route [{$r->getName()}] unexpectedly gained a module gate — update this characterization");
-        }
+        $this->actingAs($user)
+            ->postJson(route('rx.settings.categories.store'), ['name' => 'Blocked Category'])
+            ->assertForbidden();
+    }
+
+    public function test_edit_grant_allows_the_same_write(): void
+    {
+        $user = $this->userWithModulePerm('prescriptions', true, true, false);
+
+        $this->assertNotSame(403, $this->actingAs($user)
+            ->postJson(route('rx.settings.categories.store'), ['name' => 'Allowed Category'])
+            ->getStatusCode());
     }
 }
