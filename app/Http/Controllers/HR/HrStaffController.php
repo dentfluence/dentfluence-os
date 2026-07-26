@@ -77,16 +77,48 @@ class HrStaffController extends Controller
         return view('hr.staff.index', compact('doctors', 'staff', 'staffPaginated', 'departments', 'allUsers', 'view'));
     }
 
+    /**
+     * Assigning an ACCESS role is a privilege-granting act, so it carries the
+     * same owner-level gate as Settings → Roles & Permissions (admin.only).
+     *
+     * Found during the Phase 1 blocker fix (2026-07-26): the HR staff routes
+     * are gated by `module:hr` (VIEW), which meant anyone who could open HR
+     * could create a staff login and hand it ANY role — including Admin. Role
+     * *configuration* was owner-only; role *assignment* was not.
+     *
+     * Everything else on these screens (HR details, bank, contact, documents)
+     * remains available to any HR user — only the role assignment is gated.
+     */
+    private function assertMayAssignAccessRole(): void
+    {
+        abort_unless(
+            auth()->user()?->isAdminRole(),
+            403,
+            'Only the clinic owner/admin can assign an access role.'
+        );
+    }
+
     /* ── Show create form ── */
 
     public function create()
     {
         $departments = HrDepartment::active()->orderBy('name')->get();
         $shifts      = HrShift::active()->orderBy('name')->get();
-        $roles       = [
+        // ACCESS roles — the canonical, owner-configured roles table (Settings →
+        // Roles & Permissions). Any role the Clinic Owner creates is assignable
+        // here the moment it exists; nothing is hardcoded. Phase 1 blocker fix
+        // (2026-07-26): this used to be a hardcoded legacy job-title array, so
+        // custom roles could be created but never assigned.
+        $accessRoles = Role::orderBy('name')->get(['id', 'name', 'slug', 'category']);
+
+        // STAFF TYPE — clinical/HR classification only (doctor detection for
+        // scheduling, notification routing, the HR Doctors/Staff split view).
+        // NOT authorization: permissions come exclusively from the access role.
+        $staffTypes  = [
             'resident_dentist'    => 'Resident Dentist',
             'associate_dentist'   => 'Associate Dentist',
             'visiting_consultant' => 'Visiting Consultant',
+            'doctor'              => 'Doctor',
             'assistant'           => 'Assistant',
             'front_desk'          => 'Front Desk',
             'accounts'            => 'Accounts',
@@ -94,18 +126,24 @@ class HrStaffController extends Controller
             'admin'               => 'Admin',
         ];
 
-        return view('hr.staff.create', compact('departments', 'shifts', 'roles'));
+        return view('hr.staff.create', compact('departments', 'shifts', 'accessRoles', 'staffTypes'));
     }
 
     /* ── Store new staff + profile ── */
 
     public function store(Request $request)
     {
+        // Creating a login IS granting access — owner-only.
+        $this->assertMayAssignAccessRole();
+
         $request->validate([
             // User fields
             'name'        => 'required|string|max:255',
             'email'       => 'required|email|unique:users,email',
             'phone'       => 'nullable|string|max:20',
+            // ACCESS role — canonical roles table; any owner-created role is valid.
+            'role_id'     => 'required|exists:roles,id',
+            // STAFF TYPE — clinical/HR classification, never authorization.
             'role'        => 'required|in:admin,manager,doctor,resident_dentist,associate_dentist,visiting_consultant,front_desk,assistant,accounts',
             'designation' => 'nullable|string|max:255',
             'password'    => ['required', 'string', \Illuminate\Validation\Rules\Password::defaults()],
@@ -135,17 +173,19 @@ class HrStaffController extends Controller
             'shift_from'    => 'nullable|date',
         ]);
 
-        // 1. Create user account
-        // role_id drives real module permissions (Roles & Permissions screen);
-        // `role` stays for legacy doctor-detection/notification-routing lookups.
-        $roleId = Role::where('slug', Role::slugForLegacyRoleString($request->role))->value('id');
-
+        // 1. Create user account.
+        // role_id = the ACCESS role the owner picked (canonical; drives every
+        // permission check on web and API). `role` = staff-type classification
+        // only (doctor detection / notification routing / HR list split).
+        // Phase 1 blocker fix (2026-07-26): role_id is now taken from the form
+        // instead of being derived from the legacy string, so a custom role
+        // like "Evening Desk" survives exactly as the owner assigned it.
         $user = User::create([
             'name'        => $request->name,
             'email'       => $request->email,
             'phone'       => $request->phone,
             'role'        => $request->role,
-            'role_id'     => $roleId,
+            'role_id'     => $request->role_id,
             'designation' => $request->designation,
             'password'    => Hash::make($request->password),
             'is_active'   => true,
@@ -236,10 +276,21 @@ class HrStaffController extends Controller
 
         $departments = HrDepartment::active()->orderBy('name')->get();
         $shifts      = HrShift::active()->orderBy('name')->get();
-        $roles       = [
+        // ACCESS roles — the canonical, owner-configured roles table (Settings →
+        // Roles & Permissions). Any role the Clinic Owner creates is assignable
+        // here the moment it exists; nothing is hardcoded. Phase 1 blocker fix
+        // (2026-07-26): this used to be a hardcoded legacy job-title array, so
+        // custom roles could be created but never assigned.
+        $accessRoles = Role::orderBy('name')->get(['id', 'name', 'slug', 'category']);
+
+        // STAFF TYPE — clinical/HR classification only (doctor detection for
+        // scheduling, notification routing, the HR Doctors/Staff split view).
+        // NOT authorization: permissions come exclusively from the access role.
+        $staffTypes  = [
             'resident_dentist'    => 'Resident Dentist',
             'associate_dentist'   => 'Associate Dentist',
             'visiting_consultant' => 'Visiting Consultant',
+            'doctor'              => 'Doctor',
             'assistant'           => 'Assistant',
             'front_desk'          => 'Front Desk',
             'accounts'            => 'Accounts',
@@ -247,7 +298,7 @@ class HrStaffController extends Controller
             'admin'               => 'Admin',
         ];
 
-        return view('hr.staff.edit', compact('user', 'departments', 'shifts', 'roles'));
+        return view('hr.staff.edit', compact('user', 'departments', 'shifts', 'accessRoles', 'staffTypes'));
     }
 
     /* ── Update staff + profile ── */
@@ -258,6 +309,11 @@ class HrStaffController extends Controller
             'name'        => 'required|string|max:255',
             'email'       => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'phone'       => 'nullable|string|max:20',
+            // ACCESS role — optional here because four secondary forms on the
+            // edit screen (HR details, bank, contact, documents) post back only
+            // their own fields; they must not be able to blank the assignment.
+            'role_id'     => 'nullable|exists:roles,id',
+            // STAFF TYPE — clinical/HR classification, never authorization.
             'role'        => 'required|in:admin,manager,doctor,resident_dentist,associate_dentist,visiting_consultant,front_desk,assistant,accounts',
             'designation' => 'nullable|string|max:255',
 
@@ -302,14 +358,17 @@ class HrStaffController extends Controller
             'designation' => $request->designation,
         ]);
 
-        // Keep role_id (real module permissions) in sync with the legacy role
-        // string whenever it changes, and backfill it if it was never set —
-        // but don't clobber a custom role_id someone deliberately assigned
-        // via Settings > Staff if the legacy role string itself is untouched.
-        if ($user->wasChanged('role') || is_null($user->role_id)) {
-            $user->update([
-                'role_id' => Role::where('slug', Role::slugForLegacyRoleString($user->role))->value('id'),
-            ]);
+        // ACCESS role: written ONLY from the owner's explicit choice.
+        //
+        // Phase 1 blocker fix (2026-07-26). This block previously DERIVED
+        // role_id from the legacy job-title string whenever that string changed
+        // (or whenever role_id was null), which silently clobbered a custom role
+        // the owner had assigned — e.g. "Evening Desk" reverted to Front Desk
+        // the next time anyone edited that staff member. Authorization now
+        // follows the owner's assignment and nothing else.
+        if ($request->filled('role_id') && (int) $request->role_id !== (int) $user->role_id) {
+            $this->assertMayAssignAccessRole();
+            $user->update(['role_id' => $request->role_id]);
         }
 
         // Admin-only password reset: only touch the password if a new one was submitted.

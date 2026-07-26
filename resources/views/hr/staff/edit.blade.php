@@ -92,13 +92,32 @@
                         <label class="fl">Phone</label>
                         <input type="text" name="phone" value="{{ old('phone',$user->phone) }}" class="fi">
                     </div>
+                    {{-- ACCESS ROLE — canonical roles table; owner-created roles
+                         appear here immediately. Drives all permissions. --}}
                     <div>
-                        <label class="fl">Role *</label>
+                        <label class="fl">Access Role *</label>
+                        @if(auth()->user()?->isAdminRole())
+                        <select name="role_id" required class="fi">
+                            <option value="">Select access role…</option>
+                            @foreach($accessRoles as $role)
+                            <option value="{{ $role->id }}" @selected(old('role_id',$user->role_id)==$role->id)>{{ $role->name }}</option>
+                            @endforeach
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Permissions come from this role (Settings → Roles &amp; Permissions).</p>
+                        @else
+                        <input type="text" class="fi" value="{{ $user->roleModel?->name ?? 'Not assigned' }}" disabled>
+                        <p class="text-xs text-gray-500 mt-1">Only the clinic owner/admin can change an access role.</p>
+                        @endif
+                    </div>
+                    {{-- STAFF TYPE — clinical/HR classification only. --}}
+                    <div>
+                        <label class="fl">Staff Type *</label>
                         <select name="role" required class="fi">
-                            @foreach($roles as $v => $l)
+                            @foreach($staffTypes as $v => $l)
                             <option value="{{ $v }}" @selected(old('role',$user->role)==$v)>{{ $l }}</option>
                             @endforeach
                         </select>
+                        <p class="text-xs text-gray-500 mt-1">Clinical/HR classification only — grants no access.</p>
                     </div>
                     <div>
                         <label class="fl">Designation</label>

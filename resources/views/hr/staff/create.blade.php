@@ -55,14 +55,38 @@
                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300">
                 </div>
 
+                {{-- ACCESS ROLE — from Settings → Roles & Permissions. Every role
+                     the owner creates appears here immediately. Controls what
+                     this person can see and do, on web and mobile alike. --}}
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Role <span class="text-red-500">*</span></label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Access Role <span class="text-red-500">*</span></label>
+                    <select name="role_id" required @disabled(! auth()->user()?->isAdminRole())
+                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300">
+                        <option value="">Select access role…</option>
+                        @foreach($accessRoles as $role)
+                        <option value="{{ $role->id }}" @selected(old('role_id') == $role->id)>{{ $role->name }}</option>
+                        @endforeach
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">
+                        @if(auth()->user()?->isAdminRole())
+                            Permissions come from this role. Manage roles in Settings → Roles &amp; Permissions.
+                        @else
+                            Only the clinic owner/admin can create staff logins and assign access roles.
+                        @endif
+                    </p>
+                </div>
+
+                {{-- STAFF TYPE — clinical/HR classification only (doctor lists,
+                     notification routing). Never used for permissions. --}}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Staff Type <span class="text-red-500">*</span></label>
                     <select name="role" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300">
-                        <option value="">Select role…</option>
-                        @foreach($roles as $value => $label)
+                        <option value="">Select staff type…</option>
+                        @foreach($staffTypes as $value => $label)
                         <option value="{{ $value }}" @selected(old('role') == $value)>{{ $label }}</option>
                         @endforeach
                     </select>
+                    <p class="text-xs text-gray-500 mt-1">Clinical/HR classification only — does not grant any access.</p>
                 </div>
 
                 <div>
