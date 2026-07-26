@@ -23,7 +23,14 @@ use Illuminate\Support\Facades\Route;
  * Registered in bootstrap/app.php alongside other module route files.
  * All routes require auth. No extra module gate — this is a core feature.
  */
-Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.')->group(function () {
+// Phase 1 · Slice 1.3 (2026-07-25) — PRE is now owner-configurable.
+// Group gate = module:relationship (view): opening any PRE surface requires
+// the Relationships module View flag the Clinic Owner sets in Settings.
+// Operational mutations additionally carry ',edit'; genuinely destructive /
+// administrative actions (bulk dismiss/assign, template delete, clinic-wide
+// PRE settings) carry ',delete'. Lead conversion additionally requires
+// module:patients,edit because it mints a Patient record.
+Route::middleware(['web', 'auth', 'module:relationship'])->prefix('relationship')->name('relationship.')->group(function () {
 
     // ── Profile + Universal Search (Phase 3) ──────────────────────────────
 
@@ -33,24 +40,28 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
         ->name('today');
 
     Route::post('/today/action', [TodayController::class, 'logAction'])
-        ->name('today.action');
+        ->name('today.action')
+        ->middleware('module:relationship,edit');
 
     // Birthday Wishes — one-click WhatsApp send (2026-07-06), replacing the
     // Call Workflow drawer for this category only. See TodayController.
     Route::post('/today/birthday-whatsapp', [TodayController::class, 'sendBirthdayWhatsapp'])
-        ->name('today.birthday-whatsapp');
+        ->name('today.birthday-whatsapp')
+        ->middleware('module:relationship,edit');
 
     // Dismiss — clear a row without logging a call outcome (requires a reason).
     // See docs/feature-specs/feature-spec-action-board-dismiss.md.
     Route::post('/today/dismiss', [TodayController::class, 'dismiss'])
-        ->name('today.dismiss');
+        ->name('today.dismiss')
+        ->middleware('module:relationship,edit');
 
     // Close — explicit "done with this one" action, separate from Log
     // (2026-07-08: Log used to auto-close the row per outcome, which meant
     // "No answer" silently removed the row instead of leaving it open for
     // a retry). No outcome required.
     Route::post('/today/close', [TodayController::class, 'closeAction'])
-        ->name('today.close');
+        ->name('today.close')
+        ->middleware('module:relationship,edit');
 
     // Notes — same Suggestion/Patient-Response log already live on Lead &
     // Opportunity Pipeline (see OpportunityPipelineController::addNote()),
@@ -60,7 +71,8 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
         ->name('today.notes.index');
 
     Route::post('/today/notes', [TodayController::class, 'addNote'])
-        ->name('today.notes.add');
+        ->name('today.notes.add')
+        ->middleware('module:relationship,edit');
 
     // Shared projection summary (JSON) — consumed by the Daily Huddle (slice E4).
     Route::get('/today/summary', [TodayController::class, 'summary'])
@@ -83,15 +95,18 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
         ->name('today.missed-calls');
 
     Route::post('/today/missed-calls/bulk-dismiss', [MissedCallsController::class, 'bulkDismiss'])
-        ->name('today.missed-calls.bulk-dismiss');
+        ->name('today.missed-calls.bulk-dismiss')
+        ->middleware('module:relationship,delete');
 
     Route::post('/today/missed-calls/{missedCall}/ignore', [MissedCallsController::class, 'ignore'])
         ->whereNumber('missedCall')
-        ->name('today.missed-calls.ignore');
+        ->name('today.missed-calls.ignore')
+        ->middleware('module:relationship,edit');
 
     Route::post('/today/missed-calls/{missedCall}/unignore', [MissedCallsController::class, 'unignore'])
         ->whereNumber('missedCall')
-        ->name('today.missed-calls.unignore');
+        ->name('today.missed-calls.unignore')
+        ->middleware('module:relationship,edit');
 
     // ── In-App Notifications (Phase 6) ─────────────────────────────────────
     // Note: mark-all must come BEFORE /{id}/read to avoid wildcard conflict.
@@ -99,6 +114,8 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     Route::prefix('notifications')->name('notifications.')->group(function () {
         Route::get('/',               [RelationshipNotificationController::class, 'index'])
             ->name('index');  // relationship.notifications.index — JSON list
+        // Marking YOUR OWN bell notification read is personal UI state, not
+        // relationship work — stays on the group view gate (Slice 1.3).
         Route::post('/read-all',      [RelationshipNotificationController::class, 'markAllRead'])
             ->name('read-all');
         Route::post('/{id}/read',     [RelationshipNotificationController::class, 'markRead'])
@@ -149,15 +166,18 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     // must stay above the /{id} wildcard below.
     Route::post('/pipeline/{id}/move', [LeadPipelineController::class, 'moveStage'])
         ->whereNumber('id')
-        ->name('pipeline.move');  // relationship.pipeline.move
+        ->name('pipeline.move')
+        ->middleware('module:relationship,edit');  // relationship.pipeline.move
 
     Route::post('/pipeline/{id}/activity', [LeadPipelineController::class, 'logActivity'])
         ->whereNumber('id')
-        ->name('pipeline.activity');  // relationship.pipeline.activity
+        ->name('pipeline.activity')
+        ->middleware('module:relationship,edit');  // relationship.pipeline.activity
 
     Route::post('/pipeline/{id}/convert', [LeadPipelineController::class, 'convertToPatient'])
         ->whereNumber('id')
-        ->name('pipeline.convert');  // relationship.pipeline.convert
+        ->name('pipeline.convert')
+        ->middleware(['module:relationship,edit', 'module:patients,edit']);  // relationship.pipeline.convert
 
     // Lead Detail modal (2026-07-08) — shows the logged activity history
     // (who logged what, and when) for one lead. Mirrors the Opportunity
@@ -176,13 +196,15 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
         ->name('pipeline.quick-add');  // relationship.pipeline.quick-add
 
     Route::post('/pipeline/quick-add', [LeadPipelineController::class, 'storeQuickLead'])
-        ->name('pipeline.store-quick-lead');  // relationship.pipeline.store-quick-lead
+        ->name('pipeline.store-quick-lead')
+        ->middleware('module:relationship,edit');  // relationship.pipeline.store-quick-lead
 
     Route::get('/pipeline/add', [LeadPipelineController::class, 'addLead'])
         ->name('pipeline.add-lead');  // relationship.pipeline.add-lead
 
     Route::post('/pipeline/add', [LeadPipelineController::class, 'storeLead'])
-        ->name('pipeline.store-lead');  // relationship.pipeline.store-lead
+        ->name('pipeline.store-lead')
+        ->middleware('module:relationship,edit');  // relationship.pipeline.store-lead
 
     Route::get('/pipeline/{id}/edit', [LeadPipelineController::class, 'editLead'])
         ->whereNumber('id')
@@ -190,21 +212,25 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
 
     Route::post('/pipeline/{id}/edit', [LeadPipelineController::class, 'updateLead'])
         ->whereNumber('id')
-        ->name('pipeline.update-lead');  // relationship.pipeline.update-lead
+        ->name('pipeline.update-lead')
+        ->middleware('module:relationship,edit');  // relationship.pipeline.update-lead
 
     // ── PRE AI helpers (Phase 8 · Slice 3 — PRM Retirement) ─────────────────
     // Ported alongside prm.enrich / prm.draft-reply / prm.log-reply.
     Route::post('/pipeline/{id}/enrich', [LeadPipelineController::class, 'reEnrich'])
         ->whereNumber('id')
-        ->name('pipeline.enrich');  // relationship.pipeline.enrich
+        ->name('pipeline.enrich')
+        ->middleware('module:relationship,edit');  // relationship.pipeline.enrich
 
     Route::post('/pipeline/{id}/draft-reply', [LeadPipelineController::class, 'draftReply'])
         ->whereNumber('id')
-        ->name('pipeline.draft-reply');  // relationship.pipeline.draft-reply
+        ->name('pipeline.draft-reply')
+        ->middleware('module:relationship,edit');  // relationship.pipeline.draft-reply
 
     Route::post('/pipeline/{id}/log-reply', [LeadPipelineController::class, 'logReply'])
         ->whereNumber('id')
-        ->name('pipeline.log-reply');  // relationship.pipeline.log-reply
+        ->name('pipeline.log-reply')
+        ->middleware('module:relationship,edit');  // relationship.pipeline.log-reply
 
     // ── PRE Opportunity Pipeline (Phase 1 · Workstream D, slice 3;
     // full read/write board 2026-07-06 — replaces the legacy Communication
@@ -214,7 +240,8 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
         ->name('opportunities');  // relationship.opportunities
 
     Route::post('/opportunities', [OpportunityPipelineController::class, 'store'])
-        ->name('opportunities.store');  // relationship.opportunities.store
+        ->name('opportunities.store')
+        ->middleware('module:relationship,edit');  // relationship.opportunities.store
 
     Route::get('/opportunities/patient-search', [OpportunityPipelineController::class, 'patientSearch'])
         ->name('opportunities.patient-search');  // relationship.opportunities.patient-search
@@ -225,16 +252,19 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
 
     Route::patch('/opportunities/{id}/stage', [OpportunityPipelineController::class, 'updateStage'])
         ->whereNumber('id')
-        ->name('opportunities.update-stage');  // relationship.opportunities.update-stage
+        ->name('opportunities.update-stage')
+        ->middleware('module:relationship,edit');  // relationship.opportunities.update-stage
 
     Route::post('/opportunities/{id}/convert', [OpportunityPipelineController::class, 'convertToLead'])
         ->whereNumber('id')
-        ->name('opportunities.convert');  // relationship.opportunities.convert
+        ->name('opportunities.convert')
+        ->middleware('module:relationship,edit');  // relationship.opportunities.convert
 
     // Stage notes (2026-07-06) — see docs/feature-specs/feature-spec-stage-notes.md
     Route::post('/opportunities/{id}/notes', [OpportunityPipelineController::class, 'addNote'])
         ->whereNumber('id')
-        ->name('opportunities.notes.add');  // relationship.opportunities.notes.add
+        ->name('opportunities.notes.add')
+        ->middleware('module:relationship,edit');  // relationship.opportunities.notes.add
 
     // ── PRE Recalls (Phase 1 · Workstream D, slice 3; rebuilt 2026-07-06) ────
     // Filterable, actionable list — additive alongside the legacy
@@ -244,25 +274,31 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
         ->name('recalls');  // relationship.recalls
 
     Route::post('/recalls', [RecallPipelineController::class, 'store'])
-        ->name('recalls.store');  // relationship.recalls.store — manual "+ Add Recall"
+        ->name('recalls.store')
+        ->middleware('module:relationship,edit');  // relationship.recalls.store — manual "+ Add Recall"
 
     Route::post('/recalls/bulk-dismiss', [RecallPipelineController::class, 'bulkDismiss'])
-        ->name('recalls.bulk-dismiss');  // relationship.recalls.bulk-dismiss
+        ->name('recalls.bulk-dismiss')
+        ->middleware('module:relationship,delete');  // relationship.recalls.bulk-dismiss
 
     Route::post('/recalls/bulk-assign', [RecallPipelineController::class, 'bulkAssign'])
-        ->name('recalls.bulk-assign');  // relationship.recalls.bulk-assign
+        ->name('recalls.bulk-assign')
+        ->middleware('module:relationship,delete');  // relationship.recalls.bulk-assign
 
     Route::post('/recalls/{recall}/ignore', [RecallPipelineController::class, 'ignore'])
         ->whereNumber('recall')
-        ->name('recalls.ignore');  // relationship.recalls.ignore
+        ->name('recalls.ignore')
+        ->middleware('module:relationship,edit');  // relationship.recalls.ignore
 
     Route::post('/recalls/{recall}/unignore', [RecallPipelineController::class, 'unignore'])
         ->whereNumber('recall')
-        ->name('recalls.unignore');  // relationship.recalls.unignore
+        ->name('recalls.unignore')
+        ->middleware('module:relationship,edit');  // relationship.recalls.unignore
 
     Route::post('/recalls/{recall}/convert', [RecallPipelineController::class, 'convertToOpportunity'])
         ->whereNumber('recall')
-        ->name('recalls.convert');  // relationship.recalls.convert
+        ->name('recalls.convert')
+        ->middleware('module:relationship,edit');  // relationship.recalls.convert
 
     // ── WhatsApp — PRE-native "all conversations" list (2026-07-09) ─────────
     // Deliberately NOT the legacy /communication/whatsapp inbox. Lives in the
@@ -289,13 +325,16 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
         ->name('settings');  // relationship.settings
 
     Route::post('/settings/toggle', [RelationshipSettingsController::class, 'toggleFlag'])
-        ->name('settings.toggle');  // relationship.settings.toggle
+        ->name('settings.toggle')
+        ->middleware('module:relationship,delete');  // relationship.settings.toggle
 
     Route::post('/settings/referral', [RelationshipSettingsController::class, 'saveReferralConfig'])
-        ->name('settings.referral');  // relationship.settings.referral
+        ->name('settings.referral')
+        ->middleware('module:relationship,delete');  // relationship.settings.referral
 
     Route::post('/settings/recall-effective-from', [RelationshipSettingsController::class, 'saveRecallEffectiveFrom'])
-        ->name('settings.recall-effective-from');  // relationship.settings.recall-effective-from
+        ->name('settings.recall-effective-from')
+        ->middleware('module:relationship,delete');  // relationship.settings.recall-effective-from
 
     // ── Recall / Birthday settings (moved from Communication OS
     // 2026-07-06) — periodicities, channel toggles, and enable/window settings
@@ -304,31 +343,38 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     // these are POST-only handlers, not separate pages. Static segments —
     // before /{id} below.
     Route::post('/settings/recall-general', [RelationshipSettingsController::class, 'saveRecallGeneral'])
-        ->name('settings.recall-general');  // relationship.settings.recall-general
+        ->name('settings.recall-general')
+        ->middleware('module:relationship,delete');  // relationship.settings.recall-general
 
     Route::post('/settings/recall-treatment/{treatmentType}', [RelationshipSettingsController::class, 'saveTreatmentRecall'])
         ->whereNumber('treatmentType')
-        ->name('settings.recall-treatment');  // relationship.settings.recall-treatment
+        ->name('settings.recall-treatment')
+        ->middleware('module:relationship,delete');  // relationship.settings.recall-treatment
 
     Route::post('/settings/recall-birthday', [RelationshipSettingsController::class, 'saveBirthday'])
-        ->name('settings.recall-birthday');  // relationship.settings.recall-birthday
+        ->name('settings.recall-birthday')
+        ->middleware('module:relationship,delete');  // relationship.settings.recall-birthday
 
     // ── Call Outcomes + Dismiss Reasons (2026-07-06) ────────────────────────
     // See docs/feature-specs/feature-spec-custom-call-outcomes.md and
     // feature-spec-action-board-dismiss.md. Static segments — before /{id}.
     Route::post('/settings/call-outcomes/{category}/add', [RelationshipSettingsController::class, 'addCallOutcome'])
-        ->name('settings.call-outcomes.add');  // relationship.settings.call-outcomes.add
+        ->name('settings.call-outcomes.add')
+        ->middleware('module:relationship,delete');  // relationship.settings.call-outcomes.add
 
     Route::post('/settings/call-outcomes/{option}', [RelationshipSettingsController::class, 'saveCallOutcome'])
         ->whereNumber('option')
-        ->name('settings.call-outcomes.save');  // relationship.settings.call-outcomes.save
+        ->name('settings.call-outcomes.save')
+        ->middleware('module:relationship,delete');  // relationship.settings.call-outcomes.save
 
     Route::post('/settings/dismiss-reasons/add', [RelationshipSettingsController::class, 'addDismissReason'])
-        ->name('settings.dismiss-reasons.add');  // relationship.settings.dismiss-reasons.add
+        ->name('settings.dismiss-reasons.add')
+        ->middleware('module:relationship,delete');  // relationship.settings.dismiss-reasons.add
 
     Route::post('/settings/dismiss-reasons/{option}', [RelationshipSettingsController::class, 'saveDismissReason'])
         ->whereNumber('option')
-        ->name('settings.dismiss-reasons.save');  // relationship.settings.dismiss-reasons.save
+        ->name('settings.dismiss-reasons.save')
+        ->middleware('module:relationship,delete');  // relationship.settings.dismiss-reasons.save
 
     // ── Templates (moved from Communication OS 2026-07-06) ─────────────────
     // Generic, reusable Message Template editor — any PRE feature (Recall,
@@ -338,20 +384,24 @@ Route::middleware(['web', 'auth'])->prefix('relationship')->name('relationship.'
     Route::prefix('templates')->name('templates.')->group(function () {
         Route::get('/',            [RelationshipTemplateController::class, 'index'])->name('index');
         Route::get('/create',      [RelationshipTemplateController::class, 'create'])->name('create');
-        Route::post('/',           [RelationshipTemplateController::class, 'store'])->name('store');
+        Route::post('/',           [RelationshipTemplateController::class, 'store'])->name('store')
+        ->middleware('module:relationship,edit');
         // Deep-link by type (Settings gear icons) — must come before the
         // `/{id}` wildcard below since "for-type" isn't numeric.
         Route::get('/for-type/{type}', [RelationshipTemplateController::class, 'forType'])->name('forType');
         Route::get('/{id}',        [RelationshipTemplateController::class, 'edit'])->name('edit');
-        Route::put('/{id}',        [RelationshipTemplateController::class, 'update'])->name('update');
-        Route::delete('/{id}',     [RelationshipTemplateController::class, 'destroy'])->name('destroy');
+        Route::put('/{id}',        [RelationshipTemplateController::class, 'update'])->name('update')
+        ->middleware('module:relationship,edit');
+        Route::delete('/{id}',     [RelationshipTemplateController::class, 'destroy'])->name('destroy')
+        ->middleware('module:relationship,edit');
     });
 
     // ── Referral rewards (business config lives in Settings above) ─────────
     // Two-segment static route — no conflict with the /{id} wildcard below.
     Route::post('/{id}/referral-reward', [ReferralRewardController::class, 'store'])
         ->whereNumber('id')
-        ->name('referral-reward.store');  // relationship.referral-reward.store
+        ->name('referral-reward.store')
+        ->middleware('module:relationship,edit');  // relationship.referral-reward.store
 
     // ── Profile + Universal Search ─────────────────────────────────────────
     // IMPORTANT: /{id} wildcard must come LAST — all static routes above.
