@@ -26,6 +26,45 @@ Three consequences:
 
 ---
 
+## 1b. ONE ACTION, ONE EVENT (CEO semantic ruling, 27 Jul)
+
+In a real Dentfluence consultation the proposed treatment, the alternatives, the
+expected course, **the fees**, and the patient's questions are all covered in the
+same conversation. Presenting the plan and giving the estimate are therefore
+**one clinical event, not two staff actions**.
+
+Explicitly rejected workflow:
+
+```
+Plan Created → Estimate Given [click] → Plan Presented [another click] → Decision   ✗
+```
+
+Canonical workflow:
+
+```
+Plan Created → Plan Presented / Estimate Given → Patient Decision
+             → Treatment Started → Treatment Completed
+```
+
+Consequences, locked by test:
+
+- **No `estimate_given_at` column.** There is one timestamp: `presented_at`.
+- **No second event.** One action writes exactly one `treatment_plan.presented`.
+- **No second click.** The PRE board's `quoted` stage is a commercial
+  *representation* of this same event, projected automatically.
+
+`presented_at` therefore means: *"the treatment plan, including its cost
+estimate, was presented to and discussed with the patient."*
+
+| Layer | Name for the same event |
+|---|---|
+| Clinical | Plan Presented / Estimate Given |
+| PRE / commercial | Quoted |
+
+> **Governed by:** `docs/patient-journey-v1_1-frozen-integration-contract.md`
+> (CEO freeze, 27 Jul 2026) — Treatment Plan → PRE → future Microsite →
+> Appointment handoff. Invariant 3 of that contract is the ruling recorded above.
+
 ## 2. The clinical fact
 
 `treatment_plans.presented_at` — nullable timestamp, indexed, added after
@@ -235,8 +274,13 @@ presented**, because Accept was reachable before presentation.
 |---|---|---|
 | Card `is_presented` | opportunity row exists | `presented_at` |
 | Badge | "Estimate Given" (commercial) | "Not Presented" / "Presented · date" |
+| Action label | "Mark as Presented" | **"Present Plan / Give Estimate"** |
 | Accept button | always, if not accepted | only once presented |
 | `formatPlan()` | presented_at **or** opportunity | `presented_at` only |
+
+The action label was widened after the CEO semantic ruling so staff read it as
+the single moment it is. Nothing behind it changed — same one service, same one
+column, same one event.
 
 Commercial stage stays on Relationship → Journeys, where it belongs.
 

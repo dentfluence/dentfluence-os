@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slice 2.2 — CTO Completion Note</title>
+<style>
+  :root{
+    --ink:#1a0320; --muted:#7a6884; --line:#e8dff0; --bg:#faf7fc;
+    --plum:#6a0f70; --plumsoft:#f5eef9;
+    --ok:#1a7a45; --oksoft:#eaf6ef;
+    --warn:#a05c00; --warnsoft:#fff6e8;
+    --bad:#b52020; --badsoft:#fdeaea;
+    --blue:#2563eb; --bluesoft:#eff6ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:32px 20px 72px;background:var(--bg);color:var(--ink);
+       font:15px/1.6 -apple-system,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:960px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+  h2{font-size:15px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);
+     margin:38px 0 12px;font-weight:700}
+  .sub{color:var(--muted);margin:0 0 26px;font-size:14px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:14px}
+  .pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:11.5px;font-weight:700;
+        letter-spacing:.03em;vertical-align:middle}
+  .p-ok{background:var(--oksoft);color:var(--ok)}
+  .p-warn{background:var(--warnsoft);color:var(--warn)}
+  .p-bad{background:var(--badsoft);color:var(--bad)}
+  .p-blue{background:var(--bluesoft);color:var(--blue)}
+  .p-plum{background:var(--plumsoft);color:var(--plum)}
+  code{background:#f4eef7;color:var(--plum);padding:1px 6px;border-radius:5px;
+       font:12.5px/1.5 "SF Mono",Consolas,monospace}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.07em;
+     color:var(--muted);padding:0 10px 8px 0;border-bottom:1px solid var(--line);font-weight:700}
+  td{padding:10px 10px 10px 0;border-bottom:1px solid #f2ecf6;vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px}
+  .stat b{display:block;font-size:22px;letter-spacing:-.02em}
+  .stat span{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+
+  /* ── Browser checkpoint mockups ── */
+  .checks{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .chk{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .chk-h{padding:10px 14px;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;
+         display:flex;align-items:center;gap:8px}
+  .chk-n{width:20px;height:20px;border-radius:50%;background:var(--plum);color:#fff;
+         display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+  .chk-b{padding:14px}
+  .plan{border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .plan-top{display:flex;align-items:center;justify-content:space-between;
+            padding:9px 12px;background:#fcfafd;border-bottom:1px solid var(--line)}
+  .plan-name{font-size:12.5px;font-weight:700}
+  .plan-name small{display:block;font-weight:400;color:var(--muted);font-size:10.5px}
+  .badge{font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:99px}
+  .b-none{background:#f3eef6;color:#7a6884}
+  .b-pres{background:var(--bluesoft);color:var(--blue)}
+  .b-acc{background:var(--oksoft);color:var(--ok)}
+  .plan-ft{padding:10px 12px;display:flex;gap:7px;flex-wrap:wrap}
+  .btn{font-size:11px;font-weight:600;padding:5px 11px;border-radius:6px;border:1px solid var(--line);background:#fff}
+  .btn-o{border-color:#cbb8d6;color:var(--plum)}
+  .btn-g{background:#1a7a45;border-color:#1a7a45;color:#fff}
+  .btn-r{border-color:#e4c9c9;color:var(--bad)}
+  .expect{margin-top:10px;font-size:11.5px;color:var(--muted);
+          border-left:2px solid var(--line);padding-left:10px}
+  .expect b{color:var(--ink)}
+  .fail{margin-top:6px;font-size:11.5px;color:var(--bad)}
+
+  .flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;margin:6px 0 2px}
+  .node{background:#fff;border:1px solid var(--line);border-radius:7px;padding:6px 11px;font-weight:600}
+  .node.cl{border-color:#cbb8d6;background:var(--plumsoft);color:var(--plum)}
+  .node.pre{border-color:#cfe0fb;background:var(--bluesoft);color:var(--blue)}
+  .arw{color:var(--muted);font-size:15px}
+  .no{color:var(--bad);font-weight:700;font-size:11.5px}
+  ul{margin:8px 0 0;padding-left:19px}
+  li{margin-bottom:6px}
+  .foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
+        font-size:12px;color:var(--muted)}
+  @media(max-width:760px){.grid{grid-template-columns:repeat(2,1fr)}.checks{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Slice 2.2 — Plan Presentation Truth</h1>
+  <p class="sub">
+    CTO completion note · 27 Jul 2026 · commits <code>b48aaff</code> + <code>cb3a045</code>
+    · <span class="pill p-warn">LOCAL ONLY — not pushed, not deployed</span>
+  </p>
+
+  <h2>Verification wall</h2>
+  <div class="grid">
+    <div class="stat"><b>324</b><span>tests passed</span></div>
+    <div class="stat"><b>66/66</b><span>smoke · 0 residue</span></div>
+    <div class="stat"><b>14/14</b><span>board categories OK</span></div>
+    <div class="stat"><b>0</b><span>broken routes / 303</span></div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    Clinical 24 · Access 48 <span class="pill p-ok">Phase 1 intact</span> · Relationship 85 ·
+    Patients 53 · Appointments + Automation + API 114.
+    <br><span style="color:var(--muted);font-size:13px">Production data changed: <b style="color:var(--ok)">NO</b>. No backfill performed.</span>
+  </div>
+
+  <h2>What this slice settled</h2>
+  <div class="card">
+    <div class="flow">
+      <span class="node cl">Plan created</span><span class="arw">→</span>
+      <span class="node cl">Presented</span><span class="arw">→</span>
+      <span class="node cl">Patient decision</span><span class="arw">→</span>
+      <span class="node" style="opacity:.5">Treatment started</span>
+      <span class="pill p-warn" style="margin-left:4px">later slices</span>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Concept</th><th>Lives in</th><th>Kind of truth</th></tr>
+      <tr><td><b>Presented</b></td><td><code>treatment_plans.presented_at</code></td><td><span class="pill p-plum">CLINICAL</span></td></tr>
+      <tr><td><b>Quoted</b></td><td><code>treatment_opportunities.status</code></td><td><span class="pill p-blue">PRE / commercial</span></td></tr>
+      <tr><td><b>"Estimate Given"</b></td><td>nowhere — was only a UI label</td><td><span class="pill p-bad">RETIRED from clinical card</span></td></tr>
+    </table>
+    <div class="flow" style="margin-top:16px">
+      <span class="node cl">Clinical Presented</span><span class="arw">→</span><span class="node pre">PRE Quoted</span>
+      <span style="margin-left:14px" class="pill p-ok">allowed — one-way projection</span>
+    </div>
+    <div class="flow">
+      <span class="node pre">PRE Quoted</span><span class="arw">→</span><span class="node cl">Clinical Presented</span>
+      <span style="margin-left:14px" class="no">✕ FORBIDDEN — this was the defect</span>
+    </div>
+  </div>
+
+  <h2>The defect you found</h2>
+  <div class="card">
+    The write path was correct. The <b>read path</b> inferred clinical truth from PRE state:
+    the plan card computed "presented" from <i>"does this plan have any Opportunity row"</i> —
+    any status, not just <code>quoted</code>. So the pipeline manufactured clinical truth,
+    showed commercial language on a clinical card, and hid the action.
+    <ul>
+      <li>Live proof, patient 3869: a plan sat <code>is_accepted: true</code> with
+          <code>presented_at: NULL</code> — <b>accepted without ever being presented</b>,
+          because Accept was reachable before presentation.</li>
+      <li>My own <code>formatPlan()</code> carried the same inference labelled "compatibility
+          fallback". Same violation, with a reassuring comment on it. Removed.</li>
+      <li>Three real presentation paths (case journey sent, patient opens journey, patient
+          opens smart presentation) only moved the Opportunity and never recorded the clinical
+          fact. All now go through the one canonical service.</li>
+    </ul>
+  </div>
+
+  <h2>Browser checkpoints</h2>
+  <p class="sub" style="margin:-4px 0 14px">
+    Patient <b>3869</b> → Treatment Plan tab. Four checks, ~2 minutes.
+  </p>
+
+  <div class="checks">
+
+    <div class="chk">
+      <div class="chk-h"><span class="chk-n">1</span> Presented plan reads as clinical fact</div>
+      <div class="chk-b">
+        <div class="plan">
+          <div class="plan-top">
+            <div class="plan-name">Treatment Option 3<small>Rs. 53,000</small></div>
+            <span class="badge b-pres">Presented · 27 Jul 2026</span>
+          </div>
+          <div class="plan-ft">
+            <span class="btn btn-g">✓ Mark as Accepted</span>
+            <span class="btn">Print</span>
+          </div>
+        </div>
+        <div class="expect">
+          <b>Expect:</b> date-stamped "Presented" badge, Accept now offered,
+          <b>no</b> "Present Plan / Give Estimate" (it is immutable), <b>no</b> "Estimate Given" badge.
+        </div>
+        <div class="fail">Fails if: badge says Estimate Given, or shows no date.</div>
+      </div>
+    </div>
+
+    <div class="chk">
+      <div class="chk-h"><span class="chk-n">2</span> Unpresented plan offers the action</div>
+      <div class="chk-b">
+        <div class="plan">
+          <div class="plan-top">
+            <div class="plan-name">opton3<small>Rs. 28,000</small></div>
+            <span class="badge b-none">Not Presented</span>
+          </div>
+          <div class="plan-ft">
+            <span class="btn btn-o">👁 Present Plan / Give Estimate</span>
+            <span class="btn">Print</span>
+          </div>
+        </div>
+        <div class="expect">
+          <b>Expect:</b> "Not Presented", and <b>one</b> action —
+          "Present Plan / Give Estimate". Accept must be <b>absent</b> — you cannot
+          accept a plan nobody was shown. There must be <b>no separate</b>
+          "Give Estimate" button: it is the same event.
+        </div>
+        <div class="fail">Fails if: Mark as Accepted is visible here.</div>
+      </div>
+    </div>
+
+    <div class="chk">
+      <div class="chk-h"><span class="chk-n">3</span> Press the action twice — date survives</div>
+      <div class="chk-b">
+        <div class="plan">
+          <div class="plan-top">
+            <div class="plan-name">opton3 · after 2nd press<small>Rs. 28,000</small></div>
+            <span class="badge b-pres">Presented · 27 Jul 2026</span>
+          </div>
+          <div class="plan-ft"><span class="btn btn-g">✓ Mark as Accepted</span></div>
+        </div>
+        <div class="expect">
+          <b>Expect:</b> first date unchanged; toast says the original presentation date
+          is unchanged. Timeline gains a <i>second</i> "presented again" entry —
+          the ledger carries repetition, the column carries the anchor.
+        </div>
+        <div class="fail">Fails if: the date moves.</div>
+      </div>
+    </div>
+
+    <div class="chk">
+      <div class="chk-h"><span class="chk-n">4</span> Timeline separates created / presented</div>
+      <div class="chk-b">
+        <div class="plan">
+          <div class="plan-top"><div class="plan-name">Patient Journey → Clinical</div></div>
+          <div style="padding:11px 13px;font-size:12px;line-height:1.9">
+            <div><span class="badge b-pres" style="font-size:9.5px">27 Jul</span>
+              &nbsp;Treatment plan presented to patient — Option 3, Rs. 53,000
+              <span style="color:var(--muted)">· Awaiting decision</span></div>
+            <div><span class="badge b-none" style="font-size:9.5px">27 Jul</span>
+              &nbsp;Treatment plan created</div>
+          </div>
+        </div>
+        <div class="expect">
+          <b>Expect:</b> two distinct entries, with actor + value + "Awaiting decision".
+          No "accepted" entry unless you accepted it.
+        </div>
+        <div class="fail">Fails if: created and presented collapse into one row.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <b>Checkpoint 5 — permissions.</b> Log in as a view-only role → the plan card must show
+    state but offer <b>neither</b> Present Plan / Give Estimate <b>nor</b> Accept.
+    <span class="pill p-ok">test-locked on web + API, including direct POST</span>
+  </div>
+
+  <h2>One action, one event</h2>
+  <div class="card">
+    <div class="flow">
+      <span class="node cl">Present Plan / Give Estimate</span>
+      <span class="arw">→</span>
+      <span class="node cl">presented_at</span>
+      <span class="arw">+</span>
+      <span class="node cl">treatment_plan.presented</span>
+      <span class="arw">→</span>
+      <span class="node pre">PRE: Estimate Given</span>
+    </div>
+    <div style="margin-top:10px;font-size:13.5px">
+      In a real consultation the treatment, alternatives, expected course
+      <b>and fees</b> are discussed in one conversation — so this is one clinical event
+      with two names, not two staff actions.
+      <span class="pill p-bad" style="margin-left:4px">no second click</span>
+      <span class="pill p-bad">no estimate_given_at</span>
+      <span class="pill p-bad">no duplicate event</span>
+    </div>
+  </div>
+
+  <h2>Expected consequences — not defects</h2>
+  <div class="card">
+    <ul>
+      <li><b>Historical plans read "Not Presented"</b> even where an estimate genuinely went out.
+        We refuse to convert a sales-card position into a clinical date. Staff record it once.</li>
+      <li><b>Accepted-but-never-presented plans keep a NULL presentation date.</b>
+        They show as Accepted with no presentation date. No date was invented.</li>
+      <li><b>Commercial stage disappeared from the clinical card</b> — it lives on
+        Relationship → Journeys, which is where pipeline belongs.</li>
+    </ul>
+  </div>
+
+  <h2>Open debt (declared, not hidden)</h2>
+  <div class="card">
+    <ul>
+      <li><b>Opportunity double-write.</b> Presentation writes the clinical fact and projects the
+        board. Intentional bridge; removable once the board reads clinical truth.</li>
+      <li><b>"Decision Pending" is not a work queue yet.</b> The state is visible and in the API,
+        but nothing chases an undecided plan. Belongs with the decision record.</li>
+      <li><b>Two controllers still create opportunities directly</b> (decline / callback).
+        Commercial-only transitions — they never touch clinical truth — but "one writer" is
+        not yet literally true of the board.</li>
+    </ul>
+  </div>
+
+  <h2>Out of scope — untouched</h2>
+  <div class="card" style="font-size:13.5px;color:var(--muted)">
+    <code>plan_decisions</code> · partial acceptance · <code>clinical_disposition</code> ·
+    treatment start &amp; completion derivation · <code>last_visit_date</code> projection ·
+    recall redesign · appointment lifecycle repair · full Opportunity redesign
+  </div>
+
+  <h2>Freeze decision</h2>
+  <div class="card">
+    <span class="pill p-ok">CODE READY</span> — pending your browser pass above.<br><br>
+    On approval: push <code>b48aaff</code> + <code>cb3a045</code> → deploy → migrate
+    (adds one nullable indexed column) → production smoke → tag.
+    Expect <code>presented_at IS NOT NULL</code> count = <b>0</b> immediately after deploy.
+    That is correct: no history was invented.
+  </div>
+
+  <div class="foot">
+    <b>Honest note.</b> I reported this slice complete last night with 389 tests green.
+    It was complete on the write side. Every one of those tests exercised the service and the
+    API; none rendered the screen a human uses. The wall was green because it was pointed at
+    the half I had changed. Your two-minute browser check found what 389 tests could not.
+  </div>
+
+</div>
+</body>
+</html>
