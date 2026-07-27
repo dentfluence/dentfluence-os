@@ -334,6 +334,7 @@ class UnifiedTimelineService
             $link = route('patients.show', $patient->id) . '#treatment-plan';
 
             TreatmentPlan::where('patient_id', $patient->id)
+                ->with('decisions')   // Slice 2.3d — real patient decisions
                 ->orderBy('plan_date', 'desc')->limit(30)->get()
                 ->each(function ($plan) use ($entries, $before, $link) {
                     $name  = $plan->plan_name ?: 'Treatment plan';
@@ -375,7 +376,52 @@ class UnifiedTimelineService
                         ]);
                     }
 
+                    // ── Slice 2.3d — REAL patient decisions from the ledger.
+                    // Every decision appears, so the timeline reads
+                    // Presented → Deferred → later Accepted rather than only
+                    // showing the latest state. Append-only means history is
+                    // genuinely here to display.
+                    foreach ($plan->decisions as $decision) {
+                        if ($decision->decision === \App\Models\PlanDecision::ACCEPTED) {
+                            continue;   // already rendered from accepted_at below
+                        }
+
+                        [$title, $color, $icon] = match ($decision->decision) {
+                            \App\Models\PlanDecision::PARTIALLY_ACCEPTED =>
+                                ['Treatment plan partially accepted — ' . $name, 'green', 'accepted'],
+                            \App\Models\PlanDecision::DEFERRED =>
+                                ['Treatment plan deferred by patient — ' . $name, 'amber', 'deferred'],
+                            \App\Models\PlanDecision::REJECTED =>
+                                ['Treatment plan rejected by patient — ' . $name, 'red', 'rejected'],
+                            default => [null, null, null],
+                        };
+
+                        if (! $title) {
+                            continue;
+                        }
+
+                        $when = $this->toCarbon($decision->created_at);
+                        if (! $when || ($before && ! $when->lt($before))) {
+                            continue;
+                        }
+
+                        $entries->push([
+                            'date' => $when, 'type' => 'treatment.decision', 'icon_type' => $icon,
+                            'title' => $title,
+                            'description' => $decision->notes ?: (trim($total, ' ·') ?: null),
+                            'actor' => $decision->recorded_by ? $this->userName($decision->recorded_by) : null,
+                            'meta'  => $decision->defer_until
+                                ? 'Review on ' . $decision->defer_until->format('d M Y')
+                                : ($decision->is_open_ended_deferral ? 'No review date agreed' : null),
+                            'group' => 'clinical', 'permission' => 'patients.view', 'link' => $link, 'color' => $color,
+                        ]);
+                    }
+
                     // Rejected / cancelled without acceptance (Amendment 1, event 19)
+                    // LEGACY INFERENCE — reads a cancelled plan as a rejection.
+                    // Cancelled is administrative; rejection is a patient
+                    // decision. Kept for pre-2.3 rows only; retiring it belongs
+                    // with the Cancelled protection work in Slice 2.3e.
                     if ($plan->status === 'cancelled' && ! $plan->accepted_at) {
                         $entries->push([
                             'date' => $this->toCarbon($plan->updated_at), 'type' => 'treatment.rejected', 'icon_type' => 'rejected',

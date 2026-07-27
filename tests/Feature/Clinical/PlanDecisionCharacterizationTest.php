@@ -179,15 +179,39 @@ class PlanDecisionCharacterizationTest extends TestCase
 
     // ── 4. Deferral does not exist in any form ───────────────────────────────
 
-    public function test_there_is_no_way_to_record_that_a_patient_is_thinking_about_it(): void
+    /**
+     * SUPERSEDED BY SLICE 2.3d. This originally recorded that there was no way
+     * at all to say a patient was thinking about it — no verb, no column, no
+     * event — so a presented-but-undecided plan was indistinguishable from one
+     * the patient had actively deferred.
+     *
+     * All four verbs now exist. What is retained is the distinction that made
+     * the gap worth closing: NOT YET DECIDED and DEFERRED are different truths,
+     * and silence must never be recorded as a decision.
+     */
+    public function test_undecided_and_deferred_remain_different_truths(): void
     {
-        $plan = $this->planWithItems($this->patient());
+        foreach (['accept', 'acceptPartially', 'defer', 'reject'] as $verb) {
+            $this->assertTrue(method_exists(TreatmentPlanAcceptanceService::class, $verb),
+                "SLICE 2.3d: {$verb}() is part of the one decision service");
+        }
 
-        // No verb, no column, no event. A presented-but-undecided plan is
-        // indistinguishable from a plan the patient actively deferred.
-        $this->assertFalse(method_exists(TreatmentPlanAcceptanceService::class, 'defer'));
-        $this->assertFalse(method_exists(TreatmentPlanAcceptanceService::class, 'reject'));
-        $this->assertSame('pending', $plan->status);
+        // A presented plan nobody has decided on carries NO decision row.
+        // Not-yet-decided is the absence of a decision, never a recorded one.
+        $plan = $this->planWithItems($this->patient());
+        app(\App\Services\TreatmentPlan\TreatmentPlanPresentationService::class)
+            ->markPresented($plan, $this->admin(), 'clinic');
+
+        $this->assertNull($plan->fresh()->currentDecision());
+        $this->assertTrue($plan->fresh()->is_decision_pending);
+        $this->assertDatabaseCount('plan_decisions', 0);
+
+        // Deferring is an explicit act that DOES record one.
+        $this->actingAs($this->admin());
+        app(TreatmentPlanAcceptanceService::class)->defer($plan->fresh(), null, 'Will think about it', $this->admin());
+
+        $this->assertSame(\App\Models\PlanDecision::DEFERRED, $plan->fresh()->currentDecision()->decision);
+        $this->assertFalse($plan->fresh()->is_decision_pending);
     }
 
     // ── 5. Acceptance maps straight to the board's "Converted" ───────────────
