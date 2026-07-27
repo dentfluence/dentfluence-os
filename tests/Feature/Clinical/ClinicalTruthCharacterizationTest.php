@@ -164,12 +164,15 @@ class ClinicalTruthCharacterizationTest extends TestCase
     // guarding — presentation is not a decision, and no patient-decision record
     // exists yet (that remains open for a later slice).
 
-    public function test_presentation_remains_undecided_and_no_decision_record_exists_yet(): void
+    public function test_presentation_still_decides_nothing_now_that_the_decision_ledger_exists(): void
     {
         $this->assertTrue(Schema::hasColumn('treatment_plans', 'presented_at'),
             'SLICE 2.2: the clinical presentation fact now exists');
-        $this->assertFalse(Schema::hasTable('plan_decisions'),
-            'no patient-decision record exists yet — deferred to a later slice');
+        // Superseded by Slice 2.3b: the decision ledger now exists. What must
+        // remain true is that PRESENTING still decides nothing — a presented
+        // plan carries no decision row until someone records one.
+        $this->assertTrue(Schema::hasTable('plan_decisions'),
+            'SLICE 2.3: the patient-decision ledger now exists');
 
         $plan = $this->planWithItems($this->patient());
 

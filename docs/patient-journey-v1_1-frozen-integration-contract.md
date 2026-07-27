@@ -159,13 +159,34 @@ displays as *converted* — exactly the collapse the contract forbids. The servi
 comment even reads "Accepted maps to 'completed' (Converted)".
 → Owner: the slice that introduces the decision record.
 
-**C-2 · No `nurturing` or `committed` state exists.**
-DB enum is `['prospect','discussed','quoted','accepted','declined','completed']`.
-There is no `nurturing`, no `committed`, no `converted`. Note the enum's
-`accepted` value is **never written by any code path** — the vocabulary needed
-for invariants 4/5 is partly present but unused, while the value actually
-written (`completed`) is displayed as "Converted".
-→ Requires a migration + label pass in a future slice.
+**C-2 · ~~No `nurturing` or `committed` state exists.~~ — CORRECTED 27 Jul (2nd pass)**
+
+**This finding was WRONG.** I checked the enum values only and never read the
+label map. The vocabulary this contract requires **already exists in full**:
+
+```php
+TreatmentOpportunity::STAGES = [
+    'prospect'  => 'Identified',
+    'discussed' => 'Nurturing',        // invariant: Plan Created
+    'quoted'    => 'Estimate Given',   // invariant: Presented
+    'accepted'  => 'Committed',        // invariant 4 — EXISTS, NEVER WRITTEN
+    'completed' => 'Converted',        // invariant 5
+    'declined'  => 'Declined',
+];
+```
+
+**No migration is required for C-1.** `TreatmentPlanAcceptanceService` simply
+writes the wrong value: `'completed'` (Converted) instead of `'accepted'`
+(Committed). The correct slot has existed unused since the 2024 table creation.
+
+⚠️ **Blast radius:** "open opportunity" is defined in **14 places** as
+`NOT IN ('completed','declined')` — `TodayActionsEngine` (×2), `HuddleController`,
+`DashboardController`, `OpportunityPipelineController`, `ProfileController`,
+`OutcomeAutomationService`, and four scopes on the model. Writing `'accepted'`
+would make every accepted plan re-enter the open pool, so patients who already
+said yes would be chased to accept again — violating the "no duplicate chasing
+obligations" rule. The fix needs a canonical closed-set
+`['accepted','completed','declined']`, not just a changed value.
 
 **C-3 · Plan creation does not create an Opportunity, so "Plan Created →
 Nurturing" is not implemented.** Verified: `TreatmentPlanController::store`
@@ -175,13 +196,31 @@ gap rather than a wrong value — no false state is displayed today.
 **C-4 · No writer exists for "treatment actually started → Converted".**
 No visit path touches the Opportunity at all.
 
-**C-5 · STRUCTURAL BLOCKER — `treatment_visits` has no `treatment_plan_id`.**
-Columns are `patient_id`, `appointment_id`, `consultation_id`, `doctor_id`.
-Visit status vocabulary is `started / ongoing / completed / abandoned`, defaulting
-to `started`. **Therefore "treatment started" cannot currently be attributed to
-the plan it fulfils** — invariant 5 is not merely unimplemented, it is not yet
-*expressible*. Any future slice that projects Converted must first establish the
-visit ↔ plan link. Flagged as the prerequisite.
+**C-5 · ~~STRUCTURAL BLOCKER — `treatment_visits` has no `treatment_plan_id`.~~
+— CORRECTED 27 Jul (2nd pass). THIS FINDING WAS WRONG.**
+
+I read only `2026_05_26_100005_create_treatment_visits_table.php` and concluded
+the column did not exist. It is added by
+`2026_05_27_000003_add_treatment_plan_id_to_visits.php` — one day later in the
+migration sequence.
+
+The link **exists**, is `fillable`, is validated in `TreatmentVisitService`
+(`'treatment_plan_id' => ['nullable','exists:treatment_plans,id']`), and already
+drives `completePlanAndQueueRecall()`. Visit status vocabulary is
+`started / ongoing / completed / abandoned`, defaulting to `started`.
+
+There is **no structural blocker** to invariant 5. The real constraint is
+weaker and empirical: the column is **nullable**, so before Converted can be
+projected from visits, production coverage must be measured — what proportion of
+treatment visits actually carry a plan id. Sparse attribution would produce
+silent under-counting rather than an error.
+
+Read-only census for that decision:
+```sql
+SELECT COUNT(*) visits,
+       SUM(treatment_plan_id IS NOT NULL) linked_to_plan
+FROM treatment_visits;
+```
 
 **C-6 · Plan status becomes `ongoing` immediately on acceptance** (Slice 2.1
 characterization). At the clinical layer this conflates *accepted* with
