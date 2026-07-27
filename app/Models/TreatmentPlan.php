@@ -88,6 +88,39 @@ class TreatmentPlan extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /**
+     * The append-only ledger of what the patient decided about this plan
+     * (Slice 2.3). Newest first — the head of this list is the current decision.
+     */
+    public function decisions(): HasMany
+    {
+        return $this->hasMany(PlanDecision::class)->latest('created_at')->latest('id');
+    }
+
+    /**
+     * The current patient decision — DERIVED as the latest ledger row, never
+     * stored. A plan deferred in July and accepted in August keeps both rows;
+     * this returns the August one.
+     */
+    public function currentDecision(): ?PlanDecision
+    {
+        return $this->relationLoaded('decisions')
+            ? $this->decisions->first()
+            : $this->decisions()->first();
+    }
+
+    /**
+     * Presented, and the patient has not decided anything yet.
+     * NOT the same as deferred — deferred is an explicit patient choice.
+     */
+    public function getIsDecisionPendingAttribute(): bool
+    {
+        return ! is_null($this->presented_at)
+            && is_null($this->accepted_at)
+            && $this->status !== 'cancelled'
+            && is_null($this->currentDecision());
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(TreatmentPlanItem::class)->orderBy('sort_order');
@@ -127,17 +160,9 @@ class TreatmentPlan extends Model
         return ! is_null($this->presented_at);
     }
 
-    /**
-     * Slice 2.2 — presented but no decision recorded yet.
-     *
-     * Conceptual only until Slice 2.3 gives decisions their own record:
-     * today "no decision" is approximated by "not accepted". Never read this
-     * as rejection — a pending decision is a legitimate, long-lived state.
-     */
-    public function getIsDecisionPendingAttribute(): bool
-    {
-        return $this->is_presented && ! $this->is_accepted && $this->status !== 'cancelled';
-    }
+    // Slice 2.3 note: getIsDecisionPendingAttribute() moved up beside the
+    // decisions() relation — it now consults the real decision ledger instead
+    // of approximating "no decision" as "not accepted".
 
     public function getComputedTotalAttribute(): float
     {

@@ -25,9 +25,13 @@ use Illuminate\Support\Facades\DB;
  * door it came through. This service is that one door.
  *
  * On acceptance it:
- *   1. Stamps accepted_at + status = ongoing.
- *   2. Logs treatment_plan.accepted on the Timeline.
- *   3. Creates the follow-up TreatmentOpportunity (guarded — re-accepting a
+ *   1. Appends a PlanDecision row — the canonical, append-only patient
+ *      decision truth (Slice 2.3).
+ *   2. Stamps accepted_at + status = ongoing. accepted_at is now a READ-MODEL
+ *      MIRROR of the decision ledger, kept because a large amount of existing
+ *      code reads it; the ledger is the source.
+ *   3. Logs treatment_plan.accepted on the Timeline.
+ *   4. Creates the follow-up TreatmentOpportunity (guarded — re-accepting a
  *      plan after a revert never creates a second one) and logs
  *      opportunity.created, which fires the opportunity_nudge_7d rule.
  */
@@ -46,6 +50,15 @@ class TreatmentPlanAcceptanceService
         ?int $createdBy = null
     ): TreatmentPlan {
         return DB::transaction(function () use ($plan, $actor, $via, $createdBy) {
+            // Slice 2.3 — the decision ledger is written FIRST. accepted_at
+            // below is a mirror of this row, not an independent truth.
+            \App\Models\PlanDecision::create([
+                'treatment_plan_id' => $plan->id,
+                'decision'          => \App\Models\PlanDecision::ACCEPTED,
+                'source'            => $via,
+                'recorded_by'       => $actor?->id,
+            ]);
+
             $plan->update([
                 'accepted_at' => now(),
                 'status'      => 'ongoing',
@@ -124,13 +137,23 @@ class TreatmentPlanAcceptanceService
                 $via === 'mobile' ? ' [mobile]' : ''
             );
 
-            \App\Models\StaffActivityLog::record(
-                $actor?->id,
-                'tp_reverted',
-                'accepted',
-                'pending',
-                mb_substr($note, 0, 255)
-            );
+            // F-3: StaffActivityLog::record() fills performed_by from auth()->id(),
+            // which is NOT NULL — so a revert from any context without a session
+            // (queue job, console command, future service-to-service call that
+            // passes $actor explicitly) died on an integrity constraint. The
+            // staff log is a convenience record; it must never be the reason a
+            // clinical revert fails. The Activity ledger above is the audit.
+            // record() sets performed_by from auth()->id() internally, so the
+            // guard must be on the SESSION, not on $actor.
+            if (auth()->id()) {
+                \App\Models\StaffActivityLog::record(
+                    $actor?->id ?? auth()->id(),
+                    'tp_reverted',
+                    'accepted',
+                    'pending',
+                    mb_substr($note, 0, 255)
+                );
+            }
 
             return $plan->fresh(['items', 'creator', 'patient']);
         });
