@@ -40,6 +40,34 @@ class TreatmentOpportunity extends Model
         'declined'  => ['label' => 'Declined',        'color' => '#ef4444', 'bg' => '#fef2f2'],
     ];
 
+    /**
+     * Slice 2.3c — the canonical stages, named.
+     *
+     *   COMMITTED  the patient said yes. They are NOT being chased to accept
+     *              any more; what they now need is scheduling. Still a live,
+     *              visible card on the board — just not sales work.
+     *   CONVERTED  treatment actually started. NOT written by acceptance and
+     *              not implemented in this slice (needs visit→plan attribution).
+     */
+    const COMMITTED = 'accepted';
+    const CONVERTED = 'completed';
+    const DECLINED  = 'declined';
+
+    /**
+     * Statuses that are NO LONGER SALES WORK. This is the single definition of
+     * "stop chasing" — counts, nudges, overdue badges and automation all read
+     * it, so the answer can never drift between screens again.
+     *
+     * Committed belongs here: chasing a patient to accept a plan they have
+     * already accepted is exactly the duplicate obligation the frozen contract
+     * forbids. The follow-up they DO need (book the treatment) is a different
+     * obligation owned by a later slice.
+     *
+     * NOTE: this is not "hidden". The board renders every stage in STAGES, so
+     * Committed cards stay visible as awaiting scheduling.
+     */
+    const CLOSED_STATUSES = [self::COMMITTED, self::CONVERTED, self::DECLINED];
+
     // Priority display labels (maps model enum → human label)
     const PRIORITY_LABELS = [
         'high'   => 'High Priority',
@@ -117,14 +145,14 @@ class TreatmentOpportunity extends Model
     public function getIsOverdueAttribute(): bool
     {
         if (!$this->follow_up_date) return false;
-        return $this->follow_up_date->isPast() && !in_array($this->status, ['completed', 'declined']);
+        return $this->follow_up_date->isPast() && !in_array($this->status, self::CLOSED_STATUSES);
     }
 
     /** Is follow-up due today? */
     public function getDueTodayAttribute(): bool
     {
         if (!$this->follow_up_date) return false;
-        return $this->follow_up_date->isToday() && !in_array($this->status, ['completed', 'declined']);
+        return $this->follow_up_date->isToday() && !in_array($this->status, self::CLOSED_STATUSES);
     }
 
     // ── Legacy helper (kept for backward compat) ───────────────────────────────
@@ -144,9 +172,16 @@ class TreatmentOpportunity extends Model
 
     // ── Scopes ─────────────────────────────────────────────────────────────────
 
+    /** Still sales work — i.e. still being chased toward a decision. */
     public function scopeOpen($query)
     {
-        return $query->whereNotIn('status', ['completed', 'declined']);
+        return $query->whereNotIn('status', self::CLOSED_STATUSES);
+    }
+
+    /** Accepted, but treatment has not started — awaiting scheduling. */
+    public function scopeCommitted($query)
+    {
+        return $query->where('status', self::COMMITTED);
     }
 
     public function scopeDueToday($query)
@@ -157,6 +192,6 @@ class TreatmentOpportunity extends Model
     public function scopeOverdue($query)
     {
         return $query->whereDate('follow_up_date', '<', today())
-                     ->whereNotIn('status', ['completed', 'declined']);
+                     ->whereNotIn('status', self::CLOSED_STATUSES);
     }
 }

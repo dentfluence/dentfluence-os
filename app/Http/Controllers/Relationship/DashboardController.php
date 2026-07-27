@@ -38,7 +38,7 @@ class DashboardController extends Controller
             'relationships'      => Relationship::count(),
             'patients'           => Patient::withoutGlobalScope(BranchScope::class)->count(),
             'active_leads'       => Lead::whereNotIn('stage', ['converted', 'lost'])->count(),
-            'open_opportunities' => TreatmentOpportunity::whereNotIn('status', ['completed', 'declined'])->count(),
+            'open_opportunities' => TreatmentOpportunity::whereNotIn('status', TreatmentOpportunity::CLOSED_STATUSES)->count(),
         ];
 
         // Journey snapshot (shadow) — informational context only.

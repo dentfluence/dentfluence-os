@@ -79,15 +79,18 @@ class TreatmentPlanAcceptanceService
             );
 
             // Reflect the acceptance onto the plan's single linked Opportunity
-            // — created earlier if the plan was already "presented" (Estimate
-            // Given), or created now if it was accepted straight away. Accepted
-            // maps to 'completed' (Converted). One opportunity per plan, ever —
-            // the guard + stage mapping live in TreatmentPlanOpportunitySync.
-            app(TreatmentPlanOpportunitySync::class)->syncStage($plan, 'completed', [
+            // — created earlier if the plan was already presented (Estimate
+            // Given), or created now if it was accepted straight away.
+            //
+            // Slice 2.3c (C-1 fix): acceptance maps to COMMITTED, not Converted.
+            // The patient has agreed to proceed; treatment has NOT started.
+            // Converted is reserved for actual treatment start and is
+            // deliberately not written anywhere yet.
+            app(TreatmentPlanOpportunitySync::class)->syncStage($plan, TreatmentOpportunity::COMMITTED, [
                 'actor'       => $actor,
                 'created_by'  => $createdBy,
                 'source'      => 'treatment_plan_accepted',
-                'description' => 'Opportunity converted — treatment plan accepted (' . $via . ')',
+                'description' => 'Opportunity committed — patient accepted the treatment plan (' . $via . ')',
             ]);
 
             return $plan->fresh(['items', 'creator', 'patient']);

@@ -217,7 +217,7 @@ class HuddleController extends Controller
             ];
         }
 
-        $openOpportunitiesCount = TreatmentOpportunity::whereNotIn('status', ['completed', 'declined'])->count();
+        $openOpportunitiesCount = TreatmentOpportunity::whereNotIn('status', TreatmentOpportunity::CLOSED_STATUSES)->count();
         if ($openOpportunitiesCount > 0) {
             $alerts[] = [
                 'type'   => 'open_opportunities',

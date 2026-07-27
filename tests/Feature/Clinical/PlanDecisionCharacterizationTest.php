@@ -198,14 +198,17 @@ class PlanDecisionCharacterizationTest extends TestCase
      * CONVERTED. Today acceptance writes opportunity status 'completed', which
      * the PRE UI renders as "✓ Converted".
      */
-    public function test_acceptance_marks_the_opportunity_completed_which_the_board_calls_converted(): void
+    public function test_acceptance_marks_the_opportunity_committed_never_converted(): void
     {
         $plan = $this->planWithItems($this->patient());
 
         app(TreatmentPlanAcceptanceService::class)->accept($plan, $this->admin(), 'clinic');
 
-        $this->assertSame('completed', TreatmentOpportunity::where('treatment_plan_id', $plan->id)->value('status'),
-            'FINDING C-1: accepted and converted are the same stored value today');
+        // C-1 IS NOW FIXED (Slice 2.3c). This test originally recorded the
+        // defect: acceptance stored 'completed', which the board labels
+        // "Converted". Retained to prove the fix holds and never regresses.
+        $this->assertSame(TreatmentOpportunity::COMMITTED, TreatmentOpportunity::where('treatment_plan_id', $plan->id)->value('status'),
+            'C-1 fixed: acceptance stores Committed, not Converted');
 
         // KEY DISCOVERY: the vocabulary already exists. The enum carries a
         // dedicated 'accepted' value whose display label is literally
@@ -221,29 +224,33 @@ class PlanDecisionCharacterizationTest extends TestCase
     }
 
     /**
-     * FINDING — the blast radius of fixing C-1. "Open opportunity" is defined
-     * in 14 places as NOT IN ('completed','declined'). If acceptance starts
-     * writing 'accepted' (Committed), every one of those treats an accepted
-     * plan as still open, so patients who already said yes re-enter the
-     * sales-chase pool. The fix needs a canonical closed-set, not just a
-     * changed value.
+     * The blast radius of the C-1 fix, now closed. "Open opportunity" used to
+     * be spelled out as NOT IN ('completed','declined') in 14 separate places,
+     * so an accepted card counted as open everywhere. There is now ONE
+     * definition, and Committed sits inside it.
      */
-    public function test_open_opportunity_is_defined_by_excluding_only_completed_and_declined(): void
+    public function test_open_is_defined_once_and_a_committed_card_is_not_open(): void
     {
         $patient = $this->patient();
         $plan    = $this->planWithItems($patient);
 
         $opp = TreatmentOpportunity::create([
             'patient_id' => $plan->patient_id, 'treatment_plan_id' => $plan->id,
-            'type' => 'other', 'label' => 'Implant', 'status' => 'accepted',
+            'type' => 'other', 'label' => 'Implant', 'status' => TreatmentOpportunity::COMMITTED,
         ]);
 
-        // Today an 'accepted' (Committed) card counts as OPEN everywhere.
-        $this->assertSame(1, TreatmentOpportunity::open()->count(),
-            'FINDING: Committed is currently indistinguishable from still-being-chased');
+        $this->assertSame(0, TreatmentOpportunity::open()->count(),
+            'Committed is decided work, not sales work');
 
-        $opp->update(['status' => 'completed']);
-        $this->assertSame(0, TreatmentOpportunity::open()->count());
+        // …but it is still a live, visible card — not hidden.
+        $this->assertSame(1, TreatmentOpportunity::committed()->count());
+
+        // A still-undecided card remains open.
+        $opp2 = TreatmentOpportunity::create([
+            'patient_id' => $plan->patient_id, 'type' => 'other',
+            'label' => 'Crown', 'status' => 'quoted',
+        ]);
+        $this->assertSame(1, TreatmentOpportunity::open()->count());
     }
 
     // ── 6. Treatment start cannot be attributed to a plan ────────────────────

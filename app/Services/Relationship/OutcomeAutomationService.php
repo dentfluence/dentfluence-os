@@ -254,7 +254,7 @@ class OutcomeAutomationService
 
         if ($patient) {
             $opportunity = TreatmentOpportunity::where('patient_id', $patient->id)
-                ->whereNotIn('status', ['completed', 'declined'])
+                ->whereNotIn('status', TreatmentOpportunity::CLOSED_STATUSES)
                 ->latest()
                 ->first();
 

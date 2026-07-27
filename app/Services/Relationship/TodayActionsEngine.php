@@ -248,7 +248,7 @@ class TodayActionsEngine
         return TreatmentOpportunity::with('patient:id,name,phone,relationship_id')
             ->whereNotNull('follow_up_date')
             ->where('follow_up_date', '<=', Carbon::today())
-            ->whereNotIn('status', ['completed', 'declined'])
+            ->whereNotIn('status', TreatmentOpportunity::CLOSED_STATUSES)
             ->whereNotIn('id', $this->dismissedIds('opportunities', TreatmentOpportunity::class))
             ->orderBy('follow_up_date')
             ->limit($this->limit())
@@ -1000,7 +1000,7 @@ class TodayActionsEngine
     {
         return TreatmentOpportunity::with('patient:id,name,phone,relationship_id')
             ->whereDate('follow_up_date', $date)
-            ->whereNotIn('status', ['completed', 'declined'])
+            ->whereNotIn('status', TreatmentOpportunity::CLOSED_STATUSES)
             ->limit($this->limit())
             ->get()
             ->map(fn (TreatmentOpportunity $opp) => [

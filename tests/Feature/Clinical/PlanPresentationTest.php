@@ -260,10 +260,11 @@ class PlanPresentationTest extends TestCase
             'acceptance must not disturb the presentation fact');
         $this->assertFalse($plan->is_decision_pending);
 
-        // One opportunity per plan, now at converted.
+        // One opportunity per plan, now at Committed (Slice 2.3c — acceptance
+        // no longer jumps the board straight to Converted).
         $opps = TreatmentOpportunity::where('treatment_plan_id', $plan->id)->get();
         $this->assertCount(1, $opps);
-        $this->assertSame('completed', $opps->first()->status);
+        $this->assertSame(TreatmentOpportunity::COMMITTED, $opps->first()->status);
     }
 
     // ── Guards ───────────────────────────────────────────────────────────────

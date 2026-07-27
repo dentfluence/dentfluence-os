@@ -1137,7 +1137,7 @@ class RelationshipController extends ApiController
             ];
         }
 
-        $openStatuses  = array_diff(array_keys(TreatmentOpportunity::STAGES), ['completed', 'declined']);
+        $openStatuses  = array_diff(array_keys(TreatmentOpportunity::STAGES), TreatmentOpportunity::CLOSED_STATUSES);
         $openCount     = $opportunities->whereIn('status', $openStatuses)->count();
         $pipelineValue = (float) $opportunities->whereIn('status', $openStatuses)->sum('estimated_value');
 

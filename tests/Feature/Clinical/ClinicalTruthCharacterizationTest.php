@@ -148,8 +148,11 @@ class ClinicalTruthCharacterizationTest extends TestCase
 
         $opps = TreatmentOpportunity::where('treatment_plan_id', $plan->id)->get();
         $this->assertCount(1, $opps, 'exactly one opportunity per plan, ever');
-        $this->assertSame('completed', $opps->first()->status,
-            'FINDING: clinical acceptance maps to opportunity "completed" (= sale converted, NOT treatment finished)');
+        // Superseded by Slice 2.3c. This originally recorded that acceptance
+        // mapped to 'completed' — the board's "Converted" — collapsing "said
+        // yes" into "treatment started". Acceptance now maps to Committed.
+        $this->assertSame(TreatmentOpportunity::COMMITTED, $opps->first()->status,
+            'SLICE 2.3c: acceptance means Committed, never Converted');
     }
 
     // ── 3. Presentation ──────────────────────────────────────────────────────

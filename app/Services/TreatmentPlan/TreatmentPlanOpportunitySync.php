@@ -88,7 +88,11 @@ class TreatmentPlanOpportunitySync
             // rule — chase the pending estimate) only for a NEW, still-open
             // card. A card born already Converted/Declined, or any update, logs
             // a stage-changed event instead so we never nudge a closed one.
-            $isOpen = ! in_array($status, ['completed', 'declined'], true);
+            // Slice 2.3c: 'accepted' (Committed) now counts as closed here too,
+            // so an acceptance never fires opportunity.created and therefore
+            // never arms the opportunity_nudge_7d chase on a patient who has
+            // already said yes.
+            $isOpen = ! in_array($status, TreatmentOpportunity::CLOSED_STATUSES, true);
             $event  = ($created && $isOpen) ? 'opportunity.created' : 'opportunity.stage_changed';
 
             $this->activity->log(

@@ -149,7 +149,7 @@ class ProfileController extends Controller
 
             // Open opportunities (TreatmentOpportunity phase 4 will add relationship_id — for now use patient_id)
             $opportunities = TreatmentOpportunity::where('patient_id', $patient->id)
-                ->whereNotIn('status', ['completed', 'declined'])
+                ->whereNotIn('status', TreatmentOpportunity::CLOSED_STATUSES)
                 ->orderBy('follow_up_date')
                 ->get();
 

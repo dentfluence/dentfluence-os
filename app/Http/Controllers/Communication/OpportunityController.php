@@ -37,7 +37,7 @@ class OpportunityController extends Controller
         $grouped = $opportunities->groupBy('status');
 
         // Summary stats
-        $openOpps       = $opportunities->whereNotIn('status', ['completed', 'declined']);
+        $openOpps       = $opportunities->whereNotIn('status', TreatmentOpportunity::CLOSED_STATUSES);
         $pipelineValue  = $openOpps->sum('estimated_value');
         $followUpToday  = $opportunities->filter->due_today->count();
         $convertedMTD   = TreatmentOpportunity::where('status', 'completed')
