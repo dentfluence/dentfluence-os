@@ -64,6 +64,18 @@ class PublicPresentationController extends Controller
                 relationshipId: $presentation->patient?->relationship_id,
                 description:    'Patient opened the smart presentation',
             );
+
+            // Slice 2.2: the patient opening the presentation is evidence the
+            // plan was shown to them — record the clinical fact through the
+            // canonical service rather than leaving it as pipeline state only.
+            if ($plan = $presentation->treatmentPlan) {
+                try {
+                    app(\App\Services\TreatmentPlan\TreatmentPlanPresentationService::class)
+                        ->markPresented($plan, null, 'smart_presentation');
+                } catch (\RuntimeException $e) {
+                    report($e);
+                }
+            }
         }
 
         $costSummary = $presentation->currentCostSummary();

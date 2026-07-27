@@ -209,15 +209,75 @@ was superseded and why.
 - Recall redesign, treatment recovery, appointment lifecycle repair
 - Full Opportunity redesign
 
+## 10b. CEO-found defect (same slice, fixed before freeze)
+
+The write path shipped correctly but the **read path still inferred clinical
+truth from PRE state**. `treatment-plan-tab.blade.php` computed:
+
+```php
+$presentedPlanIds = TreatmentOpportunity::whereIn('treatment_plan_id', …)->pluck(…)->flip();
+'is_presented' => isset($presentedPlanIds[$p->id]),
+```
+
+Any opportunity row — **any status, not only `quoted`** — made a plan render as
+presented, showed a commercial "Estimate Given" badge on a clinical card, and
+hid the Mark as Presented action. That is exactly the forbidden direction:
+PRE → infer Clinical. `formatPlan()` carried the same inference as a documented
+"compatibility fallback"; it was the same violation with a comment on it.
+
+Live evidence at the time of the report (patient 3869): one plan was
+`is_accepted: true` with `presented_at: NULL` — **accepted without ever being
+presented**, because Accept was reachable before presentation.
+
+### What changed
+
+| Concern | Before | After |
+|---|---|---|
+| Card `is_presented` | opportunity row exists | `presented_at` |
+| Badge | "Estimate Given" (commercial) | "Not Presented" / "Presented · date" |
+| Accept button | always, if not accepted | only once presented |
+| `formatPlan()` | presented_at **or** opportunity | `presented_at` only |
+
+Commercial stage stays on Relationship → Journeys, where it belongs.
+
+### Presentation writers unified
+
+Three genuine presentation paths were only moving the Opportunity and never
+recording the clinical fact. All now go through the canonical service:
+
+| Path | Actor | `source` |
+|---|---|---|
+| Case journey sent to patient | clinic user | `case_acceptance` |
+| Patient opens the case journey | none (patient) | `patient_view` |
+| Patient opens a smart presentation | none (patient) | `smart_presentation` |
+
+Each is wrapped in try/catch — a cancelled or patient-less plan must never 500 a
+patient-facing page. First-presentation immutability means these paths can
+overlap freely: whichever happens first sets the date, the rest only log.
+
+Side benefit: `CaseJourneyController::send` previously synced the opportunity to
+`quoted` unconditionally, which could **downgrade an already-converted
+opportunity** when a journey was re-sent. The service skips the sync for
+accepted plans, so that can no longer happen.
+
+### Visible consequences (expected, not defects)
+
+1. Historical plans read **"Not Presented"** even where an estimate genuinely
+   went out. Staff record the fact once. We refuse to manufacture it from a
+   sales-card position.
+2. Pre-existing accepted-but-never-presented plans keep `presented_at = NULL`.
+   They show as Accepted with no presentation date. No date was invented.
+
 ## 11. Known debt introduced
 
 1. **Opportunity double-write.** Presentation writes both the clinical fact and
    the opportunity stage. Intentional for compatibility; removable once the
    Opportunity board reads from clinical truth.
-2. **UI does not yet surface `presented_at`.** The API returns `presented_at`
-   and `decision_pending`; no blade template displays the date yet. Deliberately
-   deferred — "Decision Pending" as a visible work state belongs with the
-   decision record, not here.
-3. **`is_presented` retains an opportunity fallback** in `formatPlan()` so
-   historical plans still render as presented on the existing screen. Removable
-   after any future backfill decision.
+2. **"Decision Pending" is not yet a work queue.** The card shows
+   "Presented · date" and the API returns `decision_pending`, but nothing
+   chases an undecided plan. That belongs with the decision record (later slice).
+3. **Two paths still create opportunities directly** (`PublicPresentationController`
+   decline/callback, and the manual pipeline controllers) rather than through
+   the sync service. They are commercial-only transitions, so they do not touch
+   clinical truth — but they are why "one writer" is not yet literally true of
+   the Opportunity board.

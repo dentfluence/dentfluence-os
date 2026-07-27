@@ -10,14 +10,14 @@
         ->orderBy('name')
         ->get(['id', 'name']);
 
-    // Plans already carrying an Opportunity (presented → Estimate Given onward),
-    // fetched in one query so the map below can flag is_presented without N+1.
-    $presentedPlanIds = \App\Models\TreatmentOpportunity::whereIn(
-            'treatment_plan_id',
-            ($patient->treatmentPlans ?? collect())->pluck('id')
-        )->pluck('treatment_plan_id')->flip();
-
     // Build plans JSON — clinical fields only, no billing fields in this view
+    //
+    // Slice 2.2 fix: "presented" is read from treatment_plans.presented_at, the
+    // CLINICAL fact. It used to be inferred from "does this plan have any
+    // TreatmentOpportunity row" — a PRE/commercial signal — which meant the
+    // pipeline silently manufactured clinical truth and hid the Mark as
+    // Presented action. Commercial stage belongs on Relationship → Journeys,
+    // never on this clinical card.
     $plansJson = ($patient->treatmentPlans ?? collect())
         ->sortBy('display_order')
         ->map(fn($p) => [
@@ -26,7 +26,8 @@
             'display_order'      => (int)$p->display_order,
             'status'             => $p->status,
             'is_accepted'        => !is_null($p->accepted_at),
-            'is_presented'       => isset($presentedPlanIds[$p->id]),
+            'is_presented'       => !is_null($p->presented_at),
+            'presented_at'       => $p->presented_at?->format('d M Y'),
             'accepted_at'        => $p->accepted_at?->format('d M Y'),
             'total'              => (float)$p->total,
             'consultation_id'    => $p->consultation_id,
@@ -1133,8 +1134,12 @@
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                     Accepted <span x-show="plan.accepted_at" x-text="plan.accepted_at ? '· ' + plan.accepted_at : ''"></span>
                                 </span>
-                                <span x-show="!plan.is_accepted && !plan.is_presented" class="tp-badge-pending">Pending</span>
-                                <span x-show="!plan.is_accepted && plan.is_presented" class="tp-badge-pending" style="background:#eff6ff;color:#2563eb;">Estimate Given</span>
+                                {{-- Clinical lifecycle only. "Estimate Given" / "Quoted" are
+                                     PRE pipeline language and live on Relationship → Journeys. --}}
+                                <span x-show="!plan.is_accepted && !plan.is_presented" class="tp-badge-pending">Not Presented</span>
+                                <span x-show="!plan.is_accepted && plan.is_presented" class="tp-badge-pending" style="background:#eff6ff;color:#2563eb;">
+                                    Presented <span x-show="plan.presented_at" x-text="plan.presented_at ? '· ' + plan.presented_at : ''"></span>
+                                </span>
                                 {{-- Collapse / expand chevron --}}
                                 <span class="tp-collapse-toggle" :class="{ 'is-collapsed': isCollapsed(plan.id) }">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1181,8 +1186,11 @@
 
                         {{-- Action footer --}}
                         <div class="tp-card-footer">
-                            {{-- Mark as Accepted (only if not already accepted) --}}
-                            <button x-show="!plan.is_accepted"
+                            {{-- Mark as Accepted — only AFTER the plan has been presented.
+                                 A patient cannot accept a plan they were never shown, and
+                                 accepting an unpresented plan would leave accepted_at set
+                                 with presented_at NULL (a self-contradictory record). --}}
+                            <button x-show="!plan.is_accepted && plan.is_presented"
                                     @click="acceptPlan(plan)"
                                     :disabled="accepting === plan.id"
                                     class="tp-btn tp-btn-green">
@@ -1190,11 +1198,11 @@
                                 <span x-text="accepting === plan.id ? 'Saving…' : 'Mark as Accepted'"></span>
                             </button>
 
-                            {{-- Mark as Presented → drops the plan into the Opportunity
-                                 pipeline at "Estimate Given" until it's accepted or
-                                 declined. Shown only for a pending plan not yet presented.
-                                 (Sharing via Smart Presentation does this automatically;
-                                 this button covers chair-side / verbal presentation.) --}}
+                            {{-- Mark as Presented — records the clinical fact that the
+                                 patient was shown this plan. Covers chair-side / verbal
+                                 presentation; sending a Case Journey or the patient
+                                 opening a shared link records the same fact through the
+                                 same service. Hidden once presented (it is immutable). --}}
                             <button x-show="!plan.is_accepted && !plan.is_presented"
                                     @click="markPresented(plan)"
                                     :disabled="presenting === plan.id"
@@ -1865,7 +1873,8 @@ function treatmentPlanTab() {
             }
         },
 
-        // ── Mark plan as presented → Opportunity (Estimate Given) ───────────────
+        // ── Mark plan as presented — records the CLINICAL fact (presented_at).
+        //    The PRE pipeline stage is projected from it server-side. ──────────
         async markPresented(plan) {
             if (this.presenting === plan.id) return;
             this.presenting = plan.id;

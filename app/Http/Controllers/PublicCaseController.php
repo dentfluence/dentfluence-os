@@ -10,6 +10,7 @@ use App\Services\CaseAcceptance\JourneyAssembler;
 use App\Services\CaseAcceptance\JourneySnapshotService;
 use App\Services\Relationship\ActivityEngine;
 use App\Services\TreatmentPlan\TreatmentPlanAcceptanceService;
+use App\Services\TreatmentPlan\TreatmentPlanPresentationService;
 use App\Services\TreatmentPlan\TreatmentPlanOpportunitySync;
 use App\Support\Features\Feature;
 use Illuminate\Http\JsonResponse;
@@ -61,12 +62,19 @@ class PublicCaseController extends Controller
                 description:    'Patient opened the case journey',
             );
 
-            // Opportunity active on view (frozen §8): quoted = estimate given.
+            // The patient opening the journey is direct evidence the plan was
+            // presented to them, so it records the clinical fact through the
+            // canonical service (which projects Opportunity → 'quoted' as
+            // before). If the clinic already marked it presented on send, the
+            // original date wins — first presentation is immutable.
             if ($plan = $journey->treatmentPlan) {
-                app(TreatmentPlanOpportunitySync::class)->syncStage($plan, 'quoted', [
-                    'source'      => 'case_acceptance',
-                    'description' => 'Patient opened the case journey',
-                ]);
+                try {
+                    app(TreatmentPlanPresentationService::class)
+                        ->markPresented($plan, null, 'patient_view');
+                } catch (\RuntimeException $e) {
+                    // Never break the patient-facing page over pipeline work.
+                    report($e);
+                }
             }
         }
 

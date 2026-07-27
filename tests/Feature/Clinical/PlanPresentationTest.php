@@ -277,6 +277,84 @@ class PlanPresentationTest extends TestCase
         app(TreatmentPlanPresentationService::class)->markPresented($plan, $this->admin(), 'clinic');
     }
 
+    // ── 2.2-fix: PRE state must never manufacture clinical truth ─────────────
+
+    public function test_an_opportunity_alone_never_makes_a_plan_read_as_presented(): void
+    {
+        // ROOT CAUSE of the CEO-found defect: the plan card derived
+        // "presented" from "does this plan have an Opportunity row", so PRE
+        // pipeline state silently became clinical truth and hid the action.
+        $patient = $this->patient();
+        $plan    = $this->plan($patient);
+
+        TreatmentOpportunity::create([
+            'patient_id'        => $plan->patient_id,
+            'treatment_plan_id' => $plan->id,
+            'type'              => 'other',
+            'label'             => 'Implant',
+            'status'            => 'quoted',
+        ]);
+
+        $this->assertFalse($plan->fresh()->is_presented);
+
+        // The clinical card must still offer the action, and must not show
+        // commercial pipeline language. (Plans render in the lazy tab fragment.)
+        $html = $this->actingAs($this->admin())
+            ->get(route('patients.tab', ['patient' => $patient, 'tab' => 'treatment-plan']))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('Mark as Presented', $html);
+        $this->assertStringNotContainsString('Estimate Given', $html);
+
+        // …and the plan JSON handed to the card says not presented.
+        $this->assertMatchesRegularExpression(
+            '/"id":' . $plan->id . ',.*?"is_presented":false/s',
+            $html,
+        );
+    }
+
+    public function test_presenting_projects_onto_the_opportunity_board_one_way_only(): void
+    {
+        $plan = $this->plan($this->patient());
+
+        app(TreatmentPlanPresentationService::class)->markPresented($plan, $this->admin(), 'clinic');
+
+        // Clinical → PRE projection is expected and explicitly tested.
+        $this->assertSame('quoted', TreatmentOpportunity::where('treatment_plan_id', $plan->id)->value('status'));
+
+        // The reverse direction does not exist: moving the board by hand
+        // leaves the clinical fact exactly as the clinician recorded it.
+        $original = $plan->fresh()->presented_at;
+        TreatmentOpportunity::where('treatment_plan_id', $plan->id)->update(['status' => 'discussed']);
+
+        $this->assertEquals($original->toDateTimeString(), $plan->fresh()->presented_at->toDateTimeString());
+    }
+
+    public function test_accept_is_offered_only_after_the_plan_has_been_presented(): void
+    {
+        $patient = $this->patient();
+        $plan    = $this->plan($patient);
+        $admin   = $this->admin();
+
+        $tab = ['patient' => $patient, 'tab' => 'treatment-plan'];
+
+        $before = $this->actingAs($admin)->get(route('patients.tab', $tab))->getContent();
+        $this->assertMatchesRegularExpression(
+            '/"id":' . $plan->id . ',.*?"is_presented":false/s', $before,
+        );
+
+        app(TreatmentPlanPresentationService::class)->markPresented($plan, $admin, 'clinic');
+
+        $after = $this->actingAs($admin)->get(route('patients.tab', $tab))->getContent();
+        $this->assertMatchesRegularExpression(
+            '/"id":' . $plan->id . ',.*?"is_presented":true/s', $after,
+        );
+        $this->assertMatchesRegularExpression(
+            '/"id":' . $plan->id . ',.*?"presented_at":"[^"]+"/s', $after,
+        );
+    }
+
     public function test_historical_plans_are_not_backfilled(): void
     {
         // A plan that reached the Opportunity board before Slice 2.2 has no

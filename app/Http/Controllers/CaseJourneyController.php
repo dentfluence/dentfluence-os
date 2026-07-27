@@ -9,7 +9,7 @@ use App\Models\TreatmentPlan;
 use App\Services\CaseAcceptance\JourneyAssembler;
 use App\Services\CaseAcceptance\JourneySnapshotService;
 use App\Services\Relationship\ActivityEngine;
-use App\Services\TreatmentPlan\TreatmentPlanOpportunitySync;
+use App\Services\TreatmentPlan\TreatmentPlanPresentationService;
 use App\Support\Features\Feature;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,7 +22,7 @@ use Illuminate\View\View;
  * gated by the `case_acceptance.enabled` feature flag so it coexists with the
  * Smart Presentation module and can be switched off instantly.
  *
- * Reuses (does not rebuild): TreatmentPlanOpportunitySync, ActivityEngine, and
+ * Reuses (does not rebuild): TreatmentPlanPresentationService, ActivityEngine, and
  * the acceptance service (via PublicCaseController). Mirrors the shape of
  * PresentationController::createFromPlan / send.
  */
@@ -207,13 +207,18 @@ class CaseJourneyController extends Controller
         $journey->update($data);
         $journey = $snapshots->send($journey);
 
-        // Opportunity goes active on estimate-given (single writer, idempotent).
+        // Sending the case journey IS presenting the plan to the patient, so it
+        // records the clinical fact through the canonical service (which then
+        // projects the Opportunity to 'quoted' exactly as before). Idempotent:
+        // re-sending a superseded journey never rewrites the original date.
         if ($plan = $journey->treatmentPlan) {
-            app(TreatmentPlanOpportunitySync::class)->syncStage($plan, 'quoted', [
-                'source'      => 'case_acceptance',
-                'created_by'  => $journey->created_by,
-                'description' => 'Estimate given via Case Acceptance journey',
-            ]);
+            try {
+                app(TreatmentPlanPresentationService::class)
+                    ->markPresented($plan, Auth::user(), 'case_acceptance');
+            } catch (\RuntimeException $e) {
+                // A cancelled or patient-less plan must not break sending.
+                report($e);
+            }
         }
 
         app(ActivityEngine::class)->log(

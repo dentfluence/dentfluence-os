@@ -654,15 +654,11 @@ class TreatmentPlanController extends Controller
             'display_order'      => (int)$plan->display_order,
             'status'             => $plan->status,
             'is_accepted'        => (bool)$plan->accepted_at,
-            // Slice 2.2: "Presented" is now the CLINICAL fact. Historical plans
-            // (presented before this slice) have no presented_at, so the old
-            // Opportunity-based signal is kept as a read-only fallback purely
-            // so existing rows don't suddenly display as never-presented.
-            // Nothing is backfilled — see docs/patient-journey-v1_1-phase2.
-            'is_presented'       => $plan->presented_at !== null
-                                        || ($plan->relationLoaded('opportunity')
-                                            ? (bool) $plan->opportunity
-                                            : TreatmentOpportunity::where('treatment_plan_id', $plan->id)->exists()),
+            // "Presented" is the CLINICAL fact and nothing else. An Opportunity
+            // row is PRE/commercial state: it may only ever be a PROJECTION of
+            // presentation, never evidence of it. Historical plans therefore
+            // read as not presented until someone records the clinical fact.
+            'is_presented'       => $plan->presented_at !== null,
             'presented_at'       => $plan->presented_at?->format('d M Y'),
             'decision_pending'   => $plan->is_decision_pending,
             'accepted_at'        => $plan->accepted_at?->format('d M Y'),
