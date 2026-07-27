@@ -347,7 +347,7 @@ class TreatmentPlanController extends Controller
         return response()->json([
             'success' => true,
             'message' => $result['first_presentation']
-                ? 'Plan marked as presented.'
+                ? 'Plan and estimate presented to the patient.'
                 : 'Plan presented again — the original presentation date is unchanged.',
             'plan'    => $this->formatPlan($result['plan']->fresh(['items', 'creator', 'opportunity'])),
         ]);

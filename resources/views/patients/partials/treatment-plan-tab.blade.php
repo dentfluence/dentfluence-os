@@ -1134,8 +1134,9 @@
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                     Accepted <span x-show="plan.accepted_at" x-text="plan.accepted_at ? '· ' + plan.accepted_at : ''"></span>
                                 </span>
-                                {{-- Clinical lifecycle only. "Estimate Given" / "Quoted" are
-                                     PRE pipeline language and live on Relationship → Journeys. --}}
+                                {{-- Clinical lifecycle only. "Quoted" is PRE pipeline language
+                                     and lives on Relationship → Journeys — it is a projection
+                                     of this same event, not a second staff action. --}}
                                 <span x-show="!plan.is_accepted && !plan.is_presented" class="tp-badge-pending">Not Presented</span>
                                 <span x-show="!plan.is_accepted && plan.is_presented" class="tp-badge-pending" style="background:#eff6ff;color:#2563eb;">
                                     Presented <span x-show="plan.presented_at" x-text="plan.presented_at ? '· ' + plan.presented_at : ''"></span>
@@ -1198,17 +1199,20 @@
                                 <span x-text="accepting === plan.id ? 'Saving…' : 'Mark as Accepted'"></span>
                             </button>
 
-                            {{-- Mark as Presented — records the clinical fact that the
-                                 patient was shown this plan. Covers chair-side / verbal
-                                 presentation; sending a Case Journey or the patient
-                                 opening a shared link records the same fact through the
-                                 same service. Hidden once presented (it is immutable). --}}
+                            {{-- ONE action, ONE event. In a real consultation the plan and
+                                 its fees are discussed together, so presenting the plan and
+                                 giving the estimate are the same moment — never two clicks.
+                                 Records treatment_plans.presented_at (immutable first time);
+                                 the PRE board projects that as "Quoted". Sending a Case
+                                 Journey or the patient opening a shared link records the
+                                 same fact through the same service. --}}
                             <button x-show="!plan.is_accepted && !plan.is_presented"
                                     @click="markPresented(plan)"
                                     :disabled="presenting === plan.id"
+                                    title="Records that the treatment plan — including its cost estimate — was presented to and discussed with the patient."
                                     class="tp-btn tp-btn-outline">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
-                                <span x-text="presenting === plan.id ? 'Saving…' : 'Mark as Presented'"></span>
+                                <span x-text="presenting === plan.id ? 'Saving…' : 'Present Plan / Give Estimate'"></span>
                             </button>
 
                             {{-- Revert acceptance (only if already accepted) — reason logged --}}
@@ -1873,8 +1877,9 @@ function treatmentPlanTab() {
             }
         },
 
-        // ── Mark plan as presented — records the CLINICAL fact (presented_at).
-        //    The PRE pipeline stage is projected from it server-side. ──────────
+        // ── Present Plan / Give Estimate — ONE action, ONE event. Records the
+        //    CLINICAL fact (presented_at). The PRE pipeline stage ("Quoted") is
+        //    projected from it server-side; it is never a second click. ────────
         async markPresented(plan) {
             if (this.presenting === plan.id) return;
             this.presenting = plan.id;

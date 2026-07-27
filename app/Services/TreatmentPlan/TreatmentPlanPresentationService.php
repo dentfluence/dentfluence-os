@@ -17,6 +17,15 @@ use Illuminate\Support\Facades\DB;
  *
  * SEMANTICS (CEO-approved):
  *
+ *   • ONE ACTION, ONE EVENT. In a real consultation the proposed treatment,
+ *     the alternatives and the fees are discussed in the same conversation.
+ *     "Plan presented" and "estimate given" are therefore the SAME clinical
+ *     event, not two staff actions — there is no estimate_given_at column and
+ *     no second event. presented_at means: the treatment plan, INCLUDING its
+ *     cost estimate, was presented to and discussed with the patient.
+ *     The PRE board's 'quoted' stage is a commercial REPRESENTATION of this
+ *     one event; it must never require or imply a second click.
+ *
  *   • presented_at records the FIRST presentation and is never overwritten.
  *     Re-opening, re-printing or re-explaining a plan does not rewrite when
  *     the patient first saw it. Re-presentation history lives in the Activity

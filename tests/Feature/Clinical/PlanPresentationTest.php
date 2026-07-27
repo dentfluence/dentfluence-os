@@ -304,8 +304,11 @@ class PlanPresentationTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('Mark as Presented', $html);
-        $this->assertStringNotContainsString('Estimate Given', $html);
+        // ONE action, ONE label — presenting the plan and giving the estimate are
+        // the same clinical moment, so the card must never offer them separately.
+        $this->assertStringContainsString('Present Plan / Give Estimate', $html);
+        $this->assertStringNotContainsString('Estimate Given', $html);   // PRE status, not a clinical badge
+        $this->assertStringNotContainsString('Mark as Estimate', $html); // no second action, ever
 
         // …and the plan JSON handed to the card says not presented.
         $this->assertMatchesRegularExpression(
@@ -353,6 +356,33 @@ class PlanPresentationTest extends TestCase
         $this->assertMatchesRegularExpression(
             '/"id":' . $plan->id . ',.*?"presented_at":"[^"]+"/s', $after,
         );
+    }
+
+    public function test_presenting_and_giving_the_estimate_are_one_action_with_one_timestamp(): void
+    {
+        // CEO semantics: in a real consultation the treatment, alternatives and
+        // fees are discussed together. "Plan presented" and "estimate given" are
+        // the SAME event — one click, one column, one ledger entry. The PRE
+        // board's 'quoted' is a representation of it, never a second action.
+        $this->assertFalse(\Illuminate\Support\Facades\Schema::hasColumn('treatment_plans', 'estimate_given_at'),
+            'there must be no separate estimate timestamp');
+
+        $plan = $this->plan($this->patient());
+
+        app(TreatmentPlanPresentationService::class)->markPresented($plan, $this->admin(), 'clinic');
+
+        // Exactly one clinical event for the one action…
+        $events = \App\Models\Activity::where('subject_type', TreatmentPlan::class)
+            ->where('subject_id', $plan->id)
+            ->pluck('event');
+
+        $this->assertSame(['treatment_plan.presented'], $events->all(),
+            'one action must write exactly one clinical event');
+
+        // …and the commercial representation followed automatically, with no
+        // second staff action required.
+        $this->assertSame('quoted', TreatmentOpportunity::where('treatment_plan_id', $plan->id)->value('status'));
+        $this->assertNotNull($plan->fresh()->presented_at);
     }
 
     public function test_historical_plans_are_not_backfilled(): void

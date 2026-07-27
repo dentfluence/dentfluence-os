@@ -196,7 +196,7 @@ class TreatmentPlanController extends ApiController
         return $this->success(
             $this->payload($result['plan']->fresh(['items', 'creator'])),
             $result['first_presentation']
-                ? 'Treatment plan marked as presented.'
+                ? 'Plan and estimate presented to the patient.'
                 : 'Plan presented again — the original presentation date is unchanged.'
         );
     }
