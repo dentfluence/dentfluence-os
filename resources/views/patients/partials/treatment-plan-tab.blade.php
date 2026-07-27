@@ -1215,6 +1215,29 @@
                                 <span x-text="presenting === plan.id ? 'Saving…' : 'Present Plan / Give Estimate'"></span>
                             </button>
 
+                            {{-- Patient decisions (Slice 2.3e). Offered only once the
+                                 plan has been presented and before it is accepted —
+                                 you cannot record a decision on a plan nobody was
+                                 shown. Deferring and rejecting are separate truths and
+                                 neither cancels the plan. --}}
+                            <button x-show="!plan.is_accepted && plan.is_presented"
+                                    @click="deferPlan(plan)"
+                                    :disabled="deciding === plan.id"
+                                    title="The patient wants to decide later. A review date is optional."
+                                    class="tp-btn tp-btn-outline">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                <span x-text="deciding === plan.id ? 'Saving…' : 'Defer'"></span>
+                            </button>
+
+                            <button x-show="!plan.is_accepted && plan.is_presented"
+                                    @click="rejectPlan(plan)"
+                                    :disabled="deciding === plan.id"
+                                    title="The patient explicitly declined this plan."
+                                    class="tp-btn tp-btn-revert">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                <span x-text="deciding === plan.id ? 'Saving…' : 'Reject'"></span>
+                            </button>
+
                             {{-- Revert acceptance (only if already accepted) — reason logged --}}
                             <button x-show="plan.is_accepted"
                                     @click="openRevert(plan)"
@@ -1328,6 +1351,7 @@ function treatmentPlanTab() {
         // ── Accept state ────────────────────────────────────────────────────
         accepting: null,
         presenting: null,
+        deciding: null,
 
         // ── Collapse / expand state (keyed by plan id) ──────────────────────
         collapsed: {},
@@ -1901,6 +1925,49 @@ function treatmentPlanTab() {
             } finally {
                 this.presenting = null;
             }
+        },
+
+        // ── Patient decisions (Slice 2.3e) ──────────────────────────────────────
+        //    Reject and Defer are different truths and neither cancels the plan.
+        //    Both post to the one canonical decision service.
+        async recordDecision(plan, verb, body, failMessage) {
+            if (this.deciding === plan.id) return;
+            this.deciding = plan.id;
+            try {
+                const resp = await fetch(`{{ url('/treatment-plans') }}/${plan.id}/${verb}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify(body),
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(data.message || failMessage);
+                const idx = this.plans.findIndex(p => p.id === plan.id);
+                if (idx > -1) this.plans[idx] = data.plan;
+            } catch (e) {
+                alert(e.message);
+            } finally {
+                this.deciding = null;
+            }
+        },
+
+        async deferPlan(plan) {
+            // A review date is OPTIONAL — "I'll think about it" with no date is a
+            // real answer and must never be given an invented one.
+            const when = prompt('Review date (YYYY-MM-DD) — leave blank if the patient did not give one:', '');
+            if (when === null) return;
+            await this.recordDecision(plan, 'defer',
+                { defer_until: when.trim() || null }, 'Could not record the deferral.');
+        },
+
+        async rejectPlan(plan) {
+            const reason = prompt('The patient declined this plan. Reason (optional):', '');
+            if (reason === null) return;
+            await this.recordDecision(plan, 'reject',
+                { reason: reason.trim() || null }, 'Could not record the rejection.');
         },
 
         // ── Revert acceptance ───────────────────────────────────────────────────

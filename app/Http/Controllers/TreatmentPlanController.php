@@ -230,7 +230,11 @@ class TreatmentPlanController extends Controller
             'estimated_duration' => ['nullable', 'string', 'max:50'],
             'visit_count'        => ['nullable', 'integer', 'min:1'],
             'doctor_notes'       => ['nullable', 'string'],
-            'status'             => ['nullable', 'in:pending,ongoing,completed,cancelled'],
+            // Slice 2.3e — LIFECYCLE LOCKDOWN. A plan's status may no longer be
+            // set through the generic edit form. Lifecycle truth comes only from
+            // the canonical verbs (Present / Accept / Partial / Defer / Reject).
+            // Rejected by the rule below with a message that teaches the verb.
+            'status'             => ['prohibited'],
             'items'              => ['nullable', 'array'],
             'items.*.id'                => ['nullable', 'exists:treatment_plan_items,id'],
             'items.*.tooth_number'      => ['nullable', 'string', 'max:100'],
@@ -240,6 +244,8 @@ class TreatmentPlanController extends Controller
             'items.*.notes'             => ['nullable', 'string'],
             'items.*.treatment_id'      => ['nullable', 'exists:treatments,id'],
             'items.*.consent_required'  => ['nullable', 'boolean'],
+        ], [
+            'status.prohibited' => $this->lifecycleLockdownMessage(),
         ]);
 
         DB::transaction(function () use ($request, $plan) {
@@ -248,7 +254,6 @@ class TreatmentPlanController extends Controller
                 'estimated_duration' => $request->estimated_duration,
                 'visit_count'        => $request->visit_count,
                 'doctor_notes'       => $request->doctor_notes,
-                'status'             => $request->status,
             ], fn($v) => !is_null($v)));
 
             // doctor_id set outside the array_filter so it can also be cleared
@@ -350,6 +355,98 @@ class TreatmentPlanController extends Controller
                 ? 'Plan and estimate presented to the patient.'
                 : 'Plan presented again — the original presentation date is unchanged.',
             'plan'    => $this->formatPlan($result['plan']->fresh(['items', 'creator', 'opportunity'])),
+        ]);
+    }
+
+    /**
+     * The message a user sees if they try to set a plan's lifecycle status
+     * directly. It names the verb they actually want rather than just refusing,
+     * because the commonest misuse was cancelling a plan to mean "patient said
+     * no" — which destroyed the difference between an administrative closure
+     * and a clinical decision.
+     */
+    public static function lifecycleLockdownMessage(): string
+    {
+        return 'A treatment plan\'s status cannot be changed from the edit form. '
+             . 'Use Reject Plan when the patient declines, Defer when they want to decide later, '
+             . 'or Accept / Partial Acceptance when they agree. '
+             . 'Completion follows the treatment itself and is never set by hand.';
+    }
+
+    // ── Patient decisions (Slice 2.3e) ────────────────────────────────────────
+    //
+    // Reject / Defer / Partial acceptance. Each is a thin door onto the one
+    // canonical decision service — no business logic lives here, so web, API
+    // and any future patient channel produce identical clinical truth.
+
+    /** The patient explicitly declined this plan. */
+    public function reject(Request $request, TreatmentPlan $plan, TreatmentPlanAcceptanceService $decisions): JsonResponse
+    {
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $plan = $decisions->reject($plan, $data['reason'] ?? null, Auth::user(), 'clinic');
+        } catch (\RuntimeException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Recorded: the patient declined this plan.',
+            'plan'    => $this->formatPlan($plan->fresh(['items', 'creator', 'opportunity'])),
+        ]);
+    }
+
+    /** "Not now" — still a live plan; a review date is optional. */
+    public function defer(Request $request, TreatmentPlan $plan, TreatmentPlanAcceptanceService $decisions): JsonResponse
+    {
+        $data = $request->validate([
+            'defer_until' => ['nullable', 'date', 'after_or_equal:today'],
+            'reason'      => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $plan = $decisions->defer(
+                $plan,
+                $data['defer_until'] ?? null,
+                $data['reason'] ?? null,
+                Auth::user(),
+                'clinic',
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => ! empty($data['defer_until'])
+                ? 'Recorded: the patient will decide later. Nobody will chase until ' . $data['defer_until'] . '.'
+                : 'Recorded: the patient will decide later.',
+            'plan'    => $this->formatPlan($plan->fresh(['items', 'creator', 'opportunity'])),
+        ]);
+    }
+
+    /** The patient agreed to some treatments and not others. */
+    public function partialAccept(Request $request, TreatmentPlan $plan, TreatmentPlanAcceptanceService $decisions): JsonResponse
+    {
+        $data = $request->validate([
+            'items'   => ['required', 'array', 'min:1'],
+            'items.*' => ['required', 'string', 'in:' . implode(',', array_keys(\App\Models\PlanDecisionItem::DECISIONS))],
+            'notes'   => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $plan = $decisions->acceptPartially($plan, $data['items'], Auth::user(), 'clinic', $data['notes'] ?? null);
+        } catch (\RuntimeException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Recorded: the patient accepted part of this plan.',
+            'plan'    => $this->formatPlan($plan->fresh(['items', 'creator', 'opportunity'])),
         ]);
     }
 

@@ -233,6 +233,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/treatment-plans/{plan}/accept',  [TreatmentPlanController::class, 'accept'])->name('treatment-plans.accept')->middleware('module:patients,edit');
         // Mark a plan as presented → lands it in the Opportunity pipeline (Estimate Given)
         Route::post('/treatment-plans/{plan}/mark-presented', [TreatmentPlanController::class, 'markPresented'])->name('treatment-plans.mark-presented')->middleware('module:patients,edit');
+        // Slice 2.3e — patient decisions. Same gate as accept; all four verbs
+        // land in the one canonical decision service.
+        Route::post('/treatment-plans/{plan}/reject',         [TreatmentPlanController::class, 'reject'])->name('treatment-plans.reject')->middleware('module:patients,edit');
+        Route::post('/treatment-plans/{plan}/defer',          [TreatmentPlanController::class, 'defer'])->name('treatment-plans.defer')->middleware('module:patients,edit');
+        Route::post('/treatment-plans/{plan}/partial-accept', [TreatmentPlanController::class, 'partialAccept'])->name('treatment-plans.partial-accept')->middleware('module:patients,edit');
         Route::post('/treatment-plans/{plan}/revert',  [TreatmentPlanController::class, 'revert'])->name('treatment-plans.revert')->middleware('module:patients,edit');
         Route::delete('/treatment-plans/{plan}',       [TreatmentPlanController::class, 'destroy'])->name('treatment-plans.destroy')->middleware('module:patients,delete');
         Route::delete('/treatment-plan-items/{item}',  [TreatmentPlanController::class, 'destroyItem'])->name('treatment-plan-items.destroy')->middleware('module:patients,delete');

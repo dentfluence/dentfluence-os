@@ -109,13 +109,15 @@ class PlanDecisionCharacterizationTest extends TestCase
     // PlanDecisionLedgerTest::test_revert_no_longer_dies_without_an_authenticated_session().
 
     /**
-     * FINDING — the plan's clinical status is FREELY writable through the
-     * ordinary update endpoint on BOTH web and API. Any user with patients.edit
-     * can declare a plan cancelled or completed without passing a service,
-     * without an activity row, and without any audit trail. This is the
-     * uncontrolled writer Slice 2.3 must close.
+     * SUPERSEDED BY SLICE 2.3e — THE DEFECT IS NOW CLOSED.
+     *
+     * This originally recorded that a plan's clinical status was freely
+     * writable through the ordinary update endpoint on BOTH surfaces: any user
+     * with patients.edit could declare a plan cancelled or completed with no
+     * service, no activity row and no audit trail. Retained inverted, so the
+     * lockdown can never silently regress.
      */
-    public function test_plan_status_can_be_set_freely_through_the_update_endpoint(): void
+    public function test_plan_status_can_no_longer_be_set_freely_through_the_update_endpoint(): void
     {
         $patient = $this->patient();
         $plan    = $this->planWithItems($patient);
@@ -129,22 +131,18 @@ class PlanDecisionCharacterizationTest extends TestCase
 
         $this->actingAs($admin)
             ->putJson(route('treatment-plans.update', $plan), $payload)
-            ->assertOk();
+            ->assertStatus(422);
 
-        $this->assertSame('cancelled', $plan->fresh()->status,
-            'FINDING: a plan can be cancelled with no decision record and no event');
+        $this->assertSame('pending', $plan->fresh()->status,
+            'the generic edit form can no longer manufacture lifecycle truth');
 
-        // …and nothing was written to the ledger to say who decided this or why.
-        $this->assertDatabaseMissing('activities', ['event' => 'treatment_plan.cancelled']);
-        $this->assertDatabaseMissing('activities', ['event' => 'treatment_plan.rejected']);
-
-        // The same freedom exists on the API surface.
+        // The same lockdown applies on the API surface, including completion —
+        // clinical completion must follow the treatment, never a form field.
         Sanctum::actingAs($admin, ['*']);
         $this->putJson("/api/v1/treatment-plans/{$plan->id}", array_merge($payload, ['status' => 'completed']))
-            ->assertOk();
+            ->assertStatus(422);
 
-        $this->assertSame('completed', $plan->fresh()->status,
-            'FINDING: clinical completion is also freely settable, bypassing the completion rule');
+        $this->assertSame('pending', $plan->fresh()->status);
     }
 
     // ── 3. Rejection has a commercial record but no clinical one ─────────────

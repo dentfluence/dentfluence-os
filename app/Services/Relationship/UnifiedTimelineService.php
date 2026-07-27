@@ -417,15 +417,16 @@ class UnifiedTimelineService
                         ]);
                     }
 
-                    // Rejected / cancelled without acceptance (Amendment 1, event 19)
-                    // LEGACY INFERENCE — reads a cancelled plan as a rejection.
-                    // Cancelled is administrative; rejection is a patient
-                    // decision. Kept for pre-2.3 rows only; retiring it belongs
-                    // with the Cancelled protection work in Slice 2.3e.
-                    if ($plan->status === 'cancelled' && ! $plan->accepted_at) {
+                    // Cancelled — an ADMINISTRATIVE closure, shown as exactly
+                    // that. Slice 2.3e retired the old inference that rendered
+                    // any cancelled plan as "Treatment plan rejected": that
+                    // asserted a patient decision nobody ever recorded.
+                    // A real rejection now comes from the decision ledger above.
+                    if ($plan->status === 'cancelled') {
                         $entries->push([
-                            'date' => $this->toCarbon($plan->updated_at), 'type' => 'treatment.rejected', 'icon_type' => 'rejected',
-                            'title' => 'Treatment plan rejected — ' . $name, 'description' => null,
+                            'date' => $this->toCarbon($plan->updated_at), 'type' => 'treatment.cancelled', 'icon_type' => 'rejected',
+                            'title' => 'Treatment plan cancelled — ' . $name,
+                            'description' => 'Closed administratively — not a recorded patient decision',
                             'actor' => $plan->created_by ? $this->userName($plan->created_by) : null, 'meta' => null,
                             'group' => 'clinical', 'permission' => 'patients.view', 'link' => $link, 'color' => 'red',
                         ]);

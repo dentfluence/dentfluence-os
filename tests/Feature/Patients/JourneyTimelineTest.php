@@ -113,7 +113,7 @@ class JourneyTimelineTest extends TestCase
 
     // ── Amendment 1 — treatment decision events ───────────────────────────────
 
-    public function test_treatment_accepted_rejected_and_deferred_events(): void
+    public function test_treatment_accepted_cancelled_and_pending_decision_events(): void
     {
         $patient = $this->patient();
         $consult = $this->consultation($patient, now()->subDays(40));
@@ -131,8 +131,11 @@ class JourneyTimelineTest extends TestCase
             'status'      => 'ongoing',
             'accepted_at' => now()->subDays(25),
         ]);
+        // Slice 2.3e: a cancelled plan is an ADMINISTRATIVE closure. It used to
+        // be rendered as "Treatment plan rejected", asserting a patient decision
+        // nobody had recorded. Renamed here to say what it actually is.
         TreatmentPlan::create($base + [
-            'plan_name' => 'Rejected Plan',
+            'plan_name' => 'Cancelled Plan',
             'plan_date' => now()->subDays(30),
             'status'    => 'cancelled',
         ]);
@@ -146,9 +149,12 @@ class JourneyTimelineTest extends TestCase
         $titles = $events->pluck('title')->implode(' | ');
 
         $this->assertStringContainsString('Treatment plan accepted — Accepted Plan', $titles);
-        $this->assertStringContainsString('Treatment plan rejected — Rejected Plan', $titles);
+        $this->assertStringContainsString('Treatment plan cancelled — Cancelled Plan', $titles);
         $this->assertStringContainsString('Treatment plan pending decision — Stale Plan', $titles);
         $this->assertStringContainsString('Treatment plan created — Accepted Plan', $titles);
+
+        // A cancellation must never masquerade as a patient rejection.
+        $this->assertStringNotContainsString('rejected', strtolower($titles));
     }
 
     // ── Unit: facade behaviour against a stubbed aggregator ──────────────────

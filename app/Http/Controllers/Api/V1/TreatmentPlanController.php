@@ -105,7 +105,10 @@ class TreatmentPlanController extends ApiController
             'estimated_duration'     => ['nullable', 'string', 'max:50'],
             'visit_count'            => ['nullable', 'integer', 'min:1'],
             'doctor_notes'           => ['nullable', 'string'],
-            'status'                 => ['nullable', 'in:pending,ongoing,completed,cancelled'],
+            // Slice 2.3e — lifecycle lockdown, identical to web. Status is not
+            // editable through the generic update; only the canonical verbs
+            // move a plan through its lifecycle.
+            'status'                 => ['prohibited'],
             'items'                  => ['nullable', 'array'],
             'items.*.id'             => ['nullable', 'integer'],
             'items.*.tooth_number'   => ['nullable', 'string', 'max:100'],
@@ -115,6 +118,8 @@ class TreatmentPlanController extends ApiController
             'items.*.units'          => ['nullable', 'integer', 'min:1'],
             'items.*.consent_required' => ['nullable', 'boolean'],
             'items.*.notes'          => ['nullable', 'string'],
+        ], [
+            'status.prohibited' => \App\Http\Controllers\TreatmentPlanController::lifecycleLockdownMessage(),
         ]);
 
         DB::transaction(function () use ($data, $p) {
@@ -123,7 +128,6 @@ class TreatmentPlanController extends ApiController
                 'estimated_duration' => $data['estimated_duration'] ?? null,
                 'visit_count'        => $data['visit_count'] ?? null,
                 'doctor_notes'       => $data['doctor_notes'] ?? null,
-                'status'             => $data['status'] ?? null,
             ], fn ($v) => ! is_null($v)));
 
             if (array_key_exists('items', $data)) {
@@ -199,6 +203,69 @@ class TreatmentPlanController extends ApiController
                 ? 'Plan and estimate presented to the patient.'
                 : 'Plan presented again — the original presentation date is unchanged.'
         );
+    }
+
+    // ── Patient decisions (Slice 2.3e) — same service as web ─────────────────
+
+    public function reject(Request $request, $plan): JsonResponse
+    {
+        $p = $this->findPlan($request, $plan);
+        if ($p instanceof JsonResponse) return $p;
+
+        $data = $request->validate(['reason' => ['nullable', 'string', 'max:1000']]);
+
+        try {
+            $p = app(TreatmentPlanAcceptanceService::class)
+                ->reject($p, $data['reason'] ?? null, $request->user(), 'mobile');
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), [], 422);
+        }
+
+        return $this->success($this->payload($p->fresh(['items', 'creator'])),
+            'Recorded: the patient declined this plan.');
+    }
+
+    public function defer(Request $request, $plan): JsonResponse
+    {
+        $p = $this->findPlan($request, $plan);
+        if ($p instanceof JsonResponse) return $p;
+
+        $data = $request->validate([
+            'defer_until' => ['nullable', 'date', 'after_or_equal:today'],
+            'reason'      => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $p = app(TreatmentPlanAcceptanceService::class)
+                ->defer($p, $data['defer_until'] ?? null, $data['reason'] ?? null, $request->user(), 'mobile');
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), [], 422);
+        }
+
+        return $this->success($this->payload($p->fresh(['items', 'creator'])),
+            'Recorded: the patient will decide later.');
+    }
+
+    public function partialAccept(Request $request, $plan): JsonResponse
+    {
+        $p = $this->findPlan($request, $plan);
+        if ($p instanceof JsonResponse) return $p;
+
+        $data = $request->validate([
+            'items'   => ['required', 'array', 'min:1'],
+            'items.*' => ['required', 'string', 'in:' . implode(',', array_keys(\App\Models\PlanDecisionItem::DECISIONS))],
+            'notes'   => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $p = app(TreatmentPlanAcceptanceService::class)
+                ->acceptPartially($p, $data['items'], $request->user(), 'mobile', $data['notes'] ?? null);
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), [], 422);
+        }
+
+        return $this->success($this->payload($p->fresh(['items', 'creator'])),
+            'Recorded: the patient accepted part of this plan.');
     }
 
     public function revert(Request $request, $plan): JsonResponse

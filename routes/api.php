@@ -202,6 +202,13 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             ->middleware('api.role:module:patients,edit');
         Route::post('/treatment-plans/{plan}/revert',      [TreatmentPlanController::class, 'revert'])
             ->middleware('api.role:module:patients,edit');
+        // Slice 2.3e — patient decisions, mirroring the web verbs exactly.
+        Route::post('/treatment-plans/{plan}/reject',         [TreatmentPlanController::class, 'reject'])
+            ->middleware('api.role:module:patients,edit');
+        Route::post('/treatment-plans/{plan}/defer',          [TreatmentPlanController::class, 'defer'])
+            ->middleware('api.role:module:patients,edit');
+        Route::post('/treatment-plans/{plan}/partial-accept', [TreatmentPlanController::class, 'partialAccept'])
+            ->middleware('api.role:module:patients,edit');
         Route::get('/treatment-plans/{plan}/billable-teeth', [TreatmentPlanController::class, 'billableTeeth']);
         // Billing a plan creates an invoice → finance,edit as well as patients,edit
         // is conceptually right, but finance is the money module: gate on finance.
