@@ -758,6 +758,10 @@ class TreatmentPlanController extends Controller
             'is_presented'       => $plan->presented_at !== null,
             'presented_at'       => $plan->presented_at?->format('d M Y'),
             'decision_pending'   => $plan->is_decision_pending,
+            // Slice 2.4e — clinical progress comes from the ONE canonical
+            // service. This controller consumes it; it never derives.
+            'progress'           => app(\App\Services\Clinical\DerivedProgressService::class)
+                                        ->deriveTreatmentPlanProgress($plan)->progress->label(),
             'accepted_at'        => $plan->accepted_at?->format('d M Y'),
             'total'              => (float)$plan->total,
             'consultation_id'    => $plan->consultation_id,

@@ -10,6 +10,12 @@
         ->orderBy('name')
         ->get(['id', 'name']);
 
+    // Slice 2.4e — clinical progress is asked of the ONE canonical service.
+    // treatment_plans.status is deliberately NOT passed to this view: it was
+    // carried in the payload but never rendered, and leaving it there is an
+    // invitation to read a legacy lifecycle column as progress (contract R-7).
+    $planProgress = app(\App\Services\Clinical\DerivedProgressService::class);
+
     // Build plans JSON — clinical fields only, no billing fields in this view
     //
     // Slice 2.2 fix: "presented" is read from treatment_plans.presented_at, the
@@ -24,7 +30,7 @@
             'id'                 => $p->id,
             'plan_name'          => $p->plan_name,
             'display_order'      => (int)$p->display_order,
-            'status'             => $p->status,
+            'progress'           => $planProgress->deriveTreatmentPlanProgress($p)->progress->label(),
             'is_accepted'        => !is_null($p->accepted_at),
             'is_presented'       => !is_null($p->presented_at),
             'presented_at'       => $p->presented_at?->format('d M Y'),
@@ -1141,6 +1147,14 @@
                                 <span x-show="!plan.is_accepted && plan.is_presented" class="tp-badge-pending" style="background:#eff6ff;color:#2563eb;">
                                     Presented <span x-show="plan.presented_at" x-text="plan.presented_at ? '· ' + plan.presented_at : ''"></span>
                                 </span>
+                                {{-- Slice 2.4e — clinical progress, from the canonical service.
+                                     Shown only once the patient has accepted (before that there
+                                     is nothing agreed to progress through) and only once work
+                                     exists, so an untouched plan stays visually quiet. Note the
+                                     ceiling reads "All Work Recorded", never "Completed". --}}
+                                <span x-show="plan.is_accepted && plan.progress && plan.progress !== 'Not Started'"
+                                      class="tp-badge-pending" style="background:#ecfdf5;color:#059669;"
+                                      x-text="plan.progress"></span>
                                 {{-- Collapse / expand chevron --}}
                                 <span class="tp-collapse-toggle" :class="{ 'is-collapsed': isCollapsed(plan.id) }">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>

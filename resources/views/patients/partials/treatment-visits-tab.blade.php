@@ -133,12 +133,19 @@ $labVendorsList     = \App\Models\LabVendor::where('is_active', true)->orderBy('
 // F2: pass plans as JSON so visit form can load plan items via AJAX
 // Only ACCEPTED plans (patient said yes -> accepted_at is set) should surface
 // in the visit form. Pending/un-accepted options stay hidden here.
+// Slice 2.4e — the plan picker used to label each plan with
+// treatment_plans.status, so an accepted-but-untouched plan read "(Ongoing)".
+// That is a lifecycle column, not clinical progress. It now consumes the
+// canonical Derived Progress Service, which answers from recorded clinical
+// work. Nothing is derived here; this only asks.
+$_progress = app(\App\Services\Clinical\DerivedProgressService::class);
+
 $treatmentPlansJson = ($patient->treatmentPlans ?? collect())
     ->filter(fn($p) => !is_null($p->accepted_at))
     ->map(fn($p) => [
         'id'        => $p->id,
         'plan_name' => $p->plan_name,
-        'status'    => $p->status,
+        'progress'  => $_progress->deriveTreatmentPlanProgress($p)->progress->label(),
     ])->values();
 
 // Appointments: upcoming + last 30 days, for linking to a visit
@@ -606,7 +613,7 @@ $appointmentsJson = ($patient->appointments ?? collect())
                                 <option value="">— Select Treatment Plan —</option>
                                 <template x-for="plan in treatmentPlans" :key="plan.id">
                                     <option :value="plan.id"
-                                            x-text="plan.plan_name + ' (' + (plan.status ? plan.status.charAt(0).toUpperCase() + plan.status.slice(1) : '') + ')'"></option>
+                                            x-text="plan.plan_name + (plan.progress ? ' (' + plan.progress + ')' : '')"></option>
                                 </template>
                             </select>
                         </div>
@@ -648,6 +655,23 @@ $appointmentsJson = ($patient->appointments ?? collect())
                                                         <svg width="14" height="14" viewBox="0 0 24 24" :fill="isPlanItemPrimary(pi.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                                                     </button>
                                                 </div>
+                                                {{-- Slice 2.4b — what happened to THIS treatment today.
+                                                     A fact about today only. It never says the
+                                                     treatment is finished overall, and nothing is
+                                                     derived from it in this slice. --}}
+                                                <div x-show="isPlanItemSelected(pi.id)" class="flex flex-wrap items-center gap-1 mt-1 ml-1">
+                                                    <span class="text-[10px] text-gray-400 mr-1">Today:</span>
+                                                    <template x-for="(label, key) in workOutcomes" :key="key">
+                                                        <button type="button" @click="setWorkOutcome(pi, key)"
+                                                                :class="workOutcomeFor(pi) === key
+                                                                    ? 'bg-[#6a0f70] border-[#380740] text-white'
+                                                                    : 'bg-white border-gray-200 text-gray-500 hover:border-[#6a0f70]'"
+                                                                class="px-2 py-0.5 text-[10px] font-semibold border rounded transition-colors">
+                                                            <span x-text="label"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+
                                                 {{-- Narrow to specific teeth when this plan item spans more than one --}}
                                                 <div x-show="isPlanItemSelected(pi.id) && planItemTeeth(pi).length > 1" class="flex flex-wrap items-center gap-1 mt-1 ml-1">
                                                     <span class="text-[10px] text-gray-400 mr-1">Done today on:</span>
@@ -1872,6 +1896,22 @@ function treatmentVisits() {
             return this.visitItems.some(i => i.treatment_plan_item_id == planItemId);
         },
 
+        // ── Slice 2.4b — today's clinical work ──────────────────────────────
+        // Three words, no enums, no lifecycle. "Completed Today" means this
+        // treatment finished at THIS visit — it does not close the plan.
+        workOutcomes: @js(\App\Models\TreatmentVisitItem::WORK_OUTCOMES),
+
+        workOutcomeFor(pi) {
+            const row = this.visitItems.find(i => i.treatment_plan_item_id == pi.id);
+            return row ? (row.work_outcome || null) : null;
+        },
+
+        setWorkOutcome(pi, key) {
+            const row = this.visitItems.find(i => i.treatment_plan_item_id == pi.id);
+            if (!row) return;
+            row.work_outcome = (row.work_outcome === key) ? null : key;   // click again to clear
+        },
+
         isPlanItemPrimary(planItemId) {
             return this.form.plan_item_id == planItemId;
         },
@@ -1889,6 +1929,7 @@ function treatmentVisits() {
             } else {
                 this.visitItems.push({
                     treatment_plan_item_id: pi.id,
+                    work_outcome:    null,   // Slice 2.4b — set by the dentist, never guessed
                     treatment_name:  pi.treatment_name,
                     material_option: '',
                     tooth_number:    pi.tooth_number || '',
@@ -2232,8 +2273,9 @@ function treatmentVisits() {
             .then(r => r.json())
             .then(d => {
                 const plans = (d.plans || []).filter(p => p.is_accepted);
+                // Slice 2.4e — canonical progress, not the legacy status column.
                 this.treatmentPlans = plans.map(p => ({
-                    id: p.id, plan_name: p.plan_name, status: p.status,
+                    id: p.id, plan_name: p.plan_name, progress: p.progress,
                 }));
             })
             .catch(() => { /* keep the server-seeded list on failure */ });
