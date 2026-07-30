@@ -7,6 +7,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TreatmentVisitItem extends Model
 {
+    /**
+     * Slice 2.4b — what happened to this planned treatment TODAY.
+     * A fact about one visit, never a running status. NULL is legitimate
+     * (ad-hoc work, or items recorded before this slice).
+     */
+    public const WORK_STARTED         = 'started';
+    public const WORK_WORKED_ON       = 'worked_on';
+    public const WORK_COMPLETED_TODAY = 'completed_today';
+
+    /** Dentist-facing wording. Internal keys are never shown. */
+    public const WORK_OUTCOMES = [
+        self::WORK_STARTED         => 'Started',
+        self::WORK_WORKED_ON       => 'Worked On',
+        self::WORK_COMPLETED_TODAY => 'Completed Today',
+    ];
+
     protected $fillable = [
         'treatment_visit_id',
         'patient_id',
@@ -15,6 +31,7 @@ class TreatmentVisitItem extends Model
         'tooth_number',
         'suggested_price',
         'treatment_plan_item_id',
+        'work_outcome',
         'billing_status',
         'invoice_item_id',
         'notes',

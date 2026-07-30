@@ -12,7 +12,10 @@ use App\Models\Patient;
 use App\Models\Task;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentVisit;
+use App\Models\TreatmentPlanItem;
+use App\Models\TreatmentVisitItem;
 use App\Services\Relationship\ActivityEngine;
+use Illuminate\Validation\ValidationException;
 use App\Services\Workflow\WorkflowShadowRunner;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -119,6 +122,8 @@ class TreatmentVisitService
             // F2: Visit items for billing (doctor selects what was done; front desk bills from this)
             'visit_items'                              => ['nullable', 'array'],
             'visit_items.*.treatment_plan_item_id'     => ['nullable', 'exists:treatment_plan_items,id'],
+            // Slice 2.4b — what happened to this planned treatment TODAY.
+            'visit_items.*.work_outcome'               => ['nullable', 'string', 'in:' . implode(',', array_keys(TreatmentVisitItem::WORK_OUTCOMES))],
             'visit_items.*.treatment_name'             => ['required_with:visit_items', 'string', 'max:150'],
             'visit_items.*.material_option'            => ['nullable', 'string', 'max:100'],
             'visit_items.*.tooth_number'               => ['nullable', 'string', 'max:100'],
@@ -445,14 +450,56 @@ class TreatmentVisitService
     }
 
     /**
+     * Slice 2.4b — a visit may only record work against ITS OWN plan's items.
+     *
+     * The link was previously validated as "some plan item exists", which would
+     * happily attach today's work to a different patient's treatment plan. Now
+     * every referenced item must belong to the plan this visit is linked to.
+     */
+    private function guardPlanItemOwnership(TreatmentVisit $visit, array $items): void
+    {
+        $referenced = collect($items)->pluck('treatment_plan_item_id')->filter()->unique();
+
+        if ($referenced->isEmpty()) {
+            return;   // ad-hoc visit — nothing to own
+        }
+
+        if (! $visit->treatment_plan_id) {
+            throw ValidationException::withMessages([
+                'visit_items' => 'This visit is not linked to a treatment plan, so planned treatments cannot be recorded against it.',
+            ]);
+        }
+
+        $ownIds = TreatmentPlanItem::where('treatment_plan_id', $visit->treatment_plan_id)
+            ->pluck('id')->all();
+
+        $foreign = $referenced->reject(fn ($id) => in_array((int) $id, $ownIds, true));
+
+        if ($foreign->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'visit_items' => 'One of the treatments recorded does not belong to this visit\'s treatment plan.',
+            ]);
+        }
+    }
+
+    /**
      * Save visit items to treatment_visit_items and fire a billing prompt.
      */
     private function saveVisitItems(TreatmentVisit $visit, array $items): void
     {
+        $this->guardPlanItemOwnership($visit, $items);
+
         foreach ($items as $row) {
             $visit->visitItems()->create([
                 'patient_id'             => $visit->patient_id,
                 'treatment_plan_item_id' => $row['treatment_plan_item_id'] ?? null,
+                // Slice 2.4b — only meaningful for planned work. Ad-hoc "Other"
+                // treatments carry no plan item, so there is nothing to say
+                // "today's work" about; the outcome stays null rather than
+                // inventing one.
+                'work_outcome'           => ! empty($row['treatment_plan_item_id'])
+                                                ? ($row['work_outcome'] ?? null)
+                                                : null,
                 'treatment_name'         => $row['treatment_name'],
                 'material_option'        => $row['material_option'] ?? null,
                 'tooth_number'           => $row['tooth_number'] ?? null,
@@ -482,6 +529,49 @@ class TreatmentVisitService
             'status'       => 'pending',
             'created_by'   => Auth::id(),
         ]);
+
+        $this->logClinicalWork($visit, $items);
+    }
+
+    /**
+     * Slice 2.4b — put today's clinical work on the patient's Journey.
+     *
+     * ONE event per visit, not one per treatment: a dentist who records four
+     * items did one piece of work, and four timeline rows would be noise.
+     * Silent when nothing planned was recorded, so ad-hoc visits are unchanged.
+     */
+    private function logClinicalWork(TreatmentVisit $visit, array $items): void
+    {
+        $planned = collect($items)
+            ->filter(fn ($i) => ! empty($i['treatment_plan_item_id']) && ! empty($i['work_outcome']));
+
+        if ($planned->isEmpty()) {
+            return;
+        }
+
+        $summary = $planned->map(fn ($i) => trim(
+            $i['treatment_name'] . ' — ' . (TreatmentVisitItem::WORK_OUTCOMES[$i['work_outcome']] ?? $i['work_outcome'])
+        ))->join(', ');
+
+        $visit->loadMissing('patient');
+
+        app(ActivityEngine::class)->log(
+            subject:        $visit,
+            event:          'treatment_visit.work_recorded',
+            actor:          Auth::user(),
+            metadata:       [
+                'patient_id'        => $visit->patient_id,
+                'treatment_visit_id'=> $visit->id,
+                'treatment_plan_id' => $visit->treatment_plan_id,
+                'work'              => $planned->map(fn ($i) => [
+                    'treatment_plan_item_id' => (int) $i['treatment_plan_item_id'],
+                    'treatment_name'         => $i['treatment_name'],
+                    'work_outcome'           => $i['work_outcome'],
+                ])->values()->all(),
+            ],
+            relationshipId: $visit->patient?->relationship_id,
+            description:    'Clinical work recorded — ' . $summary,
+        );
     }
 
     /**
@@ -554,6 +644,7 @@ class TreatmentVisitService
             'visit_items' => ($v->relationLoaded('visitItems') ? $v->visitItems : collect())->map(fn($i) => [
                 'id'                     => $i->id,
                 'treatment_plan_item_id' => $i->treatment_plan_item_id,
+                'work_outcome'           => $i->work_outcome,
                 'treatment_name'         => $i->treatment_name,
                 'material_option'        => $i->material_option,
                 'tooth_number'           => $i->tooth_number,
