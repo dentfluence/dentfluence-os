@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dentfluence OS — Master Module Register</title>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --line:#e5e7eb; --ink:#111827; --sub:#6b7280; --muted:#9ca3af;
+  --blue:#702070; --blue-bg:#f4e8f4; --green:#16a34a; --green-bg:#ecfdf3; --amber:#d97706; --amber-bg:#fffbeb;
+  --grey:#9ca3af; --grey-bg:#f3f4f6; --gold:#b8862f; --gold-bg:#fdf7ea;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);}
+header{padding:16px 24px 0;background:var(--panel);border-bottom:1px solid var(--line);}
+header h1{margin:0 0 2px;font-size:19px;font-weight:600;}
+header .sub{font-size:12.5px;color:var(--sub);margin-bottom:10px;}
+.navtabs{display:flex;gap:4px;}
+.navtab{padding:9px 16px;font-size:12.5px;font-weight:600;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent;}
+.navtab:hover{color:var(--ink);}
+.navtab.active{color:var(--blue);border-bottom-color:var(--blue);}
+
+.overview{display:grid;grid-template-columns:1.6fr repeat(4,1fr);gap:12px;padding:16px 24px 8px;background:var(--panel);}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;}
+.card .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--sub);margin-bottom:6px;}
+.card .val{font-size:22px;font-weight:600;}
+.bar{height:8px;background:var(--grey-bg);border-radius:6px;overflow:hidden;margin-top:8px;}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--green));border-radius:6px;transition:width .3s;}
+.stat-green .val{color:var(--green);} .stat-amber .val{color:var(--amber);} .stat-grey .val{color:var(--grey);} .stat-gold .val{color:var(--gold);}
+
+.domainrow{display:flex;gap:10px;padding:0 24px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap;}
+.dcard{flex:1;min-width:150px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
+.dcard .dn{font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;}
+.dcard .dv{font-size:17px;font-weight:600;}
+.dcard .df{font-size:10.5px;color:var(--sub);}
+
+.view{display:none;}
+.view.active{display:block;}
+
+.layout{display:flex;min-height:calc(100vh - 250px);}
+#sidebar{width:400px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;max-height:calc(100vh - 250px);padding:14px;}
+.searchbox{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:13px;margin-bottom:10px;}
+.chiprow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+.fchip{font-size:10.5px;padding:5px 11px;border-radius:20px;border:1px solid var(--line);background:#fff;cursor:pointer;color:var(--sub);}
+.fchip.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+.selectrow{display:flex;gap:6px;margin-bottom:12px;}
+.selectrow select{flex:1;font-size:11.5px;padding:6px;border:1px solid var(--line);border-radius:6px;}
+.reslist .mrow{display:flex;align-items:center;gap:8px;padding:9px 8px;cursor:pointer;font-size:12.5px;border-radius:8px;}
+.reslist .mrow:hover{background:#f6f7f9;}
+.reslist .mrow.active{background:var(--blue-bg);}
+.reslist .mrow .name{flex:1;font-weight:600;}
+.reslist .mrow .dom{font-size:9.5px;color:var(--sub);flex-shrink:0;}
+.tierbadge{font-size:9px;font-weight:800;width:17px;height:17px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--grey-bg);color:var(--sub);}
+.ordbadge{font-size:9.5px;font-weight:800;min-width:19px;height:17px;padding:0 3px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--blue-bg);color:var(--blue);}
+.reslist .mrow .pct{font-size:10px;font-weight:700;padding:1px 5px;border-radius:20px;flex-shrink:0;}
+.foundicon{color:var(--gold);font-size:11px;}
+.rescount{font-size:11px;color:var(--sub);margin-bottom:6px;}
+
+#main{flex:1;padding:22px 28px;overflow-y:auto;max-height:calc(100vh - 250px);}
+.detail{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px 24px;max-width:880px;}
+.breadcrumb{font-size:11.5px;color:var(--sub);margin-bottom:6px;}
+.dtitle{display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap;}
+.dtitle h2{font-size:20px;margin:0;font-weight:600;}
+.badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
+.tierbig{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:6px;background:var(--grey-bg);color:var(--sub);}
+.foundbadge{font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:6px;background:var(--gold-bg);color:var(--gold);}
+.meta{font-size:12.5px;color:var(--sub);margin:6px 0 14px;line-height:1.5;}
+.tabs-doc{font-size:11.5px;color:var(--sub);margin:-6px 0 16px;}
+.tabs-doc span{display:inline-block;background:var(--grey-bg);border-radius:6px;padding:2px 8px;margin:2px 4px 2px 0;}
+.progress-row{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
+.progress-row .bar{flex:1;height:10px;}
+.progress-row .pctnum{font-weight:700;font-size:15px;width:52px;text-align:right;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;}
+.minipanel{border:1px solid var(--line);border-radius:8px;padding:10px 12px;}
+.minipanel h4{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--sub);}
+.minipanel .row{font-size:12.5px;padding:2px 0;}
+.minipanel input[type=text]{width:100%;font-size:12.5px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-family:inherit;}
+.deps-list a{display:inline-block;font-size:11.5px;padding:3px 9px;margin:2px 4px 2px 0;border-radius:20px;background:var(--blue-bg);color:var(--blue);text-decoration:none;cursor:pointer;}
+.deps-list .typelbl{opacity:.7;font-size:10px;}
+.checklist{border-top:1px solid var(--line);padding-top:14px;}
+.checklist h3{font-size:13px;margin:0 0 10px;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;}
+.citem{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid #f4f5f6;cursor:pointer;font-size:13.5px;}
+.citem:hover{background:#fafbfc;}
+.citem input{width:16px;height:16px;cursor:pointer;accent-color:var(--green);}
+.citem.done label{color:var(--sub);text-decoration:line-through;}
+.pr-banner{margin-top:16px;padding:10px 14px;border-radius:8px;background:var(--green-bg);color:var(--green);font-weight:700;font-size:13px;text-align:center;}
+.future-banner{margin-bottom:16px;padding:12px 14px;border-radius:8px;background:var(--grey-bg);color:var(--sub);font-size:12.5px;line-height:1.5;}
+.auto-banner{margin-bottom:16px;padding:12px 14px;border-radius:8px;background:#eef2ff;color:#4338ca;font-size:12px;line-height:1.5;}
+.found-banner{margin-bottom:16px;padding:12px 14px;border-radius:8px;background:var(--gold-bg);color:var(--gold);font-size:12.5px;line-height:1.5;}
+.toolbar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.toolbar button{font-size:11.5px;padding:6px 12px;border:1px solid var(--line);background:#fff;border-radius:6px;cursor:pointer;}
+.toolbar button:hover{background:#f1f2f3;}
+.empty-hint{color:var(--sub);font-size:13px;padding:40px;text-align:center;}
+.amend-log{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;}
+.amend-log h4{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--sub);}
+.amend-item{font-size:12px;color:var(--sub);padding:5px 0;border-bottom:1px solid #f4f5f6;}
+.amend-item b{color:var(--ink);}
+.modal-backdrop{position:fixed;inset:0;background:rgba(17,24,39,.4);display:none;align-items:center;justify-content:center;z-index:50;}
+.modal-backdrop.open{display:flex;}
+.modal{background:#fff;border-radius:12px;padding:22px;width:380px;max-width:90vw;}
+.modal h3{margin:0 0 12px;font-size:15px;}
+.modal label{display:block;font-size:12px;color:var(--sub);margin:10px 0 4px;}
+.modal select,.modal textarea{width:100%;font-size:13px;padding:8px;border:1px solid var(--line);border-radius:6px;font-family:inherit;}
+.modal .mbtns{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+.modal .mbtns button{font-size:12.5px;padding:8px 14px;border-radius:6px;cursor:pointer;border:1px solid var(--line);background:#fff;}
+.modal .mbtns button.primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+
+.progwrap{padding:22px 28px;}
+.progcol h2{font-size:16px;margin:0 0 6px;}
+.progcol .sub2{font-size:12px;color:var(--sub);margin-bottom:16px;}
+.owner-col{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px;}
+.owner-col h3{margin:0 0 10px;font-size:13px;display:flex;align-items:center;gap:8px;}
+.owner-col h3 .cnt{font-size:11px;color:var(--sub);font-weight:400;}
+.owner-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f4f5f6;font-size:12.5px;cursor:pointer;}
+.owner-item:hover{color:var(--blue);}
+.owner-item:last-child{border-bottom:none;}
+
+.prog-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:14px;max-width:820px;}
+.prog-card h3{margin:0 0 4px;font-size:14.5px;}
+.prog-card .driver{font-size:12px;color:var(--sub);margin-bottom:10px;line-height:1.5;}
+.prog-card select{font-size:12px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;margin-bottom:10px;}
+.prog-card .plink{display:inline-block;font-size:11.5px;padding:3px 9px;margin:2px 4px 2px 0;border-radius:20px;background:var(--blue-bg);color:var(--blue);text-decoration:none;cursor:pointer;}
+.prog-card .noscope{font-size:11.5px;color:var(--muted);font-style:italic;}
+.found-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin-bottom:10px;max-width:820px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
+.found-card:hover{border-color:var(--gold);}
+.svgwrap{width:100%;max-width:980px;display:block;margin:0 auto;}
+.chip{fill:var(--blue-bg);stroke:var(--blue);stroke-width:1.6;}
+.chipline{stroke:var(--muted);stroke-width:1.8;fill:none;}
+.chipline.dep{stroke:var(--gold);stroke-width:2.4;transition:stroke-opacity .15s, stroke-width .15s;cursor:pointer;}
+.nodelbl{font-family:inherit;font-size:10px;line-height:1.25;text-align:center;color:var(--sub);font-weight:600;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Dentfluence OS — Master Module Register</h1>
+  <div class="sub">Every unit below is a Module: one independent business capability. Workspace is a label for navigation only — it carries no freeze or checklist authority. Checklist state saves to this browser only. Refactored onto the Workspace &rarr; Module &rarr; Features schema, 2026-08-03. Synchronized against a full read-only repository audit on 2026-08-03 (C:\laragon\www\dentfluence) — checklist stages below are seeded from that evidence; further edits still save to this browser only. Repo-wide note: no app/Policies directory exists anywhere in this codebase — every module's authorization runs through custom module: route middleware, not Laravel Policies; this is not repeated per-module below beyond individual meta notes.</div>
+  <div class="navtabs">
+    <div class="navtab active" data-view="modules">All Modules</div>
+    <div class="navtab" data-view="graph">Dependency Graph</div>
+    <div class="navtab" data-view="foundational">Foundational</div>
+    <div class="navtab" data-view="assignment">Assignment Board</div>
+    <div class="navtab" data-view="programs">Cross-Cutting Programs</div>
+  </div>
+</header>
+
+<div class="overview" id="overview"></div>
+<div class="domainrow" id="domainrow"></div>
+
+<div id="view-modules" class="view active">
+  <div class="layout">
+    <div id="sidebar"></div>
+    <div id="main"><div class="empty-hint">Search or select a module.</div></div>
+  </div>
+</div>
+
+<div id="view-graph" class="view progwrap"></div>
+<div id="view-foundational" class="view progwrap"></div>
+<div id="view-assignment" class="view progwrap"></div>
+<div id="view-programs" class="view progwrap"></div>
+
+<div class="modal-backdrop" id="amendModal">
+  <div class="modal">
+    <h3>Frozen-Amendment reason</h3>
+    <div class="meta" style="margin:0 0 4px" id="amendModalDesc">This module is Frozen. Editing it requires a logged reason.</div>
+    <label>Reason code</label>
+    <select id="amendReason">
+      <option value="Security">Security</option>
+      <option value="Compliance">Compliance</option>
+      <option value="Shared-Schema-Migration">Shared-Schema-Migration</option>
+    </select>
+    <label>Note</label>
+    <textarea id="amendNote" rows="3" placeholder="One line justification"></textarea>
+    <div class="mbtns">
+      <button id="amendCancel">Cancel</button>
+      <button class="primary" id="amendConfirm">Log &amp; apply change</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const WORKSPACES = [{"id":"clinical","name":"Clinical"},{"id":"communication","name":"Communication"},{"id":"operations","name":"Operations"},{"id":"insights","name":"Insights"},{"id":"system","name":"System"},{"id":"platform","name":"Platform"}];
+const MODULES = [{"id":"patient-management","name":"Patient Management","workspace":"clinical","tier":"L","tabs":["List","Search","Create","Edit","Archive","View Profile","Import / Export"],"meta":"Canonical minting path: PatientService::register() (line ~196; invariant guarded by patients:invariant-check). Repo audit 08-03: register() is the sole production Patient::create() caller — the only other direct call is a diagnostic console command (PatientMergeSmokeTest), not a request-serving path. No app/Policies class exists (repo-wide); authorization runs through module: route middleware.","status":"scoped","owner":null,"deps":[],"dataOwnership":["patients","patient_notes","patient_alerts","patient_allergies","patient_consents","patient_identifiers","patient_links","patient_merges"],"auto":false},{"id":"journey-timeline","name":"Journey Timeline","workspace":"clinical","tier":"M","tabs":[],"meta":"Aggregated patient event timeline (PatientJourneyService, patient_journeys table). Delegates aggregation to a separate UnifiedTimelineService not independently confirmed in this pass. Five differently-named \"journey\" services exist across the repo (Patient, Relationship, CaseAcceptance) with unconfirmed overlap — flagged for a de-duplication review.","status":"scoped","owner":null,"deps":[{"target":"consultation","type":"reads-from"},{"target":"billing","type":"reads-from"}],"dataOwnership":["patient_journeys"],"auto":false},{"id":"duplicate-merge","name":"Duplicate Merge","workspace":"clinical","tier":"M","tabs":[],"meta":"Admin-gated merge workflow with reversal support (patient_merges + reversal columns) confirmed in migrations. A second, separate merge system (RelationshipMerge / Services/Relationship/MergeService) exists in parallel for the PRE domain — two object graphs for one concept, unreconciled. Zero automated tests found for either.","status":"scoped","owner":null,"deps":[{"target":"patient-management","type":"shared-schema"},{"target":"pre","type":"shared-service"}],"dataOwnership":["patient_merges"],"auto":false},{"id":"abha","name":"ABHA","workspace":"clinical","tier":"M","tabs":[],"meta":"Local Health-ID field capture only — the web route/controller comment explicitly states \"local, no live ABDM.\" Fields are added directly to the patients table (no owned schema of its own). Matches the roadmap position that ABDM integration is design-only with flags off.","status":"scoped","owner":null,"deps":[{"target":"patient-management","type":"depends-on"}],"dataOwnership":[],"auto":false},{"id":"consultation","name":"Consultation","workspace":"clinical","tier":"XL","tabs":["Standard","Same Issue","Minor Visit","Emergency","COHA"],"meta":"CEO Directive #004 priority #1. All five consultation types (Standard, Same Issue, Minor Visit, Emergency, COHA) are routed and implemented against one Consultation model family. Repo audit 08-03 found zero dedicated automated test files (*Consultation*Test.php) — confirms the test-harness blocker from the 07-31 Consultations audit is still open.","status":"scoped","owner":null,"deps":[{"target":"patient-management","type":"depends-on"},{"target":"appointments","type":"shared-schema"}],"dataOwnership":["consultations","consultation_photographs","consultation_scans","consultation_specialty_modules","consultation_coha_reports"],"auto":false},{"id":"treatment-plans","name":"Treatment Plans","workspace":"clinical","tier":"L","tabs":[],"meta":"Best-tested module in the repo (14 test files incl. PlanDecisionLedgerTest, PlanPresentationTest). Append-only plan_decisions/plan_decision_items and immutable presented_at are implemented per in-code comments. Two CEO-flagged blockers — billingPrompts() trigger_type correctness and status='completed' being billing-written rather than clinical — remain open; a second status='completed' writer was independently confirmed in Services/Billing/TreatmentPlanBillingService.php alongside TreatmentPlanController.","status":"scoped","owner":null,"deps":[{"target":"consultation","type":"depends-on"},{"target":"treatments-kb","type":"reads-from"}],"dataOwnership":["treatment_plans","treatment_plan_items","treatment_plan_item_teeth","plan_decisions","plan_decision_items"],"auto":false},{"id":"treatment-visits","name":"Treatment Visits","workspace":"clinical","tier":"L","tabs":[],"meta":"The treatment_plan_id FK gap flagged in the 07-27 FROZEN Integration Contract is resolved at the schema level (migration add_treatment_plan_id_to_visits). Two same-purpose \"create_treatment_visits_table\" migrations exist on the same date and need reconciliation. work_outcome capture (Slice 2.4) is in schema but per memory has zero adopted rows in production — an adoption gate, not a code defect.","status":"scoped","owner":null,"deps":[{"target":"treatment-plans","type":"depends-on"},{"target":"consultation","type":"depends-on"}],"dataOwnership":["treatment_visits","treatment_visit_items"],"auto":false},{"id":"prescriptions","name":"Prescriptions","workspace":"clinical","tier":"L","tabs":["Rx Pad","Rx Settings & Templates","Drug Master"],"meta":"Weight field and syrup/ml volume-based dosing both confirmed in schema (dispensing_type=volume, adult/pediatric dose columns). Strongest consent/guard test coverage in the audited set (5 dedicated test files incl. PrescriptionConsentGateTest).","status":"scoped","owner":null,"deps":[{"target":"consultation","type":"reads-from"},{"target":"consent","type":"depends-on"}],"dataOwnership":["prescriptions","prescription_items","rx_drugs","lab_prescription_templates","lab_case_prescriptions"],"auto":false},{"id":"clinical-library","name":"Clinical Library","workspace":"clinical","tier":"M","tabs":["Library Dashboard","Education Content"],"meta":"Patient-facing file library with a marketing-eligibility pipeline (marketingEligible() scope feeds the Marketing module). No automated tests located. Dashboard queries read as global counts with no visible clinic_id filter in the excerpt reviewed — potential multi-tenant leak, needs manual verification against the full controller.","status":"scoped","owner":null,"deps":[{"target":"patient-management","type":"reads-from"},{"target":"marketing","type":"writes-to"}],"dataOwnership":["clinical_files","education_categories"],"auto":false},{"id":"treatments-kb","name":"Treatments Knowledge Base","workspace":"clinical","tier":"M","tabs":["SOP","Consent","Stages","Rules","Media","Review","Intelligence"],"meta":"Confirmed as a genuinely distinct module from Clinical Library: internal treatment-protocol governance (SOP/Rules/Media/Review all have real CRUD under TreatmentController, gated module:treatments) versus Clinical Library's patient-facing files. The \"Intelligence\" tab has no located implementation evidence. Zero automated tests found.","status":"scoped","owner":null,"deps":[],"dataOwnership":["treatment_sops","treatment_rules","treatment_media","treatment_consents","treatments","treatment_categories"],"auto":false},{"id":"appointments","name":"Appointments","workspace":"clinical","tier":"L","tabs":["Book / Reschedule","Calendar View","Automated Reminders"],"meta":"Not previously tracked as its own Module despite being one of the most heavily depended-upon capabilities in the repo — added by the 08-03 audit. Full web + Api/V1 controllers, a dedicated scheduled reminder job (relationship:appointment-reminders), and 11 characterization tests under tests/Feature/Appointments/ were confirmed. Read by Consultation, Daily Huddle, Reports, PRE, and the AI Assistant.","status":"scoped","owner":null,"deps":[{"target":"patient-management","type":"depends-on"}],"dataOwnership":["appointments"],"auto":false},{"id":"pre","name":"PRE (Relationship Engine)","workspace":"communication","tier":"L","tabs":["Today's Actions","Lead Pipeline","Opportunity Pipeline","Recall Pipeline","Message Templates"],"meta":"Today's Actions / Lead / Opportunity / Recall pipelines are implemented, routed, and tested against communication_queue. Inbound lead webhooks (website, Meta Lead Ads, WhatsApp) are fully built at the controller+config layer but have zero registered routes in web.php/api.php as of 08-03 — a P0 gap. Recall Pipeline still duplicates Communication OS's Recall Engine on the same table; last_visit_date has a confirmed read path but no confirmed writer.","status":"scoped","owner":null,"deps":[{"target":"patient-management","type":"depends-on"},{"target":"communication-os","type":"shared-schema"},{"target":"appointments","type":"reads-from"}],"dataOwnership":["relationship_journeys","relationship_notifications","relationship_rule_logs","relationship_merges"],"auto":false},{"id":"communication-os","name":"Communication OS","workspace":"communication","tier":"L","tabs":["Follow-up Engine","Recall Engine","Reviews","B2B Communication","KPI Dashboard"],"meta":"Its original tabbed-inbox scope was deliberately retired 2026-07-06 in favor of PRE (documented in-code, not a gap). What remains — Recall admin, B2B, KPI Dashboard — has not been consolidated: the Recall admin view still duplicates PRE's Recall Pipeline on the shared communication_queue table, and an abandoned consolidation attempt sits in an under_review/ directory.","status":"scoped","owner":null,"deps":[{"target":"pre","type":"shared-schema"}],"dataOwnership":[],"auto":false},{"id":"whatsapp","name":"WhatsApp","workspace":"communication","tier":"M","tabs":[],"meta":"Outbound send is implemented, consent-gated (CommunicationGuard), and branch-scoped. Genuine two-way inbound messaging is blocked by the same unrouted Webhooks\\WhatsAppLeadController gap found under PRE, not only by missing Meta credentials. Two independent Meta Graph API version configs exist (services.php v23.0 default vs prm.php v19.0 default) and risk drifting.","status":"scoped","owner":null,"deps":[{"target":"patient-management","type":"depends-on"},{"target":"pre","type":"shared-service"}],"dataOwnership":["wa_threads","wa_messages"],"auto":false},{"id":"marketing","name":"Marketing","workspace":"communication","tier":"L","tabs":["Blog Hub","Campaigns","Brand Kit","Channel Integrations (GBP/Meta)","Marketing Analytics"],"meta":"Blog Marketing Hub is the most complete sub-area (full CRUD, versioning, publish adapter — Wave 1). GBP/Meta Channel Integrations show no live wiring in IntegrationController, consistent with the reported parked status, though not explicitly flagged in code. A Reviews feature may be duplicated between Marketing\\ReviewsController and Communication OS's Reviews section — not confirmed either way.","status":"scoped","owner":null,"deps":[{"target":"clinical-library","type":"reads-from"},{"target":"whatsapp","type":"shared-service"}],"dataOwnership":["blog_posts","blog_publications","blog_post_versions"],"auto":false},{"id":"case-acceptance","name":"Case Acceptance / Presentations","workspace":"communication","tier":"M","tabs":["Smart Presentation Builder (legacy)","Case Acceptance Journey Builder"],"meta":"Both Smart Presentation Builder and the newer Case Acceptance Journey Builder are simultaneously live and routed under the same module:presentations,edit permission gate — the route comment says Journey Builder \"coexists with\" Smart Presentation, not that it replaces it. This contradicts the legacy-vs-replacement framing; a product decision is needed on which staff should actually use. Case Journey Builder has zero located test coverage.","status":"scoped","owner":null,"deps":[{"target":"treatment-plans","type":"depends-on"},{"target":"patient-management","type":"depends-on"}],"dataOwnership":["presentations","presentation_snapshots","presentation_media_items","presentation_access_tokens"],"auto":false},{"id":"billing","name":"Billing","workspace":"operations","tier":"L","tabs":["Invoice","Receipt","Outstanding","Refund"],"meta":"Schema and controller are mature (audit logs, prompts, role-based billing permissions), but automated test coverage is thin — one browser test only, no service-level Feature tests found for a Tier L financial module. A second status='completed' writer independently confirmed in Services/Billing/TreatmentPlanBillingService.php alongside TreatmentPlanController (see Treatment Plans).","status":"scoped","owner":null,"deps":[{"target":"treatment-visits","type":"depends-on"},{"target":"treatment-plans","type":"reads-from"},{"target":"lab","type":"shared-schema"}],"dataOwnership":["invoices","invoice_items","invoice_payments","billing_prompts","billing_audit_logs","role_billing_permissions"],"auto":false},{"id":"accounts-finance","name":"Accounts & Finance","workspace":"operations","tier":"L","tabs":["Income","Expenses","Payroll","Wallet & Membership","Finance Analytics"],"meta":"Wallet subsystem shows genuine iterative hardening (enhance_wallet_transactions, widen_wallet_source_add_payment_mode migrations). No single canonical Payroll/Expense model was found — payroll logic is split between HR\\HrFinanceController and Finance\\FinanceController without one confirmed source of truth.","status":"scoped","owner":null,"deps":[{"target":"billing","type":"shared-schema"},{"target":"hr","type":"shared-schema"}],"dataOwnership":["wallets","wallet_transactions","wallet_campaigns","finance_payroll","finance_membership_plans","membership_benefit_logs"],"auto":false},{"id":"inventory","name":"Inventory","workspace":"operations","tier":"L","tabs":["Stock Items & Products","Purchase Orders / GRN","Implant Registry"],"meta":"Confirmed genuinely production-mature: canonical Services/Inventory/StockStatusService.php + StockStatus enum exist in code (not just claimed), with targeted Feature tests for create/receive/movement workflows. Its controller (2,198 lines) is the single largest file in the codebase and a refactor candidate despite functional maturity.","status":"scoped","owner":null,"deps":[{"target":"billing","type":"writes-to"},{"target":"lab","type":"shared-schema"}],"dataOwnership":["inventory_categories","inventory_locations","inventory_vendors","inventory_items","inventory_stocks","inventory_settings","inventory_sub_types","inventory_variants","implant_catalog"],"auto":false},{"id":"lab","name":"Lab","workspace":"operations","tier":"L","tabs":["Lab Cases","Monthly Reconciliation","Lab Vendors"],"meta":"Repo evidence partially corrects the prior \"fully untested\" record: 4 test files exist, including two Feature-level tests exercising real business logic (auto-close, recall-engine integration). Monthly Reconciliation specifically — a named Tier feature — has no located test coverage. Two overlapping early migrations (create_lab_cases_table then rebuild_lab_cases_table) indicate a full schema rebuild occurred.","status":"scoped","owner":null,"deps":[{"target":"treatment-visits","type":"writes-to"},{"target":"tasks","type":"writes-to"},{"target":"billing","type":"shared-schema"},{"target":"inventory","type":"shared-schema"}],"dataOwnership":["lab_cases","lab_case_items","lab_case_attachments","lab_case_events","lab_case_prescriptions","lab_case_ratings","lab_vendors","lab_vendor_contacts","lab_vendor_services","lab_vendor_price_lists","lab_monthly_reconciliations"],"auto":false},{"id":"tasks","name":"Tasks (Action Board)","workspace":"operations","tier":"S","tabs":["All Tasks","My Tasks","Overdue","Create Task"],"meta":"Functional Action Board (model, controller, 6 views, 2 tests incl. a deliberate TaskHumanSystemSplitTest). Code lives under Http\\Controllers\\Communication\\TaskController rather than a dedicated Tasks namespace — an organizational mismatch worth resolving, not a functionality gap. Newly broken into Features by the 08-03 audit (previously auto-collapsed).","status":"scoped","owner":null,"deps":[{"target":"lab","type":"reads-from"},{"target":"pre","type":"event-driven"}],"dataOwnership":["tasks"],"auto":false},{"id":"practice-protocols","name":"Practice Protocols","workspace":"operations","tier":"S","tabs":["Protocols","Materials"],"meta":"Clean, self-contained module under app/Modules/PracticeProtocols with full CRUD, a dedicated ProtocolGenerationService, and consistent module-permission gating across all 6 routes. Zero automated tests found. Newly broken into Features by the 08-03 audit (previously auto-collapsed).","status":"scoped","owner":null,"deps":[{"target":"tasks","type":"writes-to"}],"dataOwnership":["practice_protocols","practice_protocol_materials"],"auto":false},{"id":"daily-huddle","name":"Daily Huddle","workspace":"operations","tier":"M","tabs":["Board","Accountability","Report","Tasks","Comments"],"meta":"Schema covers all five named features (Board, Accountability, Report, Tasks, Comments) with a rich API surface (yesterday-flow, comms-push, task assign/status). Only one test found (HuddleSnapshotTest). No shared service layer was located between the web (Communication\\HuddleController) and API (Api\\V1\\HuddleController) controllers — risk of divergent logic between the two surfaces.","status":"scoped","owner":null,"deps":[{"target":"tasks","type":"reads-from"},{"target":"appointments","type":"reads-from"},{"target":"hr","type":"reads-from"},{"target":"communication-os","type":"writes-to"}],"dataOwnership":["huddle_notes","huddle_boards","huddle_cards","huddle_task_logs","huddle_comments","huddle_settings"],"auto":false},{"id":"hr","name":"HR","workspace":"operations","tier":"L","tabs":["Staff Profiles","Attendance","Roles & Permissions","Training"],"meta":"The role_id/role split is confirmed still open in code, not just at the data layer: User model keeps both role (string, commented \"legacy... kept for backward compat\") and role_id (FK) as live fillable fields, with at least one query path still filtering on the legacy string column. A DB backfill migration exists, but the code-level retirement has not happened. Core Attendance/Staff Profile/Payroll/Roles CRUD have no located tests (only Auto-Absent and Training are tested).","status":"scoped","owner":null,"deps":[],"dataOwnership":["hr_departments","hr_shifts","hr_staff_profiles","hr_staff_shifts","hr_attendance","hr_staff_documents","hr_staff_advances","hr_bonuses","hr_entry_exit_logs","hr_salary_components","hr_incentive_rules","hr_training_sessions","hr_training_enrollments","hr_periodic_training_requirements","hr_performance_memos","roles","role_module_permissions","role_billing_permissions"],"auto":false},{"id":"reports","name":"Reports","workspace":"insights","tier":"L","tabs":["Appointments","Revenue","Patients","Treatments","Lab","Inventory"],"meta":"Appointments/Revenue/Patients/Treatments report views are implemented with an in-code comment documenting a prior fixed bug (appointment status miscount). Lab and Inventory report coverage inside ReportsController was not confirmed in this pass. Zero automated tests found.","status":"scoped","owner":null,"deps":[{"target":"patient-management","type":"reads-from"},{"target":"appointments","type":"reads-from"},{"target":"billing","type":"reads-from"},{"target":"treatment-plans","type":"reads-from"},{"target":"lab","type":"reads-from"},{"target":"inventory","type":"reads-from"}],"dataOwnership":[],"auto":false},{"id":"analytics","name":"Analytics","workspace":"insights","tier":"M","tabs":[],"meta":"Correction to prior status: this is NOT feature-flagged off — no analytics flag exists in config/features.php. It is a single Finance\\AnalyticsController mounted under two separate route groups/nav labels (\"Insights > Analytics\" and \"Finance > Analytics\"), i.e. one feature registered twice, which is a maintenance/governance risk rather than a build gap. Status changed from Future to Scoped on the 08-03 audit.","status":"scoped","owner":null,"deps":[{"target":"accounts-finance","type":"depends-on"},{"target":"lab","type":"reads-from"},{"target":"billing","type":"reads-from"}],"dataOwnership":[],"auto":false},{"id":"system-settings","name":"System Settings","workspace":"system","tier":"M","tabs":["Masters","Feature Flags","Tags","Knowledge Bank"],"meta":"Broad, wired settings hub (Masters, Feature Flags toggle endpoint backed by FeatureFlagService, Tags, Knowledge Bank, Roles, EMI, Staff). No automated tests found for the controller/UI surface itself (FeatureFlagTest.php covers the underlying service only, not this module).","status":"scoped","owner":null,"deps":[{"target":"hr","type":"depends-on"}],"dataOwnership":["feature_flags"],"auto":false},{"id":"consent","name":"Consent (DPDP)","workspace":"system","tier":"L","tabs":["Consent Purposes Catalogue","Patient Rights / DSAR","Breach Register","Data Retention"],"meta":"Consent-capture/gating half (Consent Purposes Catalogue, per-patient consent, consent logs, CommunicationGuard integration) is real and has test coverage. Patient Rights/DSAR, Breach Register, and Data Retention — three of the four named features — have no located migrations/models/controllers in the repo. No PHI/field-level encryption found on Patient or PatientConsent models (zero 'encrypted' casts) — the previously reported gap is confirmed still open against the 13 May 2027 deadline. guard.consent_required defaults to false in code; its live prod value could not be verified from the repo.","status":"scoped","owner":null,"deps":[{"target":"patient-management","type":"depends-on"}],"dataOwnership":["consent_purposes","patient_consents","consent_logs","treatment_consents","case_consent_snapshots"],"auto":false},{"id":"notifications","name":"Notifications","workspace":"system","tier":"S","tabs":["Inbox","Unread"],"meta":"Read/mark-read endpoints exist across three separate controllers (web, API, Relationship). A notifications.single_store feature flag exists and defaults to false, meaning the intended single-store consolidation (Phase 4) has not been cut over — the fragmentation across three controllers is consistent with that flag still being off.","status":"scoped","owner":null,"deps":[],"dataOwnership":[],"auto":false},{"id":"help","name":"Help","workspace":"system","tier":"S","tabs":["Help Center"],"meta":"Minimal static help page (one controller, one route, a HelpContent support class). No richer help system (search, articles, ticketing) was found. No automated tests.","status":"scoped","owner":null,"deps":[],"dataOwnership":[],"auto":false},{"id":"hq-superadmin","name":"HQ Superadmin Console","workspace":"platform","tier":"L","tabs":["Clinics","Subscriptions & Plans","Support Tickets"],"meta":"Clinics/Subscriptions & Plans/Support Tickets are all built with real controllers, models, and a superadmin route gate. Repo audit 08-03 confirms the core structural gap directly: grepping every core clinical/financial migration (patients, appointments, treatment_plans, invoices) for clinic_id returned zero hits. The multi-tenant control plane exists at the HQ layer only — the data plane underneath it is still single-tenant.","status":"scoped","owner":null,"deps":[{"target":"hr","type":"shared-schema"}],"dataOwnership":["clinics","subscriptions","tickets","plans"],"auto":false},{"id":"ai-assistant","name":"AI Assistant \"Tulip\"","workspace":"platform","tier":"M","tabs":["Chat","Read Tools","Write Tools (confirm-gated)","Action Log"],"meta":"\"Tulip\" has a real tool-calling architecture (11 tools, confirm-before-write gating for clinical/financial actions, a config kill-switch). Both previously reported gaps are independently confirmed still open: the AssistantTool interface has no canAccess()/policy check at all (PatientBalanceTool was read in full and queries Patient/InvoicePayment with only controller-level auth, no per-role or per-record check), and no tool query filters by clinic_id — consistent with the repo-wide absence of that column. Zero automated tests found.","status":"scoped","owner":null,"deps":[{"target":"patient-management","type":"reads-from"},{"target":"billing","type":"reads-from"},{"target":"appointments","type":"reads-from"},{"target":"daily-huddle","type":"reads-from"},{"target":"tasks","type":"writes-to"}],"dataOwnership":["ai_conversations","ai_action_logs"],"auto":false}];
+const PROGRAMS = [{"id":"prog-tenant","name":"Multi-Tenant / clinic_id Isolation","driver":"No clinic_id/branch_id isolation on core tables — confirmed by repo audit 2026-08-03: patients/appointments/consultations use branch_id (no FK constraint), Finance-module tables use clinic_id (a different column, different convention), and treatment_plans has neither column at all. The AI Assistant tool layer also queries with zero tenant scope. Required before onboarding clinic #2.","status":"not-started","children":["patient-management","hq-superadmin","billing","treatment-plans","ai-assistant"]},{"id":"prog-dpdp","name":"DPDP Full-Lifecycle Compliance","driver":"Hard regulatory deadline: 13 May 2027. Repo audit 2026-08-03 confirms consent-capture/gating (purposes, per-patient consent, consent logs) is implemented and tested; Patient Rights/DSAR, Breach Register, and Data Retention have no located implementation; PHI field-level encryption is absent on the Patient/PatientConsent models (zero 'encrypted' casts found).","status":"in-progress","children":["consent"]},{"id":"prog-mobile-parity","name":"Mobile <-> Web Parity","driver":"~50% parity per 07-14 audit — cuts across nearly every clinical and operations module. Repo audit 2026-08-03 confirms a substantial Api/V1 layer exists (29 controllers) mirroring most web modules, but parity depth per-module was not independently re-verified this pass.","status":"in-progress","children":[]},{"id":"prog-api-authz","name":"API Authorization Mirror","driver":"78 API role-name gates migrated to module permissions in Phase 1 access control; ongoing as new endpoints ship.","status":"in-progress","children":[]},{"id":"prog-recall-consolidation","name":"Recall Engine Consolidation (PRE vs Communication OS)","driver":"Repo audit 2026-08-03 confirms PRE's Recall Pipeline and Communication OS's Recall Engine both read/write the same communication_queue table via the shared RecallEngineService, producing two live admin UIs over one dataset. A partial consolidation attempt exists under an under_review/pre_consolidation_2026_07_06/ directory but was never merged.","status":"not-started","children":["pre","communication-os"]},{"id":"prog-webhook-routing","name":"Inbound Lead / WhatsApp Webhook Routing","driver":"Website, Meta Lead Ads, and WhatsApp Cloud API webhook controllers (Http/Controllers/Webhooks/*) and their config/secrets (config/prm.php) are fully built but have zero registered routes in routes/web.php or routes/api.php as of 2026-08-03 — P0, blocks Live Validation for pre, whatsapp, and communication-os.","status":"not-started","children":["pre","whatsapp","communication-os"]}];
+const TIER_STAGES = {"S":["Build","Test","Bug Fix","Validate","Freeze"],"M":["Audit","Planning","Implementation","Testing","Bug Fixes","Hardening","Live Validation","Freeze"],"L":["Audit","Planning","Implementation","Testing","Bug Fixes","Parity","Variants","Hardening","Live Validation","Freeze","Production Ready"],"XL":["Audit","Planning","Implementation","Testing","Bug Fixes","Parity","Variants","Hardening","Live Validation","Freeze","Production Ready"]};
+const TIER_WEIGHT = {S:1,M:2,L:3,XL:5};
+const TIER_COLOR = {S:"#9ca3af",M:"#2563eb",L:"#0891b2",XL:"#702070"};
+const FOUNDATIONAL_THRESHOLD = 3;
+
+// ---------- evidence-seeded checklist defaults (repo audit 2026-08-03) ----------
+// These are starting values derived from repository evidence, not user edits.
+// Once a user checks/unchecks a box, their browser's localStorage takes over for that module.
+const DEFAULT_CHECKLISTS = {
+  "patient-management":[true,true,true,true,true,true,false,true,true,true,false],
+  "journey-timeline":[true,true,true,true,false,true,false,false],
+  "duplicate-merge":[true,true,true,false,true,true,false,false],
+  "abha":[true,false,true,false,false,false,false,false],
+  "consultation":[true,true,true,false,true,false,true,true,false,false,false],
+  "treatment-plans":[true,true,true,true,true,false,true,true,false,false,false],
+  "treatment-visits":[true,true,true,false,false,false,false,true,false,false,false],
+  "prescriptions":[true,true,true,true,true,false,true,true,false,false,false],
+  "clinical-library":[true,true,true,false,false,false,false,false],
+  "treatments-kb":[true,true,true,false,false,false,false,false],
+  "appointments":[true,true,true,true,true,false,false,false,false,false,false],
+  "pre":[true,true,true,true,true,false,false,false,false,false,false],
+  "communication-os":[true,true,true,false,false,false,false,false,false,false,false],
+  "whatsapp":[true,true,true,false,false,true,false,false],
+  "marketing":[true,true,true,false,true,false,true,false,false,false,false],
+  "case-acceptance":[true,true,true,false,false,false,false,false],
+  "billing":[true,true,true,false,false,false,false,true,false,false,false],
+  "accounts-finance":[true,true,true,false,false,false,false,true,false,false,false],
+  "inventory":[true,true,true,true,true,true,true,true,false,true,true],
+  "lab":[true,true,true,true,false,false,true,false,false,false,false],
+  "tasks":[true,true,false,false,false],
+  "practice-protocols":[true,false,false,false,false],
+  "daily-huddle":[true,true,true,false,false,false,false,false],
+  "hr":[true,true,true,false,false,false,false,true,false,false,false],
+  "reports":[true,true,true,false,true,false,false,false,false,false,false],
+  "analytics":[true,true,true,false,false,false,false,false],
+  "system-settings":[true,true,true,false,true,false,false,false],
+  "consent":[true,true,true,true,false,false,false,false,false,false,false],
+  "notifications":[true,false,false,false,false],
+  "help":[true,false,false,false,false],
+  "hq-superadmin":[true,true,true,false,false,false,false,false,false,false,false],
+  "ai-assistant":[true,true,true,false,false,false,false,false]
+};
+
+// ---------- Execution Order (CEO Order) — single source of truth for the V1 freeze sequence ----------
+// Lower number = do first. Seeded 2026-08-03 from CEO Directive #004's explicit chain
+// (Consultation -> Treatment Plans -> Treatment Visits -> Appointments -> Rx -> Billing -> Follow-up),
+// extended to all 32 modules using structural-dependency and revenue-criticality judgment.
+// Editable per-module in the detail panel — once edited, the CEO's live value in this browser
+// always wins over this seed, exactly like Owner and the checklist.
+const DEFAULT_EXECUTION_ORDER = {
+  "patient-management":1, "consultation":2, "treatment-plans":3, "treatment-visits":4,
+  "appointments":5, "prescriptions":6, "billing":7, "communication-os":8,
+  "pre":9, "treatments-kb":10, "consent":11, "hr":12, "case-acceptance":13,
+  "journey-timeline":14, "accounts-finance":15, "inventory":16, "lab":17,
+  "daily-huddle":18, "tasks":19, "practice-protocols":20, "system-settings":21,
+  "clinical-library":22, "whatsapp":23, "duplicate-merge":24, "reports":25,
+  "hq-superadmin":26, "ai-assistant":27, "marketing":28, "abha":29,
+  "analytics":30, "notifications":31, "help":32
+};
+const EXEC_RATIONALE = {
+  "patient-management":"Precedes the CEO's named chain: every module below mints/reads patients through this one invariant. Already 82% and near-frozen — close it first so nothing is built on shifting ground.",
+  "consultation":"CEO Directive #004, link 1 of 7: \"Consultations → TxPlans → Visits → Appts → Rx → Billing → Follow-up.\"",
+  "treatment-plans":"CEO Directive #004, link 2 of 7.",
+  "treatment-visits":"CEO Directive #004, link 3 of 7.",
+  "appointments":"CEO Directive #004, link 4 of 7. Ranked after Visits in the CEO's literal sequence even though other modules already read appointment data today — booking works; this slot is about finishing it as its own hardened module.",
+  "prescriptions":"CEO Directive #004, link 5 of 7 (\"Rx\").",
+  "billing":"CEO Directive #004, link 6 of 7.",
+  "communication-os":"CEO Directive #004, link 7 of 7 (\"Follow-up\") — maps to its Follow-up Engine tab.",
+  "pre":"Directly supports Follow-up/Recall named above; the P0 unrouted-webhook gap found in the 08-03 audit blocks Live Validation of that same chain link.",
+  "treatments-kb":"Treatment Plans reads SOP/rule/media content from here — needs to be stable before Treatment Plans can freeze cleanly.",
+  "consent":"Prescriptions depends on the consent gate; DPDP compliance deadline (13 May 2027) also makes this time-sensitive.",
+  "hr":"role_module_permissions gates access to every other module; the confirmed still-open role/role_id split should close before a broad freeze wave.",
+  "case-acceptance":"Sits immediately downstream of Treatment Plans in patient conversion; two competing live UIs (Smart Presentation vs. Journey Builder) need a decision before this can freeze.",
+  "journey-timeline":"Reads Consultation + Billing — only meaningful once both of those are stable, so it trails them.",
+  "accounts-finance":"Shares schema with Billing (wallet_transactions) and Payroll — follows Billing directly.",
+  "inventory":"Already 91% and structurally the most mature module in the repo — cheapest module left to formally close; also feeds Billing/Lab.",
+  "lab":"Shares schema with Billing and Inventory; Monthly Reconciliation is its one confirmed gap.",
+  "daily-huddle":"Operational accountability layer sitting on top of Tasks/Appointments/HR — needs those closer to done first.",
+  "tasks":"Supports Lab, Practice Protocols, Daily Huddle and PRE — a utility module, not a named priority.",
+  "practice-protocols":"Self-contained and cheap to close; only feeds Tasks.",
+  "system-settings":"Feature flags/roles/masters used across the app — low urgency to freeze once the modules that read it are stable.",
+  "clinical-library":"Patient-facing but feeds Marketing, which is itself deprioritized — no named-chain blocker.",
+  "whatsapp":"Same unrouted-webhook P0 as PRE, but a secondary channel relative to the Follow-up Engine itself.",
+  "duplicate-merge":"Data-quality tooling — valuable but not blocking any daily clinical workflow.",
+  "reports":"Read-only aggregator over the chain above — only fully meaningful once those source modules are frozen.",
+  "hq-superadmin":"Multi-tenant control plane; V1 is explicitly single-clinic, so this waits for the clinic_id program before it matters.",
+  "ai-assistant":"CEO Directive #004 explicitly halts AI feature work — deliberately low here. The confirmed authorization-bypass (P0) should still be patched out-of-band as a security fix, not as new feature work.",
+  "marketing":"CEO Directive #004 halts UX/redesign work; Blog Hub already functions, GBP/Meta is parked — no forcing function for V1.",
+  "abha":"Explicit code comment confirms local-only, no live ABDM — correctly out of the V1 critical path.",
+  "analytics":"A cleanup item (duplicate route registration), not a missing capability — no user is blocked today.",
+  "notifications":"Small and already functional across 3 controllers; consolidation is a nice-to-have.",
+  "help":"Minimal static page — lowest stakes module in the register."
+};
+
+// ---------- state ----------
+const STORE_KEY = "dentfluence_master_register_v6_execorder_20260803";
+let STATE = {};
+try{ STATE = JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }catch(e){ STATE = {}; }
+STATE.checklists = STATE.checklists || {};
+STATE.owners = STATE.owners || {};
+STATE.future = STATE.future || {};
+STATE.amendments = STATE.amendments || {};
+STATE.programStatus = STATE.programStatus || {};
+STATE.executionOrder = STATE.executionOrder || {};
+MODULES.forEach(m=>{
+  if(!(m.id in STATE.future)) STATE.future[m.id] = (m.status === "future");
+  if(!(m.id in STATE.owners)) STATE.owners[m.id] = m.owner || "";
+  if(!(m.id in STATE.executionOrder)) STATE.executionOrder[m.id] = DEFAULT_EXECUTION_ORDER[m.id] || 999;
+});
+PROGRAMS.forEach(p=>{ if(!(p.id in STATE.programStatus)) STATE.programStatus[p.id] = p.status; });
+function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(STATE)); }
+function execOrderOf(id){ return STATE.executionOrder[id] || DEFAULT_EXECUTION_ORDER[id] || 999; }
+
+function stagesFor(mod){ return TIER_STAGES[mod.tier]; }
+function getChecklist(id){
+  const mod = MODULES.find(m=>m.id===id);
+  const len = mod ? stagesFor(mod).length : 11;
+  if(!STATE.checklists[id]){
+    const def = DEFAULT_CHECKLISTS[id];
+    STATE.checklists[id] = def ? def.slice(0,len) : new Array(len).fill(false);
+  }
+  if(STATE.checklists[id].length !== len){
+    const old = STATE.checklists[id];
+    const arr = new Array(len).fill(false);
+    for(let i=0;i<Math.min(old.length,len);i++) arr[i]=old[i];
+    STATE.checklists[id]=arr;
+  }
+  return STATE.checklists[id];
+}
+function progressOf(id){
+  const c = getChecklist(id);
+  const done = c.filter(Boolean).length;
+  return {done, total: c.length, pct: c.length? Math.round(done/c.length*100) : 0};
+}
+function isFuture(id){ return !!STATE.future[id]; }
+function statusLabel(id){
+  if(isFuture(id)) return "Future / Out of Scope";
+  const p = progressOf(id);
+  if(p.pct===100) return "Frozen";
+  if(p.pct===0) return "Not Started";
+  return "In Progress";
+}
+function statusColor(id){
+  if(isFuture(id)) return {c:"var(--muted)", bg:"var(--grey-bg)"};
+  const p = progressOf(id);
+  if(p.pct===100) return {c:"var(--green)", bg:"var(--green-bg)"};
+  if(p.pct===0) return {c:"var(--grey)", bg:"var(--grey-bg)"};
+  return {c:"var(--amber)", bg:"var(--amber-bg)"};
+}
+
+// ---------- fan-in / foundational (computed, not declared) ----------
+function fanInOf(id){ return MODULES.filter(m=>(m.deps||[]).some(d=>d.target===id)).length; }
+function isFoundational(id){ return fanInOf(id) >= FOUNDATIONAL_THRESHOLD; }
+function dependsOnUnfrozenFoundational(mod){
+  return (mod.deps||[]).some(d=>{
+    if(!isFoundational(d.target)) return false;
+    return progressOf(d.target).pct < 100;
+  });
+}
+
+// ---------- overview ----------
+function renderOverview(){
+  let frozen=0, inprog=0, notstarted=0, future=0;
+  MODULES.forEach(m=>{
+    if(isFuture(m.id)){ future++; return; }
+    const p = progressOf(m.id).pct;
+    if(p===100) frozen++; else if(p===0) notstarted++; else inprog++;
+  });
+  let totalW=0, doneW=0;
+  MODULES.forEach(m=>{ if(isFuture(m.id)) return; const w=TIER_WEIGHT[m.tier]; totalW+=w; doneW += w*progressOf(m.id).pct; });
+  const overallPct = totalW ? Math.round(doneW/totalW/100*100) : 0;
+  document.getElementById('overview').innerHTML = `
+    <div class="card">
+      <div class="lbl">Overall progress (weighted, in-scope, ${MODULES.length} modules)</div>
+      <div class="val">${overallPct}%</div>
+      <div class="bar"><i style="width:${overallPct}%"></i></div>
+    </div>
+    <div class="card stat-green"><div class="lbl">Frozen</div><div class="val">${frozen}</div></div>
+    <div class="card stat-amber"><div class="lbl">In progress</div><div class="val">${inprog}</div></div>
+    <div class="card stat-grey"><div class="lbl">Not started</div><div class="val">${notstarted}</div></div>
+    <div class="card stat-gold"><div class="lbl">Future / out of scope</div><div class="val">${future}</div></div>
+  `;
+  renderWorkspaceRow();
+}
+
+function renderWorkspaceRow(){
+  const wrap = document.getElementById('domainrow');
+  wrap.innerHTML = '';
+  WORKSPACES.forEach(w=>{
+    const mods = MODULES.filter(m=>m.workspace===w.id);
+    const inScope = mods.filter(m=>!isFuture(m.id));
+    let totalW=0, doneW=0, frozen=0;
+    inScope.forEach(m=>{ const wt=TIER_WEIGHT[m.tier]; totalW+=wt; doneW+=wt*progressOf(m.id).pct; if(progressOf(m.id).pct===100) frozen++; });
+    const pct = totalW? Math.round(doneW/totalW/100*100):0;
+    const card = document.createElement('div');
+    card.className = 'dcard';
+    card.innerHTML = `<div class="dn">${w.name}</div><div class="dv">${pct}%</div><div class="df">${frozen}/${inScope.length} frozen &middot; ${mods.length} modules (label only, no authority)</div>`;
+    wrap.appendChild(card);
+  });
+}
+
+// ---------- sidebar: search + filter, flat list ----------
+let activeId = null;
+let filters = { q:"", workspace:null, tier:null, status:null, pct:null };
+let sortMode = "ceo-order"; // "ceo-order" (default) | "name" | "pct-desc" | "pct-asc"
+const PCT_BUCKETS = {
+  "near-freeze": {label:"90–99% (Near Freeze)", test:p=>p>=90 && p<100},
+  "b75": {label:"75–89%", test:p=>p>=75 && p<90},
+  "b50": {label:"50–74%", test:p=>p>=50 && p<75},
+  "b25": {label:"25–49%", test:p=>p>=25 && p<50},
+  "b0": {label:"0–24%", test:p=>p>=0 && p<25},
+  "frozen": {label:"100% (Frozen)", test:p=>p>=100}
+};
+
+function passesFilter(m){
+  if(filters.workspace && m.workspace!==filters.workspace) return false;
+  if(filters.tier && m.tier!==filters.tier) return false;
+  if(filters.status){
+    const s = statusLabel(m.id);
+    if(filters.status!==s) return false;
+  }
+  if(filters.pct){
+    if(isFuture(m.id)) return false;
+    const bucket = PCT_BUCKETS[filters.pct];
+    if(bucket && !bucket.test(progressOf(m.id).pct)) return false;
+  }
+  if(filters.q){
+    const q = filters.q.toLowerCase();
+    const inName = m.name.toLowerCase().includes(q);
+    const inFeatures = (m.tabs||[]).some(t=>t.toLowerCase().includes(q));
+    if(!inName && !inFeatures) return false;
+  }
+  return true;
+}
+
+function renderSidebar(){
+  const sb = document.getElementById('sidebar');
+  const workspaceChips = WORKSPACES.map(w=>`<div class="fchip ${filters.workspace===w.id?'active':''}" data-workspace="${w.id}">${w.name}</div>`).join('');
+  sb.innerHTML = `
+    <input type="text" class="searchbox" id="searchBox" placeholder="Search modules or features..." value="${filters.q}">
+    <div class="chiprow" id="workspaceChips"><div class="fchip ${!filters.workspace?'active':''}" data-workspace="">All workspaces</div>${workspaceChips}</div>
+    <div class="selectrow">
+      <select id="tierFilter"><option value="">All tiers</option><option value="S">Tier S</option><option value="M">Tier M</option><option value="L">Tier L</option><option value="XL">Tier XL</option></select>
+      <select id="statusFilter"><option value="">All statuses</option><option>Not Started</option><option>In Progress</option><option>Frozen</option><option>Future / Out of Scope</option></select>
+    </div>
+    <div class="selectrow">
+      <select id="pctFilter"><option value="">% complete: all</option>${Object.keys(PCT_BUCKETS).map(k=>`<option value="${k}">${PCT_BUCKETS[k].label}</option>`).join('')}</select>
+      <select id="sortModeSelect">
+        <option value="ceo-order">Sort: CEO Order (default)</option>
+        <option value="name">Sort: Name (A–Z)</option>
+        <option value="pct-desc">Sort: % complete — High to Low</option>
+        <option value="pct-asc">Sort: % complete — Low to High</option>
+      </select>
+    </div>
+    <div class="rescount" id="resCount"></div>
+    <div class="reslist" id="resList"></div>
+  `;
+  document.getElementById('searchBox').value = filters.q;
+  document.getElementById('tierFilter').value = filters.tier||"";
+  document.getElementById('statusFilter').value = filters.status||"";
+  document.getElementById('pctFilter').value = filters.pct||"";
+  document.getElementById('sortModeSelect').value = sortMode;
+  document.getElementById('searchBox').addEventListener('input', e=>{ filters.q=e.target.value; renderList(); });
+  document.getElementById('tierFilter').addEventListener('change', e=>{ filters.tier=e.target.value||null; renderList(); });
+  document.getElementById('statusFilter').addEventListener('change', e=>{ filters.status=e.target.value||null; renderList(); });
+  document.getElementById('pctFilter').addEventListener('change', e=>{ filters.pct=e.target.value||null; renderList(); });
+  document.getElementById('sortModeSelect').addEventListener('change', e=>{ sortMode=e.target.value; renderList(); });
+  sb.querySelectorAll('[data-workspace]').forEach(chip=>{
+    chip.addEventListener('click', ()=>{ filters.workspace = chip.dataset.workspace || null; renderSidebar(); renderList(); });
+  });
+  renderList();
+}
+function renderList(){
+  const list = document.getElementById('resList');
+  const rc = document.getElementById('resCount');
+  const shown = MODULES.filter(passesFilter).sort((a,b)=>{
+    if(sortMode==='ceo-order'){
+      const oa = execOrderOf(a.id), ob = execOrderOf(b.id);
+      if(oa!==ob) return oa-ob;
+    }
+    if(sortMode==='pct-desc' || sortMode==='pct-asc'){
+      const pa = isFuture(a.id) ? -1 : progressOf(a.id).pct;
+      const pb = isFuture(b.id) ? -1 : progressOf(b.id).pct;
+      if(pb!==pa) return sortMode==='pct-desc' ? (pb-pa) : (pa-pb);
+    }
+    return a.name.localeCompare(b.name);
+  });
+  rc.textContent = shown.length + ' of ' + MODULES.length + ' modules';
+  list.innerHTML = '';
+  const wById = {}; WORKSPACES.forEach(w=>wById[w.id]=w.name);
+  shown.forEach(m=>{
+    const sc = statusColor(m.id);
+    const p = progressOf(m.id);
+    const row = document.createElement('div');
+    row.className = 'mrow' + (m.id===activeId?' active':'');
+    row.innerHTML = `<span class="ordbadge" title="CEO Order">#${execOrderOf(m.id)}</span><span class="tierbadge" style="color:${TIER_COLOR[m.tier]}">${m.tier}</span><span class="name">${m.name}${isFoundational(m.id)?' <span class="foundicon">&#9670;</span>':''}</span><span class="dom">${wById[m.workspace]}</span><span class="pct" style="color:${sc.c};background:${sc.bg}">${isFuture(m.id)?'Future':p.pct+'%'}</span>`;
+    row.addEventListener('click', ()=> selectModule(m.id));
+    list.appendChild(row);
+  });
+}
+window.__gotoModule = selectModule;
+
+function selectModule(id){ activeId=id; renderList(); renderDetail(id); }
+
+// ---------- module detail ----------
+let pendingAmend = null;
+function renderDetail(id){
+  const m = MODULES.find(x=>x.id===id);
+  const main = document.getElementById('main');
+  const stages = stagesFor(m);
+  const chk = getChecklist(id);
+  const p = progressOf(id);
+  const sc = statusColor(id);
+  const future = isFuture(id);
+  const owner = STATE.owners[id] || '';
+  const wName = (WORKSPACES.find(w=>w.id===m.workspace)||{}).name;
+  const remaining = stages.filter((_,i)=>!chk[i]);
+  const completed = stages.filter((_,i)=>chk[i]);
+  const amendments = STATE.amendments[id] || [];
+  const foundational = isFoundational(id);
+  const blockedByFoundation = !future && dependsOnUnfrozenFoundational(m);
+  const fanIn = fanInOf(id);
+  const dependents = MODULES.filter(x=>(x.deps||[]).some(d=>d.target===id));
+
+  const execOrder = execOrderOf(id);
+  const execRationale = EXEC_RATIONALE[id] || '';
+
+  let html = `<div class="detail">
+    <div class="breadcrumb">${wName} <span style="color:var(--muted)">(label only)</span></div>
+    <div class="dtitle"><h2>${m.name}</h2><span class="tierbig" style="color:var(--blue);background:var(--blue-bg)">CEO Order #${execOrder}</span><span class="tierbig" style="color:${TIER_COLOR[m.tier]}">Tier ${m.tier}</span>${foundational?'<span class="foundbadge">&#9670; Foundational &middot; '+fanIn+' dependents</span>':''}<span class="badge" style="color:${sc.c};background:${sc.bg}">${statusLabel(id)}</span></div>
+    ${m.meta? '<div class="meta">'+m.meta+'</div>' : ''}
+    ${m.tabs && m.tabs.length? '<div class="tabs-doc">Features: '+m.tabs.map(t=>'<span>'+t+'</span>').join('')+'</div>' : ''}
+    ${m.auto? '<div class="auto-banner">Auto-collapsed at migration: this module has not yet been broken into named Features by a real audit. It is still a full, independent Module with its own checklist and ownership.</div>' : ''}
+    ${future? '<div class="future-banner">Marked Future / Out of Scope — excluded from Workspace rollups and from being counted as a dependency blocker. Uncheck "Out of scope" below to resume active tracking.</div>' : ''}
+    ${foundational? '<div class="found-banner">Foundational: '+fanIn+' other module(s) declare a dependency on this one. Amending it once Frozen requires listing which dependents were notified (see Freeze-Amendment below).</div>' : ''}
+    ${blockedByFoundation? '<div class="future-banner">Blocked: this module depends on a Foundational module that is not yet Frozen. Checklist remains editable, but treat progress here as provisional until that dependency stabilizes.</div>' : ''}
+    <div class="progress-row"><div class="bar"><i style="width:${p.pct}%"></i></div><div class="pctnum">${p.pct}%</div></div>
+    <div class="minipanel" style="margin-bottom:18px;border-color:var(--blue)">
+      <h4 style="color:var(--blue)">Execution Order (CEO Order) — single source of truth for the V1 freeze sequence</h4>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <input type="number" id="execOrderInput" min="1" max="99" style="width:70px;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-family:inherit;" value="${execOrder}">
+        <span style="font-size:11.5px;color:var(--sub)">Lower number = do first. Work modules in this order; once one is Frozen, do not revisit it to move to the next.</span>
+      </div>
+      ${execRationale? '<div class="row" style="color:var(--sub)">'+execRationale+'</div>' : ''}
+    </div>
+    <div class="grid2">
+      <div class="minipanel"><h4>Owner</h4><input type="text" id="ownerInput" placeholder="Engineer name or AI agent id" value="${owner.replace(/"/g,'&quot;')}"></div>
+      <div class="minipanel"><h4>Out of scope</h4>
+        <label style="font-size:12.5px;display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="futureToggle" ${future?'checked':''}> Mark Future / Out of Scope</label>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="minipanel"><h4>Data ownership</h4>${m.dataOwnership && m.dataOwnership.length? m.dataOwnership.map(t=>'<div class="row"><code>'+t+'</code> — canonical owner</div>').join('') : '<div class="row" style="color:var(--muted)">Not yet declared — pending audit.</div>'}</div>
+      <div class="minipanel"><h4>Dependencies (${(m.deps||[]).length} out &middot; ${dependents.length} in)</h4><div class="deps-list">${(m.deps||[]).length? m.deps.map(d=>{const dm=MODULES.find(x=>x.id===d.target); return dm? '<a data-goto="'+d.target+'"><span class="typelbl">['+d.type+']</span> '+dm.name+'</a>' : '';}).join('') : '<span style="color:var(--muted);font-size:12px">None declared yet — pending audit.</span>'}</div></div>
+    </div>
+    <div class="toolbar">
+      <button data-action="check-all">Mark all complete</button>
+      <button data-action="clear-all">Clear checklist</button>
+    </div>
+    <div class="checklist"><h3>Checklist — Tier ${m.tier} (${stages.length} gates)</h3>
+      ${stages.map((label,i)=>`
+        <div class="citem ${chk[i]?'done':''}" data-idx="${i}">
+          <input type="checkbox" ${chk[i]?'checked':''} id="chk-${id}-${i}">
+          <label for="chk-${id}-${i}">${label}</label>
+        </div>`).join('')}
+    </div>
+    ${p.pct===100 ? '<div class="pr-banner">&#128994; FROZEN / PRODUCTION READY</div>' : ''}
+    ${amendments.length? '<div class="amend-log"><h4>Freeze-amendment history</h4>'+amendments.map(a=>'<div class="amend-item"><b>'+a.reason+'</b> — '+a.note+(a.notified?' &middot; notified: '+a.notified:'')+' <span style="float:right">'+a.date+'</span></div>').join('')+'</div>' : ''}
+  </div>`;
+  main.innerHTML = html;
+
+  main.querySelectorAll('[data-goto]').forEach(a=> a.addEventListener('click', ()=> selectModule(a.dataset.goto)));
+  main.querySelector('#ownerInput').addEventListener('change', e=>{ STATE.owners[id]=e.target.value; save(); renderList(); });
+  main.querySelector('#futureToggle').addEventListener('change', e=>{ STATE.future[id]=e.target.checked; save(); renderOverview(); renderList(); renderDetail(id); });
+  main.querySelector('#execOrderInput').addEventListener('change', e=>{
+    const v = parseInt(e.target.value,10);
+    STATE.executionOrder[id] = (Number.isFinite(v) && v>0) ? v : DEFAULT_EXECUTION_ORDER[id] || 999;
+    save(); renderList(); renderDetail(id);
+  });
+
+  main.querySelectorAll('.citem input').forEach(inp=>{
+    inp.addEventListener('change', (e)=>{
+      const idx = parseInt(e.target.closest('.citem').dataset.idx,10);
+      const wasFrozen = progressOf(id).pct === 100;
+      if(wasFrozen && !future){
+        pendingAmend = {id, idx, checked:e.target.checked};
+        e.target.checked = !e.target.checked;
+        document.getElementById('amendModalDesc').textContent = foundational
+          ? 'This is a Foundational module ('+dependents.length+' dependents). Editing it Frozen requires a logged reason and a note on who was notified.'
+          : 'This module is Frozen. Editing it requires a logged reason.';
+        openAmendModal();
+        return;
+      }
+      applyChecklistChange(id, idx, e.target.checked);
+    });
+  });
+  const chkAllBtn = main.querySelector('[data-action="check-all"]');
+  const clrBtn = main.querySelector('[data-action="clear-all"]');
+  if(chkAllBtn) chkAllBtn.addEventListener('click', ()=>{ STATE.checklists[id] = new Array(stages.length).fill(true); save(); renderOverview(); renderDetail(id); renderList(); });
+  if(clrBtn) clrBtn.addEventListener('click', ()=>{ STATE.checklists[id] = new Array(stages.length).fill(false); save(); renderOverview(); renderDetail(id); renderList(); });
+}
+
+function applyChecklistChange(id, idx, checked){
+  const cl = getChecklist(id);
+  cl[idx] = checked;
+  save();
+  renderOverview();
+  renderDetail(id);
+  renderList();
+}
+
+const amendModal = document.getElementById('amendModal');
+function openAmendModal(){ amendModal.classList.add('open'); }
+function closeAmendModal(){ amendModal.classList.remove('open'); pendingAmend=null; }
+document.getElementById('amendCancel').addEventListener('click', closeAmendModal);
+document.getElementById('amendConfirm').addEventListener('click', ()=>{
+  if(!pendingAmend) return;
+  const reason = document.getElementById('amendReason').value;
+  const note = document.getElementById('amendNote').value || '(no note)';
+  const {id, idx, checked} = pendingAmend;
+  const dependents = MODULES.filter(x=>(x.deps||[]).some(d=>d.target===id)).map(x=>x.name).join(', ');
+  STATE.amendments[id] = STATE.amendments[id] || [];
+  STATE.amendments[id].push({reason, note, date: new Date().toISOString().slice(0,10), notified: isFoundational(id)? (dependents||'none') : undefined});
+  document.getElementById('amendNote').value = '';
+  closeAmendModal();
+  applyChecklistChange(id, idx, checked);
+});
+
+// ---------- nav tabs ----------
+document.querySelectorAll('.navtab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.navtab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+t.dataset.view).classList.add('active');
+    if(t.dataset.view==='graph') renderGraph();
+    if(t.dataset.view==='foundational') renderFoundational();
+    if(t.dataset.view==='assignment') renderAssignmentBoard();
+    if(t.dataset.view==='programs') renderPrograms();
+  });
+});
+
+// ---------- dependency graph (only modules with declared edges — most are pending audit) ----------
+const NS = "http://www.w3.org/2000/svg";
+function el(tag,attrs,parent){ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); if(parent) parent.appendChild(e); return e; }
+function foreignLabel(parent,x,y,w,hh,text){ const fo=el("foreignObject",{x:x-w/2,y:y,width:w,height:hh},parent); const div=document.createElementNS("http://www.w3.org/1999/xhtml","div"); div.className="nodelbl"; div.textContent=text; fo.appendChild(div); return fo; }
+
+function renderGraph(){
+  const wrap = document.getElementById('view-graph');
+  const relevant = new Set();
+  MODULES.forEach(m=>(m.deps||[]).forEach(d=>{ relevant.add(m.id); relevant.add(d.target); }));
+  wrap.innerHTML = '<div class="progcol"><h2>Dependency Graph</h2><div class="sub2">Only modules with a declared dependency edge are shown. Foundational modules (3+ dependents) sit on the inner ring; everything else sits on the outer ring, so the busiest nodes stay closest to center. Click a node to open that module. Hover an edge to trace it.</div></div>';
+  if(relevant.size===0){ wrap.innerHTML += '<div class="empty-hint">No dependencies declared yet.</div>'; return; }
+  const nodes = Array.from(relevant).sort((a,b)=>{
+    const fa = isFoundational(a)?0:1, fb = isFoundational(b)?0:1;
+    if(fa!==fb) return fa-fb;
+    return fanInOf(b)-fanInOf(a);
+  });
+  const inner = nodes.filter(id=>isFoundational(id));
+  const outer = nodes.filter(id=>!isFoundational(id));
+  const SIZE = 1300;
+  const s = el("svg",{viewBox:"0 0 "+SIZE+" "+SIZE, class:"svgwrap"});
+  const cx=SIZE/2, cy=SIZE/2;
+  const Rinner = 260, Router = 560;
+  const pos={}, angleOf={};
+  function place(list,R){
+    list.forEach((id,i)=>{ const a=(i/list.length)*Math.PI*2 - Math.PI/2; angleOf[id]=a; pos[id]=[cx+R*Math.cos(a), cy+R*Math.sin(a)]; });
+  }
+  place(inner, Rinner);
+  place(outer, Router);
+  MODULES.forEach(m=>(m.deps||[]).forEach(d=>{
+    if(!pos[m.id]||!pos[d.target]) return;
+    const [x1,y1]=pos[m.id],[x2,y2]=pos[d.target];
+    const line = el("line",{x1,y1,x2,y2,class:"chipline dep","stroke-opacity":"0.38"},s);
+    line.addEventListener('mouseenter', ()=>{ line.setAttribute('stroke-opacity','1'); line.setAttribute('stroke-width','3.4'); });
+    line.addEventListener('mouseleave', ()=>{ line.setAttribute('stroke-opacity','0.38'); line.setAttribute('stroke-width','2.4'); });
+  }));
+  nodes.forEach(id=>{
+    const m = MODULES.find(x=>x.id===id);
+    const [x,y]=pos[id];
+    const found = isFoundational(id);
+    const r = found?30:20;
+    const n = el("g",{},s);
+    el("circle",{cx:x,cy:y,r,class:"chip"},n);
+    const a = angleOf[id];
+    const lx = x + Math.cos(a) * (r+58);
+    const ly = y + Math.sin(a) * (r+30) - 15;
+    foreignLabel(s,lx,ly,128,32,m.name + (found?' ◆':''));
+    n.style.cursor='pointer';
+    n.addEventListener('click', ()=>{ document.querySelector('.navtab[data-view="modules"]').click(); selectModule(id); });
+  });
+  const legend = document.createElement('div');
+  legend.className = 'sub2';
+  legend.style.marginTop = '6px';
+  legend.innerHTML = '<span style="color:var(--gold)">&#9670;</span> Foundational (inner ring) &middot; plain circle = outer ring, not yet 3+ dependents';
+  wrap.appendChild(s);
+  wrap.appendChild(legend);
+}
+
+// ---------- foundational panel ----------
+function renderFoundational(){
+  const wrap = document.getElementById('view-foundational');
+  wrap.innerHTML = '<div class="progcol"><h2>Foundational Modules</h2><div class="sub2">Auto-computed — any module with '+FOUNDATIONAL_THRESHOLD+'+ declared dependents. Not manually flagged. Dependents should treat these as higher-scrutiny, and amendments after Freeze must record who was notified.</div></div>';
+  const found = MODULES.filter(m=>isFoundational(m.id));
+  if(!found.length){ wrap.innerHTML += '<div class="empty-hint">No module currently has '+FOUNDATIONAL_THRESHOLD+'+ declared dependents. Expected at this stage — most dependencies have not yet been audited into the register.</div>'; return; }
+  found.forEach(m=>{
+    const card = document.createElement('div');
+    card.className = 'found-card';
+    const sc = statusColor(m.id);
+    card.innerHTML = `<span>&#9670; ${m.name}</span><span class="badge" style="color:${sc.c};background:${sc.bg}">${statusLabel(m.id)} &middot; ${fanInOf(m.id)} dependents</span>`;
+    card.addEventListener('click', ()=>{ document.querySelector('.navtab[data-view="modules"]').click(); selectModule(m.id); });
+    wrap.appendChild(card);
+  });
+}
+
+// ---------- assignment board ----------
+function renderAssignmentBoard(){
+  const byOwner = {};
+  MODULES.forEach(m=>{
+    const owner = STATE.owners[m.id] || 'Unassigned';
+    (byOwner[owner] = byOwner[owner] || []).push(m);
+  });
+  const owners = Object.keys(byOwner).sort((a,b)=> a==='Unassigned'?1:(b==='Unassigned'?-1:a.localeCompare(b)));
+  const wrap = document.getElementById('view-assignment');
+  wrap.innerHTML = '<div class="progcol"><h2>Assignment Board</h2><div class="sub2">Every Module grouped by owner — one flat list, one owner field each, no parent/child distinction to reconcile.</div></div>';
+  owners.forEach(owner=>{
+    const list = byOwner[owner];
+    const col = document.createElement('div');
+    col.className = 'owner-col';
+    col.innerHTML = `<h3>${owner} <span class="cnt">${list.length} module${list.length===1?'':'s'}</span></h3>`;
+    list.forEach(m=>{
+      const sc = statusColor(m.id);
+      const p = progressOf(m.id);
+      const item = document.createElement('div');
+      item.className = 'owner-item';
+      item.innerHTML = `<span><span class="tierbadge" style="color:${TIER_COLOR[m.tier]}">${m.tier}</span> ${m.name}${isFoundational(m.id)?' <span class="foundicon">&#9670;</span>':''}</span><span class="pct" style="color:${sc.c};background:${sc.bg};padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700">${isFuture(m.id)?'Future':p.pct+'%'}</span>`;
+      item.addEventListener('click', ()=>{ document.querySelector('.navtab[data-view="modules"]').click(); selectModule(m.id); });
+      col.appendChild(item);
+    });
+    wrap.appendChild(col);
+  });
+}
+
+// ---------- cross-cutting programs ----------
+function renderPrograms(){
+  const wrap = document.getElementById('view-programs');
+  wrap.innerHTML = '<div class="progcol"><h2>Cross-Cutting Programs</h2><div class="sub2">Outside the Module list entirely — never counted in any single module\'s freeze %.</div></div>';
+  PROGRAMS.forEach(p=>{
+    const card = document.createElement('div');
+    card.className = 'prog-card';
+    const status = STATE.programStatus[p.id];
+    card.innerHTML = `
+      <h3>${p.name}</h3>
+      <div class="driver">${p.driver}</div>
+      <select data-pid="${p.id}">
+        <option value="not-started" ${status==='not-started'?'selected':''}>Not Started</option>
+        <option value="in-progress" ${status==='in-progress'?'selected':''}>In Progress</option>
+        <option value="complete" ${status==='complete'?'selected':''}>Complete</option>
+      </select>
+      <div>${p.children.length? p.children.map(cid=>{const m=MODULES.find(x=>x.id===cid); return m? '<a class="plink" data-goto-prog="'+cid+'">'+m.name+'</a>' : '';}).join('') : '<span class="noscope">Scope not yet mapped to specific modules.</span>'}</div>
+    `;
+    card.querySelector('select').addEventListener('change', e=>{ STATE.programStatus[p.id]=e.target.value; save(); });
+    card.querySelectorAll('[data-goto-prog]').forEach(a=> a.addEventListener('click', ()=>{
+      document.querySelector('.navtab[data-view="modules"]').click();
+      selectModule(a.dataset.gotoProg);
+    }));
+    wrap.appendChild(card);
+  });
+}
+
+save();
+renderOverview();
+renderSidebar();
+</script>
+</body>
+</html>

@@ -181,6 +181,16 @@
                 style="padding:6px 16px;font-size:11px;font-weight:700;font-family:'Inter',sans-serif;background:#0e7490;color:#fff;border:none;border-radius:5px;cursor:pointer;">
             Print / Save PDF
         </button>
+        {{-- Generate Treatment Plan (2026-07-31 Visit redesign) — reuses the
+             existing treatment-plans.from-consultation route/flow (same one the
+             regular Consultation "Save & Start Treatment Plan" button uses), so
+             this doesn't invent a second treatment-plan-creation path. That route
+             currently only hands off to the Treatment Plan tab (no field-level
+             pre-fill from COHA yet) — see LEGACY/TODO note in ConsultationController. --}}
+        <a href="{{ route('treatment-plans.from-consultation', [$patient, $consultation]) }}"
+           style="padding:6px 14px;font-size:11px;font-weight:700;font-family:'Inter',sans-serif;border:none;background:#16a34a;color:#fff;border-radius:5px;text-decoration:none;">
+            Generate Treatment Plan →
+        </a>
         <a href="{{ route('patients.show', $patient) }}#consultation"
            style="padding:6px 14px;font-size:11px;font-weight:600;font-family:'Inter',sans-serif;border:1px solid #d1d5db;background:#fff;color:#6b7280;border-radius:5px;text-decoration:none;">
             Back to Patient

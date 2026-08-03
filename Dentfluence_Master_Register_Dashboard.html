@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dentfluence OS — Master Module Register</title>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --line:#e5e7eb; --ink:#111827; --sub:#6b7280; --muted:#9ca3af;
+  --blue:#702070; --blue-bg:#f4e8f4; --green:#16a34a; --green-bg:#ecfdf3; --amber:#d97706; --amber-bg:#fffbeb;
+  --grey:#9ca3af; --grey-bg:#f3f4f6; --red:#dc2626;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);}
+header{padding:18px 24px 14px;background:var(--panel);border-bottom:1px solid var(--line);}
+header h1{margin:0 0 2px;font-size:19px;font-weight:600;}
+header .sub{font-size:12.5px;color:var(--sub);}
+
+.overview{display:grid;grid-template-columns:2fr repeat(4,1fr);gap:12px;padding:16px 24px;background:var(--panel);border-bottom:1px solid var(--line);}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;}
+.card .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--sub);margin-bottom:6px;}
+.card .val{font-size:22px;font-weight:600;}
+.bar{height:8px;background:var(--grey-bg);border-radius:6px;overflow:hidden;margin-top:8px;}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--green));border-radius:6px;transition:width .3s;}
+.stat-green .val{color:var(--green);} .stat-amber .val{color:var(--amber);} .stat-grey .val{color:var(--grey);}
+
+.layout{display:flex;min-height:calc(100vh - 190px);}
+#sidebar{width:340px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;max-height:calc(100vh - 190px);}
+.grp{border-bottom:1px solid var(--line);}
+.grp>.ghead{padding:10px 16px;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--sub);background:#fafbfc;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.grp>.gbody{display:block;}
+.grp.collapsed>.gbody{display:none;}
+.mod{border-top:1px solid #f1f2f4;}
+.mrow{display:flex;align-items:center;gap:8px;padding:9px 16px 9px 20px;cursor:pointer;font-size:13px;}
+.mrow:hover{background:#f6f7f9;}
+.mrow.active{background:var(--blue-bg);}
+.mrow .arrow{font-size:9px;color:var(--muted);width:10px;flex-shrink:0;transition:transform .15s;}
+.mrow.open .arrow{transform:rotate(90deg);}
+.mrow .name{flex:1;}
+.mrow .pct{font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:20px;flex-shrink:0;}
+.pages{display:none;}
+.pages.open{display:block;}
+.prow{display:flex;align-items:center;gap:8px;padding:7px 16px 7px 40px;cursor:pointer;font-size:12.3px;color:var(--sub);}
+.prow:hover{background:#f6f7f9;}
+.prow.active{background:var(--blue-bg);color:var(--ink);}
+.prow .name{flex:1;}
+.prow .pct{font-size:10px;font-weight:700;padding:1px 5px;border-radius:20px;flex-shrink:0;}
+
+#main{flex:1;padding:22px 28px;overflow-y:auto;max-height:calc(100vh - 190px);}
+.detail{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px 24px;max-width:820px;}
+.breadcrumb{font-size:11.5px;color:var(--sub);margin-bottom:6px;}
+.dtitle{display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+.dtitle h2{font-size:20px;margin:0;font-weight:600;}
+.badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
+.meta{font-size:12.5px;color:var(--sub);margin:6px 0 14px;line-height:1.5;}
+.tabs-doc{font-size:11.5px;color:var(--sub);margin:-6px 0 16px;}
+.tabs-doc span{display:inline-block;background:var(--grey-bg);border-radius:6px;padding:2px 8px;margin:2px 4px 2px 0;}
+.progress-row{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
+.progress-row .bar{flex:1;height:10px;}
+.progress-row .pctnum{font-weight:700;font-size:15px;width:48px;text-align:right;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;}
+.minipanel{border:1px solid var(--line);border-radius:8px;padding:10px 12px;}
+.minipanel h4{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--sub);}
+.minipanel .row{font-size:12.5px;padding:2px 0;}
+.children-list a{display:block;font-size:12.5px;padding:3px 0;color:var(--blue);text-decoration:none;cursor:pointer;}
+.children-list a:hover{text-decoration:underline;}
+.checklist{border-top:1px solid var(--line);padding-top:14px;}
+.checklist h3{font-size:13px;margin:0 0 10px;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;}
+.citem{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid #f4f5f6;cursor:pointer;font-size:13.5px;}
+.citem:hover{background:#fafbfc;}
+.citem input{width:16px;height:16px;cursor:pointer;accent-color:var(--green);}
+.citem.done label{color:var(--sub);text-decoration:line-through;}
+.pr-banner{margin-top:16px;padding:10px 14px;border-radius:8px;background:var(--green-bg);color:var(--green);font-weight:700;font-size:13px;text-align:center;}
+.toolbar{display:flex;gap:8px;margin-bottom:14px;}
+.toolbar button{font-size:11.5px;padding:6px 12px;border:1px solid var(--line);background:#fff;border-radius:6px;cursor:pointer;}
+.toolbar button:hover{background:#f1f2f3;}
+.empty-hint{color:var(--sub);font-size:13px;padding:40px;text-align:center;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Dentfluence OS — Master Module Register</h1>
+  <div class="sub">Engineering command center. Grounded in the real codebase (routes/web.php, resources/views). Checklist state saves to this browser only. Snapshot 2026-08-01.</div>
+</header>
+
+<div class="overview" id="overview"></div>
+
+<div class="layout">
+  <div id="sidebar"></div>
+  <div id="main"><div class="empty-hint">Select a module or page from the sidebar to view its checklist.</div></div>
+</div>
+
+<script>
+const STAGES = ["Audit","Planning","Implementation (All Slices)","Testing","Bug Fixes","Parity","Variants","Hardening","Live Validation","Freeze","Production Ready"];
+
+const GROUPS = [
+  {id:"clinical", name:"Clinical"},
+  {id:"communication", name:"Communication"},
+  {id:"operations", name:"Operations"},
+  {id:"insights", name:"Insights"},
+  {id:"system", name:"System"},
+  {id:"platform", name:"Platform"}
+];
+
+const NODES = [
+{id:"patients",group:"clinical",parent:null,name:"Patients",meta:"Frozen V1.0. Canonical minting path: PatientService::register() (invariant, guarded)."},
+{id:"patients-crud",group:"clinical",parent:"patients",name:"Patient List / Create / Edit"},
+{id:"patients-profile",group:"clinical",parent:"patients",name:"Patient Profile",tabs:["Consultation","Treatment Plan","Visits","Billing","Wallet","Membership","Prescriptions","Lab","Documents","Notes"]},
+{id:"patients-timeline",group:"clinical",parent:"patients",name:"Journey Timeline"},
+{id:"patients-merge",group:"clinical",parent:"patients",name:"Duplicate Merge"},
+{id:"patients-abha",group:"clinical",parent:"patients",name:"ABHA / Health ID Capture"},
+{id:"patients-import",group:"clinical",parent:"patients",name:"Import / Export"},
+
+{id:"consultations",group:"clinical",parent:null,name:"Consultations",meta:"Directive #004 priority #1. 68% complete, 20 ranked blockers, 11-slice plan."},
+{id:"consultations-standard",group:"clinical",parent:"consultations",name:"Standard Consultation",tabs:["Chief Complaint","Clinical Findings","Diagnosis","Investigations","Photographs","Intraoral Scans","Radiographic Findings","Treatment Advised","Treatment Plan","Prescription","Follow-up"]},
+{id:"consultations-same-issue",group:"clinical",parent:"consultations",name:"Same-Issue Visit"},
+{id:"consultations-minor",group:"clinical",parent:"consultations",name:"Minor Visit"},
+{id:"consultations-emergency",group:"clinical",parent:"consultations",name:"Emergency Visit"},
+{id:"consultations-coha",group:"clinical",parent:"consultations",name:"COHA (Comprehensive Oral Health Assessment)"},
+
+{id:"treatment-plans",group:"clinical",parent:null,name:"Treatment Plans",meta:"78% complete. Sequenced behind Consultations per Directive #004. 6 ranked blockers."},
+{id:"treatment-visits",group:"clinical",parent:null,name:"Treatment Visits",meta:"~50% complete. Structural gap: treatment_visits has no treatment_plan_id FK."},
+
+{id:"prescriptions",group:"clinical",parent:null,name:"Prescriptions"},
+{id:"prescriptions-rxpad",group:"clinical",parent:"prescriptions",name:"Rx Pad (global + per-patient)"},
+{id:"prescriptions-settings",group:"clinical",parent:"prescriptions",name:"Rx Settings",tabs:["Drug Categories","Generics","Routes of Administration","Food Instructions","Dose Templates","Duration Templates","Warning Rules","Prescription Templates"]},
+{id:"prescriptions-drugs",group:"clinical",parent:"prescriptions",name:"Drug Master"},
+
+{id:"clinical-library",group:"clinical",parent:null,name:"Clinical Library / CMS"},
+{id:"clinical-library-dashboard",group:"clinical",parent:"clinical-library",name:"Clinical Library Dashboard"},
+{id:"clinical-library-education",group:"clinical",parent:"clinical-library",name:"Education Library"},
+
+{id:"treatments-kb",group:"clinical",parent:null,name:"Treatments Knowledge Base",tabs:["SOP","Consent","Stages","Rules","Media","Review","Intelligence"]},
+
+{id:"pre",group:"communication",parent:null,name:"Relationship Engine (PRE)",meta:"Phase 7/8 complete, PRM retired. 1,810-item recall backlog needs throttled migration."},
+{id:"pre-today",group:"communication",parent:"pre",name:"Today's Actions"},
+{id:"pre-leads",group:"communication",parent:"pre",name:"Lead Pipeline"},
+{id:"pre-opportunities",group:"communication",parent:"pre",name:"Opportunity Pipeline"},
+{id:"pre-recalls",group:"communication",parent:"pre",name:"Recall Pipeline"},
+{id:"pre-templates",group:"communication",parent:"pre",name:"Templates"},
+
+{id:"comm-os",group:"communication",parent:null,name:"Communication OS"},
+{id:"comm-followup",group:"communication",parent:"comm-os",name:"Follow-up Engine"},
+{id:"comm-recall",group:"communication",parent:"comm-os",name:"Recall Engine"},
+{id:"comm-whatsapp",group:"communication",parent:"comm-os",name:"WhatsApp Inbox",meta:"Two-way inbox. Click-to-chat + reviews LIVE; two-way messaging needs Meta creds (V1.5)."},
+{id:"comm-reviews",group:"communication",parent:"comm-os",name:"Reviews"},
+{id:"comm-b2b",group:"communication",parent:"comm-os",name:"B2B Communication (Lab / Vendor)"},
+{id:"comm-kpi",group:"communication",parent:"comm-os",name:"KPI Dashboard"},
+
+{id:"marketing",group:"communication",parent:null,name:"Marketing",meta:"GBP/Meta connect parked for V1.5."},
+{id:"marketing-blog",group:"communication",parent:"marketing",name:"Blog Marketing Hub"},
+{id:"marketing-campaigns",group:"communication",parent:"marketing",name:"Campaigns"},
+{id:"marketing-brandkit",group:"communication",parent:"marketing",name:"Brand Kit"},
+{id:"marketing-integrations",group:"communication",parent:"marketing",name:"Integrations"},
+{id:"marketing-analytics",group:"communication",parent:"marketing",name:"Marketing Analytics"},
+
+{id:"presentations",group:"communication",parent:null,name:"Presentations / Case Acceptance",meta:"Two co-existing systems in routes — Case Acceptance Engine is meant to replace Smart Presentation."},
+{id:"presentations-builder",group:"communication",parent:"presentations",name:"Smart Presentation Builder"},
+{id:"presentations-case-journey",group:"communication",parent:"presentations",name:"Case Acceptance Journey Builder"},
+
+{id:"finance",group:"operations",parent:null,name:"Accounts & Finance"},
+{id:"finance-billing",group:"operations",parent:"finance",name:"Billing / Invoices"},
+{id:"finance-income",group:"operations",parent:"finance",name:"Income",tabs:["Invoices","Receipts","Bills","Trash"]},
+{id:"finance-expenses",group:"operations",parent:"finance",name:"Expenses"},
+{id:"finance-payroll",group:"operations",parent:"finance",name:"Payroll"},
+{id:"finance-wallet",group:"operations",parent:"finance",name:"Wallet & Membership"},
+{id:"finance-analytics",group:"operations",parent:"finance",name:"Finance Analytics",tabs:["Vendors","Expenses","Lab","Procurement","Cashflow","Outstanding","BI","Audit"]},
+
+{id:"inventory",group:"operations",parent:null,name:"Inventory",meta:"Frozen — closed 07-20, production ready."},
+{id:"inventory-stock",group:"operations",parent:"inventory",name:"Stock Items & Products"},
+{id:"inventory-po",group:"operations",parent:"inventory",name:"Purchase Orders / GRN"},
+{id:"inventory-implants",group:"operations",parent:"inventory",name:"Implant Registry"},
+
+{id:"lab",group:"operations",parent:null,name:"Lab",meta:"v2 rebuild — Phases 1-5 code-complete, untested."},
+{id:"lab-cases",group:"operations",parent:"lab",name:"Lab Cases"},
+{id:"lab-reconciliation",group:"operations",parent:"lab",name:"Lab Monthly Reconciliation"},
+{id:"lab-vendors",group:"operations",parent:"lab",name:"Lab Vendors"},
+
+{id:"tasks",group:"operations",parent:null,name:"Tasks (Action Board)"},
+{id:"practice-protocols",group:"operations",parent:null,name:"Practice Protocols"},
+{id:"daily-huddle",group:"operations",parent:null,name:"Daily Huddle",tabs:["Board","Accountability","Report","Tasks","Comments"]},
+
+{id:"hr",group:"operations",parent:null,name:"HR"},
+{id:"hr-staff",group:"operations",parent:"hr",name:"Staff Profiles"},
+{id:"hr-attendance",group:"operations",parent:"hr",name:"Attendance"},
+{id:"hr-roles",group:"operations",parent:"hr",name:"Roles & Permissions"},
+{id:"hr-training",group:"operations",parent:"hr",name:"Training"},
+
+{id:"reports",group:"insights",parent:null,name:"Reports",tabs:["Appointments","Revenue","Patients","Treatments","Lab","Inventory"]},
+{id:"analytics",group:"insights",parent:null,name:"Analytics",meta:"Shares controller/tabs with Finance Analytics. Phase 6 built+tested but feature flags OFF."},
+
+{id:"settings",group:"system",parent:null,name:"Settings"},
+{id:"settings-masters",group:"system",parent:"settings",name:"Masters",tabs:["Treatments","Complaints","Diagnoses","Investigations","Materials","Brands","Medicines","Conditions","Patient Sources","Message Templates"]},
+{id:"settings-flags",group:"system",parent:"settings",name:"Feature Flags"},
+{id:"settings-tags",group:"system",parent:"settings",name:"Tags"},
+{id:"settings-kb",group:"system",parent:"settings",name:"Knowledge Bank"},
+
+{id:"consent",group:"system",parent:null,name:"Consent (DPDP)",meta:"guard.consent_required ON in prod. Hard compliance deadline 13 May 2027."},
+{id:"consent-purposes",group:"system",parent:"consent",name:"Consent Purposes Catalogue"},
+{id:"consent-rights",group:"system",parent:"consent",name:"Patient Rights / DSAR"},
+{id:"consent-breach",group:"system",parent:"consent",name:"Breach Register"},
+{id:"consent-retention",group:"system",parent:"consent",name:"Data Retention"},
+
+{id:"notifications",group:"system",parent:null,name:"Notifications"},
+{id:"help",group:"system",parent:null,name:"Help"},
+
+{id:"hq",group:"platform",parent:null,name:"HQ Superadmin Console",meta:"Multi-tenant control plane. Not in original module seed list — found in code."},
+{id:"hq-clinics",group:"platform",parent:"hq",name:"Clinics"},
+{id:"hq-subscriptions",group:"platform",parent:"hq",name:"Subscriptions & Plans"},
+{id:"hq-tickets",group:"platform",parent:"hq",name:"Support Tickets"},
+
+{id:"ai-assistant",group:"platform",parent:null,name:"AI Assistant \"Tulip\"",meta:"Built + wired. Known gaps: tools bypass canAccess(), no tenant scope."}
+];
+
+// ---------- state ----------
+const STORE_KEY = "dentfluence_master_register_v1";
+let STATE = {};
+try{ STATE = JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }catch(e){ STATE = {}; }
+function getChecklist(id){ if(!STATE[id]) STATE[id] = new Array(STAGES.length).fill(false); return STATE[id]; }
+function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(STATE)); }
+
+function progressOf(id){
+  const c = getChecklist(id);
+  const done = c.filter(Boolean).length;
+  return {done, total: STAGES.length, pct: Math.round(done/STAGES.length*100)};
+}
+function statusColor(pct){
+  if(pct===100) return {c:"var(--green)", bg:"var(--green-bg)", label:"PRODUCTION READY"};
+  if(pct===0) return {c:"var(--grey)", bg:"var(--grey-bg)", label:"Not started"};
+  return {c:"var(--amber)", bg:"var(--amber-bg)", label:"In progress"};
+}
+function currentStage(id){
+  const c = getChecklist(id);
+  const idx = c.findIndex(v=>!v);
+  return idx===-1 ? "Production Ready" : STAGES[idx];
+}
+function children(id){ return NODES.filter(n=>n.parent===id); }
+function topLevel(groupId){ return NODES.filter(n=>n.group===groupId && n.parent===null); }
+
+// ---------- overview ----------
+function renderOverview(){
+  const all = NODES; // every node is independently tracked
+  let totalDone=0, totalPossible=all.length*STAGES.length;
+  let green=0, amber=0, grey=0;
+  all.forEach(n=>{
+    const p = progressOf(n.id);
+    totalDone += p.done;
+    if(p.pct===100) green++; else if(p.pct===0) grey++; else amber++;
+  });
+  const overallPct = Math.round(totalDone/totalPossible*100);
+  document.getElementById('overview').innerHTML = `
+    <div class="card">
+      <div class="lbl">Overall Dentfluence OS progress</div>
+      <div class="val">${overallPct}%</div>
+      <div class="bar"><i style="width:${overallPct}%"></i></div>
+    </div>
+    <div class="card stat-green">
+      <div class="lbl">Production ready</div>
+      <div class="val">${green}</div>
+    </div>
+    <div class="card stat-amber">
+      <div class="lbl">In progress</div>
+      <div class="val">${amber}</div>
+    </div>
+    <div class="card stat-grey">
+      <div class="lbl">Not started</div>
+      <div class="val">${grey}</div>
+    </div>
+    <div class="card">
+      <div class="lbl">Modules &amp; pages tracked</div>
+      <div class="val">${all.length}</div>
+    </div>
+  `;
+}
+
+// ---------- sidebar ----------
+let activeId = null;
+
+function renderSidebar(){
+  const sb = document.getElementById('sidebar');
+  sb.innerHTML = '';
+  GROUPS.forEach(g=>{
+    const mods = topLevel(g.id);
+    if(!mods.length) return;
+    const grp = document.createElement('div');
+    grp.className = 'grp';
+    grp.innerHTML = `<div class="ghead">${g.name}<span class="gcount">${mods.length}</span></div><div class="gbody"></div>`;
+    grp.querySelector('.ghead').addEventListener('click', ()=> grp.classList.toggle('collapsed'));
+    const body = grp.querySelector('.gbody');
+    mods.forEach(m=>{
+      const kids = children(m.id);
+      const p = progressOf(m.id);
+      const s = statusColor(p.pct);
+      const modDiv = document.createElement('div');
+      modDiv.className = 'mod';
+      const mrow = document.createElement('div');
+      mrow.className = 'mrow' + (m.id===activeId?' active':'');
+      mrow.dataset.id = m.id;
+      mrow.innerHTML = `<span class="arrow">${kids.length?'&#9656;':''}</span><span class="name">${m.name}</span><span class="pct" style="color:${s.c};background:${s.bg}">${p.pct}%</span>`;
+      const pagesWrap = document.createElement('div');
+      pagesWrap.className = 'pages';
+      kids.forEach(k=>{
+        const kp = progressOf(k.id);
+        const ks = statusColor(kp.pct);
+        const prow = document.createElement('div');
+        prow.className = 'prow' + (k.id===activeId?' active':'');
+        prow.dataset.id = k.id;
+        prow.innerHTML = `<span class="name">${k.name}</span><span class="pct" style="color:${ks.c};background:${ks.bg}">${kp.pct}%</span>`;
+        prow.addEventListener('click', (e)=>{ e.stopPropagation(); selectNode(k.id); });
+        pagesWrap.appendChild(prow);
+      });
+      mrow.addEventListener('click', ()=>{
+        selectNode(m.id);
+        if(kids.length){ mrow.classList.toggle('open'); pagesWrap.classList.toggle('open'); }
+      });
+      modDiv.appendChild(mrow);
+      modDiv.appendChild(pagesWrap);
+      body.appendChild(modDiv);
+    });
+    sb.appendChild(grp);
+  });
+}
+
+// ---------- detail panel ----------
+function selectNode(id){
+  activeId = id;
+  renderSidebar();
+  // re-open ancestor chain
+  const n = NODES.find(x=>x.id===id);
+  if(n && n.parent){
+    const mrow = document.querySelector(`.mrow[data-id="${n.parent}"]`);
+    if(mrow){ mrow.classList.add('open'); mrow.nextSibling && mrow.parentElement.querySelector('.pages').classList.add('open'); }
+  }
+  renderDetail(id);
+}
+
+function renderDetail(id){
+  const n = NODES.find(x=>x.id===id);
+  const main = document.getElementById('main');
+  if(!n){ main.innerHTML = '<div class="empty-hint">Select a module or page from the sidebar.</div>'; return; }
+  const kids = children(id);
+  const parent = n.parent ? NODES.find(x=>x.id===n.parent) : null;
+  const c = getChecklist(id);
+  const p = progressOf(id);
+  const s = statusColor(p.pct);
+  const remaining = STAGES.filter((_,i)=>!c[i]);
+  const completed = STAGES.filter((_,i)=>c[i]);
+
+  let html = `<div class="detail">
+    <div class="breadcrumb">${parent ? parent.name+' / ' : (GROUPS.find(g=>g.id===n.group)||{}).name+' / '}${n.name}</div>
+    <div class="dtitle"><h2>${n.name}</h2><span class="badge" style="color:${s.c};background:${s.bg}">${p.pct===100?'&#128994; PRODUCTION READY':s.label}</span></div>
+    ${n.meta ? `<div class="meta">${n.meta}</div>` : ''}
+    ${n.tabs ? `<div class="tabs-doc">Tabs / sections on record: ${n.tabs.map(t=>'<span>'+t+'</span>').join('')}</div>` : ''}
+    <div class="progress-row"><div class="bar"><i style="width:${p.pct}%"></i></div><div class="pctnum">${p.pct}%</div></div>
+    <div class="grid2">
+      <div class="minipanel"><h4>Completed steps (${completed.length})</h4>${completed.length? completed.map(x=>'<div class="row">&#10003; '+x+'</div>').join('') : '<div class="row" style="color:var(--muted)">None yet</div>'}</div>
+      <div class="minipanel"><h4>Remaining steps (${remaining.length})</h4>${remaining.length? remaining.map(x=>'<div class="row">&#9675; '+x+'</div>').join('') : '<div class="row" style="color:var(--green)">All complete</div>'}</div>
+    </div>
+    <div class="grid2">
+      <div class="minipanel"><h4>Current stage</h4><div class="row"><b>${currentStage(id)}</b></div></div>
+      <div class="minipanel"><h4>Parent module</h4><div class="row">${parent ? parent.name : '— (top-level module)'}</div></div>
+    </div>
+    ${kids.length ? `<div class="minipanel" style="margin-bottom:18px"><h4>Child modules / pages (${kids.length})</h4><div class="children-list">${kids.map(k=>{const kp=progressOf(k.id);return '<a data-goto="'+k.id+'">'+k.name+' — '+kp.pct+'%</a>';}).join('')}</div></div>` : ''}
+    <div class="toolbar">
+      <button data-action="check-all">Mark all complete</button>
+      <button data-action="clear-all">Clear checklist</button>
+    </div>
+    <div class="checklist"><h3>Universal Module Checklist</h3>
+      ${STAGES.map((label,i)=>`
+        <div class="citem ${c[i]?'done':''}" data-idx="${i}">
+          <input type="checkbox" ${c[i]?'checked':''} id="chk-${id}-${i}">
+          <label for="chk-${id}-${i}">${label}</label>
+        </div>`).join('')}
+    </div>
+    ${p.pct===100 ? '<div class="pr-banner">&#128994; PRODUCTION READY</div>' : ''}
+  </div>`;
+  main.innerHTML = html;
+
+  main.querySelectorAll('.citem input').forEach(inp=>{
+    inp.addEventListener('change', (e)=>{
+      const idx = parseInt(e.target.closest('.citem').dataset.idx,10);
+      const cl = getChecklist(id);
+      cl[idx] = e.target.checked;
+      save();
+      renderOverview();
+      renderDetail(id);
+      renderSidebar();
+    });
+  });
+  main.querySelectorAll('[data-goto]').forEach(a=> a.addEventListener('click', ()=> selectNode(a.dataset.goto)));
+  const chkAllBtn = main.querySelector('[data-action="check-all"]');
+  const clrBtn = main.querySelector('[data-action="clear-all"]');
+  if(chkAllBtn) chkAllBtn.addEventListener('click', ()=>{ STATE[id] = new Array(STAGES.length).fill(true); save(); renderOverview(); renderDetail(id); renderSidebar(); });
+  if(clrBtn) clrBtn.addEventListener('click', ()=>{ STATE[id] = new Array(STAGES.length).fill(false); save(); renderOverview(); renderDetail(id); renderSidebar(); });
+}
+
+renderOverview();
+renderSidebar();
+</script>
+</body>
+</html>

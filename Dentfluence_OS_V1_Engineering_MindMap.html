@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dentfluence OS V1 — Engineering Execution Mind Map</title>
+<style>
+  :root{
+    --grey:#9aa0a6;   --grey-bg:#f1f2f3;
+    --blue:#3b82f6;   --blue-bg:#eaf1fe;
+    --orange:#f59e0b; --orange-bg:#fef3e2;
+    --yellow:#d4b106; --yellow-bg:#fdf8e3;
+    --purple:#8b5cf6; --purple-bg:#f3eefe;
+    --green:#16a34a;  --green-bg:#e9f8ee;
+    --red:#dc2626;    --red-bg:#fdeaea;
+    --ink:#1f2328;    --sub:#5b6470;    --line:#e2e5e9;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#fafbfc;color:var(--ink);margin:0;padding:24px;}
+  h1{font-size:20px;font-weight:600;margin:0 0 4px;}
+  .sub{color:var(--sub);font-size:13px;margin-bottom:16px;}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;padding:10px 14px;background:#fff;border:1px solid var(--line);border-radius:10px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
+  .toolbar{display:flex;gap:8px;margin-bottom:16px;}
+  .toolbar button{font-size:12px;padding:6px 12px;border:1px solid var(--line);background:#fff;border-radius:6px;cursor:pointer;color:var(--ink);}
+  .toolbar button:hover{background:var(--grey-bg);}
+  .root{border:1px solid var(--line);border-radius:12px;background:#fff;padding:16px;margin-bottom:14px;}
+  .root>.title{font-size:16px;font-weight:600;margin-bottom:2px;}
+  details{margin:6px 0;}
+  summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;font-weight:500;}
+  summary::-webkit-details-marker{display:none;}
+  summary .arrow{font-size:10px;color:var(--sub);transition:transform .15s;width:10px;}
+  details[open]>summary .arrow{transform:rotate(90deg);}
+  .grp>summary{font-size:15px;background:#f6f7f9;}
+  .mod{margin-left:14px;border-left:2px solid var(--line);padding-left:10px;}
+  .mod>summary{font-size:13.5px;}
+  .badge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;margin-left:auto;white-space:nowrap;}
+  .pct{font-size:11px;color:var(--sub);font-weight:400;margin-left:4px;}
+  .pipeline{margin-left:24px;padding:8px 0 4px 12px;border-left:2px dashed var(--line);}
+  .stage{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 8px;margin:2px 0;border-radius:6px;}
+  .stage .dot{flex-shrink:0;}
+  .stage.done{color:var(--sub);}
+  .stage.current{background:var(--orange-bg);font-weight:600;}
+  .slices{margin-left:22px;padding:4px 0 4px 10px;border-left:1px dotted var(--line);}
+  .slices .s{font-size:11px;color:var(--sub);padding:2px 6px;}
+  .fields{margin-left:24px;margin-top:4px;margin-bottom:8px;background:#fbfbfc;border:1px dashed var(--line);border-radius:8px;padding:8px 12px;font-size:11.5px;color:var(--sub);}
+  .fields div{padding:2px 0;}
+  .fields b{color:var(--ink);font-weight:600;}
+  .notstarted{color:var(--sub);font-style:italic;}
+</style>
+</head>
+<body>
+
+<h1>Dentfluence OS V1 — Engineering Execution Mind Map</h1>
+<div class="sub">Command center view for CEO review. Snapshot date: 2026-08-01. Governed by CEO Directive #004 (Production Mode) — priority order: Consultations &rarr; Treatment Plans &rarr; Treatment Visits &rarr; Appointments &rarr; Rx &rarr; Billing &rarr; Follow-up.</div>
+
+<div class="legend">
+  <span><i class="dot" style="background:var(--grey)"></i>Grey — Not started</span>
+  <span><i class="dot" style="background:var(--blue)"></i>Blue — Audit</span>
+  <span><i class="dot" style="background:var(--orange)"></i>Orange — Development</span>
+  <span><i class="dot" style="background:var(--yellow)"></i>Yellow — Testing</span>
+  <span><i class="dot" style="background:var(--purple)"></i>Purple — Hardening</span>
+  <span><i class="dot" style="background:var(--green)"></i>Green — Production ready</span>
+  <span><i class="dot" style="background:var(--red)"></i>Red — Blocked</span>
+</div>
+
+<div class="toolbar">
+  <button onclick="setAll(true)">Expand all</button>
+  <button onclick="setAll(false)">Collapse all</button>
+</div>
+
+<div id="tree"></div>
+
+<script>
+const COLORS = {
+  grey:  {c:'var(--grey)',  bg:'var(--grey-bg)',  label:'Not started'},
+  blue:  {c:'var(--blue)',  bg:'var(--blue-bg)',  label:'Audit'},
+  orange:{c:'var(--orange)',bg:'var(--orange-bg)',label:'Development'},
+  yellow:{c:'var(--yellow)',bg:'var(--yellow-bg)',label:'Testing'},
+  purple:{c:'var(--purple)',bg:'var(--purple-bg)',label:'Hardening'},
+  green: {c:'var(--green)', bg:'var(--green-bg)', label:'Production ready'},
+  red:   {c:'var(--red)',   bg:'var(--red-bg)',   label:'Blocked'}
+};
+
+const PIPELINE_STAGES = [
+  'Audit','Planning','Implementation','Browser Verification','Bug Fixes',
+  'Parity (Create=Edit=View=Print)','Variants Complete','Production Hardening',
+  'Live Validation','Freeze','Production Ready'
+];
+
+// Each module: status (color), completion %, currentStage (index into PIPELINE_STAGES, or null),
+// slices (array of {name, status?}), fields {currentPhase, completionPct, currentSlice, blockedBy, dependencies, notes}, noPipeline (bool for Overview cards)
+
+function mod(name, o){ return Object.assign({name}, o); }
+
+const DATA = {
+  title: "Dentfluence OS V1",
+  groups: [
+    {
+      name: "Overview",
+      infoOnly: true,
+      modules: [
+        mod("Master Roadmap", {status:"green", fields:{
+          currentPhase:"Single source of truth", completionPct:"—", currentSlice:"—",
+          blockedBy:"None", dependencies:"All module roadmaps roll up here",
+          notes:"Dentfluence_Master_Roadmap.docx consolidated 2026-07-30. Check before citing any older status file."}}),
+        mod("CEO Directive #004 — Production Mode", {status:"purple", fields:{
+          currentPhase:"Governing law", completionPct:"—", currentSlice:"—",
+          blockedBy:"None", dependencies:"Gates every task below",
+          notes:"Halts AI/Voice/UX-redesign work. Priority: finish+deploy+real-use-validate Consultations→TxPlans→Visits→Appointments→Rx→Billing→Follow-up. Gate question: does this move V1 to production?"}}),
+        mod("Production Readiness Review", {status:"red", fields:{
+          currentPhase:"11 criticals open", completionPct:"—", currentSlice:"—",
+          blockedBy:"Multi-tenant clinic_id isolation unsafe for clinic #2",
+          dependencies:"Encryption/access hardening (parked)",
+          notes:"07-14 review found 11 Criticals; recheck before any second-clinic rollout."}})
+      ]
+    },
+    {
+      name: "Clinical",
+      modules: [
+        mod("Patients", {status:"green", completionPct:100, currentStageIdx:10, fields:{
+          currentPhase:"Frozen / Production ready", completionPct:"100%", currentSlice:"None — frozen",
+          blockedBy:"None", dependencies:"PatientService::register() is the ONLY minting path (invariant, guarded)",
+          notes:"docs/patients-module-master.md is reference. PatientJourneyService = canonical read model. Phases 1-4 frozen V1.0."}}),
+        mod("Appointments", {status:"blue", currentStageIdx:1, fields:{
+          currentPhase:"Audit complete → Planning", completionPct:"Audit done, build not started", currentSlice:"—",
+          blockedBy:"Sequenced after Consultations + Treatment Plans per Directive #004",
+          dependencies:"Treatment Visits, PRE recall engine",
+          notes:"07-22 audit complete — used as redesign foundation. Next: planning phase."}}),
+        {
+          name:"Treatments", isSubgroup:true, modules:[
+            mod("Consultations", {status:"orange", completionPct:68, currentStageIdx:2, fields:{
+              currentPhase:"Implementation (Slice 5 of 11)", completionPct:"68%", currentSlice:"S5 — test harness",
+              blockedBy:"S5 hard-blocks S6/S8/S9/S10 (must finish test harness first)",
+              dependencies:"Directive #004 priority #1 — finish fully before touching Treatment Plans",
+              notes:"20 ranked blockers from 07-31 audit. S1 = edit data-loss triad, tackled first."},
+              slices:["S1 Edit data-loss triad","S2","S3","S4","S5 Test harness (blocks S6,S8,S9,S10)","S6","S7","S8","S9","S10","S11"]}),
+            mod("Treatment Plans", {status:"red", completionPct:78, currentStageIdx:2, fields:{
+              currentPhase:"Implementation — paused", completionPct:"78% (ahead of Consultations)", currentSlice:"Ranked blocker #1 of 6",
+              blockedBy:"WAITING on Consultations to reach production-ready (Directive #004 sequencing)",
+              dependencies:"Consultations must be fully finished first",
+              notes:"07-31 audit: 6 ranked blockers. #1 billingPrompts() wrong trigger_type. #2 status='completed' still billing-written, not clinical. Full report: outputs/treatment_plans_production_audit.md."},
+              slices:["Blocker #1 billingPrompts trigger_type","Blocker #2 clinical vs billing completion","Blocker #3","Blocker #4","Blocker #5","Blocker #6"]}),
+            mod("Treatment Visits", {status:"orange", completionPct:50, currentStageIdx:2, fields:{
+              currentPhase:"Implementation (Parts 3-4 remaining)", completionPct:"~50% (Parts 1-2 done)", currentSlice:"Part 3",
+              blockedBy:"Structural: treatment_visits has NO treatment_plan_id (frozen integration contract C-5)",
+              dependencies:"Treatment Plans data model fix",
+              notes:"Frozen Integration Contract (07-27) flags this FK gap as a structural blocker for Plan→Visit→Appointment truth chain."}})
+          ]
+        },
+        mod("Prescriptions", {status:"orange", fields:{
+          currentPhase:"Feature additions, unmigrated", completionPct:"Functionally live, pending migration",
+          currentSlice:"—", blockedBy:"Migrations not yet run (user executes manually)",
+          dependencies:"None blocking", notes:"Syrup ml dosing + weight field built, awaiting migrate."}}),
+        mod("Clinical Library", {status:"blue", currentStageIdx:1, fields:{
+          currentPhase:"Audit complete → V2 planning", completionPct:"Audit done", currentSlice:"—",
+          blockedBy:"None", dependencies:"Documents/media storage layer",
+          notes:"07-09 audit found vanishing-photos root cause; V2 rebuild planned."}})
+      ]
+    },
+    {
+      name: "Communication",
+      modules: [
+        mod("Relationships (PRE)", {status:"green", currentStageIdx:9, fields:{
+          currentPhase:"Complete, backlog cleanup ongoing", completionPct:"Core complete (Phase 7/8)", currentSlice:"—",
+          blockedBy:"1,810-item recall backlog needs throttled migration",
+          dependencies:"WhatsApp click-to-chat, communication_queue",
+          notes:"PRE COMPLETE, PRM retired. last_visit_date had NO writer historically — root cause of backlog, now addressed via Slice 2.4 work."}}),
+        mod("WhatsApp", {status:"orange", fields:{
+          currentPhase:"Partially live", completionPct:"Click-to-chat + reviews LIVE; rest uncommitted",
+          currentSlice:"—", blockedBy:"Two-way messaging needs Meta creds (V1.5, DPDP-gated)",
+          dependencies:"PRE engine, communication_queue",
+          notes:"Engine + reviews shipped 07-18. META_GRAPH_VERSION v23."}}),
+        mod("Marketing", {status:"grey", fields:{
+          currentPhase:"Mostly parked for V1.5", completionPct:"Blog Hub Wave 1 live; GBP/Meta connect parked",
+          currentSlice:"—", blockedBy:"Directive #004 halts non-production-critical work",
+          dependencies:"Reviews module (weakest score 4/10)",
+          notes:"Re-engineering plan treats Reviews as wiring, not a new build."}})
+      ]
+    },
+    {
+      name: "Operations",
+      modules: [
+        mod("Accounts & Finance", {status:"orange", fields:{
+          currentPhase:"Development", completionPct:"Phase 1 PO→GRN→Invoice→AP chain in progress",
+          currentSlice:"—", blockedBy:"None known", dependencies:"Inventory, Lab",
+          notes:"Wallet refactor and billing workflow update also active in this module."}}),
+        mod("Inventory", {status:"green", currentStageIdx:10, fields:{
+          currentPhase:"Frozen / Production ready", completionPct:"100% — CLOSED", currentSlice:"None",
+          blockedBy:"None", dependencies:"Canonical StockStatusService + enum",
+          notes:"Closed 07-20, confirmed prod-ready."}}),
+        mod("Lab", {status:"yellow", currentStageIdx:5, fields:{
+          currentPhase:"Testing (untested build)", completionPct:"Phases 1-5 code-complete, untested",
+          currentSlice:"Phase 5", blockedBy:"No browser verification yet",
+          dependencies:"Accounts & Finance procurement chain", notes:"Lab Module v2 rebuild — needs full QA pass."}}),
+        mod("Tasks", {status:"orange", fields:{
+          currentPhase:"Development", completionPct:"Action Board fixes in progress",
+          currentSlice:"—", blockedBy:"None known", dependencies:"closes_task revival logic",
+          notes:"Includes Action Board 'done state' and three-spec fixes."}}),
+        mod("Practice Protocols", {status:"grey", fields:{
+          currentPhase:"Not started", completionPct:"0%", currentSlice:"—",
+          blockedBy:"—", dependencies:"—", notes:"No audit on record yet."}}),
+        mod("HR", {status:"grey", fields:{
+          currentPhase:"Not started (partial: role management)", completionPct:"Role/permission split done, unmigrated",
+          currentSlice:"—", blockedBy:"Migration not run", dependencies:"—",
+          notes:"Role Management Fix (role_id/role split) is the only HR-adjacent work so far."}})
+      ]
+    },
+    {
+      name: "Insights",
+      modules: [
+        mod("Reports", {status:"grey", fields:{
+          currentPhase:"Not started", completionPct:"0%", currentSlice:"—",
+          blockedBy:"—", dependencies:"Product Audit Dashboard (module scoring) is closest existing artifact",
+          notes:"No dedicated Reports module build on record."}}),
+        mod("Analytics", {status:"purple", currentStageIdx:7, fields:{
+          currentPhase:"Hardening complete, flags OFF", completionPct:"Phase 6 Read & Insights built + tested",
+          currentSlice:"—", blockedBy:"Feature flags intentionally off — not yet live-validated",
+          dependencies:"Event data volume (ActivityEngine as event bus)",
+          notes:"Ready to flip on pending CEO go-ahead."}})
+      ]
+    },
+    {
+      name: "System",
+      modules: [
+        mod("Settings", {status:"grey", fields:{
+          currentPhase:"Not started", completionPct:"0%", currentSlice:"—",
+          blockedBy:"—", dependencies:"—", notes:"No dedicated audit on record."}}),
+        mod("Consent (DPDP)", {status:"orange", fields:{
+          currentPhase:"Development — partially live", completionPct:"Consent module built; guard.consent_required ON in prod",
+          currentSlice:"—", blockedBy:"None active", dependencies:"Communication module (Phase 4)",
+          notes:"Hard deadline: DPDP compliance by 13 May 2027."}}),
+        mod("Patient Rights", {status:"grey", fields:{
+          currentPhase:"Not started", completionPct:"0%", currentSlice:"—",
+          blockedBy:"—", dependencies:"Consent (DPDP) module",
+          notes:"Required under DPDP before 2027-05-13 deadline; not yet scoped."}}),
+        mod("Breach Register", {status:"grey", fields:{
+          currentPhase:"Not started", completionPct:"0%", currentSlice:"—",
+          blockedBy:"—", dependencies:"Consent (DPDP) module",
+          notes:"Required under DPDP; not yet scoped."}}),
+        mod("Data Retention", {status:"grey", fields:{
+          currentPhase:"Not started", completionPct:"0%", currentSlice:"—",
+          blockedBy:"Related: clinic_id isolation hardening currently PARKED",
+          dependencies:"Encryption/Access Hardening (parked)",
+          notes:"Needed before onboarding a second clinic."}}),
+        mod("Help", {status:"grey", fields:{
+          currentPhase:"Not started", completionPct:"0%", currentSlice:"—",
+          blockedBy:"—", dependencies:"—", notes:"No audit on record."}})
+      ]
+    }
+  ]
+};
+
+function statusBadge(status){
+  const s = COLORS[status] || COLORS.grey;
+  return `<span class="badge" style="background:${s.bg};color:${s.c}">${s.label}</span>`;
+}
+
+function renderPipeline(m){
+  if(m.status==='grey' && m.currentStageIdx===undefined){
+    return `<div class="pipeline"><div class="notstarted">Pipeline not yet started.</div></div>`;
+  }
+  const cur = m.currentStageIdx===undefined ? -1 : m.currentStageIdx;
+  let html = `<div class="pipeline">`;
+  PIPELINE_STAGES.forEach((st,i)=>{
+    const done = i<cur, isCur = i===cur;
+    const dotColor = done?'var(--green)':(isCur?`var(${'--'+(m.status)})`:'var(--grey)');
+    html += `<div class="stage ${done?'done':''} ${isCur?'current':''}">
+      <span class="dot" style="background:${dotColor}"></span>${st}${done?' &#10003;':''}${isCur?' (current)':''}
+    </div>`;
+  });
+  html += `</div>`;
+  if(m.slices){
+    html += `<div class="slices"><div style="font-size:11px;color:var(--sub);font-weight:600;padding:2px 6px;">Implementation slices</div>`;
+    m.slices.forEach(s=>{ html += `<div class="s">&bull; ${s}</div>`; });
+    html += `</div>`;
+  }
+  return html;
+}
+
+function renderFields(f){
+  if(!f) return '';
+  return `<div class="fields">
+    <div><b>Current phase:</b> ${f.currentPhase}</div>
+    <div><b>Completion %:</b> ${f.completionPct}</div>
+    <div><b>Current slice:</b> ${f.currentSlice}</div>
+    <div><b>Blocked by:</b> ${f.blockedBy}</div>
+    <div><b>Dependencies:</b> ${f.dependencies}</div>
+    <div><b>Notes:</b> ${f.notes}</div>
+  </div>`;
+}
+
+function renderModule(m){
+  const s = COLORS[m.status] || COLORS.grey;
+  return `<details class="mod" style="border-color:${s.c}">
+    <summary style="background:${s.bg}"><span class="arrow">&#9656;</span>${m.name}${statusBadge(m.status)}</summary>
+    ${renderFields(m.fields)}
+    ${!m.infoOnlySkipPipeline ? renderPipeline(m) : ''}
+  </details>`;
+}
+
+function renderGroup(g){
+  let inner = '';
+  g.modules.forEach(m=>{
+    if(m.isSubgroup){
+      inner += `<details class="mod" open><summary style="background:#f6f7f9"><span class="arrow">&#9656;</span>${m.name}</summary>`;
+      m.modules.forEach(sm=> inner += renderModule(sm));
+      inner += `</details>`;
+    } else {
+      inner += renderModule(m);
+    }
+  });
+  return `<details class="grp"><summary><span class="arrow">&#9656;</span>${g.name}</summary>${inner}</details>`;
+}
+
+function render(){
+  let html = `<div class="root"><div class="title">${DATA.title}</div><div class="sub" style="margin-bottom:10px">Hierarchical engineering execution map — expand any node.</div>`;
+  DATA.groups.forEach(g=> html += renderGroup(g));
+  html += `</div>`;
+  document.getElementById('tree').innerHTML = html;
+}
+
+function setAll(open){
+  document.querySelectorAll('details').forEach(d=> d.open = open);
+}
+
+render();
+</script>
+</body>
+</html>

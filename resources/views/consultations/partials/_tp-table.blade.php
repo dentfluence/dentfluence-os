@@ -1,3 +1,8 @@
+{{-- ══ LEGACY — CONFIRMED UNUSED (audit 2026-07-31) ══
+     Only referenced by treatment-plan.blade.php, which is itself legacy/
+     unused — dead sub-partial of a dead partial. Retained for reference/
+     rollback per Retire > Archive > Verify > Delete policy — excluded from
+     new development. ══ --}}
 {{--
     partials/_tp-table.blade.php  (private sub-partial)
     Variables: $planType ('best'|'acceptable'), $ref (JS array name), $totalRef (JS total var name)

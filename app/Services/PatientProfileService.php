@@ -18,6 +18,7 @@ use App\Models\Prescription\Prescription;
 use App\Services\MembershipBenefitService;
 use App\Services\Patient\FamilyLinkService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Patient Profile read model (Patients Module Phase 4, Slice 1).
@@ -296,15 +297,18 @@ class PatientProfileService
     /** Benefit logs (latest 50) — table may not exist yet if migration pending. */
     private function benefitLogs(Patient $patient)
     {
-        try {
-            return MembershipBenefitLog::with(['invoice', 'membership.plan'])
-                ->where('patient_id', $patient->id)
-                ->orderByDesc('availed_at')
-                ->limit(50)
-                ->get();
-        } catch (\Exception $e) {
+        // Narrowed guard (Phase 2, PM-013): only the documented "migration not
+        // run yet" case is swallowed. Any other failure (bad query, DB outage,
+        // etc.) now surfaces normally instead of silently rendering "no data".
+        if (! Schema::hasTable('membership_benefit_logs')) {
             return collect();
         }
+
+        return MembershipBenefitLog::with(['invoice', 'membership.plan'])
+            ->where('patient_id', $patient->id)
+            ->orderByDesc('availed_at')
+            ->limit(50)
+            ->get();
     }
 
     /**

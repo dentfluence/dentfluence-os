@@ -363,19 +363,24 @@
 </div>
 @endif
 
-{{-- ── History of Present Illness ── --}}
+{{-- ── Examination Findings ──────────────────────────────────────────
+     2026-07-31 UX experiment: prefers the primary `examination_notes`
+     field, falls back to the older `findings_summary_final` so records
+     saved before this column was surfaced still print correctly. ── --}}
+@php $printExamFindings = $consultation->examination_notes ?: $consultation->findings_summary_final; @endphp
+@if(filled($printExamFindings))
+<div class="cp-section">
+    <div class="cp-section-title">Examination Findings</div>
+    <div class="cp-value" style="font-size:12.5px;">{{ $printExamFindings }}</div>
+</div>
+@endif
+
+{{-- ── History of Present Illness (supporting detail, kept — not in the
+     spec's primary sequence but not internal-only, so still printed) ── --}}
 @if(filled($consultation->hopi_final))
 <div class="cp-section">
     <div class="cp-section-title">History of Present Illness</div>
     <div class="cp-value" style="font-size:12.5px;">{{ $consultation->hopi_final }}</div>
-</div>
-@endif
-
-{{-- ── Findings Summary (if recorded) ── --}}
-@if(filled($consultation->findings_summary_final))
-<div class="cp-section">
-    <div class="cp-section-title">Examination Findings</div>
-    <div class="cp-value" style="font-size:12.5px;">{{ $consultation->findings_summary_final }}</div>
 </div>
 @endif
 
@@ -424,7 +429,9 @@
 {{-- ── Treatment To Be Done ── --}}
 @if($hasTreatment)
 <div class="cp-section">
-    <div class="cp-section-title">Treatment Advised</div>
+    {{-- Renamed 2026-07-31 — $txText already prefers treatment_done (see PHP
+         above), this label now says so explicitly per the UX experiment spec. --}}
+    <div class="cp-section-title">Treatment Done / Advised</div>
     @if(filled($txText))
     <div class="cp-value" style="font-size:12.5px;margin-bottom:6px;">{{ $txText }}</div>
     @endif

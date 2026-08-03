@@ -10,15 +10,18 @@ use App\Models\Patient;
 use App\Models\Prescription\{
     Prescription,
     PrescriptionItem,
-    PrescriptionAuditLog,
     RxDrug,
 };
 use App\Services\Prescription\PrescriptionAlertService;
+use App\Services\Prescription\PrescriptionQuickSaveService;
 use App\Services\Relationship\CommunicationGuard;
 
 class PrescriptionController extends Controller
 {
-    public function __construct(private PrescriptionAlertService $alertService) {}
+    public function __construct(
+        private PrescriptionAlertService $alertService,
+        private PrescriptionQuickSaveService $quickSave,
+    ) {}
 
     // ─────────────────────────────────────────────────────────────────────────
     // GLOBAL INDEX  /prescriptions
@@ -111,7 +114,7 @@ class PrescriptionController extends Controller
 
     public function store(Request $request, Patient $patient)
     {
-        $prescription = $this->saveQuickPrescription($request, $patient);
+        $prescription = $this->quickSave->createFromPanel($request, $patient);
 
         return redirect()
             ->route('patients.show', $patient)
@@ -159,16 +162,7 @@ class PrescriptionController extends Controller
     {
         abort_if($prescription->isCancelled(), 403, 'Cancelled prescriptions cannot be edited.');
 
-        DB::transaction(function () use ($request, $prescription) {
-            $this->fillQuickHeader($prescription, $request);
-            $prescription->status = Prescription::STATUS_ISSUED;
-            $prescription->save();
-
-            $prescription->items()->delete();
-            $this->createQuickItems($prescription, $request);
-
-            $this->audit($prescription, 'edited');
-        });
+        $this->quickSave->updateFromPanel($prescription, $request);
 
         return redirect()
             ->route('patients.show', $patient)
@@ -211,7 +205,7 @@ class PrescriptionController extends Controller
                 $newItem->save();
             }
 
-            $this->audit($clone, 'repeated', 'Repeated from ' . $prescription->prescription_number);
+            $this->quickSave->audit($clone, 'repeated', 'Repeated from ' . $prescription->prescription_number);
         });
 
         return redirect()
@@ -229,7 +223,7 @@ class PrescriptionController extends Controller
 
         $prescription->update(['status' => 'cancelled']);
         $prescription->delete(); // soft delete
-        $this->audit($prescription, 'cancelled', $request->input('reason'));
+        $this->quickSave->audit($prescription, 'cancelled', $request->input('reason'));
 
         return redirect()
             ->route('patients.show', $patient)
@@ -413,7 +407,7 @@ class PrescriptionController extends Controller
             'status'           => Prescription::STATUS_WHATSAPP_SENT,
             'whatsapp_sent_at' => now(),
         ]);
-        $this->audit($prescription, 'whatsapp_sent');
+        $this->quickSave->audit($prescription, 'whatsapp_sent');
 
         // Build the wa.me deep-link URL
         $phone   = preg_replace('/[^0-9]/', '', $patient->phone ?? '');
@@ -537,122 +531,4 @@ class PrescriptionController extends Controller
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // PRIVATE HELPERS
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Build + persist a brand-new Prescription (header + items) from the
-     * quick form's POST payload. Status goes straight to ISSUED — there is
-     * no draft/finalize step; it's live the moment it's saved, and can be
-     * opened again in Edit at any time.
-     */
-    private function saveQuickPrescription(Request $request, Patient $patient): Prescription
-    {
-        $prescription = null;
-
-        DB::transaction(function () use ($request, $patient, &$prescription) {
-            $prescription = new Prescription([
-                'prescription_number' => Prescription::generateNumber(),
-                'patient_id'          => $patient->id,
-                'visit_id'            => $request->input('visit_id') ?: null,
-                'consultation_id'     => $request->input('consultation_id') ?: null,
-                'prescribed_by'       => Auth::id(),
-                'language'            => 'en',
-                'source'              => $request->input('source', $request->filled('visit_id')
-                    ? Prescription::SOURCE_VISIT
-                    : Prescription::SOURCE_CONSULTATION),
-                'status'              => Prescription::STATUS_ISSUED,
-            ]);
-            $this->fillQuickHeader($prescription, $request);
-            $prescription->save();
-
-            $this->createQuickItems($prescription, $request);
-
-            $this->audit($prescription, 'created');
-        });
-
-        return $prescription;
-    }
-
-    /**
-     * Apply the clinical-context fields shared by the create/edit quick form:
-     * chief complaint, diagnosis, follow-up (date or "after N days" note),
-     * and general instructions (built from the selected chips + free-text note).
-     */
-    private function fillQuickHeader(Prescription $prescription, Request $request): void
-    {
-        $instrs   = json_decode($request->input('instructions_data', '[]'), true) ?: [];
-        $instrTxt = implode('; ', array_filter((array) $instrs));
-        $note     = trim($request->input('prescription_notes', ''));
-
-        $prescription->chief_complaint      = $request->input('chief_complaint') ?: null;
-        $prescription->diagnosis            = $request->input('diagnosis') ?: null;
-        $prescription->weight               = $request->input('weight') ?: null;
-        $prescription->follow_up_date       = $request->input('follow_up_date') ?: null;
-        $prescription->follow_up_after_days = $request->input('follow_up_after_days') ?: null;
-        $prescription->general_instructions = implode("\n", array_filter([$instrTxt, $note])) ?: null;
-    }
-
-    /**
-     * Decode the <x-prescription-panel> JSON payload and create PrescriptionItem
-     * rows. The panel only sends the combined drug label, a form type, and
-     * dosing — when a drug_id is present we look it up against the RxDrug
-     * master so generic name, strength, and dosage form are snapshotted too
-     * (used by the print view's "Tablet Flexon / composition" formatting).
-     */
-    private function createQuickItems(Prescription $prescription, Request $request): void
-    {
-        $rows = json_decode($request->input('prescriptions_data', '[]'), true) ?: [];
-
-        foreach ($rows as $i => $row) {
-            if (empty($row['drug'])) continue;
-
-            $drug = !empty($row['drug_id']) ? RxDrug::find($row['drug_id']) : null;
-
-            $item = new PrescriptionItem([
-                'prescription_id' => $prescription->id,
-                'drug_id'         => $drug?->id,
-                'drug_name'       => $row['drug'],
-                'generic_name'    => $drug?->generic?->name,
-                'strength'        => $drug?->strength,
-                'dosage_form'     => $drug?->dosage_form ?? ($row['form_type'] ?? null),
-                'food_advice'     => $row['food'] ?: ($drug?->defaultFoodInstruction?->label),
-                'morning'         => $this->doseValue($row['morn']  ?? null),
-                'afternoon'       => $this->doseValue($row['noon']  ?? null),
-                'night'           => $this->doseValue($row['night'] ?? null),
-                'is_sos'          => !empty($row['sos']),
-                'duration'        => (int) ($row['duration'] ?? 0),
-                'duration_unit'   => $row['unit'] ?? 'days',
-                'dispensing_type' => $drug?->dispensing_type ?? RxDrug::DISPENSING_UNIT,
-                'unit_label'      => $drug?->unit_label,
-                'sort_order'      => $i,
-            ]);
-            $item->quantity = $item->calculateQuantity();
-            $item->save();
-        }
-    }
-
-    /**
-     * Normalise a panel dose value into a stored amount.
-     * Solids send a boolean (checkbox) → 1 or 0; liquids send millilitres as a
-     * number → stored as-is (e.g. 5 ml). Blank/false becomes 0.
-     */
-    private function doseValue($value): float
-    {
-        if (is_bool($value)) {
-            return $value ? 1.0 : 0.0;
-        }
-        return is_numeric($value) ? (float) $value : 0.0;
-    }
-
-    private function audit(Prescription $prescription, string $action, ?string $notes = null): void
-    {
-        PrescriptionAuditLog::create([
-            'prescription_id' => $prescription->id,
-            'user_id'         => Auth::id(),
-            'action'          => $action,
-            'notes'           => $notes,
-        ]);
-    }
 }

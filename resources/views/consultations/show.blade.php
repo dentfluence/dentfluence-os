@@ -70,7 +70,14 @@
                         View Report
                     </a>
                 @else
-                    <a href="{{ route('consultations.edit', $consultation) }}"
+                    {{-- Slice 1 fix (2026-08-01): Minor Visit has its own edit workflow now
+                         (see consultations.minor-visit.edit) — routing it through the generic
+                         consultation edit form was a production blocker (missing fields,
+                         corrupted saves). Other typed variants (Same Issue, Emergency) still
+                         fall through to the generic form — untouched, out of Slice 1 scope. --}}
+                    <a href="{{ $consultation->consultation_type === 'minor_visit'
+                                ? route('patients.consultations.minor-visit.edit', [$consultation->patient_id, $consultation])
+                                : route('consultations.edit', $consultation) }}"
                        class="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition-colors">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
@@ -132,24 +139,34 @@
                     Sections
                 </p>
                 @php
+                // 2026-07-31 UX experiment: nav mirrors the new primary flow
+                // (Overview → Chief Complaint → Examination Findings → Advanced
+                // Details → Diagnosis → Treatment Done → Prescription →
+                // Instructions → Follow-up). Advanced-group items (Specialty/
+                // HOPI/Visit Update/Tooth Chart/Investigations/Findings Summary)
+                // are collapsed by default, so clicking their nav link both
+                // scrolls AND expands the panel via the section's own toggle —
+                // grouped under one "Advanced Clinical Details" link instead of
+                // six separate ones cluttering the sidebar.
                 $sections = [
-                    'sec-header'      => 'Overview',
-                    'sec-complaint'   => 'Chief Complaint',
-                    'sec-specialty'   => 'Specialty Findings',
-                    'sec-hopi'        => 'HOPI',
-                    'sec-visit-update'=> 'Visit Update',
-                    'sec-toothchart'  => 'Tooth Chart',
-                    'sec-invest'      => 'Investigations',
-                    'sec-findings'    => 'Findings Summary',
-                    'sec-diagnosis'   => 'Diagnosis',
-                    'sec-rendered'    => 'Treatment Rendered',
+                    'sec-header'         => 'Overview',
+                    'sec-complaint'      => 'Chief Complaint',
+                    'sec-exam-findings'  => 'Examination Findings',
+                    'sec-diagnosis'      => 'Diagnosis',
+                    'sec-treatment-done' => 'Treatment Done',
+                    'sec-prescription'   => 'Prescription',
+                    'sec-instructions'   => 'Instructions',
+                    'sec-followup'       => 'Follow-up',
+                    'sec-rendered'       => 'Treatment Rendered',
                 ];
                 // Conditional sections only appear in the nav when they actually render.
                 $navHide = [];
-                if (!($consultation->specialty_findings ?? false) && !$consultation->specialtyModules()->exists()) $navHide[] = 'sec-specialty';
-                if (!$consultation->hopi_final) $navHide[] = 'sec-hopi';
-                if (!$consultation->update_notes && !$consultation->additional_findings && $consultation->related_to_clinic_treatment === null) $navHide[] = 'sec-visit-update';
-                if (!$consultation->findings_summary_final) $navHide[] = 'sec-findings';
+                $examFindingsForNav = $consultation->examination_notes ?: $consultation->findings_summary_final;
+                if (!$examFindingsForNav) $navHide[] = 'sec-exam-findings';
+                if (!$consultation->treatment_done) $navHide[] = 'sec-treatment-done';
+                if (!$linkedPrescription) $navHide[] = 'sec-prescription';
+                if (!$linkedPrescription?->general_instructions) $navHide[] = 'sec-instructions';
+                if (!$consultation->follow_up_date && !$consultation->follow_up_note) $navHide[] = 'sec-followup';
                 if (!$consultation->procedure_performed && !$consultation->emergency_treatment_rendered && !$consultation->advice) $navHide[] = 'sec-rendered';
                 @endphp
                 <ul class="pb-3">
@@ -161,6 +178,15 @@
                             {{ $label }}
                         </a>
                     </li>
+                    @if($id === 'sec-complaint')
+                    <li>
+                        <a href="#sec-advanced"
+                           onclick="setTimeout(() => document.querySelector('[data-advanced-toggle]')?.click(), 50)"
+                           class="block text-sm text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 px-4 py-1.5 transition-colors italic">
+                            Advanced Details ▾
+                        </a>
+                    </li>
+                    @endif
                     @endforeach
                 </ul>
             </nav>
@@ -227,6 +253,44 @@
                     @endforeach
                 </dl>
             </section>
+
+            {{-- 3. Examination Findings ────────────────────────────────────── --}}
+            {{-- 2026-07-31 UX experiment: primary clinical notes field, reuses the
+                 existing `examination_notes` column (see create.blade.php). Falls
+                 back to the older `findings_summary_final` field for records saved
+                 before this column was surfaced, so nothing looks blank. --}}
+            @php $examFindings = $consultation->examination_notes ?: $consultation->findings_summary_final; @endphp
+            @if($examFindings)
+            <section id="sec-exam-findings" class="bg-white rounded-xl border border-gray-200 shadow-sm">
+                <div class="px-5 py-3 border-b border-gray-100">
+                    <h3 class="font-semibold text-gray-800">Examination Findings</h3>
+                </div>
+                <div class="px-5 py-4 text-sm">
+                    <p class="text-gray-800 whitespace-pre-wrap leading-relaxed">{{ $examFindings }}</p>
+                </div>
+            </section>
+            @endif
+
+            {{-- ══════════════════════════════════════════════════════════════
+                 ▼ ADVANCED CLINICAL DETAILS (2026-07-31 UX experiment)
+                 Read-only counterpart to create/edit's collapsible "Advanced
+                 Clinical Details" card — same set of sections (Specialty
+                 Findings, HOPI, Visit Update, Tooth Chart, Investigations,
+                 Findings Summary, Risk Assessment), just collapsed by default
+                 here too so the primary read is Chief Complaint → Examination
+                 Findings → Diagnosis → Treatment Done, not a wall of cards.
+                 Nothing inside was removed or restructured — only wrapped.
+                 ══════════════════════════════════════════════════════════════ --}}
+            <div id="sec-advanced" class="bg-white rounded-xl border border-gray-200 shadow-sm" x-data="{ showAdvanced: false }">
+                <button type="button" data-advanced-toggle @click="showAdvanced = !showAdvanced"
+                        class="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-gray-50 transition-colors rounded-xl">
+                    <span class="font-semibold text-gray-800 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-gray-400 transition-transform" :class="showAdvanced ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                        Advanced Clinical Details
+                    </span>
+                    <span class="text-xs text-gray-400">Specialty Findings · HOPI · Tooth Chart · Investigations · Findings Summary · Risk</span>
+                </button>
+                <div x-show="showAdvanced" x-collapse x-cloak class="border-t border-gray-100 px-5 py-4 space-y-4">
 
             {{-- 2b. Specialty Findings ─────────────────────────────────────── --}}
             {{-- Mirrors the create form's Specialty Modules zone (Ortho / Perio / Endo / Smile / Prostho). --}}
@@ -488,6 +552,35 @@
             </section>
             @endif
 
+            {{-- 2e. Risk Assessment ────────────────────────────────────────── --}}
+            {{-- Relocated into Advanced Clinical Details 2026-07-31 to mirror
+                 create.blade.php — same `diagnosis_risk` field, just moved out
+                 of the Diagnosis card (still shown, not removed). --}}
+            @php
+            $riskVal = $consultation->diagnosis_risk ?: $consultation->risk_assessment;
+            $riskLc  = strtolower((string) $riskVal);
+            $riskColor = str_contains($riskLc, 'very high') || str_contains($riskLc, 'high')
+                            ? 'bg-red-100 text-red-700'
+                       : (str_contains($riskLc, 'moderate') || str_contains($riskLc, 'medium')
+                            ? 'bg-yellow-100 text-yellow-700'
+                       : (str_contains($riskLc, 'low')
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-600'));
+            @endphp
+            @if($riskVal)
+            <div class="bg-white rounded-lg border border-gray-100">
+                <div class="px-4 py-3 flex items-center gap-2">
+                    <p class="text-xs font-medium text-gray-400 uppercase tracking-wide">Risk Assessment</p>
+                    <span class="ml-1 text-xs font-semibold px-2 py-0.5 rounded-full {{ $riskColor }}">{{ ucwords($riskVal) }}</span>
+                </div>
+            </div>
+            @endif
+
+                </div>
+                {{-- /showAdvanced collapse --}}
+            </div>
+            {{-- /Advanced Clinical Details card --}}
+
             {{-- 10. Diagnosis ──────────────────────────────────────────────── --}}
             <section id="sec-diagnosis" class="bg-white rounded-xl border border-gray-200 shadow-sm">
                 <div class="px-5 py-3 border-b border-gray-100">
@@ -504,29 +597,6 @@
                             <p class="mt-0.5 text-gray-800">{{ $consultation->secondary_diagnosis ?: '—' }}</p>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <p class="text-xs font-medium text-gray-400 uppercase tracking-wide">Risk Assessment</p>
-                        @php
-                        // Create form saves `diagnosis_risk` ("Low Risk" … "Very High Risk");
-                        // older records may use `risk_assessment`. Show whichever is present.
-                        $riskVal = $consultation->diagnosis_risk ?: $consultation->risk_assessment;
-                        $riskLc  = strtolower((string) $riskVal);
-                        $riskColor = str_contains($riskLc, 'very high') || str_contains($riskLc, 'high')
-                                        ? 'bg-red-100 text-red-700'
-                                   : (str_contains($riskLc, 'moderate') || str_contains($riskLc, 'medium')
-                                        ? 'bg-yellow-100 text-yellow-700'
-                                   : (str_contains($riskLc, 'low')
-                                        ? 'bg-green-100 text-green-700'
-                                        : 'bg-gray-100 text-gray-600'));
-                        @endphp
-                        @if($riskVal)
-                        <span class="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full {{ $riskColor }}">
-                            {{ ucwords($riskVal) }}
-                        </span>
-                        @else
-                        <span class="ml-2 text-gray-400">—</span>
-                        @endif
-                    </div>
                     @if($consultation->diagnosis_notes)
                     <div>
                         <p class="text-xs font-medium text-gray-400 uppercase tracking-wide">Notes</p>
@@ -535,6 +605,85 @@
                     @endif
                 </div>
             </section>
+
+            {{-- 11. Treatment Done ─────────────────────────────────────────── --}}
+            {{-- NEW 2026-07-31 — reuses the `treatment_done` column (already
+                 fillable/cast on Consultation, previously unused in this view).
+                 Distinct from Diagnosis: what was actually performed today. --}}
+            @if($consultation->treatment_done)
+            <section id="sec-treatment-done" class="bg-white rounded-xl border border-gray-200 shadow-sm">
+                <div class="px-5 py-3 border-b border-gray-100">
+                    <h3 class="font-semibold text-gray-800">Treatment Done</h3>
+                </div>
+                <div class="px-5 py-4 text-sm">
+                    <p class="text-gray-800 whitespace-pre-wrap leading-relaxed">{{ $consultation->treatment_done }}</p>
+                </div>
+            </section>
+            @endif
+
+            {{-- 12. Prescription ───────────────────────────────────────────── --}}
+            {{-- NEW 2026-07-31 — the Rx tied specifically to this consultation
+                 (see ConsultationController::show(), same query as edit()/print()),
+                 distinct from the generic "Previous Prescriptions" CIP panel item. --}}
+            @if($linkedPrescription)
+            <section id="sec-prescription" class="bg-white rounded-xl border border-gray-200 shadow-sm">
+                <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <h3 class="font-semibold text-gray-800">Prescription</h3>
+                    <a href="{{ route('patients.show', $consultation->patient_id) }}#prescriptions"
+                       class="text-xs text-indigo-600 hover:text-indigo-800">View in Prescriptions tab →</a>
+                </div>
+                <div class="px-5 py-4 text-sm">
+                    <p class="text-xs text-gray-400 mb-2">{{ $linkedPrescription->prescription_number }}</p>
+                    @if($linkedPrescription->items && $linkedPrescription->items->count())
+                    <ul class="space-y-1">
+                        @foreach($linkedPrescription->items as $item)
+                        <li class="flex items-start gap-2 text-gray-800">
+                            <span class="text-green-500 mt-0.5">•</span>
+                            <span>{{ $item->drug_name }}{{ $item->strength ? ' '.$item->strength : '' }}
+                                @if($item->duration)<span class="text-gray-400"> — {{ $item->duration }} {{ $item->duration_unit ?? 'days' }}</span>@endif
+                            </span>
+                        </li>
+                        @endforeach
+                    </ul>
+                    @else
+                    <p class="text-gray-400 italic">No items.</p>
+                    @endif
+                </div>
+            </section>
+            @endif
+
+            {{-- 13. Instructions ───────────────────────────────────────────── --}}
+            @if($linkedPrescription?->general_instructions)
+            <section id="sec-instructions" class="bg-white rounded-xl border border-gray-200 shadow-sm">
+                <div class="px-5 py-3 border-b border-gray-100">
+                    <h3 class="font-semibold text-gray-800">Instructions</h3>
+                </div>
+                <div class="px-5 py-4 text-sm">
+                    <p class="text-gray-800 whitespace-pre-wrap leading-relaxed">{{ $linkedPrescription->general_instructions }}</p>
+                </div>
+            </section>
+            @endif
+
+            {{-- 14. Follow-up ───────────────────────────────────────────────── --}}
+            {{-- Reuses follow_up_date/follow_up_note (same columns as
+                 partials/follow-up.blade.php in create/edit). --}}
+            @if($consultation->follow_up_date || $consultation->follow_up_note)
+            <section id="sec-followup" class="bg-white rounded-xl border border-gray-200 shadow-sm">
+                <div class="px-5 py-3 border-b border-gray-100">
+                    <h3 class="font-semibold text-gray-800">Follow-up</h3>
+                </div>
+                <div class="px-5 py-4 text-sm grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-xs font-medium text-gray-400 uppercase tracking-wide">Date</p>
+                        <p class="mt-0.5 text-gray-800">{{ $consultation->follow_up_date?->format('d M Y') ?: '—' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-gray-400 uppercase tracking-wide">Note</p>
+                        <p class="mt-0.5 text-gray-800">{{ $consultation->follow_up_note ?: '—' }}</p>
+                    </div>
+                </div>
+            </section>
+            @endif
 
             {{-- 10b. Treatment Rendered & Advice (Emergency / Minor-Visit) ─── --}}
             @php $hasRendered = $consultation->procedure_performed || $consultation->emergency_treatment_rendered || $consultation->advice; @endphp
@@ -576,7 +725,11 @@
                     Back to Patient
                 </a>
                 @if($consultation->consultation_type !== 'coha')
-                <a href="{{ route('consultations.edit', $consultation) }}"
+                {{-- Slice 1 fix (2026-08-01): see matching note above — Minor Visit routes
+                     to its own edit workflow, not the generic consultation form. --}}
+                <a href="{{ $consultation->consultation_type === 'minor_visit'
+                            ? route('patients.consultations.minor-visit.edit', [$consultation->patient_id, $consultation])
+                            : route('consultations.edit', $consultation) }}"
                    class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
@@ -968,7 +1121,7 @@
                             <a href="{{ route('patients.show', $consultation->patient_id) }}" class="flex items-center gap-2 text-sm text-gray-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg px-2 py-1.5 transition-colors"><svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>View Patient Profile</a>
                                            <a href="{{ route('consultations.print', $consultation) }}" target="_blank" class="flex items-center gap-2 text-sm text-gray-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg px-2 py-1.5 transition-colors"><svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print Consultation</a>
                             <a href="{{ route('patients.prescriptions.create', $consultation->patient_id) }}?consultation_id={{ $consultation->id }}" class="flex items-center gap-2 text-sm text-gray-700 hover:text-green-700 hover:bg-green-50 rounded-lg px-2 py-1.5 transition-colors"><svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"/></svg>New Prescription</a>
-                            <a href="{{ route('consultations.edit', $consultation) }}" class="flex items-center gap-2 text-sm text-gray-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg px-2 py-1.5 transition-colors"><svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>Edit Consultation</a>
+                            <a href="{{ $consultation->consultation_type === 'minor_visit' ? route('patients.consultations.minor-visit.edit', [$consultation->patient_id, $consultation]) : route('consultations.edit', $consultation) }}" class="flex items-center gap-2 text-sm text-gray-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg px-2 py-1.5 transition-colors"><svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>Edit Consultation</a>
                         </div>
                     </div>
                 </div>

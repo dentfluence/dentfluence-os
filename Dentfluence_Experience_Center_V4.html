@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dentfluence Experience Center</title>
+<style>
+:root{
+  --primary:#702070; --primary-dark:#4a1548; --primary-light:#f4e8f4;
+  --gold:#b8862f; --indigo:#2d2a55; --titanium:#8a8a94; --cyan:#8fd8e0; --graphite:#3a3740;
+  --ink:#14121a; --paper:#ffffff; --muted:#6b6470; --line:#e8e3e8; --panel:#faf7fa;
+  --font: -apple-system,"SF Pro Display","Segoe UI",Inter,Helvetica,Arial,sans-serif;
+  --ease: cubic-bezier(.22,.61,.36,1); --dur: 900ms; --dur-s: 600ms; --dur-l: 1200ms;
+}
+html[data-theme="dark"]{ --ink:#f3eef3; --paper:#0b0a0d; --muted:#a89fa8; --line:#242028; --panel:#141116; --primary-light:#26182a; }
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%;}
+body{ font-family:var(--font); background:var(--paper); color:var(--ink); overflow:hidden; -webkit-font-smoothing:antialiased; transition:background 1.1s var(--ease),color 1.1s var(--ease); }
+.glow{ position:fixed; border-radius:50%; filter:blur(110px); pointer-events:none; z-index:0; }
+.glow1{ width:52vw; height:52vw; background:radial-gradient(circle,var(--primary) 0%,transparent 70%); top:-18%; right:-14%; opacity:.14; animation:driftA 34s ease-in-out infinite; }
+.glow2{ width:40vw; height:40vw; background:radial-gradient(circle,var(--gold) 0%,transparent 70%); bottom:-16%; left:-10%; opacity:.08; animation:driftB 40s ease-in-out infinite; }
+@keyframes driftA{ 0%,100%{ transform:translate(0,0);} 50%{ transform:translate(-3%,4%);} }
+@keyframes driftB{ 0%,100%{ transform:translate(0,0);} 50%{ transform:translate(4%,-3%);} }
+.deck{ position:relative; width:100vw; height:100vh; overflow:hidden; z-index:1; }
+.slide{ position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:5vh 6.5vw; opacity:0; transform:translateY(26px) scale(.985); filter:blur(6px); pointer-events:none; transition:opacity var(--dur-l) var(--ease), transform var(--dur-l) var(--ease), filter var(--dur-l) var(--ease); }
+.slide.active{ opacity:1; transform:translateY(0) scale(1); filter:blur(0); pointer-events:auto; }
+.slide.prev{ opacity:0; transform:translateY(-18px) scale(.99); filter:blur(4px); }
+.kicker{ font-size:11px; font-weight:600; letter-spacing:.17em; color:var(--primary); text-transform:uppercase; margin-bottom:12px; opacity:0; filter:blur(4px); transform:translateY(8px); }
+.slide.active .kicker{ animation:riseIn var(--dur) 60ms var(--ease) forwards; }
+h1.stitle{ font-size:clamp(26px,3.3vw,46px); font-weight:600; line-height:1.08; letter-spacing:-.02em; max-width:960px; opacity:0; filter:blur(6px); transform:translateY(14px); }
+.slide.active h1.stitle{ animation:riseIn var(--dur) 160ms var(--ease) forwards; }
+.ssub{ font-size:clamp(13px,1.05vw,16.5px); color:var(--muted); font-weight:400; margin-top:9px; max-width:640px; opacity:0; filter:blur(4px); transform:translateY(10px); }
+.slide.active .ssub{ animation:riseIn var(--dur) 260ms var(--ease) forwards; }
+@keyframes riseIn{ to{ opacity:1; transform:translateY(0); filter:blur(0);} }
+.stage{ flex:1; min-height:0; margin-top:2.6vh; display:flex; align-items:center; justify-content:center; overflow-y:auto; }
+.glass{ background:rgba(255,255,255,.55); backdrop-filter:blur(24px) saturate(160%); -webkit-backdrop-filter:blur(24px) saturate(160%); border:1px solid rgba(255,255,255,.5); border-radius:16px; box-shadow:0 24px 70px rgba(20,18,26,.08); }
+html[data-theme="dark"] .glass{ background:rgba(255,255,255,.035); border-color:rgba(255,255,255,.08); box-shadow:0 24px 70px rgba(0,0,0,.4); }
+.progress-track{ position:fixed; top:0; left:0; height:2px; width:100%; background:var(--line); z-index:60;}
+.progress-fill{ height:100%; background:var(--primary); transition:width var(--dur) var(--ease); }
+.counter{ position:fixed; bottom:22px; right:30px; font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; z-index:60; letter-spacing:.03em;}
+.counter b{ color:var(--ink); font-weight:600; }
+.brandmark{ position:fixed; bottom:22px; left:30px; font-size:11.5px; font-weight:600; color:var(--muted); letter-spacing:.1em; z-index:60; }
+.brandmark span{ color:var(--primary); }
+.actmark{ position:fixed; top:18px; left:30px; font-size:11.5px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; z-index:60; }
+.controls{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); display:flex; gap:6px; z-index:60; }
+.controls button{ width:30px; height:30px; border-radius:50%; border:1px solid var(--line); background:var(--paper); color:var(--ink); cursor:pointer; font-size:12.5px; display:flex; align-items:center; justify-content:center; transition:all var(--dur-s) var(--ease); }
+.controls button:hover{ background:var(--primary); color:#fff; border-color:var(--primary); transform:scale(1.06); }
+.toprow{ position:fixed; top:14px; right:20px; display:flex; gap:7px; z-index:60; }
+.iconbtn{ width:28px; height:28px; border-radius:7px; border:1px solid var(--line); background:var(--paper); color:var(--muted); cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; transition:all var(--dur-s) var(--ease); }
+.iconbtn:hover{ color:var(--primary); border-color:var(--primary); }
+.overview{ position:fixed; inset:0; background:var(--paper); z-index:70; display:none; padding:52px 6vw; overflow-y:auto; }
+.overview.open{ display:block; }
+.overview h2{ font-size:19px; margin-bottom:6px; }
+.overview .oc{ font-size:12px; color:var(--muted); margin-bottom:20px; }
+.ovgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:10px; }
+.ovcard{ border:1px solid var(--line); border-radius:11px; padding:12px; cursor:pointer; transition:all var(--dur-s) var(--ease); background:var(--panel); }
+.ovcard:hover{ border-color:var(--primary); transform:translateY(-3px); }
+.ovcard .n{ font-size:10px; color:var(--primary); font-weight:700; margin-bottom:4px; }
+.ovcard .t{ font-size:12.5px; font-weight:600; line-height:1.3; }
+.ovclose{ position:absolute; top:20px; right:30px; }
+.tip{ position:fixed; z-index:200; pointer-events:none; max-width:225px; padding:10px 13px; border-radius:11px; background:var(--paper); border:1px solid var(--line); box-shadow:0 16px 40px rgba(20,18,26,.16); opacity:0; transform:translateY(6px) scale(.98); transition:opacity var(--dur-s) var(--ease), transform var(--dur-s) var(--ease); backdrop-filter:blur(14px); }
+html[data-theme="dark"] .tip{ background:rgba(20,17,22,.94); }
+.tip.show{ opacity:1; transform:translateY(0) scale(1); }
+.tip .tt{ font-size:13.5px; font-weight:700; color:var(--primary); margin-bottom:2px; }
+.tip .td{ font-size:12.5px; color:var(--muted); line-height:1.45; }
+.card-grid{ display:grid; gap:10px; width:100%; }
+.info-card{ padding:15px; cursor:pointer; transition:all var(--dur) var(--ease); opacity:0; transform:translateY(14px); }
+.slide.active .info-card{ animation:riseIn var(--dur) var(--ease) forwards; }
+.info-card .iname{ font-size:14px; font-weight:600; margin-bottom:5px; }
+.info-card .idesc{ font-size:12.5px; color:var(--muted); max-height:0; opacity:0; overflow:hidden; transition:all var(--dur) var(--ease); line-height:1.5; }
+.info-card.open .idesc{ max-height:140px; opacity:1; margin-top:5px; }
+.info-card.open{ border-color:var(--primary); }
+.role-hub{ display:flex; gap:14px; flex-wrap:wrap; justify-content:center; max-width:1000px; }
+.role-card{ width:138px; padding:19px 14px; text-align:center; cursor:pointer; transition:transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease); opacity:0; transform:translateY(18px); }
+.slide.active .role-card{ animation:riseIn var(--dur) var(--ease) forwards; }
+.role-card:hover{ transform:translateY(-6px); box-shadow:0 30px 80px rgba(112,32,112,.14); }
+.role-card .ric{ width:42px; height:42px; border-radius:50%; background:var(--primary-light); border:1px solid var(--primary); margin:0 auto 10px; display:flex; align-items:center; justify-content:center; font-size:16px; color:var(--primary); transition:transform var(--dur) var(--ease); }
+.role-card:hover .ric{ transform:scale(1.08); }
+.role-card .rname{ font-size:14.5px; font-weight:600; margin-bottom:3px; }
+.role-card .rtag{ font-size:11.5px; color:var(--muted); }
+.journey-view{ display:none; width:100%; max-width:1080px; opacity:0; transform:translateY(14px); filter:blur(4px); }
+.journey-view.open{ display:block; animation:riseIn var(--dur) var(--ease) forwards; }
+.journey-back{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--muted); cursor:pointer; margin-bottom:16px; transition:color var(--dur-s) var(--ease); }
+.journey-back:hover{ color:var(--primary); }
+.journey-steps{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-bottom:18px; }
+.jstep{ width:110px; padding:14px 9px; text-align:center; opacity:0; transform:translateY(14px); }
+.journey-view.open .jstep{ animation:riseIn var(--dur) var(--ease) forwards; }
+.jstep .num{ font-size:10.5px; color:var(--primary); font-weight:700; margin-bottom:5px; }
+.jstep .lbl{ font-size:12.5px; font-weight:600; line-height:1.35; }
+.journey-focus-wrap{ text-align:center; }
+.journey-focus{ padding:12px 22px; border-radius:13px; display:inline-block; background:var(--primary-light); border:1px solid var(--primary); }
+.journey-focus .fk{ font-size:11px; color:var(--primary); text-transform:uppercase; letter-spacing:.1em; font-weight:700; margin-bottom:3px; }
+.journey-focus .fv{ font-size:16.5px; font-weight:600; }
+.picker-wrap{ width:100%; max-width:1120px; }
+.picker-row{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:16px; max-height:150px; overflow-y:auto; padding:4px; }
+.pchip{ font-size:12px; padding:7px 14px; border-radius:20px; border:1px solid var(--line); background:var(--paper); color:var(--muted); cursor:pointer; transition:all var(--dur-s) var(--ease); white-space:nowrap; }
+.pchip:hover{ border-color:var(--primary); color:var(--primary); }
+.pchip.active{ background:var(--primary); color:#fff; border-color:var(--primary); }
+.player-box{ text-align:center; }
+.insight-line{ margin-top:14px; font-size:14px; color:var(--muted); font-style:italic; line-height:1.5; }
+.insight-line b{ color:var(--primary); font-style:normal; }
+.arch-stack{ display:flex; flex-direction:column; gap:6px; width:100%; max-width:580px; }
+.arch-layer{ padding:11px 16px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; transition:all var(--dur) var(--ease); opacity:0; transform:translateY(10px); }
+.slide.active .arch-layer{ animation:riseIn var(--dur) var(--ease) forwards; }
+.arch-layer .an{ font-size:14px; font-weight:600; }
+.arch-layer .ad{ font-size:12.5px; color:var(--muted); max-width:320px; text-align:right; opacity:0; max-height:0; overflow:hidden; transition:opacity var(--dur) var(--ease); }
+.arch-layer.on{ border-color:var(--primary); background:var(--primary-light); }
+.arch-layer.on .ad{ opacity:1; }
+.arch-connector{ width:1px; height:6px; background:var(--line); margin-left:16px; }
+.replay-btn{ margin-top:16px; font-size:12px; padding:7px 16px; border-radius:20px; border:1px solid var(--line); background:var(--paper); color:var(--muted); cursor:pointer; transition:all var(--dur-s) var(--ease); }
+.replay-btn:hover{ color:var(--primary); border-color:var(--primary); }
+.banner{ padding:14px 24px; border-radius:13px; border:1px solid var(--gold); background:rgba(184,134,47,.08); color:var(--gold); font-size:14px; font-weight:600; text-align:center; margin-top:16px; }
+.node-glow{ filter:drop-shadow(0 0 0px var(--primary)); transition:filter var(--dur) var(--ease), transform var(--dur) var(--ease); cursor:pointer; }
+.node-glow:hover{ filter:drop-shadow(0 0 12px var(--primary)); transform:scale(1.06); }
+.node-label-fo div{ font-family:var(--font); text-align:center; line-height:1.28; color:var(--muted); font-weight:600; overflow:visible; }
+.draw{ stroke-dasharray:900; stroke-dashoffset:900; }
+.slide.active .draw{ animation:drawLine 1.6s .3s var(--ease) forwards; }
+@keyframes drawLine{ to{ stroke-dashoffset:0; } }
+.pulse-slow{ animation:pulseAnim 3.2s ease-in-out infinite; }
+@keyframes pulseAnim{ 0%,100%{ filter:drop-shadow(0 0 0px var(--primary)); } 50%{ filter:drop-shadow(0 0 7px var(--primary)); } }
+.chip{ fill:var(--primary-light); stroke:var(--primary); stroke-width:1.2; }
+.chip-line{ stroke:var(--titanium); stroke-width:1.8; fill:none; transition:all var(--dur) var(--ease); }
+.chip-line-active{ stroke:var(--primary); stroke-width:2.6; fill:none; transition:all var(--dur) var(--ease); }
+.svgwrap{ display:block; width:100%; max-width:1180px; height:56vh; max-height:640px; }
+.small-svgwrap{ height:46vh; max-height:520px; }
+footer.grad-closing{ position:absolute; inset:0; background:radial-gradient(circle at 30% 30%, var(--primary-light), transparent 60%); z-index:-1; opacity:.6; }
+.two-col{ display:flex; gap:20px; width:100%; max-width:900px; }
+.two-col .colcard{ flex:1; padding:18px; }
+.two-col h4{ font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+.two-col .row{ display:flex; gap:9px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); font-size:13.5px; }
+.two-col .row:last-child{ border-bottom:none; }
+.zone-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; width:100%; max-width:960px; }
+.zone-tile{ padding:20px 16px; text-align:center; cursor:pointer; transition:all var(--dur) var(--ease); opacity:0; transform:translateY(14px); }
+.slide.active .zone-tile{ animation:riseIn var(--dur) var(--ease) forwards; }
+.zone-tile:hover{ transform:translateY(-4px); box-shadow:0 24px 60px rgba(112,32,112,.14); }
+.zone-tile .zicn{ font-size:20px; color:var(--primary); margin-bottom:8px; }
+.zone-tile .zname{ font-size:14px; font-weight:600; margin-bottom:5px; }
+.zone-detail{ display:none; width:100%; max-width:640px; text-align:center; padding:26px; }
+.zone-detail.open{ display:block; animation:riseIn var(--dur) var(--ease) forwards; }
+.kpi-row{ display:flex; gap:14px; flex-wrap:wrap; justify-content:center; width:100%; max-width:980px; }
+.kpi-card{ padding:20px 22px; text-align:center; min-width:150px; opacity:0; transform:translateY(14px); }
+.slide.active .kpi-card{ animation:riseIn var(--dur) var(--ease) forwards; }
+.kpi-card .kv{ font-size:28px; font-weight:700; color:var(--primary); font-variant-numeric:tabular-nums; }
+.kpi-card .kl{ font-size:12.5px; color:var(--muted); margin-top:5px; }
+.feed-wrap{ width:100%; max-width:520px; }
+.feed-item{ display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--line); font-size:13.5px; opacity:0; transform:translateY(8px); }
+.feed-item.show{ animation:riseIn var(--dur) var(--ease) forwards; }
+.feed-item .fdot{ width:6px; height:6px; border-radius:50%; background:var(--primary); margin-top:5px; flex-shrink:0; }
+.feed-item .fmuted{ color:var(--muted); font-size:12px; margin-top:2px; }
+</style>
+</head>
+<body>
+<div class="glow glow1"></div><div class="glow glow2"></div>
+<div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+<div class="tip" id="tip"><div class="tt" id="tipTitle"></div><div class="td" id="tipDesc"></div></div>
+<div class="deck" id="deck"></div>
+<div class="actmark" id="actMark"></div>
+<div class="toprow">
+  <button class="iconbtn" id="themeToggle" title="Toggle dark / light">&#9788;</button>
+  <button class="iconbtn" id="gridToggle" title="Overview (G)">&#9638;</button>
+  <button class="iconbtn" id="fsToggle" title="Presentation mode (F)">&#9974;</button>
+</div>
+<div class="controls"><button id="prevBtn">&#8592;</button><button id="nextBtn">&#8594;</button></div>
+<div class="counter"><b id="curNum">01</b> / <span id="totalNum"></span></div>
+<div class="brandmark">DENT<span>FLUENCE</span> EXPERIENCE CENTER</div>
+<div class="overview" id="overview"><button class="iconbtn ovclose" id="ovClose">&#10005;</button><h2>All sections</h2><div class="oc" id="ovCount"></div><div class="ovgrid" id="ovgrid"></div></div>
+
+<script>
+const NS="http://www.w3.org/2000/svg";
+function el(tag,attrs,parent){ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); if(parent) parent.appendChild(e); return e; }
+function svgBase(vb,small){ const s=document.createElementNS(NS,"svg"); s.setAttribute("viewBox",vb); s.setAttribute("class","svgwrap"+(small?" small-svgwrap":"")); return s; }
+function h(tag,attrs,html){ const e=document.createElement(tag); if(attrs) for(const k in attrs){ if(k==='class') e.className=attrs[k]; else if(k==='style') e.style.cssText=attrs[k]; else e.setAttribute(k,attrs[k]); } if(html!==undefined) e.innerHTML=html; return e; }
+const tipEl=document.getElementById('tip'), tipTitle=document.getElementById('tipTitle'), tipDesc=document.getElementById('tipDesc');
+function showTip(evt,title,desc){ tipTitle.textContent=title; tipDesc.textContent=desc||''; tipEl.classList.add('show'); moveTip(evt); }
+function moveTip(evt){ const x=evt.clientX,y=evt.clientY,vw=window.innerWidth; tipEl.style.left=(x+(vw-x<250?-240:16))+'px'; tipEl.style.top=(y+14)+'px'; }
+function hideTip(){ tipEl.classList.remove('show'); }
+function attachTip(node,title,desc){ node.classList.add('node-glow'); node.addEventListener('mouseenter',e=>showTip(e,title,desc)); node.addEventListener('mousemove',moveTip); node.addEventListener('mouseleave',hideTip); }
+function foreignLabel(parent,x,y,w,hh,text,size){ const fo=el("foreignObject",{x:x-w/2,y:y,width:w,height:hh,class:"node-label-fo"},parent); const div=document.createElementNS("http://www.w3.org/1999/xhtml","div"); div.style.cssText=`font-size:${size||11.5}px;`; div.textContent=text; fo.appendChild(div); return fo; }
+
+/* ============ reusable: card grid ============ */
+function buildCardGrid(items, cols){
+  const grid=h('div',{class:'card-grid',style:`grid-template-columns:repeat(${cols},1fr);max-width:${cols*220}px;`});
+  items.forEach((it,i)=>{
+    const card=h('div',{class:'glass info-card',style:`animation-delay:${i*0.05}s`});
+    card.appendChild(h('div',{class:'iname'},it.name));
+    card.appendChild(h('div',{class:'idesc'},it.desc));
+    card.addEventListener('click',()=>card.classList.toggle('open'));
+    grid.appendChild(card);
+  });
+  return grid;
+}
+/* ============ reusable: stage player ============ */
+function buildStagePlayer(stages){
+  const wrap=h('div',{class:'player-box'});
+  const gap=100, pad=56;
+  const width = pad*2 + (stages.length-1)*gap;
+  const s=svgBase(`0 0 ${width} 150`);
+  const y=64;
+  el("line",{x1:pad,y1:y,x2:pad+(stages.length-1)*gap,y2:y,class:"chip-line"},s);
+  const fillLine=el("line",{x1:pad,y1:y,x2:pad,y2:y,class:"chip-line-active"},s);
+  const nodes=[];
+  stages.forEach((t,i)=>{
+    const x=pad+i*gap;
+    const n=el("g",{},s);
+    const c=el("circle",{cx:x,cy:y,r:13,fill:"var(--paper)",stroke:"var(--line)","stroke-width":1.5},n);
+    foreignLabel(s,x,y+22,gap-2,40,t,10.5);
+    nodes.push({c,x});
+  });
+  wrap.appendChild(s);
+  function play(){
+    nodes.forEach(n=>{ n.c.setAttribute('fill','var(--paper)'); n.c.setAttribute('stroke','var(--line)'); });
+    fillLine.setAttribute('x2',pad);
+    nodes.forEach((n,i)=>{ setTimeout(()=>{ n.c.setAttribute('fill','var(--primary)'); n.c.setAttribute('stroke','var(--primary)'); fillLine.setAttribute('x2',n.x); }, 420+i*440); });
+  }
+  return {wrap, play};
+}
+/* ============ reusable: picker + player (scenarios/workflows) ============ */
+function buildScenarioTheatre(list, insightPrefix){
+  const wrap=h('div',{class:'picker-wrap'});
+  const row=h('div',{class:'picker-row'});
+  const playerHost=h('div',{});
+  const insight=h('div',{class:'insight-line'});
+  wrap.appendChild(row); wrap.appendChild(playerHost); wrap.appendChild(insight);
+  function select(idx){
+    row.querySelectorAll('.pchip').forEach((c,i)=>c.classList.toggle('active',i===idx));
+    const item=list[idx];
+    playerHost.innerHTML='';
+    const {wrap:pw,play}=buildStagePlayer(item.beats);
+    playerHost.appendChild(pw);
+    insight.innerHTML = `<b>${insightPrefix}</b> ${item.insight}`;
+    setTimeout(play, 320);
+  }
+  list.forEach((item,i)=>{ const chip=h('div',{class:'pchip'}, item.name); chip.addEventListener('click',()=>select(i)); row.appendChild(chip); });
+  setTimeout(()=>select(0), 80);
+  return wrap;
+}
+/* ============ reusable: hub diagram ============ */
+function buildHubDiagram(centerLabel, spokes){
+  const s=svgBase("0 0 560 460");
+  s.style.maxWidth="640px";
+  const cx=280,cy=215,R=170,Ry=145;
+  spokes.forEach((sp,i)=>{
+    const a=(i/spokes.length)*Math.PI*2 - Math.PI/2;
+    const x=cx+R*Math.cos(a), y=cy+Ry*Math.sin(a);
+    el("line",{x1:x,y1:y,x2:cx,y2:cy,class:"chip-line draw",style:`animation-delay:${i*.1}s`},s);
+    const n=el("g",{class:"pulse-slow",style:`animation-delay:${i*.22}s`},s);
+    el("circle",{cx:x,cy:y,r:22,class:"chip"},n);
+    foreignLabel(s,x,y+30,108,32,sp.name,11);
+    attachTip(n,sp.name,sp.desc);
+  });
+  el("circle",{cx,cy,r:48,fill:"var(--primary)"},s);
+  const cfo=foreignLabel(s,cx,cy-15,116,40,centerLabel,11.5);
+  const cdiv=cfo.querySelector('div');
+  cdiv.style.whiteSpace="pre-line"; cdiv.style.color="#fff"; cdiv.style.fontWeight="700";
+  return s;
+}
+/* ============ reusable: dependency graph ============ */
+function buildDependencyGraph(nodesList, deps){
+  const s=svgBase("0 0 740 540");
+  const cx=370,cy=270,R=215;
+  const pos={},lineEls={},nodeEls={};
+  nodesList.forEach((m,i)=>{ const a=(i/nodesList.length)*Math.PI*2 - Math.PI/2; pos[m]=[cx+R*Math.cos(a),cy+R*Math.sin(a)]; });
+  const drawn=new Set();
+  nodesList.forEach(m=>{ (deps[m]||[]).forEach(t=>{ const key=[m,t].sort().join('|'); if(drawn.has(key)||!pos[t]) return; drawn.add(key);
+    const [x1,y1]=pos[m],[x2,y2]=pos[t]; lineEls[key]=el("line",{x1,y1,x2,y2,class:"chip-line",opacity:.6},s); }); });
+  nodesList.forEach(m=>{
+    const [x,y]=pos[m]; const n=el("g",{},s);
+    el("circle",{cx:x,cy:y,r:22,class:"chip"},n);
+    foreignLabel(s,x,y+31,104,30,m,10.5);
+    nodeEls[m]=n;
+    n.addEventListener('mouseenter',(e)=>{
+      showTip(e,m,`Connected to ${(deps[m]||[]).length} other modules.`);
+      Object.entries(lineEls).forEach(([key,ln])=>{ if(key.includes(m)){ ln.setAttribute('class','chip-line-active'); ln.setAttribute('opacity',1);} else { ln.setAttribute('class','chip-line'); ln.setAttribute('opacity',.12);} });
+      Object.entries(nodeEls).forEach(([nm,ng])=>{ ng.style.opacity = (nm===m || (deps[m]||[]).includes(nm)) ? 1 : .28; });
+    });
+    n.addEventListener('mousemove',moveTip);
+    n.addEventListener('mouseleave',()=>{ hideTip(); Object.values(lineEls).forEach(ln=>{ln.setAttribute('class','chip-line'); ln.setAttribute('opacity',.6);}); Object.values(nodeEls).forEach(ng=>ng.style.opacity=1); });
+  });
+  return s;
+}
+/* ============ reusable: KPI counters ============ */
+function buildKPIRow(items){
+  const row=h('div',{class:'kpi-row'});
+  items.forEach((it,i)=>{
+    const card=h('div',{class:'glass kpi-card',style:`animation-delay:${i*0.07}s`});
+    const kv=h('div',{class:'kv'},'0');
+    card.appendChild(kv); card.appendChild(h('div',{class:'kl'},it.label));
+    row.appendChild(card);
+    const target=it.value, suffix=it.suffix||'', dur=1300, start=performance.now()+300+i*80;
+    function tick(now){
+      const p=Math.min(1,(now-start)/dur);
+      if(p<0){ requestAnimationFrame(tick); return; }
+      const eased=1-Math.pow(1-p,3);
+      kv.textContent = (target%1===0? Math.round(target*eased) : (target*eased).toFixed(1)) + suffix;
+      if(p<1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+  return row;
+}
+/* ============ reusable: live feed ============ */
+function buildLiveFeed(items){
+  const wrap=h('div',{class:'feed-wrap'});
+  items.forEach((it,i)=>{
+    const row=h('div',{class:'feed-item'});
+    row.appendChild(h('div',{class:'fdot'}));
+    const txt=h('div',{}); txt.innerHTML = it.t + `<div class="fmuted">${it.m}</div>`;
+    row.appendChild(txt);
+    wrap.appendChild(row);
+    setTimeout(()=>row.classList.add('show'), 300+i*260);
+  });
+  return wrap;
+}
+/* ============ reusable: zone map (clinic simulator) ============ */
+function buildZoneMap(zones){
+  const wrap=h('div',{style:'width:100%;display:flex;flex-direction:column;align-items:center;'});
+  const grid=h('div',{class:'zone-grid'});
+  const detail=h('div',{class:'zone-detail glass'});
+  zones.forEach((z,i)=>{
+    const tile=h('div',{class:'glass zone-tile',style:`animation-delay:${i*0.06}s`});
+    tile.appendChild(h('div',{class:'zicn'},z.icon));
+    tile.appendChild(h('div',{class:'zname'},z.name));
+    tile.addEventListener('click',()=>{
+      detail.innerHTML='';
+      detail.appendChild(h('div',{style:'font-size:11px;color:var(--primary);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;'},z.name));
+      detail.appendChild(h('div',{style:'font-size:15px;font-weight:600;margin-bottom:10px;'},z.headline));
+      detail.appendChild(h('div',{style:'font-size:12.5px;color:var(--muted);line-height:1.6;'},z.desc));
+      detail.classList.add('open');
+    });
+    grid.appendChild(tile);
+  });
+  wrap.appendChild(grid); wrap.appendChild(h('div',{style:'height:16px;'})); wrap.appendChild(detail);
+  setTimeout(()=>grid.children[0].click(), 200);
+  return wrap;
+}
+
+/* ============ role hub / journeys ============ */
+const JOURNEYS = {
+  owner:{ name:"Owner", icon:"&#9670;", tag:"Peace of mind", steps:["Morning Dashboard","Today's Revenue","KPIs","Pending Payments","Collections","Profit","Daily Huddle","Accounts","AI Summary","End of Day"], focus:"Peace of mind." },
+  dentist:{ name:"Dentist", icon:"&#9679;", tag:"Less typing, more dentistry", steps:["Today's Patients","History Ready","AI Summary","Consultation","Treatment Plan","Prescription","Clinical Media","Billing","Next Patient"], focus:"Less typing. More dentistry." },
+  reception:{ name:"Front Desk", icon:"&#9733;", tag:"Zero duplicate entry", steps:["Calls","Appointments","Arrival","Payments","Membership","Communication","Recall"], focus:"No duplicate entry, anywhere." },
+  assistant:{ name:"Assistant", icon:"&#9632;", tag:"Always know what's next", steps:["Chair Preparation","Sterilization","Lab","Inventory","Procedure","Checklists"], focus:"Knowing exactly what to do." },
+  manager:{ name:"Manager", icon:"&#9650;", tag:"Full accountability", steps:["Attendance","Tasks","KPIs","Revenue","Expenses","Lab","Doctor Productivity"], focus:"Accountability, by default." },
+  patient:{ name:"Patient", icon:"&#9829;", tag:"Feels remembered", steps:["Books Online","Welcomed by Name","Doctor Already Knows","Treatment Explained Visually","Digital Consent","Prescription on Phone","Payment","Recall","Birthday Wishes"], focus:"Feels remembered." }
+};
+function secRoleHub(){
+  const wrap=h('div',{style:'width:100%;display:flex;flex-direction:column;align-items:center;'});
+  const hub=h('div',{class:'role-hub'});
+  Object.entries(JOURNEYS).forEach(([key,r],i)=>{
+    const card=h('div',{class:'glass role-card',style:`animation-delay:${i*0.08}s`});
+    card.appendChild(h('div',{class:'ric'},r.icon)); card.appendChild(h('div',{class:'rname'},r.name)); card.appendChild(h('div',{class:'rtag'},r.tag));
+    card.addEventListener('click',()=>openJourney(key));
+    hub.appendChild(card);
+  });
+  wrap.appendChild(hub);
+  wrap.appendChild(h('div',{class:'journey-view',id:'journeyView'}));
+  return wrap;
+}
+function openJourney(key){
+  const r=JOURNEYS[key];
+  const wrap=document.querySelector('.slide.active .role-hub')?.parentElement;
+  if(!wrap) return;
+  const hub=wrap.querySelector('.role-hub'), jv=wrap.querySelector('.journey-view');
+  hub.style.display='none'; jv.innerHTML=''; jv.classList.add('open');
+  const back=h('div',{class:'journey-back'},'&#8592; &nbsp;All roles');
+  back.addEventListener('click',()=>{ jv.classList.remove('open'); jv.innerHTML=''; hub.style.display='flex'; });
+  jv.appendChild(back);
+  jv.appendChild(h('h2',{style:'font-size:22px;font-weight:600;margin-bottom:16px;'}, r.name+' Journey'));
+  const steps=h('div',{class:'journey-steps'});
+  r.steps.forEach((s,i)=>{ const st=h('div',{class:'glass jstep',style:`animation-delay:${i*0.08}s`}); st.appendChild(h('div',{class:'num'},String(i+1).padStart(2,'0'))); st.appendChild(h('div',{class:'lbl'},s)); steps.appendChild(st); });
+  jv.appendChild(steps);
+  const fw=h('div',{class:'journey-focus-wrap'}); const focus=h('div',{class:'journey-focus'});
+  focus.appendChild(h('div',{class:'fk'},'Focus on')); focus.appendChild(h('div',{class:'fv'},r.focus));
+  fw.appendChild(focus); jv.appendChild(fw);
+}
+
+/* ================= CHAPTER 1-2: WELCOME / FUTURE ================= */
+function secOpening(){ const wrap=h('div',{style:'text-align:center;width:100%;position:relative;'}); wrap.appendChild(h('footer',{class:'grad-closing'})); return wrap; }
+function secFutureOfDentistry(){ const wrap=h('div',{style:'text-align:center;width:100%;position:relative;'}); wrap.appendChild(h('footer',{class:'grad-closing'})); return wrap; }
+function secDentistryToday(){
+  return buildCardGrid([
+    {name:"A clinical profession", desc:"Trust is built chairside, one patient at a time."},
+    {name:"Running as a business", desc:"Staff, inventory, cash flow, marketing, compliance — every clinic carries all of it."},
+    {name:"Buried under admin", desc:"A meaningful share of the day is lost to re-entry and chasing follow-ups."},
+    {name:"Underserved by software", desc:"Most dental software serves scheduling and records — not the whole practice."}
+  ],2);
+}
+/* ================= CHAPTER 3: CURRENT PROBLEMS ================= */
+function secCurrentProblems(){
+  return buildCardGrid([
+    {name:"Disconnected systems", desc:"Every tool is its own island."},
+    {name:"Multiple software", desc:"One task, five logins."},
+    {name:"Repeated data entry", desc:"The same patient, typed in three times."},
+    {name:"Poor accountability", desc:"No owner, no timestamp, no trail."},
+    {name:"Lost follow-ups", desc:"Recall that quietly never happens."},
+    {name:"Missed revenue", desc:"Accepted plans that never convert to billed treatment."},
+    {name:"Communication gaps", desc:"Patients hear nothing between visits."},
+    {name:"No business visibility", desc:"The owner finds out at month-end, if at all."},
+    {name:"No AI, no automation", desc:"Everything manual, everything reactive."}
+  ],3);
+}
+function secFragmented(){
+  const s=svgBase("0 0 700 380");
+  const items=["Excel","Paper","WhatsApp","CRM","Billing","PMS"];
+  const pos=[[110,80],[560,70],[90,300],[590,290],[350,50],[350,340]];
+  const g=el("g",{},s);
+  pos.forEach((p,i)=>{ const nxt=pos[(i+1)%pos.length]; el("line",{x1:p[0],y1:p[1],x2:nxt[0],y2:nxt[1],class:"chip-line",style:"stroke-dasharray:4,7",opacity:.35},g); });
+  el("circle",{cx:350,cy:195,r:44,fill:"var(--primary)",class:"pulse-slow"},g);
+  foreignLabel(g,350,183,100,32,"One System",12);
+  g.querySelector('.node-label-fo div').style.color="#fff"; g.querySelector('.node-label-fo div').style.fontWeight="700";
+  pos.forEach((p,i)=>{ const c=el("g",{class:"pulse-slow",style:`animation-delay:${i*0.3}s`},g); el("circle",{cx:p[0],cy:p[1],r:25,class:"chip"},c); foreignLabel(g,p[0],p[1]+33,104,30,items[i],12); attachTip(c,items[i],"Disconnected — lives in its own silo today."); });
+  return s;
+}
+function secWhyPMSFails(){
+  const wrap=h('div',{class:'two-col'});
+  const l=h('div',{class:'glass colcard'}); l.appendChild(h('h4',{},'What a PMS does'));
+  ["Scheduling","Patient records","Basic billing"].forEach(t=>{ const r=h('div',{class:'row'}); r.innerHTML=`<span style="color:var(--primary);font-weight:700">&#10003;</span> ${t}`; l.appendChild(r); });
+  const rr=h('div',{class:'glass colcard'}); rr.appendChild(h('h4',{},'What it cannot do'));
+  ["Connect relationships","Drive follow-up","See business impact of a plan","Adapt to daily clinic rhythm"].forEach(t=>{ const r=h('div',{class:'row'}); r.innerHTML=`<span style="color:var(--muted)">&#9675;</span> ${t}`; rr.appendChild(r); });
+  wrap.appendChild(l); wrap.appendChild(rr); return wrap;
+}
+function secAIAloneInsufficient(){
+  return buildCardGrid([
+    {name:"AI needs workflow", desc:"A model with no understanding of clinical or business workflow can only guess."},
+    {name:"AI needs identity", desc:"Without one connected patient record, AI has no reliable context."},
+    {name:"AI needs trust boundaries", desc:"Unsupervised AI in a clinical setting is a liability, not a feature."},
+    {name:"AI needs a platform", desc:"That's why Dentfluence built the OS first — AI sits on top, not underneath."}
+  ],2);
+}
+function secWhyDentfluenceExists(){
+  const layers=["AI","EMR","CRM","PMS"];
+  const wrap=h('div',{style:'width:100%;max-width:420px;display:flex;flex-direction:column-reverse;gap:9px;'});
+  const base=h('div',{class:'glass',style:'height:56px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13.5px;'},'Dentfluence OS');
+  layers.forEach((l,i)=>{ wrap.appendChild(h('div',{class:'glass',style:`height:38px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;opacity:0;animation:riseIn .6s ${.1+i*.1}s var(--ease) forwards;`},l)); });
+  wrap.appendChild(base); return wrap;
+}
+/* ================= CHAPTER 7: PHILOSOPHY ================= */
+function secPhilosophy(){
+  return buildCardGrid([
+    {name:"Ethics First", desc:"Every decision passes an ethics check before it ships."},
+    {name:"Automation", desc:"Every event has a rule waiting for it."},
+    {name:"Single Source of Truth", desc:"One patient record. Never two."},
+    {name:"AI Assists", desc:"AI drafts, flags, suggests — never decides."},
+    {name:"Dentist Decides", desc:"The final clinical call always belongs to the dentist."},
+    {name:"Transparent Growth", desc:"No hidden manipulation, ever."},
+    {name:"Future Ready", desc:"Tomorrow's capability, built on today's foundation."}
+  ],4);
+}
+function secEthicalGrowth(){
+  const s=svgBase("0 0 460 220");
+  el("polyline",{points:"20,40 80,150 130,60 180,190 230,50",class:"chip-line",stroke:"#c94b4b",style:"stroke-width:2.5"},s);
+  el("text",{x:235,y:50,style:"font-size:11px",fill:"#c94b4b"},s).textContent="Fear-based";
+  el("path",{d:"M20,170 C140,150 260,100 440,30",class:"chip-line-active draw",style:"animation-delay:.4s;stroke-width:3"},s);
+  el("text",{x:340,y:22,style:"font-size:11px;font-weight:600",fill:"var(--primary)"},s).textContent="Trust-based";
+  return s;
+}
+function secSingleSourceOfTruth(){
+  return buildCardGrid([
+    {name:"One patient record", desc:"Created once via a single guarded path."},
+    {name:"No sync jobs", desc:"There is nothing to reconcile because there was never a second copy."},
+    {name:"No drift", desc:"Dentist, owner and AI all reason over the same truth, same moment."}
+  ],3);
+}
+function secAutomationFirst(){ const {wrap,play}=buildStagePlayer(["Event Happens","Rule Evaluated","Task Created","Right Person Notified","Outcome Logged"]); setTimeout(play,400); return wrap; }
+function secHumanCenteredAI(){
+  const s=svgBase("0 0 460 320");
+  const cx=230,cy=160;
+  el("circle",{cx,cy,r:38,fill:"var(--primary)"},s);
+  foreignLabel(s,cx,cy-9,82,28,"Doctor",11.5);
+  s.querySelector('.node-label-fo div').style.color="#fff"; s.querySelector('.node-label-fo div').style.fontWeight="700";
+  ["Documentation","Clinical Assistance","Automation","Analytics","Communication"].forEach((t,i,arr)=>{
+    const a=(i/arr.length)*Math.PI*2 - Math.PI/2; const x=cx+150*Math.cos(a), y=cy+120*Math.sin(a);
+    el("line",{x1:x,y1:y,x2:cx,y2:cy,class:"chip-line draw",style:`animation-delay:${.1*i}s`},s);
+    const n=el("g",{class:"pulse-slow",style:`animation-delay:${i*.2}s`},s);
+    el("circle",{cx:x,cy:y,r:22,class:"chip"},n);
+    foreignLabel(s,x,y+29,112,30,t,11);
+  });
+  return s;
+}
+function secClinicalSafety(){
+  return buildCardGrid([
+    {name:"Consent, captured", desc:"Explicit, logged patient consent before treatment."},
+    {name:"Audit trail", desc:"Every sensitive clinical action is timestamped and traceable."},
+    {name:"Drug safety checks", desc:"Dose, allergy and interaction checks built into the Rx workflow."},
+    {name:"Owner + timestamp", desc:"No ambiguity about who did what, and when."}
+  ],2);
+}
+function secFutureReadyBridge(){
+  return buildCardGrid([
+    {name:"Reserved AI layer", desc:"An agent layer is designed into the architecture, not bolted on later."},
+    {name:"Reserved API layer", desc:"Built to connect outward when the time comes."},
+    {name:"Nothing to rebuild", desc:"Today's foundation is deliberately tomorrow's foundation too."}
+  ],3);
+}
+
+/* ================= SCENARIO THEATRE — 52 scenarios ================= */
+const SCENARIOS = [
+{name:"Morning Opening", beats:["Clinic Opens","Staff Checked In","Schedule Loaded","Inventory Reviewed","Huddle Briefing"], insight:"The day starts with a briefing, not a scramble."},
+{name:"Reception Opening", beats:["Desk Opens","Today's Arrivals Reviewed","Pending Calls Listed","Payments Queue Checked","Ready for Patients"], insight:"Front desk starts informed, not reactive."},
+{name:"Assistant Opening", beats:["Chairs Checked","Sterilization Verified","Trays Prepared","Inventory Confirmed","Ready for First Patient"], insight:"Preparation happens before the first patient walks in."},
+{name:"Doctor Arrives", beats:["Login","Today's List Loaded","Patient Histories Ready","AI Summary Reviewed","First Patient Called"], insight:"No time lost reconstructing yesterday."},
+{name:"Manager Dashboard Opens", beats:["Login","Attendance Checked","Yesterday's Tasks Reviewed","Today's Priorities Set","Team Briefed"], insight:"Accountability starts at the top of the day."},
+{name:"New Patient", beats:["Walk-in / Online Booking","Registered Once","History Captured","Consent Signed","Seen by Doctor"], insight:"One registration. Never re-typed again."},
+{name:"Returning Patient", beats:["Recognized on Arrival","Full History Ready","No Re-entry Needed","Continuity of Care","Faster Visit"], insight:"The system remembers, so the team doesn't have to."},
+{name:"Emergency Patient", beats:["Patient Arrives in Pain","Priority Flagged","Slot Reassigned","Doctor Alerted","Seen Immediately"], insight:"Urgency handled without disrupting the whole day."},
+{name:"Online Appointment", beats:["Patient Books Online","Slot Reserved","Confirmation Sent","Reception Notified","Reminder Scheduled"], insight:"Booking that needs no phone call."},
+{name:"Phone Appointment", beats:["Call Received","Slot Checked Live","Booked in One Call","Confirmation Sent","Reminder Scheduled"], insight:"No hold music, no double-booking."},
+{name:"Walk-in Patient", beats:["Arrives Unannounced","Registered on the Spot","Slot Found","Seen Same Day","Follow-up Scheduled"], insight:"Flexibility without losing the record."},
+{name:"Consultation", beats:["Chief Complaint","Clinical Findings","Diagnosis","Investigations","Treatment Advised"], insight:"One record, start to finish."},
+{name:"Treatment Planning", beats:["Options Presented","Costs Explained","Plan Drafted","Shared with Patient","Awaiting Decision"], insight:"Clarity before commitment, every time."},
+{name:"Treatment Acceptance", beats:["Plan Reviewed","Questions Answered","Accepted","Consent Captured","Scheduled"], insight:"Acceptance is a tracked clinical fact, not a guess."},
+{name:"Treatment Rejection", beats:["Plan Reviewed","Concerns Raised","Declined","Reason Logged","Follow-up Queued"], insight:"A 'no' still becomes a tracked opportunity, not a dead end."},
+{name:"Implant Journey", beats:["Assessment","Planning","Surgical Visit","Healing Follow-up","Prosthetic Placement"], insight:"A multi-visit journey, tracked as one continuous case."},
+{name:"RCT Journey", beats:["Diagnosis","Access & Cleaning","Obturation Visit","Review","Crown Referral"], insight:"Multi-sitting procedures, never losing the thread."},
+{name:"Extraction Journey", beats:["Assessment","Consent","Procedure","Post-op Instructions","Healing Check"], insight:"Even a single-visit procedure gets a full record."},
+{name:"Orthodontic Journey", beats:["Assessment","Appliance Fitted","Monthly Adjustments","Progress Photos","Retention Phase"], insight:"Long-term care, visualized over months."},
+{name:"Smile Design Journey", beats:["Consultation","Digital Mock-up","Patient Approval","Treatment Phases","Final Reveal"], insight:"Aesthetic cases, planned and tracked visually."},
+{name:"Treatment Visit", beats:["Chair Prepared","Procedure Logged","Materials Consumed","Inventory Updated","Visit Closed"], insight:"Every visit writes back to the same plan automatically."},
+{name:"Recall Patient", beats:["Due Date Reached","Reminder Sent","Patient Responds","Appointment Booked","Recall Closed"], insight:"Recall that actually closes the loop."},
+{name:"Membership", beats:["Plan Offered","Enrolled","Benefits Active","Renewal Approaching","Renewed"], insight:"Recurring revenue, handled without a spreadsheet."},
+{name:"Pending Payment", beats:["Invoice Raised","Payment Due","Reminder Sent","Follow-up Logged","Payment Collected"], insight:"Collections become a workflow, not an awkward call."},
+{name:"Payment Received", beats:["Payment Captured","Receipt Generated","Wallet Updated","Accounts Reconciled","Owner Dashboard Updated"], insight:"Money in, everywhere updated, instantly."},
+{name:"Lab Delay", beats:["Case Overdue","Lab Notified","Patient Informed","Alternative Offered","Case Resolved"], insight:"The clinic knows before the patient has to ask."},
+{name:"Inventory Shortage", beats:["Stock Below Threshold","Alert Raised","Purchase Order Drafted","Vendor Notified","Stock Received"], insight:"The chair never runs out mid-procedure."},
+{name:"Internal Referral", beats:["Doctor Flags Need","Referred to Specialist","Case Notes Shared","Patient Briefed","Continuity Maintained"], insight:"Referrals stay inside one record."},
+{name:"Prescription", beats:["Diagnosis Confirmed","Drug Selected","Safety Checked","Rx Generated","Sent to Patient"], insight:"Dosing and interaction checks, built in."},
+{name:"Patient Education", beats:["Condition Explained","Visual Aid Shown","Questions Answered","Material Shared","Understanding Confirmed"], insight:"Consent that's actually informed."},
+{name:"Patient Communication", beats:["Check-in Message","Patient Replies","Query Logged","Resolved","Relationship Updated"], insight:"Every message becomes part of the patient's record."},
+{name:"WhatsApp Follow-up", beats:["Visit Completed","Follow-up Queued","Message Sent","Patient Responds","Outcome Logged"], insight:"Follow-up that doesn't depend on someone remembering."},
+{name:"Review Request", beats:["Positive Visit","Review Requested","Patient Responds","Review Published","Practice Reputation Grows"], insight:"Earned, not manufactured."},
+{name:"Missed Appointment", beats:["No-show Detected","Reason Logged","Patient Contacted","Rebooked","Pattern Flagged"], insight:"A missed visit triggers a process, not a gap."},
+{name:"Owner Morning", beats:["Overnight Summary","Revenue Snapshot","Pending Items Flagged","Priorities Set","Day Begins"], insight:"Five minutes to know exactly where the practice stands."},
+{name:"Owner Evening", beats:["Day Reviewed","Revenue Confirmed","Outstanding Flagged","Team Performance Checked","Tomorrow Previewed"], insight:"The owner never has to chase the numbers."},
+{name:"Daily Huddle", beats:["Team Gathers","Today's Cases Reviewed","Targets Set","Blockers Raised","Everyone Aligned"], insight:"Five minutes that saves an hour of confusion."},
+{name:"Staff Accountability", beats:["Task Assigned","Owner Set","Deadline Set","Progress Tracked","Completion Logged"], insight:"Every task has a name attached to it."},
+{name:"Revenue Review", beats:["Daily Revenue Pulled","Compared to Target","Variance Flagged","Cause Identified","Action Assigned"], insight:"Revenue conversations backed by real numbers."},
+{name:"Monthly Review", beats:["Month Closed","KPIs Compiled","Trends Compared","Wins Highlighted","Next Month Planned"], insight:"A monthly review that takes minutes, not days."},
+{name:"Voice Command", beats:["Doctor Speaks","Command Recognized","Action Drafted","Doctor Confirms","Action Executed"], insight:"Hands-free, but never autonomous without approval."},
+{name:"AI Assistant", beats:["Question Asked","Records Searched","Answer Drafted","Sources Shown","Doctor Reviews"], insight:"An assistant that shows its work."},
+{name:"Future Agent", beats:["Trigger Detected","Plan Proposed","Doctor Notified","Approval Given","Task Executed"], insight:"Roadmap only — always human-approved, by design."},
+{name:"Birthday Recall", beats:["Birthday Detected","Wish Scheduled","Message Sent","Patient Feels Remembered","Relationship Strengthened"], insight:"A small moment that builds long-term loyalty."},
+{name:"Prescription Refill", beats:["Refill Requested","History Checked","Safety Verified","Refill Approved","Sent to Patient"], insight:"Repeat care, without repeat paperwork."},
+{name:"Lab Case Received", beats:["Case Delivered","Quality Checked","Patient Notified","Visit Scheduled","Case Closed"], insight:"The loop from lab to chair, closed automatically."},
+{name:"Consent Renewal", beats:["Consent Expiring","Patient Notified","Reviewed Again","Re-signed","Record Updated"], insight:"Compliance that doesn't rely on memory."},
+{name:"Complaint Handling", beats:["Complaint Raised","Logged","Escalated","Resolved","Follow-up Confirmed"], insight:"Nothing falls through the cracks, even the hard conversations."},
+{name:"Referral Received", beats:["External Referral In","Patient Registered","History Requested","First Visit Scheduled","Referring Doctor Updated"], insight:"Referral partners get closure, not silence."},
+{name:"Clinic Closing Checklist", beats:["Cash Verified","Equipment Checked","Sterilization Confirmed","Tomorrow Previewed","Clinic Secured"], insight:"Every day ends the same disciplined way."},
+{name:"New Staff Onboarding", beats:["Profile Created","Role Assigned","Permissions Set","Training Scheduled","First Shift Supported"], insight:"Onboarding that doesn't depend on tribal knowledge."},
+{name:"Equipment Maintenance", beats:["Usage Threshold Reached","Maintenance Alert","Vendor Scheduled","Serviced","Logged"], insight:"Equipment downtime, prevented not discovered."}
+];
+function secScenarioTheatre(){ return buildScenarioTheatre(SCENARIOS,'Why it matters —'); }
+
+/* ================= WORKFLOW THEATRE — 8 workflows ================= */
+const WORKFLOWS = [
+{name:"Booking to Dashboard", beats:["Appointment Booked","Confirmation Sent","Reception Notified","Dentist Schedule Updated","Assistant Checklist Generated","Inventory Reserved","Communication Scheduled","AI Analysis","Owner Dashboard Updated","Recall Engine Prepared"], insight:"One booking, nine automatic downstream updates."},
+{name:"Plan to Payment", beats:["Treatment Plan Accepted","Visit Scheduled","Visit Completed","Invoice Generated","Payment Collected","Wallet Updated","Accounts Reconciled"], insight:"Clinical acceptance and financial record, always in sync."},
+{name:"Recall Engine", beats:["Last Visit Logged","Recall Rule Triggered","Message Queued","Sent via WhatsApp/SMS","Response Tracked","Appointment Booked","Recall Closed"], insight:"The relationship engine that never forgets a patient."},
+{name:"Inventory to Procurement", beats:["Stock Consumed","Threshold Reached","Purchase Order Drafted","Vendor Notified","Stock Received","Inventory Updated"], insight:"The chair never runs out mid-procedure."},
+{name:"Consultation to Analytics", beats:["Consultation Logged","Diagnosis Coded","Treatment Advised","Outcome Tracked","Analytics Updated","Reported to Owner"], insight:"Clinical data becomes business intelligence automatically."},
+{name:"Membership Lifecycle", beats:["Plan Sold","Benefits Activated","Usage Tracked","Renewal Reminder","Renewed or Lapsed","Retention Analysed"], insight:"Recurring revenue, managed end to end."},
+{name:"Communication Escalation", beats:["Message Unanswered","Escalation Rule Triggered","Second Channel Tried","Staff Alerted","Manually Resolved","Outcome Logged"], insight:"No patient message disappears into silence."},
+{name:"Lab Case Lifecycle", beats:["Case Sent","Vendor Tracked","Delay Detected","Patient Informed","Case Received","Visit Scheduled"], insight:"Full visibility on work happening outside the clinic's walls."}
+];
+function secWorkflowSimulator(){ return buildScenarioTheatre(WORKFLOWS,'What this proves —'); }
+
+/* ================= CLINIC SIMULATOR ================= */
+function secClinicSimulator(){
+  return buildZoneMap([
+    {icon:"&#9733;",name:"Reception",headline:"The first and last touchpoint",desc:"Calls, appointments, arrival, payments, membership — no duplicate entry, ever."},
+    {icon:"&#9679;",name:"Doctor Cabin",headline:"History ready before the patient sits down",desc:"Consultation, treatment plan, prescription — one continuous record."},
+    {icon:"&#9632;",name:"Treatment Room",headline:"Every visit writes back automatically",desc:"Procedure logged, materials consumed, inventory updated in real time."},
+    {icon:"&#10022;",name:"Sterilization",headline:"A checklist that's never skipped",desc:"Every cycle logged, every instrument accounted for."},
+    {icon:"&#9650;",name:"Lab",headline:"Visibility from send to receive",desc:"Case status tracked end to end, delays surfaced before the patient asks."},
+    {icon:"&#9670;",name:"Manager Office",headline:"Accountability, not guesswork",desc:"Attendance, tasks, doctor productivity — all in one view."},
+    {icon:"&#9906;",name:"Owner Dashboard",headline:"Peace of mind in five minutes",desc:"Revenue, collections, profit — the whole practice, distilled."},
+    {icon:"&#9829;",name:"Patient",headline:"Feels remembered, not processed",desc:"Welcomed by name, treatment explained visually, never asked the same question twice."}
+  ]);
+}
+
+/* ================= DAILY HUDDLE ================= */
+function secDailyHuddle(){
+  const {wrap,play}=buildStagePlayer(["Morning Briefing","Today's Appointments","Pending Treatments","Revenue Target","Collections","Pending Lab","Staff Tasks","Communication","Manager Notes","Owner Summary"]);
+  setTimeout(play,400); return wrap;
+}
+
+/* ================= ACCOUNTABILITY ================= */
+function secAccountability(){
+  return buildCardGrid([
+    {name:"Attendance", desc:"Every shift, checked in and checked out."},
+    {name:"Tasks", desc:"Assigned, owned, and tracked to completion."},
+    {name:"Pending Work", desc:"Nothing invisible — always a live list."},
+    {name:"Completed Work", desc:"A record of what got done, and by whom."},
+    {name:"Doctor Productivity", desc:"Cases, conversions, and chair time, visible."},
+    {name:"Staff Productivity", desc:"Every role, measured fairly."},
+    {name:"Escalations", desc:"Issues that need a manager, surfaced automatically."},
+    {name:"Audit Logs", desc:"Every sensitive action, timestamped and traceable."},
+    {name:"Ownership", desc:"One name attached to every task, always."},
+    {name:"Timestamps", desc:"When it happened is never in question."}
+  ],5);
+}
+
+/* ================= TECHNICAL ARCHITECTURE ================= */
+const ARCH_LAYERS = [
+["One Patient","A single identity, created once, referenced everywhere."],
+["Identity Layer","Patient, staff and clinic identity — the root of trust."],
+["Clinical Layer","Consultations, treatment plans, visits, prescriptions."],
+["Business Layer","Billing, wallet, membership, accounts, inventory."],
+["Communication Layer","PRE, WhatsApp, recall — one relationship, always current."],
+["Automation Layer","Rules that turn events into tasks, automatically."],
+["Analytics Layer","Every module's activity, turned into decisions."],
+["AI Layer","Assists across all layers. Never decides alone."],
+["Android Layer","Every role, connected to the same truth, on the move."],
+["API Layer","The connection point for labs, insurers, health ID systems."],
+["Future Agent Layer","Reserved for autonomous workflows — opt-in, always."]
+];
+function secArchitecture(){
+  const wrap=h('div',{style:'display:flex;width:100%;justify-content:center;'});
+  const stack=h('div',{class:'arch-stack'});
+  ARCH_LAYERS.forEach(([name,desc],i)=>{
+    const layer=h('div',{class:'glass arch-layer',style:`animation-delay:${i*0.06}s`});
+    layer.appendChild(h('div',{class:'an'},name)); layer.appendChild(h('div',{class:'ad'},desc));
+    layer.addEventListener('click',()=>{ stack.querySelectorAll('.arch-layer').forEach(l=>l.classList.remove('on')); layer.classList.add('on'); });
+    stack.appendChild(layer);
+    if(i<ARCH_LAYERS.length-1) stack.appendChild(h('div',{class:'arch-connector'}));
+  });
+  wrap.appendChild(stack);
+  setTimeout(()=>{ const f=stack.querySelector('.arch-layer'); if(f) f.classList.add('on'); },400);
+  return wrap;
+}
+function secDataFlow(){
+  const stagesTop=["Patient","Appointments","Consultation","Treatment Plan","Prescription"];
+  const stagesBottom=["Visits","Billing","Accounts","Reports","Analytics","Android","AI","Owner Dashboard"];
+  const all=[...stagesTop,...stagesBottom];
+  const gap=88, pad=46;
+  const width = pad*2 + (all.length-1)*gap;
+  const s=svgBase(`0 0 ${width} 150`,true);
+  const y=64;
+  el("line",{x1:pad,y1:y,x2:pad+(all.length-1)*gap,y2:y,class:"chip-line"},s);
+  all.forEach((t,i)=>{ const x=pad+i*gap; const n=el("g",{},s); el("circle",{cx:x,cy:y,r:11,class:"chip"},n); foreignLabel(s,x,y+19,gap-4,36,t,9.8); });
+  const dot=el("circle",{r:5,fill:"var(--gold)"},s);
+  el("animateMotion",{dur:"26s",repeatCount:"indefinite",path:`M${pad},${y} L${pad+(all.length-1)*gap},${y}`},dot);
+  const wrap=h('div',{style:'text-align:center;width:100%;'});
+  wrap.appendChild(s);
+  wrap.appendChild(h('div',{class:'insight-line'},'One patient. One glowing thread of data, moving through every layer, continuously.'));
+  return wrap;
+}
+const MODULE_INFO = [
+["Patients","Single identity — every module reads and writes here."],
+["Appointments","Scheduling, reminders, and slot management."],
+["Consultation","Chief complaint through diagnosis, in one record."],
+["Treatment Plan","Options, costs, and accept / reject / defer tracking."],
+["Treatment Visits","Each visit logged directly against the plan."],
+["Prescription","Rx pad with dose, drug and safety checks."],
+["Clinical Media","Patient education and case documentation."],
+["Billing","Invoices tied directly to treatment and visits."],
+["Accounts","Full clinic financials — income, expense, payroll."],
+["Membership","Recurring plans and patient loyalty tiers."],
+["Communication","WhatsApp, SMS, email — one queue."],
+["PRE","Patient Relationship Engine — one relationship per patient."],
+["Reports","Cross-module operational reporting."],
+["Analytics","Surfaces patterns a busy day would miss."],
+["AI","Assists across every layer, decides nothing alone."],
+["Android","Every role, connected, on the move."]
+];
+function secModuleExplorer(){ return buildCardGrid(MODULE_INFO.map(([n,d])=>({name:n,desc:d})), 4); }
+const MODULES = ["Consultation","Prescription","Treatment Plan","Treatment Visit","Billing","Wallet","Accounts","Inventory","Lab","Analytics","AI","Reports","Patient Timeline"];
+const DEPS = {
+"Consultation":["Prescription","Treatment Plan","Billing","Patient Timeline","AI"],
+"Prescription":["Consultation","Patient Timeline"],
+"Treatment Plan":["Consultation","Treatment Visit","Billing","Accounts","Patient Timeline"],
+"Treatment Visit":["Treatment Plan","Inventory","Billing"],
+"Billing":["Treatment Plan","Accounts","Analytics","Consultation","Wallet"],
+"Wallet":["Billing","Accounts"],
+"Accounts":["Billing","Treatment Plan","Analytics","Reports","Inventory","Lab"],
+"Inventory":["Treatment Visit","Accounts"],
+"Lab":["Treatment Plan","Accounts"],
+"Analytics":["Billing","Accounts","Reports","AI"],
+"AI":["Consultation","Analytics","Reports"],
+"Reports":["Analytics","Accounts","AI"],
+"Patient Timeline":["Consultation","Prescription","Treatment Plan"]
+};
+function secDependencyExplorer(){ return buildDependencyGraph(MODULES,DEPS); }
+function secEcosystem(){
+  const roles=["Dentist","Assistant","Reception","Owner","Manager","Web"];
+  const s=svgBase("0 0 580 440");
+  const cx=290,cy=220;
+  el("circle",{cx,cy,r:44,fill:"var(--primary)",class:"pulse-slow"},s);
+  foreignLabel(s,cx,cy-9,82,28,"Cloud",12.5);
+  s.querySelector('.node-label-fo div').style.color="#fff"; s.querySelector('.node-label-fo div').style.fontWeight="700";
+  roles.forEach((r,i)=>{
+    const a=(i/roles.length)*Math.PI*2 - Math.PI/2; const x=cx+185*Math.cos(a), y=cy+160*Math.sin(a);
+    el("line",{x1:cx,y1:cy,x2:x,y2:y,class:"chip-line draw",style:`animation-delay:${i*.15}s`},s);
+    const dot=el("circle",{r:2.6,fill:"var(--primary)"},s);
+    el("animateMotion",{dur:`${3+i*.4}s`,repeatCount:"indefinite",path:`M${cx},${cy} L${x},${y}`},dot);
+    const n=el("g",{},s); el("circle",{cx:x,cy:y,r:24,class:"chip"},n);
+    foreignLabel(s,x,y+31,108,30,r,11.5);
+    attachTip(n,r,"Real-time sync — same truth, every device.");
+  });
+  return s;
+}
+
+/* ================= COMMUNICATION ENGINE ================= */
+function secCommEngine(){
+  const wrap=h('div',{style:'display:flex;gap:3.5vw;align-items:center;flex-wrap:wrap;justify-content:center;width:100%;'});
+  const diagramCol=h('div',{style:'flex:1 1 560px;max-width:640px;display:flex;justify-content:center;'});
+  diagramCol.appendChild(buildHubDiagram("Communication\nEngine",[
+    {name:"PRE",desc:"Patient Relationship Engine — one relationship per patient."},
+    {name:"WhatsApp",desc:"Click-to-chat and two-way inbox."},
+    {name:"SMS",desc:"Fallback channel for reminders and alerts."},
+    {name:"Email",desc:"Statements, receipts, formal communication."},
+    {name:"Calls",desc:"Logged against the patient record."},
+    {name:"Notifications",desc:"In-app alerts across every role."},
+    {name:"Follow-up",desc:"Structured, trackable follow-up queue."},
+    {name:"Recall",desc:"Ethical, automated recall scheduling."},
+    {name:"Campaigns",desc:"Education and awareness, never fear-based."}
+  ]));
+  const feedCol=h('div',{style:'flex:0 1 400px;'});
+  feedCol.appendChild(buildLiveFeed([
+    {t:"WhatsApp reminder sent", m:"Appointment tomorrow, 10:30 AM"},
+    {t:"Recall SMS delivered", m:"6-month check-up due"},
+    {t:"Review request opened", m:"Post-visit follow-up"},
+    {t:"Follow-up call logged", m:"Pending payment, gentle reminder"},
+    {t:"Membership renewal sent", m:"Plan expiring in 7 days"}
+  ]));
+  wrap.appendChild(diagramCol); wrap.appendChild(feedCol);
+  return wrap;
+}
+
+/* ================= BUSINESS INTELLIGENCE ================= */
+function secBusinessIntelligence(){
+  const wrap=h('div',{style:'display:flex;flex-direction:column;align-items:center;width:100%;gap:20px;'});
+  wrap.appendChild(buildKPIRow([
+    {label:"Patients Today", value:34}, {label:"Collections", value:92, suffix:"%"},
+    {label:"Recall Conversion", value:61, suffix:"%"}, {label:"Active Memberships", value:212},
+    {label:"Practice Health", value:8.4}
+  ]));
+  wrap.appendChild(buildCardGrid([
+    {name:"Revenue", desc:"Daily, weekly and monthly, always current."},
+    {name:"Expenses", desc:"Tracked against budget, not guessed."},
+    {name:"Profit", desc:"The number that actually matters, visible."},
+    {name:"Pending Treatments", desc:"Accepted plans not yet converted to revenue."},
+    {name:"Growth & Forecast", desc:"Where the practice is heading, not just where it's been."}
+  ],5));
+  return wrap;
+}
+
+/* ================= AI EXPERIENCE ================= */
+function secAILayer(){
+  return buildCardGrid([
+    {name:"Clinical AI",desc:"Organizes findings, drafts notes — the dentist confirms every word."},
+    {name:"Business AI",desc:"Surfaces revenue and collection risks before they become a problem."},
+    {name:"Communication AI",desc:"Writes patient messages in your voice, for human approval."},
+    {name:"Analytics AI",desc:"Finds the pattern in a month of data in seconds."},
+    {name:"Voice AI",desc:"Chairside, hands-free control for the clinical team."},
+    {name:"Agentic AI",desc:"Completes multi-step tasks — always with a visible approval step."},
+    {name:"Future AI",desc:"Where this layer is headed — covered in Future Vision."}
+  ],4);
+}
+
+/* ================= BUSINESS / REVENUE MODEL ================= */
+function secRevenueModel1(){
+  return buildCardGrid([
+    {name:"Market",desc:"A large, fragmented, underserved market."},
+    {name:"Subscription",desc:"Priced per clinic, month to month."},
+    {name:"Pricing",desc:"Tiered by clinic size and module depth."},
+    {name:"ROI",desc:"Fewer missed follow-ups, faster collections, less admin overhead."},
+    {name:"Value Proposition",desc:"Time saved, revenue protected, relationships retained."}
+  ],5);
+}
+function secRevenueModel2(){
+  return buildCardGrid([
+    {name:"Growth Strategy",desc:"Retention-driven, not ad-spend-driven."},
+    {name:"Competition",desc:"Point tools compete on features. We compete on connection."},
+    {name:"Dentfluence Ecosystem",desc:"Clinical media, education, marketplace, enterprise."},
+    {name:"Future Products",desc:"Built on the same identity layer, not bolted on."},
+    {name:"Expansion",desc:"One clinic to a multi-clinic group, same architecture."}
+  ],5);
+}
+function secMoat(){
+  const s=svgBase("0 0 460 320");
+  el("polygon",{points:"200,40 260,40 280,90 180,90",class:"chip"},s);
+  el("text",{x:230,y:70,"text-anchor":"middle",style:"font-size:10px;font-weight:600"},s).textContent="Code / UI";
+  el("line",{x1:40,y1:95,x2:420,y2:95,class:"chip-line",style:"stroke-dasharray:3,4"},s);
+  el("text",{x:44,y:88,style:"font-size:9px",fill:"var(--muted)"},s).textContent="visible";
+  const g=el("g",{style:"opacity:0;animation:riseIn .8s .3s var(--ease) forwards"},s);
+  el("polygon",{points:"120,95 340,95 400,290 60,290",fill:"var(--primary)",opacity:.15,stroke:"var(--primary)","stroke-width":1.2},g);
+  ["Workflow knowledge","Clinical understanding","Years of refinement","Real clinic validation","Ethical philosophy","Integrated architecture"].forEach((t,i)=>{ el("text",{x:230,y:130+i*26,"text-anchor":"middle",style:"font-size:10.5px;font-weight:500"},g).textContent=t; });
+  return s;
+}
+
+/* ================= ENGINEERING & COMPLIANCE ================= */
+function secEngineeringDiscipline(){
+  const stages=["Audit","Planning","Implementation","Testing","Bug Fixes","Parity","Variants","Hardening","Live Validation","Freeze","Production Ready"];
+  const {wrap,play}=buildStagePlayer(stages); setTimeout(play,400); return wrap;
+}
+function secCompliance(){
+  const s=svgBase("0 0 440 360");
+  const cx=220,cy=170;
+  el("path",{d:`M${cx-46},${cy-70} L${cx+46},${cy-70} L${cx+46},${cy+30} Q${cx+46},${cy+80} ${cx},${cy+100} Q${cx-46},${cy+80} ${cx-46},${cy+30} Z`,class:"chip"},s);
+  el("text",{x:cx,y:cy+10,"text-anchor":"middle",style:"font-size:20px",fill:"var(--primary)"},s).textContent="✓";
+  ["ABHA","DPDP","Consent","Patient Rights","Audit Logs","Data Retention"].forEach((t,i,arr)=>{
+    const a=(i/arr.length)*Math.PI*2 - Math.PI/2; const x=cx+165*Math.cos(a), y=cy+140*Math.sin(a);
+    el("line",{x1:x,y1:y,x2:cx,y2:cy,class:"chip-line",style:`stroke-dasharray:4,5;animation:riseIn .4s ${.12*i}s var(--ease) both`},s);
+    const n=el("g",{style:`opacity:0;animation:riseIn .4s ${.15+.12*i}s var(--ease) forwards`},s);
+    el("circle",{cx:x,cy:y,r:20,class:"chip"},n);
+    foreignLabel(s,x,y+27,102,30,t,11);
+  });
+  return s;
+}
+
+/* ================= FUTURE VISION ================= */
+function secFuture(){
+  const wrap=h('div',{style:'display:flex;flex-direction:column;align-items:center;width:100%;'});
+  wrap.appendChild(buildCardGrid([
+    {name:"Voice Commands",desc:"Hands-free chairside control."},
+    {name:"AI Secretary — Tulip",desc:"An autonomous front-desk assistant, supervised."},
+    {name:"Autonomous Practice Management",desc:"The practice manages its own admin load."},
+    {name:"Digital Twin",desc:"A living model of the practice's operations."},
+    {name:"Predictive Analytics",desc:"Forecasting, not just reporting."},
+    {name:"Agentic AI",desc:"Multi-step tasks, always with approval."},
+    {name:"ABHA — deeper integration",desc:"Beyond capture, into full interoperability."},
+    {name:"DPDP — full lifecycle",desc:"Consent, rights and retention, fully automated."},
+    {name:"Future Integrations",desc:"Labs, insurers, and health networks."}
+  ],3));
+  wrap.appendChild(h('div',{class:'banner'},'Dentist approval always required.'));
+  return wrap;
+}
+
+/* ================= CLOSING ACT ================= */
+function secPathToScale(){ const {wrap,play}=buildStagePlayer(["Tulip Dental","Production Ready","10 Clinics","100 Clinics","1,000 Clinics","Scale"]); setTimeout(play,400); return wrap; }
+function secAsk(){
+  return buildCardGrid([
+    {name:"Strategic Advisor",desc:"Ongoing guidance on product direction."},
+    {name:"Industry Feedback",desc:"An outside, informed sanity check."},
+    {name:"Clinical Critique",desc:"Tell us honestly what a clinician would reject."},
+    {name:"Innovation Guidance",desc:"Where should Dentfluence go next."},
+    {name:"Conference Exposure",desc:"Introductions to the wider dental community."},
+    {name:"Educational Collaboration",desc:"Co-building CE content, together."},
+    {name:"Product Validation",desc:"Real-world review before we scale."}
+  ],4);
+}
+function secClosing(){ const d=h('div',{style:'position:relative;width:100%;'}); d.appendChild(h('footer',{class:'grad-closing'})); return d; }
+
+/* ================= SLIDE DEFINITIONS ================= */
+const SLIDES = [
+{act:"ACT I — WELCOME",kicker:"DENTFLUENCE EXPERIENCE CENTER",title:"Welcome to the Dentfluence Experience Center",sub:"",build:secOpening,notes:"Thank you for your time. What follows is the product, walked through the way it actually works."},
+{act:"ACT I — WELCOME",kicker:"THE FUTURE OF DENTISTRY",title:"What if the practice ran itself, quietly?",sub:"",build:secFutureOfDentistry,notes:"Set the aspiration before the detail."},
+{act:"ACT I — WELCOME",kicker:"DENTISTRY TODAY",title:"A clinical craft, running as a business",sub:"Click a card to expand.",build:secDentistryToday,notes:"Dentistry is both a craft and a business — most software only serves one half."},
+{act:"ACT I — WELCOME",kicker:"CURRENT PROBLEMS",title:"Nine ways the day gets harder than it should",sub:"Click a card to expand.",build:secCurrentProblems,notes:"Name the pain precisely — this audience has lived it."},
+{act:"ACT I — WELCOME",kicker:"THE FRAGMENTATION PROBLEM",title:"Dentistry runs on fragments",sub:"Hover any fragment.",build:secFragmented,notes:"This is Monday morning in most clinics — including ours, before we built this."},
+{act:"ACT I — WELCOME",kicker:"WHY EXISTING PMS FAILS",title:"Good at records. Blind to the practice.",sub:"",build:secWhyPMSFails,notes:"Most PMS platforms are excellent at scheduling and records — never built to run the practice."},
+{act:"ACT I — WELCOME",kicker:"WHY AI ALONE IS INSUFFICIENT",title:"AI without a platform is a guess",sub:"Click a card to expand.",build:secAIAloneInsufficient,notes:"AI bolted onto disconnected systems has no reliable context."},
+{act:"ACT I — WELCOME",kicker:"WHY DENTFLUENCE EXISTS",title:"The layer underneath everything else",sub:"Not a PMS. Not a CRM. Not an EMR. Not a chatbot.",build:secWhyDentfluenceExists,notes:"Think of it the way an operating system relates to the apps on your phone."},
+
+{act:"ACT II — PHILOSOPHY",kicker:"PRODUCT PHILOSOPHY",title:"Seven principles, no exceptions",sub:"Click a card to expand.",build:secPhilosophy,notes:"Every product decision gets run through these filters before it ships."},
+{act:"ACT II — PHILOSOPHY",kicker:"ETHICAL GROWTH",title:"Growth without manipulation",sub:"",build:secEthicalGrowth,notes:"Fear-based recall works short-term and destroys trust long-term."},
+{act:"ACT II — PHILOSOPHY",kicker:"SINGLE SOURCE OF TRUTH",title:"One record. Never two.",sub:"",build:secSingleSourceOfTruth,notes:"There is nothing to reconcile because there was never a second copy."},
+{act:"ACT II — PHILOSOPHY",kicker:"AUTOMATION",title:"Every event has a rule waiting for it",sub:"",build:secAutomationFirst,notes:"Automation is how the system behaves by default."},
+{act:"ACT II — PHILOSOPHY",kicker:"AI ASSISTS · DENTIST DECIDES",title:"AI assists. The doctor decides.",sub:"",build:secHumanCenteredAI,notes:"Every AI feature can suggest, draft or flag. It cannot decide."},
+{act:"ACT II — PHILOSOPHY",kicker:"CLINICAL SAFETY",title:"Safety is not optional",sub:"Click a card to expand.",build:secClinicalSafety,notes:"In a clinic, ambiguity is where trust breaks down. We designed it out."},
+{act:"ACT II — PHILOSOPHY",kicker:"FUTURE READY",title:"Tomorrow's capability, today's foundation",sub:"",build:secFutureReadyBridge,notes:"Nothing about the future roadmap requires rebuilding what exists today."},
+
+{act:"ACT III — SCENARIO THEATRE",kicker:"SCENARIO THEATRE",title:"52 real moments. Every clinic reacts.",sub:"Select any scenario — watch it play.",build:secScenarioTheatre,notes:"The heart of the experience. Pick two or three most relevant to the room."},
+
+{act:"ACT IV — WORKFLOW THEATRE",kicker:"WORKFLOW THEATRE",title:"Automation, made visible",sub:"Select a workflow — watch it cascade.",build:secWorkflowSimulator,notes:"Every workflow here is a real automation chain, not an illustration."},
+
+{act:"ACT V — CLINIC SIMULATOR",kicker:"CLINIC SIMULATOR",title:"Walk through the clinic",sub:"Click any zone.",build:secClinicSimulator,notes:"Every corner of the clinic, connected to the same system."},
+
+{act:"ACT VI — USER JOURNEYS",kicker:"MEET YOUR PRACTICE",title:"Every role. One connected OS.",sub:"Click a role to walk through their day.",build:secRoleHub,notes:"Click through Owner, Dentist, Front Desk, Assistant, Manager and Patient."},
+
+{act:"ACT VII — DAILY HUDDLE",kicker:"DAILY HUDDLE",title:"Five minutes that align the whole team",sub:"",build:secDailyHuddle,notes:"A structured huddle, not a hallway conversation."},
+
+{act:"ACT VIII — ACCOUNTABILITY",kicker:"ACCOUNTABILITY",title:"No ambiguity, ever",sub:"Click a card to expand.",build:secAccountability,notes:"Every task has an owner, a timestamp, and a trail."},
+
+{act:"ACT IX — ARCHITECTURE",kicker:"TECHNICAL ARCHITECTURE",title:"One patient. Eleven layers. No gaps.",sub:"Click any layer.",build:secArchitecture,notes:"The same architecture my engineering team tracks internally."},
+{act:"ACT IX — ARCHITECTURE",kicker:"DATA FLOW",title:"Watch one patient move through the system",sub:"",build:secDataFlow,notes:"A single glowing thread — slow, elegant, continuous."},
+{act:"ACT IX — ARCHITECTURE",kicker:"MODULE EXPLORER",title:"Sixteen modules, explained",sub:"Click a card to expand.",build:secModuleExplorer,notes:"Every module, what it does, in plain language."},
+{act:"ACT IX — ARCHITECTURE",kicker:"DEPENDENCY EXPLORER",title:"Nothing lives in isolation",sub:"Hover any module.",build:secDependencyExplorer,notes:"Hover Consultation — watch its real connections light up."},
+{act:"ACT IX — ARCHITECTURE",kicker:"MOBILE + WEB ECOSYSTEM",title:"Every device, one truth, in real time",sub:"",build:secEcosystem,notes:"Reception and owner see different views of the same live truth."},
+
+{act:"ACT X — COMMUNICATION",kicker:"COMMUNICATION ENGINE",title:"Every channel, one engine",sub:"Hover any channel.",build:secCommEngine,notes:"PRE, WhatsApp, SMS, email, recall and campaigns — one relationship."},
+
+{act:"ACT XI — BUSINESS INTELLIGENCE",kicker:"BUSINESS INTELLIGENCE",title:"The practice, in real time",sub:"",build:secBusinessIntelligence,notes:"An owner should never have to ask a spreadsheet how the practice is doing."},
+
+{act:"ACT XII — AI EXPERIENCE",kicker:"THE AI LAYER",title:"Seven capabilities. One rule.",sub:"Click a card to expand.",build:secAILayer,notes:"AI can suggest, draft or flag. It cannot decide."},
+
+{act:"ACT XIII — BUSINESS",kicker:"REVENUE MODEL",title:"A platform, not a point tool",sub:"Click a card to expand.",build:secRevenueModel1,notes:"The shape of the opportunity, not an unverifiable number."},
+{act:"ACT XIII — BUSINESS",kicker:"GROWTH & ECOSYSTEM",title:"Built to expand without rebuilding",sub:"Click a card to expand.",build:secRevenueModel2,notes:"One clinic to a multi-clinic group, same architecture."},
+{act:"ACT XIII — BUSINESS",kicker:"DEFENSIBILITY",title:"The moat isn't the code",sub:"",build:secMoat,notes:"Code can be copied in a weekend. Years of clinical refinement cannot."},
+
+{act:"ACT XIV — ENGINEERING & TRUST",kicker:"ENGINEERING DISCIPLINE",title:"Eleven gates. Every module.",sub:"",build:secEngineeringDiscipline,notes:"The literal checklist every module must pass before production-ready."},
+{act:"ACT XIV — ENGINEERING & TRUST",kicker:"COMPLIANCE",title:"Built for what's coming",sub:"",build:secCompliance,notes:"India's DPDP Act has a hard compliance deadline. We're building to it now."},
+
+{act:"ACT XV — FUTURE VISION",kicker:"FUTURE VISION — NOT V1",title:"Where the architecture is designed to go",sub:"Click a card to expand.",build:secFuture,notes:"None of this exists yet. This is the roadmap, not what's being evaluated today."},
+
+{act:"ACT XVI — CLOSING",kicker:"EXECUTION STRATEGY",title:"Prove it in one clinic. Then scale it.",sub:"",build:secPathToScale,notes:"Every clinic after Tulip Dental has to be earned on product quality."},
+{act:"ACT XVI — CLOSING",kicker:"THE ASK",title:"Where We Need Help",sub:"This is not a pitch. It's an invitation.",build:secAsk,notes:"Your perspective — not your money, not an endorsement."},
+{act:"ACT XVI — CLOSING",kicker:"CLOSING",title:"Dentfluence is not another dental software.",sub:"It is building the Operating System on which the future dental practice will run.",build:secClosing,notes:"Thank you. I'd welcome your questions — and your skepticism."}
+];
+
+const deck=document.getElementById('deck');
+SLIDES.forEach((sl)=>{
+  const section=h('section',{class:'slide'});
+  section.appendChild(h('div',{class:'kicker'},sl.kicker));
+  section.appendChild(h('h1',{class:'stitle'},sl.title));
+  if(sl.sub) section.appendChild(h('div',{class:'ssub'},sl.sub));
+  const stage=h('div',{class:'stage'});
+  if(sl.build) stage.appendChild(sl.build());
+  section.appendChild(stage);
+  deck.appendChild(section);
+});
+const ovgrid=document.getElementById('ovgrid');
+document.getElementById('ovCount').textContent = SLIDES.length + ' chapters — including a 52-scenario theatre and an 8-workflow simulator inside.';
+SLIDES.forEach((sl,i)=>{
+  const c=h('div',{class:'ovcard'});
+  c.appendChild(h('div',{class:'n'}, String(i+1).padStart(2,'0')+' — '+sl.kicker));
+  c.appendChild(h('div',{class:'t'}, sl.title));
+  c.addEventListener('click',()=>{ goTo(i); toggleGrid(false); });
+  ovgrid.appendChild(c);
+});
+let current=0; const total=SLIDES.length;
+document.getElementById('totalNum').textContent=String(total).padStart(2,'0');
+const slideEls=document.querySelectorAll('.slide');
+function render(){
+  slideEls.forEach((elx,i)=>{ elx.classList.remove('active','prev'); if(i===current) elx.classList.add('active'); else if(i<current) elx.classList.add('prev'); });
+  document.getElementById('curNum').textContent=String(current+1).padStart(2,'0');
+  document.getElementById('progressFill').style.width=((current+1)/total*100)+'%';
+  document.getElementById('actMark').textContent=SLIDES[current].act;
+}
+function goTo(i){ current=Math.max(0,Math.min(total-1,i)); render(); }
+function next(){ goTo(current+1); } function prev(){ goTo(current-1); }
+document.getElementById('nextBtn').onclick=next; document.getElementById('prevBtn').onclick=prev;
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){ e.preventDefault(); next(); }
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){ e.preventDefault(); prev(); }
+  else if(e.key==='Home'){ goTo(0); } else if(e.key==='End'){ goTo(total-1); }
+  else if(e.key.toLowerCase()==='g'){ toggleGrid(); }
+  else if(e.key.toLowerCase()==='f'){ toggleFullscreen(); } else if(e.key==='Escape'){ toggleGrid(false); }
+});
+let touchX=null;
+document.addEventListener('touchstart', e=> touchX=e.touches[0].clientX);
+document.addEventListener('touchend', e=>{ if(touchX===null) return; const dx=e.changedTouches[0].clientX-touchX; if(dx<-50) next(); else if(dx>50) prev(); touchX=null; });
+const themeToggle=document.getElementById('themeToggle');
+themeToggle.onclick=()=>{ const html=document.documentElement; const cur=html.getAttribute('data-theme'); html.setAttribute('data-theme', cur==='light'?'dark':'light'); themeToggle.innerHTML = cur==='light' ? '&#9789;' : '&#9788;'; };
+const overview=document.getElementById('overview');
+function toggleGrid(force){ overview.classList.toggle('open', force!==undefined?force:!overview.classList.contains('open')); }
+document.getElementById('gridToggle').onclick=()=>toggleGrid();
+document.getElementById('ovClose').onclick=()=>toggleGrid(false);
+function toggleFullscreen(){ if(!document.fullscreenElement){ document.documentElement.requestFullscreen().catch(()=>{}); } else { document.exitFullscreen().catch(()=>{}); } }
+document.getElementById('fsToggle').onclick=toggleFullscreen;
+document.addEventListener('mousemove',(e)=>{
+  const active=document.querySelector('.slide.active .stage'); if(!active) return;
+  const r=active.getBoundingClientRect(); const relX=(e.clientX-(r.left+r.width/2))/r.width; const relY=(e.clientY-(r.top+r.height/2))/r.height;
+  active.style.transform=`perspective(1000px) rotateY(${relX*2}deg) rotateX(${-relY*2}deg)`;
+});
+document.querySelectorAll('.stage').forEach(d=> d.style.transition='transform .5s cubic-bezier(.22,.61,.36,1)');
+render();
+</script>
+</body>
+</html>

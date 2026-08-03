@@ -73,12 +73,16 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
 
         /*
          | -------- Patients (Phase 1) --------
-         | Same PatientService brain as the web pages. Reads are open to any
-         | logged-in staff; writes are role-gated server-side. "/search" is
+         | Same PatientService brain as the web pages. Variants hardening
+         | 2026-08-03: list + search are PHI reads and now require the
+         | owner-configured patients View flag (Slice 1.4 rule) — they were the
+         | last two patient reads open to any authenticated token. "/search" is
          | declared before "/{patient}" so it isn't swallowed as an id.
          */
-        Route::get('/patients/search',    [PatientController::class, 'search']);
-        Route::get('/patients',           [PatientController::class, 'index']);
+        Route::get('/patients/search',    [PatientController::class, 'search'])
+            ->middleware('api.role:module:patients,view');
+        Route::get('/patients',           [PatientController::class, 'index'])
+            ->middleware('api.role:module:patients,view');
         Route::get('/patients/{patient}', [PatientController::class, 'show'])
             ->middleware('api.role:module:patients,view');
 
@@ -165,11 +169,15 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::patch('/notifications/{id}/read',        [\App\Http\Controllers\Api\V1\NotificationsController::class, 'markRead']);
         Route::post('/notifications/mark-all-read',     [\App\Http\Controllers\Api\V1\NotificationsController::class, 'markAllRead']);
 
-        // Consultation create — 4 workflows (mirrors web)
-        Route::get('/patients/{patient}/consultations/same-issue-context', [ConsultationController::class, 'sameIssueContext']);
+        // Consultation create — 4 workflows (mirrors web).
+        // Variants hardening 2026-08-03: these two clinical reads were the only
+        // patient-context PHI endpoints outside the Slice 1.4 view gate.
+        Route::get('/patients/{patient}/consultations/same-issue-context', [ConsultationController::class, 'sameIssueContext'])
+            ->middleware('api.role:module:patients,view');
         // COHA (Comprehensive Oral Health Assessment) — separate workflow from the
         // patient page, mirrors web's dedicated coha.* routes/controller.
-        Route::get('/coha/{consultation}', [CohaController::class, 'show']);
+        Route::get('/coha/{consultation}', [CohaController::class, 'show'])
+            ->middleware('api.role:module:patients,view');
         // Clinical writes — Slice 1.2: owner-configured patients,edit (was a
         // hardcoded dentist role-name list). Mirrors web consultation stores.
         Route::middleware('api.role:module:patients,edit')->group(function () {

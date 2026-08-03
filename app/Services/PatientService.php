@@ -7,6 +7,7 @@ use App\Models\Patient;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * PatientService
@@ -199,65 +200,74 @@ class PatientService
         $dobUnknown = (bool) ($in['dob_unknown'] ?? false);
         $dob        = $in['date_of_birth'] ?? $in['dob'] ?? null;
 
-        $patient = Patient::create([
-            // External/source ID (migration/import only). Omitted on normal
-            // registration → the model boot auto-assigns the TDC number.
-            'patient_id'  => $in['patient_id'] ?? null,
-            // Identity
-            'title'       => $in['title'] ?? null,
-            'first_name'  => $in['first_name'] ?? null,
-            'middle_name' => $in['middle_name'] ?? null,
-            'last_name'   => $in['last_name'] ?? null,
-            'name'        => $displayName,
-            'gender'      => $in['gender'] ?? null,
-            'date_of_birth' => $dobUnknown ? null : $dob,
-            'dob_unknown' => $dobUnknown,
-            'age_years'   => $in['age_years'] ?? null,
-            // Contact
-            'phone'           => $in['phone'] ?? $in['mobile'] ?? null,
-            'alternate_phone' => $in['alternate_phone'] ?? null,
-            'email'           => $in['email'] ?? null,
-            'emergency_contact_name'         => $in['emergency_contact_name'] ?? null,
-            'emergency_contact_relationship' => $in['emergency_contact_relationship'] ?? null,
-            'emergency_contact_number'       => $in['emergency_contact_number'] ?? null,
-            // Address
-            'address' => $in['address'] ?? null,
-            'area'    => $in['area'] ?? null,
-            'city'    => $in['city'] ?? null,
-            'state'   => $in['state'] ?? null,
-            'pincode' => $in['pincode'] ?? null,
-            'occupation'      => $in['occupation'] ?? null,
-            // Clinical
-            'medical_conditions'  => $in['medical_conditions'] ?? [],
-            'current_medications' => $in['current_medications'] ?? null,
-            'dental_conditions'   => $in['dental_conditions'] ?? [],
-            'medical_alert'       => $in['medical_alert'] ?? null,
-            'allergies'           => $in['allergies'] ?? [],
-            'family_notes'        => $in['family_notes'] ?? null,
-            // Habits
-            'habits'          => $in['habits'] ?? [],
-            'habit_frequency' => $in['habit_frequency'] ?? [],
-            // Source
-            'source'               => $in['source'] ?? null,
-            'referred_by'          => $in['referred_by'] ?? null,
-            'source_referral_name' => $in['source_referral_name'] ?? null,
-            'source_camp_name'     => $in['source_camp_name'] ?? null,
-            'source_campaign'      => $in['source_campaign'] ?? null,
-            // Structured referral
-            'referral_type'       => $in['referral_type'] ?? null,
-            'referred_patient_id' => $in['referred_patient_id'] ?? null,
-            'referrer_name'       => $in['referrer_name'] ?? null,
-            'referrer_mobile'     => $in['referrer_mobile'] ?? null,
-            'referrer_type'       => $in['referrer_type'] ?? null,
-            'referrer_notes'      => $in['referrer_notes'] ?? null,
-            // Misc
-            'chief_complaint' => $in['chief_complaint'] ?? $in['notes'] ?? null,
-            // Ownership
-            'branch_id'  => $actor->branch_id,
-            'created_by' => $actor->id,
-        ]);
+        // Create + tag-sync run atomically (Phase 2, PM-015): previously a
+        // tag-sync failure after a successful create could leave a patient
+        // record with no tags and no rollback. Everything after this block
+        // (relationship linker, appointment link-back) is unchanged — the
+        // linker already self-guards and must never block creation.
+        $patient = DB::transaction(function () use ($in, $actor, $displayName, $dobUnknown, $dob) {
+            $patient = Patient::create([
+                // External/source ID (migration/import only). Omitted on normal
+                // registration → the model boot auto-assigns the TDC number.
+                'patient_id'  => $in['patient_id'] ?? null,
+                // Identity
+                'title'       => $in['title'] ?? null,
+                'first_name'  => $in['first_name'] ?? null,
+                'middle_name' => $in['middle_name'] ?? null,
+                'last_name'   => $in['last_name'] ?? null,
+                'name'        => $displayName,
+                'gender'      => $in['gender'] ?? null,
+                'date_of_birth' => $dobUnknown ? null : $dob,
+                'dob_unknown' => $dobUnknown,
+                'age_years'   => $in['age_years'] ?? null,
+                // Contact
+                'phone'           => $in['phone'] ?? $in['mobile'] ?? null,
+                'alternate_phone' => $in['alternate_phone'] ?? null,
+                'email'           => $in['email'] ?? null,
+                'emergency_contact_name'         => $in['emergency_contact_name'] ?? null,
+                'emergency_contact_relationship' => $in['emergency_contact_relationship'] ?? null,
+                'emergency_contact_number'       => $in['emergency_contact_number'] ?? null,
+                // Address
+                'address' => $in['address'] ?? null,
+                'area'    => $in['area'] ?? null,
+                'city'    => $in['city'] ?? null,
+                'state'   => $in['state'] ?? null,
+                'pincode' => $in['pincode'] ?? null,
+                'occupation'      => $in['occupation'] ?? null,
+                // Clinical
+                'medical_conditions'  => $in['medical_conditions'] ?? [],
+                'current_medications' => $in['current_medications'] ?? null,
+                'dental_conditions'   => $in['dental_conditions'] ?? [],
+                'medical_alert'       => $in['medical_alert'] ?? null,
+                'allergies'           => $in['allergies'] ?? [],
+                'family_notes'        => $in['family_notes'] ?? null,
+                // Habits
+                'habits'          => $in['habits'] ?? [],
+                'habit_frequency' => $in['habit_frequency'] ?? [],
+                // Source
+                'source'               => $in['source'] ?? null,
+                'referred_by'          => $in['referred_by'] ?? null,
+                'source_referral_name' => $in['source_referral_name'] ?? null,
+                'source_camp_name'     => $in['source_camp_name'] ?? null,
+                'source_campaign'      => $in['source_campaign'] ?? null,
+                // Structured referral
+                'referral_type'       => $in['referral_type'] ?? null,
+                'referred_patient_id' => $in['referred_patient_id'] ?? null,
+                'referrer_name'       => $in['referrer_name'] ?? null,
+                'referrer_mobile'     => $in['referrer_mobile'] ?? null,
+                'referrer_type'       => $in['referrer_type'] ?? null,
+                'referrer_notes'      => $in['referrer_notes'] ?? null,
+                // Misc
+                'chief_complaint' => $in['chief_complaint'] ?? $in['notes'] ?? null,
+                // Ownership
+                'branch_id'  => $actor->branch_id,
+                'created_by' => $actor->id,
+            ]);
 
-        $this->syncTags($patient, $in['tags'] ?? [], $actor);
+            $this->syncTags($patient, $in['tags'] ?? [], $actor);
+
+            return $patient;
+        });
 
         // Phase 1 (Workstream A) — link to Master Relationship. NO-OP unless the
         // 'identity.link_patient' feature flag is on; never breaks creation.
@@ -291,14 +301,25 @@ class PatientService
      */
     public function findDuplicatesByPhone(?string $phone, int $branchId)
     {
-        $phone = trim((string) $phone);
-
-        if ($phone === '') {
+        // PM-006 (Variants hardening 2026-08-03): match on the normalized
+        // number — strip formatting/country code, compare the last 10 digits —
+        // instead of an exact string compare. "+91 98765 43210", "098765 43210"
+        // and "9876543210" are the same patient. Same normalization rule as
+        // IdentityResolver::normalizePhone(); expressed in SQL so the DB does
+        // the narrowing. Strictly broader than the old exact match, so every
+        // previously-detected duplicate is still detected.
+        $digits = preg_replace('/\D+/', '', (string) $phone) ?? '';
+        if ($digits === '') {
             return collect();
         }
+        $last10 = strlen($digits) > 10 ? substr($digits, -10) : $digits;
+
+        // Nested REPLACE (portable MySQL, no REGEXP_REPLACE dependency) strips
+        // the separators staff actually type: space, dash, dot, parens, plus.
+        $normalizedExpr = "RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 10)";
 
         return Patient::where('branch_id', $branchId)
-            ->where('phone', $phone)
+            ->whereRaw("$normalizedExpr = ?", [$last10])
             ->orderBy('name')
             ->limit(5)
             ->get(['id', 'name', 'phone', 'date_of_birth']);
@@ -452,9 +473,14 @@ class PatientService
     /** Soft delete (keeps the record) with an audit-friendly reason. */
     public function softDelete(Patient $patient, string $reason): void
     {
-        $patient->deleted_reason = $reason;
-        $patient->save();
-        $patient->delete();
+        // Atomic (Phase 2, PM-015): previously these were two separate
+        // statements — a crash between them could leave deleted_reason set
+        // on a non-deleted record.
+        DB::transaction(function () use ($patient, $reason) {
+            $patient->deleted_reason = $reason;
+            $patient->save();
+            $patient->delete();
+        });
     }
 
     // ──────────────────────────────────────────────────────────────────────

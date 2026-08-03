@@ -115,22 +115,30 @@
 @endsection
 
 @section('content')
-<form method="POST" action="{{ route('patients.consultations.minor-visit.store', $patient) }}"
-      x-data="minorVisitForm()"
+{{-- Slice 1 fix (2026-08-01): edit-aware — $consultation present means we're
+     editing an existing Minor Visit (via consultations.minor-visit.edit),
+     absent means the normal create flow. Same view, two routes. --}}
+<form method="POST"
+      action="{{ isset($consultation) ? route('patients.consultations.minor-visit.update', [$patient, $consultation]) : route('patients.consultations.minor-visit.store', $patient) }}"
+      x-data="minorVisitForm(@js(isset($consultation) ? [
+          'clinicRelated'  => (bool) $consultation->related_to_clinic_treatment,
+          'procedureText'  => $consultation->procedure_performed ?? '',
+      ] : null))"
       id="mv-form">
 @csrf
+@if(isset($consultation)) @method('PUT') @endif
 
 {{-- ── Topbar ── --}}
 <div id="ctopbar">
     <div class="ctb-left">
-        <a href="{{ route('patients.show', $patient) }}#consultation" class="btn-outline">← Back</a>
+        <a href="{{ isset($consultation) ? route('consultations.show', $consultation) : route('patients.show', $patient) . '#consultation' }}" class="btn-outline">← Back</a>
         <div>
-            <div class="ctb-title">Minor Visit</div>
+            <div class="ctb-title">{{ isset($consultation) ? 'Edit Minor Visit' : 'Minor Visit' }}</div>
             <div class="ctb-sub">{{ $patient->name }} · Standalone procedure or review</div>
         </div>
     </div>
     <div class="ctb-right">
-        <button type="submit" class="btn-save">Save Minor Visit</button>
+        <button type="submit" class="btn-save">{{ isset($consultation) ? 'Update Minor Visit' : 'Save Minor Visit' }}</button>
     </div>
 </div>
 
@@ -168,8 +176,9 @@
             <div class="form-group">
                 <label>Doctor <span class="req">*</span></label>
                 <select name="doctor_id" required>
+                    @php $selectedDoctorId = old('doctor_id', isset($consultation) ? $consultation->doctor_id : auth()->id()); @endphp
                     @foreach($doctors as $doc)
-                    <option value="{{ $doc->id }}" {{ $doc->id == auth()->id() ? 'selected' : '' }}>
+                    <option value="{{ $doc->id }}" {{ $doc->id == $selectedDoctorId ? 'selected' : '' }}>
                         {{ $doc->doctor_name }}
                     </option>
                     @endforeach
@@ -177,7 +186,39 @@
             </div>
             <div class="form-group">
                 <label>Date</label>
-                <input type="date" name="consultation_date" value="{{ date('Y-m-d') }}">
+                <input type="date" name="consultation_date"
+                    value="{{ old('consultation_date', isset($consultation) ? $consultation->consultation_date->format('Y-m-d') : date('Y-m-d')) }}">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Reason</label>
+                <input type="text" name="chief_complaint"
+                    value="{{ old('chief_complaint', isset($consultation) ? $consultation->chief_complaint : '') }}"
+                    placeholder="e.g. Suture removal, pain in tooth #46, denture adjustment">
+            </div>
+            <div class="form-group">
+                <label>Charges <span style="font-weight:400;color:#9ca3af;">(optional)</span></label>
+                <input type="number" name="charges" min="0" step="0.01"
+                    placeholder="e.g. 500" {{ isset($consultation) ? 'disabled' : '' }}>
+                @if(isset($consultation))
+                <p style="font-size:11px;color:#9ca3af;margin-top:4px;">Charges aren't stored on the record and can't be edited here — queue a fresh billing prompt from the patient's Billing tab if needed.</p>
+                @else
+                <p style="font-size:11px;color:#9ca3af;margin-top:4px;">If set, a billing prompt is queued for front desk — no invoice is created automatically.</p>
+                @endif
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Follow-up Date <span style="font-weight:400;color:#9ca3af;">(optional)</span></label>
+                <input type="date" name="follow_up_date"
+                    value="{{ old('follow_up_date', isset($consultation) && $consultation->follow_up_date ? $consultation->follow_up_date->format('Y-m-d') : '') }}">
+            </div>
+            <div class="form-group">
+                <label>Follow-up Note <span style="font-weight:400;color:#9ca3af;">(optional)</span></label>
+                <input type="text" name="follow_up_note"
+                    value="{{ old('follow_up_note', isset($consultation) ? $consultation->follow_up_note : '') }}"
+                    placeholder="e.g. Review healing in 1 week">
             </div>
         </div>
     </div>
@@ -224,13 +265,19 @@
             <div class="form-group">
                 <label>Clinical Notes</label>
                 <textarea name="finishing_notes" rows="2"
-                    placeholder="Any observations or post-procedure findings.">{{ old('finishing_notes') }}</textarea>
+                    placeholder="Any observations or post-procedure findings.">{{ old('finishing_notes', isset($consultation) ? $consultation->finishing_notes : '') }}</textarea>
             </div>
 
             <div class="form-group">
                 <label>Advice Given</label>
-                <textarea name="advice" rows="2"
-                    placeholder="e.g. Avoid hard foods for 24 hours. Return if pain persists.">{{ old('advice') }}</textarea>
+                {{-- Slice 1 fix (2026-08-01): this textarea shared name="advice" with the
+                     external/walk-in one below. x-show only hides with CSS — both stayed
+                     in the DOM and both posted, so whichever was later in DOM order
+                     silently overwrote this one on submit. Given a unique name here;
+                     merged back into the single `advice` column server-side in
+                     minorVisitStore() based on related_to_clinic_treatment. --}}
+                <textarea name="advice_clinic_related" rows="2"
+                    placeholder="e.g. Avoid hard foods for 24 hours. Return if pain persists.">{{ old('advice_clinic_related', (isset($consultation) && $consultation->related_to_clinic_treatment) ? $consultation->advice : '') }}</textarea>
             </div>
         </div>
     </div>
@@ -243,16 +290,13 @@
         </div>
 
         <div class="card">
-            <div class="card-title"><span class="dot"></span> Chief Complaint & History</div>
-            <div class="form-group">
-                <label>Chief Complaint</label>
-                <input type="text" name="chief_complaint"
-                    placeholder="e.g. Pain in tooth #46 after treatment done elsewhere">
-            </div>
+            <div class="card-title"><span class="dot"></span> History</div>
+            {{-- Reason (chief_complaint) is captured once, in the shared Visit Details card above —
+                 not duplicated here to avoid two inputs sharing the same field name. --}}
             <div class="form-group">
                 <label>History (HOPI)</label>
                 <textarea name="hopi_final" rows="3"
-                    placeholder="Duration, nature of complaint, treatment already taken."></textarea>
+                    placeholder="Duration, nature of complaint, treatment already taken.">{{ old('hopi_final', isset($consultation) ? $consultation->hopi_final : '') }}</textarea>
             </div>
         </div>
 
@@ -261,12 +305,12 @@
             <div class="form-group">
                 <label>Clinical Findings</label>
                 <textarea name="clinical_data[notes]" rows="3"
-                    placeholder="Examination findings — soft tissue, tooth condition, etc."></textarea>
+                    placeholder="Examination findings — soft tissue, tooth condition, etc.">{{ old('clinical_data.notes', isset($consultation) ? ($consultation->clinical_data['notes'] ?? '') : '') }}</textarea>
             </div>
             <div class="form-group">
                 <label>Diagnosis</label>
                 <textarea name="primary_diagnosis" rows="2"
-                    placeholder="Working diagnosis based on today's examination."></textarea>
+                    placeholder="Working diagnosis based on today's examination.">{{ old('primary_diagnosis', isset($consultation) ? $consultation->primary_diagnosis : '') }}</textarea>
             </div>
         </div>
 
@@ -288,8 +332,10 @@
 
             <div class="form-group">
                 <label>Advice Given</label>
-                <textarea name="advice" rows="2"
-                    placeholder="Post-procedure instructions and advice.">{{ old('advice') }}</textarea>
+                {{-- Slice 1 fix (2026-08-01): see matching note on the clinic-related
+                     "Advice Given" field above — unique name, merged server-side. --}}
+                <textarea name="advice_external" rows="2"
+                    placeholder="Post-procedure instructions and advice.">{{ old('advice_external', (isset($consultation) && !$consultation->related_to_clinic_treatment) ? $consultation->advice : '') }}</textarea>
             </div>
         </div>
     </div>
@@ -309,11 +355,19 @@
 
 @push('scripts')
 <script>
-function minorVisitForm() {
+function minorVisitForm(initial) {
+    // Slice 1 fix (2026-08-01): `initial` is passed from Blade when editing an
+    // existing Minor Visit ({clinicRelated, procedureText}), or null when
+    // creating one. Seeds the radio's checked state (clinicRelatedRaw), the
+    // branch toggle (clinicRelated), and the shared Procedure Performed field
+    // (procedureText is x-model-only with no server-rendered fallback) so
+    // Edit opens on the correct sub-form with existing data intact instead of
+    // a blank form.
+    const clinicRelated = initial ? initial.clinicRelated : null;
     return {
-        clinicRelated: null,
-        clinicRelatedRaw: '',
-        procedureText: '',
+        clinicRelated: clinicRelated,
+        clinicRelatedRaw: clinicRelated === null ? '' : (clinicRelated ? '1' : '0'),
+        procedureText: initial ? (initial.procedureText || '') : '',
         setProcedure(text) {
             this.procedureText = text;
         },

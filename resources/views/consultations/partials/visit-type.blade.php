@@ -1,3 +1,10 @@
+{{-- ══ LEGACY — CONFIRMED UNUSED (audit 2026-07-31) ══
+     Not @include'd by any view in the app (repo-wide grep, zero hits).
+     NOTE: Phase 2 of the 2026-07-31 Visit redesign will need a real Visit
+     Type picker (Consultation / Minor Visit / COHA) — check this file first
+     before writing a new one from scratch, it may be a useful starting
+     point even though it's currently disconnected. Retained for reference/
+     rollback per Retire > Archive > Verify > Delete policy. ══ --}}
 {{--
     partials/visit-type.blade.php
     Section 2 — Visit Type

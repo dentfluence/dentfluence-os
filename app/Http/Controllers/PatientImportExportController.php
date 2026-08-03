@@ -90,12 +90,8 @@ class PatientImportExportController extends Controller
         ],
     ];
 
-    // ── Import form ───────────────────────────────────────────────────────────
-
-    public function importForm()
-    {
-        return view('patients.import');
-    }
+    // importForm() removed 2026-08-03: unrouted dead method whose target view
+    // (patients/import.blade.php) was deleted in the 2-Aug dead-view sweep.
 
     // ── Preview (step 1) — parse file, return first 10 rows ──────────────────
 
@@ -158,7 +154,13 @@ class PatientImportExportController extends Controller
         $branchId  = Auth::user()->branch_id;
         $userId    = Auth::id();
         $imported  = 0;
-        $skipped   = 0;
+        // Per-reason skip counters (Variants hardening 2026-08-03): the summary
+        // previously lumped every skip under "duplicates", so a clinic had no
+        // way to know rows were dropped for missing data vs. real duplicates.
+        $skippedDupId    = 0;   // duplicate source patient_id (file or DB)
+        $skippedDupPhone = 0;   // duplicate phone (file or DB)
+        $skippedEmpty    = 0;   // no name AND no phone
+        $skippedSummary  = 0;   // footer rows like "Count: 4242"
 
         // ── Pre-load the dedup sets ONCE ─────────────────────────────────────
         // Previously every row fired two `exists()` queries against unindexed
@@ -191,7 +193,8 @@ class PatientImportExportController extends Controller
             DB::transaction(function () use (
                 $chunk, $skipDupes, $branchId, $userId, $patients, $actor,
                 $existingPhones, $existingPatientIds,
-                &$seenPatientIds, &$seenPhones, &$imported, &$skipped
+                &$seenPatientIds, &$seenPhones, &$imported,
+                &$skippedDupId, &$skippedDupPhone, &$skippedEmpty, &$skippedSummary
             ) {
                 foreach ($chunk as $row) {
                     $phone = $this->sanitizePhone($row['phone'] ?? '');
@@ -200,7 +203,7 @@ class PatientImportExportController extends Controller
                     $rawPatientId = $row['patient_id'] ?? null;
                     if ($rawPatientId) {
                         if (isset($seenPatientIds[$rawPatientId]) || isset($existingPatientIds[$rawPatientId])) {
-                            $skipped++;
+                            $skippedDupId++;
                             continue;
                         }
                         $seenPatientIds[$rawPatientId] = true;
@@ -209,7 +212,7 @@ class PatientImportExportController extends Controller
                     // Duplicate phone — within the file or already in the DB.
                     if ($phone && $skipDupes
                         && (isset($existingPhones[$phone]) || isset($seenPhones[$phone]))) {
-                        $skipped++;
+                        $skippedDupPhone++;
                         continue;
                     }
 
@@ -220,13 +223,13 @@ class PatientImportExportController extends Controller
 
                     // Skip empty rows
                     if (empty($row['name']) && empty($phone)) {
-                        $skipped++;
+                        $skippedEmpty++;
                         continue;
                     }
 
                     // Skip summary/footer rows (e.g. Clinicia exports "Count: 4242" as last row)
                     if (preg_match('/^(count|total|sum|grand total)\s*:/i', $row['name'] ?? '')) {
-                        $skipped++;
+                        $skippedSummary++;
                         continue;
                     }
 
@@ -273,8 +276,17 @@ class PatientImportExportController extends Controller
         \Illuminate\Support\Facades\Storage::disk('local')->delete($sessionData['temp_path']);
         $request->session()->forget('import_preview');
 
+        // Honest per-reason summary — never label a data-quality skip a "duplicate".
+        $skipParts = array_filter([
+            $skippedDupPhone ? "{$skippedDupPhone} duplicate phone" : null,
+            $skippedDupId    ? "{$skippedDupId} duplicate patient ID" : null,
+            $skippedEmpty    ? "{$skippedEmpty} missing name & phone" : null,
+            $skippedSummary  ? "{$skippedSummary} summary/footer row" . ($skippedSummary > 1 ? 's' : '') : null,
+        ]);
+
         return redirect()->route('settings.index', ['tab' => 'data'])
-            ->with('import_success', "Import complete — {$imported} patients added" . ($skipped ? ", {$skipped} skipped (duplicates)." : '.'));
+            ->with('import_success', "Import complete — {$imported} patients added"
+                . ($skipParts ? ' · skipped: ' . implode(', ', $skipParts) . '.' : '.'));
     }
 
     // ── Export ────────────────────────────────────────────────────────────────

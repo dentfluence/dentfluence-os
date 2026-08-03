@@ -1,5 +1,3 @@
-     CONSULTATION TAB
-══════════════════════════════════════════════════════════ --}}
 <div x-show="activeTab === 'consultation'" style="display:none" class="w-full px-6 py-5">
     <div class="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5">
 
@@ -14,7 +12,38 @@
                 </div>
                 {{-- ── Consultation type selector ── --}}
                 <div class="flex items-center gap-2 flex-wrap">
-                    {{-- New Consultation (primary) --}}
+                    {{-- New Visit (2026-07-31 Visit redesign) — Visit Type picker per directive:
+                         Consultation / Minor Visit / COHA. Purely additive: the existing
+                         New Consultation/Same Issue/Minor Visit/Emergency/COHA links below
+                         are untouched, still work exactly as before. This is a second,
+                         optional entry point that groups the 3 target visit types. --}}
+                    <div x-data="{ open: false }" class="relative" @click.outside="open = false">
+                        <button type="button" @click="open = !open"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-800 text-white hover:bg-gray-900 transition-colors font-semibold rounded">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                            + New Visit
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" :style="open ? 'transform:rotate(180deg)' : ''" style="transition:transform .15s;"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                        <div x-show="open" x-cloak x-transition
+                             class="absolute z-20 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                            <a href="{{ route('patients.consultations.create', $patient) }}?type=new"
+                               class="block px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-purple-50 hover:text-[#6a0f70] border-b border-gray-100">
+                                Consultation
+                                <div class="text-[10px] text-gray-400 font-normal mt-0.5">Chief complaint → exam → diagnosis → prescription</div>
+                            </a>
+                            <a href="{{ route('patients.consultations.minor-visit.create', $patient) }}"
+                               class="block px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-cyan-50 hover:text-cyan-800 border-b border-gray-100">
+                                Minor Visit
+                                <div class="text-[10px] text-gray-400 font-normal mt-0.5">Dressing, suture removal, adjustment, review</div>
+                            </a>
+                            <a href="{{ route('coha.create', $patient) }}"
+                               class="block px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-cyan-50 hover:text-cyan-800">
+                                Complete Oral Health Assessment
+                                <div class="text-[10px] text-gray-400 font-normal mt-0.5">Full assessment across all systems</div>
+                            </a>
+                        </div>
+                    </div>
+                    {{-- New Consultation (existing, unchanged) --}}
                     <a href="{{ route('patients.consultations.create', $patient) }}?type=new"
                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[#6a0f70] text-white hover:bg-[#380740] transition-colors font-semibold rounded">
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
@@ -133,8 +162,12 @@
                                class="p-1.5 rounded text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                             </a>
-                            {{-- Edit button (COHA gets its own edit route; others use standard edit) --}}
-                            <a href="{{ $isCoha ? route('coha.edit', [$patient, $consult]) : route('patients.consultations.edit', [$patient, $consult]) }}"
+                            {{-- Edit button (COHA and Minor Visit get their own edit routes;
+                                 Slice 1 fix 2026-08-01: Minor Visit used to fall through to
+                                 the generic edit form here too — same production blocker as
+                                 the show-page Edit buttons. Others use standard edit. --}}
+                            <a href="{{ $isCoha ? route('coha.edit', [$patient, $consult])
+                                        : ($consult->consultation_type === 'minor_visit' ? route('patients.consultations.minor-visit.edit', [$patient, $consult]) : route('patients.consultations.edit', [$patient, $consult])) }}"
                                title="Edit"
                                class="p-1.5 rounded text-gray-400 hover:text-[#6a0f70] hover:bg-purple-50 transition-colors">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>

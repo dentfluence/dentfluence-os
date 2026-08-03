@@ -14,22 +14,41 @@
         <div class="print-row"><span class="print-label">Date of Birth:</span><span class="print-value">{{ $patient->dob ? \Carbon\Carbon::parse($patient->dob)->format('d M Y') : '—' }}</span></div>
         <div class="print-row"><span class="print-label">Age:</span><span class="print-value">{{ $patient->age ?? '—' }}</span></div>
         <div class="print-row"><span class="print-label">Gender:</span><span class="print-value">{{ ucfirst($patient->gender ?? '—') }}</span></div>
-        <div class="print-row"><span class="print-label">Blood Group:</span><span class="print-value">{{ $patient->blood_group ?? '—' }}</span></div>
+        {{-- Blood Group row removed 2026-08-03: patients has no blood_group column — it always printed "—". --}}
         <div class="print-row"><span class="print-label">Phone:</span><span class="print-value">{{ $patient->phone ?? '—' }}</span></div>
         <div class="print-row"><span class="print-label">Email:</span><span class="print-value">{{ $patient->email ?? '—' }}</span></div>
         <div class="print-row" style="grid-column:span 2;"><span class="print-label">Address:</span><span class="print-value">{{ $patient->address ?? '—' }}</span></div>
     </div>
 </div>
 
-{{-- ── Medical History ── --}}
-@if($patient->medical_history || $patient->allergies || $patient->current_medications)
+{{-- ── Medical History ──
+     Fixed 2026-08-03 (Variants hardening):
+     · medical_history is not a patients column (row could never print) — the
+       real fields are medical_conditions / dental_conditions / medical_alert.
+     · allergies / medical_conditions / dental_conditions are ARRAY casts
+       (EncryptedArray) — echoing them raw crashed print with a TypeError for
+       any patient with data. Guarded with the same implode pattern used in
+       tabs/consultation.blade.php. --}}
+@php
+    $printList = fn ($v) => is_array($v) ? implode(', ', array_filter($v)) : $v;
+    $conditions = $printList($patient->medical_conditions);
+    $dental     = $printList($patient->dental_conditions);
+    $allergies  = $printList($patient->allergies);
+@endphp
+@if($conditions || $dental || $allergies || $patient->medical_alert || $patient->current_medications)
 <div class="print-section">
     <div class="print-section-title">Medical History</div>
-    @if($patient->medical_history)
-    <div class="print-row"><span class="print-label">History:</span><span class="print-value">{{ $patient->medical_history }}</span></div>
+    @if($patient->medical_alert)
+    <div class="print-row"><span class="print-label">Alert:</span><span class="print-value" style="color:#c0392b;font-weight:600;">{{ $patient->medical_alert }}</span></div>
     @endif
-    @if($patient->allergies)
-    <div class="print-row"><span class="print-label">Allergies:</span><span class="print-value" style="color:#c0392b;font-weight:600;">{{ $patient->allergies }}</span></div>
+    @if($conditions)
+    <div class="print-row"><span class="print-label">Medical Conditions:</span><span class="print-value">{{ $conditions }}</span></div>
+    @endif
+    @if($dental)
+    <div class="print-row"><span class="print-label">Dental Conditions:</span><span class="print-value">{{ $dental }}</span></div>
+    @endif
+    @if($allergies)
+    <div class="print-row"><span class="print-label">Allergies:</span><span class="print-value" style="color:#c0392b;font-weight:600;">{{ $allergies }}</span></div>
     @endif
     @if($patient->current_medications)
     <div class="print-row"><span class="print-label">Medications:</span><span class="print-value">{{ $patient->current_medications }}</span></div>

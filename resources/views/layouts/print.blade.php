@@ -34,7 +34,7 @@
         /* ── Reset ── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            'Inter', sans-serif;
+            font-family: 'Inter', sans-serif; /* fixed 2026-08-03: property name was missing, declaration was silently dropped */
             font-size: 12pt;
             color: #111;
             background: #fff;

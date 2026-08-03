@@ -63,14 +63,55 @@
     .ps-alert.warn { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
     .ps-alert.ok   { background:#f0fdf4; color:#16a34a; }
 
-    /* ── Page body ── */
+    /* ── Page body ──────────────────────────────────────────────────────
+         Iteration 3 (2026-07-31, "exact half, no empty spaces"): .consult-main
+         is a plain flex column holding, top to bottom: Visit Type, then
+         .consult-split (the real 50/50 two-column grid), then Advanced
+         Clinical Details and the Same Issue card (both full width). Earlier
+         iterations tried to fake two columns with CSS Grid `order` on
+         scattered siblings — that caused mismatched row-heights and left
+         empty gaps when one column's content was shorter than the other's.
+         .consult-split's two children (.consult-col-l/.consult-col-r) are
+         now genuine independent flex columns, so each packs tight to its
+         own content with zero cross-column gaps. The old gcol- and oN
+         classes are still applied to a few inner elements as harmless
+         leftovers (they're no-ops outside a CSS Grid) — safe to ignore. ── */
     .consult-wrap {
-        display:grid; grid-template-columns:1fr 270px;
-        gap:16px; padding:16px 20px; align-items:start;
-        max-width:100%;
+        padding:10px 16px; max-width:100%;
     }
-    .consult-main  { display:flex; flex-direction:column; gap:12px; min-width:0; }
-    .consult-aside { display:flex; flex-direction:column; gap:10px; position:sticky; top:60px; min-width:0; }
+    .consult-main {
+        display:flex; flex-direction:column; gap:10px; min-width:0;
+    }
+    .consult-split {
+        display:grid; grid-template-columns:1fr 1fr;
+        gap:10px 16px; align-items:start;
+    }
+    .consult-col-l, .consult-col-r {
+        display:flex; flex-direction:column; gap:10px; min-width:0;
+    }
+
+    @media (max-width:1080px) {
+        .consult-split { grid-template-columns:1fr; }
+    }
+
+    /* ── Consult Assist — was a permanent sidebar column, now a floating
+         panel + launcher button (spec: "do not consume an entire column
+         with AI"). Internal markup is 100% unchanged, only repositioned. ── */
+    .assist-fab {
+        position:fixed; bottom:24px; right:88px; z-index:210;
+        width:42px; height:42px; border-radius:50%;
+        background:#6a0f70; color:#fff; border:none;
+        box-shadow:0 4px 14px rgba(106,15,112,.4); cursor:pointer;
+        display:flex; align-items:center; justify-content:center;
+        font-size:17px; transition:transform .15s;
+    }
+    .assist-fab:hover { transform:scale(1.06); }
+    .consult-aside {
+        position:fixed; bottom:76px; right:24px; z-index:205;
+        width:300px; max-height:70vh; overflow-y:auto;
+        display:flex; flex-direction:column; gap:10px;
+        padding:2px; /* room for card shadows */
+    }
 
     /* ── Cards ── */
     .c-card {
@@ -78,9 +119,10 @@
         border-radius:8px; overflow:visible;
     }
     .c-card-head {
-        padding:11px 16px; border-bottom:1px solid #f3f4f6;
+        padding:8px 14px; border-bottom:1px solid #f3f4f6;
         display:flex; align-items:center; justify-content:space-between;
         background:#faf5fb; border-radius:8px 8px 0 0;
+        min-height:34px;
     }
     .c-head-label {
         font-size:10px; font-weight:700; letter-spacing:.07em;
@@ -93,7 +135,24 @@
         color:#fff; font-size:9px; font-weight:700;
         display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
     }
-    .c-body { padding:16px; }
+    .c-body { padding:12px 14px; }
+
+    /* ── Voice-First Consultation (Iteration 2) ── */
+    .voice-btn {
+        display:flex; align-items:center; gap:5px;
+        padding:4px 10px; border-radius:99px; font-size:10px; font-weight:700;
+        border:1.5px solid #e9d5ff; background:#faf5fb; color:#6a0f70;
+        font-family:'Inter',sans-serif; cursor:pointer; transition:all .15s;
+    }
+    .voice-btn:hover  { background:#6a0f70; color:#fff; border-color:#6a0f70; }
+    .voice-btn-live   { background:#dc2626; color:#fff; border-color:#dc2626; animation:voicepulse 1.4s ease-in-out infinite; }
+    @keyframes voicepulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+    .voice-insert-btn {
+        font-size:10px; font-weight:600; color:#6a0f70; font-family:'Inter',sans-serif;
+        border:1px solid rgba(106,15,112,.25); background:#fff; border-radius:5px;
+        padding:4px 9px; cursor:pointer; transition:all .15s;
+    }
+    .voice-insert-btn:hover { background:#faf5fb; }
 
     /* ── Consultation Type cards ── */
     .type-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
@@ -126,12 +185,12 @@
     .df-label {
         display:block; font-size:10px; font-weight:600; color:#6b7280;
         text-transform:uppercase; letter-spacing:.05em;
-        font-family:'Inter',sans-serif; margin-bottom:4px;
+        font-family:'Inter',sans-serif; margin-bottom:3px;
     }
     .df-label .req { color:#dc2626; }
     .df-input {
         width:100%; border:1px solid #e5e7eb; border-radius:5px;
-        padding:7px 10px; font-size:13px; font-family:'Inter',sans-serif;
+        padding:6px 9px; font-size:13px; font-family:'Inter',sans-serif;
         color:#111827; background:#fff; outline:none; transition:border-color .15s;
     }
     .df-input:focus { border-color:#6a0f70; box-shadow:0 0 0 3px rgba(106,15,112,.07); }
@@ -415,8 +474,17 @@
             </div>
         </div>
         <div class="ctb-right">
+            {{-- 2026-07-31 UX experiment: "Keep only one Save area." These topbar
+                 buttons duplicated the working Save Draft/Save Consultation pair in
+                 the bottom CTA bar — the topbar "Save Draft" button was actually
+                 inert (type="button", no handler), and "Save Consultation" here just
+                 re-submitted the same form the bottom bar already submits. Commented
+                 out, not deleted, per no-delete policy — the bottom CTA bar (search
+                 "SAVE CTA") is now the one Save area. --}}
+            {{--
             <button type="button" class="btn-draft">Save Draft</button>
             <button type="submit" class="btn-save">Save Consultation</button>
+            --}}
         </div>
     </div>
 
@@ -455,9 +523,13 @@
             <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
         </svg>
         <span style="font-size:11px;font-weight:600;color:#b45309;">Date of consultation</span>
-        {{-- Visible date picker — defaults to today, cannot pick a future date --}}
+        {{-- Visible date picker — defaults to today for a new consultation, or the
+             record's saved clinical date when editing. Slice 1 fix (2026-08-01): this
+             was hardcoded to now(), so opening Edit silently reset the clinical date to
+             today on every save. --}}
         <input type="date" name="consultation_date" id="consult-date-input"
-               value="{{ now()->format('Y-m-d') }}" max="{{ now()->format('Y-m-d') }}"
+               value="{{ old('consultation_date', isset($consultation) ? $consultation->consultation_date->format('Y-m-d') : now()->format('Y-m-d')) }}"
+               max="{{ now()->format('Y-m-d') }}"
                onchange="document.getElementById('backdate-note').style.display = (this.value < '{{ now()->format('Y-m-d') }}') ? 'inline' : 'none';"
                style="font-size:11px;font-family:'Inter',sans-serif;border:1px solid #fcd34d;border-radius:5px;padding:4px 8px;background:#fff;color:#374151;cursor:pointer;">
         <span style="font-size:11px;color:#92400e;">Leave as today for a normal entry, or pick a past date for a missed entry.</span>
@@ -493,11 +565,31 @@
         {{-- ── LEFT: Main form ── --}}
         <div class="consult-main">
 
-            {{-- 1. CONSULTATION TYPE — hidden when type is pre-set from URL (e.g. ?type=new from the patient tab buttons) --}}
-            <div class="c-card" x-show="!typeLocked" x-cloak>
+            {{-- 1. VISIT TYPE — read-only once a consultation exists (2026-07-31 UX
+                 experiment: "During Edit, do NOT allow changing the visit type").
+                 The editable type-card selector below is unchanged for CREATE —
+                 this @if just adds a locked display for EDIT, it doesn't touch the
+                 create-mode markup or the underlying consultation_type field/route. --}}
+            @if(($consultation ?? null)?->exists)
+            <div class="c-card gcol-full">
+                <div class="c-card-head">
+                    <span class="c-head-label">Visit Type</span>
+                </div>
+                <div class="c-body" style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:13px;font-weight:600;color:#374151;font-family:'Inter',sans-serif;">
+                        {{ $consultation->typeLabel() }}
+                    </span>
+                    <span style="font-size:10px;color:#9ca3af;font-family:'Inter',sans-serif;font-style:italic;">(read only)</span>
+                </div>
+            </div>
+            @endif
+
+            {{-- Original editable selector — hidden entirely once the consultation
+                 exists (see @if above), so it can't be used to change the type on
+                 an existing record. Still exactly what CREATE uses. --}}
+            <div class="c-card gcol-full" x-show="!typeLocked && !{{ (($consultation ?? null)?->exists) ? 'true' : 'false' }}" x-cloak>
                 <div class="c-card-head">
                     <span class="c-head-label">
-                        <span class="c-num">1</span>
                         Consultation Type
                         <span style="font-weight:400;color:#9ca3af;text-transform:none;letter-spacing:0;font-size:10px;">— select to begin</span>
                     </span>
@@ -647,10 +739,30 @@
                 </div>
             </div>
 
-            {{-- 2. CHIEF COMPLAINT --}}
+        {{-- ══ Iteration 3 (2026-07-31): "exact half, no empty spaces" ══
+             .consult-split / .consult-col-l / .consult-col-r are REAL nested
+             flex containers (not the order/grid-column trick from Iteration 1) —
+             each column now packs tightly based on its OWN content height, so
+             there are no more cross-column empty gaps. Rollback = remove these
+             3 wrapper divs and the matching closes below Diagnosis/Save CTA. --}}
+        <div class="consult-split">
+        <div class="consult-col-l">
+
+            {{-- 2. CHIEF COMPLAINT.
+                 Iteration 2 (2026-07-31): mic button added for Voice-First
+                 Consultation. Speech capture runs entirely client-side
+                 (browser Web Speech API) — no controller/route/DB change. --}}
             <div class="c-card" x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak>
                 <div class="c-card-head">
-                    <span class="c-head-label"><span class="c-num">2</span>Chief Complaint</span>
+                    <span class="c-head-label">Chief Complaint</span>
+                    <button type="button" class="voice-btn" :class="voiceListening ? 'voice-btn-live' : ''"
+                            @click="toggleVoiceCapture()">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/>
+                        </svg>
+                        <span x-text="voiceListening ? 'Listening…' : 'Start Voice Consultation'"></span>
+                    </button>
                 </div>
                 <div class="c-body" style="display:flex;flex-direction:column;gap:12px;">
                     <div>
@@ -663,7 +775,225 @@
                 </div>
             </div>
 
-            {{-- 3. SPECIALTY MODULES ZONE --}}
+            {{-- ▼ VOICE TRANSCRIPT (NEW — Iteration 2, 2026-07-31) ————————————————
+                 Collapsible but ALWAYS reachable (never hidden entirely) per spec:
+                 "Doctors should always be able to review what was spoken."
+                 Reuses the existing runAssist() Consult Assist engine for diagnosis
+                 SUGGESTIONS once transcript text is inserted into Chief Complaint —
+                 no new AI/backend call added. True automatic extraction of HOPI /
+                 Examination Findings / Diagnosis straight from the transcript would
+                 need a real NLP/AI backend call, which is out of scope for this
+                 UI-only iteration (see refinement report, "Suggestions for a future
+                 Voice-first workflow"). For now the doctor reviews the transcript
+                 and taps which field it should go into — still voice-first, just
+                 human-confirmed instead of auto-applied. --}}
+            <div class="c-card gcol-l o1" x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak>
+                <div class="c-card-head" style="cursor:pointer;background:#fafafa;" @click="showTranscript = !showTranscript">
+                    <span class="c-head-label" style="color:#6b7280;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                             :style="showTranscript ? 'transform:rotate(90deg)' : ''" style="transition:transform .15s;">
+                            <path d="m9 18 6-6-6-6"/>
+                        </svg>
+                        Voice Transcript
+                        <span x-show="voiceTranscript" x-cloak style="width:6px;height:6px;border-radius:50%;background:#6a0f70;display:inline-block;"></span>
+                    </span>
+                    <span style="font-size:10px;color:#9ca3af;font-family:'Inter',sans-serif;">
+                        Raw speech-to-text — always available, never auto-applied
+                    </span>
+                </div>
+                <div x-show="showTranscript" x-collapse x-cloak style="padding:12px 16px;">
+                    <textarea class="df-input" rows="4" readonly x-model="voiceTranscript"
+                              placeholder="Nothing recorded yet — tap “Start Voice Consultation” above and speak naturally."
+                              style="background:#fafafa;color:#4b5563;"></textarea>
+                    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+                        <button type="button" class="voice-insert-btn" @click="insertVoiceInto('chief_complaint')">→ Insert into Chief Complaint</button>
+                        <button type="button" class="voice-insert-btn" @click="insertVoiceInto('examination_notes')">→ Insert into Examination Findings</button>
+                        <button type="button" class="voice-insert-btn" @click="insertVoiceInto('hopi_final')">→ Insert into HOPI</button>
+                        <button type="button" class="voice-insert-btn" style="color:#dc2626;border-color:#fecaca;" @click="voiceTranscript=''">Clear</button>
+                    </div>
+                    <p x-show="!voiceSupported" x-cloak style="margin-top:8px;font-size:10px;color:#dc2626;font-family:'Inter',sans-serif;">
+                        This browser doesn't support live speech recognition — use Chrome or Edge for Voice Consultation. Typing still works as usual.
+                    </p>
+                </div>
+            </div>
+
+            {{-- 3. EXAMINATION FINDINGS (NEW — 2026-07-31 UX experiment) —————————
+                 Reuses the existing consultations.examination_notes column (already
+                 fillable/cast on the model, previously orphaned in this view — see
+                 feedback_reuse_first_no_duplicate_implementations memory). This is
+                 now the doctor's primary clinical note; Findings Summary (below,
+                 inside Advanced) keeps working exactly as before, just reduced in
+                 prominence rather than removed — see feedback in the deliverable
+                 re: eventually making Findings Summary AI-generated FROM this field. --}}
+            <div class="gcol-l o3" x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak>
+            <div class="c-card">
+                <div class="c-card-head">
+                    <span class="c-head-label">Examination Findings</span>
+                </div>
+                <div class="c-body">
+                    <textarea name="examination_notes" x-ref="examinationNotesField" class="df-input" rows="4"
+                              placeholder="What did you find on examination? e.g. Generalised mild gingivitis, caries on #14, 15, 46. BOP absent. Plaque index fair.">{{ old('examination_notes', $consultation?->examination_notes) }}</textarea>
+                </div>
+            </div>
+            </div>
+
+            {{-- 6. DIAGNOSIS —— single provisional field (simplified).
+                 Iteration 3 (2026-07-31, "exact half, no empty spaces"): moved up
+                 to sit directly under Examination Findings inside the real left
+                 column (.consult-col-l) — see that wrapper below. Content is
+                 UNCHANGED, only its position in the file moved so the two columns
+                 can be genuinely independent-height flex columns instead of a
+                 shared CSS-grid row-track (which is what caused the empty gaps). --}}
+            <div x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak>
+            <div class="c-card" x-data="{ diagText: @js(old('provisional_diagnosis', $consultation?->provisional_diagnosis ?? '')) }">
+
+                <div class="c-card-head">
+                    <span class="c-head-label">Diagnosis</span>
+                    <span style="font-size:10px;color:#9ca3af;font-family:'Inter',sans-serif;font-style:italic;">
+                        Consultation ends here — treatment plan is the next step
+                    </span>
+                </div>
+
+                <div class="c-body">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;">
+
+                        {{-- Left: INVESTIGATIONS (moved here 2026-07-31 — "add investigation
+                             column before provisional diagnosis"). Reuses the exact same
+                             partial/fields that used to live inside Advanced Clinical
+                             Details — @include, not a rebuild, so investigations[] and
+                             investigation_details[_notes] stay the one implementation.
+                             Removed from Advanced below so the fields aren't duplicated. --}}
+                        <div>
+                            @include('consultations.partials.investigations', ['consultation' => $consultation ?? null])
+                        </div>
+
+                        {{-- Right: Provisional Diagnosis + Consult Assist suggestions.
+                             Diagnosis Notes removed from this screen 2026-07-31 (per
+                             request) — field/column untouched, just not rendered here.
+                             Restore by uncommenting the LEGACY block further down. --}}
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            <div>
+                                <label class="df-label">Provisional Diagnosis <span class="req">*</span></label>
+                                <textarea name="provisional_diagnosis" x-model="diagText" class="df-input" rows="5"
+                                          placeholder="Working diagnosis — e.g. Symptomatic irreversible pulpitis tooth #16">{{ old('provisional_diagnosis', $consultation?->provisional_diagnosis ?? '') }}</textarea>
+                                {{-- Mirror to primary_diagnosis so controller/show pages still work --}}
+                                <input type="hidden" name="primary_diagnosis" :value="diagText">
+                            </div>
+                            {{-- Consult Assist one-click suggestions --}}
+                            <div>
+                                <label class="df-label">
+                                    Suggested from Consult Assist
+                                    <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#b5b5b5;font-size:9px;">(click to use)</span>
+                                </label>
+                                <div style="display:flex;flex-wrap:wrap;gap:5px;padding:8px;min-height:60px;border:1px dashed #e5e7eb;border-radius:5px;background:#fafafa;">
+                                    <template x-for="diag in ($root.suggestions || []).flatMap(s=>s.diagnoses||[]).filter((v,i,a)=>a.indexOf(v)===i).slice(0,8)" :key="diag">
+                                        <button type="button" @click="diagText = diagText ? diagText + ', ' + diag : diag"
+                                                x-text="diag"
+                                                style="font-size:10px;padding:3px 8px;border-radius:99px;border:1px solid rgba(106,15,112,.2);background:#faf5fb;color:#6a0f70;cursor:pointer;font-family:'Inter',sans-serif;transition:all .12s;"
+                                                onmouseover="this.style.background='#ede4f5'" onmouseout="this.style.background='#faf5fb'"></button>
+                                    </template>
+                                    <template x-if="($root.suggestions||[]).flatMap(s=>s.diagnoses||[]).length===0">
+                                        <span style="font-size:10px;color:#d1d5db;font-family:'Inter',sans-serif;align-self:center;">
+                                            Enter chief complaint to get suggestions
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    {{-- ══ LEGACY — REMOVED FROM SCREEN (2026-07-31, "remove diagnostic
+                         notes") ══ diagnosis_notes column/field untouched elsewhere
+                         (show/print/controller). Retained per Retire > Archive > Verify >
+                         Delete policy — uncomment to restore.
+                    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">
+                        <label class="df-label">Diagnosis Notes <span style="font-weight:400;letter-spacing:0;text-transform:none;color:#9ca3af;font-size:9px;">(optional)</span></label>
+                        <textarea name="diagnosis_notes" class="df-input" rows="4"
+                                  placeholder="Clinical reasoning, comorbidities, patient concerns…">{{ old('diagnosis_notes', $consultation?->diagnosis_notes ?? '') }}</textarea>
+                    </div>
+                    ══ /LEGACY ══ --}}
+                </div>{{-- /c-body --}}
+
+            </div>{{-- /diagnosis card --}}
+            </div>{{-- /diagnosis outer x-show wrapper --}}
+
+        </div>{{-- /consult-col-l --}}
+
+        <div class="consult-col-r">
+
+            {{-- 6. PRESCRIPTION — embedded Rx pad (2026-07-31 CEO directive) --}}
+            @include('consultations.partials.prescription', [
+                'patient'            => $patient,
+                'consultation'       => $consultation ?? null,
+                'linkedPrescription' => $linkedPrescription ?? null,
+            ])
+
+            {{-- 9. FOLLOW-UP (2026-07-31 Visit redesign) --}}
+            @include('consultations.partials.follow-up', [
+                'consultation' => $consultation ?? null,
+            ])
+
+            {{-- SAVE CTA — shown for all types. Bottom of the right column,
+                 always last, regardless of Advanced Clinical Details (now a
+                 sibling of .consult-split entirely, not a row-mate). --}}
+            <div x-show="form.type" x-cloak
+                 style="background:#f9f5ff;border:1.5px solid #e9d5ff;border-radius:8px;padding:16px 20px;
+                        display:flex;flex-direction:column;align-items:stretch;gap:10px;">
+                <div style="font-size:11px;color:#9ca3af;font-family:'Inter',sans-serif;">
+                    Treatment plan is managed separately from the patient profile.
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button type="submit" name="status" value="draft" class="btn-draft" style="flex:1;">Save Draft</button>
+                    <button type="submit" class="btn-save" style="flex:1;">Save Consultation</button>
+                </div>
+            </div>
+
+        </div>{{-- /consult-col-r --}}
+
+        </div>{{-- /consult-split --}}
+
+            {{-- ▼ ADVANCED CLINICAL DETAILS (2026-07-31 UX experiment) ————————————
+                 Collapsible, collapsed by default. Wraps Specialty Modules, HOPI,
+                 Tooth Chart, Findings Summary, and Risk Assessment — nothing here
+                 was rewritten, these are the exact same existing sections, just
+                 grouped and hidden behind one toggle so the default
+                 routine-consultation path is short. Nothing inside is removed or
+                 disabled — expand to reach every field exactly as before.
+                 (Investigations moved OUT of this block, 2026-07-31 — now lives
+                 in the Diagnosis card, left of Provisional Diagnosis.)
+                 Iteration 2: given a visually distinct "secondary" treatment
+                 (dashed separator + muted fill) so it reads as clearly outside
+                 the primary Chief Complaint → Prescription flow, per spec
+                 "ensure it feels visually separated from the main workflow." --}}
+            <div x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak
+                 class="c-card gcol-full o8"
+                 style="border-color:#e9e9ec; border-top:2px dashed #d8d8de; background:#fcfcfd; margin-top:4px;">
+                <div class="c-card-head" style="cursor:pointer;background:#f5f5f7;" @click="showAdvanced = !showAdvanced">
+                    <span class="c-head-label" style="color:#9ca3af;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                             :style="showAdvanced ? 'transform:rotate(90deg)' : ''" style="transition:transform .15s;">
+                            <path d="m9 18 6-6-6-6"/>
+                        </svg>
+                        Advanced Clinical Details
+                        <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#c7c7cf;font-size:9px;">— optional, secondary to the main workflow</span>
+                    </span>
+                    <span style="font-size:10px;color:#c7c7cf;font-family:'Inter',sans-serif;">
+                        Specialty modules · HOPI · Tooth chart · Findings summary · Risk assessment
+                    </span>
+                </div>
+                <div x-show="showAdvanced" x-collapse x-cloak style="padding:16px;display:flex;flex-direction:column;gap:16px;">
+
+            {{-- 4. SPECIALTY MODULES ZONE --}}
+            @php
+                // Slice 1 fix (2026-08-01): specialty findings were never re-populated on
+                // Edit — acceptedModules (which module cards show) was seeded from the
+                // record, but the individual <select> fields inside each card always
+                // rendered blank because they had no old()/saved-value binding at all.
+                // $specialtyFindings is keyed by module tag => [field_name => value], the
+                // same shape packModules() writes on submit (see specialty_findings cast).
+                $specialtyFindings = isset($consultation) ? ($consultation->specialty_findings ?? []) : [];
+            @endphp
             <div x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak>
 
                 {{-- Manual module selector chips --}}
@@ -729,11 +1059,12 @@
                                 ['Profile',         'ortho_profile',   ['Straight','Convex','Concave']],
                                 ['Facial symmetry', 'ortho_symmetry',  ['Symmetric','Asymmetric']],
                             ] as [$lbl,$nm,$opts])
+                            @php $val = old($nm, $specialtyFindings['orthodontics'][$nm] ?? ''); @endphp
                             <div>
                                 <label class="df-label" style="font-size:9px;">{{ $lbl }}</label>
                                 <select name="{{ $nm }}" class="mod-sel">
                                     <option value="">Select</option>
-                                    @foreach($opts as $o)<option>{{ $o }}</option>@endforeach
+                                    @foreach($opts as $o)<option @selected($val === $o)>{{ $o }}</option>@endforeach
                                 </select>
                             </div>
                             @endforeach
@@ -765,11 +1096,12 @@
                                 ['Plaque score',  'perio_plaque',  ['Good','Fair','Moderate','Poor']],
                                 ['Oral hygiene',  'perio_hygiene', ['Excellent','Good','Fair','Poor']],
                             ] as [$lbl,$nm,$opts])
+                            @php $val = old($nm, $specialtyFindings['periodontics'][$nm] ?? ''); @endphp
                             <div>
                                 <label class="df-label" style="font-size:9px;">{{ $lbl }}</label>
                                 <select name="{{ $nm }}" class="mod-sel">
                                     <option value="">Select</option>
-                                    @foreach($opts as $o)<option>{{ $o }}</option>@endforeach
+                                    @foreach($opts as $o)<option @selected($val === $o)>{{ $o }}</option>@endforeach
                                 </select>
                             </div>
                             @endforeach
@@ -801,11 +1133,12 @@
                                 ['Pulp status',  'endo_pulp',    ['Normal','Reversible pulpitis','Irreversible pulpitis','Necrotic']],
                                 ['Mobility',     'endo_mob',     ['None','Grade I','Grade II','Grade III']],
                             ] as [$lbl,$nm,$opts])
+                            @php $val = old($nm, $specialtyFindings['endodontics'][$nm] ?? ''); @endphp
                             <div>
                                 <label class="df-label" style="font-size:9px;">{{ $lbl }}</label>
                                 <select name="{{ $nm }}" class="mod-sel">
                                     <option value="">Select</option>
-                                    @foreach($opts as $o)<option>{{ $o }}</option>@endforeach
+                                    @foreach($opts as $o)<option @selected($val === $o)>{{ $o }}</option>@endforeach
                                 </select>
                             </div>
                             @endforeach
@@ -836,11 +1169,12 @@
                                 ['Midline',         'sd_midline', ['Coincident','Deviated']],
                                 ['Discoloration',   'sd_disco',   ['None','Intrinsic','Extrinsic','Tetracycline','Fluorosis']],
                             ] as [$lbl,$nm,$opts])
+                            @php $val = old($nm, $specialtyFindings['smile_design'][$nm] ?? ''); @endphp
                             <div>
                                 <label class="df-label" style="font-size:9px;">{{ $lbl }}</label>
                                 <select name="{{ $nm }}" class="mod-sel">
                                     <option value="">Select</option>
-                                    @foreach($opts as $o)<option>{{ $o }}</option>@endforeach
+                                    @foreach($opts as $o)<option @selected($val === $o)>{{ $o }}</option>@endforeach
                                 </select>
                             </div>
                             @endforeach
@@ -870,11 +1204,12 @@
                                 ['Occlusal support',  'pros_occl',   ['Adequate','Inadequate']],
                                 ['TMJ status',        'pros_tmj',    ['Normal','Clicking','Pain on opening','Restricted']],
                             ] as [$lbl,$nm,$opts])
+                            @php $val = old($nm, $specialtyFindings['prosthodontics'][$nm] ?? ''); @endphp
                             <div>
                                 <label class="df-label" style="font-size:9px;">{{ $lbl }}</label>
                                 <select name="{{ $nm }}" class="mod-sel">
                                     <option value="">Select</option>
-                                    @foreach($opts as $o)<option>{{ $o }}</option>@endforeach
+                                    @foreach($opts as $o)<option @selected($val === $o)>{{ $o }}</option>@endforeach
                                 </select>
                             </div>
                             @endforeach
@@ -887,7 +1222,7 @@
             {{-- 4. HOPI (P2C5 — enhanced auto-draft) --}}
             <div class="c-card" x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak>
                 <div class="c-card-head">
-                    <span class="c-head-label"><span class="c-num">3</span>History of Present Illness (HOPI)</span>
+                    <span class="c-head-label">History of Present Illness (HOPI)</span>
                     <div style="display:flex;gap:6px;align-items:center;">
                         <span style="font-size:10px;color:#9ca3af;font-family:'Inter',sans-serif;">Pulls complaint · duration · severity · clinical findings · investigations</span>
                         <button type="button" @click="generateHopi()"
@@ -918,7 +1253,7 @@
 
                 <div class="c-card-head">
                     <span class="c-head-label">
-                        <span class="c-num">4</span>Tooth Chart
+                        Tooth Chart
                         <span x-show="markedCount > 0" x-cloak
                               style="font-weight:400;color:#9ca3af;text-transform:none;letter-spacing:0;font-size:10px;"
                               x-text="'· ' + markedCount + ' tooth marked'"></span>
@@ -1162,17 +1497,20 @@
 
             </div>
 
-            {{-- 5. INVESTIGATIONS --}}
+            {{-- 5. INVESTIGATIONS — moved 2026-07-31 to the Diagnosis card (left
+                 column, before Provisional Diagnosis). Same @include, same
+                 fields — left here only as a commented pointer so it isn't
+                 rendered twice with duplicate investigations[] fields. --}}
+            {{--
             <div x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'">
                 @include('consultations.partials.investigations', ['consultation' => $consultation ?? null])
             </div>
+            --}}
 
             {{-- 5b. FINDINGS SUMMARY (P2C5) --}}
             <div class="c-card" x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak>
                 <div class="c-card-head">
-                    <span class="c-head-label">
-                        <span class="c-num" style="font-size:8px;">5b</span>Findings Summary
-                    </span>
+                    <span class="c-head-label">Findings Summary</span>
                     <div style="display:flex;gap:6px;align-items:center;">
                         <span style="font-size:10px;color:#9ca3af;font-family:'Inter',sans-serif;">Compiles clinical exam · investigations · specialty modules</span>
                         <button type="button" @click="generateFindingsSummary()"
@@ -1197,78 +1535,28 @@
                 </div>
             </div>
 
-            {{-- 6. DIAGNOSIS —— single provisional field (simplified) --}}
-            {{-- Outer wrapper owns x-show (parent consultForm scope); inner div owns x-data --}}
-            <div x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak>
-            <div class="c-card" x-data="{ diagText: @js(old('provisional_diagnosis', $consultation?->provisional_diagnosis ?? '')) }">
-
+            {{-- Risk Assessment — relocated from the Diagnosis section (2026-07-31
+                 UX experiment); same diagnosis_risk field, no data change. --}}
+            <div class="c-card" x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak>
                 <div class="c-card-head">
-                    <span class="c-head-label"><span class="c-num">6</span>Diagnosis</span>
-                    <span style="font-size:10px;color:#9ca3af;font-family:'Inter',sans-serif;font-style:italic;">
-                        Consultation ends here — treatment plan is the next step
-                    </span>
+                    <span class="c-head-label" style="color:#6b7280;">Risk Assessment</span>
                 </div>
-
                 <div class="c-body">
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                    <select name="diagnosis_risk" class="df-input">
+                        <option value="">Select risk level</option>
+                        @foreach(['Low Risk','Moderate Risk','High Risk','Very High Risk'] as $r)
+                            <option {{ old('diagnosis_risk', $consultation?->diagnosis_risk ?? '') === $r ? 'selected' : '' }}>{{ $r }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
 
-                        {{-- Left: diagnosis textarea + Consult Assist suggestions --}}
-                        <div style="display:flex;flex-direction:column;gap:8px;">
-                            <div>
-                                <label class="df-label">Provisional Diagnosis <span class="req">*</span></label>
-                                <textarea name="provisional_diagnosis" x-model="diagText" class="df-input" rows="5"
-                                          placeholder="Working diagnosis — e.g. Symptomatic irreversible pulpitis tooth #16">{{ old('provisional_diagnosis', $consultation?->provisional_diagnosis ?? '') }}</textarea>
-                                {{-- Mirror to primary_diagnosis so controller/show pages still work --}}
-                                <input type="hidden" name="primary_diagnosis" :value="diagText">
-                            </div>
-                            {{-- Consult Assist one-click suggestions --}}
-                            <div>
-                                <label class="df-label">
-                                    Suggested from Consult Assist
-                                    <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#b5b5b5;font-size:9px;">(click to use)</span>
-                                </label>
-                                <div style="display:flex;flex-wrap:wrap;gap:5px;padding:8px;min-height:60px;border:1px dashed #e5e7eb;border-radius:5px;background:#fafafa;">
-                                    <template x-for="diag in ($root.suggestions || []).flatMap(s=>s.diagnoses||[]).filter((v,i,a)=>a.indexOf(v)===i).slice(0,8)" :key="diag">
-                                        <button type="button" @click="diagText = diagText ? diagText + ', ' + diag : diag"
-                                                x-text="diag"
-                                                style="font-size:10px;padding:3px 8px;border-radius:99px;border:1px solid rgba(106,15,112,.2);background:#faf5fb;color:#6a0f70;cursor:pointer;font-family:'Inter',sans-serif;transition:all .12s;"
-                                                onmouseover="this.style.background='#ede4f5'" onmouseout="this.style.background='#faf5fb'"></button>
-                                    </template>
-                                    <template x-if="($root.suggestions||[]).flatMap(s=>s.diagnoses||[]).length===0">
-                                        <span style="font-size:10px;color:#d1d5db;font-family:'Inter',sans-serif;align-self:center;">
-                                            Enter chief complaint to get suggestions
-                                        </span>
-                                    </template>
-                                </div>
-                            </div>
-                        </div>
+                </div>{{-- /showAdvanced collapse --}}
+            </div>{{-- /Advanced Clinical Details card --}}
 
-                        {{-- Right: Risk, Notes --}}
-                        <div style="display:flex;flex-direction:column;gap:10px;">
-                            <div>
-                                <label class="df-label">Risk Assessment</label>
-                                <select name="diagnosis_risk" class="df-input">
-                                    <option value="">Select risk level</option>
-                                    @foreach(['Low Risk','Moderate Risk','High Risk','Very High Risk'] as $r)
-                                        <option {{ old('diagnosis_risk', $consultation?->diagnosis_risk ?? '') === $r ? 'selected' : '' }}>{{ $r }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div>
-                                <label class="df-label">Diagnosis Notes <span style="font-weight:400;letter-spacing:0;text-transform:none;color:#9ca3af;font-size:9px;">(optional)</span></label>
-                                <textarea name="diagnosis_notes" class="df-input" rows="4"
-                                          placeholder="Clinical reasoning, comorbidities, patient concerns…">{{ old('diagnosis_notes', $consultation?->diagnosis_notes ?? '') }}</textarea>
-                            </div>
-                        </div>
-
-                    </div>
-                </div>{{-- /c-body --}}
-
-            </div>{{-- /diagnosis card --}}
-            </div>{{-- /diagnosis outer x-show wrapper --}}
-
-            {{-- COHA — dedicated page (P2C7) --}}
-            {{-- SAME ISSUE simplified card — shown instead of full form --}}
+            {{-- SAME ISSUE simplified card — shown instead of full form.
+                 Moved here (Iteration 3, 2026-07-31) so it's full-width, outside
+                 the .consult-split columns — content is unchanged. --}}
             <div x-show="form.type === 'same_issue'" x-cloak
                  class="c-card" style="border-color:#fde68a;">
                 <div class="c-card-head" style="background:#fffbeb;">
@@ -1329,25 +1617,63 @@
                 </div>
             </div>
 
+            {{-- Diagnosis moved up to the left column (see above, right after
+                 Examination Findings) — Iteration 3, 2026-07-31. --}}
 
-            {{-- SAVE CTA — shown for all types --}}
-            <div x-show="form.type" x-cloak
-                 style="background:#f9f5ff;border:1.5px solid #e9d5ff;border-radius:8px;padding:16px 20px;
-                        display:flex;align-items:center;justify-content:space-between;gap:16px;">
-                <div style="font-size:11px;color:#9ca3af;font-family:'Inter',sans-serif;">
-                    Treatment plan is managed separately from the patient profile.
+            {{-- ══ LEGACY — REMOVED FROM SCREEN (Iteration 2, 2026-07-31) ══
+                 CEO refinement: "Consultation = Assessment. Treatment Done belongs
+                 to Treatment Visit / Procedure Visit, not Consultation." Code kept
+                 intact per Retire > Archive > Verify > Delete policy — the
+                 `treatment_done` column, its route/controller handling, and
+                 show.blade.php / print.blade.php display are UNCHANGED and still
+                 read this column if it's ever populated by another path. Only this
+                 screen's input UI is disabled (wrapped in a Blade comment, so it
+                 never renders/parses). To restore: uncomment the block below.
+
+            <div class="gcol-l o7" x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak>
+            <div class="c-card">
+                <div class="c-card-head">
+                    <span class="c-head-label">Treatment Done</span>
+                    <span style="font-size:10px;color:#9ca3af;font-family:'Inter',sans-serif;font-style:italic;">
+                        Optional — what was actually performed today
+                    </span>
                 </div>
-                <div style="display:flex;gap:8px;flex-shrink:0;">
-                    <button type="submit" name="status" value="draft" class="btn-draft">Save Draft</button>
-                    <button type="submit" class="btn-save">Save Consultation</button>
+                <div class="c-body">
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+                        @foreach(['Access opening done','Temporary dressing','Scaling completed','Extraction performed','Composite restoration','I&D performed'] as $eg)
+                        <span class="minor-tag" style="display:inline-block;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:600;border:1.5px solid #e9d5ff;background:#faf5fb;color:#6a0f70;cursor:pointer;font-family:'Inter',sans-serif;"
+                              @click="$refs.treatmentDoneNote.value = $refs.treatmentDoneNote.value ? $refs.treatmentDoneNote.value + ', {{ $eg }}' : '{{ $eg }}'">{{ $eg }}</span>
+                        @endforeach
+                    </div>
+                    <textarea name="treatment_done" x-ref="treatmentDoneNote" class="df-input" rows="3"
+                              placeholder="e.g. Access opening done on #46, temporary dressing placed. Return for RCT completion.">{{ old('treatment_done', $consultation?->treatment_done) }}</textarea>
                 </div>
             </div>
+            </div>
+            ══ /LEGACY ══ --}}
+
+            {{-- Prescription/Follow-up/Save moved up to the right column
+                 (Iteration 3, 2026-07-31) — see .consult-col-r above, right
+                 after Diagnosis. Same Issue card sits below Advanced. --}}
 
         </div>{{-- /consult-main --}}
 
-        {{-- ── RIGHT: Consult Assist sidebar ── --}}
+        {{-- ── Consult Assist — 2026-07-31 UX Experiment #2: converted from a
+             permanent sidebar column into a floating launcher + panel so it
+             never competes with Prescription for the right column. All the
+             markup below (assist card + accepted-modules card) is UNCHANGED
+             from the old sidebar — only the outer container's positioning
+             and the x-show condition (now gated on assistPanelOpen too) changed. ── --}}
+        <button type="button" class="assist-fab"
+                @click="assistPanelOpen = !assistPanelOpen"
+                x-show="form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak
+                :title="assistPanelOpen ? 'Hide Consult Assist' : 'Show Consult Assist'">
+            <span x-show="!isLoadingAssist">✨</span>
+            <span x-show="isLoadingAssist" x-cloak style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:pulse 1s linear infinite;"></span>
+        </button>
+
         <div class="consult-aside"
-             :style="(form.type && form.type !== 'coha' && form.type !== 'same_issue') ? '' : 'visibility:hidden;pointer-events:none;'">
+             x-show="assistPanelOpen && form.type && form.type !== 'coha' && form.type !== 'same_issue'" x-cloak>
 
             {{-- Consult Assist Panel --}}
             <div style="background:#fff;border:1px solid #e9d5ff;border-radius:8px;overflow:hidden;">
@@ -1511,6 +1837,12 @@ function consultForm() {
         },
         acceptedModules: {!! json_encode(isset($consultation) ? ($consultation->accepted_specialties ?? []) : []) !!},
         typeLocked:      false, // true when type comes from URL param (skip type selector)
+        // 2026-07-31 UX experiment: Advanced Clinical Details starts collapsed —
+        // routine consultation path never has to see it unless the doctor opens it.
+        showAdvanced:    false,
+        // 2026-07-31 UX Experiment #2 (Split Layout): Consult Assist is now a
+        // floating panel, closed by default — toggled by the .assist-fab button.
+        assistPanelOpen: false,
         assistActive:    false,
         suggestions:     [],   // specialty-level matches
         treatmentMatches:[],   // treatment-level matches (new)
@@ -1519,12 +1851,72 @@ function consultForm() {
         isLoadingAssist: false,
         assistDebounce:  null,
 
+        // ── Voice-First Consultation (Iteration 2, 2026-07-31) — browser-only
+        // Web Speech API capture. No backend call: nothing here touches a
+        // controller, route, or the database beyond the normal form submit. ──
+        voiceSupported:  ('SpeechRecognition' in window) || ('webkitSpeechRecognition' in window),
+        voiceListening:  false,
+        voiceTranscript: '',
+        voiceRecognition: null,
+        showTranscript:  false,
+
         init() {
             // If a type is passed via URL (?type=new), pre-select it and skip the type card
             const urlType = new URLSearchParams(window.location.search).get('type');
             if (urlType && !this.form.type) {
                 this.form.type = urlType;
                 this.typeLocked = true;
+            }
+        },
+
+        // ── Voice-First Consultation ──────────────────────────────────────────
+        toggleVoiceCapture() {
+            if (!this.voiceSupported) {
+                alert('Voice Consultation needs Chrome or Edge — this browser doesn\'t support live speech recognition. You can still type as usual.');
+                return;
+            }
+            if (this.voiceListening) {
+                this.voiceRecognition?.stop();
+                return; // onend below flips voiceListening off
+            }
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            this.voiceRecognition = new SR();
+            this.voiceRecognition.continuous     = true;
+            this.voiceRecognition.interimResults = false;
+            this.voiceRecognition.lang           = 'en-IN';
+            this.voiceRecognition.onresult = (e) => {
+                let finalText = '';
+                for (let i = e.resultIndex; i < e.results.length; i++) {
+                    if (e.results[i].isFinal) finalText += e.results[i][0].transcript + ' ';
+                }
+                if (finalText.trim()) {
+                    this.voiceTranscript = (this.voiceTranscript ? this.voiceTranscript + ' ' : '') + finalText.trim();
+                    this.showTranscript = true; // auto-reveal once something's captured
+                }
+            };
+            this.voiceRecognition.onerror = () => { this.voiceListening = false; };
+            this.voiceRecognition.onend   = () => { this.voiceListening = false; };
+            this.voiceRecognition.start();
+            this.voiceListening = true;
+        },
+
+        // Doctor-confirmed insertion — reuses the EXISTING runAssist() Consult
+        // Assist engine for diagnosis suggestions once text lands in Chief
+        // Complaint, instead of adding a new AI/backend extraction call.
+        insertVoiceInto(field) {
+            if (!this.voiceTranscript) return;
+            if (field === 'chief_complaint') {
+                this.form.chief_complaint = this.form.chief_complaint
+                    ? this.form.chief_complaint + ' ' + this.voiceTranscript
+                    : this.voiceTranscript;
+                this.runAssist();
+            } else if (field === 'examination_notes' && this.$refs.examinationNotesField) {
+                const el = this.$refs.examinationNotesField;
+                el.value = el.value ? el.value + ' ' + this.voiceTranscript : this.voiceTranscript;
+            } else if (field === 'hopi_final' && this.$refs.hopiNote) {
+                this.showAdvanced = true; // reveal so the doctor can see it landed
+                const el = this.$refs.hopiNote;
+                el.value = el.value ? el.value + ' ' + this.voiceTranscript : this.voiceTranscript;
             }
         },
 

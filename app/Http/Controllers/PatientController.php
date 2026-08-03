@@ -224,6 +224,15 @@ class PatientController extends Controller
         if ($patient->merged_into_id) abort(404);
         if (method_exists($patient, 'trashed') && $patient->trashed()) abort(404);
 
+        // Money tabs follow the same owner-configured rule the Journey Timeline
+        // enforces per-event: financial data requires the finance View flag.
+        // Previously the timeline hid a payment from a no-finance role while
+        // the Billing tab showed the same money (Variants release pass 2026-08-03).
+        if (in_array($tab, ['billing', 'wallet'], true)
+            && ! request()->user()?->canAccess('finance', 'view')) {
+            abort(403);
+        }
+
         $data = $this->profileService->tabData($patient, $tab);
 
         return view('patients.tabs._fragment', $data + ['tab' => $tab]);
@@ -276,7 +285,12 @@ class PatientController extends Controller
 
     public function edit(Patient $patient)
     {
-        return view('patients.edit', compact('patient'));
+        // The real edit surface is the shared add/edit modal on the profile
+        // page (see profile/edit-patient-prefill). patients/edit.blade.php was
+        // a dead, unlinked view (Phase 2 audit finding, PM-009) and has been
+        // removed; redirect here instead of leaving a dangling view() call for
+        // anyone who reaches this route directly, mirroring create()'s pattern.
+        return redirect()->route('patients.show', $patient);
     }
 
     public function update(UpdatePatientRequest $request, Patient $patient)
@@ -345,6 +359,11 @@ class PatientController extends Controller
     // ── Print patient profile ─────────────────────────────────────────────────
     public function print(Patient $patient)
     {
+        // Same guards as show()/tab(): a merged-away or archived record must
+        // not be printable (Variants hardening 2026-08-03).
+        abort_if($patient->merged_into_id !== null, 404);
+        abort_if($patient->trashed(), 404);
+
         $patient->load(['consultations' => fn($q) => $q->latest()->limit(10)->with('doctor')]);
         $print  = \App\Models\AppSetting::group('print');
         $clinic = \App\Models\AppSetting::group('clinic');

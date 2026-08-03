@@ -23,10 +23,15 @@ trait ProvidesPatientRules
         return array_merge($this->patientSharedRules(), [
             'first_name' => ['required', 'string', 'max:100'],
             'last_name'  => ['required', 'string', 'max:100'],
-            'phone'      => ['required', 'string', 'max:20'],
+            // Digits + common separators, at least 7 digits total. CREATE only —
+            // deliberately not applied on update so records imported with
+            // legacy-formatted numbers can still be edited (Variants 2026-08-03).
+            'phone'      => ['required', 'string', 'max:20', 'regex:/^(?=(?:\D*\d){7})[0-9+\-().\s]+$/'],
             // DOB is optional, but age must always be captured: either a DOB (age
             // is auto-derived) OR a manual age. So age is required only when no DOB.
-            'date_of_birth' => ['nullable', 'date'],
+            // before_or_equal:today — a future DOB produced a negative age and
+            // wrongly flagged adults as DPDP minors (Variants hardening 2026-08-03).
+            'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
             'age_years'     => ['nullable', 'integer', 'min:0', 'max:150', 'required_without:date_of_birth'],
             'confirm_duplicate' => ['nullable', 'boolean'],
         ]);
@@ -42,8 +47,11 @@ trait ProvidesPatientRules
             'first_name' => ['nullable', 'string', 'max:100'],
             'last_name'  => ['nullable', 'string', 'max:100'],
             'name'       => ['nullable', 'string', 'max:200'],
-            'phone'      => ['nullable', 'string', 'max:20'],
-            'date_of_birth' => ['nullable', 'date'],
+            // 'filled': omitting phone is fine (partial update), but sending an
+            // empty phone is rejected — blanking it silently removed the record
+            // from dedupe + messaging forever (Variants hardening 2026-08-03).
+            'phone'      => ['sometimes', 'filled', 'string', 'max:20'],
+            'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
             'patient_id' => ['nullable', 'string', 'max:30', Rule::unique('patients', 'patient_id')->ignore($patientId)],
             // Admin/editable status fields the edit form exposes.
             'membership_status'     => ['nullable', 'in:not_enrolled,active,expired'],
@@ -60,7 +68,12 @@ trait ProvidesPatientRules
         return [
             'title'       => ['nullable', 'string', 'max:10'],
             'middle_name' => ['nullable', 'string', 'max:100'],
-            'gender'      => ['nullable', 'in:male,female,other,prefer_not_to_say'],
+            // NOTE: the patients.gender column is enum('male','female','other').
+            // 'prefer_not_to_say' was removed from this list AND the form option
+            // (Variants hardening 2026-08-03) because MySQL strict mode rejected
+            // it with a 500 on save. Staff should leave gender blank instead.
+            // Re-adding it requires an additive enum migration first.
+            'gender'      => ['nullable', 'in:male,female,other'],
             'dob_unknown' => ['nullable', 'boolean'],
             'age_years'   => ['nullable', 'integer', 'min:0', 'max:150'],
             'tags'        => ['nullable', 'array'],

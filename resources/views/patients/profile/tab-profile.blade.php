@@ -362,10 +362,16 @@
                         ['Book Appointment',    'alpine', "openAppointmentModal('appointment', null, {{ $patient->id }})"],
                         // Prescriptions & Billing
                         ['Write Prescription',  'url',    route('patients.prescriptions.create', $patient)],
-                        ['Billing',             'tab',    'billing'],
-                        ['Wallet',              'tab',    'wallet'],
                         ['Membership',          'js',     "openMembershipEnroll()"],
                     ];
+                    // Money quick-actions only for roles with the finance View
+                    // flag — mirrors the tab pills + fragment gate (2026-08-03).
+                    if (auth()->user()?->canAccess('finance', 'view')) {
+                        array_splice($quickActions, count($quickActions) - 1, 0, [
+                            ['Billing', 'tab', 'billing'],
+                            ['Wallet',  'tab', 'wallet'],
+                        ]);
+                    }
                     @endphp
 
                     @foreach($quickActions as [$label, $actionType, $actionValue])

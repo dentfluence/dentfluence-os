@@ -363,9 +363,13 @@
     </div>
     @endif
 
-    {{-- Tabs — capsule pill nav --}}
-    <div class="patient-tab-nav mt-3 mx-1 mb-1">
-        @foreach([
+    {{-- Tabs — capsule pill nav. Money tabs (Billing/Wallet) only render for
+         roles holding the finance View flag — same rule as the Journey
+         Timeline's per-event filter; the fragment endpoint enforces it
+         server-side too (Variants release pass 2026-08-03). --}}
+    @php
+        $canSeeFinanceTabs = auth()->user()?->canAccess('finance', 'view');
+        $patientTabs = [
             'profile'           => 'Profile',
             'consultation'      => 'Consultation',
             'treatment-plan'    => 'Treatment Plan',
@@ -377,7 +381,13 @@
             'membership'        => 'Membership',
             'documents'         => 'Documents',
             'notes'             => 'Notes & Logs',
-        ] as $tab => $label)
+        ];
+        if (! $canSeeFinanceTabs) {
+            unset($patientTabs['billing'], $patientTabs['wallet']);
+        }
+    @endphp
+    <div class="patient-tab-nav mt-3 mx-1 mb-1">
+        @foreach($patientTabs as $tab => $label)
         <button
             x-on:click="activeTab = '{{ $tab }}'"
             dusk="tab-{{ $tab }}"

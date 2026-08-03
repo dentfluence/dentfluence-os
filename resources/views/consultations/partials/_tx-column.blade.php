@@ -1,3 +1,8 @@
+{{-- ══ LEGACY — CONFIRMED UNUSED (audit 2026-07-31) ══
+     Only referenced by treatment-advised.blade.php, which is itself legacy/
+     unused — dead sub-partial of a dead partial. Retained for reference/
+     rollback per Retire > Archive > Verify > Delete policy — excluded from
+     new development. ══ --}}
 {{--
     partials/_tx-column.blade.php
     Variables: $col (string), $label (string), $color (hex), $borderColor (hex), $options (string[])

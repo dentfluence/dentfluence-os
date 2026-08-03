@@ -1,3 +1,11 @@
+{{-- ══ LEGACY — CONFIRMED UNUSED (audit 2026-07-31) ══
+     Not @include'd by any view in the app (repo-wide grep, zero hits).
+     Note: per ConsultationController comment (2026-07-09), photo/file upload
+     was deliberately removed from the Consultation flow — that's handled by
+     the patient's Documents tab and mobile Capture Photo flow instead. This
+     partial is a leftover from before that decision, not a UI gap.
+     Retained for reference/rollback per Retire > Archive > Verify > Delete
+     policy — excluded from new development. ══ --}}
 {{--
     partials/photographs.blade.php
     Section 3 — Photographs

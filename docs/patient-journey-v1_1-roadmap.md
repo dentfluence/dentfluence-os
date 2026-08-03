@@ -1,8 +1,42 @@
 # Patient Journey V1.1 — Phase & Slice Execution Roadmap
 
-**Date:** 2026-07-25 · **Status:** ROADMAP FOR APPROVAL — nothing implemented.
+**Date:** 2026-07-25 · **Status updated:** 2026-07-27 · **Status:** IN EXECUTION — P0 ✅ P1 ✅ production-frozen; P2 in progress (2.1 ✅, 2.2 ✅ local, awaiting CEO retest). See EXECUTION STATUS LEDGER below.
 **Basis:** `patient-journey-v1_1-architecture-proposal.md` (accepted working direction) + the four forensic audits.
-**Operating rule once execution begins:** ONE SLICE → STOP → report (files, migrations, tests, PASS/FAIL, manual checks, risks) → CEO approval → next slice. Every slice ends with the smoke suite green.
+**Operating rule:** ONE SLICE → STOP → report (files, migrations, tests, PASS/FAIL, manual checks, risks) → CEO approval → next slice. Every slice ends with the smoke suite green.
+
+---
+
+## EXECUTION STATUS LEDGER *(updated 2026-07-27 — the phase/slice text below is the approved plan; this ledger is what actually happened)*
+
+### ✅ DONE & FROZEN
+
+| Phase/Slice | Status | Anchor | Notes |
+|---|---|---|---|
+| 0.1 Baseline | 🔒 DONE | tag `patient-journey-v1.1-baseline` @ `8573615` | Pre-V1.1 anchor — never move. |
+| 0.2 Census | 🔒 DONE | `journey:census` | **Census OVERRIDES audit assumptions** (e.g. `last_visit_date` 100% NULL; 0 appointments ever marked done). |
+| 0.3 Broken instruments | 🔒 DONE + DEPLOYED | prod-frozen commit `296eb74` | 3 board categories revived, TI crash, Huddle queries, lost `relationship.reception` route restored; `today-actions:health` (15 categories) added. **🔒 PHASE 0 PRODUCTION FROZEN 07-25.** |
+| P1 Access Control (executed as 1.1 + 1.2/1.3/1.4) | 🔒 DONE + DEPLOYED | tag `phase-1-access-control-frozen` @ `3285d32`, VPS HEAD, migration batch 23 | Executed with one extra slice vs plan: 1.1 characterization (constitutional: owner-configured roles canonical), 1.2 clinical write gates + **legacy admin bypass retired**, 1.3 module catalogue (`relationship`,`prescriptions`) + PRE/prescription gates, 1.4 API mirror (78 role-name gates → module perms). CEO manual retest found+fixed 4 real defects incl. an HR privilege escalation. **🔒 PHASE 1 PRODUCTION FROZEN 07-26.** Matrix tests = permanent regression wall. |
+| ⚖️ Gate B | ✅ SIGNED 07-26 (with CEO corrections) | `patient-journey-v1_1-phase2-clinical-truth.md` | Presented = lifecycle event, not decision. Plus 4 frozen decisions: partial acceptance = append-only `plan_decision_items` (never item.status); consultation disposition = distinct `clinical_disposition`; `defer_until` nullable; existing completed plans NOT re-derived — Slice 2.5 compares & reports first. **Frozen invariant: BILLING PROGRESS ≠ CLINICAL PROGRESS.** |
+| 2.1 (executed as clinical-truth characterization, not ConsultationService) | 🔒 DONE | commits `d336238`,`d0e376d` | Test-locked evidence: `item.status` has no writer; plan `completed` currently = BILLED (2 writers); 5 independent opportunity writers; presentation was web-only. |
+| 2.2 Plan Presentation Truth | ✅ CODE-COMPLETE — **LOCAL ONLY, awaiting CEO browser retest → push → deploy → freeze** | commit `b48aaff` on top of `3285d32` | `presented_at` = clinical fact; canonical `TreatmentPlanPresentationService` for web + NEW API route (mobile parity gap closed); first presentation immutable; opportunity now downstream projection; **NO backfill**. 389 tests green, smoke 66/66, crawler 303/0. |
+
+**Re-slicing note:** Phase 1 ran as four slices (1.1–1.4) and Phase 2 is running on the Gate-B re-slicing (2.1 = characterization, 2.2 = presentation, decisions split out below) rather than the original three-slice text further down. The original text stands as the approved scope; the Gate-B doc governs Phase-2 slice boundaries.
+
+### ⏭️ SEQUENCE AHEAD (in order — ONE SLICE → STOP rule unchanged)
+
+1. **NOW → close 2.2:** CEO browser retest of presentation flow → push → deploy → production verify → 🔒 freeze 2.2.
+2. **2.3 — plan_decisions + decision service** *(original "2.2" scope, per signed Gate B)*: append-only `plan_decisions` (accepted|rejected|deferred, nullable `defer_until`, `source`) + `plan_decision_items` for partial acceptance; `TreatmentPlanAcceptanceService` extended (accept writes decision row + keeps `accepted_at` mirror; new reject/defer verbs); free `status='cancelled'` blocked; `syncStage('declined')`; events `plan.accepted/rejected/deferred`; web + API verbs. Carry PPX guardrail: `source` vocabulary stays open to a patient channel.
+3. **2.4 — item progress + one completion rule + `clinical_disposition`** *(original "2.3" scope + CEO decision #2)*: visit-driven item status writer; single `completePlan()` rule; billing stops flipping clinical `status`; consultation-level `clinical_disposition` concept (distinct, not `treatment_acceptance` overload).
+4. **2.5 — stored-vs-derived completion comparison report** *(CEO decision #4, read-only)*: compare production plans marked completed vs derived clinical completion; REPORT discrepancies for CEO decision — no modification.
+5. **ConsultationService** *(original 2.1 scope — not yet built)*: still required before Slice 5.2 (doctor queue) and 6.2 (attendance writers); slot it as the closing Phase-2 slice or first P5 prerequisite — CEO call at the Phase 2 freeze gate.
+6. **🔒 PHASE 2 FREEZE GATE** → then the plan below runs as written, unchanged:
+7. **P3 Relationship Spine** (3.1 schema **CEO GATE** → 3.2 RelationshipWorkService → 3.3 web outcomes → 3.4 mobile parity → 3.5 history reader → 3.6 claim).
+8. **P4 Action Board V2** (4.1 ContextAssembler → ⚖️ **Gate C** → 4.2 Projector V2 → 4.3 pilot **CEO GATE**).
+9. **P5 Journey Integration** (5.1 appointment events/reconciliation → 5.2 doctor queue → 5.3 detectors).
+10. **P6 Recall & Recovery** (6.1 semantics pack → ⚖️ **Gate A** → 6.2 attendance writers → 6.3 unified engine). Gate-B session already pre-shaped Gate A: last_visit derived from completed clinical encounters, column = rebuildable cache, appointments excluded until lifecycle repaired, NULL never auto-recalls.
+11. **P7 Migration & Cutover** (7.1 dry-run reports **CEO GATE ×5** → 7.2 rollback rehearsal → 7.3 attendance backfill → 7.4 follow_ups/tasks backfill → 7.5 opportunity repair + the 1,810 → 7.6 staff cutover → 7.7 two-week observation — each individually CEO-gated).
+12. **P8 Stabilisation & Retirement** (8.1 dead code → 8.2 legacy retirement → 8.3 final audit → **🔒 V1.1 FROZEN**).
+13. *(Post-V1.1, unscheduled: FUTURE PHASE PPX — see section after Phase 8.)*
 
 ---
 
@@ -29,6 +63,8 @@
 | P8 | Stabilisation & Retirement | Retire legacy, re-audit, freeze V1.1 | 3 | DELETIONS (approved only) | Low (old screens disappear) | 🔒 PATIENT JOURNEY V1.1 FROZEN |
 
 **Staff cutover map (explicit):** current Action Board remains primary through P0–P6. Web/mobile shared outcome workflow activates in P3 (same screens, better behavior). Board V2 available to pilot users at P4.3. Old follow-up/communication screens remain fully usable through P6. At P7.6: Board V2 primary for all staff, old surfaces read-only. Retirement only in P8 after the observation window.
+
+**Future (post-V1.1, NOT scheduled, NOT part of the P0–P8 execution contract):** Phase PPX — Patient Plan Experience. See the FUTURE PHASE section after Phase 8. Recorded here only so V1.1 decisions (Gate B especially) stay compatible with it.
 
 ---
 
@@ -377,6 +413,60 @@ Scope: re-run the four audits' headline checks (permission matrix, write-path ce
 
 ---
 
+# ⏭️ FUTURE PHASE PPX — PATIENT PLAN EXPERIENCE *(POST-V1.1 · NOT SCHEDULED · DO NOT BUILD)*
+
+> **Status:** roadmap placeholder only. No slices, no migrations, no models, no routes, no UI exist or may be created under this heading until it is separately approved, sliced, and gated after V1.1 freezes (P8.3). It is written down now for exactly one reason: so that V1.1 decisions — Gate B above all — do not accidentally foreclose it.
+
+### Concept
+
+Every published Treatment Plan becomes capable of generating a secure, tokenised, clinic-branded **patient microsite**: an interactive, patient-facing representation of the dentist-approved plan. Not a clinic website, not e-commerce. The patient sees ONLY the clinically appropriate options the treating dentist approved for *their* plan (e.g., 46: Option A save-tooth RCT+crown vs Option B extraction+implant; crown choices PFM/Zirconia; optional whitening), with clinic-approved education, benefits/limitations, expected visits/timeline, pricing and applicable EMI — then expresses a preference, confirms, or asks for clarification/call/appointment. Everything flows back into Dentfluence.
+
+**Journey position:** PPX sits *between* P2's "plan presented" fact and the patient's decision — it is a new *presentation channel* and *preference-capture channel* for the exact gap that Slice 5.3's `decision_followup` detector chases (presented, no decision). The loop it serves: Clinical Truth → Personalized Patient Experience → Informed Patient Decision → Clinic Action → Treatment Journey.
+
+**Version placement:** earliest V1.5 (Connect), realistically V2 (Clinical Cloud) — it requires public internet exposure, patient-consent handling (DPDP), and clinic branding. It is also the natural successor/absorber of the frozen **Case Acceptance Engine** concept and the retired Smart Presentation public doors: ONE patient-facing presentation system, not a third parallel one. When PPX is designed, Case Acceptance Engine is folded into it, not built beside it.
+
+### Scope (when it eventually runs)
+
+Publish action on a plan (dentist-controlled) → immutable published snapshot of dentist-approved options → unique secure link + QR → patient microsite (read + interact) → patient events (opened, content viewed, option reviewed, preference submitted, clarification requested, plan confirmed, call/appointment requested) → each event lands in Dentfluence as ActivityEngine events, and actionable ones become spine obligations through RelationshipWorkService (source_type = ppx interaction) → staff work them on Board V2 like any other obligation → decision, when it happens, is recorded through the ONE decision door from Slice 2.2 (source = patient channel).
+
+### Non-scope (permanent boundaries)
+
+- **PPX never prescribes or recommends.** Clinical options originate from the dentist; PPX renders dentist-approved options only. No engagement-optimisation dark patterns; the design goal is informed decision-making, not conversion manipulation.
+- **PPX is presentation, not truth.** Treatment Plan remains the sole source of clinical/business truth. PPX holds a *published snapshot* + interaction events; it never writes plan items, prices, or clinical status. No parallel patient record, no second decision store.
+- **A patient "preference/confirmation" on the microsite is NOT automatically a clinical decision.** It produces an event + obligation; the `plan_decisions` row is written through the existing decision service (whether auto-on-confirm or staff-ratified is a PPX-time gate decision — the table doesn't care, the `source` column does).
+- No generic clinic website/CMS, no online store, no payment collection in v1 of PPX, no patient login/portal account system (tokenised link first).
+
+### Dependencies (all satisfied by V1.1 as designed — this is why PPX waits)
+
+| Needs | Provided by |
+|---|---|
+| "Presented" as a repeatable lifecycle event + decision facts with `source` | P2 Gate B / Slice 2.2 (`plan_decisions`, presentation Activity events) |
+| One write door for patient-triggered work (question/call/appointment requests) | P3 RelationshipWorkService + `source_type`/`source_id` columns (3.1) |
+| Obligations visible with why-context, worked and closed once | P4 Board V2 + ContextAssembler; P5.1 appointment reconciliation (patient books → obligation auto-resolves) |
+| Chase-the-undecided automation PPX events must feed/suppress | P5.3 `decision_followup` detector |
+| Event vocabulary AI Secretary (V4) can later consume | ActivityEngine as the single event spine (already the V1.2 AI contract shape from 4.1) |
+| Public exposure, consent, branding | V1.5 Connect infra, DPDP consent module, clinic_id isolation hardening (parked) — outside V1.1 |
+
+### Future event model (reserve the vocabulary, implement nothing)
+
+`plan.shared` · `plan.opened` · `plan.content_viewed` · `plan.option_reviewed` · `plan.preference_submitted` · `plan.clarification_requested` · `plan.confirmed` · `plan.appointment_requested` — all as ActivityEngine events referencing plan + published-snapshot id, patient-attributed, consumable later by Today Actions detectors and AI Secretary for *ethical* follow-up (e.g., "opened twice, no preference, 5 days" → decision_followup context enrichment — never auto-pressure messaging). These names are reserved; do not emit them from anything before the PPX phase itself.
+
+### Current architectural blockers — audit result
+
+Checked against P0–P8 as written: **none hard.** Three soft guardrails, all zero-code, all satisfiable inside decisions already scheduled:
+
+1. **Gate B (pre-2.2):** when approving `plan_decisions` semantics, note in the gate record that (a) `source` must accommodate a patient-channel value (schema already has the column — this is vocabulary, not schema), and (b) the table stays extensible to option-scoped decisions via a future nullable option reference (append-only additive — nothing to build now). Do NOT bake a whole-plan-only assumption into service method *signatures* that would need breaking changes later.
+2. **Slice 2.2 as written:** "presented" as a repeatable lifecycle event (not a one-shot state) is exactly what PPX needs — keep that shape at the gate; a PPX publish is simply another (re)presentation event on another channel.
+3. **P3 spine:** keep `source_type` genuinely polymorphic (string, not a locked-down enum migration) so a PPX interaction type can register without schema change. Current design already says this.
+
+Everything else PPX needs (option modelling, snapshots, tokens, microsite rendering, EMI display, education library) is additive, PPX-owned, and touches no V1.1 table.
+
+### Recommendation: action required NOW
+
+**None.** No code, no schema, no slice changes to P0–P8. The only obligations this section creates are: carry guardrails 1–3 into the Gate B and 3.1 approval records when those gates are reached, and reject any interim proposal to resurrect Case Acceptance Engine / Smart Presentation as a separate build — they merge into PPX or don't happen.
+
+---
+
 ## CRITICAL PATH
 
 ```
@@ -400,10 +490,10 @@ Technically independent (may be scheduled early if a phase stalls, each still in
 10. **8.1 / 8.2** — every code retirement batch.
 11. Standing rule: ANY unplanned data touch, ANY new destructive-looking command, ANY scope addition → stop and ask.
 
-## START HERE
+## START HERE *(superseded — kept for history)*
 
-**Phase 0, Slice 0.1 — Repo hygiene & baseline.** Reasons: it is the only slice with literally zero risk and everything depends on it — uncommitted Phase-4/WhatsApp/smoke work is currently unauditable, and no later slice's PASS/FAIL means anything without a tagged, smoke-green baseline to diff against. It also produces the rollback anchor (`pre-journey-v1.1` tag) that every subsequent rollback strategy references. One session, immediately reviewable, and it makes every future review honest.
+~~Phase 0, Slice 0.1 — Repo hygiene & baseline.~~ Executed. **Current position (2026-07-27): close Slice 2.2** — CEO browser retest → push → deploy → freeze — then Slice 2.3 (`plan_decisions` + decision service) per the EXECUTION STATUS LEDGER at the top of this document.
 
 ---
 
-*Roadmap only. Nothing implemented. On approval, execution follows the rule: ONE SLICE → STOP → report → CEO approval → next.*
+*In execution since 2026-07-25. P0+P1 production-frozen; P2 in progress. Rule unchanged: ONE SLICE → STOP → report → CEO approval → next. The ledger at the top is the single place status is updated; the phase text below stays as the approved plan.*

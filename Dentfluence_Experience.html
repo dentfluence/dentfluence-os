@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dentfluence OS — The Operating System of the Future</title>
+<style>
+:root{
+  --primary:#702070; --primary-dark:#4a1548; --primary-light:#f4e8f4;
+  --gold:#b8862f; --indigo:#2d2a55; --titanium:#8a8a94; --cyan:#8fd8e0; --graphite:#3a3740;
+  --ink:#14121a; --paper:#ffffff; --muted:#6b6470; --line:#e8e3e8; --panel:#faf7fa;
+  --font: -apple-system,"SF Pro Display","Segoe UI",Inter,Helvetica,Arial,sans-serif;
+  --ease: cubic-bezier(.22,.61,.36,1); --dur: 900ms; --dur-s: 600ms; --dur-l: 1200ms;
+}
+html[data-theme="dark"]{
+  --ink:#f3eef3; --paper:#0b0a0d; --muted:#a89fa8; --line:#242028; --panel:#141116; --primary-light:#26182a;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%;}
+body{ font-family:var(--font); background:var(--paper); color:var(--ink); overflow:hidden; -webkit-font-smoothing:antialiased; transition:background 1.1s var(--ease),color 1.1s var(--ease); }
+
+/* ---- ambient lighting ---- */
+.glow{ position:fixed; border-radius:50%; filter:blur(110px); pointer-events:none; z-index:0; }
+.glow1{ width:52vw; height:52vw; background:radial-gradient(circle,var(--primary) 0%,transparent 70%); top:-18%; right:-14%; opacity:.14; animation:driftA 34s ease-in-out infinite; }
+.glow2{ width:40vw; height:40vw; background:radial-gradient(circle,var(--gold) 0%,transparent 70%); bottom:-16%; left:-10%; opacity:.08; animation:driftB 40s ease-in-out infinite; }
+@keyframes driftA{ 0%,100%{ transform:translate(0,0);} 50%{ transform:translate(-3%,4%);} }
+@keyframes driftB{ 0%,100%{ transform:translate(0,0);} 50%{ transform:translate(4%,-3%);} }
+
+.deck{ position:relative; width:100vw; height:100vh; overflow:hidden; z-index:1; }
+.slide{
+  position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center;
+  padding:6.5vh 8vw; opacity:0; transform:translateY(26px) scale(.985); filter:blur(6px);
+  pointer-events:none; transition:opacity var(--dur-l) var(--ease), transform var(--dur-l) var(--ease), filter var(--dur-l) var(--ease);
+}
+.slide.active{ opacity:1; transform:translateY(0) scale(1); filter:blur(0); pointer-events:auto; }
+.slide.prev{ opacity:0; transform:translateY(-18px) scale(.99); filter:blur(4px); }
+
+.kicker{ font-size:12px; font-weight:600; letter-spacing:.18em; color:var(--primary); text-transform:uppercase; margin-bottom:16px; opacity:0; filter:blur(4px); transform:translateY(8px); }
+.slide.active .kicker{ animation:riseIn var(--dur) 60ms var(--ease) forwards; }
+h1.stitle{ font-size:clamp(32px,4.2vw,58px); font-weight:600; line-height:1.06; letter-spacing:-.02em; max-width:960px; opacity:0; filter:blur(6px); transform:translateY(14px); }
+.slide.active h1.stitle{ animation:riseIn var(--dur) 160ms var(--ease) forwards; }
+.ssub{ font-size:clamp(14.5px,1.25vw,19px); color:var(--muted); font-weight:400; margin-top:12px; max-width:620px; opacity:0; filter:blur(4px); transform:translateY(10px); }
+.slide.active .ssub{ animation:riseIn var(--dur) 260ms var(--ease) forwards; }
+@keyframes riseIn{ to{ opacity:1; transform:translateY(0); filter:blur(0);} }
+
+.stage{ flex:1; min-height:0; margin-top:4vh; display:flex; align-items:center; justify-content:center; }
+
+/* ---- glass ---- */
+.glass{
+  background:rgba(255,255,255,.55); backdrop-filter:blur(24px) saturate(160%); -webkit-backdrop-filter:blur(24px) saturate(160%);
+  border:1px solid rgba(255,255,255,.5); border-radius:20px; box-shadow:0 24px 70px rgba(20,18,26,.08);
+}
+html[data-theme="dark"] .glass{ background:rgba(255,255,255,.035); border-color:rgba(255,255,255,.08); box-shadow:0 24px 70px rgba(0,0,0,.4); }
+
+/* ---- chrome (kept from base deck) ---- */
+.progress-track{ position:fixed; top:0; left:0; height:2px; width:100%; background:var(--line); z-index:60;}
+.progress-fill{ height:100%; background:var(--primary); transition:width var(--dur) var(--ease); }
+.counter{ position:fixed; bottom:26px; right:34px; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; z-index:60; letter-spacing:.03em;}
+.counter b{ color:var(--ink); font-weight:600; }
+.brandmark{ position:fixed; bottom:26px; left:34px; font-size:11.5px; font-weight:600; color:var(--muted); letter-spacing:.1em; z-index:60; }
+.brandmark span{ color:var(--primary); }
+.controls{ position:fixed; bottom:22px; left:50%; transform:translateX(-50%); display:flex; gap:6px; z-index:60; }
+.controls button{ width:34px; height:34px; border-radius:50%; border:1px solid var(--line); background:var(--paper); color:var(--ink); cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; transition:all var(--dur-s) var(--ease); }
+.controls button:hover{ background:var(--primary); color:#fff; border-color:var(--primary); transform:scale(1.06); }
+.toprow{ position:fixed; top:16px; right:22px; display:flex; gap:8px; z-index:60; }
+.iconbtn{ width:32px; height:32px; border-radius:8px; border:1px solid var(--line); background:var(--paper); color:var(--muted); cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; transition:all var(--dur-s) var(--ease); }
+.iconbtn:hover{ color:var(--primary); border-color:var(--primary); }
+
+.notes-panel{ position:fixed; left:0; right:0; bottom:0; background:var(--panel); border-top:1px solid var(--line); padding:16px 8vw; font-size:13.5px; color:var(--muted); line-height:1.6; max-height:0; overflow:hidden; transition:max-height var(--dur) var(--ease); z-index:55; }
+.notes-panel.open{ max-height:160px; }
+.notes-panel b{ color:var(--primary); font-size:11px; letter-spacing:.1em; text-transform:uppercase; display:block; margin-bottom:6px;}
+
+.overview{ position:fixed; inset:0; background:var(--paper); z-index:70; display:none; padding:60px 6vw; overflow-y:auto; }
+.overview.open{ display:block; }
+.overview h2{ font-size:22px; margin-bottom:26px; }
+.ovgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:14px; }
+.ovcard{ border:1px solid var(--line); border-radius:14px; padding:16px; cursor:pointer; transition:all var(--dur-s) var(--ease); background:var(--panel); }
+.ovcard:hover{ border-color:var(--primary); transform:translateY(-3px); }
+.ovcard .n{ font-size:11px; color:var(--primary); font-weight:700; margin-bottom:6px; }
+.ovcard .t{ font-size:14px; font-weight:600; line-height:1.3; }
+.ovclose{ position:absolute; top:24px; right:34px; }
+
+/* ---- tooltip ---- */
+.tip{ position:fixed; z-index:200; pointer-events:none; max-width:230px; padding:11px 14px; border-radius:12px; background:var(--paper); border:1px solid var(--line); box-shadow:0 16px 40px rgba(20,18,26,.16); opacity:0; transform:translateY(6px) scale(.98); transition:opacity var(--dur-s) var(--ease), transform var(--dur-s) var(--ease); backdrop-filter:blur(14px); }
+html[data-theme="dark"] .tip{ background:rgba(20,17,22,.94); }
+.tip.show{ opacity:1; transform:translateY(0) scale(1); }
+.tip .tt{ font-size:12.5px; font-weight:700; color:var(--primary); margin-bottom:3px; }
+.tip .td{ font-size:11.5px; color:var(--muted); line-height:1.4; }
+
+/* ---- role hub (Part 2) ---- */
+.role-hub{ display:flex; gap:20px; flex-wrap:wrap; justify-content:center; max-width:1000px; }
+.role-card{ width:170px; padding:26px 18px; text-align:center; cursor:pointer; transition:transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease); opacity:0; transform:translateY(18px); }
+.slide.active .role-card{ animation:riseIn var(--dur) var(--ease) forwards; }
+.role-card:hover{ transform:translateY(-6px); box-shadow:0 30px 80px rgba(112,32,112,.14); }
+.role-card .ric{ width:52px; height:52px; border-radius:50%; background:var(--primary-light); border:1px solid var(--primary); margin:0 auto 14px; display:flex; align-items:center; justify-content:center; font-size:20px; color:var(--primary); transition:transform var(--dur) var(--ease); }
+.role-card:hover .ric{ transform:scale(1.08); }
+.role-card .rname{ font-size:15px; font-weight:600; margin-bottom:4px; }
+.role-card .rtag{ font-size:11.5px; color:var(--muted); }
+
+.journey-view{ display:none; width:100%; max-width:1080px; opacity:0; transform:translateY(14px); filter:blur(4px); }
+.journey-view.open{ display:block; animation:riseIn var(--dur) var(--ease) forwards; }
+.journey-back{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); cursor:pointer; margin-bottom:22px; transition:color var(--dur-s) var(--ease); }
+.journey-back:hover{ color:var(--primary); }
+.journey-steps{ display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin-bottom:26px; }
+.jstep{ width:128px; padding:18px 12px; text-align:center; opacity:0; transform:translateY(14px); }
+.journey-view.open .jstep{ animation:riseIn var(--dur) var(--ease) forwards; }
+.jstep .num{ font-size:10px; color:var(--primary); font-weight:700; margin-bottom:8px; }
+.jstep .lbl{ font-size:12.5px; font-weight:600; line-height:1.3; }
+.journey-focus{ text-align:center; padding:16px 26px; border-radius:16px; display:inline-block; background:var(--primary-light); border:1px solid var(--primary); }
+.journey-focus-wrap{ text-align:center; }
+.journey-focus .fk{ font-size:10.5px; color:var(--primary); text-transform:uppercase; letter-spacing:.1em; font-weight:700; margin-bottom:4px; }
+.journey-focus .fv{ font-size:17px; font-weight:600; }
+
+/* ---- architecture layers (Part 3) ---- */
+.arch-stack{ display:flex; flex-direction:column; gap:9px; width:100%; max-width:560px; }
+.arch-layer{ padding:14px 20px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; transition:all var(--dur) var(--ease); opacity:0; transform:translateY(10px); }
+.slide.active .arch-layer{ animation:riseIn var(--dur) var(--ease) forwards; }
+.arch-layer .an{ font-size:14.5px; font-weight:600; }
+.arch-layer .ad{ font-size:11.5px; color:var(--muted); max-width:280px; text-align:right; opacity:0; max-height:0; overflow:hidden; transition:opacity var(--dur) var(--ease); }
+.arch-layer.on{ border-color:var(--primary); background:var(--primary-light); }
+.arch-layer.on .ad{ opacity:1; }
+.arch-connector{ width:1px; height:9px; background:var(--line); margin-left:20px; }
+
+/* ---- AI cards ---- */
+.ai-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; width:100%; max-width:980px; }
+.ai-card{ padding:20px; cursor:pointer; transition:all var(--dur) var(--ease); opacity:0; transform:translateY(14px); }
+.slide.active .ai-card{ animation:riseIn var(--dur) var(--ease) forwards; }
+.ai-card .aname{ font-size:14px; font-weight:600; margin-bottom:6px; }
+.ai-card .adesc{ font-size:11.5px; color:var(--muted); max-height:0; opacity:0; overflow:hidden; transition:all var(--dur) var(--ease); line-height:1.5; }
+.ai-card.open .adesc{ max-height:100px; opacity:1; margin-top:8px; }
+.ai-card.open{ border-color:var(--primary); }
+
+/* ---- automation timeline ---- */
+.auto-track{ position:relative; width:100%; max-width:1040px; }
+
+/* ---- misc ---- */
+.replay-btn{ margin-top:22px; font-size:11.5px; padding:8px 16px; border-radius:20px; border:1px solid var(--line); background:var(--paper); color:var(--muted); cursor:pointer; transition:all var(--dur-s) var(--ease); }
+.replay-btn:hover{ color:var(--primary); border-color:var(--primary); }
+
+.tech-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; width:100%; max-width:940px; }
+.tech-card{ padding:22px; opacity:0; transform:translateY(14px); }
+.slide.active .tech-card{ animation:riseIn var(--dur) var(--ease) forwards; }
+.tech-card .tn{ font-size:14px; font-weight:600; margin-bottom:6px; }
+.tech-card .td2{ font-size:12px; color:var(--muted); line-height:1.5; }
+
+.fv-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; width:100%; max-width:900px; margin-bottom:22px; }
+.fv-card{ padding:20px; text-align:center; opacity:0; transform:translateY(14px); }
+.slide.active .fv-card{ animation:riseIn var(--dur) var(--ease) forwards; }
+.fv-card .fn{ font-size:13.5px; font-weight:600; }
+.banner{ padding:14px 26px; border-radius:14px; border:1px solid var(--gold); background:rgba(184,134,47,.08); color:var(--gold); font-size:13.5px; font-weight:600; text-align:center; }
+
+.node-glow{ filter:drop-shadow(0 0 0px var(--primary)); transition:filter var(--dur) var(--ease), transform var(--dur) var(--ease); cursor:pointer; }
+.node-glow:hover{ filter:drop-shadow(0 0 12px var(--primary)); transform:scale(1.06); }
+.node-label-fo div{ font-family:var(--font); text-align:center; line-height:1.2; color:var(--muted); font-weight:500; }
+.draw{ stroke-dasharray:900; stroke-dashoffset:900; }
+.slide.active .draw{ animation:drawLine 1.6s .3s var(--ease) forwards; }
+@keyframes drawLine{ to{ stroke-dashoffset:0; } }
+.pulse-slow{ animation:pulseAnim 3.2s ease-in-out infinite; }
+@keyframes pulseAnim{ 0%,100%{opacity:.5;} 50%{opacity:1;} }
+.chip{ fill:var(--primary-light); stroke:var(--primary); stroke-width:1.2; }
+.chip-line{ stroke:var(--line); stroke-width:1.5; fill:none; transition:all var(--dur) var(--ease); }
+.chip-line-active{ stroke:var(--primary); stroke-width:2.2; fill:none; transition:all var(--dur) var(--ease); }
+.svgwrap{ width:100%; height:100%; max-height:60vh; }
+
+footer.grad-closing{ position:absolute; inset:0; background:radial-gradient(circle at 30% 30%, var(--primary-light), transparent 60%); z-index:-1; opacity:.6; }
+</style>
+</head>
+<body>
+
+<div class="glow glow1"></div>
+<div class="glow glow2"></div>
+
+<div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+<div class="tip" id="tip"><div class="tt" id="tipTitle"></div><div class="td" id="tipDesc"></div></div>
+<div class="deck" id="deck"></div>
+<div class="notes-panel" id="notesPanel"><b>Speaker notes</b><span id="notesText"></span></div>
+
+<div class="toprow">
+  <button class="iconbtn" id="themeToggle" title="Toggle dark / light">&#9788;</button>
+  <button class="iconbtn" id="notesToggle" title="Toggle speaker notes (N)">&#128172;</button>
+  <button class="iconbtn" id="gridToggle" title="Overview grid (G)">&#9638;</button>
+  <button class="iconbtn" id="fsToggle" title="Presentation mode (F)">&#9974;</button>
+</div>
+<div class="controls">
+  <button id="prevBtn" title="Previous (&larr;)">&#8592;</button>
+  <button id="nextBtn" title="Next (&rarr;)">&#8594;</button>
+</div>
+<div class="counter"><b id="curNum">01</b> / <span id="totalNum">11</span></div>
+<div class="brandmark">DENT<span>FLUENCE</span> OS</div>
+
+<div class="overview" id="overview">
+  <button class="iconbtn ovclose" id="ovClose">&#10005;</button>
+  <h2>All sections</h2>
+  <div class="ovgrid" id="ovgrid"></div>
+</div>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+function el(tag,attrs,parent){ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); if(parent) parent.appendChild(e); return e; }
+function svgBase(vb){ const s=document.createElementNS(NS,"svg"); s.setAttribute("viewBox",vb); s.setAttribute("class","svgwrap"); return s; }
+function h(tag,attrs,html){ const e=document.createElement(tag); if(attrs) for(const k in attrs){ if(k==='class') e.className=attrs[k]; else if(k==='style') e.style.cssText=attrs[k]; else e.setAttribute(k,attrs[k]); } if(html!==undefined) e.innerHTML=html; return e; }
+
+// ---------- tooltip ----------
+const tipEl=document.getElementById('tip'), tipTitle=document.getElementById('tipTitle'), tipDesc=document.getElementById('tipDesc');
+function showTip(evt,title,desc){ tipTitle.textContent=title; tipDesc.textContent=desc||''; tipEl.classList.add('show'); moveTip(evt); }
+function moveTip(evt){ const x=evt.clientX,y=evt.clientY,vw=window.innerWidth; tipEl.style.left=(x+(vw-x<250?-240:16))+'px'; tipEl.style.top=(y+14)+'px'; }
+function hideTip(){ tipEl.classList.remove('show'); }
+function attachTip(node,title,desc){ node.classList.add('node-glow'); node.addEventListener('mouseenter',e=>showTip(e,title,desc)); node.addEventListener('mousemove',moveTip); node.addEventListener('mouseleave',hideTip); }
+function foreignLabel(parent,x,y,w,hh,text,size){ const fo=el("foreignObject",{x:x-w/2,y:y,width:w,height:hh,class:"node-label-fo"},parent); const div=document.createElementNS("http://www.w3.org/1999/xhtml","div"); div.style.cssText=`font-size:${size||10}px;`; div.textContent=text; fo.appendChild(div); return fo; }
+
+// ================= SECTION BUILDERS =================
+
+function secOpening(){
+  const wrap=h('div',{style:'text-align:center;width:100%;position:relative;'});
+  wrap.appendChild(h('footer',{class:'grad-closing'}));
+  return wrap;
+}
+
+function secFragmented(){
+  const s=svgBase("0 0 700 380");
+  const items=["Excel","Paper","WhatsApp","CRM","Billing","PMS"];
+  const pos=[[110,80],[560,70],[90,300],[590,290],[350,50],[350,340]];
+  const g=el("g",{},s);
+  pos.forEach((p,i)=>{ const nxt=pos[(i+1)%pos.length]; el("line",{x1:p[0],y1:p[1],x2:nxt[0],y2:nxt[1],class:"chip-line",style:"stroke-dasharray:4,7",opacity:.35},g); });
+  el("circle",{cx:350,cy:195,r:46,fill:"var(--primary)",class:"pulse-slow"},g);
+  foreignLabel(g,350,183,90,30,"One System",10.5);
+  g.querySelector('.node-label-fo div').style.color="#fff"; g.querySelector('.node-label-fo div').style.fontWeight="700";
+  pos.forEach((p,i)=>{
+    const c=el("g",{class:"pulse-slow",style:`animation-delay:${i*0.3}s`},g);
+    el("circle",{cx:p[0],cy:p[1],r:26,class:"chip"},c);
+    foreignLabel(g,p[0],p[1]+34,92,28,items[i],10.5);
+    attachTip(c,items[i],"Disconnected — lives in its own silo today.");
+  });
+  return s;
+}
+
+// ---- Part 2: role hub + journeys ----
+const JOURNEYS = {
+  owner:{ name:"Owner", icon:"&#9670;", tag:"Peace of mind",
+    steps:["Morning Dashboard","Today's Revenue","KPIs","Pending Payments","Collections","Profit","Daily Huddle","Accounts","AI Summary","End of Day"],
+    focus:"Peace of mind." },
+  dentist:{ name:"Dentist", icon:"&#9679;", tag:"Less typing, more dentistry",
+    steps:["Today's Patients","History Ready","AI Summary","Consultation","Treatment Plan","Prescription","Clinical Media","Billing","Next Patient"],
+    focus:"Less typing. More dentistry." },
+  reception:{ name:"Front Desk", icon:"&#9733;", tag:"Zero duplicate entry",
+    steps:["Calls","Appointments","Arrival","Payments","Membership","Communication","Recall"],
+    focus:"No duplicate entry, anywhere." },
+  assistant:{ name:"Assistant", icon:"&#9632;", tag:"Always know what's next",
+    steps:["Chair Preparation","Sterilization","Lab","Inventory","Procedure","Checklists"],
+    focus:"Knowing exactly what to do." },
+  manager:{ name:"Manager", icon:"&#9650;", tag:"Full accountability",
+    steps:["Attendance","Tasks","KPIs","Revenue","Expenses","Lab","Doctor Productivity"],
+    focus:"Accountability, by default." },
+  patient:{ name:"Patient", icon:"&#9829;", tag:"Feels remembered",
+    steps:["Books Online","Welcomed by Name","Doctor Already Knows","Treatment Explained Visually","Digital Consent","Prescription on Phone","Payment","Recall","Birthday Wishes"],
+    focus:"Feels remembered." }
+};
+
+function secRoleHub(){
+  const wrap=h('div',{style:'width:100%;display:flex;flex-direction:column;align-items:center;'});
+  const hub=h('div',{class:'role-hub'});
+  Object.entries(JOURNEYS).forEach(([key,r],i)=>{
+    const card=h('div',{class:'glass role-card',style:`animation-delay:${i*0.08}s`});
+    card.appendChild(h('div',{class:'ric'},r.icon));
+    card.appendChild(h('div',{class:'rname'},r.name));
+    card.appendChild(h('div',{class:'rtag'},r.tag));
+    card.addEventListener('click',()=>openJourney(key));
+    hub.appendChild(card);
+  });
+  wrap.appendChild(hub);
+
+  const jv=h('div',{class:'journey-view',id:'journeyView'});
+  wrap.appendChild(jv);
+  wrap._hub = hub;
+  wrap._jv = jv;
+  return wrap;
+}
+
+function openJourney(key){
+  const r = JOURNEYS[key];
+  const wrap = document.querySelector('.slide.active .role-hub')?.parentElement || document.getElementById('journeyView')?.parentElement;
+  const hub = wrap.querySelector('.role-hub');
+  const jv = wrap.querySelector('.journey-view');
+  hub.style.display = 'none';
+  jv.innerHTML = '';
+  jv.classList.add('open');
+  const back = h('div',{class:'journey-back'},'&#8592; &nbsp;All roles');
+  back.addEventListener('click', ()=>{ jv.classList.remove('open'); jv.innerHTML=''; hub.style.display='flex'; });
+  jv.appendChild(back);
+  jv.appendChild(h('h2',{style:'font-size:26px;font-weight:600;margin-bottom:22px;'}, r.name + ' Journey'));
+  const steps = h('div',{class:'journey-steps'});
+  r.steps.forEach((s,i)=>{
+    const st = h('div',{class:'glass jstep',style:`animation-delay:${i*0.09}s`});
+    st.appendChild(h('div',{class:'num'}, String(i+1).padStart(2,'0')));
+    st.appendChild(h('div',{class:'lbl'}, s));
+    steps.appendChild(st);
+  });
+  jv.appendChild(steps);
+  const fw = h('div',{class:'journey-focus-wrap'});
+  const focus = h('div',{class:'journey-focus'});
+  focus.appendChild(h('div',{class:'fk'},'Focus on'));
+  focus.appendChild(h('div',{class:'fv'}, r.focus));
+  fw.appendChild(focus);
+  jv.appendChild(fw);
+}
+
+// ---- Part 3: interactive architecture ----
+const ARCH_LAYERS = [
+  ["One Patient","A single identity, created once, referenced everywhere."],
+  ["Identity Layer","Patient, staff and clinic identity — the root of trust."],
+  ["Clinical Engine","Consultations, treatment plans, visits, prescriptions."],
+  ["Business Engine","Billing, wallet, membership, accounts, inventory."],
+  ["Communication Engine","PRE, WhatsApp, recall — one relationship, always current."],
+  ["Analytics Engine","Every module's activity, turned into decisions."],
+  ["AI Layer","Assists across all engines. Never decides alone."],
+  ["Android","Every role, connected to the same truth, on the move."],
+  ["Owner Dashboard","Everything above, distilled into one view."]
+];
+function secArchitecture(){
+  const wrap=h('div',{style:'display:flex;gap:6vw;align-items:center;width:100%;justify-content:center;'});
+  const stack=h('div',{class:'arch-stack'});
+  ARCH_LAYERS.forEach(([name,desc],i)=>{
+    const layer=h('div',{class:'glass arch-layer',style:`animation-delay:${i*0.07}s`,'data-i':i});
+    layer.appendChild(h('div',{class:'an'},name));
+    layer.appendChild(h('div',{class:'ad'},desc));
+    layer.addEventListener('click',()=>{
+      stack.querySelectorAll('.arch-layer').forEach(l=>l.classList.remove('on'));
+      layer.classList.add('on');
+    });
+    stack.appendChild(layer);
+    if(i<ARCH_LAYERS.length-1) stack.appendChild(h('div',{class:'arch-connector'}));
+  });
+  wrap.appendChild(stack);
+  setTimeout(()=>{ const first=stack.querySelector('.arch-layer'); if(first) first.classList.add('on'); }, 400);
+  return wrap;
+}
+
+// ---- Module explorer: dependency graph ----
+const MODULES = ["Consultation","Prescription","Treatment Plan","Billing","Accounts","Analytics","AI","Reports","Patient Timeline"];
+const DEPS = {
+  "Consultation":["Prescription","Treatment Plan","Billing","Patient Timeline","AI"],
+  "Prescription":["Consultation","Patient Timeline"],
+  "Treatment Plan":["Consultation","Billing","Accounts","Patient Timeline"],
+  "Billing":["Treatment Plan","Accounts","Analytics","Consultation"],
+  "Accounts":["Billing","Treatment Plan","Analytics","Reports"],
+  "Analytics":["Billing","Accounts","Reports","AI"],
+  "AI":["Consultation","Analytics","Reports"],
+  "Reports":["Analytics","Accounts","AI"],
+  "Patient Timeline":["Consultation","Prescription","Treatment Plan"]
+};
+function secModuleExplorer(){
+  const s=svgBase("0 0 720 520");
+  const cx=360,cy=260,R=205;
+  const nodePos={}, nodeEls={}, lineEls={};
+  MODULES.forEach((m,i)=>{
+    const a=(i/MODULES.length)*Math.PI*2 - Math.PI/2;
+    nodePos[m]=[cx+R*Math.cos(a), cy+R*Math.sin(a)];
+  });
+  // draw lines once per unique pair
+  const drawn = new Set();
+  MODULES.forEach(m=>{
+    (DEPS[m]||[]).forEach(t=>{
+      const key=[m,t].sort().join('|');
+      if(drawn.has(key)) return; drawn.add(key);
+      const [x1,y1]=nodePos[m], [x2,y2]=nodePos[t];
+      const ln=el("line",{x1,y1,x2,y2,class:"chip-line",opacity:.28},s);
+      lineEls[key]=ln;
+    });
+  });
+  MODULES.forEach(m=>{
+    const [x,y]=nodePos[m];
+    const n=el("g",{},s);
+    const c=el("circle",{cx:x,cy:y,r:26,class:"chip"},n);
+    foreignLabel(s,x,y+34,104,30,m,9.5);
+    nodeEls[m]=n;
+    n.addEventListener('mouseenter',(e)=>{
+      showTip(e,m,`Connected to ${(DEPS[m]||[]).length} other modules.`);
+      Object.entries(lineEls).forEach(([key,ln])=>{
+        if(key.includes(m)){ ln.setAttribute('class','chip-line-active'); ln.setAttribute('opacity',1); }
+        else { ln.setAttribute('class','chip-line'); ln.setAttribute('opacity',.08); }
+      });
+      Object.entries(nodeEls).forEach(([nm,ng])=>{
+        const related = nm===m || (DEPS[m]||[]).includes(nm);
+        ng.style.opacity = related ? 1 : .3;
+      });
+    });
+    n.addEventListener('mousemove',moveTip);
+    n.addEventListener('mouseleave',()=>{
+      hideTip();
+      Object.values(lineEls).forEach(ln=>{ ln.setAttribute('class','chip-line'); ln.setAttribute('opacity',.28); });
+      Object.values(nodeEls).forEach(ng=> ng.style.opacity = 1);
+    });
+  });
+  return s;
+}
+
+// ---- AI layer ----
+const AI_CAPS = [
+  ["Clinical AI","Drafts notes, flags findings — the dentist reviews and confirms every word."],
+  ["Business AI","Surfaces revenue and collection risks before they become a problem."],
+  ["Communication AI","Writes patient messages in your voice, for human approval."],
+  ["Analytics AI","Finds the pattern in a month of data in seconds."],
+  ["Agentic AI","Completes multi-step tasks — always with a visible approval step."],
+  ["Voice AI","Chairside, hands-free control for the clinical team."],
+  ["Future AI","Where this layer is headed — detailed later in this deck."]
+];
+function secAILayer(){
+  const grid=h('div',{class:'ai-grid'});
+  AI_CAPS.forEach(([name,desc],i)=>{
+    const card=h('div',{class:'glass ai-card',style:`animation-delay:${i*0.07}s`});
+    card.appendChild(h('div',{class:'aname'},name));
+    card.appendChild(h('div',{class:'adesc'},desc));
+    card.addEventListener('click',()=> card.classList.toggle('open'));
+    grid.appendChild(card);
+  });
+  return grid;
+}
+
+// ---- android ecosystem ----
+function secAndroid(){
+  const roles=["Dentist","Assistant","Reception","Owner","Manager"];
+  const s=svgBase("0 0 560 420");
+  const cx=280,cy=210;
+  el("circle",{cx,cy,r:44,fill:"var(--primary)",class:"pulse-slow"},s);
+  foreignLabel(s,cx,cy-9,70,26,"Cloud",11);
+  s.querySelector('.node-label-fo div').style.color="#fff"; s.querySelector('.node-label-fo div').style.fontWeight="700";
+  roles.forEach((r,i)=>{
+    const a=(i/roles.length)*Math.PI*2 - Math.PI/2;
+    const x=cx+175*Math.cos(a), y=cy+150*Math.sin(a);
+    const ln=el("line",{x1:cx,y1:cy,x2:x,y2:y,class:"chip-line draw",style:`animation-delay:${i*.15}s`},s);
+    const dot=el("circle",{r:2.6,fill:"var(--primary)"},s);
+    // ambient traveling pulse along the line
+    const anim=el("animateMotion",{dur:`${3+i*.4}s`,repeatCount:"indefinite",path:`M${cx},${cy} L${x},${y}`},dot);
+    const n=el("g",{},s);
+    el("circle",{cx:x,cy:y,r:24,class:"chip"},n);
+    foreignLabel(s,x,y+30,96,26,r,10);
+    attachTip(n,r,"Real-time sync — same truth, every device.");
+  });
+  return s;
+}
+
+// ---- automation engine timeline ----
+const AUTO_STAGES = ["Appointment","Reminder","Consultation","Treatment","Billing","Recall","Feedback","Membership","Long-term relationship"];
+function secAutomation(){
+  const wrap=h('div',{class:'auto-track'});
+  const s=svgBase(`0 0 ${AUTO_STAGES.length*94+30} 150`);
+  const y=70;
+  el("line",{x1:20,y1:y,x2:AUTO_STAGES.length*94-30,y2:y,class:"chip-line"},s);
+  const fillLine=el("line",{x1:20,y1:y,x2:20,y2:y,class:"chip-line-active"},s);
+  const nodes=[];
+  AUTO_STAGES.forEach((t,i)=>{
+    const x=20+i*94;
+    const n=el("g",{},s);
+    const c=el("circle",{cx:x,cy:y,r:15,fill:"var(--paper)",stroke:"var(--line)","stroke-width":1.5},n);
+    foreignLabel(s,x,y+26,88,34,t,9);
+    nodes.push({c,x});
+  });
+  wrap.appendChild(s);
+  const btn=h('button',{class:'replay-btn'},'Replay sequence');
+  const wrapCenter=h('div',{style:'text-align:center;width:100%;'});
+  wrapCenter.appendChild(wrap);
+  wrapCenter.appendChild(btn);
+
+  function play(){
+    nodes.forEach(n=>{ n.c.setAttribute('fill','var(--paper)'); n.c.setAttribute('stroke','var(--line)'); });
+    fillLine.setAttribute('x2',20);
+    nodes.forEach((n,i)=>{
+      setTimeout(()=>{
+        n.c.setAttribute('fill','var(--primary)'); n.c.setAttribute('stroke','var(--primary)');
+        fillLine.setAttribute('x2', n.x);
+      }, 500+i*550);
+    });
+  }
+  btn.addEventListener('click', play);
+  wrapCenter._play = play;
+  return wrapCenter;
+}
+
+// ---- technical excellence ----
+const TECH_ITEMS = [
+  ["Layered Architecture","Six engines, one identity layer — nothing bypasses it."],
+  ["Event Flow","Every action emits an event. Every module can listen."],
+  ["Single Source of Truth","One patient record. No sync jobs, no drift."],
+  ["Dependency Graph","Every module's real connections, mapped and enforced."],
+  ["Automation Engine","Rules-driven, not cron jobs bolted on after the fact."],
+  ["Future Agent Layer","A reserved layer for autonomous workflows — opt-in, always."]
+];
+function secTech(){
+  const grid=h('div',{class:'tech-grid'});
+  TECH_ITEMS.forEach(([n,d],i)=>{
+    const c=h('div',{class:'glass tech-card',style:`animation-delay:${i*0.07}s`});
+    c.appendChild(h('div',{class:'tn'},n));
+    c.appendChild(h('div',{class:'td2'},d));
+    grid.appendChild(c);
+  });
+  return grid;
+}
+
+// ---- future vision ----
+const FUTURE_ITEMS = ["Voice Commands","AI Secretary (Tulip)","Autonomous Practice Management","Agentic AI","Self-learning Workflows","Smart Scheduling"];
+function secFuture(){
+  const wrap=h('div',{style:'display:flex;flex-direction:column;align-items:center;width:100%;'});
+  const grid=h('div',{class:'fv-grid'});
+  FUTURE_ITEMS.forEach((t,i)=>{
+    const c=h('div',{class:'glass fv-card',style:`animation-delay:${i*0.07}s`});
+    c.appendChild(h('div',{class:'fn'},t));
+    grid.appendChild(c);
+  });
+  wrap.appendChild(grid);
+  wrap.appendChild(h('div',{class:'banner'},'Dentist approval always required.'));
+  return wrap;
+}
+
+function secClosing(){
+  const d=h('div',{style:'position:relative;width:100%;'});
+  d.appendChild(h('footer',{class:'grad-closing'}));
+  return d;
+}
+
+// ================= SLIDE DEFINITIONS =================
+const SLIDES = [
+  {kicker:"DENTFLUENCE OS",title:"The Operating System of the Future",sub:"A private experience for Dr. Rajeev Chitguppi",build:secOpening,
+   notes:"Thank you for your time. What follows isn't a slide deck — it's the product, walked through the way it actually works."},
+  {kicker:"PART ONE — THE FUTURE DENTAL PRACTICE",title:"Dentistry runs on fragments",sub:"Excel. Paper. WhatsApp. A CRM. Separate billing. A separate PMS. Hover any fragment.",build:secFragmented,
+   notes:"This isn't hypothetical. This is Monday morning in most clinics — including ours, before we built this."},
+  {kicker:"PART TWO — MEET YOUR PRACTICE",title:"Every role. One connected OS.",sub:"Click a role to walk through their actual day.",build:secRoleHub,
+   notes:"Click through Owner, Dentist, Front Desk, Assistant, Manager and Patient — each is a real, distinct experience inside the same system."},
+  {kicker:"PART THREE — HOW THIS WORKS",title:"One patient. Nine layers. No gaps.",sub:"Click any layer to see what it does and how it connects.",build:secArchitecture,
+   notes:"This is the same architecture my engineering team tracks internally — nothing here is aspirational."},
+  {kicker:"MODULE EXPLORER",title:"Nothing lives in isolation",sub:"Hover any module to see exactly what depends on it.",build:secModuleExplorer,
+   notes:"Hover Consultation — watch Prescription, Treatment Plan, Billing, Accounts, Analytics, AI, Reports and the Patient Timeline all light up together."},
+  {kicker:"THE AI LAYER",title:"AI assists. The doctor decides.",sub:"Click any capability to expand it.",build:secAILayer,
+   notes:"Every AI feature we ship has one hard rule: it can suggest, draft or flag. It cannot decide."},
+  {kicker:"ANDROID ECOSYSTEM",title:"Every role, connected in real time",sub:"The same truth, on every device, at once.",build:secAndroid,
+   notes:"Reception doesn't see what the owner sees — but they're both looking at the same underlying truth, live."},
+  {kicker:"AUTOMATION ENGINE",title:"The relationship that runs itself",sub:"Press replay to watch a single patient move through the system.",build:secAutomation,
+   notes:"This is the loop most clinics quietly lose money in. The system exists to close it, automatically."},
+  {kicker:"TECHNICAL EXCELLENCE",title:"Built like infrastructure, not a form builder",sub:"For the engineers and architects in the room.",build:secTech,
+   notes:"I want the technical people in the room to leave convinced this is engineered, not assembled."},
+  {kicker:"FUTURE VISION — NOT V1",title:"Tulip, the AI Secretary",sub:"Where the architecture is designed to go.",build:secFuture,
+   notes:"I want to be direct: none of this exists yet. This is where the architecture is designed to go — not what I'm asking you to evaluate today."},
+  {kicker:"CLOSING",title:"Dentfluence is not another dental software.",sub:"It is building the Operating System on which the future dental practice will run.",build:secClosing,
+   notes:"Thank you. I'd welcome your questions — and your skepticism."}
+];
+
+// ================= BUILD DECK =================
+const deck=document.getElementById('deck');
+SLIDES.forEach((sl,i)=>{
+  const section=h('section',{class:'slide'});
+  section.dataset.index=i;
+  section.appendChild(h('div',{class:'kicker'},sl.kicker));
+  section.appendChild(h('h1',{class:'stitle'},sl.title));
+  section.appendChild(h('div',{class:'ssub'},sl.sub));
+  const stage=h('div',{class:'stage'});
+  if(sl.build) stage.appendChild(sl.build());
+  section.appendChild(stage);
+  deck.appendChild(section);
+});
+
+const ovgrid=document.getElementById('ovgrid');
+SLIDES.forEach((sl,i)=>{
+  const c=h('div',{class:'ovcard'});
+  c.appendChild(h('div',{class:'n'}, String(i+1).padStart(2,'0')+' — '+sl.kicker));
+  c.appendChild(h('div',{class:'t'}, sl.title));
+  c.addEventListener('click',()=>{ goTo(i); toggleGrid(false); });
+  ovgrid.appendChild(c);
+});
+
+let current=0; const total=SLIDES.length;
+document.getElementById('totalNum').textContent=String(total).padStart(2,'0');
+const slideEls=document.querySelectorAll('.slide');
+
+function render(){
+  slideEls.forEach((elx,i)=>{
+    elx.classList.remove('active','prev');
+    if(i===current) elx.classList.add('active');
+    else if(i<current) elx.classList.add('prev');
+  });
+  document.getElementById('curNum').textContent=String(current+1).padStart(2,'0');
+  document.getElementById('progressFill').style.width=((current+1)/total*100)+'%';
+  document.getElementById('notesText').textContent=SLIDES[current].notes;
+  // auto-play automation timeline when its slide becomes active
+  if(SLIDES[current].build===secAutomation){
+    const box=slideEls[current].querySelector('.auto-track')?.parentElement;
+    if(box && box._play) setTimeout(box._play, 500);
+  }
+}
+function goTo(i){ current=Math.max(0,Math.min(total-1,i)); render(); }
+function next(){ goTo(current+1); }
+function prev(){ goTo(current-1); }
+document.getElementById('nextBtn').onclick=next;
+document.getElementById('prevBtn').onclick=prev;
+
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){ e.preventDefault(); next(); }
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){ e.preventDefault(); prev(); }
+  else if(e.key==='Home'){ goTo(0); }
+  else if(e.key==='End'){ goTo(total-1); }
+  else if(e.key.toLowerCase()==='n'){ toggleNotes(); }
+  else if(e.key.toLowerCase()==='g'){ toggleGrid(); }
+  else if(e.key.toLowerCase()==='f'){ toggleFullscreen(); }
+  else if(e.key==='Escape'){ toggleGrid(false); }
+});
+let touchX=null;
+document.addEventListener('touchstart', e=> touchX=e.touches[0].clientX);
+document.addEventListener('touchend', e=>{ if(touchX===null) return; const dx=e.changedTouches[0].clientX-touchX; if(dx<-50) next(); else if(dx>50) prev(); touchX=null; });
+
+const themeToggle=document.getElementById('themeToggle');
+themeToggle.onclick=()=>{ const html=document.documentElement; const cur=html.getAttribute('data-theme'); html.setAttribute('data-theme', cur==='light'?'dark':'light'); themeToggle.innerHTML = cur==='light' ? '&#9789;' : '&#9788;'; };
+
+const notesPanel=document.getElementById('notesPanel');
+function toggleNotes(force){ notesPanel.classList.toggle('open', force!==undefined?force:!notesPanel.classList.contains('open')); }
+document.getElementById('notesToggle').onclick=()=>toggleNotes();
+
+const overview=document.getElementById('overview');
+function toggleGrid(force){ overview.classList.toggle('open', force!==undefined?force:!overview.classList.contains('open')); }
+document.getElementById('gridToggle').onclick=()=>toggleGrid();
+document.getElementById('ovClose').onclick=()=>toggleGrid(false);
+
+function toggleFullscreen(){ if(!document.fullscreenElement){ document.documentElement.requestFullscreen().catch(()=>{}); } else { document.exitFullscreen().catch(()=>{}); } }
+document.getElementById('fsToggle').onclick=toggleFullscreen;
+
+// subtle parallax on stage content
+document.addEventListener('mousemove',(e)=>{
+  const active=document.querySelector('.slide.active .stage');
+  if(!active) return;
+  const r=active.getBoundingClientRect();
+  const relX=(e.clientX-(r.left+r.width/2))/r.width;
+  const relY=(e.clientY-(r.top+r.height/2))/r.height;
+  active.style.transform=`perspective(1000px) rotateY(${relX*2.2}deg) rotateX(${-relY*2.2}deg)`;
+});
+document.querySelectorAll('.stage').forEach(d=> d.style.transition='transform .5s cubic-bezier(.22,.61,.36,1)');
+
+render();
+</script>
+</body>
+</html>

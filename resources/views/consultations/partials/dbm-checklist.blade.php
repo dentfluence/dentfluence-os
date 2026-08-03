@@ -1,3 +1,7 @@
+{{-- ══ LEGACY — CONFIRMED UNUSED (audit 2026-07-31) ══
+     Not @include'd by any view in the app (repo-wide grep, zero hits).
+     Retained for reference/rollback per Retire > Archive > Verify > Delete
+     policy — excluded from new development. ══ --}}
 {{--
     partials/dbm-checklist.blade.php
     Section 8 — DBM 35-Point Checklist

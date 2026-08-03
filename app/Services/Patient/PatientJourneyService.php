@@ -21,7 +21,7 @@ use Illuminate\Support\Collection;
  * aggregator) adding the three concerns the aggregator deliberately leaves
  * to the caller:
  *   1. permission filtering  — events carry "module.action"; entries the
- *      viewer cannot access are dropped (e.g. no billing.view → no invoices)
+ *      viewer cannot access are dropped (e.g. no finance.view → no invoices)
  *   2. group filtering       — all|clinical|financial|comms|consent|reviews
  *   3. cursor pagination     — fixed page size + "load older" cursor
  *

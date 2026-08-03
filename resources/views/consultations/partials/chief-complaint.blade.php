@@ -1,3 +1,10 @@
+{{-- ══ LEGACY — CONFIRMED UNUSED (audit 2026-07-31) ══
+     Not @include'd by any view in the app (repo-wide grep, zero hits).
+     consultations/create.blade.php builds this section's content inline
+     instead of including this partial. Retained for reference/rollback
+     per Retire > Archive > Verify > Delete policy — excluded from new
+     development. Do not @include without re-verifying against the live
+     inline markup in create.blade.php first (may have drifted). ══ --}}
 {{--
     partials/chief-complaint.blade.php
     Section 1 — Chief Complaint

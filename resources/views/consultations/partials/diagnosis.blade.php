@@ -1,3 +1,10 @@
+{{-- ══ LEGACY — CONFIRMED UNUSED (audit 2026-07-31) ══
+     Not @include'd by any view in the app (repo-wide grep, zero hits).
+     consultations/create.blade.php builds the live Diagnosis section (numbered
+     "6" there) inline instead of including this partial — the two have likely
+     drifted; do not assume this file reflects the current live Diagnosis UI.
+     Retained for reference/rollback per Retire > Archive > Verify > Delete
+     policy — excluded from new development. ══ --}}
 {{--
     partials/diagnosis.blade.php
     Section 9 — Diagnosis

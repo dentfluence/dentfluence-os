@@ -241,7 +241,11 @@ class UnifiedTimelineService
                             'actor'       => $act->actor_type ? $this->resolveActorName($act) : 'System',
                             'meta'        => $act->metadata ? $this->formatMeta((array) $act->metadata) : null,
                             'group'       => $this->groupForLedgerEvent((string) $act->event),
-                            'permission'  => str_starts_with((string) $act->event, 'payment') ? 'billing.view' : 'patients.view',
+                            // 'finance' is the real module slug (there is no 'billing'
+                            // module in the catalogue — the old 'billing.view' string
+                            // resolved to nothing, hiding money events from every
+                            // non-admin incl. Accounts/Front Desk. Fixed 2026-08-03.)
+                            'permission'  => str_starts_with((string) $act->event, 'payment') ? 'finance.view' : 'patients.view',
                             'link'        => null,
                             'color'       => 'slate',
                         ]);
@@ -500,7 +504,7 @@ class UnifiedTimelineService
                         'actor'       => $inv->created_by ? $this->userName($inv->created_by) : null,
                         'meta'        => ucfirst((string) ($inv->status ?? '')),
                         'group'       => 'financial',
-                        'permission'  => 'billing.view',
+                        'permission'  => 'finance.view', // real module slug — 'billing' never existed in the catalogue (fixed 2026-08-03)
                         'link'        => route('billing.print', $inv->id),
                         'color'       => 'indigo',
                     ]);
@@ -524,7 +528,7 @@ class UnifiedTimelineService
                         'actor'       => $p->created_by ? $this->userName($p->created_by) : null,
                         'meta'        => ucfirst(str_replace('_', ' ', (string) ($p->payment_mode ?? ''))),
                         'group'       => 'financial',
-                        'permission'  => 'billing.view',
+                        'permission'  => 'finance.view', // real module slug — 'billing' never existed in the catalogue (fixed 2026-08-03)
                         'link'        => $p->invoice_id ? route('billing.print', $p->invoice_id) : null,
                         'color'       => 'green',
                     ]);
@@ -670,7 +674,11 @@ class UnifiedTimelineService
                         'actor'       => $log->captured_by ? $this->userName($log->captured_by) : null,
                         'meta'        => $log->capture_method ? ucfirst((string) $log->capture_method) : null,
                         'group'       => 'consent',
-                        'permission'  => 'consent.view',
+                        // 'consent' is not a module slug — the old string hid consent
+                        // events from every non-admin. Consent trail is patient-identity
+                        // data and its capture UI is reachable by staff, so patients.view
+                        // is the correct (and strictly tighter) gate. Fixed 2026-08-03.
+                        'permission'  => 'patients.view',
                         'link'        => null,
                         'color'       => 'amber',
                     ]);

@@ -158,12 +158,12 @@ Route::middleware('auth')->group(function () {
         // Relationship notes — writes gated by module:patients,edit (Phase 4 fix:
         // these previously required only module view, letting view-only users write)
         Route::post('/{patient}/relationship-notes',          [PatientController::class, 'storeRelationshipNote'])->name('relationship-notes.store')->middleware('module:patients,edit');
-        Route::delete('/{patient}/relationship-notes/{note}', [PatientController::class, 'destroyRelationshipNote'])->name('relationship-notes.destroy')->middleware('module:patients,edit');
+        Route::delete('/{patient}/relationship-notes/{note}', [PatientController::class, 'destroyRelationshipNote'])->name('relationship-notes.destroy')->middleware('module:patients,delete'); // PM-003: hard delete → delete tier (was ,edit)
 
         // Treatment opportunities — writes gated by module:patients,edit (Phase 4 fix)
         Route::post('/{patient}/opportunities',         [PatientController::class, 'storeOpportunity'])->name('opportunities.store')->middleware('module:patients,edit');
         Route::patch('/{patient}/opportunities/{opp}',  [PatientController::class, 'updateOpportunity'])->name('opportunities.update')->middleware('module:patients,edit');
-        Route::delete('/{patient}/opportunities/{opp}', [PatientController::class, 'destroyOpportunity'])->name('opportunities.destroy')->middleware('module:patients,edit');
+        Route::delete('/{patient}/opportunities/{opp}', [PatientController::class, 'destroyOpportunity'])->name('opportunities.destroy')->middleware('module:patients,delete'); // PM-003: hard delete → delete tier (was ,edit)
 
         // Patient notes — Slice 1.2: writes require edit, delete requires delete
         Route::post('/{patient}/notes',          [PatientNoteController::class, 'store'])->name('notes.store')->middleware('module:patients,edit');
@@ -189,6 +189,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/{patient}/consultations/same-issue',  [ConsultationController::class, 'sameIssueStore'])->name('consultations.same-issue.store')->middleware('module:patients,edit');
         Route::get ('/{patient}/consultations/minor-visit', [ConsultationController::class, 'minorVisitCreate'])->name('consultations.minor-visit.create');
         Route::post('/{patient}/consultations/minor-visit', [ConsultationController::class, 'minorVisitStore'])->name('consultations.minor-visit.store')->middleware('module:patients,edit');
+        // Slice 1 fix (2026-08-01): Minor Visit had no edit workflow — editing one
+        // fell through to the generic consultation edit form, which is missing
+        // Minor Visit's fields and risked corrupting the record on save.
+        Route::get ('/{patient}/consultations/minor-visit/{consultation}/edit', [ConsultationController::class, 'minorVisitEdit'])->name('consultations.minor-visit.edit');
+        Route::put ('/{patient}/consultations/minor-visit/{consultation}',      [ConsultationController::class, 'minorVisitUpdate'])->name('consultations.minor-visit.update')->middleware('module:patients,edit');
         Route::get ('/{patient}/consultations/emergency',   [ConsultationController::class, 'emergencyCreate'])->name('consultations.emergency.create');
         Route::post('/{patient}/consultations/emergency',   [ConsultationController::class, 'emergencyStore'])->name('consultations.emergency.store')->middleware('module:patients,edit');
     });
@@ -348,11 +353,17 @@ Route::middleware('auth')->group(function () {
         Route::get('/settings/activity-log',          [\App\Http\Controllers\Settings\ActivityLogController::class, 'index'])->name('settings.activity-log');
 
         // ── Data: Import / Export ──
+        // Variants hardening 2026-08-03 (PM-007 + import gap): import is a bulk
+        // patient WRITE — it now requires the owner-configured patients Edit
+        // flag, not just settings view. Export is a bulk PHI read — admin-tier,
+        // enforced by middleware (proper 302 denial semantics) instead of only
+        // the in-controller isAdminRole() backstop, which stays as
+        // defence-in-depth.
         Route::prefix('settings/data')->name('settings.data.')->group(function () {
-            Route::post('/import/preview',      [PatientImportExportController::class, 'preview'])->name('import.preview');
-            Route::post('/import/store',        [PatientImportExportController::class, 'import'])->name('import.store');
+            Route::post('/import/preview',      [PatientImportExportController::class, 'preview'])->name('import.preview')->middleware('module:patients,edit');
+            Route::post('/import/store',        [PatientImportExportController::class, 'import'])->name('import.store')->middleware('module:patients,edit');
             Route::get('/import/template/{source}', [PatientImportExportController::class, 'downloadTemplate'])->name('import.template');
-            Route::get('/export',               [PatientImportExportController::class, 'export'])->name('export');
+            Route::get('/export',               [PatientImportExportController::class, 'export'])->name('export')->middleware('admin.only');
         });
         Route::post('/settings/clinic',               [\App\Http\Controllers\Settings\SettingsController::class, 'saveClinic'])->name('settings.clinic.save');
         // HFR / Health Facility capture for the clinic (local, no live ABDM)

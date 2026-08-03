@@ -1,3 +1,8 @@
+{{-- ══ LEGACY — CONFIRMED UNUSED (audit 2026-07-31) ══
+     Not @include'd by any view in the app (repo-wide grep, zero hits), despite
+     the comment below claiming it's used by a CIP Clinical Checklists section.
+     Retained for reference/rollback per Retire > Archive > Verify > Delete
+     policy — excluded from new development. ══ --}}
 {{-- partials/_cip-checklist.blade.php --}}
 {{-- Used by the CIP Clinical Checklists section.                              --}}
 {{-- Props: $items (array of string checklist items)                           --}}

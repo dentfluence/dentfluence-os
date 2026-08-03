@@ -66,7 +66,7 @@ class PatientMergeCommand extends Command
             return self::SUCCESS;
         }
 
-        if (! $this->confirm("Merge #{$loser->id} into #{$master->id}? This archives the loser and is only reversible by an admin un-merge.")) {
+        if (! $this->confirm("Merge #{$loser->id} into #{$master->id}? This archives the loser. Merges are currently PERMANENT — un-merge is not implemented yet.")) {
             $this->comment('Aborted.');
             return self::SUCCESS;
         }

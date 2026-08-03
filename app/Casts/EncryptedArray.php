@@ -46,7 +46,16 @@ class EncryptedArray implements CastsAttributes
         }
 
         // Accept an already-encoded string or a real array.
-        $json = is_string($value) ? $value : json_encode(array_values((array) $value));
+        // Slice 1 fix (2026-08-01): this used to force array_values() on every
+        // array, which silently discards string keys — e.g. Consultation's
+        // specialty_findings is keyed by specialty tag
+        // (['orthodontics' => [...], 'periodontics' => [...]]); array_values()
+        // rewrote that to [0 => [...], 1 => [...]] on every save, so the tag was
+        // permanently lost and could never be read back on Edit. Harmless for
+        // genuinely sequential list data (array_values on a 0..n array is a
+        // no-op), but data-destroying for any associative array cast through
+        // this class. Preserve keys as given instead.
+        $json = is_string($value) ? $value : json_encode((array) $value);
 
         return [$key => Crypt::encryptString($json)];
     }

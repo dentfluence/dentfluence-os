@@ -375,7 +375,7 @@
                     @endforeach
                 </div>
                 <div>
-                    <label class="df-label">Oral Cancer Screening</label>
+                    <label class="df-label" style="color:#dc2626;">⚠ Oral Cancer Screening <span style="font-weight:400;color:#9ca3af;">(part of Soft Tissue exam — not a separate section yet, see LEGACY note in ConsultationController)</span></label>
                     <select name="soft_tissue[oral_cancer_screening]" class="df-select">
                         <option value="">— select —</option>
                         @foreach(['negative'=>'Negative — No suspicious findings','leukoplakia'=>'Leukoplakia (white patch)','erythroplakia'=>'Erythroplakia (red patch)','mixed'=>'Mixed lesion','suspicious'=>'Suspicious — Refer for biopsy'] as $v=>$l)
@@ -392,7 +392,7 @@
         <div class="coha-card">
             <div class="coha-card-head" @click="toggleSection('tooth_assessment')">
                 <span class="coha-num">3</span>
-                <span class="coha-head-label">Tooth Assessment</span>
+                <span class="coha-head-label">Hard Tissue / Tooth Assessment</span>
                 <svg class="coha-chevron" :style="sections.tooth_assessment ? 'transform:rotate(180deg)' : ''"
                      width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"/>
@@ -538,7 +538,7 @@
         <div class="coha-card">
             <div class="coha-card-head" @click="toggleSection('ortho')">
                 <span class="coha-num">4</span>
-                <span class="coha-head-label">Orthodontic Findings</span>
+                <span class="coha-head-label">Occlusion / Orthodontic Findings</span>
                 <svg class="coha-chevron" :style="sections.ortho ? 'transform:rotate(180deg)' : ''"
                      width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"/>
@@ -873,7 +873,7 @@
         <div class="coha-card">
             <div class="coha-card-head" @click="toggleSection('awareness')">
                 <span class="coha-num">9</span>
-                <span class="coha-head-label">Treatment Awareness (Patient Education)</span>
+                <span class="coha-head-label">Treatment Priorities (Patient Awareness)</span>
                 <svg class="coha-chevron" :style="sections.awareness ? 'transform:rotate(180deg)' : ''"
                      width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"/>

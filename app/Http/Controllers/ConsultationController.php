@@ -7,13 +7,23 @@ use App\Models\Consultation;
 use App\Models\ConsultationCohaReport;
 use App\Models\ConsultationSpecialtyModule;
 use App\Models\Patient;
+use App\Models\Prescription\Prescription;
 use App\Models\Presentation;
 use App\Models\User;
+use App\Services\Prescription\PrescriptionQuickSaveService;
 use App\Support\QrCodeGenerator;
 use Illuminate\Http\Request;
 
 class ConsultationController extends Controller
 {
+    /** Note field name used by the Prescription section embedded on this
+     *  screen — deliberately NOT "prescription_notes" (that's already a live
+     *  Consultation column used by the separate Brain quick-note UI on the
+     *  patient create page; reusing it here would silently overwrite it). */
+    private const RX_NOTE_FIELD = 'rx_general_instructions';
+
+    public function __construct(private PrescriptionQuickSaveService $quickSave) {}
+
     public function create(Request $request, Patient $patient)
     {
         $doctors = User::orderBy('name')->get();
@@ -34,6 +44,7 @@ class ConsultationController extends Controller
         $previousConsultation = $pastConsultations->first();
 
         $consultation = null; // Ensures all partials have $consultation defined (nullsafe ?-> requires the variable to exist)
+        $linkedPrescription = null; // No consultation saved yet — nothing to link/prefill from.
 
         // ── Backdated entry: load patient's past appointments (last 90 days) ──
         $pastAppointments = $patient->appointments()
@@ -43,7 +54,7 @@ class ConsultationController extends Controller
             ->take(20)
             ->get(['id', 'appointment_date', 'status', 'treatment_id']);
 
-        return view('consultations.create', compact('patient', 'doctors', 'pastConsultations', 'previousConsultation', 'consultation', 'pastAppointments'));
+        return view('consultations.create', compact('patient', 'doctors', 'pastConsultations', 'previousConsultation', 'consultation', 'pastAppointments', 'linkedPrescription'));
     }
 
     public function store(StoreConsultationRequest $request, Patient $patient)
@@ -82,28 +93,34 @@ class ConsultationController extends Controller
             $data['accepted_specialties'] = json_decode($data['accepted_specialties'], true);
         }
 
-        // ── Prescription panel: decode JSON from universal component ──────────
-        // Component posts prescriptions_data / instructions_data as JSON strings.
-        // Map them into the model columns (prescriptions / instructions).
-        if (!empty($data['prescriptions_data'])) {
-            $data['prescriptions'] = is_string($data['prescriptions_data'])
-                ? json_decode($data['prescriptions_data'], true)
-                : $data['prescriptions_data'];
-        }
-        unset($data['prescriptions_data']);
-
-        if (!empty($data['instructions_data'])) {
-            $data['instructions'] = is_string($data['instructions_data'])
-                ? json_decode($data['instructions_data'], true)
-                : $data['instructions_data'];
-        }
-        unset($data['instructions_data']);
+        // ── Embedded Prescription section (2026-07-31) ─────────────────────────
+        // The panel posts prescriptions_data / instructions_data as JSON strings.
+        // These used to be decoded straight into consultations.prescriptions /
+        // .instructions (dead JSON columns nothing ever read back) — that write
+        // path is retired. The real save now goes through PrescriptionQuickSaveService
+        // once the consultation exists, creating a real Prescription+PrescriptionItem
+        // row keyed by consultation_id (below), same tables the standalone
+        // Prescription module uses. Strip these keys before mass-assignment —
+        // they aren't fillable on Consultation anyway, but no reason to carry them.
+        unset($data['prescriptions_data'], $data['instructions_data'], $data['prescriptions'], $data['instructions']);
 
         // Pull out specialty_modules — handled separately after consultation create
         $specialtyModules = $data['specialty_modules'] ?? [];
         unset($data['specialty_modules']);
 
         $consultation = Consultation::create($data);
+
+        // ── Embedded Prescription section: create the linked Prescription ─────
+        // Only writes a Prescription row if the doctor actually entered a drug —
+        // an empty panel should be a no-op, not an empty prescription record.
+        if ($this->quickSave->panelHasDrugRows($request)) {
+            $this->quickSave->createFromPanel($request, $patient, [
+                'consultation_id' => $consultation->id,
+                'chief_complaint' => $consultation->chief_complaint,
+                'diagnosis'       => $consultation->primary_diagnosis,
+                'source'          => Prescription::SOURCE_CONSULTATION,
+            ], self::RX_NOTE_FIELD);
+        }
 
         // ── P2C: Save specialty module findings ───────────────────────────────
         // Each accepted specialty module is saved as a ConsultationSpecialtyModule row.
@@ -178,6 +195,16 @@ class ConsultationController extends Controller
             ->with('items')
             ->get();
 
+        // 2026-07-31 UX experiment: the Rx specifically tied to THIS consultation
+        // (same query pattern as edit()/print() below) — closes the gap where
+        // show.blade.php only surfaced "Previous Prescriptions" generically and
+        // never distinguished the one actually written during this visit.
+        $linkedPrescription = \App\Models\Prescription\Prescription::where('consultation_id', $consultation->id)
+            ->where('status', '!=', \App\Models\Prescription\Prescription::STATUS_CANCELLED)
+            ->with('items')
+            ->latest()
+            ->first();
+
         // Pending treatment plans
         $pendingTreatmentPlans = $patient->treatmentPlans()
             ->whereIn('status', ['pending', 'in_progress', 'approved'])
@@ -191,6 +218,7 @@ class ConsultationController extends Controller
             'prevConsultations',
             'lastConsultation',
             'prevPrescriptions',
+            'linkedPrescription',
             'pendingTreatmentPlans'
         ));
     }
@@ -256,7 +284,16 @@ class ConsultationController extends Controller
               ?? Consultation::with('doctor')->find($consultation->previous_consultation_id)
             : $pastConsultations->first();
 
-        return view('consultations.create', compact('consultation', 'patient', 'doctors', 'pastConsultations', 'previousConsultation'));
+        // Prefill the embedded Prescription section from whatever's already
+        // linked to this consultation (same source the standalone module and
+        // the Case Paper print view use — see ConsultationController::print()).
+        $linkedPrescription = Prescription::where('consultation_id', $consultation->id)
+            ->where('status', '!=', Prescription::STATUS_CANCELLED)
+            ->with('items')
+            ->latest()
+            ->first();
+
+        return view('consultations.create', compact('consultation', 'patient', 'doctors', 'pastConsultations', 'previousConsultation', 'linkedPrescription'));
     }
 
     public function update(StoreConsultationRequest $request, Patient $patient, Consultation $consultation)
@@ -277,26 +314,44 @@ class ConsultationController extends Controller
             $data['accepted_specialties'] = json_decode($data['accepted_specialties'], true);
         }
 
-        // ── Prescription panel: decode JSON from universal component ──────────
-        if (!empty($data['prescriptions_data'])) {
-            $data['prescriptions'] = is_string($data['prescriptions_data'])
-                ? json_decode($data['prescriptions_data'], true)
-                : $data['prescriptions_data'];
-        }
-        unset($data['prescriptions_data']);
-
-        if (!empty($data['instructions_data'])) {
-            $data['instructions'] = is_string($data['instructions_data'])
-                ? json_decode($data['instructions_data'], true)
-                : $data['instructions_data'];
-        }
-        unset($data['instructions_data']);
+        // ── Embedded Prescription section: retired dead JSON-column write ─────
+        // See store() for the full explanation — same retirement, same real
+        // Prescription+PrescriptionItem save below instead.
+        unset($data['prescriptions_data'], $data['instructions_data'], $data['prescriptions'], $data['instructions']);
 
         // Pull out specialty_modules
         $specialtyModules = $data['specialty_modules'] ?? [];
         unset($data['specialty_modules']);
 
         $consultation->update($data);
+
+        // ── Embedded Prescription section: update the linked Prescription ─────
+        // Edits the existing Rx tied to this consultation in place if one
+        // exists; otherwise creates one — same "one Rx per consultation"
+        // shape as create. An emptied-out panel is left untouched rather than
+        // deleting a real prescription record (cancel that from the
+        // standalone Prescriptions tab instead — matches its own no
+        // hard-delete policy).
+        if ($this->quickSave->panelHasDrugRows($request)) {
+            $context = [
+                'chief_complaint' => $consultation->chief_complaint,
+                'diagnosis'       => $consultation->primary_diagnosis,
+            ];
+
+            $existingRx = Prescription::where('consultation_id', $consultation->id)
+                ->where('status', '!=', Prescription::STATUS_CANCELLED)
+                ->latest()
+                ->first();
+
+            if ($existingRx) {
+                $this->quickSave->updateFromPanel($existingRx, $request, $context, self::RX_NOTE_FIELD);
+            } else {
+                $this->quickSave->createFromPanel($request, $patient, array_merge($context, [
+                    'consultation_id' => $consultation->id,
+                    'source'          => Prescription::SOURCE_CONSULTATION,
+                ]), self::RX_NOTE_FIELD);
+            }
+        }
 
         // ── P2C: Sync specialty modules ───────────────────────────────────────
         // Submitted modules = accepted. Any existing module NOT in the list
@@ -382,19 +437,30 @@ class ConsultationController extends Controller
             'primary_diagnosis'       => 'nullable|string',
             'diagnosis_notes'         => 'nullable|string',
             'finishing_notes'         => 'nullable|string',
-            'prescriptions_data'      => 'nullable|string',
-            'instructions_data'       => 'nullable|string',
+            // LEGACY (retired 2026-07-31, kept for rollback — see ConsultationController LEGACY block below)
+            // 'prescriptions_data'      => 'nullable|string',
+            // 'instructions_data'       => 'nullable|string',
         ]);
 
-        if (!empty($data['prescriptions_data'])) {
-            $data['prescriptions'] = json_decode($data['prescriptions_data'], true);
-        }
-        unset($data['prescriptions_data']);
-
-        if (!empty($data['instructions_data'])) {
-            $data['instructions'] = json_decode($data['instructions_data'], true);
-        }
-        unset($data['instructions_data']);
+        // ── LEGACY — retired 2026-07-31 ────────────────────────────────────────
+        // This form never actually posts prescriptions_data/instructions_data
+        // (resources/views/consultations/same-issue.blade.php has no prescription
+        // UI at all — confirmed via repo-wide grep), and consultations.prescriptions/
+        // .instructions were confirmed to have zero read paths anywhere in the app
+        // (web or API) — so this block was doubly dead. Commented out rather than
+        // deleted per "Retire > Archive > Verify > Delete" policy. Do NOT reactivate
+        // without also adding a <x-prescription-panel> to same-issue.blade.php AND
+        // re-adding the validation rules above — reactivating half of this (just the
+        // decode) would silently write to a column nothing reads, same problem as before.
+        // if (!empty($data['prescriptions_data'])) {
+        //     $data['prescriptions'] = json_decode($data['prescriptions_data'], true);
+        // }
+        // unset($data['prescriptions_data']);
+        // if (!empty($data['instructions_data'])) {
+        //     $data['instructions'] = json_decode($data['instructions_data'], true);
+        // }
+        // unset($data['instructions_data']);
+        // ─────────────────────────────────────────────────────────────────────
 
         $consultation = Consultation::create(array_merge($data, [
             'patient_id'        => $patient->id,
@@ -441,21 +507,52 @@ class ConsultationController extends Controller
             'hopi_final'                  => 'nullable|string',
             'primary_diagnosis'           => 'nullable|string',
             'clinical_data'               => 'nullable|array',
-            'advice'                      => 'nullable|string',
+            // Slice 1 fix (2026-08-01): the view used to post a single name="advice"
+            // textarea duplicated across both the clinic-related and external/walk-in
+            // branches (x-show only hides with CSS, both stayed in the DOM and both
+            // posted) — whichever was later in DOM order silently overwrote the other
+            // on submit. Now two distinct fields, merged into `advice` below based on
+            // which branch was actually active.
+            'advice_clinic_related'       => 'nullable|string',
+            'advice_external'             => 'nullable|string',
             'finishing_notes'             => 'nullable|string',
-            'prescriptions_data'          => 'nullable|string',
-            'instructions_data'           => 'nullable|string',
+            // Visit redesign (2026-07-31) — Charges, Follow-up added to match the
+            // target Minor Visit workflow (Reason/Procedure/Notes/Charges/Follow-up).
+            // 'charges' is NOT a Consultation column (no migration added, per
+            // "don't change database unnecessarily") — it only drives a BillingPrompt
+            // below, same mechanism TreatmentVisitService already uses.
+            'charges'                     => 'nullable|numeric|min:0',
+            'follow_up_date'              => 'nullable|date',
+            'follow_up_note'              => 'nullable|string',
+            // LEGACY (retired 2026-07-31, kept for rollback — see LEGACY block below)
+            // 'prescriptions_data'          => 'nullable|string',
+            // 'instructions_data'           => 'nullable|string',
         ]);
 
-        if (!empty($data['prescriptions_data'])) {
-            $data['prescriptions'] = json_decode($data['prescriptions_data'], true);
-        }
-        unset($data['prescriptions_data']);
+        $charges = $data['charges'] ?? null;
+        unset($data['charges']); // not a Consultation column — handled via BillingPrompt below
 
-        if (!empty($data['instructions_data'])) {
-            $data['instructions'] = json_decode($data['instructions_data'], true);
-        }
-        unset($data['instructions_data']);
+        // Slice 1 fix (2026-08-01): resolve the two branch-specific advice fields into
+        // the single `advice` column, keyed by which branch the user actually filled in.
+        $data['advice'] = $data['related_to_clinic_treatment']
+            ? ($data['advice_clinic_related'] ?? null)
+            : ($data['advice_external'] ?? null);
+        unset($data['advice_clinic_related'], $data['advice_external']);
+
+        // ── LEGACY — retired 2026-07-31 ────────────────────────────────────────
+        // Same retirement/reasoning as sameIssueStore() above: minor-visit.blade.php
+        // has no prescription UI, and the target columns have zero read paths
+        // anywhere in the app. Commented out, not deleted — do not reactivate
+        // without adding the panel to the view AND restoring the validation rules.
+        // if (!empty($data['prescriptions_data'])) {
+        //     $data['prescriptions'] = json_decode($data['prescriptions_data'], true);
+        // }
+        // unset($data['prescriptions_data']);
+        // if (!empty($data['instructions_data'])) {
+        //     $data['instructions'] = json_decode($data['instructions_data'], true);
+        // }
+        // unset($data['instructions_data']);
+        // ─────────────────────────────────────────────────────────────────────
 
         $consultation = Consultation::create(array_merge($data, [
             'patient_id'        => $patient->id,
@@ -466,9 +563,77 @@ class ConsultationController extends Controller
             'consultation_date' => $data['consultation_date'] ?? now(),
         ]));
 
+        // ── Visit redesign (2026-07-31): Minor Visit Charges ───────────────────
+        // Reuses the existing billing_prompts mechanism (same table/shape
+        // TreatmentVisitService already writes to for trigger_type='treatment_visit')
+        // instead of adding a new column — front desk turns this into an invoice
+        // manually from the Billing Prompts queue. No invoice is auto-created.
+        if ($charges !== null && $charges > 0) {
+            \App\Models\BillingPrompt::create([
+                'patient_id'   => $patient->id,
+                'trigger_type' => 'consultation',
+                'trigger_id'   => $consultation->id,
+                'description'  => 'Minor Visit charge: ' . ($consultation->chief_complaint ?: $consultation->procedure_performed ?: 'Rs. ' . $charges),
+                'status'       => 'pending',
+                'created_by'   => auth()->id(),
+            ]);
+        }
+
         return redirect()
             ->route('consultations.show', $consultation)
             ->with('success', 'Minor Visit saved.');
+    }
+
+    /**
+     * Slice 1 fix (2026-08-01): Minor Visit had no edit workflow of its own —
+     * the "Edit Consultation" link on show.blade.php sent every consultation,
+     * including Minor Visit, to the generic edit()/update() pair, which renders
+     * create.blade.php (the standard consultation form). That form has no
+     * inputs for related_to_clinic_treatment, procedure_performed, or the
+     * advice_clinic_related/advice_external pair, so saving from it risked
+     * silently corrupting a Minor Visit record's fields. This gives Minor
+     * Visit its own edit()/update(), mirroring minorVisitCreate()/Store().
+     */
+    public function minorVisitEdit(Patient $patient, Consultation $consultation)
+    {
+        $doctors = User::orderBy('name')->get();
+        $lastTreatmentPlan = $patient->treatmentPlans()->latest()->first();
+
+        return view('consultations.minor-visit', compact('patient', 'consultation', 'doctors', 'lastTreatmentPlan'));
+    }
+
+    public function minorVisitUpdate(Request $request, Patient $patient, Consultation $consultation)
+    {
+        $data = $request->validate([
+            'doctor_id'                   => 'required|exists:users,id',
+            'consultation_date'           => 'nullable|date',
+            'related_to_clinic_treatment' => 'required|boolean',
+            'procedure_performed'         => 'required|string',
+            'chief_complaint'             => 'nullable|string',
+            'hopi_final'                  => 'nullable|string',
+            'primary_diagnosis'           => 'nullable|string',
+            'clinical_data'               => 'nullable|array',
+            'advice_clinic_related'       => 'nullable|string',
+            'advice_external'             => 'nullable|string',
+            'finishing_notes'             => 'nullable|string',
+            'follow_up_date'              => 'nullable|date',
+            'follow_up_note'              => 'nullable|string',
+            // Charges is deliberately NOT accepted on update — it only ever
+            // drove a one-time BillingPrompt at creation (see minorVisitStore());
+            // re-processing it here on every edit would queue a duplicate
+            // billing prompt each time the record is saved.
+        ]);
+
+        $data['advice'] = $data['related_to_clinic_treatment']
+            ? ($data['advice_clinic_related'] ?? null)
+            : ($data['advice_external'] ?? null);
+        unset($data['advice_clinic_related'], $data['advice_external']);
+
+        $consultation->update($data);
+
+        return redirect()
+            ->route('consultations.show', $consultation)
+            ->with('success', 'Minor Visit updated.');
     }
 
     // ── Emergency Visit ───────────────────────────────────────────────────────
@@ -497,19 +662,25 @@ class ConsultationController extends Controller
             'emergency_treatment_rendered' => 'required|string',
             'advice'                       => 'nullable|string',
             'finishing_notes'              => 'nullable|string',
-            'prescriptions_data'           => 'nullable|string',
-            'instructions_data'            => 'nullable|string',
+            // LEGACY (retired 2026-07-31, kept for rollback — see LEGACY block below)
+            // 'prescriptions_data'           => 'nullable|string',
+            // 'instructions_data'            => 'nullable|string',
         ]);
 
-        if (!empty($data['prescriptions_data'])) {
-            $data['prescriptions'] = json_decode($data['prescriptions_data'], true);
-        }
-        unset($data['prescriptions_data']);
-
-        if (!empty($data['instructions_data'])) {
-            $data['instructions'] = json_decode($data['instructions_data'], true);
-        }
-        unset($data['instructions_data']);
+        // ── LEGACY — retired 2026-07-31 ────────────────────────────────────────
+        // Same retirement/reasoning as sameIssueStore() above: emergency.blade.php
+        // has no prescription UI, and the target columns have zero read paths
+        // anywhere in the app. Commented out, not deleted — do not reactivate
+        // without adding the panel to the view AND restoring the validation rules.
+        // if (!empty($data['prescriptions_data'])) {
+        //     $data['prescriptions'] = json_decode($data['prescriptions_data'], true);
+        // }
+        // unset($data['prescriptions_data']);
+        // if (!empty($data['instructions_data'])) {
+        //     $data['instructions'] = json_decode($data['instructions_data'], true);
+        // }
+        // unset($data['instructions_data']);
+        // ─────────────────────────────────────────────────────────────────────
 
         $consultation = Consultation::create(array_merge($data, [
             'patient_id'        => $patient->id,

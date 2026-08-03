@@ -1,3 +1,11 @@
+{{-- ══ LEGACY — CONFIRMED UNUSED (audit 2026-07-31) ══
+     Not @include'd by any view in the app (repo-wide grep, zero hits).
+     Its only consumer, _tp-table.blade.php, is itself legacy/unused — this
+     is a dead partial calling a dead sub-partial. Patient-specific Treatment
+     Plans are a separate, API-only system (TreatmentPlanController) with UI
+     embedded in the patient profile tabs — this file predates or diverged
+     from that. Retained for reference/rollback per Retire > Archive > Verify
+     > Delete policy — excluded from new development. ══ --}}
 {{--
     partials/treatment-plan.blade.php
     Section 11A + 11B — Treatment Plans (Best & Acceptable)

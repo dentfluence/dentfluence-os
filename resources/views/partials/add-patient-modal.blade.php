@@ -248,7 +248,9 @@ $alertPresets   = ['Blood Thinners / Anticoagulants','Diabetic on Insulin','Ster
                             <option value="male">Male</option>
                             <option value="female">Female</option>
                             <option value="other">Other</option>
-                            <option value="prefer_not_to_say">Prefer not to say</option>
+                            {{-- "Prefer not to say" removed 2026-08-03: the DB
+                                 enum only accepts male/female/other, so picking
+                                 it crashed the save. Leave blank instead. --}}
                         </select>
                     </div>
                 </div>
@@ -1370,6 +1372,10 @@ function addPatientModal() {
 
                 this.errors = data.errors ?? { _general: [data.message ?? 'Something went wrong. Please try again.'] };
                 if (this.errors.phone) this.errors.mobile = this.errors.phone;
+                // Stale-edit conflict (optimistic lock 422 on updated_at) has no
+                // field of its own — surface it in the general banner so the
+                // user's discarded edit is never silent (Variants hardening 2026-08-03).
+                if (this.errors.updated_at && !this.errors._general) this.errors._general = this.errors.updated_at;
                 if (this.errors.first_name || this.errors.last_name || this.errors.patient_id) this.currentTab = 0;
                 else if (this.errors.mobile) this.currentTab = 1;
             } catch (e) {
