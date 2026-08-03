@@ -12,37 +12,10 @@
                 </div>
                 {{-- ── Consultation type selector ── --}}
                 <div class="flex items-center gap-2 flex-wrap">
-                    {{-- New Visit (2026-07-31 Visit redesign) — Visit Type picker per directive:
-                         Consultation / Minor Visit / COHA. Purely additive: the existing
-                         New Consultation/Same Issue/Minor Visit/Emergency/COHA links below
-                         are untouched, still work exactly as before. This is a second,
-                         optional entry point that groups the 3 target visit types. --}}
-                    <div x-data="{ open: false }" class="relative" @click.outside="open = false">
-                        <button type="button" @click="open = !open"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-800 text-white hover:bg-gray-900 transition-colors font-semibold rounded">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                            + New Visit
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" :style="open ? 'transform:rotate(180deg)' : ''" style="transition:transform .15s;"><path d="m6 9 6 6 6-6"/></svg>
-                        </button>
-                        <div x-show="open" x-cloak x-transition
-                             class="absolute z-20 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-                            <a href="{{ route('patients.consultations.create', $patient) }}?type=new"
-                               class="block px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-purple-50 hover:text-[#6a0f70] border-b border-gray-100">
-                                Consultation
-                                <div class="text-[10px] text-gray-400 font-normal mt-0.5">Chief complaint → exam → diagnosis → prescription</div>
-                            </a>
-                            <a href="{{ route('patients.consultations.minor-visit.create', $patient) }}"
-                               class="block px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-cyan-50 hover:text-cyan-800 border-b border-gray-100">
-                                Minor Visit
-                                <div class="text-[10px] text-gray-400 font-normal mt-0.5">Dressing, suture removal, adjustment, review</div>
-                            </a>
-                            <a href="{{ route('coha.create', $patient) }}"
-                               class="block px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-cyan-50 hover:text-cyan-800">
-                                Complete Oral Health Assessment
-                                <div class="text-[10px] text-gray-400 font-normal mt-0.5">Full assessment across all systems</div>
-                            </a>
-                        </div>
-                    </div>
+                    {{-- "+ New Visit" grouped dropdown removed (CEO, 2026-08-03,
+                         post-freeze UI-only change): it was a redundant second
+                         entry point — every option it offered (Consultation /
+                         Minor Visit / COHA) already has its own button right here. --}}
                     {{-- New Consultation (existing, unchanged) --}}
                     <a href="{{ route('patients.consultations.create', $patient) }}?type=new"
                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[#6a0f70] text-white hover:bg-[#380740] transition-colors font-semibold rounded">
