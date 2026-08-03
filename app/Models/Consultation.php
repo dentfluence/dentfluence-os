@@ -196,10 +196,17 @@ class Consultation extends Model
         return $this->hasMany(ClinicalFinding::class);
     }
 
-    public function diagnoses(): HasMany
-    {
-        return $this->hasMany(Diagnosis::class);
-    }
+    // REMOVED (Consultations Slice 4, 2026-08-03): diagnoses() was
+    //     hasMany(Diagnosis::class)
+    // but the Diagnosis model maps the diagnosis_masters *catalog* table
+    // (no consultation_id column) — any call would throw an SQL error.
+    // It had zero callers (ABDM's ConditionBuilder deliberately avoids it and
+    // reads the diagnosis columns on this model instead; see its :51 comment).
+    // The per-consultation `diagnoses` table exists in the schema but has no
+    // model and no writer — diagnosis truth lives in the primary_diagnosis /
+    // secondary_diagnosis / provisional_diagnosis / differential_diagnosis
+    // columns here. If the child table is ever activated, create a dedicated
+    // ConsultationDiagnosis model for it rather than reusing Diagnosis.
 
     public function treatmentPlans(): HasMany
     {

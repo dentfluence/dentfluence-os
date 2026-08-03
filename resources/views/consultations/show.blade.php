@@ -70,14 +70,20 @@
                         View Report
                     </a>
                 @else
-                    {{-- Slice 1 fix (2026-08-01): Minor Visit has its own edit workflow now
-                         (see consultations.minor-visit.edit) — routing it through the generic
-                         consultation edit form was a production blocker (missing fields,
-                         corrupted saves). Other typed variants (Same Issue, Emergency) still
-                         fall through to the generic form — untouched, out of Slice 1 scope. --}}
-                    <a href="{{ $consultation->consultation_type === 'minor_visit'
-                                ? route('patients.consultations.minor-visit.edit', [$consultation->patient_id, $consultation])
-                                : route('consultations.edit', $consultation) }}"
+                    {{-- Slice 1 fix (2026-08-01) + Slice 6 (2026-08-03): typed workflows
+                         own their edits. Minor Visit and Same Issue route to their
+                         dedicated edit screens (the generic form lacks their fields);
+                         ConsultationController::edit() also redirects server-side, so
+                         these links are just the no-hop path. --}}
+                    @php
+                        $consultationEditUrl = match ($consultation->consultation_type) {
+                            'minor_visit' => route('patients.consultations.minor-visit.edit', [$consultation->patient_id, $consultation]),
+                            'same_issue'  => route('patients.consultations.same-issue.edit', [$consultation->patient_id, $consultation]),
+                            'emergency'   => route('patients.consultations.emergency.edit', [$consultation->patient_id, $consultation]),
+                            default       => route('consultations.edit', $consultation),
+                        };
+                    @endphp
+                    <a href="{{ $consultationEditUrl }}"
                        class="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition-colors">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
@@ -725,11 +731,13 @@
                     Back to Patient
                 </a>
                 @if($consultation->consultation_type !== 'coha')
-                {{-- Slice 1 fix (2026-08-01): see matching note above — Minor Visit routes
-                     to its own edit workflow, not the generic consultation form. --}}
-                <a href="{{ $consultation->consultation_type === 'minor_visit'
-                            ? route('patients.consultations.minor-visit.edit', [$consultation->patient_id, $consultation])
-                            : route('consultations.edit', $consultation) }}"
+                {{-- Slice 1 + Slice 6: typed workflows own their edits (see matching note above). --}}
+                <a href="{{ match ($consultation->consultation_type) {
+                                'minor_visit' => route('patients.consultations.minor-visit.edit', [$consultation->patient_id, $consultation]),
+                                'same_issue'  => route('patients.consultations.same-issue.edit', [$consultation->patient_id, $consultation]),
+                                'emergency'   => route('patients.consultations.emergency.edit', [$consultation->patient_id, $consultation]),
+                                default       => route('consultations.edit', $consultation),
+                            } }}"
                    class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
@@ -1121,7 +1129,7 @@
                             <a href="{{ route('patients.show', $consultation->patient_id) }}" class="flex items-center gap-2 text-sm text-gray-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg px-2 py-1.5 transition-colors"><svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>View Patient Profile</a>
                                            <a href="{{ route('consultations.print', $consultation) }}" target="_blank" class="flex items-center gap-2 text-sm text-gray-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg px-2 py-1.5 transition-colors"><svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print Consultation</a>
                             <a href="{{ route('patients.prescriptions.create', $consultation->patient_id) }}?consultation_id={{ $consultation->id }}" class="flex items-center gap-2 text-sm text-gray-700 hover:text-green-700 hover:bg-green-50 rounded-lg px-2 py-1.5 transition-colors"><svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"/></svg>New Prescription</a>
-                            <a href="{{ $consultation->consultation_type === 'minor_visit' ? route('patients.consultations.minor-visit.edit', [$consultation->patient_id, $consultation]) : route('consultations.edit', $consultation) }}" class="flex items-center gap-2 text-sm text-gray-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg px-2 py-1.5 transition-colors"><svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>Edit Consultation</a>
+                            <a href="{{ match ($consultation->consultation_type) { 'minor_visit' => route('patients.consultations.minor-visit.edit', [$consultation->patient_id, $consultation]), 'same_issue' => route('patients.consultations.same-issue.edit', [$consultation->patient_id, $consultation]), 'emergency' => route('patients.consultations.emergency.edit', [$consultation->patient_id, $consultation]), default => route('consultations.edit', $consultation) } }}" class="flex items-center gap-2 text-sm text-gray-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg px-2 py-1.5 transition-colors"><svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>Edit Consultation</a>
                         </div>
                     </div>
                 </div>
@@ -1135,301 +1143,13 @@
     </div>
     {{-- /3-column flex wrapper --}}
 
-    {{-- ══════════════════════════════════════════════════════════════════════ --}}
-    {{-- DYNAMIC CLINICAL SUMMARY                                               --}}
-    {{-- Full-width panel below the 3-col layout. Aggregates this consultation  --}}
-    {{-- into a scannable medico-legal snapshot for quick doctor review.        --}}
-    {{-- ══════════════════════════════════════════════════════════════════════ --}}
-    <div class="max-w-screen-2xl mx-auto px-4 pb-8">
-        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden" id="clinical-summary">
-
-            {{-- Header bar --}}
-            <div class="bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-4 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center shrink-0">
-                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <h2 class="text-white font-semibold text-sm tracking-wide">Dynamic Clinical Summary</h2>
-                        <p class="text-slate-300 text-xs mt-0.5">Auto-generated from this consultation record &middot; For medico-legal reference only</p>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-xs font-semibold px-2.5 py-1 rounded-full
-                        {{ $consultation->status === 'completed' ? 'bg-emerald-400/20 text-emerald-200 border border-emerald-400/30' : 'bg-amber-400/20 text-amber-200 border border-amber-400/30' }}">
-                        {{ ucfirst($consultation->status) }}
-                    </span>
-                    <a href="{{ route('consultations.print', $consultation) }}" target="_blank"
-                       class="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors border border-white/20">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <polyline points="6 9 6 2 18 2 18 9"/>
-                            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-                            <rect x="6" y="14" width="12" height="8"/>
-                        </svg>
-                        Print Record
-                    </a>
-                </div>
-            </div>
-
-            {{-- Body: 3 columns --}}
-            @php
-                $hasVitals = $consultation->bp || $consultation->pulse || $consultation->temp || $consultation->weight || $consultation->spo2;
-                $hasDiagnosis = $consultation->primary_diagnosis || $consultation->provisional_diagnosis || $consultation->diagnosis_notes;
-                $hasFindings  = $consultation->chief_complaint || $consultation->notes;
-                $hasTreatment = $consultation->treatmentPlans?->count() > 0;
-                $hasFollowup  = $consultation->followup_date;
-                $hasInvest    = $consultation->investigations_advised;
-                $hasRemarks   = $consultation->remarks;
-
-                $medConds  = $consultation->patient->medical_conditions ?? [];
-                $allergies = $consultation->patient->allergies ?? [];
-                $medAlert  = $consultation->patient->medical_alert ?? null;
-
-                $riskFlags = [];
-                if ($medAlert)           $riskFlags[] = ['type' => 'critical', 'label' => 'Medical Alert', 'value' => $medAlert];
-                if (count($allergies))   $riskFlags[] = ['type' => 'warning',  'label' => 'Allergies',     'value' => implode(', ', $allergies)];
-                if (count($medConds))    $riskFlags[] = ['type' => 'info',     'label' => 'Conditions',    'value' => implode(', ', $medConds)];
-
-                $daysSinceVisit = \Carbon\Carbon::parse($consultation->consultation_date)->diffInDays(now());
-            @endphp
-
-            <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100">
-
-                {{-- COL 1: Clinical Picture --}}
-                <div class="p-5 space-y-4">
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Clinical Picture</p>
-
-                    {{-- Visit meta --}}
-                    <div class="space-y-1.5">
-                        <div class="flex items-center justify-between text-xs">
-                            <span class="text-gray-400">Date</span>
-                            <span class="font-medium text-gray-800">{{ \Carbon\Carbon::parse($consultation->consultation_date)->format('d M Y') }}</span>
-                        </div>
-                        <div class="flex items-center justify-between text-xs">
-                            <span class="text-gray-400">Visit Type</span>
-                            <span class="font-medium text-gray-800 capitalize">{{ $consultation->visit_type ?? '—' }}</span>
-                        </div>
-                        <div class="flex items-center justify-between text-xs">
-                            <span class="text-gray-400">Attending</span>
-                            <span class="font-medium text-gray-800">{{ $consultation->doctor->doctor_name ?? '—' }}</span>
-                        </div>
-                    </div>
-
-                    {{-- Chief complaint --}}
-                    @if($consultation->chief_complaint)
-                    <div>
-                        <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Chief Complaint</p>
-                        <p class="text-xs text-gray-700 leading-relaxed">{{ $consultation->chief_complaint }}</p>
-                    </div>
-                    @endif
-
-                    {{-- Diagnosis --}}
-                    @if($hasDiagnosis)
-                    <div>
-                        <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Diagnosis</p>
-                        @if($consultation->primary_diagnosis)
-                            <p class="text-xs font-semibold text-gray-800">{{ $consultation->primary_diagnosis }}</p>
-                        @endif
-                        @if($consultation->secondary_diagnosis)
-                            <p class="text-xs text-gray-600 mt-0.5">{{ $consultation->secondary_diagnosis }}</p>
-                        @endif
-                        @if($consultation->diagnosis_notes)
-                            <p class="text-xs text-gray-500 mt-1 italic">{{ Str::limit($consultation->diagnosis_notes, 120) }}</p>
-                        @endif
-                    </div>
-                    @endif
-
-                    {{-- Vitals strip --}}
-                    @if($hasVitals)
-                    <div>
-                        <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Vitals</p>
-                        <div class="flex flex-wrap gap-2">
-                            @if($consultation->bp)
-                            <div class="bg-blue-50 border border-blue-100 rounded-lg px-2 py-1 text-center">
-                                <p class="text-[9px] text-blue-500 font-semibold uppercase">BP</p>
-                                <p class="text-xs font-bold text-blue-800">{{ $consultation->bp }}</p>
-                            </div>
-                            @endif
-                            @if($consultation->pulse)
-                            <div class="bg-rose-50 border border-rose-100 rounded-lg px-2 py-1 text-center">
-                                <p class="text-[9px] text-rose-500 font-semibold uppercase">Pulse</p>
-                                <p class="text-xs font-bold text-rose-800">{{ $consultation->pulse }}</p>
-                            </div>
-                            @endif
-                            @if($consultation->temp)
-                            <div class="bg-amber-50 border border-amber-100 rounded-lg px-2 py-1 text-center">
-                                <p class="text-[9px] text-amber-600 font-semibold uppercase">Temp</p>
-                                <p class="text-xs font-bold text-amber-800">{{ $consultation->temp }}°</p>
-                            </div>
-                            @endif
-                            @if($consultation->weight)
-                            <div class="bg-green-50 border border-green-100 rounded-lg px-2 py-1 text-center">
-                                <p class="text-[9px] text-green-600 font-semibold uppercase">Wt</p>
-                                <p class="text-xs font-bold text-green-800">{{ $consultation->weight }}kg</p>
-                            </div>
-                            @endif
-                            @if($consultation->spo2)
-                            <div class="bg-purple-50 border border-purple-100 rounded-lg px-2 py-1 text-center">
-                                <p class="text-[9px] text-purple-600 font-semibold uppercase">SpO₂</p>
-                                <p class="text-xs font-bold text-purple-800">{{ $consultation->spo2 }}%</p>
-                            </div>
-                            @endif
-                        </div>
-                    </div>
-                    @endif
-                </div>
-
-                {{-- COL 2: Risk + Actions --}}
-                <div class="p-5 space-y-4">
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Risk Profile &amp; Actions</p>
-
-                    {{-- Risk flags --}}
-                    @if(count($riskFlags))
-                    <div class="space-y-2">
-                        @foreach($riskFlags as $flag)
-                        @php
-                            $colorClass = match($flag['type']) {
-                                'critical' => 'bg-red-50 border-red-200 text-red-800',
-                                'warning'  => 'bg-orange-50 border-orange-200 text-orange-800',
-                                default    => 'bg-blue-50 border-blue-200 text-blue-800',
-                            };
-                            $dotClass = match($flag['type']) {
-                                'critical' => 'bg-red-500',
-                                'warning'  => 'bg-orange-500',
-                                default    => 'bg-blue-400',
-                            };
-                        @endphp
-                        <div class="rounded-lg border px-3 py-2 {{ $colorClass }}">
-                            <div class="flex items-center gap-1.5 mb-0.5">
-                                <span class="w-1.5 h-1.5 rounded-full shrink-0 {{ $dotClass }}"></span>
-                                <span class="text-[10px] font-bold uppercase tracking-wide opacity-70">{{ $flag['label'] }}</span>
-                            </div>
-                            <p class="text-xs leading-snug">{{ $flag['value'] }}</p>
-                        </div>
-                        @endforeach
-                    </div>
-                    @else
-                    <div class="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                        <div class="flex items-center gap-1.5">
-                            <svg class="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-                            <span class="text-xs text-emerald-700 font-medium">No medical risk flags on record</span>
-                        </div>
-                    </div>
-                    @endif
-
-                    {{-- Treatment plan summary --}}
-                    @if($hasTreatment)
-                    <div>
-                        <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Treatment Planned</p>
-                        <div class="space-y-1.5">
-                            @foreach($consultation->treatmentPlans->take(3) as $plan)
-                            @if($plan->items?->count())
-                                @foreach($plan->items->take(4) as $item)
-                                <div class="flex items-start gap-1.5 text-xs text-gray-700">
-                                    <span class="text-indigo-400 shrink-0 mt-0.5">▸</span>
-                                    <span>{{ $item->treatment_name ?? $item->name ?? '—' }}
-                                        @if($item->tooth_number ?? null)
-                                            <span class="text-gray-400">· Tooth {{ $item->tooth_number }}</span>
-                                        @endif
-                                    </span>
-                                </div>
-                                @endforeach
-                            @endif
-                            @endforeach
-                        </div>
-                    </div>
-                    @endif
-
-                    {{-- Investigations --}}
-                    @if($hasInvest)
-                    <div>
-                        <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Investigations Advised</p>
-                        <p class="text-xs text-gray-700 leading-relaxed">{{ $consultation->investigations_advised }}</p>
-                    </div>
-                    @endif
-
-                    {{-- Remarks --}}
-                    @if($hasRemarks)
-                    <div>
-                        <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Remarks / Advice</p>
-                        <p class="text-xs text-gray-700 leading-relaxed">{{ Str::limit($consultation->remarks, 160) }}</p>
-                    </div>
-                    @endif
-                </div>
-
-                {{-- COL 3: Status + Medico-Legal Footer --}}
-                <div class="p-5 space-y-4">
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Record Status</p>
-
-                    {{-- Follow-up --}}
-                    <div class="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
-                        <p class="text-[10px] font-semibold text-indigo-500 uppercase tracking-wide mb-1">Follow-up</p>
-                        @if($hasFollowup)
-                            @php $followupDate = \Carbon\Carbon::parse($consultation->followup_date); $isPast = $followupDate->isPast(); @endphp
-                            <p class="text-sm font-bold {{ $isPast ? 'text-red-700' : 'text-indigo-800' }}">
-                                {{ $followupDate->format('d M Y') }}
-                            </p>
-                            <p class="text-[10px] text-indigo-400 mt-0.5">
-                                {{ $isPast ? 'Overdue by '.$followupDate->diffForHumans() : 'In '.$followupDate->diffForHumans() }}
-                            </p>
-                        @else
-                            <p class="text-xs text-indigo-400 italic">Not scheduled</p>
-                        @endif
-                    </div>
-
-                    {{-- Clinical notes excerpt --}}
-                    @if($consultation->notes)
-                    <div>
-                        <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Clinical Notes</p>
-                        <p class="text-xs text-gray-600 leading-relaxed italic">{{ Str::limit($consultation->notes, 200) }}</p>
-                    </div>
-                    @endif
-
-                    {{-- Record age --}}
-                    <div class="flex items-center justify-between text-xs border-t border-gray-100 pt-3">
-                        <span class="text-gray-400">Record age</span>
-                        <span class="font-medium text-gray-600">
-                            {{ $daysSinceVisit === 0 ? 'Today' : $daysSinceVisit . ' day' . ($daysSinceVisit > 1 ? 's' : '') . ' ago' }}
-                        </span>
-                    </div>
-
-                    {{-- Medico-legal signature block --}}
-                    <div class="border border-dashed border-gray-300 rounded-xl px-4 py-3 bg-gray-50/50 space-y-2">
-                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Verified Record</p>
-                        <div class="space-y-1.5 text-xs">
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-400">Doctor</span>
-                                <span class="font-semibold text-gray-800">{{ $consultation->doctor->doctor_name ?? '—' }}</span>
-                            </div>
-                            @if($consultation->doctor?->designation ?? null)
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-400">Qualification</span>
-                                <span class="font-medium text-gray-700">{{ $consultation->doctor->designation }}</span>
-                            </div>
-                            @endif
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-400">Entry</span>
-                                <span class="font-medium text-gray-700">{{ $consultation->created_at->format('d M Y, h:i A') }}</span>
-                            </div>
-                            @if($consultation->updated_at != $consultation->created_at)
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-400">Last edited</span>
-                                <span class="font-medium text-gray-700">{{ $consultation->updated_at->format('d M Y') }}</span>
-                            </div>
-                            @endif
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-            {{-- /grid --}}
-
-        </div>
-        {{-- /clinical-summary card --}}
-    </div>
-    {{-- /summary wrapper --}}
+    {{-- Slice 7 (2026-08-03): "Dynamic Clinical Summary" panel removed. It read
+         nine columns that do not exist on consultations (bp / pulse / temp /
+         weight / spo2 / notes / followup_date / investigations_advised /
+         remarks -- vitals live on treatment_visits), so most of the panel
+         rendered permanently empty while duplicating the real sections above.
+         The Case Paper print (consultations.print) is the medico-legal
+         snapshot. --}}
 
 </div>
 {{-- /min-h-screen --}}
@@ -1442,7 +1162,7 @@
     html { scroll-behavior: smooth; }
 
     /* ── Section anchor offset (sticky header = ~60px) ──────────────── */
-    [id^="sec-"], #clinical-summary {
+    [id^="sec-"] {
         scroll-margin-top: 72px;
     }
 
@@ -1451,15 +1171,6 @@
         color: #4f46e5;
         background-color: #eef2ff;
         font-weight: 600;
-    }
-
-    /* ── Clinical Summary section fade-in ────────────────────────────── */
-    #clinical-summary {
-        animation: summaryFadeIn .35s ease both;
-    }
-    @keyframes summaryFadeIn {
-        from { opacity: 0; transform: translateY(12px); }
-        to   { opacity: 1; transform: translateY(0); }
     }
 
     /* ── Print: hide everything except clinical content ─────────────── */

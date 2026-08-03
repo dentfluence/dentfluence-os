@@ -181,12 +181,20 @@ Route::middleware('auth')->group(function () {
 
         // Consultations nested under patient
         Route::get('/{patient}/consultations/create', [ConsultationController::class, 'create'])->name('consultations.create');
-        Route::get('/{patient}/consultations',        [ConsultationController::class, 'forPatient'])->name('consultations.index');
+        // Slice 8 (2026-08-03): the consultations.index listing route was dead
+        // (zero inbound links; the patient profile tab is the real listing) —
+        // removed together with forPatient() and consultations/index.blade.php.
 
         // ── Typed consultation routes (must come before resource wildcard) ────
         // Slice 1.2: clinical creates require edit (were view-gated).
         Route::get ('/{patient}/consultations/same-issue',  [ConsultationController::class, 'sameIssueCreate'])->name('consultations.same-issue.create');
         Route::post('/{patient}/consultations/same-issue',  [ConsultationController::class, 'sameIssueStore'])->name('consultations.same-issue.store')->middleware('module:patients,edit');
+        // Slice 6 (2026-08-03): Same Issue is now a single canonical workflow —
+        // the standard form's same_issue chip is retired and, like Minor Visit,
+        // Same Issue gets its own edit pair so records are never edited through
+        // the generic form (which has no update_notes/additional_findings inputs).
+        Route::get ('/{patient}/consultations/same-issue/{consultation}/edit', [ConsultationController::class, 'sameIssueEdit'])->name('consultations.same-issue.edit');
+        Route::put ('/{patient}/consultations/same-issue/{consultation}',      [ConsultationController::class, 'sameIssueUpdate'])->name('consultations.same-issue.update')->middleware('module:patients,edit');
         Route::get ('/{patient}/consultations/minor-visit', [ConsultationController::class, 'minorVisitCreate'])->name('consultations.minor-visit.create');
         Route::post('/{patient}/consultations/minor-visit', [ConsultationController::class, 'minorVisitStore'])->name('consultations.minor-visit.store')->middleware('module:patients,edit');
         // Slice 1 fix (2026-08-01): Minor Visit had no edit workflow — editing one
@@ -196,6 +204,10 @@ Route::middleware('auth')->group(function () {
         Route::put ('/{patient}/consultations/minor-visit/{consultation}',      [ConsultationController::class, 'minorVisitUpdate'])->name('consultations.minor-visit.update')->middleware('module:patients,edit');
         Route::get ('/{patient}/consultations/emergency',   [ConsultationController::class, 'emergencyCreate'])->name('consultations.emergency.create');
         Route::post('/{patient}/consultations/emergency',   [ConsultationController::class, 'emergencyStore'])->name('consultations.emergency.store')->middleware('module:patients,edit');
+        // Slice 9 (2026-08-03): Emergency edit pair — completes typed-workflow
+        // parity (Minor Visit got its edit in Slice 1, Same Issue in Slice 6).
+        Route::get ('/{patient}/consultations/emergency/{consultation}/edit', [ConsultationController::class, 'emergencyEdit'])->name('consultations.emergency.edit');
+        Route::put ('/{patient}/consultations/emergency/{consultation}',      [ConsultationController::class, 'emergencyUpdate'])->name('consultations.emergency.update')->middleware('module:patients,edit');
     });
 
     // ── Patient-context clinical routes (all gated under patients module) ──────

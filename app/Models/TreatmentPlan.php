@@ -136,11 +136,16 @@ class TreatmentPlan extends Model
         return $this->hasOne(TreatmentOpportunity::class);
     }
 
-    public function billingPrompts(): HasMany
-    {
-        return $this->hasMany(BillingPrompt::class, 'trigger_id')
-                    ->where('trigger_type', 'consultation');
-    }
+    // REMOVED (Consultations Slice 4, 2026-08-03): billingPrompts() was
+    //     hasMany(BillingPrompt::class, 'trigger_id')->where('trigger_type', 'consultation')
+    // i.e. it matched billing_prompts rows written by Minor Visit (trigger_id =
+    // consultation id) against a *treatment plan* id — a cross-entity ID collision
+    // that could surface other patients' prompts. It had zero callers (verified by
+    // repo-wide grep; the Billing tab reads prompts via PatientProfileService's
+    // direct BillingPrompt query). There is currently no valid way to scope prompts
+    // to a plan: prompts are keyed to consultations or treatment visits, and
+    // treatment_visits has no treatment_plan_id. If plan-level prompts are ever
+    // needed, introduce trigger_type='treatment_plan' and a matching writer first.
 
     public function invoices(): HasMany
     {

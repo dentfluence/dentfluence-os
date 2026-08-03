@@ -61,8 +61,25 @@ class ConsultationController extends Controller
     {
         $data = $request->validated();
 
+        // Slice 6 (2026-08-03): ONE writer per business process. The standard
+        // form's same_issue chip is retired — Same Issue records are created
+        // only by sameIssueStore(). This guard catches stale tabs / direct
+        // posts so the schema-incompatible chip shape can never come back.
+        // ('same_issue' stays in the validator's in: list only so LEGACY
+        // records can still round-trip through update().)
+        if (($data['consultation_type'] ?? null) === 'same_issue') {
+            return redirect()
+                ->route('patients.consultations.same-issue.create', $patient)
+                ->with('info', 'Same Issue visits are recorded on their own screen now — please use this form.');
+        }
+
         // Always inject patient/branch from route — brain form doesn't send these
         $data['patient_id']        = $patient->id;
+        // Doctor attribution (Slice 2, 2026-08-03): the form sends a visible doctor
+        // select; fall back to the logged-in user only if it's somehow absent.
+        // update() intentionally has no fallback — an absent key must never
+        // reattribute an existing record.
+        $data['doctor_id']         = $data['doctor_id'] ?? auth()->id();
         $data['branch_id']         = $data['branch_id'] ?? auth()->user()->branch_id ?? 1;
         $data['status']            = $data['status'] ?? 'completed';
         // ── Consultation (clinical) date ──────────────────────────────────────
@@ -268,6 +285,24 @@ class ConsultationController extends Controller
 
     public function edit(Patient $patient, Consultation $consultation)
     {
+        // Slice 6 (2026-08-03): typed workflows own their records' edits. The
+        // generic form has no inputs for the typed columns (update_notes,
+        // procedure_performed, …), so editing a typed record here would
+        // silently corrupt it. Redirect to the canonical typed edit screen —
+        // covers direct URL entry, not just the show-page links.
+        if ($consultation->consultation_type === 'minor_visit') {
+            return redirect()->route('patients.consultations.minor-visit.edit', [$patient, $consultation]);
+        }
+        if ($consultation->consultation_type === 'same_issue') {
+            return redirect()->route('patients.consultations.same-issue.edit', [$patient, $consultation]);
+        }
+        if ($consultation->consultation_type === 'emergency') {
+            return redirect()->route('patients.consultations.emergency.edit', [$patient, $consultation]);
+        }
+        if ($consultation->consultation_type === 'coha') {
+            return redirect()->route('coha.edit', [$patient, $consultation]);
+        }
+
         $doctors = User::orderBy('name')->get();
         $pastConsultations = $patient->consultations()
             ->where('id', '!=', $consultation->id)
@@ -397,11 +432,11 @@ class ConsultationController extends Controller
             ->with('success', 'Consultation deleted.');
     }
 
-    public function forPatient(\App\Models\Patient $patient)
-    {
-        $consultations = $patient->consultations()->latest()->get();
-        return view('consultations.index', compact('patient', 'consultations'));
-    }
+    // REMOVED (Slice 8, 2026-08-03): forPatient() + its route
+    // (patients.consultations.index) + consultations/index.blade.php were a
+    // dead standalone listing — zero inbound links anywhere (verified by
+    // repo-wide grep); the patient profile's Consultation tab is the real
+    // listing. The orphaned blade file is deleted in the same slice.
 
     // ── Same Issue ────────────────────────────────────────────────────────────
 
@@ -430,7 +465,8 @@ class ConsultationController extends Controller
     {
         $data = $request->validate([
             'doctor_id'               => 'required|exists:users,id',
-            'consultation_date'       => 'nullable|date',
+            // Slice 3 (2026-08-03): backdating allowed, future dates never.
+            'consultation_date'       => 'nullable|date|before_or_equal:today',
             'previous_consultation_id'=> 'nullable|exists:consultations,id',
             'update_notes'            => 'required|string',
             'additional_findings'     => 'nullable|string',
@@ -476,6 +512,56 @@ class ConsultationController extends Controller
             ->with('success', 'Same Issue consultation saved.');
     }
 
+    /**
+     * Slice 6 (2026-08-03): Same Issue edit workflow — mirrors the Minor Visit
+     * pattern (see minorVisitEdit above). Same Issue records previously fell
+     * through to the generic edit form, which has no update_notes /
+     * additional_findings inputs, so saving from it silently corrupted them.
+     */
+    public function sameIssueEdit(Patient $patient, Consultation $consultation)
+    {
+        abort_if($consultation->consultation_type !== 'same_issue', 404);
+
+        $doctors = User::orderBy('name')->get();
+        $previousConsultation = $consultation->previous_consultation_id
+            ? Consultation::with(['doctor', 'treatmentPlans'])->find($consultation->previous_consultation_id)
+            : null;
+
+        return view('consultations.same-issue', compact('patient', 'consultation', 'doctors', 'previousConsultation'));
+    }
+
+    public function sameIssueUpdate(Request $request, Patient $patient, Consultation $consultation)
+    {
+        abort_if($consultation->consultation_type !== 'same_issue', 404);
+
+        $data = $request->validate([
+            'doctor_id'               => 'required|exists:users,id',
+            'consultation_date'       => 'nullable|date|before_or_equal:today',
+            // LEGACY SHAPE: records created by the retired create.blade.php
+            // same_issue chip stored their content in chief_complaint /
+            // hopi_final instead of update_notes. The edit screen surfaces
+            // those fields only when populated, so both shapes stay editable
+            // in the ONE canonical workflow. update_notes stays required for
+            // typed-shape records (i.e. whenever no legacy chief_complaint
+            // is being posted).
+            'update_notes'            => 'required_without:chief_complaint|nullable|string',
+            'chief_complaint'         => 'nullable|string',
+            'hopi_final'              => 'nullable|string',
+            'additional_findings'     => 'nullable|string',
+            'primary_diagnosis'       => 'nullable|string',
+            'diagnosis_notes'         => 'nullable|string',
+            'finishing_notes'         => 'nullable|string',
+            // previous_consultation_id is deliberately NOT accepted on update —
+            // which visit this one continues is a fact set at creation.
+        ]);
+
+        $consultation->update($data);
+
+        return redirect()
+            ->route('consultations.show', $consultation)
+            ->with('success', 'Same Issue consultation updated.');
+    }
+
     // ── Minor Visit ───────────────────────────────────────────────────────────
 
     /**
@@ -500,7 +586,8 @@ class ConsultationController extends Controller
     {
         $data = $request->validate([
             'doctor_id'                   => 'required|exists:users,id',
-            'consultation_date'           => 'nullable|date',
+            // Slice 3 (2026-08-03): backdating allowed, future dates never.
+            'consultation_date'           => 'nullable|date|before_or_equal:today',
             'related_to_clinic_treatment' => 'required|boolean',
             'procedure_performed'         => 'required|string',
             'chief_complaint'             => 'nullable|string',
@@ -606,7 +693,8 @@ class ConsultationController extends Controller
     {
         $data = $request->validate([
             'doctor_id'                   => 'required|exists:users,id',
-            'consultation_date'           => 'nullable|date',
+            // Slice 3 (2026-08-03): backdating allowed, future dates never.
+            'consultation_date'           => 'nullable|date|before_or_equal:today',
             'related_to_clinic_treatment' => 'required|boolean',
             'procedure_performed'         => 'required|string',
             'chief_complaint'             => 'nullable|string',
@@ -654,7 +742,11 @@ class ConsultationController extends Controller
     {
         $data = $request->validate([
             'doctor_id'                    => 'required|exists:users,id',
-            'consultation_date'            => 'nullable|date',
+            // Slice 3 (2026-08-03): backdating allowed, future dates never.
+            // NOTE: emergency posts datetime-local (has a time component), so the
+            // ceiling is now, not today — before_or_equal:today would reject a
+            // legitimate entry made this afternoon (today 14:30 > midnight).
+            'consultation_date'            => 'nullable|date|before_or_equal:now',
             'chief_complaint'              => 'required|string',
             'hopi_final'                   => 'nullable|string',
             'clinical_data'                => 'nullable|array',
@@ -691,6 +783,20 @@ class ConsultationController extends Controller
             'consultation_date' => $data['consultation_date'] ?? now(),
         ]));
 
+        // ── Slice 9 (2026-08-03): embedded Prescription for Emergency ─────────
+        // Emergency visits are where an immediate Rx (antibiotics, analgesics)
+        // is MOST common, yet Rx lived only on the standard form. Same engine,
+        // same rules as store(): a real Prescription row via
+        // PrescriptionQuickSaveService, only if a drug was actually entered.
+        if ($this->quickSave->panelHasDrugRows($request)) {
+            $this->quickSave->createFromPanel($request, $patient, [
+                'consultation_id' => $consultation->id,
+                'chief_complaint' => $consultation->chief_complaint,
+                'diagnosis'       => $consultation->primary_diagnosis,
+                'source'          => Prescription::SOURCE_CONSULTATION,
+            ], self::RX_NOTE_FIELD);
+        }
+
         // If "Convert to New Consultation" was clicked, redirect to new consultation pre-filled
         if ($request->filled('_convert_to_new')) {
             return redirect()
@@ -702,6 +808,73 @@ class ConsultationController extends Controller
         return redirect()
             ->route('consultations.show', $consultation)
             ->with('success', 'Emergency Visit saved.');
+    }
+
+    /**
+     * Slice 9 (2026-08-03): Emergency edit workflow — completes typed-workflow
+     * parity. Emergency records previously fell through to the generic edit
+     * form, which has no emergency_treatment_rendered input.
+     */
+    public function emergencyEdit(Patient $patient, Consultation $consultation)
+    {
+        abort_if($consultation->consultation_type !== 'emergency', 404);
+
+        $doctors = User::orderBy('name')->get();
+        $linkedPrescription = Prescription::where('consultation_id', $consultation->id)
+            ->where('status', '!=', Prescription::STATUS_CANCELLED)
+            ->with('items')
+            ->latest()
+            ->first();
+
+        return view('consultations.emergency', compact('patient', 'consultation', 'doctors', 'linkedPrescription'));
+    }
+
+    public function emergencyUpdate(Request $request, Patient $patient, Consultation $consultation)
+    {
+        abort_if($consultation->consultation_type !== 'emergency', 404);
+
+        $data = $request->validate([
+            'doctor_id'                    => 'required|exists:users,id',
+            // Emergency posts datetime-local — ceiling is now, not midnight.
+            'consultation_date'            => 'nullable|date|before_or_equal:now',
+            'chief_complaint'              => 'required|string',
+            'hopi_final'                   => 'nullable|string',
+            'clinical_data'                => 'nullable|array',
+            'primary_diagnosis'            => 'nullable|string',
+            'emergency_treatment_rendered' => 'required|string',
+            'advice'                       => 'nullable|string',
+            'finishing_notes'              => 'nullable|string',
+        ]);
+
+        $consultation->update($data);
+
+        // ── Embedded Prescription: same update-in-place rules as update() ─────
+        // Edits the existing Rx tied to this visit if one exists; an emptied
+        // panel never deletes a real prescription record.
+        if ($this->quickSave->panelHasDrugRows($request)) {
+            $context = [
+                'chief_complaint' => $consultation->chief_complaint,
+                'diagnosis'       => $consultation->primary_diagnosis,
+            ];
+
+            $existingRx = Prescription::where('consultation_id', $consultation->id)
+                ->where('status', '!=', Prescription::STATUS_CANCELLED)
+                ->latest()
+                ->first();
+
+            if ($existingRx) {
+                $this->quickSave->updateFromPanel($existingRx, $request, $context, self::RX_NOTE_FIELD);
+            } else {
+                $this->quickSave->createFromPanel($request, $patient, array_merge($context, [
+                    'consultation_id' => $consultation->id,
+                    'source'          => Prescription::SOURCE_CONSULTATION,
+                ]), self::RX_NOTE_FIELD);
+            }
+        }
+
+        return redirect()
+            ->route('consultations.show', $consultation)
+            ->with('success', 'Emergency Visit updated.');
     }
 
     // ── COHA (Comprehensive Oral Health Assessment) ───────────────────────────
@@ -723,6 +896,12 @@ class ConsultationController extends Controller
      */
     public function cohaStore(Request $request, Patient $patient)
     {
+        // Slice 3 (2026-08-03): COHA previously had ZERO validation — raw
+        // $request->input() straight into Consultation::create. Now validated
+        // to the same standard as the other typed workflows. Section payloads
+        // may arrive as arrays or JSON strings (parseSection handles both).
+        $request->validate(self::cohaRules());
+
         // 1 — Create the Consultation record (type = coha)
         $consultation = Consultation::create([
             'patient_id'        => $patient->id,
@@ -781,6 +960,9 @@ class ConsultationController extends Controller
     {
         abort_if($consultation->consultation_type !== 'coha', 404);
 
+        // Slice 3 (2026-08-03): same validation as cohaStore() — was previously absent.
+        $request->validate(self::cohaRules());
+
         $consultation->update([
             'doctor_id'         => $request->input('doctor_id', $consultation->doctor_id),
             'consultation_date' => $request->input('consultation_date', $consultation->consultation_date),
@@ -831,6 +1013,40 @@ class ConsultationController extends Controller
      * Helper: extract a named section from the request.
      * Handles both array inputs (from Blade form) and JSON strings.
      */
+    /**
+     * Shared validation rules for the COHA store/update pair (Slice 3, 2026-08-03).
+     * The nine section payloads are posted either as arrays (normal form submit)
+     * or JSON strings (Alpine hidden inputs) — parseSection() normalises both,
+     * so validation accepts either shape but nothing else.
+     */
+    private static function cohaRules(): array
+    {
+        $section = ['nullable', function ($attribute, $value, $fail) {
+            if (!is_array($value) && !is_string($value)) {
+                $fail("The {$attribute} section must be an array or JSON string.");
+            }
+            if (is_string($value) && $value !== '' && json_decode($value, true) === null) {
+                $fail("The {$attribute} section is not valid JSON.");
+            }
+        }];
+
+        return [
+            'doctor_id'           => ['required', 'exists:users,id'],
+            // Backdating allowed (missed entries), future dates never.
+            'consultation_date'   => ['nullable', 'date', 'before_or_equal:today'],
+            'doctor_notes'        => ['nullable', 'string'],
+            'monitoring_teeth'    => ['nullable', 'array'],
+            'extraoral'           => $section,
+            'soft_tissue'         => $section,
+            'tooth_assessment'    => $section,
+            'ortho_findings'      => $section,
+            'perio_findings'      => $section,
+            'esthetic_findings'   => $section,
+            'risk_assessment'     => $section,
+            'treatment_awareness' => $section,
+        ];
+    }
+
     private function parseSection(Request $request, string $section): array
     {
         $value = $request->input($section);

@@ -427,7 +427,7 @@
 
 @section('content')
 <div x-data="consultForm()" x-init="init()"
-     @prev-panel-updated.window="prevPanel = $event.detail">
+     >
 <form id="cForm" method="POST"
       action="{{ isset($consultation)
           ? (isset($patient) && $patient->exists
@@ -438,7 +438,10 @@
     @csrf
     @if(isset($consultation)) @method('PUT') @endif
     <input type="hidden" name="patient_id"         value="{{ $patient->id }}">
-    <input type="hidden" name="doctor_id"          value="{{ auth()->id() }}">
+    {{-- Slice 2 fix (2026-08-03): doctor_id was a hidden input hardcoded to auth()->id(),
+         so editing a colleague's consultation silently reattributed it to the editor.
+         It is now a visible select in the "Date of consultation" strip below —
+         defaults to the record's saved doctor when editing, the logged-in user when creating. --}}
     <input type="hidden" name="branch_id"          value="{{ auth()->user()->branch_id ?? 1 }}">
     {{-- visit_type is derived in the controller from consultation_type; do not bind form.type here --}}
     <input type="hidden" name="consultation_type" x-bind:value="form.type">
@@ -535,6 +538,16 @@
         <span style="font-size:11px;color:#92400e;">Leave as today for a normal entry, or pick a past date for a missed entry.</span>
         <span id="backdate-note" style="display:none;font-size:11px;font-weight:700;color:#b45309;">⏱ Backdated — entry log still records today.</span>
 
+        {{-- Doctor attribution — Slice 2 fix (2026-08-03). Defaults: edit → saved doctor, create → logged-in user. --}}
+        <span style="font-size:11px;font-weight:600;color:#b45309;border-left:1px solid #fde68a;padding-left:12px;">Doctor</span>
+        @php $selectedDoctorId = old('doctor_id', isset($consultation) ? $consultation->doctor_id : auth()->id()); @endphp
+        <select name="doctor_id" required
+                style="font-size:11px;font-family:'Inter',sans-serif;border:1px solid #fcd34d;border-radius:5px;padding:4px 8px;background:#fff;color:#374151;cursor:pointer;max-width:220px;">
+            @foreach($doctors as $doc)
+            <option value="{{ $doc->id }}" {{ $selectedDoctorId == $doc->id ? 'selected' : '' }}>{{ $doc->name }}</option>
+            @endforeach
+        </select>
+
         @if(isset($pastAppointments) && $pastAppointments->count())
         {{-- Optional shortcut: pick a past appointment to auto-fill the date above --}}
         <span style="font-size:11px;color:#92400e;border-left:1px solid #fde68a;padding-left:12px;">or link an appointment:</span>
@@ -601,12 +614,30 @@
                         @php
                         // Only 3 visit categories. COHA lives on the Patient page.
                         // Follow-Up / Minor Visit / 6M Recall / COHA removed per workflow spec.
+                        // Slice 6 (2026-08-03): same_issue removed as a FORM type —
+                        // it was a second, schema-incompatible writer (posted
+                        // chief_complaint/hopi_final while the dedicated screen
+                        // writes update_notes/additional_findings). The card below
+                        // the loop now NAVIGATES to the one canonical Same Issue
+                        // screen instead. store() also guards server-side.
                         $types = [
                             ['new',       '#6a0f70','#f5f3ff','New Consultation', 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 0 2-2h2a2 2 0 0 0 2 2m-6 9 2 2 4-4'],
-                            ['same_issue','#d97706','#fffbeb','Same Issue',       'M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'],
                             ['emergency', '#dc2626','#fef2f2','Emergency',        'M13 10V3L4 14h7v7l9-11h-7z'],
                         ];
                         @endphp
+
+                        {{-- Same Issue — navigates to its dedicated workflow (one writer). --}}
+                        <a href="{{ route('patients.consultations.same-issue.create', $patient) }}"
+                           class="type-card" style="text-decoration:none;color:inherit;">
+                            <div class="type-icon" style="background:#f9fafb">
+                                <svg width="15" height="15" fill="none" viewBox="0 0 24 24"
+                                     stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                </svg>
+                            </div>
+                            <div class="type-label">Same Issue</div>
+                            <div class="type-dot"></div>
+                        </a>
                         @foreach($types as [$key, $color, $bg, $label, $path])
                         <div class="type-card"
                              :class="form.type==='{{ $key }}'
@@ -627,113 +658,7 @@
                         @endforeach
                     </div>
 
-                    {{-- ── P2C9: Previous Consultation Context Panel ─────────────────── --}}
-                    <template x-if="form.type==='same_issue'">
-                        <div style="margin-top:14px;" x-data="prevConsultPanel()">
-
-                            @if($pastConsultations->isEmpty())
-                            {{-- No past consultations exist --}}
-                            <div style="padding:10px 14px;background:#fef9c3;border:1px solid #fde68a;border-radius:7px;font-size:12px;color:#92400e;font-family:'Inter',sans-serif;">
-                                <strong>No previous consultations found</strong> for this patient. This will be recorded as a standalone consultation.
-                            </div>
-                            @else
-                            {{-- Selector --}}
-                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                                <label style="font-size:11px;font-weight:600;color:#6b7280;white-space:nowrap;font-family:'Inter',sans-serif;">Linking to:</label>
-                                <select
-                                    name="previous_consultation_id"
-                                    x-model="selectedId"
-                                    @change="updatePanel()"
-                                    style="flex:1;padding:5px 9px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;background:#fff;color:#374151;">
-                                    @foreach($pastConsultations as $pc)
-                                    <option value="{{ $pc->id }}"
-                                        data-date="{{ $pc->consultation_date->format('d M Y') }}"
-                                        data-type="{{ str_replace('_', ' ', $pc->consultation_type ?? $pc->visit_type ?? 'consultation') }}"
-                                        data-doctor="{{ $pc->doctor->name ?? '—' }}"
-                                        data-complaint="{{ addslashes(Str::limit($pc->chief_complaint ?? '', 200)) }}"
-                                        data-specialties="{{ addslashes(implode(', ', (array)($pc->accepted_specialties ?? []))) }}"
-                                        data-diagnosis="{{ addslashes($pc->primary_diagnosis ?? '') }}"
-                                        data-treatment="{{ addslashes(Str::limit($pc->treatment_done ?? '', 200)) }}"
-                                        data-notes="{{ addslashes(Str::limit($pc->finishing_notes ?? $pc->diagnosis_notes ?? '', 150)) }}"
-                                        {{ $loop->first ? 'selected' : '' }}>
-                                        {{ $pc->consultation_date->format('d M Y') }}
-                                        — {{ Str::limit($pc->primary_diagnosis ?? $pc->chief_complaint ?? 'No diagnosis', 50) }}
-                                    </option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            {{-- Rich context card --}}
-                            <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;font-family:'Inter',sans-serif;">
-                                {{-- Header --}}
-                                <div style="background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;">
-                                    <div style="display:flex;align-items:center;gap:8px;">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                        <span style="font-size:10px;font-weight:700;color:#6b7280;letter-spacing:.04em;text-transform:uppercase;">Previous Consultation — Read Only</span>
-                                    </div>
-                                    <span x-text="panel.date" style="font-size:11px;color:#6b7280;font-weight:500;"></span>
-                                </div>
-
-                                {{-- Body --}}
-                                <div style="padding:12px 14px;background:#fff;display:flex;flex-direction:column;gap:10px;">
-
-                                    {{-- Type + Doctor --}}
-                                    <div style="display:flex;gap:20px;">
-                                        <div style="flex:1;">
-                                            <div style="font-size:9px;font-weight:700;color:#9ca3af;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;">Type</div>
-                                            <div x-text="panel.type" style="font-size:12px;color:#374151;font-weight:600;text-transform:capitalize;"></div>
-                                        </div>
-                                        <div style="flex:2;">
-                                            <div style="font-size:9px;font-weight:700;color:#9ca3af;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;">Doctor</div>
-                                            <div x-text="panel.doctor || '—'" style="font-size:12px;color:#374151;"></div>
-                                        </div>
-                                    </div>
-
-                                    {{-- Chief Complaint --}}
-                                    <div x-show="panel.complaint">
-                                        <div style="font-size:9px;font-weight:700;color:#9ca3af;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;">Chief Complaint</div>
-                                        <div x-text="panel.complaint" style="font-size:12px;color:#374151;line-height:1.5;"></div>
-                                    </div>
-
-                                    {{-- Specialties --}}
-                                    <div x-show="panel.specialties">
-                                        <div style="font-size:9px;font-weight:700;color:#9ca3af;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px;">Specialties</div>
-                                        <div style="display:flex;flex-wrap:wrap;gap:5px;">
-                                            <template x-for="sp in panel.specialtyList" :key="sp">
-                                                <span x-text="sp.trim()" style="padding:2px 8px;background:#ede9fe;color:#7c3aed;border-radius:4px;font-size:10px;font-weight:600;text-transform:capitalize;"></span>
-                                            </template>
-                                        </div>
-                                    </div>
-
-                                    {{-- Diagnosis --}}
-                                    <div x-show="panel.diagnosis">
-                                        <div style="font-size:9px;font-weight:700;color:#9ca3af;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;">Diagnosis</div>
-                                        <div x-text="panel.diagnosis" style="font-size:12px;color:#374151;font-weight:600;"></div>
-                                    </div>
-
-                                    {{-- Treatment Done --}}
-                                    <div x-show="panel.treatment">
-                                        <div style="font-size:9px;font-weight:700;color:#9ca3af;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;">Treatment Done</div>
-                                        <div x-text="panel.treatment" style="font-size:12px;color:#374151;line-height:1.5;"></div>
-                                    </div>
-
-                                    {{-- Notes --}}
-                                    <div x-show="panel.notes">
-                                        <div style="font-size:9px;font-weight:700;color:#9ca3af;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;">Notes</div>
-                                        <div x-text="panel.notes" style="font-size:12px;color:#6b7280;font-style:italic;line-height:1.5;"></div>
-                                    </div>
-
-                                    {{-- Empty fallback --}}
-                                    <div x-show="!panel.complaint && !panel.diagnosis && !panel.treatment && !panel.notes"
-                                         style="font-size:12px;color:#9ca3af;font-style:italic;">
-                                        No detailed clinical notes recorded for this consultation.
-                                    </div>
-                                </div>
-                            </div>
-                            @endif
-
-                        </div>
-                    </template>
+                    {{-- Slice 6 (2026-08-03): P2C9 previous-consultation context panel removed with the same_issue chip -- the dedicated Same Issue screen shows this context itself. --}}
 
                     {{-- COHA is a separate workflow on the Patient page — not shown here --}}
                 </div>
@@ -1554,68 +1479,7 @@
                 </div>{{-- /showAdvanced collapse --}}
             </div>{{-- /Advanced Clinical Details card --}}
 
-            {{-- SAME ISSUE simplified card — shown instead of full form.
-                 Moved here (Iteration 3, 2026-07-31) so it's full-width, outside
-                 the .consult-split columns — content is unchanged. --}}
-            <div x-show="form.type === 'same_issue'" x-cloak
-                 class="c-card" style="border-color:#fde68a;">
-                <div class="c-card-head" style="background:#fffbeb;">
-                    <span class="c-head-label" style="color:#d97706;">
-                        <span class="c-num" style="background:#d97706;">→</span>
-                        Same Issue — Update This Visit
-                    </span>
-                </div>
-                <div class="c-body" style="display:flex;flex-direction:column;gap:16px;">
-
-                    {{-- Previous data read-only row --}}
-                    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:12px 14px;font-family:'Inter',sans-serif;">
-                        <p style="font-size:9px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">
-                            From Previous Consultation (read-only)
-                        </p>
-                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-                            <div>
-                                <p style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">Chief Complaint</p>
-                                <p x-text="prevPanel.complaint || '—'" style="font-size:12px;color:#374151;line-height:1.5;"></p>
-                            </div>
-                            <div>
-                                <p style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">HOPI</p>
-                                <p x-text="prevPanel.hopi || '—'" style="font-size:12px;color:#374151;line-height:1.5;"></p>
-                            </div>
-                            <div>
-                                <p style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">Diagnosis</p>
-                                <p x-text="prevPanel.diagnosis || '—'" style="font-size:12px;color:#374151;line-height:1.5;"></p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- 3 editable fields --}}
-                    <div>
-                        <label class="df-label">Progress / Update since last visit <span class="req">*</span></label>
-                        <textarea name="chief_complaint" x-model="form.chief_complaint"
-                                  @input.debounce.600ms="runAssist()"
-                                  class="df-input" rows="3"
-                                  placeholder="Describe what has changed, improved, or worsened since the last visit…"></textarea>
-                    </div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                        <div>
-                            <label class="df-label">Updated HOPI</label>
-                            <textarea name="hopi_final" class="df-input" rows="3"
-                                      placeholder="Any updates to the history of present illness…">{{ old('hopi_final', $consultation?->hopi_final) }}</textarea>
-                        </div>
-                        <div>
-                            <label class="df-label">Updated Diagnosis</label>
-                            <input type="text" name="primary_diagnosis" class="df-input"
-                                   value="{{ old('primary_diagnosis', $consultation?->primary_diagnosis) }}"
-                                   placeholder="e.g. Periapical periodontitis — resolving">
-                        </div>
-                    </div>
-
-                    {{-- Hidden: carry forward previous consultation link --}}
-                    <input type="hidden" name="previous_consultation_id"
-                           x-bind:value="prevPanel.id || '{{ old('previous_consultation_id', $consultation?->previous_consultation_id) }}'">
-                    {{-- consultation_type is already bound via the top-level hidden input (line 361); no duplicate needed --}}
-                </div>
-            </div>
+            {{-- Slice 6 (2026-08-03): SAME ISSUE simplified card removed -- Same Issue is written only by its dedicated screen now (see type selector + ConsultationController::store() guard). --}}
 
             {{-- Diagnosis moved up to the left column (see above, right after
                  Examination Findings) — Iteration 3, 2026-07-31. --}}
@@ -1828,13 +1692,6 @@ function consultForm() {
             emergency:  'Emergency',
         },
 
-        // Holds previous consultation data for the Same Issue read-only display
-        prevPanel: {
-            id:        null,
-            complaint: '',
-            hopi:      '',
-            diagnosis: '',
-        },
         acceptedModules: {!! json_encode(isset($consultation) ? ($consultation->accepted_specialties ?? []) : []) !!},
         typeLocked:      false, // true when type comes from URL param (skip type selector)
         // 2026-07-31 UX experiment: Advanced Clinical Details starts collapsed —
@@ -1863,7 +1720,11 @@ function consultForm() {
         init() {
             // If a type is passed via URL (?type=new), pre-select it and skip the type card
             const urlType = new URLSearchParams(window.location.search).get('type');
-            if (urlType && !this.form.type) {
+            // Slice 6 (2026-08-03): same_issue is no longer a form type here --
+            // its dedicated screen is the one writer. Old bookmarks with
+            // ?type=same_issue fall through to the type selector instead of
+            // locking the form into a type that has no visible inputs.
+            if (urlType && urlType !== 'same_issue' && !this.form.type) {
                 this.form.type = urlType;
                 this.typeLocked = true;
             }
@@ -2271,74 +2132,6 @@ function toothChart(initialTeeth = []) {
     };
 }
 
-// ── Previous consultation panel ───────────────────────────────────────────────
-function prevConsultPanel() {
-    function readOption(selectEl, val) {
-        if (!selectEl) return {};
-        const opt = selectEl.querySelector(`option[value="${val}"]`);
-        if (!opt) return {};
-        return {
-            date:        opt.dataset.date        || '',
-            type:        opt.dataset.type        || '',
-            doctor:      opt.dataset.doctor      || '',
-            complaint:   opt.dataset.complaint   || '',
-            specialties: opt.dataset.specialties || '',
-            diagnosis:   opt.dataset.diagnosis   || '',
-            treatment:   opt.dataset.treatment   || '',
-            notes:       opt.dataset.notes       || '',
-        };
-    }
-
-    return {
-        selectedId: '',
-        panel: {
-            date:'', type:'', doctor:'',
-            complaint:'', specialties:'', specialtyList:[],
-            diagnosis:'', treatment:'', notes:'',
-        },
-
-        init() {
-            const sel = this.$el.querySelector('select[name="previous_consultation_id"]');
-            if (sel && sel.options.length) {
-                this.selectedId = sel.options[0].value;
-                this.panel = this._read(sel, this.selectedId);
-                this._dispatch();
-            }
-        },
-
-        updatePanel() {
-            const sel = this.$el.querySelector('select[name="previous_consultation_id"]');
-            this.panel = this._read(sel, this.selectedId);
-            this._dispatch();
-        },
-
-        // Bubble the key fields up to the parent consultForm() so the Same Issue
-        // read-only block (which lives outside this component's scope) can read them.
-        _dispatch() {
-            this.$dispatch('prev-panel-updated', {
-                id:        this.selectedId,
-                complaint: this.panel.complaint,
-                hopi:      this.panel.notes,       // notes holds HOPI/finishing notes
-                diagnosis: this.panel.diagnosis,
-            });
-        },
-
-        _read(sel, val) {
-            const d = readOption(sel, val);
-            return {
-                date:          d.date,
-                type:          d.type,
-                doctor:        d.doctor,
-                complaint:     d.complaint,
-                specialties:   d.specialties,
-                specialtyList: d.specialties ? d.specialties.split(',').filter(s => s.trim()) : [],
-                diagnosis:     d.diagnosis,
-                treatment:     d.treatment,
-                notes:         d.notes,
-            };
-        },
-    };
-}
 </script>
 @endpush
 @endsection

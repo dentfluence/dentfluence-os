@@ -120,7 +120,8 @@ class CohaController extends ApiController
     {
         $rules = [
             'doctor_id'          => ['nullable', 'integer', 'exists:users,id'],
-            'consultation_date'  => ['nullable', 'date'],
+            // Slice 10 (2026-08-03): same rule as web cohaRules() — backdating yes, future never.
+            'consultation_date'  => ['nullable', 'date', 'before_or_equal:today'],
             'doctor_notes'       => ['nullable', 'string'],
             'monitoring_teeth'   => ['nullable', 'array'],
             'monitoring_teeth.*' => ['string', 'max:10'],

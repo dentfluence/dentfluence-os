@@ -186,8 +186,10 @@
             </div>
             <div class="form-group">
                 <label>Date</label>
+                {{-- Slice 3 (2026-08-03): backdating allowed, future dates blocked; server enforces before_or_equal:today --}}
                 <input type="date" name="consultation_date"
-                    value="{{ old('consultation_date', isset($consultation) ? $consultation->consultation_date->format('Y-m-d') : date('Y-m-d')) }}">
+                    value="{{ old('consultation_date', isset($consultation) ? $consultation->consultation_date->format('Y-m-d') : date('Y-m-d')) }}"
+                    max="{{ date('Y-m-d') }}">
             </div>
         </div>
         <div class="form-row">

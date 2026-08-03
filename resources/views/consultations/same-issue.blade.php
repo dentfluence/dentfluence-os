@@ -119,21 +119,27 @@
 @endsection
 
 @section('content')
-<form method="POST" action="{{ route('patients.consultations.same-issue.store', $patient) }}"
+{{-- Slice 6 (2026-08-03): this screen now handles BOTH create and edit —
+     mirrors the Minor Visit pattern. $consultation present = edit mode. --}}
+<form method="POST"
+      action="{{ isset($consultation)
+          ? route('patients.consultations.same-issue.update', [$patient, $consultation])
+          : route('patients.consultations.same-issue.store', $patient) }}"
       id="si-form">
 @csrf
+@if(isset($consultation)) @method('PUT') @endif
 
 {{-- ── Topbar ── --}}
 <div id="ctopbar">
     <div class="ctb-left">
         <a href="{{ route('patients.show', $patient) }}#consultation" class="btn-outline">← Back</a>
         <div>
-            <div class="ctb-title">Same Issue Consultation</div>
+            <div class="ctb-title">{{ isset($consultation) ? 'Edit Same Issue Consultation' : 'Same Issue Consultation' }}</div>
             <div class="ctb-sub">{{ $patient->name }} · Returning for same complaint</div>
         </div>
     </div>
     <div class="ctb-right">
-        <button type="submit" class="btn-save">Save Consultation</button>
+        <button type="submit" class="btn-save">{{ isset($consultation) ? 'Update Consultation' : 'Save Consultation' }}</button>
     </div>
 </div>
 
@@ -170,9 +176,10 @@
         <div class="form-row">
             <div class="form-group">
                 <label>Doctor <span class="req">*</span></label>
+                @php $selectedDoctorId = old('doctor_id', isset($consultation) ? $consultation->doctor_id : auth()->id()); @endphp
                 <select name="doctor_id" required>
                     @foreach($doctors as $doc)
-                    <option value="{{ $doc->id }}" {{ $doc->id == auth()->id() ? 'selected' : '' }}>
+                    <option value="{{ $doc->id }}" {{ $selectedDoctorId == $doc->id ? 'selected' : '' }}>
                         {{ $doc->doctor_name }}
                     </option>
                     @endforeach
@@ -180,7 +187,10 @@
             </div>
             <div class="form-group">
                 <label>Date</label>
-                <input type="date" name="consultation_date" value="{{ date('Y-m-d') }}">
+                {{-- Slice 3 (2026-08-03): backdating allowed, future dates blocked; server enforces before_or_equal:today --}}
+                <input type="date" name="consultation_date"
+                       value="{{ old('consultation_date', isset($consultation) ? $consultation->consultation_date->format('Y-m-d') : date('Y-m-d')) }}"
+                       max="{{ date('Y-m-d') }}">
             </div>
         </div>
     </div>
@@ -251,18 +261,42 @@
     </div>
     @endif
 
+    {{-- ── LEGACY-SHAPE FIELDS (Slice 6, 2026-08-03) ──
+         Records created by the retired create.blade.php same_issue chip stored
+         their content in chief_complaint / hopi_final. Shown ONLY when editing
+         such a record, so its content stays editable in this one canonical
+         screen. New records never render (or post) these inputs. --}}
+    @if(isset($consultation) && ($consultation->chief_complaint || $consultation->hopi_final))
+    <div class="card">
+        <div class="card-title"><span class="dot"></span> Progress Note <span style="font-size:10px;font-weight:400;color:#9ca3af;text-transform:none;letter-spacing:0;">(recorded with the older Same Issue form)</span></div>
+        @if($consultation->chief_complaint)
+        <div class="form-group">
+            <label>Progress / Update (legacy field)</label>
+            <textarea name="chief_complaint" rows="3">{{ old('chief_complaint', $consultation->chief_complaint) }}</textarea>
+        </div>
+        @endif
+        @if($consultation->hopi_final)
+        <div class="form-group">
+            <label>Updated HOPI (legacy field)</label>
+            <textarea name="hopi_final" rows="3">{{ old('hopi_final', $consultation->hopi_final) }}</textarea>
+        </div>
+        @endif
+    </div>
+    @endif
+
     {{-- ── Current Update ── --}}
     <div class="card">
         <div class="card-title"><span class="dot"></span> Current Update <span style="font-size:10px;font-weight:400;color:#9ca3af;text-transform:none;letter-spacing:0;">(What has changed or why they returned)</span></div>
         <div class="form-group">
-            <label>Patient Update <span class="req">*</span></label>
-            <textarea name="update_notes" rows="4" required
-                placeholder="e.g. Patient discussed with family and wants Implant instead of Bridge. Previously quoted Rs. 18,000 for bridge. Requesting revised quote for implant option.">{{ old('update_notes') }}</textarea>
+            @php $updateNotesRequired = !isset($consultation) || $consultation->update_notes || !$consultation->chief_complaint; @endphp
+            <label>Patient Update @if($updateNotesRequired)<span class="req">*</span>@endif</label>
+            <textarea name="update_notes" rows="4" {{ $updateNotesRequired ? 'required' : '' }}
+                placeholder="e.g. Patient discussed with family and wants Implant instead of Bridge. Previously quoted Rs. 18,000 for bridge. Requesting revised quote for implant option.">{{ old('update_notes', $consultation->update_notes ?? '') }}</textarea>
         </div>
         <div class="form-group">
             <label>Additional Findings Today <span style="font-size:11px;font-weight:400;color:#9ca3af;">(if any new observations)</span></label>
             <textarea name="additional_findings" rows="3"
-                placeholder="e.g. Slight increase in sensitivity. Tooth #46 shows early periapical changes on today's IOPA.">{{ old('additional_findings') }}</textarea>
+                placeholder="e.g. Slight increase in sensitivity. Tooth #46 shows early periapical changes on today's IOPA.">{{ old('additional_findings', $consultation->additional_findings ?? '') }}</textarea>
         </div>
     </div>
 
@@ -272,12 +306,12 @@
         <div class="form-group">
             <label>Diagnosis</label>
             <textarea name="primary_diagnosis" rows="2"
-                placeholder="Leave blank if unchanged from previous visit.">{{ old('primary_diagnosis', $previousConsultation?->primary_diagnosis) }}</textarea>
+                placeholder="Leave blank if unchanged from previous visit.">{{ old('primary_diagnosis', isset($consultation) ? $consultation->primary_diagnosis : $previousConsultation?->primary_diagnosis) }}</textarea>
         </div>
         <div class="form-group">
             <label>Notes</label>
             <textarea name="diagnosis_notes" rows="2"
-                placeholder="Any changes in risk assessment or differential.">{{ old('diagnosis_notes') }}</textarea>
+                placeholder="Any changes in risk assessment or differential.">{{ old('diagnosis_notes', $consultation->diagnosis_notes ?? '') }}</textarea>
         </div>
     </div>
 
@@ -288,7 +322,7 @@
         <div class="form-group">
             <label>Notes / Next Steps</label>
             <textarea name="finishing_notes" rows="3"
-                placeholder="e.g. Revised quotation to be prepared. Patient to return after reviewing implant cost.">{{ old('finishing_notes') }}</textarea>
+                placeholder="e.g. Revised quotation to be prepared. Patient to return after reviewing implant cost.">{{ old('finishing_notes', $consultation->finishing_notes ?? '') }}</textarea>
         </div>
     </div>
 

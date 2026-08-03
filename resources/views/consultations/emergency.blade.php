@@ -107,25 +107,33 @@
 @endsection
 
 @section('content')
-<form method="POST" action="{{ route('patients.consultations.emergency.store', $patient) }}"
-      x-data="emergencyForm()"
+{{-- Slice 9 (2026-08-03): this screen now handles BOTH create and edit —
+     mirrors the Minor Visit / Same Issue pattern. $consultation = edit mode. --}}
+<form method="POST"
+      action="{{ isset($consultation)
+          ? route('patients.consultations.emergency.update', [$patient, $consultation])
+          : route('patients.consultations.emergency.store', $patient) }}"
+      x-data="emergencyForm({{ Js::from(old('chief_complaint', $consultation->chief_complaint ?? '')) }})"
       id="em-form">
 @csrf
+@if(isset($consultation)) @method('PUT') @endif
 
 {{-- ── Topbar ── --}}
 <div id="ctopbar">
     <div class="ctb-left">
         <a href="{{ route('patients.show', $patient) }}#consultation" class="btn-outline">← Back</a>
         <div>
-            <div class="ctb-title">Emergency Visit</div>
+            <div class="ctb-title">{{ isset($consultation) ? 'Edit Emergency Visit' : 'Emergency Visit' }}</div>
             <div class="ctb-sub">{{ $patient->name }} · Acute condition requiring immediate care</div>
         </div>
     </div>
     <div class="ctb-right">
+        @if(!isset($consultation))
         <button type="submit" name="_convert_to_new" value="1" class="btn-convert">
             Save &amp; Create New Consultation →
         </button>
-        <button type="submit" class="btn-save">Save Emergency Visit</button>
+        @endif
+        <button type="submit" class="btn-save">{{ isset($consultation) ? 'Update Emergency Visit' : 'Save Emergency Visit' }}</button>
     </div>
 </div>
 
@@ -162,9 +170,10 @@
         <div class="form-row">
             <div class="form-group">
                 <label>Doctor <span class="req">*</span></label>
+                @php $selectedDoctorId = old('doctor_id', isset($consultation) ? $consultation->doctor_id : auth()->id()); @endphp
                 <select name="doctor_id" required>
                     @foreach($doctors as $doc)
-                    <option value="{{ $doc->id }}" {{ $doc->id == auth()->id() ? 'selected' : '' }}>
+                    <option value="{{ $doc->id }}" {{ $selectedDoctorId == $doc->id ? 'selected' : '' }}>
                         {{ $doc->doctor_name }}
                     </option>
                     @endforeach
@@ -172,8 +181,10 @@
             </div>
             <div class="form-group">
                 <label>Date &amp; Time</label>
+                {{-- Slice 3 (2026-08-03): future dates blocked (max = now); server enforces before_or_equal:now --}}
                 <input type="datetime-local" name="consultation_date"
-                    value="{{ now()->format('Y-m-d\TH:i') }}">
+                    value="{{ old('consultation_date', isset($consultation) ? $consultation->consultation_date->format('Y-m-d\TH:i') : now()->format('Y-m-d\TH:i')) }}"
+                    max="{{ now()->format('Y-m-d\TH:i') }}">
             </div>
         </div>
     </div>
@@ -196,7 +207,7 @@
         <div class="form-group">
             <label>History (HOPI)</label>
             <textarea name="hopi_final" rows="3"
-                placeholder="Since when? What happened? Any prior treatment? Medications taken?">{{ old('hopi_final') }}</textarea>
+                placeholder="Since when? What happened? Any prior treatment? Medications taken?">{{ old('hopi_final', $consultation->hopi_final ?? '') }}</textarea>
         </div>
     </div>
 
@@ -206,12 +217,12 @@
         <div class="form-group">
             <label>Clinical Findings</label>
             <textarea name="clinical_data[notes]" rows="3"
-                placeholder="Extraoral/intraoral findings, swelling extent, percussion/palpation, mobility, bleeding.">{{ old('clinical_data.notes') }}</textarea>
+                placeholder="Extraoral/intraoral findings, swelling extent, percussion/palpation, mobility, bleeding.">{{ old('clinical_data.notes', isset($consultation) ? ($consultation->clinical_data['notes'] ?? '') : '') }}</textarea>
         </div>
         <div class="form-group">
             <label>Emergency Diagnosis</label>
             <textarea name="primary_diagnosis" rows="2"
-                placeholder="Working diagnosis (e.g. Acute apical abscess #26, Ellis Class III fracture #11).">{{ old('primary_diagnosis') }}</textarea>
+                placeholder="Working diagnosis (e.g. Acute apical abscess #26, Ellis Class III fracture #11).">{{ old('primary_diagnosis', $consultation->primary_diagnosis ?? '') }}</textarea>
         </div>
     </div>
 
@@ -221,13 +232,61 @@
         <div class="form-group">
             <label>Treatment Given <span class="req">*</span></label>
             <textarea name="emergency_treatment_rendered" rows="4" required
-                placeholder="Describe all procedures performed during this emergency visit.&#10;e.g. Incision &amp; drainage of abscess, antibiotics prescribed, temporary dressing placed on #26.">{{ old('emergency_treatment_rendered') }}</textarea>
+                placeholder="Describe all procedures performed during this emergency visit.&#10;e.g. Incision &amp; drainage of abscess, antibiotics prescribed, temporary dressing placed on #26.">{{ old('emergency_treatment_rendered', $consultation->emergency_treatment_rendered ?? '') }}</textarea>
         </div>
         <div class="form-group">
             <label>Advice</label>
             <textarea name="advice" rows="2"
-                placeholder="Post-treatment instructions. e.g. Ice pack 20 min on/off. Soft diet. Return if swelling worsens.">{{ old('advice') }}</textarea>
+                placeholder="Post-treatment instructions. e.g. Ice pack 20 min on/off. Soft diet. Return if swelling worsens.">{{ old('advice', $consultation->advice ?? '') }}</textarea>
         </div>
+    </div>
+
+    {{-- ── Prescription (Slice 9, 2026-08-03) ──
+         Emergency visits are where an immediate Rx is most common. Same
+         <x-prescription-panel> + PrescriptionQuickSaveService engine as the
+         standard consultation form and the Prescriptions tab — a third entry
+         point into the SAME engine, not a new implementation. --}}
+    <div class="card">
+        <div class="card-title"><span class="dot"></span> Prescription <span style="font-size:10px;font-weight:400;color:#9ca3af;text-transform:none;letter-spacing:0;">(optional — same Rx pad as the Prescriptions tab)</span></div>
+        @php
+            $rx = $linkedPrescription ?? null;
+            $panelValue = $rx?->exists
+                ? $rx->items->map(function ($item) {
+                    $liquid = in_array(strtolower((string) $item->dosage_form), ['syrup', 'suspension', 'drops'], true);
+                    return [
+                        'drug'      => trim($item->drug_name . ($item->strength ? ' ' . $item->strength : '')),
+                        'drug_id'   => $item->drug_id,
+                        'form_type' => strtolower($item->dosage_form ?: 'tablet'),
+                        'food'      => $item->food_advice ?? '',
+                        'sos'       => (bool) $item->is_sos,
+                        'morn'      => $liquid ? (float) $item->morning   : ((float) $item->morning   > 0),
+                        'noon'      => $liquid ? (float) $item->afternoon : ((float) $item->afternoon > 0),
+                        'night'     => $liquid ? (float) $item->night     : ((float) $item->night     > 0),
+                        'duration'  => (string) $item->duration,
+                        'unit'      => $item->duration_unit ?? 'days',
+                    ];
+                })->values()->toArray()
+                : [];
+            $savedInstr = $rx?->general_instructions ?? '';
+            $instrLines = explode("\n", $savedInstr, 2);
+            $chipsPart  = $instrLines[0] ?? '';
+            $notePart   = $instrLines[1] ?? (str_contains($chipsPart, ';') ? '' : $chipsPart);
+        @endphp
+        <x-prescription-panel
+            prefix="prescriptions_data"
+            note-field="rx_general_instructions"
+            instruct-field="instructions_data"
+            :value="$panelValue"
+            :note-value="$rx?->exists ? $notePart : ''"
+            :instruct-value="$rx?->exists ? array_filter(explode('; ', $chipsPart)) : []"
+            :collapsible="false"
+            :start-open="true"
+        />
+        @if($rx?->exists)
+        <p style="margin-top:10px;font-size:10px;color:#9ca3af;">
+            Editing {{ $rx->prescription_number }} — saving this visit updates it in place.
+        </p>
+        @endif
     </div>
 
 
@@ -258,9 +317,11 @@
 
 @push('scripts')
 <script>
-function emergencyForm() {
+// Slice 9 (2026-08-03): accepts the saved chief complaint so edit mode doesn't
+// blank the x-model-bound input (x-model overrides the value attribute).
+function emergencyForm(initialComplaint = '') {
     return {
-        complaintText: '',
+        complaintText: initialComplaint,
         setComplaint(text) { this.complaintText = text; },
     };
 }

@@ -31,7 +31,8 @@ class ConsultationController extends ApiController
         $p = $this->find($request, $patient);
         $data = $request->validate([
             'doctor_id'              => ['nullable', 'integer', 'exists:users,id'],
-            'consultation_date'      => ['nullable', 'date'],
+            // Slice 10 (2026-08-03): same rule as web — backdating yes, future never.
+            'consultation_date'      => ['nullable', 'date', 'before_or_equal:today'],
             'chief_complaint'        => ['required', 'string', 'max:1000'],
             'complaint_duration'     => ['nullable', 'string', 'max:100'],
             'severity'               => ['nullable', 'string', 'max:50'],
@@ -81,17 +82,20 @@ class ConsultationController extends ApiController
         $p = $this->find($request, $patient);
         $data = $request->validate([
             'doctor_id'                => ['nullable', 'integer', 'exists:users,id'],
-            'consultation_date'        => ['nullable', 'date'],
+            // Slice 10 (2026-08-03): same rule as web — backdating yes, future never.
+            'consultation_date'        => ['nullable', 'date', 'before_or_equal:today'],
             'previous_consultation_id' => ['nullable', 'integer', 'exists:consultations,id'],
             'update_notes'             => ['required', 'string'],
             'additional_findings'      => ['nullable', 'string'],
             'primary_diagnosis'        => ['nullable', 'string'],
             'diagnosis_notes'          => ['nullable', 'string'],
             'finishing_notes'          => ['nullable', 'string'],
-            // Inline Rx + instructions — same columns the web form persists
-            // (it sends them as JSON strings; mobile sends native arrays).
-            'prescriptions'            => ['nullable', 'array'],
-            'instructions'             => ['nullable', 'array'],
+            // Slice 10 (2026-08-03): 'prescriptions'/'instructions' rules REMOVED.
+            // They mass-assigned consultations.prescriptions/.instructions — dead
+            // JSON columns with ZERO read paths that the web retired 2026-07-31
+            // (see web ConsultationController store()). No real Prescription row
+            // was ever created, so mobile Rx silently vanished. If sent, the keys
+            // are now ignored; mobile Rx should use the Prescriptions API.
         ]);
 
         $data['doctor_id'] = $data['doctor_id'] ?? $request->user()->id;
@@ -104,7 +108,8 @@ class ConsultationController extends ApiController
         $p = $this->find($request, $patient);
         $data = $request->validate([
             'doctor_id'                   => ['nullable', 'integer', 'exists:users,id'],
-            'consultation_date'           => ['nullable', 'date'],
+            // Slice 10 (2026-08-03): same rule as web — backdating yes, future never.
+            'consultation_date'           => ['nullable', 'date', 'before_or_equal:today'],
             'related_to_clinic_treatment' => ['nullable', 'boolean'],
             'procedure_performed'         => ['required', 'string'],
             'chief_complaint'             => ['nullable', 'string'],
@@ -115,13 +120,34 @@ class ConsultationController extends ApiController
             'clinical_data'               => ['nullable', 'array'],
             'advice'                      => ['nullable', 'string'],
             'finishing_notes'             => ['nullable', 'string'],
-            'prescriptions'               => ['nullable', 'array'],
-            'instructions'                => ['nullable', 'array'],
+            // Slice 10 (2026-08-03): dead-column 'prescriptions'/'instructions'
+            // rules removed — see storeSameIssue() note.
+            // Charges parity with web minorVisitStore(): drives a BillingPrompt,
+            // never a Consultation column.
+            'charges'                     => ['nullable', 'numeric', 'min:0'],
         ]);
         $data['related_to_clinic_treatment'] = $data['related_to_clinic_treatment'] ?? false;
         $data['doctor_id'] = $data['doctor_id'] ?? $request->user()->id;
 
-        return $this->create($p, $data, 'minor_visit', 'routine');
+        $charges = $data['charges'] ?? null;
+        unset($data['charges']);
+
+        $consultation = $this->make($p, $data, 'minor_visit', 'routine');
+
+        // Slice 10 (2026-08-03): same BillingPrompt mechanism as the web's
+        // minorVisitStore() — front desk turns it into an invoice manually.
+        if ($charges !== null && $charges > 0) {
+            \App\Models\BillingPrompt::create([
+                'patient_id'   => $p->id,
+                'trigger_type' => 'consultation',
+                'trigger_id'   => $consultation->id,
+                'description'  => 'Minor Visit charge: ' . ($consultation->chief_complaint ?: $consultation->procedure_performed ?: 'Rs. ' . $charges),
+                'status'       => 'pending',
+                'created_by'   => $request->user()->id,
+            ]);
+        }
+
+        return $this->success($this->payload($consultation), 'Consultation saved.', 201);
     }
 
     public function storeEmergency(Request $request, $patient): JsonResponse
@@ -129,7 +155,9 @@ class ConsultationController extends ApiController
         $p = $this->find($request, $patient);
         $data = $request->validate([
             'doctor_id'                    => ['nullable', 'integer', 'exists:users,id'],
-            'consultation_date'            => ['nullable', 'date'],
+            // Slice 10 (2026-08-03): matches web emergencyStore() — ceiling is
+            // now (emergency may carry a time component), never the future.
+            'consultation_date'            => ['nullable', 'date', 'before_or_equal:now'],
             'chief_complaint'              => ['required', 'string'],
             'hopi_final'                   => ['nullable', 'string'],
             'clinical_data'                => ['nullable', 'array'],
@@ -137,8 +165,8 @@ class ConsultationController extends ApiController
             'emergency_treatment_rendered' => ['required', 'string'],
             'advice'                       => ['nullable', 'string'],
             'finishing_notes'              => ['nullable', 'string'],
-            'prescriptions'                => ['nullable', 'array'],
-            'instructions'                 => ['nullable', 'array'],
+            // Slice 10 (2026-08-03): dead-column 'prescriptions'/'instructions'
+            // rules removed — see storeSameIssue() note.
         ]);
 
         $data['doctor_id'] = $data['doctor_id'] ?? $request->user()->id;
@@ -241,7 +269,9 @@ class ConsultationController extends ApiController
         }
 
         $data = $request->validate([
-            'consultation_date'            => ['nullable', 'date'],
+            // Slice 10 (2026-08-03): same rule family as web — backdating yes,
+            // future never (now, not today, so emergency times stay editable).
+            'consultation_date'            => ['nullable', 'date', 'before_or_equal:now'],
             'chief_complaint'              => ['nullable', 'string'],
             'complaint_duration'           => ['nullable', 'string', 'max:100'],
             'severity'                     => ['nullable', 'string', 'max:50'],

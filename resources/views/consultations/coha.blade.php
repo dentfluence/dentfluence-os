@@ -252,8 +252,10 @@
             </div>
             <div>
                 <label class="df-label">Assessment Date</label>
+                {{-- Slice 3 (2026-08-03): backdating allowed, future dates blocked; server enforces before_or_equal:today --}}
                 <input type="date" name="consultation_date" class="df-input"
-                       value="{{ isset($consultation) ? $consultation->consultation_date->format('Y-m-d') : now()->format('Y-m-d') }}">
+                       value="{{ old('consultation_date', isset($consultation) ? $consultation->consultation_date->format('Y-m-d') : now()->format('Y-m-d')) }}"
+                       max="{{ now()->format('Y-m-d') }}">
             </div>
             <div>
                 <label class="df-label">Patient</label>

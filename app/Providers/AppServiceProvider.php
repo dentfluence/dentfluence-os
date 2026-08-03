@@ -64,6 +64,11 @@ class AppServiceProvider extends ServiceProvider
         // no rule currently matches 'consultation.completed', feeds Insights only)
         Consultation::observe(ConsultationActivityObserver::class);
 
+        // Consultations Slice 11 (2026-08-03): a saved consultation advances
+        // patients.last_visit_date (the recall engine's key column, previously
+        // writer-less) and closes its linked appointment (status -> done).
+        Consultation::observe(\App\Observers\ConsultationClinicalWiringObserver::class);
+
         // Finance: keep every staff member mirrored into finance_vendors
         // (vendor_type = 'staff') so they appear in the Expense form's
         // Vendor dropdown for petty cash / reimbursements.
