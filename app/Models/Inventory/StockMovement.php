@@ -5,6 +5,7 @@ namespace App\Models\Inventory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class StockMovement extends Model
 {
@@ -80,18 +81,59 @@ class StockMovement extends Model
 
     /**
      * Upsert the inventory_stocks record for a given item+location.
+     *
+     * Hardening (2026-08-04 — P0 concurrency fix): this used to be a PHP
+     * read-modify-write (`$stock->available_qty = max(0, ...); $stock->save()`),
+     * which is a classic lost-update race — two concurrent movements against
+     * the same item+location could both read the same starting available_qty
+     * and the second save() would silently clobber the first's change, with
+     * no error. It's now a single atomic SQL UPDATE, so concurrent movements
+     * serialize correctly at the database level instead of racing in PHP.
      */
     private function adjustStock(int $itemId, ?int $locationId, float $delta): void
     {
         if (! $locationId) return;
 
-        $stock = InventoryStock::firstOrCreate(
-            ['inventory_item_id' => $itemId, 'location_id' => $locationId],
-            ['available_qty' => 0, 'reserved_qty' => 0]
-        );
+        // Format with fixed precision so it interpolates safely into raw SQL
+        // (this is a float we computed, never raw user input).
+        $delta = sprintf('%.4f', $delta);
 
-        $stock->available_qty = max(0, $stock->available_qty + $delta);
-        $stock->save();
+        $affected = InventoryStock::where('inventory_item_id', $itemId)
+            ->where('location_id', $locationId)
+            ->update([
+                'available_qty' => DB::raw("GREATEST(0, available_qty + ({$delta}))"),
+                'updated_at'    => now(),
+            ]);
+
+        if ($affected > 0) {
+            return;
+        }
+
+        // No row existed yet for this item+location — this is the very first
+        // movement recorded against it. Insert it directly.
+        try {
+            InventoryStock::create([
+                'inventory_item_id' => $itemId,
+                'location_id'       => $locationId,
+                'available_qty'     => max(0, (float) $delta),
+                'reserved_qty'      => 0,
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Race: a concurrent movement inserted the row first (unique
+            // constraint on inventory_item_id+location_id, see the
+            // inventory_stocks migration). Fall back to the atomic update
+            // now that the row exists.
+            if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
+                InventoryStock::where('inventory_item_id', $itemId)
+                    ->where('location_id', $locationId)
+                    ->update([
+                        'available_qty' => DB::raw("GREATEST(0, available_qty + ({$delta}))"),
+                        'updated_at'    => now(),
+                    ]);
+            } else {
+                throw $e;
+            }
+        }
     }
 
     /* ── Relationships ── */

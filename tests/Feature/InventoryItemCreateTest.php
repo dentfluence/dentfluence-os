@@ -30,15 +30,17 @@ class InventoryItemCreateTest extends TestCase
         ]);
 
         $resp = $this->actingAs($user)->post(route('inventory.products.store'), [
-            'product_name'       => $name,
-            'category_id'        => $category->id,
-            // Current inventory validation (see InventoryController::store):
-            'inventory_behavior' => 'consumable',
-            'purchase_unit'      => 'box',
-            'consumption_unit'   => 'piece',
-            'pieces_per_unit'    => 10,
-            'minimum_qty'        => 5,
-            'minimum_order_qty'  => 1,
+            'product_name'         => $name,
+            'category_id'          => $category->id,
+            // Current inventory validation (see
+            // InventoryController::validateProductForm) — the form was
+            // reshaped from separate purchase/consumption unit fields to a
+            // single "packaging" model (e.g. "1 box = 10 pieces") after this
+            // test was first written; these are the fields it now requires.
+            'packaging_type'       => 'box',
+            'qty_in_packaging'     => 10,
+            'packaging_unit_label' => 'piece',
+            'minimum_qty'          => 5,
         ]);
         $resp->assertSessionHasNoErrors();
 

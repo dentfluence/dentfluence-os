@@ -18,7 +18,7 @@ class ImplantPlacement extends Model
         'patient_id', 'treatment_visit_id', 'implant_catalog_id', 'surgeon_id',
         'lot_number', 'serial_number', 'tooth_position', 'surgery_date',
         'implant_brand_freetext', 'implant_code_freetext',
-        'label_photo_path', 'status', 'notes', 'created_by',
+        'label_photo_path', 'status', 'notes', 'created_by', 'stock_movement_id',
     ];
 
     protected $casts = [
@@ -50,6 +50,12 @@ class ImplantPlacement extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** The stock_out (treatment_usage) movement created when this implant was placed, if any. */
+    public function stockMovement(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Inventory\StockMovement::class, 'stock_movement_id');
     }
 
     /* ── Helpers ── */

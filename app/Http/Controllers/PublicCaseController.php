@@ -62,20 +62,13 @@ class PublicCaseController extends Controller
                 description:    'Patient opened the case journey',
             );
 
-            // The patient opening the journey is direct evidence the plan was
-            // presented to them, so it records the clinical fact through the
-            // canonical service (which projects Opportunity → 'quoted' as
-            // before). If the clinic already marked it presented on send, the
-            // original date wins — first presentation is immutable.
-            if ($plan = $journey->treatmentPlan) {
-                try {
-                    app(TreatmentPlanPresentationService::class)
-                        ->markPresented($plan, null, 'patient_view');
-                } catch (\RuntimeException $e) {
-                    // Never break the patient-facing page over pipeline work.
-                    report($e);
-                }
-            }
+            // F2 — PRESENTATION IS WRITTEN ONLY BY THE CLINIC.
+            // Canonical Treatment Lifecycle V1 §5: presentation means the
+            // clinic showed the plan to the patient, and it is stamped by that
+            // act — when the journey is sent. A page load cannot establish it:
+            // this handler is unauthenticated, so a link-preview fetcher or an
+            // email scanner opening the URL would have recorded a clinical
+            // fact that never happened. Sending the journey already stamps it.
         }
 
         // Education + alternatives come from the PINNED snapshot; the dentist's
@@ -186,14 +179,33 @@ class PublicCaseController extends Controller
             return view('case-journeys.public.expired');
         }
 
+        // F2 — closed cases refuse further decisions, so a replayed link
+        // cannot manufacture duplicate history.
+        if (in_array($journey->status, ['accepted', 'declined'], true)) {
+            return redirect()->route('case.public.show', $token);
+        }
+
         $journey->update(['status' => 'declined']);
 
+        // F2 — ONE DECISION DOOR FOR EVERY CHANNEL.
+        // Canonical Treatment Lifecycle V1 §7: the channel is not the truth,
+        // the decision is. This previously moved the sales pipeline only, so a
+        // patient who declined on their own link left no decision on record —
+        // the plan still read as awaiting an answer. It now writes through the
+        // same door the clinic uses, which syncs the pipeline as part of its job.
         if ($plan = $journey->treatmentPlan) {
-            app(TreatmentPlanOpportunitySync::class)->syncStage($plan, 'declined', [
-                'source'          => 'case_acceptance',
-                'declined_reason' => 'Declined via Case Acceptance journey',
-                'description'     => 'Opportunity declined from case journey',
-            ]);
+            try {
+                app(TreatmentPlanAcceptanceService::class)->reject(
+                    $plan,
+                    'Declined via Case Acceptance journey',
+                    null,
+                    'case_acceptance',
+                );
+            } catch (\RuntimeException $e) {
+                // A plan that cannot carry a decision (cancelled, unlinked)
+                // must not break the patient-facing page.
+                report($e);
+            }
         }
 
         app(ActivityEngine::class)->log(

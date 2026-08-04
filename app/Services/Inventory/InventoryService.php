@@ -305,38 +305,46 @@ class InventoryService
     {
         $qty = (float) $data['qty'];
 
-        if ($data['type'] === 'remove') {
-            $stock = InventoryStock::where('inventory_item_id', $item->id)
-                ->where('location_id', $data['location_id'])
-                ->first();
-            if (! $stock || $stock->available_qty < $qty) {
-                throw new \RuntimeException(
-                    'Cannot remove more than available stock (' . ($stock->available_qty ?? 0) . ').'
-                );
+        // Hardening (2026-08-04 — P0 concurrency fix): the availability
+        // check and the movement write are now inside one transaction with
+        // the stock row locked for its duration, so two concurrent "remove"
+        // requests against the same item+location can no longer both read
+        // the same available_qty and both pass the check.
+        return DB::transaction(function () use ($item, $data, $user, $qty) {
+            if ($data['type'] === 'remove') {
+                $stock = InventoryStock::where('inventory_item_id', $item->id)
+                    ->where('location_id', $data['location_id'])
+                    ->lockForUpdate()
+                    ->first();
+                if (! $stock || $stock->available_qty < $qty) {
+                    throw new \RuntimeException(
+                        'Cannot remove more than available stock (' . ($stock->available_qty ?? 0) . ').'
+                    );
+                }
             }
-        }
 
-        $unitCost = (float) $item->average_purchase_price;
-        if ($data['type'] === 'add' && ! empty($data['unit_price'])) {
-            $unitCost = (float) $data['unit_price'];
-            $item->last_purchase_price    = $unitCost;
-            $item->average_purchase_price = $unitCost;
-            $item->save();
-        }
+            $unitCost = (float) $item->average_purchase_price;
+            if ($data['type'] === 'add' && ! empty($data['unit_price'])) {
+                $unitCost = (float) $data['unit_price'];
+                $item->last_purchase_price    = $unitCost;
+                $item->average_purchase_price = $unitCost;
+                $item->save();
+            }
 
-        return StockMovement::create([
-            'inventory_item_id' => $item->id,
-            'to_location_id'    => $data['type'] === 'add'    ? $data['location_id'] : null,
-            'from_location_id'  => $data['type'] === 'remove' ? $data['location_id'] : null,
-            'movement_type'     => $data['type'] === 'add' ? 'stock_in' : 'stock_out',
-            'qty'               => $qty,
-            'unit_cost'         => $unitCost,
-            'total_cost'        => round($qty * $unitCost, 2),
-            'notes'             => $data['note'] ?? 'Manual adjustment',
-            'reference_type'    => 'manual_adjustment',
-            'reference_id'      => null,
-            'created_by'        => $user->id,
-        ]);
+            return StockMovement::create([
+                'inventory_item_id' => $item->id,
+                'to_location_id'    => $data['type'] === 'add'    ? $data['location_id'] : null,
+                'from_location_id'  => $data['type'] === 'remove' ? $data['location_id'] : null,
+                'movement_type'     => $data['type'] === 'add' ? 'stock_in' : 'stock_out',
+                'qty'               => $qty,
+                'unit_cost'         => $unitCost,
+                'total_cost'        => round($qty * $unitCost, 2),
+                'notes'             => $data['note'] ?? 'Manual adjustment',
+                'reference_type'    => 'manual_adjustment',
+                'reference_id'      => null,
+                'created_by'        => $user->id,
+            ]);
+        });
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -376,32 +384,41 @@ class InventoryService
         return $movement;
     }
 
-    /** Record a stock-out (mirrors web InventoryController@storeStockOut). */
+    /**
+     * Record a stock-out (mirrors web InventoryController@storeStockOut).
+     *
+     * Hardening (2026-08-04 — P0 concurrency fix): availability check +
+     * write now share one transaction with the stock row locked, closing
+     * the same check-then-act race as adjustStock() above.
+     */
     public function createStockOut(array $data, User $user): StockMovement
     {
-        $item = InventoryItem::find($data['inventory_item_id']);
+        return DB::transaction(function () use ($data, $user) {
+            $item = InventoryItem::find($data['inventory_item_id']);
 
-        $stock = InventoryStock::where('inventory_item_id', $data['inventory_item_id'])
-            ->where('location_id', $data['from_location_id'])
-            ->first();
-        $available = $stock ? $stock->available_qty : 0;
+            $stock = InventoryStock::where('inventory_item_id', $data['inventory_item_id'])
+                ->where('location_id', $data['from_location_id'])
+                ->lockForUpdate()
+                ->first();
+            $available = $stock ? $stock->available_qty : 0;
 
-        if ((float) $data['qty'] > $available) {
-            throw new \RuntimeException(
-                'Insufficient stock. Available: ' . $available . ' ' . ($item?->consumption_unit ?? '')
-            );
-        }
+            if ((float) $data['qty'] > $available) {
+                throw new \RuntimeException(
+                    'Insufficient stock. Available: ' . $available . ' ' . ($item?->consumption_unit ?? '')
+                );
+            }
 
-        return StockMovement::create([
-            'inventory_item_id' => $data['inventory_item_id'],
-            'movement_type'     => $data['movement_type'],
-            'qty'               => -1 * abs((float) $data['qty']), // negative = leaving system
-            'from_location_id'  => $data['from_location_id'],
-            'unit_cost'         => $item?->average_purchase_price ?? 0,
-            'total_cost'        => round(abs((float) $data['qty']) * ($item?->average_purchase_price ?? 0), 2),
-            'notes'             => $data['notes'] ?? null,
-            'created_by'        => $user->id,
-        ]);
+            return StockMovement::create([
+                'inventory_item_id' => $data['inventory_item_id'],
+                'movement_type'     => $data['movement_type'],
+                'qty'               => -1 * abs((float) $data['qty']), // negative = leaving system
+                'from_location_id'  => $data['from_location_id'],
+                'unit_cost'         => $item?->average_purchase_price ?? 0,
+                'total_cost'        => round(abs((float) $data['qty']) * ($item?->average_purchase_price ?? 0), 2),
+                'notes'             => $data['notes'] ?? null,
+                'created_by'        => $user->id,
+            ]);
+        });
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -536,19 +553,95 @@ class InventoryService
     }
 
     /**
-     * Receive goods against a PO (mirrors web InventoryController@receivePO).
+     * Receive goods against a PO (used by both the web InventoryController and
+     * the mobile API — web used to keep its own ~150-line duplicate of this
+     * method; consolidated 2026-08-04 so every hardening fix below applies on
+     * both channels identically).
+     *
      * Creates a GRN, stock_in movements, recalculates PO status, and posts an
      * unpaid vendor bill to Finance. Wrapped in a DB transaction for safety.
+     *
+     * Hardening (2026-08-04):
+     *   - P0-5: refuses to receive against a PO that is already fully
+     *     received/cancelled, and refuses any line that would push a PO item's
+     *     received quantity past what was actually ordered.
+     *   - P0-4: a deterministic fingerprint of this exact receipt (PO +
+     *     location + date + sorted lines) is stored as idempotency_key. A
+     *     double-click, browser resubmit, or client retry after a timeout
+     *     reproduces the same fingerprint — the existing GRN is returned
+     *     instead of creating a duplicate stock-in and a duplicate Finance
+     *     bill. The DB unique constraint on idempotency_key is the
+     *     authoritative guard for the case where two identical requests race.
+     *
+     * @throws \RuntimeException on any guard above (message is user-facing)
      */
     public function receivePurchaseOrder(PurchaseOrder $po, array $data, User $user): GoodsReceiptNote
     {
-        return DB::transaction(function () use ($po, $data, $user) {
+        if (in_array($po->status, ['completed', 'cancelled'], true)) {
+            throw new \RuntimeException(
+                'PO ' . $po->order_no . ' is already ' . str_replace('_', ' ', $po->status)
+                . ' and cannot be received against again.'
+            );
+        }
+
+        $fingerprint = $this->grnIdempotencyKey($po->id, $data);
+
+        $existing = GoodsReceiptNote::where('purchase_order_id', $po->id)
+            ->where('idempotency_key', $fingerprint)
+            ->first();
+        if ($existing) {
+            return $existing->fresh(['items']);
+        }
+
+        try {
+            return $this->doReceivePurchaseOrder($po, $data, $user, $fingerprint);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Race: two identical requests both passed the pre-check above.
+            // The unique index on idempotency_key rejected the second insert —
+            // return the winner's GRN instead of a raw 500.
+            if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
+                $existing = GoodsReceiptNote::where('purchase_order_id', $po->id)
+                    ->where('idempotency_key', $fingerprint)
+                    ->first();
+                if ($existing) {
+                    return $existing->fresh(['items']);
+                }
+            }
+            throw $e;
+        }
+    }
+
+    private function doReceivePurchaseOrder(PurchaseOrder $po, array $data, User $user, string $fingerprint): GoodsReceiptNote
+    {
+        return DB::transaction(function () use ($po, $data, $user, $fingerprint) {
             $locationId   = $data['location_id'];
             $receivedDate = $data['received_date'];
             $anyReceived  = false;
 
+            // P0-5: cap every line at what's actually still outstanding on the
+            // PO before writing anything, so a typo or a duplicate delivery
+            // note can't silently over-receive stock and over-bill Finance.
+            foreach ($data['lines'] as $line) {
+                $qty = (float) $line['qty'];
+                if ($qty <= 0) continue;
+
+                $poItem = $po->items()->where('inventory_item_id', $line['item_id'])->first();
+                if ($poItem) {
+                    $outstanding = max(0, $poItem->qty_ordered - $poItem->qty_received);
+                    if ($qty > $outstanding + 0.0001) {
+                        throw new \RuntimeException(
+                            'Cannot receive ' . rtrim(rtrim(number_format($qty, 2), '0'), '.')
+                            . ' of "' . ($poItem->item?->product_name ?? 'this item') . '" — only '
+                            . rtrim(rtrim(number_format($outstanding, 2), '0'), '.')
+                            . ' still outstanding on PO ' . $po->order_no . '.'
+                        );
+                    }
+                }
+            }
+
             $grn = GoodsReceiptNote::create([
                 'grn_number'        => GoodsReceiptNote::generateGrnNumber(),
+                'idempotency_key'   => $fingerprint,
                 'purchase_order_id' => $po->id,
                 'vendor_id'         => $po->vendor_id,
                 'received_date'     => $receivedDate,
@@ -698,6 +791,18 @@ class InventoryService
      * now, and expenses already taken over by a vendor invoice (source_type
      * = VendorInvoice) are left alone — the invoice owns them.
      *
+     * Hardening (2026-08-04):
+     *   - P0-7: no longer hard-deletes the stock_movements / GRN / grn_items
+     *     rows. stock_movements is an append-only ledger everywhere else in
+     *     this codebase (see reverseAdjustment()) — this method now follows
+     *     the same pattern: a compensating stock_out entry is created and the
+     *     original movement is stamped reversed_at/reversed_by. The GRN
+     *     itself is marked status='reversed' instead of deleted, so the
+     *     record of what was received and undone is never lost.
+     *   - M1: refuses to reverse if the linked Finance bill has already been
+     *     marked paid, instead of silently voiding stock while leaving a paid
+     *     bill standing.
+     *
      * @throws \RuntimeException with a user-facing message on any guard
      */
     public function reverseLastGrn(PurchaseOrder $po): GoodsReceiptNote
@@ -708,6 +813,7 @@ class InventoryService
         }
 
         $grn = GoodsReceiptNote::where('purchase_order_id', $po->id)
+            ->where('status', '!=', 'reversed')
             ->latest()
             ->first();
 
@@ -723,8 +829,28 @@ class InventoryService
             );
         }
 
-        DB::transaction(function () use ($grn, $po) {
-            // 1. Reverse each stock movement created by this GRN
+        $matchLinkedExpense = fn ($q) => $q
+            ->where('grn_number', $grn->grn_number)
+            ->orWhere(fn ($qq) => $qq
+                ->whereIn('source_type', ['GoodsReceiptNote', GoodsReceiptNote::class])
+                ->where('source_id', $grn->id));
+
+        // M1: block the reversal outright if the bill is already paid — undo
+        // the payment in Finance first, otherwise Inventory and Finance would
+        // permanently disagree about whether this delivery happened.
+        $alreadyPaid = FinanceExpense::where($matchLinkedExpense)
+            ->where('payment_status', 'paid')
+            ->exists();
+        if ($alreadyPaid) {
+            throw new \RuntimeException(
+                'The bill for GRN ' . $grn->grn_number . ' has already been marked paid in Finance. '
+                . 'Reverse the payment there first, then undo this receipt.'
+            );
+        }
+
+        DB::transaction(function () use ($grn, $po, $matchLinkedExpense) {
+            // 1. Reverse each stock movement created by this GRN with a
+            //    compensating entry — never edit or delete the original.
             foreach ($grn->items as $grnItem) {
                 $poItem = $po->items()
                     ->where('inventory_item_id', $grnItem->inventory_item_id)
@@ -735,28 +861,48 @@ class InventoryService
                     ]);
                 }
 
-                if ($grnItem->stock_movement_id) {
-                    StockMovement::where('id', $grnItem->stock_movement_id)->delete();
+                $original = $grnItem->stock_movement_id
+                    ? StockMovement::find($grnItem->stock_movement_id)
+                    : null;
+
+                if ($original && is_null($original->reversed_at)) {
+                    StockMovement::create([
+                        'inventory_item_id' => $original->inventory_item_id,
+                        'movement_type'     => 'stock_out',
+                        'qty'               => $original->qty,
+                        'from_location_id'  => $original->to_location_id,
+                        'unit_cost'         => $original->unit_cost,
+                        'total_cost'        => $original->total_cost,
+                        'reference_type'    => PurchaseOrder::class,
+                        'reference_id'      => $po->id,
+                        'reversal_of_id'    => $original->id,
+                        'notes'             => 'Reversal of GRN# ' . $grn->grn_number . ' (movement #' . $original->id . ')',
+                        'created_by'        => auth()->id(),
+                    ]);
+
+                    $original->update([
+                        'reversed_at' => now(),
+                        'reversed_by' => auth()->id(),
+                    ]);
                 }
             }
 
             // 2. Void the Finance expense linked to this GRN (both historical
-            //    forms; skip expenses a vendor invoice has taken over).
-            FinanceExpense::where(function ($q) use ($grn) {
-                    $q->where('grn_number', $grn->grn_number)
-                      ->orWhere(fn ($qq) => $qq
-                          ->whereIn('source_type', ['GoodsReceiptNote', GoodsReceiptNote::class])
-                          ->where('source_id', $grn->id));
-                })
+            //    forms; skip expenses a vendor invoice has taken over). The
+            //    'paid' case was already blocked above.
+            FinanceExpense::where($matchLinkedExpense)
                 ->where('payment_status', 'unpaid')
                 ->update([
                     'payment_status' => 'void',
                     'notes'          => 'Voided — GRN ' . $grn->grn_number . ' reversed on ' . now()->format('d M Y H:i') . '.',
                 ]);
 
-            // 3. Delete the GRN
-            $grn->items()->delete();
-            $grn->delete();
+            // 3. Mark the GRN reversed — record and line items stay in place.
+            $grn->update([
+                'status'      => 'reversed',
+                'reversed_at' => now(),
+                'reversed_by' => auth()->id(),
+            ]);
 
             // 4. Recalculate PO status
             $po->refresh();
@@ -771,6 +917,34 @@ class InventoryService
         });
 
         return $grn;
+    }
+
+    /**
+     * Deterministic fingerprint for a single "receive this PO" request —
+     * P0-4 idempotency. Two requests with the same PO, location, received
+     * date, and set of (item, qty, batch, expiry) lines produce the same
+     * key regardless of submission order, so a double-click / resubmit /
+     * client retry is recognised as the same receipt instead of a new one.
+     */
+    private function grnIdempotencyKey(int $poId, array $data): string
+    {
+        $lines = collect($data['lines'] ?? [])
+            ->map(fn ($l) => [
+                'item_id'  => (int) $l['item_id'],
+                'qty'      => round((float) $l['qty'], 2),
+                'batch_no' => $l['batch_no'] ?? null,
+                'expiry'   => $l['expiry'] ?? null,
+            ])
+            ->sortBy('item_id')
+            ->values()
+            ->all();
+
+        return hash('sha256', json_encode([
+            'po'       => $poId,
+            'location' => (int) ($data['location_id'] ?? 0),
+            'date'     => (string) ($data['received_date'] ?? ''),
+            'lines'    => $lines,
+        ]));
     }
 
     /**
@@ -862,7 +1036,20 @@ class InventoryService
         return $item->fresh();
     }
 
-    /** Record an implant placement (mirrors web @storePlacement). */
+    /**
+     * Record an implant placement (mirrors web @storePlacement).
+     *
+     * Hardening (2026-08-04 — P0-2): placing a catalog-linked implant now
+     * deducts one real unit of stock via a 'treatment_usage' movement, the
+     * same way any other clinical consumption is recorded — before this fix
+     * every implant ever placed stayed counted as available stock forever.
+     * Free-text placements (no implant_catalog_id) and legacy catalog rows
+     * with no linked inventory_item_id are unaffected — there's no stock to
+     * deduct. The placement form has no location field, so the location
+     * currently holding the most stock for this component is used.
+     *
+     * @throws \RuntimeException if the linked component has zero stock anywhere
+     */
     public function createPlacement(array $data, ?UploadedFile $labelPhoto, User $user): ImplantPlacement
     {
         if ($labelPhoto) {
@@ -870,10 +1057,75 @@ class InventoryService
         }
         $data['created_by'] = $user->id;
 
-        return ImplantPlacement::create($data)->load(['patient', 'catalogItem', 'surgeon']);
+        return DB::transaction(function () use ($data, $user) {
+            $placement = ImplantPlacement::create($data);
+            $this->deductImplantStockIfLinked($placement, $user);
+
+            return $placement->fresh(['patient', 'catalogItem', 'surgeon']);
+        });
     }
 
-    /** Update an implant placement (mirrors web @updatePlacement). */
+    /**
+     * Deduct one unit of stock for a placement's linked catalog component,
+     * if it has one. No-op for free-text placements or catalog rows not yet
+     * paired with a stock-tracked inventory item (both pre-existing, valid
+     * states — not something this hardening pass changes).
+     */
+    private function deductImplantStockIfLinked(ImplantPlacement $placement, User $user): void
+    {
+        $catalogItem = $placement->implant_catalog_id
+            ? ImplantCatalog::find($placement->implant_catalog_id)
+            : null;
+
+        if (! $catalogItem || ! $catalogItem->inventory_item_id) {
+            return;
+        }
+
+        // Hardening (2026-08-04 — P0 concurrency fix): lock the selected
+        // stock row for the duration of this already-open transaction (see
+        // createPlacement() above), so two concurrent placements against the
+        // same last-remaining unit can't both pass this check.
+        $stock = InventoryStock::where('inventory_item_id', $catalogItem->inventory_item_id)
+            ->where('available_qty', '>', 0)
+            ->orderByDesc('available_qty')
+            ->lockForUpdate()
+            ->first();
+
+        if (! $stock) {
+            throw new \RuntimeException(
+                'No stock available for "' . $catalogItem->getFullName()
+                . '" — receive stock for this component before placing it.'
+            );
+        }
+
+        $movement = StockMovement::create([
+            'inventory_item_id' => $catalogItem->inventory_item_id,
+            'movement_type'     => 'treatment_usage',
+            'qty'               => 1,
+            'from_location_id'  => $stock->location_id,
+            'reference_type'    => ImplantPlacement::class,
+            'reference_id'      => $placement->id,
+            'notes'             => 'Implant placed — patient #' . $placement->patient_id
+                                  . ($placement->tooth_position ? ', tooth ' . $placement->tooth_position : ''),
+            'created_by'        => $user->id,
+        ]);
+
+        $placement->update(['stock_movement_id' => $movement->id]);
+    }
+
+    /**
+     * Update an implant placement (mirrors web @updatePlacement).
+     *
+     * Hardening (2026-08-04 — P0-3): a status transition into 'failed' or
+     * 'explanted' never returns stock to inventory — fixtures are single-use
+     * per manufacturer IFU (Instructions For Use), and a failed component
+     * replaced under warranty is recorded as a NEW placement (and a new
+     * stock deduction of the replacement unit), not a correction of this
+     * one. That "do nothing to stock" behaviour is correct, but it used to
+     * be an invisible no-op; it's now an explicit, audited system note so
+     * the transition is provably seen and handled rather than silently
+     * skipped.
+     */
     public function updatePlacement(ImplantPlacement $placement, array $data, ?UploadedFile $labelPhoto): ImplantPlacement
     {
         if ($labelPhoto) {
@@ -881,6 +1133,19 @@ class InventoryService
                 Storage::disk('public')->delete($placement->label_photo_path);
             }
             $data['label_photo_path'] = $labelPhoto->store('implants/labels', 'public');
+        }
+
+        $wasTerminal      = in_array($placement->status, ['failed', 'explanted'], true);
+        $enteringTerminal = isset($data['status'])
+            && in_array($data['status'], ['failed', 'explanted'], true)
+            && ! $wasTerminal;
+
+        if ($enteringTerminal) {
+            $data['notes'] = trim(
+                ($data['notes'] ?? $placement->notes ?? '')
+                . "\n\n[System] Marked " . $data['status'] . ' on ' . now()->format('d M Y, h:i A')
+                . ' — component is not returned to stock (single-use, per manufacturer IFU).'
+            );
         }
 
         $placement->update($data);

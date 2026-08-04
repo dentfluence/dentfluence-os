@@ -24,6 +24,7 @@ use App\Models\Receipt;
 use App\Models\Treatment;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentVisitItem;
+use App\Services\Billing\PlanBillingRollbackService;
 use App\Services\Billing\TreatmentPlanBillingService;
 use App\Models\Wallet;
 use App\Services\MembershipBenefitService;
@@ -238,6 +239,14 @@ class BillingController extends Controller
 
     public function storeFromPlan(Request $request, TreatmentPlan $plan, TreatmentPlanBillingService $service)
     {
+        // S1 — an unaccepted plan is a quotation, not work the patient agreed
+        // to; invoicing one is a billing error. The mobile read endpoint has
+        // always enforced this (Api\V1\TreatmentPlanController::billableTeeth);
+        // the web write path did not. Same message, for parity.
+        if (is_null($plan->accepted_at)) {
+            return back()->withErrors(['tooth_ids' => 'This plan must be accepted before billing.']);
+        }
+
         $request->validate([
             'tooth_ids'   => 'required|array|min:1',
             'tooth_ids.*' => 'integer',
@@ -593,6 +602,13 @@ class BillingController extends Controller
             // before recreating the lines, then re-deduct fresh for the new set.
             $this->reverseRetailStockMovements($invoice);
 
+            // S1 — the lines about to be destroyed may be holding treatment-plan
+            // teeth on 'invoiced'. The FK nulls invoice_item_id on delete but
+            // leaves the status, so without this release the teeth claimed to be
+            // invoiced with no invoice at all. Release them BEFORE the delete,
+            // while the linkage still exists.
+            app(PlanBillingRollbackService::class)->rollbackInvoiceItems($invoice->items()->get());
+
             $invoice->items()->delete();
 
             foreach ($request->items as $i => $row) {
@@ -756,6 +772,11 @@ class BillingController extends Controller
         $this->reverseRetailStockMovements($invoice);
         $this->reverseInvoiceWalletDebit($invoice, 'invoice ' . $invoice->invoice_number . ' deleted. ' . $request->cancelled_reason);
 
+        // S1 — release any treatment-plan teeth this invoice billed, so the
+        // clinic can re-invoice them. Without this they stayed 'invoiced'
+        // against a deleted invoice and were unbillable forever.
+        app(PlanBillingRollbackService::class)->rollbackInvoice($invoice);
+
         $invoice->update([
             'status'           => 'cancelled',
             'cancelled_reason' => $request->cancelled_reason,
@@ -771,6 +792,8 @@ class BillingController extends Controller
     public function cancel(Invoice $invoice)
     {
         $this->reverseRetailStockMovements($invoice);
+        // S1 — same plan-teeth release as every other cancel path.
+        app(PlanBillingRollbackService::class)->rollbackInvoice($invoice);
         $invoice->update(['status' => 'cancelled']);
         return back()->with('success', 'Invoice cancelled.');
     }
@@ -1572,6 +1595,11 @@ class BillingController extends Controller
             // 4b. Reverse any wallet credit that was debited against this invoice
             $this->reverseInvoiceWalletDebit($invoice, 'invoice ' . $invoice->invoice_number . ' cancelled. ' . $request->cancelled_reason);
 
+            // 4c. S1 — release the treatment-plan teeth this invoice billed and
+            // reopen the plan if billing had closed it. Money is being refunded
+            // above; the clinical plan must go back to billable in step with it.
+            app(PlanBillingRollbackService::class)->rollbackInvoice($invoice);
+
             // 5. Mark invoice as cancelled + save audit
             $invoice->update([
                 'status'           => 'cancelled',
@@ -1783,6 +1811,9 @@ class BillingController extends Controller
 
         // Snapshot + audit log BEFORE soft-delete
         BillingAuditLog::record('delete', $invoice, $request->reason, auth()->id(), $displayRef);
+
+        // S1 — release any treatment-plan teeth this invoice billed.
+        app(PlanBillingRollbackService::class)->rollbackInvoice($invoice);
 
         $invoice->delete();
 

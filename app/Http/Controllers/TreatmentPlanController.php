@@ -44,6 +44,17 @@ class TreatmentPlanController extends Controller
 
         abort_if($plans->isEmpty(), 404, 'Plans not found.');
 
+        // F4 — this endpoint takes an arbitrary list of plan ids, so it is the
+        // easiest place to read plans that are not the caller's to read. Every
+        // plan must be accessible, and they must all belong to ONE patient:
+        // a comparison print of two patients' plans is never a real document.
+        foreach ($plans as $plan) {
+            $this->assertPlanAccessible($plan);
+        }
+
+        abort_if($plans->pluck('patient_id')->unique()->count() > 1, 400,
+            'Treatment plans from different patients cannot be printed together.');
+
         // Assign A/B/C internal letters
         $letters = ['A', 'B', 'C', 'D', 'E'];
         foreach ($plans as $idx => $plan) {
@@ -95,6 +106,8 @@ class TreatmentPlanController extends Controller
 
     public function consentPrint(Request $request, TreatmentPlan $plan, ConsentDocumentService $consents)
     {
+        $this->assertPlanAccessible($plan);
+
         $plan->load(['patient', 'consultation.doctor', 'doctor']);
 
         // Selection from the "Consent Form" picker on the plan tab — an array
@@ -124,6 +137,8 @@ class TreatmentPlanController extends Controller
 
     public function getItems(TreatmentPlan $plan): JsonResponse
     {
+        $this->assertPlanAccessible($plan);
+
         return response()->json([
             'success' => true,
             'items'   => $plan->items->map(fn($i) => [
@@ -168,9 +183,18 @@ class TreatmentPlanController extends Controller
             'items.*.treatment_name'    => ['required', 'string', 'max:150'],
             'items.*.unit_price'        => ['required', 'numeric', 'min:0'],
             'items.*.units'             => ['nullable', 'integer', 'min:1'],
-            'items.*.notes'             => ['nullable', 'string'],
+            'items.*.notes'             => ['nullable', 'string', 'max:2000'],
             'items.*.treatment_id'      => ['nullable', 'exists:treatments,id'],
             'items.*.consent_required'  => ['nullable', 'boolean'],
+            // F3 — pricing modifiers the plan writes are now declared, so they
+            // are bounded rather than accepted raw from the request.
+            'items.*.disc_pct'          => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'items.*.gst_pct'           => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'items.*.option_rank'       => ['nullable', 'in:best,acceptable,alternative'],
+            'items.*.aocp_applied'      => ['nullable', 'boolean'],
+            'items.*.status'            => ['prohibited'],
+        ], [
+            'items.*.status.prohibited' => $this->lifecycleLockdownMessage(),
         ]);
 
         $plan = DB::transaction(function () use ($request, $patient) {
@@ -223,6 +247,8 @@ class TreatmentPlanController extends Controller
 
     public function update(Request $request, TreatmentPlan $plan): JsonResponse
     {
+        $this->assertPlanAccessible($plan);
+
         $request->validate([
             'plan_name'          => ['nullable', 'string', 'max:100'],
             'doctor_id'          => ['nullable', 'exists:users,id'],
@@ -241,11 +267,19 @@ class TreatmentPlanController extends Controller
             'items.*.treatment_name'    => ['required_with:items', 'string', 'max:150'],
             'items.*.unit_price'        => ['required_with:items', 'numeric', 'min:0'],
             'items.*.units'             => ['nullable', 'integer', 'min:1'],
-            'items.*.notes'             => ['nullable', 'string'],
+            'items.*.notes'             => ['nullable', 'string', 'max:2000'],
             'items.*.treatment_id'      => ['nullable', 'exists:treatments,id'],
             'items.*.consent_required'  => ['nullable', 'boolean'],
+            // F3 — see store(). Item lifecycle state is owned by the plan and
+            // is refused here for the same reason plan status is.
+            'items.*.disc_pct'          => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'items.*.gst_pct'           => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'items.*.option_rank'       => ['nullable', 'in:best,acceptable,alternative'],
+            'items.*.aocp_applied'      => ['nullable', 'boolean'],
+            'items.*.status'            => ['prohibited'],
         ], [
-            'status.prohibited' => $this->lifecycleLockdownMessage(),
+            'status.prohibited'         => $this->lifecycleLockdownMessage(),
+            'items.*.status.prohibited' => $this->lifecycleLockdownMessage(),
         ]);
 
         DB::transaction(function () use ($request, $plan) {
@@ -318,6 +352,8 @@ class TreatmentPlanController extends Controller
 
     public function accept(TreatmentPlan $plan, TreatmentPlanAcceptanceService $acceptance): JsonResponse
     {
+        $this->assertPlanAccessible($plan);
+
         // Acceptance orchestration (stamp + Timeline log + guarded Opportunity)
         // lives in TreatmentPlanAcceptanceService — shared with the Smart
         // Presentation and mobile accept paths so all three produce identical
@@ -338,6 +374,8 @@ class TreatmentPlanController extends Controller
     // twice; the one-opportunity-per-plan guard lives in the sync service.
     public function markPresented(TreatmentPlan $plan, \App\Services\TreatmentPlan\TreatmentPlanPresentationService $presentation): JsonResponse
     {
+        $this->assertPlanAccessible($plan);
+
         // Slice 2.2: routed through the canonical presentation service, which
         // records the CLINICAL fact (presented_at, first time only) and then
         // projects it onto the Opportunity board exactly as before — so staff
@@ -382,6 +420,8 @@ class TreatmentPlanController extends Controller
     /** The patient explicitly declined this plan. */
     public function reject(Request $request, TreatmentPlan $plan, TreatmentPlanAcceptanceService $decisions): JsonResponse
     {
+        $this->assertPlanAccessible($plan);
+
         $data = $request->validate([
             'reason' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -402,6 +442,8 @@ class TreatmentPlanController extends Controller
     /** "Not now" — still a live plan; a review date is optional. */
     public function defer(Request $request, TreatmentPlan $plan, TreatmentPlanAcceptanceService $decisions): JsonResponse
     {
+        $this->assertPlanAccessible($plan);
+
         $data = $request->validate([
             'defer_until' => ['nullable', 'date', 'after_or_equal:today'],
             'reason'      => ['nullable', 'string', 'max:1000'],
@@ -431,6 +473,8 @@ class TreatmentPlanController extends Controller
     /** The patient agreed to some treatments and not others. */
     public function partialAccept(Request $request, TreatmentPlan $plan, TreatmentPlanAcceptanceService $decisions): JsonResponse
     {
+        $this->assertPlanAccessible($plan);
+
         $data = $request->validate([
             'items'   => ['required', 'array', 'min:1'],
             'items.*' => ['required', 'string', 'in:' . implode(',', array_keys(\App\Models\PlanDecisionItem::DECISIONS))],
@@ -458,6 +502,8 @@ class TreatmentPlanController extends Controller
     //
     public function revert(Request $request, TreatmentPlan $plan): JsonResponse
     {
+        $this->assertPlanAccessible($plan);
+
         // Reason is mandatory — it's recorded in the log.
         $request->validate([
             'reason' => ['required', 'string', 'max:500'],
@@ -486,6 +532,8 @@ class TreatmentPlanController extends Controller
 
     public function destroy(TreatmentPlan $plan): JsonResponse
     {
+        $this->assertPlanAccessible($plan);
+
         // Billing guard — mirrors revert(). Deleting a plan that already has
         // invoices orphans the billing linkage, so it's refused outright.
         if ($plan->invoices()->exists()) {
@@ -504,6 +552,12 @@ class TreatmentPlanController extends Controller
 
     public function destroyItem(TreatmentPlanItem $item): JsonResponse
     {
+        // F4 — the item is bound straight from the URL, so ownership is
+        // established through its plan before anything else happens.
+        $item->loadMissing('plan');
+        abort_if(! $item->plan, 404, 'Treatment plan item not found.');
+        $this->assertPlanAccessible($item->plan);
+
         // Same protection as update(): completed / billed work is never deleted.
         $isBilled = $item->status === 'completed'
             || (int) $item->invoiced_units > 0
@@ -699,6 +753,35 @@ class TreatmentPlanController extends Controller
         }
         return (float)($prices[$name] ?? 0);
     }
+    /**
+     * F4 — AUTHORIZATION PARITY WITH THE API.
+     *
+     * Every plan-scoped web action binds a plan straight from the URL. Module
+     * permission middleware answers "may this user work with treatment plans
+     * at all", never "is this particular plan theirs" — so the mobile surface
+     * checked ownership (Api\V1\TreatmentPlanController::findPlan) and the web
+     * surface did not.
+     *
+     * A missing branch on either side is treated as "not scoped" rather than
+     * "denied", matching how BranchScope already behaves; tightening that is a
+     * tenancy decision for the platform, not something to change here.
+     */
+    private function assertPlanAccessible(TreatmentPlan $plan): void
+    {
+        $plan->loadMissing('patient');
+
+        abort_if(! $plan->patient, 404, 'Treatment plan not found.');
+
+        $planBranch = $plan->patient->branch_id;
+        $userBranch = Auth::user()?->branch_id;
+
+        if (is_null($planBranch) || is_null($userBranch)) {
+            return;
+        }
+
+        abort_if((int) $planBranch !== (int) $userBranch, 404, 'Treatment plan not found.');
+    }
+
     private function syncItems(TreatmentPlan $plan, array $items, float $overallDiscPct): void
     {
         // Only write material_variants if the column exists (migration may not have run yet)
@@ -708,8 +791,14 @@ class TreatmentPlanController extends Controller
         }
 
         foreach ($items as $idx => $row) {
+            // F3 — THE PLAN OWNS ITS ITEMS.
+            // Canonical Treatment Lifecycle V1 §14: only the owner writes a
+            // fact. Looking an item up globally allowed a posted id belonging
+            // to another patient's plan to be re-parented into this one, with
+            // its price and description overwritten. Scoping the lookup to the
+            // plan means an unknown id creates a new item here instead.
             $item = isset($row['id'])
-                ? TreatmentPlanItem::find($row['id']) ?? new TreatmentPlanItem()
+                ? $plan->items()->whereKey($row['id'])->first() ?? new TreatmentPlanItem()
                 : new TreatmentPlanItem();
 
             $data = [
@@ -722,7 +811,13 @@ class TreatmentPlanController extends Controller
                 'disc_pct'          => (float)($row['disc_pct']    ?? $overallDiscPct),
                 'gst_pct'           => (float)($row['gst_pct']     ?? 0),
                 'option_rank'       => $row['option_rank']  ?? 'best',
-                'status'            => $row['status']        ?? 'pending',
+                // F3 — item lifecycle state is NEVER client-supplied. It was
+                // read straight from the request, so a caller could mark an
+                // item completed with no visit behind it, and that value then
+                // decided whether the item was protected from deletion. An
+                // existing item keeps whatever it already has; a new one starts
+                // pending.
+                'status'            => $item->exists ? $item->status : 'pending',
                 'notes'             => $row['notes']         ?? null,
                 'sort_order'        => $idx,
                 'aocp_applied'      => (bool)($row['aocp_applied'] ?? false),

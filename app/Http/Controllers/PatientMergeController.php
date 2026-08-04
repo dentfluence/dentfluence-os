@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Patient;
+use App\Models\PatientMerge;
 use App\Services\Patient\PatientMergeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -169,5 +170,32 @@ class PatientMergeController extends Controller
             "Merged {$loser->name} into this record."
                 .($record->retired_patient_id ? " {$record->retired_patient_id} archived." : '')
         );
+    }
+
+    /**
+     * Undo a merge — the bounded safety net (Final Design §1), not a general
+     * rollback. Same password-re-confirmation bar as the merge it reverses;
+     * PatientMergeService::undo() itself is the authoritative gate on whether
+     * this is actually still allowed (window + zero-activity-since).
+     */
+    public function undo(Request $request, Patient $patient, PatientMerge $merge)
+    {
+        abort_unless(Auth::user()?->isAdminRole(), 403);
+        abort_if($merge->surviving_patient_id !== $patient->id, 404);
+
+        $data = $request->validate(['password' => ['required', 'string']]);
+
+        if (! Hash::check($data['password'], Auth::user()->password)) {
+            return back()->withErrors(['password' => 'Incorrect password. Undo cancelled.']);
+        }
+
+        try {
+            $this->merges->undo($merge, Auth::id());
+        } catch (\Throwable $e) {
+            return back()->withErrors(['undo' => $e->getMessage()]);
+        }
+
+        return redirect()->route('patients.show', $patient)
+            ->with('success', 'Merge undone — the record has been restored as a separate patient.');
     }
 }

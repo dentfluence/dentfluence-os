@@ -261,6 +261,12 @@ class PlanDecisionLedgerTest extends TestCase
      * Reverting clears the accepted_at MIRROR, but the decision that was
      * genuinely recorded stays in history — the patient did accept, and that
      * happened. Correcting the record is a later decision row, not amnesia.
+     *
+     * F1/F2 (Canonical Treatment Lifecycle V1 §7, §15 transition 9): that
+     * "later decision row" is now actually written. Previously revert wrote
+     * nothing, so the ledger head still read ACCEPTED while the mirror said
+     * otherwise, and the plan was neither accepted nor decision-pending. The
+     * reversal is now itself a recorded decision.
      */
     public function test_revert_clears_the_mirror_without_erasing_decision_history(): void
     {
@@ -274,6 +280,15 @@ class PlanDecisionLedgerTest extends TestCase
         $plan->refresh();
 
         $this->assertNull($plan->accepted_at);
-        $this->assertSame(1, $plan->decisions()->count(), 'the acceptance still happened and is still on record');
+
+        // Two rows: the acceptance that genuinely happened, and the reversal
+        // that superseded it. Nothing was overwritten or removed.
+        $this->assertSame(2, $plan->decisions()->count(), 'history accumulates — nothing is erased');
+        $this->assertSame(1, $plan->decisions()->where('decision', PlanDecision::ACCEPTED)->count(),
+            'the acceptance still happened and is still on record');
+        $this->assertSame(PlanDecision::REVERTED, $plan->currentDecision()->decision,
+            'the reversal is the current decision');
+        $this->assertTrue($plan->is_decision_pending,
+            'the plan is awaiting a patient decision again');
     }
 }

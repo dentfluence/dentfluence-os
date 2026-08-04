@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('page-title', 'Settings')
+@section('page-title', 'Clinic Administration')
 
 @push('styles')
 <style>
@@ -185,9 +185,77 @@
 
 {{-- ── PAGE HEADER ── --}}
 <div style="padding:18px 28px 16px;background:#fff;border-bottom:1px solid #ede4f3;flex-shrink:0;">
-    <h1 style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:#1a0320;margin:0 0 2px;">Settings</h1>
-    <p style="font-size:12.5px;color:#9a7aaa;margin:0;">Manage your clinic configuration, staff, and system preferences.</p>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap;">
+        <div>
+            <h1 style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:#1a0320;margin:0 0 2px;">Clinic Administration</h1>
+            <p style="font-size:12.5px;color:#9a7aaa;margin:0;">Clinic-wide identity, people, connections and platform settings. Module-specific settings live inside each module.</p>
+        </div>
+
+        {{-- ── Global Settings Search (Settings Architecture v2, Phase 1) ──
+             Client-side filter over a keyword index; each entry navigates
+             straight to the tab/page that owns that setting today. The
+             index is deliberately small and will grow/repoint as settings
+             move to their modules in later phases — see $searchIndex below. --}}
+        <div x-data="settingsSearch()" style="position:relative;width:300px;flex-shrink:0;">
+            <div style="position:relative;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9a7aaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);pointer-events:none;">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input type="text" x-model="q" @input="search()" @focus="open = q.length > 0"
+                       placeholder="Search settings — GST, working hours, EMI, chair..."
+                       autocomplete="off"
+                       style="width:100%;padding:8px 12px 8px 32px;border:1.5px solid #e0d4ea;border-radius:8px;font-size:12.5px;color:#1a0320;outline:none;box-sizing:border-box;font-family:'Inter',sans-serif;">
+            </div>
+            <div x-show="open && results.length" x-cloak @click.outside="open=false"
+                 style="position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid #ede4f3;border-radius:8px;box-shadow:0 12px 32px rgba(14,1,24,.14);z-index:40;max-height:320px;overflow-y:auto;">
+                <template x-for="r in results" :key="r.keyword">
+                    <a href="#"
+                       @click.prevent="if(r.available){ $parent.activeTab = r.tab; window.location.hash = r.tab; open = false; q = ''; }"
+                       style="display:block;padding:10px 14px;text-decoration:none;border-bottom:1px solid #f5f0f8;"
+                       :style="!r.available ? 'opacity:.55;cursor:not-allowed;' : 'cursor:pointer;'"
+                       @mouseover="if(r.available) $el.style.background='#f9f5fc'"
+                       @mouseout="$el.style.background=''">
+                        <div style="font-size:12.5px;font-weight:600;color:#3a0050;" x-text="r.label"></div>
+                        <div style="font-size:11px;color:#9a7aaa;margin-top:1px;" x-text="r.available ? r.owner : (r.owner + ' — coming soon')"></div>
+                    </a>
+                </template>
+            </div>
+            <div x-show="open && q.length > 0 && !results.length" x-cloak
+                 style="position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid #ede4f3;border-radius:8px;box-shadow:0 12px 32px rgba(14,1,24,.14);z-index:40;padding:12px 14px;font-size:12px;color:#9a7aaa;">
+                No matching setting found.
+            </div>
+        </div>
+    </div>
 </div>
+
+@php
+    // Global Settings Search index — Settings Architecture v2, Phase 1.
+    // "available" entries point at where the setting genuinely lives today.
+    // "unavailable" entries name a setting the frozen spec calls for that
+    // doesn't exist yet (e.g. Working Hours) — shown so the search is honest
+    // about what it can't do yet, rather than silently finding nothing.
+    // This index is extended in place as settings move to their modules in
+    // Phases 2–5; it is not itself a new architectural concept, just a
+    // lookup table over destinations that already exist.
+    $settingsSearchIndex = [
+        ['keyword' => 'GST',          'label' => 'GST / Tax Rate',              'owner' => 'Billing & Invoice',  'tab' => 'billing',       'available' => true],
+        ['keyword' => 'Tax',          'label' => 'GST / Tax Rate',              'owner' => 'Billing & Invoice',  'tab' => 'billing',       'available' => true],
+        ['keyword' => 'Invoice',      'label' => 'Invoice Numbering',           'owner' => 'Billing & Invoice',  'tab' => 'billing',       'available' => true],
+        ['keyword' => 'EMI',          'label' => 'EMI Providers & Schemes',     'owner' => 'Billing & Invoice',  'tab' => 'billing',       'available' => true],
+        ['keyword' => 'Chair',        'label' => 'Operatories / Chairs',        'owner' => 'Clinic Profile',     'tab' => 'operatories',   'available' => true],
+        ['keyword' => 'Operatory',    'label' => 'Operatories / Chairs',        'owner' => 'Clinic Profile',     'tab' => 'operatories',   'available' => true],
+        ['keyword' => 'Permissions',  'label' => 'Roles & Permissions',         'owner' => 'Staff & Roles',      'tab' => 'staff-roles',   'available' => true],
+        ['keyword' => 'Roles',        'label' => 'Roles & Permissions',         'owner' => 'Staff & Roles',      'tab' => 'staff-roles',   'available' => true],
+        ['keyword' => 'Staff',        'label' => 'Staff Directory',             'owner' => 'Staff & Roles',      'tab' => 'staff-roles',   'available' => true],
+        ['keyword' => 'Reminder',     'label' => 'Reminder Toggles',            'owner' => 'Notifications',      'tab' => 'notifications', 'available' => true],
+        ['keyword' => 'Patient ID',   'label' => 'Patient ID Numbering',        'owner' => 'Clinic Profile',     'tab' => 'clinic',        'available' => true],
+        ['keyword' => 'Logo',         'label' => 'Clinic Logo & Letterhead',    'owner' => 'Clinic Profile',     'tab' => 'clinic',        'available' => true],
+        ['keyword' => 'Feature Flag', 'label' => 'Feature Flags',               'owner' => 'Advanced',           'tab' => 'cross-app-flags', 'available' => true],
+        ['keyword' => 'Inventory',    'label' => 'Inventory Categories & Vendors', 'owner' => 'Inventory',       'tab' => 'inventory',     'available' => true],
+        ['keyword' => 'Working Hours','label' => 'Working Hours',               'owner' => 'Appointment Settings', 'tab' => null,          'available' => false],
+        ['keyword' => 'Slot Duration','label' => 'Appointment Slot Duration',   'owner' => 'Appointment Settings', 'tab' => null,          'available' => false],
+    ];
+@endphp
 
 {{-- ── SIDEBAR + CONTENT ── --}}
 <div style="flex:1;display:flex;overflow:hidden;">
@@ -195,45 +263,52 @@
 {{-- ── SIDEBAR NAV ── --}}
 <div style="width:210px;border-right:1px solid #ede4f3;background:#fff;overflow-y:auto;flex-shrink:0;">
     @php
+    // Settings Architecture v2, Phase 1 — "Clinic Administration shell".
+    // Every item below is the exact same tab/route as before (zero backend
+    // change), regrouped under the frozen 6-group structure. Items whose
+    // ownership moves to a module in Phase 2+ (Masters, Knowledge Bank,
+    // Clinical, Patient Defaults, Clinical Library, Billing & Invoice,
+    // Printing, Notifications, Growth & Comms, Inventory, Huddle,
+    // Personalisation, Calendar) stay fully functional here under a clearly
+    // labelled transitional group in the meantime — this is a scaffolding
+    // necessity, not a new permanent architecture concept. They physically
+    // relocate into their owning module's own Settings page as each module
+    // is migrated, per the frozen roadmap.
     $navGroups = [
-        'Clinic' => [
+        'Organization' => [
             ['id'=>'clinic',          'label'=>'Clinic Profile',    'icon'=>'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>'],
             ['id'=>'operatories',     'label'=>'Operatories',       'icon'=>'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 4 0v2m0 0V5a2 2 0 0 1 4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/>'],
             ['id'=>'abdm-hfr',        'label'=>'Health Facility (HFR)', 'icon'=>'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>', 'href' => 'settings.clinic.hfr.edit'],
         ],
-        'Team' => [
+        'People & Access' => [
             ['id'=>'staff-roles',     'label'=>'Staff & Roles',     'icon'=>'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'],
         ],
-        'Clinical' => [
-            ['id'=>'masters',         'label'=>'Masters',           'icon'=>'<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>'],
-            ['id'=>'knowledge-bank',  'label'=>'Knowledge Bank',    'icon'=>'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>'],
-            ['id'=>'clinical',        'label'=>'Clinical',          'icon'=>'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'],
-            ['id'=>'patient-defaults','label'=>'Patient Defaults',  'icon'=>'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'],
-            ['id'=>'clinical-library-link', 'label'=>'Clinical Library', 'icon'=>'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/><path d="M7 7h2m0 0h2m-2 0v4"/>', 'href' => 'settings.clinical-library'],
-        ],
-        'Finance' => [
-            ['id'=>'billing',         'label'=>'Billing & Invoice', 'icon'=>'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'],
-            ['id'=>'printing',        'label'=>'Printing',          'icon'=>'<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>'],
+        'Connections' => [
             ['id'=>'banking-link',    'label'=>'Banking',           'icon'=>'<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>', 'href' => 'settings.banking'],
         ],
-        'Communication' => [
-            ['id'=>'notifications',   'label'=>'Notifications',     'icon'=>'<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'],
-            ['id'=>'growth',          'label'=>'Growth & Comms',    'icon'=>'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>'],
+        'Platform' => [
+            ['id'=>'activity-log-link', 'label'=>'Audit Logs',      'icon'=>'<path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/>', 'href' => 'settings.activity-log'],
         ],
-        'Operations' => [
-            ['id'=>'inventory',       'label'=>'Inventory',         'icon'=>'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8L2 7h20z"/>'],
-            ['id'=>'huddle',          'label'=>'Huddle',            'icon'=>'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 17h7m-3.5-3.5v7"/>'],
-        ],
-        'App' => [
-            ['id'=>'personalisation', 'label'=>'Personalisation',   'icon'=>'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'],
-            ['id'=>'calendar',        'label'=>'Calendar',          'icon'=>'<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'],
+        'Advanced' => [
             ['id'=>'cross-app-flags', 'label'=>'Feature Flags',     'icon'=>'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>'],
         ],
         'Data' => [
             ['id'=>'data',            'label'=>'Import / Export',   'icon'=>'<polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/>'],
         ],
-        'Security' => [
-            ['id'=>'activity-log-link', 'label'=>'Activity Log', 'icon'=>'<path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/>', 'href' => 'settings.activity-log'],
+        'Legacy — moving to modules' => [
+            ['id'=>'masters',         'label'=>'Masters',           'icon'=>'<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>'],
+            ['id'=>'knowledge-bank',  'label'=>'Knowledge Bank',    'icon'=>'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>'],
+            ['id'=>'clinical',        'label'=>'Clinical',          'icon'=>'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'],
+            ['id'=>'patient-defaults','label'=>'Patient Defaults',  'icon'=>'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'],
+            ['id'=>'clinical-library-link', 'label'=>'Clinical Library', 'icon'=>'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/><path d="M7 7h2m0 0h2m-2 0v4"/>', 'href' => 'settings.clinical-library'],
+            ['id'=>'billing',         'label'=>'Billing & Invoice', 'icon'=>'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'],
+            ['id'=>'printing',        'label'=>'Printing',          'icon'=>'<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>'],
+            ['id'=>'notifications',   'label'=>'Notifications',     'icon'=>'<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'],
+            ['id'=>'growth',          'label'=>'Growth & Comms',    'icon'=>'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>'],
+            ['id'=>'inventory',       'label'=>'Inventory',         'icon'=>'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8L2 7h20z"/>'],
+            ['id'=>'huddle',          'label'=>'Huddle',            'icon'=>'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 17h7m-3.5-3.5v7"/>'],
+            ['id'=>'personalisation', 'label'=>'Personalisation',   'icon'=>'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'],
+            ['id'=>'calendar',        'label'=>'Calendar',          'icon'=>'<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'],
         ],
     ];
     @endphp
@@ -2903,6 +2978,23 @@
 
 @push('scripts')
 <script>
+// Global Settings Search — Settings Architecture v2, Phase 1.
+function settingsSearch() {
+    return {
+        q: '',
+        open: false,
+        results: [],
+        index: @json($settingsSearchIndex),
+
+        search() {
+            const term = this.q.trim().toLowerCase();
+            if (! term) { this.results = []; this.open = false; return; }
+            this.results = this.index.filter(r => r.keyword.toLowerCase().includes(term) || r.label.toLowerCase().includes(term));
+            this.open = true;
+        },
+    };
+}
+
 function settingsApp() {
     return {
         activeTab: '{{ $activeTab }}',

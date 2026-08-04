@@ -40,10 +40,15 @@ class EnsureApiRole
             ], 401);
         }
 
-        // Admin / clinic owner can do everything.
-        if ($user->isAdminRole()) {
-            return $next($request);
-        }
+        // F4 — the legacy `users.role === 'admin'` bypass is REMOVED.
+        //
+        // User::canAccess() retired that string column as an authority in
+        // Phase 1: only the assigned role's ADMIN slug grants blanket access,
+        // and it does so inside canAccess() below. Keeping the short-circuit
+        // here meant a user carrying the legacy string but a restricted
+        // assigned role was denied on web and allowed on every API route —
+        // the two surfaces were not the same gate. Genuine administrators are
+        // unaffected; they pass through canAccess() exactly as they do on web.
 
         foreach ($roles as $role) {
             // 'module:billing' (+ optional next param as the action) → check the

@@ -248,6 +248,21 @@ class Patient extends Model
         return $query->whereNull('merged_into_id');
     }
 
+    /**
+     * The most recent not-yet-undone merge where this patient survived, if
+     * any. Cheap (indexed on surviving_patient_id) and only meaningful for the
+     * rare patient with merge history — safe to call from a view. Whether it
+     * is still ACTUALLY undoable (window + activity check) is a service
+     * decision, not this model's — see PatientMergeService::undoStatus().
+     */
+    public function latestUndoableMerge(): ?PatientMerge
+    {
+        return PatientMerge::where('surviving_patient_id', $this->id)
+            ->whereNull('undone_at')
+            ->latest()
+            ->first();
+    }
+
     /** Patients this patient has referred. */
     public function referrals()
     {

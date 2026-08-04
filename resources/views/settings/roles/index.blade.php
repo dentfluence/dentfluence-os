@@ -132,11 +132,12 @@
 
                 <div>
                     {{-- Column header --}}
-                    <div style="display:grid; grid-template-columns:1fr 90px 90px 90px; gap:0; padding:10px 20px; background:#f9f5fc; border-bottom:1px solid #ede4f3; font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:#9a7aaa;">
+                    <div style="display:grid; grid-template-columns:1fr 90px 90px 90px 90px; gap:0; padding:10px 20px; background:#f9f5fc; border-bottom:1px solid #ede4f3; font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:#9a7aaa;">
                         <div>Module</div>
                         <div style="text-align:center;">View</div>
                         <div style="text-align:center;">Edit</div>
                         <div style="text-align:center;">Delete</div>
+                        <div style="text-align:center;" title="Configure this module's own Settings page">Settings</div>
                     </div>
 
                     @foreach($modules as $section => $sectionModules)
@@ -146,7 +147,7 @@
                     </div>
 
                     @foreach($sectionModules as $module)
-                    <div style="display:grid; grid-template-columns:1fr 90px 90px 90px; gap:0; padding:11px 20px; border-bottom:1px solid #f5f0f8; align-items:center;"
+                    <div style="display:grid; grid-template-columns:1fr 90px 90px 90px 90px; gap:0; padding:11px 20px; border-bottom:1px solid #f5f0f8; align-items:center;"
                          :style="permissions['{{ $module->slug }}']?.view ? '' : 'opacity:.55;'">
 
                         {{-- Module name --}}
@@ -189,6 +190,19 @@
                                        :checked="permissions['{{ $module->slug }}']?.delete"
                                        @change="toggle('{{ $module->slug }}', 'delete', $event.target.checked)"
                                        :disabled="!permissions['{{ $module->slug }}']?.edit"
+                                       style="display:none;">
+                                <span class="df-toggle-track"></span>
+                            </label>
+                        </div>
+
+                        {{-- Settings toggle (disabled if no view) — Settings Architecture v2, distinct from Edit --}}
+                        <div style="text-align:center;">
+                            <label class="df-toggle" :class="permissions['{{ $module->slug }}']?.settings ? 'on' : ''"
+                                   :style="!permissions['{{ $module->slug }}']?.view ? 'pointer-events:none;opacity:.3;' : ''">
+                                <input type="checkbox"
+                                       :checked="permissions['{{ $module->slug }}']?.settings"
+                                       @change="toggle('{{ $module->slug }}', 'settings', $event.target.checked)"
+                                       :disabled="!permissions['{{ $module->slug }}']?.view"
                                        style="display:none;">
                                 <span class="df-toggle-track"></span>
                             </label>
@@ -342,15 +356,16 @@ function rolesManager() {
 
         toggle(slug, action, value) {
             if (! this.permissions[slug]) {
-                this.permissions[slug] = { view: false, edit: false, delete: false };
+                this.permissions[slug] = { view: false, edit: false, delete: false, settings: false };
             }
 
             this.permissions[slug][action] = value;
 
-            // Cascade: turning off view disables edit+delete
+            // Cascade: turning off view disables edit+delete+settings
             if (action === 'view' && !value) {
-                this.permissions[slug].edit   = false;
-                this.permissions[slug].delete = false;
+                this.permissions[slug].edit     = false;
+                this.permissions[slug].delete   = false;
+                this.permissions[slug].settings = false;
             }
             // Cascade: turning off edit disables delete
             if (action === 'edit' && !value) {
@@ -364,6 +379,13 @@ function rolesManager() {
             if (action === 'delete' && value) {
                 this.permissions[slug].view = true;
                 this.permissions[slug].edit = true;
+            }
+            // Cascade: turning on settings requires view only — deliberately
+            // independent of edit, so a role can configure a module's
+            // Settings page without also being able to edit its operational
+            // data, or vice versa (Settings Architecture v2, Q6).
+            if (action === 'settings' && value) {
+                this.permissions[slug].view = true;
             }
 
             // Force re-render

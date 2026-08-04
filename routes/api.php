@@ -53,6 +53,18 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login'])
         ->middleware('throttle:5,1');
 
+    // WhatsApp Cloud API webhook (PRM Phase 4c) — was implemented but never
+    // routed (Repo Cleanup Audit 08-03 P0 / PRE Communication Cleanup v3
+    // 2026-08-04, slice 1). Meta calls this directly, so it must stay outside
+    // auth:sanctum; the controller itself is fail-closed on both the
+    // subscription-verify token and the X-Hub-Signature-256 payload signature,
+    // and no-ops (404) while prm.webhooks.whatsapp.enabled stays off. Actual
+    // live path is /api/v1/webhooks/prm/whatsapp (this file has one route
+    // group, prefixed "v1") — the controller's own docblock path comment
+    // predates that and was left as-is per "do not rewrite the controller".
+    Route::get('/webhooks/prm/whatsapp',  [WhatsAppLeadController::class, 'verify']);
+    Route::post('/webhooks/prm/whatsapp', [WhatsAppLeadController::class, 'receive']);
+
     /*
      | -------- Protected routes (require a Bearer token) --------
      | The client sends header:  Authorization: Bearer <token>
@@ -195,7 +207,11 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         // for one treatment. Read-only; powers the Case Journey live-cost UI.
         // See docs/plan-case-acceptance-engine.md §4.1.
         Route::get('/treatment-pricing',                   [\App\Http\Controllers\Api\V1\TreatmentPricingController::class, 'index']);
-        Route::get('/treatment-plans/{plan}',              [TreatmentPlanController::class, 'show']);
+        // F4 — this returns the patient's name, contact details and the full
+        // costed plan. It was reachable by any authenticated token, which
+        // defeated the patients-view gate the group above exists to enforce.
+        Route::get('/treatment-plans/{plan}',              [TreatmentPlanController::class, 'show'])
+            ->middleware('api.role:module:patients,view');
         // Slice 1.2: treatment-plan writes follow the same owner-configured
         // patients,edit permission the web routes use (were role-name lists).
         Route::post('/patients/{patient}/treatment-plans', [TreatmentPlanController::class, 'store'])
@@ -217,7 +233,10 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             ->middleware('api.role:module:patients,edit');
         Route::post('/treatment-plans/{plan}/partial-accept', [TreatmentPlanController::class, 'partialAccept'])
             ->middleware('api.role:module:patients,edit');
-        Route::get('/treatment-plans/{plan}/billable-teeth', [TreatmentPlanController::class, 'billableTeeth']);
+        // F4 — reads plan contents, so it carries the same gate as every other
+        // plan read rather than being open to any authenticated token.
+        Route::get('/treatment-plans/{plan}/billable-teeth', [TreatmentPlanController::class, 'billableTeeth'])
+            ->middleware('api.role:module:patients,view');
         // Billing a plan creates an invoice → finance,edit as well as patients,edit
         // is conceptually right, but finance is the money module: gate on finance.
         Route::post('/treatment-plans/{plan}/bill',           [TreatmentPlanController::class, 'bill'])
@@ -693,7 +712,6 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::get('/inventory/dashboard', [InventoryController::class, 'dashboard']);
         Route::get('/inventory/items',    [InventoryController::class, 'items']);
         Route::get('/inventory/products',  [InventoryController::class, 'products']);
-        Route::post('/inventory/products', [InventoryController::class, 'storeProduct']);
         Route::get('/inventory/vendors',  [InventoryController::class, 'vendors']);
 
         // Implants — declare list/option routes before the "/{...}" id routes
@@ -714,6 +732,12 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::get('/inventory/items/{item}/history', [InventoryController::class, 'stockHistory']);
 
         /* ---- Writes (role-gated) ---- */
+
+        // Create a new catalogue product (2026-08-04 P0 hardening — this
+        // route was missing its permission gate entirely; every sibling
+        // write route in this file requires module:inventory,edit).
+        Route::post('/inventory/products', [InventoryController::class, 'storeProduct'])
+            ->middleware('api.role:module:inventory,edit');
 
         // Item update + quick stock adjust
         Route::put('/inventory/items/{item}', [InventoryController::class, 'updateItem'])

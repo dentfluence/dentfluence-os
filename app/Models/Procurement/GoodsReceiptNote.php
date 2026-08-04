@@ -18,13 +18,14 @@ class GoodsReceiptNote extends Model
     protected $table = 'goods_receipt_notes';
 
     protected $fillable = [
-        'grn_number', 'purchase_order_id', 'vendor_id',
+        'grn_number', 'idempotency_key', 'purchase_order_id', 'vendor_id',
         'received_date', 'location_id', 'notes',
-        'vendor_invoice_id', 'status', 'created_by',
+        'vendor_invoice_id', 'status', 'reversed_at', 'reversed_by', 'created_by',
     ];
 
     protected $casts = [
         'received_date' => 'date',
+        'reversed_at'   => 'datetime',
     ];
 
     /* ── Relationships ── */
@@ -49,7 +50,17 @@ class GoodsReceiptNote extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function reversedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reversed_by');
+    }
+
     /* ── Helpers ── */
+
+    public function isReversed(): bool
+    {
+        return $this->status === 'reversed';
+    }
 
     public static function generateGrnNumber(): string
     {

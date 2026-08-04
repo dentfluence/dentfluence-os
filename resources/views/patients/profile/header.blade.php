@@ -5,6 +5,32 @@
     </div>
 @endif
 
+{{-- Duplicate Merge — safety-net undo (Final Design §1). Admin-only, and only
+     shown while the merge is still within its bounded undo window with zero
+     activity recorded against this patient since. Not a general rollback. --}}
+@if(auth()->user()?->isAdminRole())
+    @php
+        $recentMerge = $patient->latestUndoableMerge();
+        $undoStatus  = $recentMerge ? app(\App\Services\Patient\PatientMergeService::class)->undoStatus($recentMerge) : null;
+    @endphp
+    @if($recentMerge && $undoStatus && $undoStatus['allowed'])
+        <div class="mx-6 mt-3 flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 text-amber-900 text-sm px-4 py-2 rounded">
+            <span>A duplicate record was merged into this patient {{ $recentMerge->created_at->diffForHumans() }}.</span>
+            <form method="POST" action="{{ route('patients.merge.undo', [$patient, $recentMerge]) }}"
+                  onsubmit="return confirm('Undo this merge? The merged record will be restored as a separate patient.');"
+                  class="flex items-center gap-2">
+                @csrf
+                <input type="password" name="password" required placeholder="Your password"
+                       class="text-xs border border-amber-300 rounded px-2 py-1 w-32">
+                <button type="submit"
+                        class="px-3 py-1 text-xs font-medium text-white bg-amber-600 rounded hover:bg-amber-700 whitespace-nowrap">
+                    Undo ({{ $undoStatus['minutes_left'] }} min left)
+                </button>
+            </form>
+        </div>
+    @endif
+@endif
+
 {{-- ══════════════════════════════════════════════════════════
      HEADER (sticky)
 ══════════════════════════════════════════════════════════ --}}

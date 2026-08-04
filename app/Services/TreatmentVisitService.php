@@ -15,6 +15,7 @@ use App\Models\TreatmentVisit;
 use App\Models\TreatmentPlanItem;
 use App\Models\TreatmentVisitItem;
 use App\Services\Relationship\ActivityEngine;
+use App\Services\TreatmentPlan\PlanLifecycleService;
 use Illuminate\Validation\ValidationException;
 use App\Services\Workflow\WorkflowShadowRunner;
 use Illuminate\Support\Facades\Auth;
@@ -177,6 +178,11 @@ class TreatmentVisitService
             // Record implant placement + deduct stock for fixture/components used
             $this->recordImplantPlacementAndStock($visit, $data);
 
+            // F1 — report the clinical fact to the Treatment Plan, which
+            // re-derives its own lifecycle (Accepted → Treatment Started →
+            // Treatment Complete). The visit never writes that state itself.
+            $this->reportClinicalFactToPlan($visit);
+
             return $visit;
         });
 
@@ -230,6 +236,9 @@ class TreatmentVisitService
             // Record implant placement + deduct stock for fixture/components used.
             // Idempotent — re-saving the same visit won't double-deduct (see method docblock).
             $this->recordImplantPlacementAndStock($visit, $data);
+
+            // F1 — the recorded facts may have changed, so the plan re-derives.
+            $this->reportClinicalFactToPlan($visit);
         });
 
         // Phase 5 shadow-run — see the matching comment in create() above.
@@ -350,13 +359,43 @@ class TreatmentVisitService
     }
 
     /**
+     * F1 — hand the clinical fact to the Treatment Plan module.
+     *
+     * Canonical Treatment Lifecycle V1 §15 transitions 6 and 7: Treatment Visit
+     * establishes the FACT that work was performed; Treatment Plan writes its
+     * own STATE in response. This is the only channel between the two, and it
+     * carries no state — just the signal to re-derive.
+     */
+    private function reportClinicalFactToPlan(TreatmentVisit $visit): void
+    {
+        if (! $visit->treatment_plan_id) {
+            return;
+        }
+
+        $plan = TreatmentPlan::find($visit->treatment_plan_id);
+
+        if ($plan) {
+            app(PlanLifecycleService::class)->reactToClinicalFact($plan, Auth::user());
+        }
+    }
+
+    /**
      * Mark the linked plan complete and auto-create a 6-month recall task
      * (due 1 week before the 6-month mark). Skipped if a recall already exists.
      * Identical to the block that previously lived in store()/update().
      */
     private function completePlanAndQueueRecall(int $treatmentPlanId, int $patientId, string $patientName, ?string $treatmentName = null): void
     {
-        TreatmentPlan::where('id', $treatmentPlanId)->update(['status' => 'completed']);
+        // F1 — TREATMENT VISIT DOES NOT WRITE PLAN LIFECYCLE.
+        // Canonical Treatment Lifecycle V1 §8 and §15: the visit establishes
+        // clinical FACTS (what was performed, on which teeth) and the Treatment
+        // Plan re-derives its own state from them. This method previously wrote
+        // treatment_plans.status directly — a second writer, with no criteria,
+        // bypassing model events and therefore the audit trail.
+        $planForLifecycle = TreatmentPlan::find($treatmentPlanId);
+        if ($planForLifecycle) {
+            app(PlanLifecycleService::class)->reactToClinicalFact($planForLifecycle, Auth::user());
+        }
 
         $hasRecall = Task::where('patient_id', $patientId)
             ->where('category', 'follow_up')
@@ -375,7 +414,10 @@ class TreatmentVisitService
                 'priority'    => 'medium',
                 'status'      => 'pending',
                 'patient_id'  => $patientId,
-                'branch_id'   => Auth::user()->branch_id,
+                // Null-safe: a visit saved from a queue or console context has
+                // no session, and a recall task must never be the reason a
+                // recorded clinical fact fails to save.
+                'branch_id'   => Auth::user()?->branch_id,
                 'created_by'  => Auth::id(),
                 // Due 1 week before the 6-month mark so staff has time to reach out
                 'due_date'    => now()->addMonths(6)->subWeek(),

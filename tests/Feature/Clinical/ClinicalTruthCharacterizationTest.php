@@ -241,14 +241,49 @@ class ClinicalTruthCharacterizationTest extends TestCase
         $this->assertSame(0, $plan->patient->treatmentVisits()->count());
     }
 
-    // ── 6. last_visit_date remains dead ──────────────────────────────────────
+    // ── 6. last_visit_date is now written by ConsultationClinicalWiringObserver ──
 
-    public function test_last_visit_date_is_never_written_by_any_clinical_flow(): void
+    /**
+     * UPDATED 2026-08-05: this used to characterize a real gap ("FINDING
+     * (Gate A): no clinical event writes last_visit_date", tracked in the
+     * PRE Engine Audit as a P0 — the recall engine keyed entirely off a dead
+     * column). That gap was closed by Consultations Slice 11
+     * (ConsultationClinicalWiringObserver, 2026-08-03), which advances
+     * patients.last_visit_date on every saved consultation. This test was
+     * never updated to match — it kept asserting the old (now false)
+     * behaviour and started failing once the observer landed. Rewritten to
+     * characterize the CURRENT, correct behaviour instead of the old gap.
+     */
+    public function test_last_visit_date_is_advanced_by_a_completed_consultation(): void
     {
         $patient = $this->patient();
         $plan    = $this->planWithItems($patient);
 
         app(TreatmentPlanAcceptanceService::class)->accept($plan, $this->admin(), 'clinic');
+
+        $this->assertNull($patient->fresh()->last_visit_date,
+            'sanity check: no visit has happened yet');
+
+        $visitDate = now();
+
+        Consultation::create([
+            'patient_id'        => $patient->id,
+            'doctor_id'         => $this->admin()->id,
+            'branch_id'         => 1,
+            'status'            => 'completed',
+            'consultation_date' => $visitDate,
+        ]);
+
+        $this->assertSame(
+            $visitDate->toDateString(),
+            $patient->fresh()->last_visit_date->toDateString(),
+            'FINDING (Gate A, closed 2026-08-03): a completed consultation now advances last_visit_date.'
+        );
+    }
+
+    public function test_last_visit_date_advance_is_monotonic_and_never_rewinds(): void
+    {
+        $patient = $this->patient();
 
         Consultation::create([
             'patient_id'        => $patient->id,
@@ -257,8 +292,22 @@ class ClinicalTruthCharacterizationTest extends TestCase
             'status'            => 'completed',
             'consultation_date' => now(),
         ]);
+        $laterVisitDate = $patient->fresh()->last_visit_date;
 
-        $this->assertNull($patient->fresh()->last_visit_date,
-            'FINDING (Gate A): no clinical event writes last_visit_date');
+        // A backdated correction/second consultation must never pull the
+        // column backwards.
+        Consultation::create([
+            'patient_id'        => $patient->id,
+            'doctor_id'         => $this->admin()->id,
+            'branch_id'         => 1,
+            'status'            => 'completed',
+            'consultation_date' => now()->subDays(30),
+        ]);
+
+        $this->assertSame(
+            $laterVisitDate->toDateString(),
+            $patient->fresh()->last_visit_date->toDateString(),
+            'a backdated consultation must not rewind last_visit_date'
+        );
     }
 }

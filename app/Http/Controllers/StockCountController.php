@@ -8,6 +8,7 @@ use App\Models\Inventory\StockCountSession;
 use App\Models\Inventory\StockCountLine;
 use App\Models\Inventory\InventoryItem;
 use App\Models\Inventory\InventoryLocation;
+use App\Models\Inventory\InventoryStock;
 use App\Models\Inventory\StockMovement;
 use Carbon\Carbon;
 
@@ -191,22 +192,43 @@ class StockCountController extends Controller
                 if ($status === 'low')      $lowCount++;
                 if (in_array($status, ['critical', 'out'])) $criticalCount++;
 
-                // Create stock adjustment movement only if variance is non-zero
-                if ($line->variance !== null && abs($line->variance) > 0.001) {
-                    $movementType = $line->variance > 0 ? 'stock_in' : 'stock_out';
+                // Hardening (2026-08-04 — P0 fix): re-derive the variance
+                // against LIVE stock at completion time instead of trusting
+                // the session-start snapshot stored on the line. A count
+                // session can stay open for a while (a full clinic count
+                // isn't instant) while normal stock-in/out keeps happening
+                // on the same items; completing against the stale
+                // system_qty would silently apply a corrupted adjustment
+                // (real variance + whatever moved during the count window).
+                // lockForUpdate() also closes the same double-submit race
+                // the session's isEditable() check alone can't prevent.
+                $liveSystemQty = (float) InventoryStock::where('inventory_item_id', $line->inventory_item_id)
+                    ->lockForUpdate()
+                    ->sum('available_qty');
 
+                $variance = round($line->physical_qty - $liveSystemQty, 2);
+                $line->system_qty = $liveSystemQty;
+                $line->variance    = $variance;
+
+                // Create stock adjustment movement only if variance is non-zero
+                if (abs($variance) > 0.001) {
+                    // 'adjustment' is the only valid enum value for a manual/count
+                    // correction (see stock_movements migration). qty must stay
+                    // SIGNED here — StockMovement::updateLiveStock()'s adjustment
+                    // branch reads $this->qty directly (not abs()) to decide
+                    // add vs. remove.
                     $movement = StockMovement::create([
                         'inventory_item_id' => $line->inventory_item_id,
-                        'movement_type'     => 'stock_adjustment',
-                        'qty'               => abs($line->variance),
-                        'to_location_id'    => $line->variance > 0 ? $location?->id : null,
-                        'from_location_id'  => $line->variance < 0 ? $location?->id : null,
+                        'movement_type'     => 'adjustment',
+                        'qty'               => $variance,
+                        'to_location_id'    => $variance > 0 ? $location?->id : null,
+                        'from_location_id'  => $variance < 0 ? $location?->id : null,
                         'unit_cost'         => 0,
                         'total_cost'        => 0,
                         'notes'             => 'Physical count — Session ' . $session->session_no
-                                              . '. System: ' . $line->system_qty
+                                              . '. System (at completion): ' . $liveSystemQty
                                               . ' | Physical: ' . $line->physical_qty
-                                              . ' | Variance: ' . ($line->variance > 0 ? '+' : '') . $line->variance,
+                                              . ' | Variance: ' . ($variance > 0 ? '+' : '') . $variance,
                         'reference_type'    => StockCountSession::class,
                         'reference_id'      => $session->id,
                         'created_by'        => auth()->id(),

@@ -57,10 +57,13 @@ class Role extends Model
         if (! $perm) return false;
 
         return match ($action) {
-            'view'   => (bool) $perm->can_view,
-            'edit'   => (bool) $perm->can_edit,
-            'delete' => (bool) $perm->can_delete,
-            default  => false,
+            'view'     => (bool) $perm->can_view,
+            'edit'     => (bool) $perm->can_edit,
+            'delete'   => (bool) $perm->can_delete,
+            // Settings Architecture v2 — Phase 1: distinct "can configure this
+            // module" tier, separate from can_edit (operational data).
+            'settings' => (bool) $perm->can_settings,
+            default    => false,
         };
     }
 

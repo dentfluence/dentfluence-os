@@ -65,12 +65,16 @@ class TreatmentPlanPresentationService
         $this->guard($plan);
 
         return DB::transaction(function () use ($plan, $actor, $source) {
-            $isFirst = is_null($plan->presented_at);
+            // F2 — the first-presentation test is a CONDITIONAL WRITE, not a
+            // read of an in-memory model resolved before the transaction
+            // opened. Two concurrent presentations previously both computed
+            // "this is the first time" and both stamped it; now exactly one
+            // row-update can succeed, and its affected-row count is the answer.
+            $isFirst = TreatmentPlan::whereKey($plan->id)
+                ->whereNull('presented_at')
+                ->update(['presented_at' => now()]) === 1;
 
-            if ($isFirst) {
-                $plan->forceFill(['presented_at' => now()])->save();
-            }
-
+            $plan->refresh();
             $plan->loadMissing(['patient', 'items']);
 
             // One meaningful clinical event per explicit presentation. This is

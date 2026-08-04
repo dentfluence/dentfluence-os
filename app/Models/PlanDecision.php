@@ -22,11 +22,22 @@ class PlanDecision extends Model
     public const DEFERRED           = 'deferred';
     public const REJECTED           = 'rejected';
 
+    /**
+     * F2 — the patient's acceptance was reversed.
+     *
+     * Canonical Treatment Lifecycle V1 §7: "Reversing an acceptance is itself a
+     * recorded decision, never an erasure of the original." The earlier
+     * ACCEPTED row stays exactly where it is; this row supersedes it as the
+     * ledger head and returns the plan to Decision Pending (§15 transition 9).
+     */
+    public const REVERTED = 'reverted';
+
     public const DECISIONS = [
         self::ACCEPTED           => 'Accepted',
         self::PARTIALLY_ACCEPTED => 'Partially Accepted',
         self::DEFERRED           => 'Deferred',
         self::REJECTED           => 'Rejected',
+        self::REVERTED           => 'Acceptance Reversed',
     ];
 
     /**

@@ -51,7 +51,20 @@ class TreatmentPlanAcceptanceService
         string $via = 'clinic',
         ?int $createdBy = null
     ): TreatmentPlan {
+        $this->guardDecidable($plan);
+
         return DB::transaction(function () use ($plan, $actor, $via, $createdBy) {
+            // F2 — IDEMPOTENT ACCEPTANCE. Re-submitting an acceptance (a
+            // double-click, a replayed patient link, a retried mobile request)
+            // must not append a second decision or move the moment the patient
+            // actually said yes. The plan is re-read under a lock so two
+            // concurrent accepts cannot both see "not yet accepted".
+            $locked = TreatmentPlan::whereKey($plan->id)->lockForUpdate()->first();
+
+            if ($locked && ! is_null($locked->accepted_at)) {
+                return $plan->fresh(['items', 'creator', 'patient']);
+            }
+
             // Slice 2.3 — the decision ledger is written FIRST. accepted_at
             // below is a mirror of this row, not an independent truth.
             \App\Models\PlanDecision::create([
@@ -61,10 +74,10 @@ class TreatmentPlanAcceptanceService
                 'recorded_by'       => $actor?->id,
             ]);
 
-            $plan->update([
-                'accepted_at' => now(),
-                'status'      => 'ongoing',
-            ]);
+            // F1 — accepted_at is the Treatment Plan's own fact. Lifecycle
+            // state is NOT written here; it is derived and projected by
+            // PlanLifecycleService, the single writer of status.
+            $plan->update(['accepted_at' => now()]);
 
             $plan->load(['items', 'patient']);
 
@@ -95,6 +108,8 @@ class TreatmentPlanAcceptanceService
                 'description' => 'Opportunity committed — patient accepted the treatment plan (' . $via . ')',
             ]);
 
+            app(PlanLifecycleService::class)->sync($plan, $actor);
+
             return $plan->fresh(['items', 'creator', 'patient']);
         });
     }
@@ -116,21 +131,34 @@ class TreatmentPlanAcceptanceService
         ?User $actor = null,
         string $via = 'clinic'
     ): TreatmentPlan {
-        if (is_null($plan->accepted_at)) {
-            throw new \RuntimeException('This plan is not accepted, so there is nothing to revert.');
-        }
-
-        if ($plan->invoices()->exists()) {
-            throw new \RuntimeException('Cannot revert: this plan already has invoices/billing against it.');
-        }
-
         return DB::transaction(function () use ($plan, $reason, $actor, $via) {
+            // F2 — the guards run INSIDE the transaction against a locked row,
+            // so a concurrent acceptance or invoice cannot slip past a check
+            // that was made before the transaction opened.
+            $locked = TreatmentPlan::whereKey($plan->id)->lockForUpdate()->first();
+
+            if (! $locked || is_null($locked->accepted_at)) {
+                throw new \RuntimeException('This plan is not accepted, so there is nothing to revert.');
+            }
+
+            if ($locked->invoices()->exists()) {
+                throw new \RuntimeException('Cannot revert: this plan already has invoices/billing against it.');
+            }
+
             $plan->load('patient');
 
-            $plan->update([
-                'accepted_at' => null,
-                'status'      => 'pending',
-            ]);
+            // F2 — THE REVERSAL IS A DECISION, NOT AN ERASURE (§7). The earlier
+            // ACCEPTED row stays exactly where it is; this row supersedes it as
+            // the ledger head and returns the plan to Decision Pending.
+            $this->appendDecision($plan, PlanDecision::REVERTED, $actor, $via, $reason);
+
+            // F1 — only accepted_at, the plan's own fact, is cleared here.
+            // Lifecycle state is re-derived by PlanLifecycleService below.
+            $plan->update(['accepted_at' => null]);
+
+            $this->logDecision($plan, 'treatment_plan.reverted', $actor,
+                'Acceptance reverted — the plan is awaiting a patient decision again',
+                ['via' => $via, 'reason' => $reason]);
 
             // Staff activity log (note column is varchar(255) — cap it).
             $note = sprintf(
@@ -147,9 +175,9 @@ class TreatmentPlanAcceptanceService
             // (queue job, console command, future service-to-service call that
             // passes $actor explicitly) died on an integrity constraint. The
             // staff log is a convenience record; it must never be the reason a
-            // clinical revert fails. The Activity ledger above is the audit.
-            // record() sets performed_by from auth()->id() internally, so the
-            // guard must be on the SESSION, not on $actor.
+            // clinical revert fails. The decision ledger and the Activity entry
+            // above are the audit. record() sets performed_by from auth()->id()
+            // internally, so the guard must be on the SESSION, not on $actor.
             if (auth()->id()) {
                 \App\Models\StaffActivityLog::record(
                     $actor?->id ?? auth()->id(),
@@ -159,6 +187,10 @@ class TreatmentPlanAcceptanceService
                     mb_substr($note, 0, 255)
                 );
             }
+
+            // F1 — re-derive the lifecycle. The plan returns to Decision
+            // Pending, and the opportunity re-opens so the estimate is chased.
+            app(PlanLifecycleService::class)->sync($plan, $actor);
 
             return $plan->fresh(['items', 'creator', 'patient']);
         });
@@ -204,7 +236,8 @@ class TreatmentPlanAcceptanceService
 
             // The patient committed to at least part of the plan, so the
             // acceptance mirror is set exactly as it is for a full acceptance.
-            $plan->update(['accepted_at' => now(), 'status' => 'ongoing']);
+            // F1 — status is not written here; PlanLifecycleService derives it.
+            $plan->update(['accepted_at' => now()]);
 
             $this->logDecision($plan, 'treatment_plan.partially_accepted', $actor,
                 'Treatment plan partially accepted by patient', [
@@ -218,6 +251,8 @@ class TreatmentPlanAcceptanceService
                 'source'      => 'treatment_plan_partially_accepted',
                 'description' => 'Opportunity committed — patient accepted part of the treatment plan (' . $via . ')',
             ]);
+
+            app(PlanLifecycleService::class)->sync($plan, $actor);
 
             return $plan->fresh(['items', 'creator', 'patient']);
         });
@@ -255,6 +290,8 @@ class TreatmentPlanAcceptanceService
 
             // The plan itself is NOT cancelled. Cancelled is an administrative
             // state; rejection is a patient decision. Never collapse the two.
+            app(PlanLifecycleService::class)->sync($plan, $actor);
+
             return $plan->fresh(['items', 'creator', 'patient']);
         });
     }
@@ -292,6 +329,8 @@ class TreatmentPlanAcceptanceService
                 TreatmentOpportunity::where('treatment_plan_id', $plan->id)
                     ->update(['follow_up_date' => $deferUntil]);
             }
+
+            app(PlanLifecycleService::class)->sync($plan, $actor);
 
             return $plan->fresh(['items', 'creator', 'patient']);
         });

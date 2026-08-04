@@ -150,6 +150,8 @@ Route::middleware('auth')->group(function () {
         Route::get ('/{patient}/merge',         [\App\Http\Controllers\PatientMergeController::class, 'create'])->name('merge.create')->middleware('admin.only');
         Route::get ('/{patient}/merge/preview',  [\App\Http\Controllers\PatientMergeController::class, 'preview'])->name('merge.preview')->middleware('admin.only');
         Route::post('/{patient}/merge',         [\App\Http\Controllers\PatientMergeController::class, 'store'])->name('merge.store')->middleware('admin.only');
+        // Safety-net undo (Final Design §1) — bounded, not a general rollback.
+        Route::post('/{patient}/merge/{merge}/undo', [\App\Http\Controllers\PatientMergeController::class, 'undo'])->name('merge.undo')->middleware('admin.only');
 
         // ── ABHA / Health ID capture (local, no live ABDM) ──
         Route::get  ('/{patient}/abha', [\App\Http\Controllers\Abdm\PatientAbhaController::class, 'edit'])->name('abha.edit');
@@ -539,8 +541,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/billing/{invoice}/cancel',      [\App\Http\Controllers\BillingController::class, 'cancel'])->name('billing.cancel');
         Route::post('/billing/{invoice}/payment',     [\App\Http\Controllers\BillingController::class, 'recordPayment'])->name('billing.payment');
         // Bill from Treatment Plan (partial multi-tooth invoicing)
+        // S1 — storeFromPlan CREATES an invoice, so it carries finance,edit
+        // rather than the group's view-level gate. The GET stays view-level.
         Route::get('/billing/from-plan/{plan}',  [\App\Http\Controllers\BillingController::class, 'billFromPlan'])->name('billing.fromPlan');
-        Route::post('/billing/from-plan/{plan}', [\App\Http\Controllers\BillingController::class, 'storeFromPlan'])->name('billing.storeFromPlan');
+        Route::post('/billing/from-plan/{plan}', [\App\Http\Controllers\BillingController::class, 'storeFromPlan'])
+             ->middleware('module:finance,edit')->name('billing.storeFromPlan');
         // Manual discount (permission-gated, audited)
         Route::post('/billing/{invoice}/manual-discount',        [\App\Http\Controllers\BillingController::class, 'applyManualDiscount'])->name('billing.manualDiscount.apply');
         Route::post('/billing/{invoice}/manual-discount/remove', [\App\Http\Controllers\BillingController::class, 'removeManualDiscount'])->name('billing.manualDiscount.remove');
@@ -597,13 +602,19 @@ Route::middleware('auth')->group(function () {
     require __DIR__ . '/prescriptions.php';
     /* ── Inventory Module ── */
     Route::middleware('module:inventory')->prefix('inventory')->name('inventory.')->group(function () {
+        // NOTE (P0-6 hardening, 2026-08-04): the group middleware above only checks
+        // the 'view' permission (module: defaults to 'view' when no action is given).
+        // Every write route below must therefore carry an explicit ->middleware(
+        // 'module:inventory,edit') or ->middleware('module:inventory,delete') so a
+        // role granted view-only access cannot mutate data — mirrors the gate already
+        // enforced on the mobile API (routes/api.php, api.role:module:inventory,edit|delete).
         // Dashboard
         Route::get('/',               [InventoryController::class, 'dashboard'])->name('index');
         Route::get('/dashboard',      [InventoryController::class, 'dashboard'])->name('dashboard');
 
         // Stock view (current qty + quick +/- adjust)
         Route::get('/items',               [InventoryController::class, 'items'])->name('items');
-        Route::post('/items/{item}/adjust',[InventoryController::class, 'adjustStock'])->name('items.adjust');
+        Route::post('/items/{item}/adjust',[InventoryController::class, 'adjustStock'])->name('items.adjust')->middleware('module:inventory,edit');
         Route::get('/items/{item}/history',[InventoryController::class, 'stockHistory'])->name('items.history');
         // Reversing a manual adjustment is Admin-only (same gate as deleting a product) —
         // it's a correction to the audit ledger, not a routine action.
@@ -612,10 +623,10 @@ Route::middleware('auth')->group(function () {
         // Stock Count — 15-day physical count cycle
         Route::prefix('stock-count')->name('stock-count.')->group(function () {
             Route::get('/',                                     [\App\Http\Controllers\StockCountController::class, 'index'])->name('index');
-            Route::post('/',                                    [\App\Http\Controllers\StockCountController::class, 'start'])->name('start');
+            Route::post('/',                                    [\App\Http\Controllers\StockCountController::class, 'start'])->name('start')->middleware('module:inventory,edit');
             Route::get('/{session}',                            [\App\Http\Controllers\StockCountController::class, 'sheet'])->name('sheet');
-            Route::post('/{session}/save',                      [\App\Http\Controllers\StockCountController::class, 'save'])->name('save');
-            Route::post('/{session}/complete',                  [\App\Http\Controllers\StockCountController::class, 'complete'])->name('complete');
+            Route::post('/{session}/save',                      [\App\Http\Controllers\StockCountController::class, 'save'])->name('save')->middleware('module:inventory,edit');
+            Route::post('/{session}/complete',                  [\App\Http\Controllers\StockCountController::class, 'complete'])->name('complete')->middleware('module:inventory,edit');
         });
 
         // Product Master — card catalogue + detail view + CRUD
@@ -626,69 +637,73 @@ Route::middleware('auth')->group(function () {
         // "import" is never mistaken for an item ID.
         Route::get('/products/import',           [InventoryProductImportController::class, 'importForm'])->name('products.import');
         Route::get('/products/import/template',  [InventoryProductImportController::class, 'downloadTemplate'])->name('products.import.template');
-        Route::post('/products/import/preview',  [InventoryProductImportController::class, 'preview'])->name('products.import.preview');
-        Route::post('/products/import/store',    [InventoryProductImportController::class, 'store'])->name('products.import.store');
+        Route::post('/products/import/preview',  [InventoryProductImportController::class, 'preview'])->name('products.import.preview')->middleware('module:inventory,edit');
+        Route::post('/products/import/store',    [InventoryProductImportController::class, 'store'])->name('products.import.store')->middleware('module:inventory,edit');
 
         Route::get('/products/{item}',     [InventoryController::class, 'showProduct'])->name('products.show');
-        Route::post('/products',           [InventoryController::class, 'storeProduct'])->name('products.store');
-        Route::put('/products/{item}',     [InventoryController::class, 'updateProduct'])->name('products.update');
+        Route::post('/products',           [InventoryController::class, 'storeProduct'])->name('products.store')->middleware('module:inventory,edit');
+        Route::put('/products/{item}',     [InventoryController::class, 'updateProduct'])->name('products.update')->middleware('module:inventory,edit');
         // Delete is Admin-only regardless of what a role's Inventory permission grid says —
         // deleting a product hides its whole movement/audit history, not a routine edit.
         Route::delete('/products/{item}',  [InventoryController::class, 'destroyProduct'])->name('products.destroy')->middleware('admin.only');
 
         // Stock movements
         Route::get('/stock-in',       [InventoryController::class, 'stockIn'])->name('stock-in');
-        Route::post('/stock-in',      [InventoryController::class, 'storeStockIn'])->name('stock-in.store');
+        Route::post('/stock-in',      [InventoryController::class, 'storeStockIn'])->name('stock-in.store')->middleware('module:inventory,edit');
         Route::get('/stock-out',      [InventoryController::class, 'stockOut'])->name('stock-out');
-        Route::post('/stock-out',     [InventoryController::class, 'storeStockOut'])->name('stock-out.store');
+        Route::post('/stock-out',     [InventoryController::class, 'storeStockOut'])->name('stock-out.store')->middleware('module:inventory,edit');
         // Stock Movement — plain-language timeline of every stock change
         Route::get('/stock-movement', [InventoryController::class, 'stockMovements'])->name('stock-movement');
 
         // Other sections
         Route::get('/purchase',       [InventoryController::class, 'purchase'])->name('purchase');
-        Route::post('/purchase',      [InventoryController::class, 'storePurchaseOrder'])->name('purchase.store');
+        Route::post('/purchase',      [InventoryController::class, 'storePurchaseOrder'])->name('purchase.store')->middleware('module:inventory,edit');
         Route::get('/vendors',        [InventoryController::class, 'vendors'])->name('vendors');
-        Route::post('/vendors',       [InventoryController::class, 'storeVendor'])->name('vendors.store');
+        Route::post('/vendors',       [InventoryController::class, 'storeVendor'])->name('vendors.store')->middleware('module:inventory,edit');
         Route::get('/reusable-assets',              [InventoryController::class, 'reusableAssets'])->name('reusable-assets');
-        Route::post('/reusable-assets',             [InventoryController::class, 'storeAsset'])->name('reusable-assets.store');
-        Route::put('/reusable-assets/{asset}',      [InventoryController::class, 'updateAsset'])->name('reusable-assets.update');
-        Route::post('/reusable-assets/{asset}/status', [InventoryController::class, 'updateAssetStatus'])->name('reusable-assets.status');
+        Route::post('/reusable-assets',             [InventoryController::class, 'storeAsset'])->name('reusable-assets.store')->middleware('module:inventory,edit');
+        Route::put('/reusable-assets/{asset}',      [InventoryController::class, 'updateAsset'])->name('reusable-assets.update')->middleware('module:inventory,edit');
+        Route::post('/reusable-assets/{asset}/status', [InventoryController::class, 'updateAssetStatus'])->name('reusable-assets.status')->middleware('module:inventory,edit');
         Route::get('/expiry',         [InventoryController::class, 'expiry'])->name('expiry');
         Route::get('/reports',        [InventoryController::class, 'reports'])->name('reports');
 
-        // Settings (admin-only) — GET redirects to unified Settings module
+        // Settings — GET redirects to unified Settings module. Every write below is
+        // already blocked for non-admins by a controller-level check (InventoryController
+        // settings methods); the module:inventory,edit|delete middleware here is added as
+        // a second, canonical layer so the route itself is never reachable by a view-only
+        // role even if a future edit to the controller check is missed.
         Route::get('/settings',                      [InventoryController::class, 'settings'])->name('settings');
-        Route::post('/settings',                     [InventoryController::class, 'updateSettings'])->name('settings.update');
+        Route::post('/settings',                     [InventoryController::class, 'updateSettings'])->name('settings.update')->middleware('module:inventory,edit');
 
-        // Categories CRUD (admin-only)
-        Route::post('/settings/categories',          [InventoryController::class, 'storeCategory'])->name('settings.categories.store');
-        Route::put('/settings/categories/{cat}',     [InventoryController::class, 'updateCategory'])->name('settings.categories.update');
-        Route::delete('/settings/categories/{cat}',  [InventoryController::class, 'destroyCategory'])->name('settings.categories.destroy');
+        // Categories CRUD
+        Route::post('/settings/categories',          [InventoryController::class, 'storeCategory'])->name('settings.categories.store')->middleware('module:inventory,edit');
+        Route::put('/settings/categories/{cat}',     [InventoryController::class, 'updateCategory'])->name('settings.categories.update')->middleware('module:inventory,edit');
+        Route::delete('/settings/categories/{cat}',  [InventoryController::class, 'destroyCategory'])->name('settings.categories.destroy')->middleware('module:inventory,delete');
 
-        // Locations CRUD (admin-only)
-        Route::post('/settings/locations',           [InventoryController::class, 'storeLocation'])->name('settings.locations.store');
-        Route::put('/settings/locations/{loc}',      [InventoryController::class, 'updateLocation'])->name('settings.locations.update');
-        Route::delete('/settings/locations/{loc}',   [InventoryController::class, 'destroyLocation'])->name('settings.locations.destroy');
+        // Locations CRUD
+        Route::post('/settings/locations',           [InventoryController::class, 'storeLocation'])->name('settings.locations.store')->middleware('module:inventory,edit');
+        Route::put('/settings/locations/{loc}',      [InventoryController::class, 'updateLocation'])->name('settings.locations.update')->middleware('module:inventory,edit');
+        Route::delete('/settings/locations/{loc}',   [InventoryController::class, 'destroyLocation'])->name('settings.locations.destroy')->middleware('module:inventory,delete');
 
-        // Sub-types CRUD (admin-only)
-        Route::post('/settings/sub-types',           [InventoryController::class, 'storeSubType'])->name('settings.sub-types.store');
-        Route::put('/settings/sub-types/{st}',       [InventoryController::class, 'updateSubType'])->name('settings.sub-types.update');
-        Route::delete('/settings/sub-types/{st}',    [InventoryController::class, 'destroySubType'])->name('settings.sub-types.destroy');
+        // Sub-types CRUD
+        Route::post('/settings/sub-types',           [InventoryController::class, 'storeSubType'])->name('settings.sub-types.store')->middleware('module:inventory,edit');
+        Route::put('/settings/sub-types/{st}',       [InventoryController::class, 'updateSubType'])->name('settings.sub-types.update')->middleware('module:inventory,edit');
+        Route::delete('/settings/sub-types/{st}',    [InventoryController::class, 'destroySubType'])->name('settings.sub-types.destroy')->middleware('module:inventory,delete');
 
         // Variants (3rd tier) — CRUD + AJAX loader + inline store
         Route::get('/ajax/variants',                 [InventoryController::class, 'ajaxVariants'])->name('ajax.variants');
-        Route::post('/ajax/variants',                [InventoryController::class, 'ajaxStoreVariant'])->name('ajax.variants.store');
-        Route::post('/settings/variants',            [InventoryController::class, 'storeVariant'])->name('settings.variants.store');
-        Route::put('/settings/variants/{variant}',   [InventoryController::class, 'updateVariant'])->name('settings.variants.update');
-        Route::delete('/settings/variants/{variant}',[InventoryController::class, 'destroyVariant'])->name('settings.variants.destroy');
+        Route::post('/ajax/variants',                [InventoryController::class, 'ajaxStoreVariant'])->name('ajax.variants.store')->middleware('module:inventory,edit');
+        Route::post('/settings/variants',            [InventoryController::class, 'storeVariant'])->name('settings.variants.store')->middleware('module:inventory,edit');
+        Route::put('/settings/variants/{variant}',   [InventoryController::class, 'updateVariant'])->name('settings.variants.update')->middleware('module:inventory,edit');
+        Route::delete('/settings/variants/{variant}',[InventoryController::class, 'destroyVariant'])->name('settings.variants.destroy')->middleware('module:inventory,delete');
 
         // Vendor update (edit modal) + deactivate/reactivate (never a hard delete)
-        Route::put('/vendors/{vendor}',              [InventoryController::class, 'updateVendor'])->name('vendors.update');
-        Route::post('/vendors/{vendor}/toggle',       [InventoryController::class, 'toggleVendor'])->name('vendors.toggle');
+        Route::put('/vendors/{vendor}',              [InventoryController::class, 'updateVendor'])->name('vendors.update')->middleware('module:inventory,edit');
+        Route::post('/vendors/{vendor}/toggle',       [InventoryController::class, 'toggleVendor'])->name('vendors.toggle')->middleware('module:inventory,edit');
 
         // GRN — receive against PO
-        Route::post('/purchase/{po}/receive',        [InventoryController::class, 'receivePO'])->name('purchase.receive');
-        Route::patch('/purchase/{po}/mark-ordered', [InventoryController::class, 'markOrdered'])->name('purchase.markOrdered');
+        Route::post('/purchase/{po}/receive',        [InventoryController::class, 'receivePO'])->name('purchase.receive')->middleware('module:inventory,edit');
+        Route::patch('/purchase/{po}/mark-ordered', [InventoryController::class, 'markOrdered'])->name('purchase.markOrdered')->middleware('module:inventory,edit');
         // Print a Purchase Order (print-to-PDF via browser, same as invoices)
         Route::get('/purchase/{po}/print',          [InventoryController::class, 'printPO'])->name('purchase.print');
         // Received Stock — dentist-friendly report over GRN records
@@ -702,10 +717,12 @@ Route::middleware('auth')->group(function () {
             return response()->file($path, ['Content-Type' => 'text/html; charset=UTF-8']);
         })->name('guide.demo');
         // PO Edit / Delete
-        Route::patch('/purchase/{po}',              [InventoryController::class, 'updatePO'])->name('purchase.update');
-        Route::delete('/purchase/{po}',             [InventoryController::class, 'destroyPO'])->name('purchase.destroy');
-        // GRN reversal (undo last receipt within correction window)
-        Route::delete('/purchase/{po}/grn/last',   [InventoryController::class, 'reverseLastGrn'])->name('purchase.grn.reverse');
+        Route::patch('/purchase/{po}',              [InventoryController::class, 'updatePO'])->name('purchase.update')->middleware('module:inventory,edit');
+        Route::delete('/purchase/{po}',             [InventoryController::class, 'destroyPO'])->name('purchase.destroy')->middleware('module:inventory,delete');
+        // GRN reversal (undo last receipt within correction window) — same "correction to
+        // the audit ledger" reasoning as movements.reverse above, so it gets the stricter
+        // delete gate rather than plain edit.
+        Route::delete('/purchase/{po}/grn/last',   [InventoryController::class, 'reverseLastGrn'])->name('purchase.grn.reverse')->middleware('module:inventory,delete');
 
         // AJAX — stock availability check
         Route::get('/stock-check',                   [InventoryController::class, 'stockCheck'])->name('stock-check');
@@ -714,9 +731,9 @@ Route::middleware('auth')->group(function () {
         Route::prefix('vendor-invoices')->name('vendor-invoices.')->group(function () {
             Route::get('/',              [\App\Http\Controllers\VendorInvoiceController::class, 'index'])->name('index');
             Route::get('/create',        [\App\Http\Controllers\VendorInvoiceController::class, 'create'])->name('create');
-            Route::post('/',             [\App\Http\Controllers\VendorInvoiceController::class, 'store'])->name('store');
+            Route::post('/',             [\App\Http\Controllers\VendorInvoiceController::class, 'store'])->name('store')->middleware('module:inventory,edit');
             Route::get('/{vendorInvoice}',[\App\Http\Controllers\VendorInvoiceController::class, 'show'])->name('show');
-            Route::delete('/{vendorInvoice}',[\App\Http\Controllers\VendorInvoiceController::class, 'destroy'])->name('destroy');
+            Route::delete('/{vendorInvoice}',[\App\Http\Controllers\VendorInvoiceController::class, 'destroy'])->name('destroy')->middleware('module:inventory,delete');
         });
 
         // Alerts Hub (Phase 1 stub — full build in Phase 4)
@@ -724,10 +741,10 @@ Route::middleware('auth')->group(function () {
 
         // Implant Registry
         Route::get('/implants',                                   [InventoryController::class, 'implants'])->name('implants');
-        Route::post('/implants/catalog',                          [InventoryController::class, 'storeCatalogItem'])->name('implants.catalog.store');
-        Route::put('/implants/catalog/{catalogItem}',             [InventoryController::class, 'updateCatalogItem'])->name('implants.catalog.update');
-        Route::post('/implants/placements',                       [InventoryController::class, 'storePlacement'])->name('implants.placements.store');
-        Route::put('/implants/placements/{placement}',            [InventoryController::class, 'updatePlacement'])->name('implants.placements.update');
+        Route::post('/implants/catalog',                          [InventoryController::class, 'storeCatalogItem'])->name('implants.catalog.store')->middleware('module:inventory,edit');
+        Route::put('/implants/catalog/{catalogItem}',             [InventoryController::class, 'updateCatalogItem'])->name('implants.catalog.update')->middleware('module:inventory,edit');
+        Route::post('/implants/placements',                       [InventoryController::class, 'storePlacement'])->name('implants.placements.store')->middleware('module:inventory,edit');
+        Route::put('/implants/placements/{placement}',            [InventoryController::class, 'updatePlacement'])->name('implants.placements.update')->middleware('module:inventory,edit');
     });
     /* ── Tasks Module ── */
     Route::middleware('module:tasks')->prefix('tasks')->name('tasks.')->group(function () {

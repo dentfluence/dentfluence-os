@@ -11,6 +11,7 @@ use App\Services\MembershipBenefitService;
 use App\Services\Presentations\PresentationNarrativeService;
 use App\Services\Relationship\ActivityEngine;
 use App\Services\TreatmentPlan\TreatmentPlanAcceptanceService;
+use App\Services\TreatmentPlan\TreatmentPlanOpportunitySync;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
@@ -65,17 +66,12 @@ class PublicPresentationController extends Controller
                 description:    'Patient opened the smart presentation',
             );
 
-            // Slice 2.2: the patient opening the presentation is evidence the
-            // plan was shown to them — record the clinical fact through the
-            // canonical service rather than leaving it as pipeline state only.
-            if ($plan = $presentation->treatmentPlan) {
-                try {
-                    app(\App\Services\TreatmentPlan\TreatmentPlanPresentationService::class)
-                        ->markPresented($plan, null, 'smart_presentation');
-                } catch (\RuntimeException $e) {
-                    report($e);
-                }
-            }
+            // F2 — PRESENTATION IS WRITTEN ONLY BY THE CLINIC.
+            // Canonical Treatment Lifecycle V1 §5. This handler is
+            // unauthenticated, so a link-preview fetcher or an email scanner
+            // opening the URL would have stamped a clinical fact that never
+            // happened. Sending the presentation is the clinic's act of
+            // presenting, and that is where the fact is now recorded.
         }
 
         $costSummary = $presentation->currentCostSummary();
@@ -121,10 +117,18 @@ class PublicPresentationController extends Controller
         $relationshipId = $presentation->patient?->relationship_id;
         $actor = $presentation->created_by ? User::find($presentation->created_by) : null;
 
+        // F2 — a presentation with no plan behind it cannot carry a decision;
+        // this must not become a 500 on a page the patient is looking at.
+        if (! $plan) {
+            return redirect()->route('presentations.public.show', $token);
+        }
+
         // Acceptance orchestration is shared with the in-clinic and mobile
         // paths (TreatmentPlanAcceptanceService) — it was previously a
         // hand-copied clone of TreatmentPlanController::accept(), which meant
         // any change had to be made in three places or the channels drifted.
+        // That door is idempotent (F2), so a replayed link records the
+        // patient's decision once, at the moment they actually made it.
         app(TreatmentPlanAcceptanceService::class)->accept(
             $plan,
             $actor,
@@ -157,8 +161,12 @@ class PublicPresentationController extends Controller
         $plan = $presentation->treatmentPlan;
         $relationshipId = $presentation->patient?->relationship_id;
 
-        // Deliberately does NOT touch treatment_plans — declining a presentation
-        // is a communication-layer fact, not a clinical one.
+        // F2 — closed cases refuse further decisions, so a replayed link cannot
+        // manufacture duplicate history.
+        if (in_array($presentation->status, [Presentation::STATUS_ACCEPTED, Presentation::STATUS_DECLINED], true)) {
+            return redirect()->route('presentations.public.show', $token);
+        }
+
         $presentation->update(['status' => Presentation::STATUS_DECLINED, 'declined_at' => now()]);
 
         app(ActivityEngine::class)->log(
@@ -170,44 +178,28 @@ class PublicPresentationController extends Controller
             description:    'Patient declined via Smart Presentation',
         );
 
-        // ── Fix (2026-07-12): decline() used to stop here, leaving the sales
-        // pipeline unaware — an Opportunity already in 'prospect'/'quoted'
-        // stayed stuck forever, and if none existed yet nothing tracked the
-        // decline at all. Mirrors accept()'s guarded Opportunity handling
-        // above, but finds-or-creates into the 'declined' stage instead. ──
+        // F2 — ONE DECISION DOOR FOR EVERY CHANNEL.
+        // Canonical Treatment Lifecycle V1 §7: the channel is not the truth,
+        // the decision is. This path used to move the sales pipeline only — a
+        // patient who declined on their own link left no decision on record,
+        // so the plan still read as awaiting an answer and staff kept chasing
+        // someone who had already said no. It now writes through the same door
+        // the clinic uses, which syncs the opportunity as part of its job (so
+        // the bespoke find-or-create that lived here is gone: the Opportunity
+        // is owned by the sync service, never by a controller).
         if ($plan) {
-            $opportunity = TreatmentOpportunity::where('treatment_plan_id', $plan->id)->first();
-
-            if ($opportunity) {
-                $opportunity->update([
-                    'status'          => 'declined',
-                    'declined_reason' => $opportunity->declined_reason ?? 'Declined via Smart Presentation',
-                ]);
-            } else {
-                $plan->loadMissing('items');
-                $firstItem = $plan->items->first();
-
-                $opportunity = TreatmentOpportunity::create([
-                    'patient_id'        => $plan->patient_id,
-                    'treatment_plan_id' => $plan->id,
-                    'relationship_id'   => $relationshipId,
-                    'type'              => 'other',
-                    'label'             => $firstItem?->treatment_name ?? $plan->plan_name,
-                    'status'            => 'declined',
-                    'priority'          => 'medium',
-                    'declined_reason'   => 'Declined via Smart Presentation',
-                    'created_by'        => $presentation->created_by,
-                ]);
+            try {
+                app(TreatmentPlanAcceptanceService::class)->reject(
+                    $plan,
+                    'Declined via Smart Presentation',
+                    null,
+                    'smart_presentation',
+                );
+            } catch (\RuntimeException $e) {
+                // A plan that cannot carry a decision (cancelled, unlinked)
+                // must not break the patient-facing page.
+                report($e);
             }
-
-            app(ActivityEngine::class)->log(
-                subject:        $opportunity,
-                event:          'opportunity.declined',
-                actor:          null,
-                metadata:       ['stage' => 'declined', 'patient_id' => $plan->patient_id, 'source' => 'smart_presentation_declined'],
-                relationshipId: $relationshipId,
-                description:    'Opportunity marked declined from Smart Presentation',
-            );
         }
 
         return redirect()->route('presentations.public.show', $token);
@@ -251,41 +243,22 @@ class PublicPresentationController extends Controller
         // ── Mirrors accept()/decline()'s guarded Opportunity handling above.
         // Won't downgrade an opportunity that's already committed/converted —
         // a callback request after acceptance shouldn't reopen the pipeline. ──
+        // F2 — the Opportunity is owned by TreatmentPlanOpportunitySync, never
+        // by a controller. A callback request is not a decision, so it moves
+        // only the pipeline stage and writes nothing to the decision ledger.
         if ($plan) {
-            $opportunity = TreatmentOpportunity::where('treatment_plan_id', $plan->id)->first();
+            $committed = TreatmentOpportunity::where('treatment_plan_id', $plan->id)
+                ->whereIn('status', [TreatmentOpportunity::COMMITTED, TreatmentOpportunity::CONVERTED])
+                ->exists();
 
-            if ($opportunity) {
-                if (! in_array($opportunity->status, ['accepted', 'completed'], true)) {
-                    $opportunity->update([
-                        'status'         => 'discussed',
-                        'follow_up_date' => $opportunity->follow_up_date ?? now()->toDateString(),
-                    ]);
-                }
-            } else {
-                $plan->loadMissing('items');
-                $firstItem = $plan->items->first();
-
-                $opportunity = TreatmentOpportunity::create([
-                    'patient_id'        => $plan->patient_id,
-                    'treatment_plan_id' => $plan->id,
-                    'relationship_id'   => $relationshipId,
-                    'type'              => 'other',
-                    'label'             => $firstItem?->treatment_name ?? $plan->plan_name,
-                    'status'            => 'discussed',
-                    'priority'          => 'high',
-                    'follow_up_date'    => now()->toDateString(),
-                    'created_by'        => $presentation->created_by,
+            if (! $committed) {
+                app(TreatmentPlanOpportunitySync::class)->syncStage($plan, 'discussed', [
+                    'source'         => 'smart_presentation_callback',
+                    'description'    => 'Patient requested a callback via Smart Presentation',
+                    'follow_up_date' => now()->toDateString(),
+                    'created_by'     => $presentation->created_by,
                 ]);
             }
-
-            app(ActivityEngine::class)->log(
-                subject:        $opportunity,
-                event:          'opportunity.callback_requested',
-                actor:          null,
-                metadata:       ['stage' => 'discussed', 'patient_id' => $plan->patient_id, 'source' => 'smart_presentation_callback'],
-                relationshipId: $relationshipId,
-                description:    'Patient requested a callback via Smart Presentation',
-            );
         }
 
         return redirect()->route('presentations.public.show', $token);

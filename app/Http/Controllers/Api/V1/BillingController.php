@@ -26,6 +26,7 @@ use App\Models\WalletTransaction;
 use App\Services\Billing\EmiScheduleService;
 use App\Services\Billing\InvoicePaymentService;
 use App\Services\Billing\ManualDiscountService;
+use App\Services\Billing\PlanBillingRollbackService;
 use App\Services\CouponService;
 use App\Services\MembershipBenefitService;
 use App\Services\WalletService;
@@ -940,6 +941,10 @@ class BillingController extends ApiController
                 'invoice ' . $inv->invoice_number . ' cancelled. ' . $data['cancelled_reason'],
                 $request->user()->id,
             );
+
+            // S1 — release the treatment-plan teeth this invoice billed and
+            // reopen the plan if billing had closed it (web parity).
+            app(PlanBillingRollbackService::class)->rollbackInvoice($inv);
 
             $inv->update([
                 'status'           => 'cancelled',

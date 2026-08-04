@@ -27,32 +27,43 @@ class TreatmentPlanBillingService
      */
     public function ensureTeeth(TreatmentPlanItem $item): void
     {
-        if ($item->teeth()->exists()) {
-            return;
-        }
+        // S1 — this is reached from GET handlers (billFromPlan, billableTeeth),
+        // so a double-click or a browser prefetch used to run the check and the
+        // create concurrently: both saw zero rows, both inserted, and the item
+        // ended up with double the teeth it has. That inflated the denominator
+        // in refreshItemProgress(), so the item could never reach 'invoiced'.
+        // The transaction + row lock closes the window; the unique index added
+        // in 2026_08_04_100000 is the hard backstop underneath it.
+        DB::transaction(function () use ($item) {
+            $locked = TreatmentPlanItem::whereKey($item->id)->lockForUpdate()->first();
 
-        $teeth = collect(explode(',', (string) $item->tooth_number))
-            ->map(fn ($t) => trim($t))
-            ->filter()
-            ->values();
-
-        if ($teeth->isEmpty()) {
-            $count = max((int) $item->units, 1);
-            for ($i = 0; $i < $count; $i++) {
-                $item->teeth()->create([
-                    'tooth_number' => null,
-                    'status'       => TreatmentPlanItemTooth::STATUS_PENDING,
-                ]);
+            if (! $locked || $locked->teeth()->exists()) {
+                return;
             }
-            return;
-        }
 
-        foreach ($teeth as $tooth) {
-            $item->teeth()->create([
-                'tooth_number' => $tooth,
-                'status'       => TreatmentPlanItemTooth::STATUS_PENDING,
-            ]);
-        }
+            $teeth = collect(explode(',', (string) $locked->tooth_number))
+                ->map(fn ($t) => trim($t))
+                ->filter()
+                ->values();
+
+            if ($teeth->isEmpty()) {
+                $count = max((int) $locked->units, 1);
+                for ($i = 0; $i < $count; $i++) {
+                    $locked->teeth()->create([
+                        'tooth_number' => null,
+                        'status'       => TreatmentPlanItemTooth::STATUS_PENDING,
+                    ]);
+                }
+                return;
+            }
+
+            foreach ($teeth as $tooth) {
+                $locked->teeth()->firstOrCreate(
+                    ['tooth_number' => $tooth],
+                    ['status' => TreatmentPlanItemTooth::STATUS_PENDING],
+                );
+            }
+        });
     }
 
     /** Ensure teeth rows for every item on a plan. */
@@ -73,10 +84,18 @@ class TreatmentPlanBillingService
     {
         return DB::transaction(function () use ($plan, $toothIds, $userId) {
             // Only PENDING teeth that belong to items on THIS plan.
+            //
+            // S1 — lockForUpdate is load-bearing, not defensive. Without it the
+            // read is a consistent-snapshot read under InnoDB REPEATABLE READ,
+            // so two simultaneous submissions of the same selection both saw
+            // 'pending', both passed the guard below, and both raised an
+            // invoice: the patient was charged twice for the same tooth and one
+            // invoice line was left orphaned but fully payable.
             $teeth = TreatmentPlanItemTooth::whereIn('id', $toothIds)
                 ->where('status', TreatmentPlanItemTooth::STATUS_PENDING)
                 ->whereHas('planItem', fn ($q) => $q->where('treatment_plan_id', $plan->id))
                 ->with('planItem')
+                ->lockForUpdate()
                 ->get();
 
             if ($teeth->isEmpty()) {
@@ -121,12 +140,27 @@ class TreatmentPlanBillingService
                 $line->save();
 
                 // Mark the selected teeth as invoiced + link them to this line.
+                //
+                // S1 — the flip is CONDITIONAL on the row still being pending and
+                // asserts it actually moved. Previously this was an update by
+                // primary key with no status predicate, so a tooth another
+                // transaction had already invoiced was silently re-pointed at
+                // this invoice's line. If the assertion fails the whole
+                // transaction rolls back: no invoice, nothing partially billed.
                 foreach ($group as $tooth) {
-                    $tooth->update([
-                        'status'          => TreatmentPlanItemTooth::STATUS_INVOICED,
-                        'invoice_item_id' => $line->id,
-                        'invoiced_at'     => now(),
-                    ]);
+                    $flipped = TreatmentPlanItemTooth::whereKey($tooth->id)
+                        ->where('status', TreatmentPlanItemTooth::STATUS_PENDING)
+                        ->update([
+                            'status'          => TreatmentPlanItemTooth::STATUS_INVOICED,
+                            'invoice_item_id' => $line->id,
+                            'invoiced_at'     => now(),
+                        ]);
+
+                    if ($flipped !== 1) {
+                        throw ValidationException::withMessages([
+                            'tooth_ids' => 'One of the selected teeth was billed by someone else just now. Nothing was invoiced — please reload and try again.',
+                        ]);
+                    }
                 }
 
                 $this->refreshItemProgress($item);
@@ -134,13 +168,12 @@ class TreatmentPlanBillingService
 
             $invoice->recalculate();
 
-            // Close the plan only once EVERY item is fully invoiced.
-            $plan->load('items');
-            if ($plan->items->isNotEmpty()
-                && $plan->items->every(fn ($it) => $it->billing_progress === TreatmentPlanItem::PROGRESS_INVOICED)
-                && $plan->status !== 'completed') {
-                $plan->update(['status' => 'completed']);
-            }
+            // F1 — BILLING DOES NOT WRITE PLAN LIFECYCLE.
+            // Canonical Treatment Lifecycle V1 §10 and §12: completion is a
+            // clinical determination scoped to what the patient accepted, and
+            // full invoicing is a financial coincidence, not clinical delivery.
+            // This service previously closed the plan here; that write now
+            // belongs solely to PlanLifecycleService, driven by clinical facts.
 
             return $invoice;
         });

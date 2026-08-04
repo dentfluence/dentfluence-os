@@ -4,9 +4,11 @@ namespace App\Services\Patient;
 
 use App\Domain\Events\DomainEventBus;
 use App\Domain\Events\Patient\PatientMerged;
+use App\Domain\Events\Patient\PatientMergeUndone;
 use App\Models\Patient;
 use App\Models\PatientMerge;
 use App\Models\Relationship;
+use App\Models\RelationshipMerge;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Services\Relationship\ActivityEngine;
@@ -29,6 +31,16 @@ use Illuminate\Support\Facades\Schema;
  * The whole operation runs in ONE transaction with both patient rows locked:
  * any failure rolls everything back — no partial, no silent merge. Coverage of
  * every table is proven by `patients:merge-coverage` against PatientMergeManifest.
+ *
+ * SAFETY-NET UNDO (Final Design §1): merge() also records everything undo()
+ * needs to reverse itself — but undo is deliberately bounded, not a general
+ * reversal engine. It is refused outright (never partial, never best-effort)
+ * unless BOTH hold: (1) within config('patients.merge_undo_window_minutes')
+ * of the merge, and (2) zero activity has touched the surviving patient since.
+ * A merge older than the window, or one the master has since transacted
+ * against, is not undoable through this service — see docs/patients-module-*
+ * and the Duplicate Merge Final Design for why an unconditional undo across
+ * 40+ tables was rejected (post-merge activity cannot be cleanly unwound).
  */
 class PatientMergeService
 {
@@ -144,7 +156,7 @@ class PatientMergeService
             // 3. Special-entity rules (each returns what it changed, for un-merge readiness).
             $walletTransfer = $this->mergeWallet($master, $loser);
             $membershipRev  = $this->mergeMemberships($master, $loser);
-            $this->moveIdentifiers($master, $loser);
+            $identifierRev  = $this->moveIdentifiers($master, $loser);
             $tagRev         = $this->mergeTagPivot($master, $loser);
             $linkRev        = $this->mergeFamilyLinks($master, $loser);
 
@@ -172,6 +184,7 @@ class PatientMergeService
                 'reversal'              => array_merge(
                     ['master_before' => $masterBefore],
                     $membershipRev,
+                    $identifierRev,
                     $tagRev,
                     $linkRev,
                 ),
@@ -323,15 +336,19 @@ class PatientMergeService
 
     /**
      * Move memberships to the master; if more than one ends up active, keep the
-     * latest-expiry and expire the rest. Returns the ids expired (for un-merge).
+     * latest-expiry and expire the rest. Returns the ids moved (for un-merge)
+     * and the ids expired (for un-merge).
      */
     private function mergeMemberships(Patient $master, Patient $loser): array
     {
         $table = 'finance_patient_memberships';
         if (! Schema::hasTable($table)) {
-            return ['memberships_expired' => []];
+            return ['memberships_moved' => [], 'memberships_expired' => []];
         }
-        DB::table($table)->where('patient_id', $loser->id)->update(['patient_id' => $master->id]);
+        $movedIds = DB::table($table)->where('patient_id', $loser->id)->pluck('id')->all();
+        if ($movedIds) {
+            DB::table($table)->whereIn('id', $movedIds)->update(['patient_id' => $master->id]);
+        }
 
         $actives = DB::table($table)
             ->where('patient_id', $master->id)
@@ -345,18 +362,22 @@ class PatientMergeService
             DB::table($table)->whereIn('id', $expireIds)->update(['status' => 'expired']);
         }
 
-        return ['memberships_expired' => $expireIds];
+        return ['memberships_moved' => $movedIds, 'memberships_expired' => $expireIds];
     }
 
-    /** Move the loser's identifiers to the master; demote to non-primary if the master already has a primary. */
-    private function moveIdentifiers(Patient $master, Patient $loser): void
+    /**
+     * Move the loser's identifiers to the master; demote to non-primary if the
+     * master already has a primary. Returns the ids moved and the ids demoted
+     * (for un-merge — a demotion is not otherwise inferable after the fact).
+     */
+    private function moveIdentifiers(Patient $master, Patient $loser): array
     {
         if (! Schema::hasTable('patient_identifiers')) {
-            return;
+            return ['identifiers_moved' => [], 'identifiers_demoted' => []];
         }
         $ids = DB::table('patient_identifiers')->where('patient_id', $loser->id)->pluck('id')->all();
         if (! $ids) {
-            return;
+            return ['identifiers_moved' => [], 'identifiers_demoted' => []];
         }
         DB::table('patient_identifiers')->whereIn('id', $ids)->update(['patient_id' => $master->id]);
 
@@ -366,16 +387,27 @@ class PatientMergeService
             ->where('is_primary', true)
             ->exists();
 
+        $demoted = [];
         if ($masterHasPrimary) {
-            DB::table('patient_identifiers')->whereIn('id', $ids)->update(['is_primary' => false]);
+            $demoted = DB::table('patient_identifiers')
+                ->whereIn('id', $ids)->where('is_primary', true)->pluck('id')->all();
+            if ($demoted) {
+                DB::table('patient_identifiers')->whereIn('id', $demoted)->update(['is_primary' => false]);
+            }
         }
+
+        return ['identifiers_moved' => $ids, 'identifiers_demoted' => $demoted];
     }
 
-    /** Tag pivot: drop rows that would collide with the master's tags, then move the rest. Returns removed rows. */
+    /**
+     * Tag pivot: drop rows that would collide with the master's tags, then move
+     * the rest. Returns both the removed rows (to reinsert on un-merge) and the
+     * moved row ids (to re-point back to the loser on un-merge).
+     */
     private function mergeTagPivot(Patient $master, Patient $loser): array
     {
         if (! Schema::hasTable('patient_tag')) {
-            return ['patient_tag_deleted' => []];
+            return ['patient_tag_deleted' => [], 'patient_tag_moved' => []];
         }
         $masterTagIds = DB::table('patient_tag')->where('patient_id', $master->id)->pluck('tag_id')->all();
         $deleted = [];
@@ -387,9 +419,12 @@ class PatientMergeService
                 ->where('patient_id', $loser->id)->whereIn('tag_id', $masterTagIds)
                 ->delete();
         }
-        DB::table('patient_tag')->where('patient_id', $loser->id)->update(['patient_id' => $master->id]);
+        $movedIds = DB::table('patient_tag')->where('patient_id', $loser->id)->pluck('id')->all();
+        if ($movedIds) {
+            DB::table('patient_tag')->whereIn('id', $movedIds)->update(['patient_id' => $master->id]);
+        }
 
-        return ['patient_tag_deleted' => $deleted];
+        return ['patient_tag_deleted' => $deleted, 'patient_tag_moved' => $movedIds];
     }
 
     /**
@@ -403,12 +438,12 @@ class PatientMergeService
      *   - direct master↔loser links become self-links and are removed (a guardian
      *     collapse is blocked up-front by assertNoGuardianWardCollapse).
      * Checking both directions keeps the re-point from violating the ordered-pair
-     * unique index. Returns removed + reconciled rows for un-merge readiness.
+     * unique index. Returns removed + reconciled + moved rows for un-merge readiness.
      */
     private function mergeFamilyLinks(Patient $master, Patient $loser): array
     {
         if (! Schema::hasTable('patient_links')) {
-            return ['patient_links_deleted' => [], 'patient_links_reconciled' => []];
+            return ['patient_links_deleted' => [], 'patient_links_reconciled' => [], 'patient_links_moved' => []];
         }
 
         $hasType     = Schema::hasColumn('patient_links', 'relationship_type');
@@ -417,6 +452,7 @@ class PatientMergeService
 
         $deleted    = [];
         $reconciled = [];
+        $moved      = [];
 
         // Direct link(s) between the two records would become self-links — remove them.
         $direct = fn () => $this->scopeLinkPair(DB::table('patient_links'), $master->id, $loser->id);
@@ -425,16 +461,16 @@ class PatientMergeService
 
         // Re-point / reconcile every remaining loser link on both sides.
         $this->reparentLinkSide($master, $loser, 'patient_id', 'linked_patient_id',
-            $hasType, $hasGuardian, $hasNotes, $deleted, $reconciled);
+            $hasType, $hasGuardian, $hasNotes, $deleted, $reconciled, $moved);
         $this->reparentLinkSide($master, $loser, 'linked_patient_id', 'patient_id',
-            $hasType, $hasGuardian, $hasNotes, $deleted, $reconciled);
+            $hasType, $hasGuardian, $hasNotes, $deleted, $reconciled, $moved);
 
         // Belt-and-braces: no self-links survive.
         $selfLinks = fn () => DB::table('patient_links')->whereColumn('patient_id', 'linked_patient_id');
         $deleted = array_merge($deleted, $selfLinks()->get()->map(fn ($r) => (array) $r)->all());
         $selfLinks()->delete();
 
-        return ['patient_links_deleted' => $deleted, 'patient_links_reconciled' => $reconciled];
+        return ['patient_links_deleted' => $deleted, 'patient_links_reconciled' => $reconciled, 'patient_links_moved' => $moved];
     }
 
     /**
@@ -445,6 +481,7 @@ class PatientMergeService
      *
      * @param  array<int,array>  $deleted     accumulates removed rows (by-ref)
      * @param  array<int,array>  $reconciled  accumulates {id,before,after} (by-ref)
+     * @param  array<int,array>  $moved       accumulates {id,column} for un-collided re-points (by-ref)
      */
     private function reparentLinkSide(
         Patient $master,
@@ -456,6 +493,7 @@ class PatientMergeService
         bool $hasNotes,
         array &$deleted,
         array &$reconciled,
+        array &$moved,
     ): void {
         $loserRows = DB::table('patient_links')->where($moveCol, $loser->id)->get();
 
@@ -467,6 +505,7 @@ class PatientMergeService
 
             if (! $existing) {
                 DB::table('patient_links')->where('id', $row->id)->update([$moveCol => $master->id]);
+                $moved[] = ['id' => $row->id, 'column' => $moveCol];
                 continue;
             }
 
@@ -526,5 +565,297 @@ class PatientMergeService
         }
 
         return null;
+    }
+
+    // ── Safety-net undo (Final Design §1) ───────────────────────────────────────
+
+    /**
+     * Whether $record can be undone right now, and why not if it can't. Powers
+     * the profile-header "Undo" affordance — never throws.
+     *
+     * @return array{allowed:bool, reason:?string, minutes_left:int}
+     */
+    public function undoStatus(PatientMerge $record): array
+    {
+        if ($record->undone_at) {
+            return ['allowed' => false, 'reason' => 'already_undone', 'minutes_left' => 0];
+        }
+
+        $master = Patient::withTrashed()->find($record->surviving_patient_id);
+        if (! $master) {
+            return ['allowed' => false, 'reason' => 'master_not_found', 'minutes_left' => 0];
+        }
+
+        $windowMinutes = (int) config('patients.merge_undo_window_minutes', 15);
+        $minutesLeft   = $windowMinutes - $record->created_at->diffInMinutes(now());
+
+        if ($minutesLeft <= 0) {
+            return ['allowed' => false, 'reason' => 'window_expired', 'minutes_left' => 0];
+        }
+        if ($this->hasActivitySince($master, $record)) {
+            return ['allowed' => false, 'reason' => 'activity_since_merge', 'minutes_left' => (int) $minutesLeft];
+        }
+
+        return ['allowed' => true, 'reason' => null, 'minutes_left' => (int) $minutesLeft];
+    }
+
+    /**
+     * Throwing gate shared by undoStatus() and undo() itself. Deliberately
+     * bounded — NOT a general reversal engine (Final Design §1): refuses
+     * outright, with no partial/best-effort path, unless the merge is both
+     * within its window AND the surviving patient has had zero activity since.
+     */
+    private function assertUndoable(PatientMerge $record, Patient $master): void
+    {
+        if ($record->undone_at) {
+            throw new \RuntimeException('This merge was already undone.');
+        }
+
+        $windowMinutes = (int) config('patients.merge_undo_window_minutes', 15);
+        if ($record->created_at->diffInMinutes(now()) > $windowMinutes) {
+            throw new \RuntimeException(
+                "The {$windowMinutes}-minute undo window for this merge has passed. Automatic undo is no "
+                .'longer available — contact support for manual recovery using the retained merge record.'
+            );
+        }
+
+        if ($this->hasActivitySince($master, $record)) {
+            throw new \RuntimeException(
+                'This patient has new activity recorded since the merge. Automatic undo is refused to avoid '
+                .'corrupting that activity — contact support for manual recovery using the retained merge record.'
+            );
+        }
+    }
+
+    /**
+     * True if any row belonging to $master in a manifest table is newer than
+     * the merge itself — i.e. the surviving patient was used after the merge.
+     * Deliberately conservative: a table with neither created_at nor updated_at
+     * cannot be checked and is skipped (documented limitation, not a silent
+     * assumption of safety elsewhere). Known gap: for patient_links this checks
+     * only the patient_id side, not linked_patient_id — see Final Design risks.
+     */
+    private function hasActivitySince(Patient $master, PatientMerge $record): bool
+    {
+        $cutoff = $record->created_at;
+
+        $tables = array_merge(
+            PatientMergeManifest::CHILD_TABLES,
+            PatientMergeManifest::MONEY_TABLES,
+            PatientMergeManifest::SPECIAL_TABLES,
+        );
+
+        foreach ($tables as $table) {
+            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'patient_id')) {
+                continue;
+            }
+
+            $hasCreated = Schema::hasColumn($table, 'created_at');
+            $hasUpdated = Schema::hasColumn($table, 'updated_at');
+            if (! $hasCreated && ! $hasUpdated) {
+                continue;
+            }
+
+            $exists = DB::table($table)
+                ->where('patient_id', $master->id)
+                ->where(function ($q) use ($cutoff, $hasCreated, $hasUpdated) {
+                    if ($hasCreated) $q->orWhere('created_at', '>', $cutoff);
+                    if ($hasUpdated) $q->orWhere('updated_at', '>', $cutoff);
+                })
+                ->exists();
+
+            if ($exists) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Reverse a merge. Refuses outright (via assertUndoable, re-checked inside
+     * the lock) rather than performing any partial restoration. Restores the
+     * loser patient, every re-parented row, and every special-entity change the
+     * merge made, using only the data captured by merge() itself.
+     *
+     * @throws \RuntimeException if the merge is no longer undoable
+     */
+    public function undo(PatientMerge $record, ?int $userId = null): PatientMerge
+    {
+        $master = Patient::withTrashed()->findOrFail($record->surviving_patient_id);
+        $this->assertUndoable($record, $master);
+
+        DB::transaction(function () use ($record, $userId) {
+            // Re-fetch and lock both rows — the check above is a fast-fail outside
+            // the lock; this is the authoritative gate, evaluated with both rows
+            // locked so a concurrent merge/undo can't race past it.
+            $master = Patient::whereKey($record->surviving_patient_id)->lockForUpdate()->firstOrFail();
+            $loser  = Patient::withTrashed()->whereKey($record->merged_patient_id)->lockForUpdate()->firstOrFail();
+            $this->assertUndoable($record, $master);
+
+            $reversal      = (array) $record->reversal;
+            $reassignments = (array) $record->reassignments;
+
+            // 1. Restore the master's pre-merge demographic/union field values.
+            if ($masterBefore = ($reversal['master_before'] ?? null)) {
+                $master->forceFill($masterBefore);
+                $master->saveQuietly();
+            }
+
+            // 2. Move every re-parented child + money row back to the loser.
+            foreach ($reassignments as $table => $ids) {
+                if (! $ids || ! Schema::hasTable($table) || ! Schema::hasColumn($table, 'patient_id')) {
+                    continue;
+                }
+                DB::table($table)->whereIn('id', $ids)->update(['patient_id' => $loser->id]);
+            }
+
+            // 3. Special-entity rules, reversed.
+            $this->restoreWallet($master, $loser, $record->wallet_transfer, $reassignments);
+            $this->restoreMemberships($loser, $reversal);
+            $this->restoreIdentifiers($loser, $reversal);
+            $this->restoreTagPivot($loser, $reversal);
+            $this->restoreFamilyLinks($loser, $reversal);
+
+            // 4. Reverse the delegated relationship-tier cascade, if one occurred.
+            if ($record->relationship_merge_id) {
+                $relMerge = RelationshipMerge::find($record->relationship_merge_id);
+                if ($relMerge) {
+                    $this->relationshipMerge->undo($relMerge);
+                }
+            }
+
+            // 5. Un-archive the loser.
+            $loser->merged_into_id = null;
+            $loser->merged_at      = null;
+            $loser->merged_by      = null;
+            $loser->saveQuietly();
+            $loser->restore();
+
+            // 6. Mark the merge record undone (reuses the existing audit row —
+            // no new table, no new column; the actor is recorded inside the
+            // same reversal JSON that already carries the rest of the audit detail).
+            $record->undone_at = now();
+            $record->reversal  = array_merge($reversal, ['undone_by' => $userId, 'undone_at_recorded' => now()->toDateTimeString()]);
+            $record->save();
+
+            // 7. Journey Timeline entry — same feed the original merge used.
+            $this->activity->log(
+                $master,
+                'patient.merge_undone',
+                $userId ? User::find($userId) : null,
+                ['merged_patient_id' => $loser->id, 'merge_record_id' => $record->id],
+                $master->relationship_id,
+                'Undid merge — restored '.($record->retired_patient_id ?: '#'.$loser->id)." ({$loser->name}) as a separate record.",
+            );
+        });
+
+        // Publish AFTER commit, mirroring merge()'s own event-timing discipline.
+        $this->bus->publish(new PatientMergeUndone(
+            survivingPatientId: $record->surviving_patient_id,
+            mergedPatientId: $record->merged_patient_id,
+            mergeRecordId: $record->id,
+            relationshipId: Patient::whereKey($record->surviving_patient_id)->value('relationship_id'),
+        ));
+
+        return $record->refresh();
+    }
+
+    private function restoreWallet(Patient $master, Patient $loser, ?array $walletTransfer, array $reassignments): void
+    {
+        if (! $walletTransfer || ! Schema::hasTable('wallets')) {
+            return;
+        }
+
+        $masterWallet = Wallet::forPatientLocked($master->id);
+        $masterWallet->balance_promotional -= $walletTransfer['promotional'];
+        $masterWallet->balance_permanent   -= $walletTransfer['permanent'];
+        $masterWallet->balance_total        = $masterWallet->balance_promotional + $masterWallet->balance_permanent;
+        $masterWallet->save();
+
+        $loserWallet = Wallet::create([
+            'patient_id'          => $loser->id,
+            'balance_promotional' => $walletTransfer['promotional'],
+            'balance_permanent'   => $walletTransfer['permanent'],
+            'balance_total'       => $walletTransfer['promotional'] + $walletTransfer['permanent'],
+        ]);
+
+        $txnIds = $reassignments['wallet_transactions'] ?? [];
+        if ($txnIds) {
+            DB::table('wallet_transactions')->whereIn('id', $txnIds)->update(['wallet_id' => $loserWallet->id]);
+        }
+    }
+
+    /**
+     * Move the loser's memberships back and restore whichever ones the merge
+     * auto-expired (which may include an originally-master-owned membership,
+     * not only moved ones — both operations are applied independently and are
+     * each safe to run regardless of the other).
+     */
+    private function restoreMemberships(Patient $loser, array $reversal): void
+    {
+        $table = 'finance_patient_memberships';
+        if (! Schema::hasTable($table)) {
+            return;
+        }
+        $movedIds = (array) ($reversal['memberships_moved'] ?? []);
+        if ($movedIds) {
+            DB::table($table)->whereIn('id', $movedIds)->update(['patient_id' => $loser->id]);
+        }
+        $expiredIds = (array) ($reversal['memberships_expired'] ?? []);
+        if ($expiredIds) {
+            DB::table($table)->whereIn('id', $expiredIds)->update(['status' => 'active']);
+        }
+    }
+
+    private function restoreIdentifiers(Patient $loser, array $reversal): void
+    {
+        if (! Schema::hasTable('patient_identifiers')) {
+            return;
+        }
+        $movedIds = (array) ($reversal['identifiers_moved'] ?? []);
+        if ($movedIds) {
+            DB::table('patient_identifiers')->whereIn('id', $movedIds)->update(['patient_id' => $loser->id]);
+        }
+        $demotedIds = (array) ($reversal['identifiers_demoted'] ?? []);
+        if ($demotedIds) {
+            DB::table('patient_identifiers')->whereIn('id', $demotedIds)->update(['is_primary' => true]);
+        }
+    }
+
+    private function restoreTagPivot(Patient $loser, array $reversal): void
+    {
+        if (! Schema::hasTable('patient_tag')) {
+            return;
+        }
+        $movedIds = (array) ($reversal['patient_tag_moved'] ?? []);
+        if ($movedIds) {
+            DB::table('patient_tag')->whereIn('id', $movedIds)->update(['patient_id' => $loser->id]);
+        }
+        foreach ((array) ($reversal['patient_tag_deleted'] ?? []) as $row) {
+            $insert = $row;
+            unset($insert['id']);
+            DB::table('patient_tag')->insert($insert);
+        }
+    }
+
+    private function restoreFamilyLinks(Patient $loser, array $reversal): void
+    {
+        if (! Schema::hasTable('patient_links')) {
+            return;
+        }
+        foreach ((array) ($reversal['patient_links_reconciled'] ?? []) as $r) {
+            $before = (array) $r['before'];
+            unset($before['id']);
+            DB::table('patient_links')->where('id', $r['id'])->update($before);
+        }
+        foreach ((array) ($reversal['patient_links_moved'] ?? []) as $m) {
+            DB::table('patient_links')->where('id', $m['id'])->update([$m['column'] => $loser->id]);
+        }
+        foreach ((array) ($reversal['patient_links_deleted'] ?? []) as $row) {
+            $insert = $row;
+            unset($insert['id']);
+            DB::table('patient_links')->insert($insert);
+        }
     }
 }

@@ -1929,7 +1929,7 @@ class InventoryController extends Controller
 
     public function receivePO(Request $request, PurchaseOrder $po)
     {
-        $request->validate([
+        $data = $request->validate([
             'location_id'       => 'required|exists:inventory_locations,id',
             'received_date'     => 'required|date',
             'vendor_invoice_no' => 'nullable|string|max:80',
@@ -1941,143 +1941,24 @@ class InventoryController extends Controller
             'lines.*.expiry'    => 'nullable|date',
         ]);
 
-        // P0 #1 (Product Audit): make GRN-receive atomic — GRN header, stock
-        // movements, PO line/price updates and the auto-created vendor invoice
-        // must all commit together or roll back (the API twin already does this).
-        return \DB::transaction(function () use ($request, $po) {
-        $locationId   = $request->location_id;
-        $receivedDate = $request->received_date;
-        $anyReceived  = false;
-
-        // Phase 1: create a GRN header record
-        $grn = \App\Models\Procurement\GoodsReceiptNote::create([
-            'grn_number'        => \App\Models\Procurement\GoodsReceiptNote::generateGrnNumber(),
-            'purchase_order_id' => $po->id,
-            'vendor_id'         => $po->vendor_id,
-            'received_date'     => $receivedDate,
-            'location_id'       => $locationId,
-            'status'            => 'confirmed',
-            'created_by'        => auth()->id(),
-        ]);
-
-        foreach ($request->lines as $idx => $line) {
-            $qty = (float) $line['qty'];
-            if ($qty <= 0) continue;
-
-            $anyReceived = true;
-            $poItem   = $po->items()->where('inventory_item_id', $line['item_id'])->first();
-            $unitCost = (float) ($line['unit_cost'] ?? $poItem?->unit_price ?? 0);
-
-            // Record stock_in movement (uses polymorphic reference for PO traceability)
-            $movement = StockMovement::create([
-                'inventory_item_id' => $line['item_id'],
-                'movement_type'     => 'stock_in',
-                'qty'               => $qty,
-                'to_location_id'    => $locationId,
-                'unit_cost'         => $unitCost,
-                'total_cost'        => $qty * $unitCost,
-                'batch_no'          => $line['batch_no'] ?? null,
-                'expiry_date'       => $line['expiry'] ?? null,
-                'reference_type'    => \App\Models\Inventory\PurchaseOrder::class,
-                'reference_id'      => $po->id,
-                'notes'             => 'GRN# ' . $grn->grn_number . ' — PO# ' . $po->order_no,
-                'created_by'        => auth()->id(),
-            ]);
-
-            // Phase 1: create GRN item record with link back to StockMovement
-            $grn->items()->create([
-                'purchase_order_item_id' => $poItem?->id,
-                'inventory_item_id'      => $line['item_id'],
-                'qty_received'           => $qty,
-                'unit_price'             => $unitCost,
-                'total_price'            => $qty * $unitCost,
-                'batch_no'               => $line['batch_no'] ?? null,
-                'expiry_date'            => $line['expiry'] ?? null,
-                'stock_movement_id'      => $movement->id,
-            ]);
-
-            // Update qty_received on PO line
-            if ($poItem) {
-                $poItem->increment('qty_received', $qty);
-                // Update item last purchase price
-                if (!empty($line['unit_cost']) && (float)$line['unit_cost'] > 0) {
-                    $invItem = InventoryItem::find($line['item_id']);
-                    $invItem->last_purchase_price    = (float)$line['unit_cost'];
-                    $invItem->average_purchase_price = (float)$line['unit_cost'];
-                    $invItem->save();
-                }
-            }
-        }
-
-        if (!$anyReceived) {
-            // Clean up the empty GRN header we created
-            $grn->delete();
-            return back()->withErrors(['lines' => 'Enter at least one quantity greater than 0.']);
-        }
-
-        // Recalculate PO status
-        $po->refresh();
-        $allItems = $po->items;
-        $allFullyReceived = $allItems->every(fn($i) => $i->qty_received >= $i->qty_ordered);
-        $anyPartial       = $allItems->some(fn($i) => $i->qty_received > 0);
-
-        $po->update([
-            'status' => $allFullyReceived ? 'completed' : ($anyPartial ? 'partially_received' : 'ordered'),
-        ]);
-
-        // ── Auto-create an unpaid vendor invoice in Finance for THIS GRN ──
-        // Each GRN = one vendor invoice (supports partial deliveries with multiple invoices per PO)
-
-        // Reload GRN items from DB — relationship cache is empty right after bulk insert
-        $grn->load('items');
-
-        // Calculate the value of items received in THIS GRN
-        $grnSubtotal = 0;
-        $grnGst      = 0;
-        foreach ($grn->items as $grnItem) {
-            $poItem      = $po->items()->where('inventory_item_id', $grnItem->inventory_item_id)->first();
-            $gstRate     = $poItem?->gst_rate ?? 0;
-            $lineAmt     = $grnItem->total_price; // qty * unit_price already stored
-            $lineGst     = $lineAmt * ($gstRate / 100);
-            $grnSubtotal += $lineAmt;
-            $grnGst      += $lineGst;
-        }
-        $grnTotal = $grnSubtotal + $grnGst;
-
-        if ($grnTotal > 0) {
-            $suppliesCategory = FinanceExpenseCategory::where('name', 'like', '%Suppl%')
-                ->orWhere('name', 'like', '%Dental%')
-                ->orWhere('name', 'like', '%Inventory%')
-                ->first();
-
-            $financeVendorId = $po->finance_vendor_id
-                ?? $po->resolveFinanceVendor()?->id;
-
-            $vendorInvoiceNo = $request->vendor_invoice_no;
-            $invoiceLabel    = $vendorInvoiceNo ? ' [Inv# ' . $vendorInvoiceNo . ']' : '';
-
-            FinanceExpense::create([
-                'title'             => 'PO# ' . $po->order_no . ' — ' . ($po->vendor?->vendor_name ?? 'Vendor') . $invoiceLabel,
-                'description'       => 'GRN# ' . $grn->grn_number . ' — items received against PO ' . $po->order_no
-                                     . ($vendorInvoiceNo ? '. Vendor Invoice: ' . $vendorInvoiceNo : '') . '.',
-                'expense_date'      => $receivedDate,
-                'amount'            => $grnSubtotal,
-                'gst_applicable'    => $grnGst > 0,
-                'gst_amount'        => $grnGst,
-                'total_amount'      => $grnTotal,
-                'category_id'       => $suppliesCategory?->id,
-                'vendor_id'         => $financeVendorId,
-                'payment_status'    => 'unpaid',
-                'status'            => 'approved',
-                'source_type'       => GoodsReceiptNote::class,
-                'source_id'         => $grn->id,
-                'created_by'        => auth()->id(),
-            ]);
+        // 2026-08-04 hardening: delegates to the shared "brain"
+        // (InventoryService::receivePurchaseOrder) — the same one the mobile
+        // API uses — instead of keeping a separately maintained ~150-line
+        // copy of this logic. This is what makes the GRN idempotency guard,
+        // the PO status guard, and the over-receive cap apply on web too, and
+        // fixes a real drift bug in the process: this copy never set
+        // grn_number/vendor_invoice_no on the auto-created FinanceExpense
+        // (the API version did), and never auto-closed the pending delivery
+        // follow-up Task on receipt.
+        try {
+            $grn = app(\App\Services\Inventory\InventoryService::class)
+                ->receivePurchaseOrder($po, $data, $request->user());
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['lines' => $e->getMessage()]);
         }
 
         return redirect()->route('inventory.purchase')
-            ->with('success', 'GRN recorded for PO# ' . $po->order_no . '. Stock updated. Pending bill added to Finance.');
-        });
+            ->with('success', 'GRN# ' . $grn->grn_number . ' recorded for PO# ' . $po->order_no . '. Stock updated. Pending bill added to Finance.');
     }
 
     /* ─────────────────────────────────────────────────────────
@@ -2374,15 +2255,17 @@ class InventoryController extends Controller
             'label_photo'             => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
         ]);
 
-        if ($request->hasFile('label_photo')) {
-            $data['label_photo_path'] = $request->file('label_photo')
-                ->store('implants/labels', 'public');
+        // 2026-08-04 hardening: delegates to InventoryService::createPlacement
+        // (same one the API uses) so a catalog-linked implant actually
+        // deducts stock on web too — this used to just ImplantPlacement::create()
+        // with zero stock effect.
+        try {
+            app(\App\Services\Inventory\InventoryService::class)
+                ->createPlacement($data, $request->file('label_photo'), $request->user());
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['implant_catalog_id' => $e->getMessage()]);
         }
 
-        $data['created_by'] = auth()->id();
-        unset($data['label_photo']);
-
-        ImplantPlacement::create($data);
         return back()->with('success', 'Implant placement recorded successfully.');
     }
 
@@ -2398,16 +2281,10 @@ class InventoryController extends Controller
             'label_photo'            => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
         ]);
 
-        if ($request->hasFile('label_photo')) {
-            if ($placement->label_photo_path) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($placement->label_photo_path);
-            }
-            $data['label_photo_path'] = $request->file('label_photo')
-                ->store('implants/labels', 'public');
-        }
-
-        unset($data['label_photo']);
-        $placement->update($data);
+        // 2026-08-04 hardening: delegates to InventoryService::updatePlacement
+        // so the failed/explanted audit-note behaviour applies on web too.
+        app(\App\Services\Inventory\InventoryService::class)
+            ->updatePlacement($placement, $data, $request->file('label_photo'));
 
         return back()->with('success', 'Placement updated.');
     }

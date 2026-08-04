@@ -63,6 +63,25 @@ class TreatmentPlan extends Model
                 $plan->display_order = static::where('consultation_id', $plan->consultation_id)->count() + 1;
             }
         });
+
+        // F2 — PRESENTATION IS IMMUTABLE.
+        // Canonical Treatment Lifecycle V1 §5: presentation is a clinical
+        // communication fact, stamped once by the clinic and never rewritten.
+        // Until now this rested on a single conditional inside one service;
+        // any other code path that happened to include the key could silently
+        // move or clear the moment the patient first saw their plan.
+        static::updating(function (self $plan) {
+            if (! $plan->isDirty('presented_at')) {
+                return;
+            }
+
+            if (! is_null($plan->getOriginal('presented_at'))) {
+                throw new \RuntimeException(
+                    'Presentation is immutable: treatment plan #' . $plan->id
+                    . ' was already presented and that record cannot be changed or cleared.'
+                );
+            }
+        });
     }
 
     // ── Relationships ─────────────────────────────────────────────────────────
@@ -115,10 +134,15 @@ class TreatmentPlan extends Model
      */
     public function getIsDecisionPendingAttribute(): bool
     {
+        // F2 — a reversed acceptance returns the plan to Decision Pending
+        // (§15 transition 9), so this reads the ledger head rather than merely
+        // testing for its absence.
+        $decision = $this->currentDecision();
+
         return ! is_null($this->presented_at)
             && is_null($this->accepted_at)
             && $this->status !== 'cancelled'
-            && is_null($this->currentDecision());
+            && (is_null($decision) || $decision->decision === PlanDecision::REVERTED);
     }
 
     public function items(): HasMany
@@ -172,6 +196,25 @@ class TreatmentPlan extends Model
     public function getComputedTotalAttribute(): float
     {
         return (float) $this->items()->sum('total');
+    }
+
+    /**
+     * F1 — the canonical lifecycle state, DERIVED (Canonical Treatment
+     * Lifecycle V1 §15). `status` is the legacy projection of this value; this
+     * accessor is the state itself.
+     */
+    public function getLifecycleStateAttribute(): \App\Enums\PlanLifecycleState
+    {
+        return app(\App\Services\TreatmentPlan\PlanLifecycleService::class)->derive($this);
+    }
+
+    /**
+     * Does this plan currently authorize Treatment Visits? (§7 — acceptance is
+     * the only authorization to treat.)
+     */
+    public function getAuthorizesTreatmentAttribute(): bool
+    {
+        return $this->lifecycle_state->authorizesTreatment();
     }
 
     // ── Scopes ────────────────────────────────────────────────────────────────

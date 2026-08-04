@@ -12,6 +12,7 @@ use App\Models\TreatmentMedia;
 use App\Models\TreatmentPlan;
 use App\Services\Presentations\PresentationLinkService;
 use App\Services\Presentations\PresentationSummaryService;
+use App\Services\TreatmentPlan\TreatmentPlanPresentationService;
 use App\Services\Relationship\ActivityEngine;
 use App\Services\Whatsapp\OutboundMessageService;
 use Illuminate\Http\RedirectResponse;
@@ -258,6 +259,21 @@ class PresentationController extends Controller
         }
 
         $presentation->update(['status' => Presentation::STATUS_SENT, 'sent_at' => now()]);
+
+        // F2 — PRESENTATION IS THE CLINIC'S ACT.
+        // Canonical Treatment Lifecycle V1 §5. Sending the plan to the patient
+        // is the clinic presenting it, so the clinical fact is recorded here.
+        // It used to be stamped when the patient's browser loaded the public
+        // page, which an automated link preview could trigger. Immutable and
+        // idempotent, so a resend never rewrites the first presentation.
+        if ($plan = $presentation->treatmentPlan) {
+            try {
+                app(TreatmentPlanPresentationService::class)
+                    ->markPresented($plan, Auth::user(), 'smart_presentation');
+            } catch (\RuntimeException $e) {
+                report($e);
+            }
+        }
 
         app(ActivityEngine::class)->log(
             subject:        $presentation,

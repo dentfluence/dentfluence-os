@@ -8,15 +8,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class RoleModulePermission extends Model
 {
     protected $fillable = [
-        'role_id', 'module_id', 'can_view', 'can_edit', 'can_delete',
+        'role_id', 'module_id', 'can_view', 'can_edit', 'can_delete', 'can_settings',
     ];
 
     protected function casts(): array
     {
         return [
-            'can_view'   => 'boolean',
-            'can_edit'   => 'boolean',
-            'can_delete' => 'boolean',
+            'can_view'     => 'boolean',
+            'can_edit'     => 'boolean',
+            'can_delete'   => 'boolean',
+            'can_settings' => 'boolean',
         ];
     }
 

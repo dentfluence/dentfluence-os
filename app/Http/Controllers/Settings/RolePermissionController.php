@@ -37,9 +37,10 @@ class RolePermissionController extends Controller
                 foreach ($perms as $p) {
                     if ($p->module) {
                         $map[$p->module->slug] = [
-                            'view'   => (bool) $p->can_view,
-                            'edit'   => (bool) $p->can_edit,
-                            'delete' => (bool) $p->can_delete,
+                            'view'     => (bool) $p->can_view,
+                            'edit'     => (bool) $p->can_edit,
+                            'delete'   => (bool) $p->can_delete,
+                            'settings' => (bool) $p->can_settings,
                         ];
                     }
                 }
@@ -64,9 +65,10 @@ class RolePermissionController extends Controller
         foreach ($perms as $p) {
             if ($p->module) {
                 $map[$p->module->slug] = [
-                    'view'   => (bool) $p->can_view,
-                    'edit'   => (bool) $p->can_edit,
-                    'delete' => (bool) $p->can_delete,
+                    'view'     => (bool) $p->can_view,
+                    'edit'     => (bool) $p->can_edit,
+                    'delete'   => (bool) $p->can_delete,
+                    'settings' => (bool) $p->can_settings,
                 ];
             }
         }
@@ -98,6 +100,7 @@ class RolePermissionController extends Controller
             'permissions.*.view'       => 'boolean',
             'permissions.*.edit'       => 'boolean',
             'permissions.*.delete'     => 'boolean',
+            'permissions.*.settings'   => 'boolean',
         ]);
 
         $modules = Module::all()->keyBy('slug');
@@ -108,9 +111,10 @@ class RolePermissionController extends Controller
             RoleModulePermission::updateOrCreate(
                 ['role_id' => $role->id, 'module_id' => $modules[$slug]->id],
                 [
-                    'can_view'   => $perms['view']   ?? false,
-                    'can_edit'   => $perms['edit']   ?? false,
-                    'can_delete' => $perms['delete'] ?? false,
+                    'can_view'     => $perms['view']     ?? false,
+                    'can_edit'     => $perms['edit']     ?? false,
+                    'can_delete'   => $perms['delete']   ?? false,
+                    'can_settings' => $perms['settings'] ?? false,
                 ]
             );
         }

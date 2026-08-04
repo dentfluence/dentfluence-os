@@ -333,6 +333,13 @@ class TreatmentPlanController extends ApiController
         $p = $this->findPlan($request, $plan);
         if ($p instanceof JsonResponse) return $p;
 
+        // S1 — the same guard billableTeeth() already applies. Without it a
+        // client could skip the read endpoint and POST straight to /bill,
+        // invoicing a plan the patient never accepted.
+        if (is_null($p->accepted_at)) {
+            return $this->error('This plan must be accepted before billing.', [], 422);
+        }
+
         $data = $request->validate([
             'tooth_ids'   => ['required', 'array', 'min:1'],
             'tooth_ids.*' => ['integer'],
@@ -357,8 +364,10 @@ class TreatmentPlanController extends ApiController
     private function syncItems(TreatmentPlan $plan, array $items): void
     {
         foreach ($items as $idx => $row) {
+            // F3 — THE PLAN OWNS ITS ITEMS (§14). Scoped to this plan, so a
+            // posted id belonging to another plan can never be re-parented.
             $item = isset($row['id'])
-                ? (TreatmentPlanItem::find($row['id']) ?? new TreatmentPlanItem())
+                ? ($plan->items()->whereKey($row['id'])->first() ?? new TreatmentPlanItem())
                 : new TreatmentPlanItem();
 
             $item->fill([
@@ -371,10 +380,14 @@ class TreatmentPlanController extends ApiController
                 'consent_required'  => (bool) ($row['consent_required'] ?? false),
                 'unit_price'        => (float) ($row['unit_price'] ?? 0),
                 'units'             => (int) ($row['units'] ?? 1),
-                'disc_pct'          => 0,
-                'gst_pct'           => 0,
-                'option_rank'       => 'best',
-                'status'            => 'pending',
+                // F3 — pricing modifiers set on web are preserved on an
+                // existing item rather than being reset to defaults by a
+                // mobile edit, which silently discarded agreed discounts.
+                'disc_pct'          => $item->exists ? (float) $item->disc_pct : 0,
+                'gst_pct'           => $item->exists ? (float) $item->gst_pct : 0,
+                'option_rank'       => $item->exists ? $item->option_rank : 'best',
+                // F3 — item lifecycle state is never client-supplied.
+                'status'            => $item->exists ? $item->status : 'pending',
                 'notes'             => $row['notes'] ?? null,
                 'sort_order'        => $idx,
             ]);
