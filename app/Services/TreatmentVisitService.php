@@ -252,6 +252,39 @@ class TreatmentVisitService
     }
 
     /**
+     * Delete a visit WITH its dependents (Freeze Spec G1, 2026-08-05).
+     *
+     * TreatmentVisit soft-deletes, so the treatment_visit_items
+     * cascadeOnDelete FK never fires — a bare $visit->delete() left items
+     * live and billable and prompts pending (audit P0, confirmed by
+     * TreatmentVisitCrudTest::test_soft_deleting_a_visit_removes_its_
+     * dependent_items_and_prompts). Both controllers now route through here.
+     *
+     * Guard: a visit whose items are already invoiced cannot be deleted —
+     * billing history must never be orphaned by a clinical-side delete.
+     */
+    public function delete(TreatmentVisit $visit): void
+    {
+        DB::transaction(function () use ($visit) {
+            if ($visit->visitItems()->where('billing_status', 'invoiced')->exists()) {
+                throw ValidationException::withMessages([
+                    'visit' => 'This visit has billed treatments. Settle or remove the invoice before deleting the visit.',
+                ]);
+            }
+
+            BillingPrompt::where('trigger_type', 'treatment_visit')
+                ->where('trigger_id', $visit->id)
+                ->where('status', 'pending')
+                ->update(['status' => 'dismissed']);
+
+            // Hard delete — treatment_visit_items has no SoftDeletes.
+            $visit->visitItems()->delete();
+
+            $visit->delete(); // soft delete of the visit itself, as before
+        });
+    }
+
+    /**
      * Keys in the validated payload that are transient control params, not
      * real columns on treatment_visits — stripped before the mass-assignment
      * create()/update() call and handled by their own dedicated methods.

@@ -129,7 +129,8 @@ class TreatmentVisitController extends ApiController
     public function destroy(Request $request, $visit): JsonResponse
     {
         $v = $this->findVisit($request, $visit);
-        $v->delete();
+        // G1 — same dependent cleanup + invoiced-items guard as the web.
+        $this->service->delete($v);
 
         return $this->success(null, 'Treatment visit deleted.');
     }

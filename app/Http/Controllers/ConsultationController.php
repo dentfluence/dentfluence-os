@@ -180,7 +180,54 @@ class ConsultationController extends Controller
         // Stay on consultation view — doctor can continue to Rx or Treatment Plan from there
         return redirect()
             ->route('consultations.show', $consultation)
-            ->with('success', 'Consultation saved.');
+            ->with('success', 'Consultation saved.')
+            ->with('visit_gate', $this->visitGateData($patient));
+    }
+
+    /**
+     * UX-04 (Freeze Spec, 2026-08-05) — post-consultation-save Treatment Visit
+     * gate. Fires only when today's appointment is a TREATMENT appointment,
+     * no visit has been recorded today, and the doctor hasn't already answered
+     * "No Treatment Done Today". Read-side only; the modal renders once from
+     * this flash on consultations/show. Returns null when the gate shouldn't
+     * show, which the view treats as "no modal".
+     */
+    private function visitGateData(Patient $patient): ?array
+    {
+        $appointment = $patient->appointments()
+            ->whereDate('appointment_date', today())
+            ->where('type', 'treatment')
+            ->where('status', '!=', 'cancelled')
+            ->orderBy('appointment_time')
+            ->first();
+        if (! $appointment) {
+            return null;
+        }
+
+        $visitToday = $patient->treatmentVisits()
+            ->whereDate('visit_date', today())->exists();
+        if ($visitToday) {
+            return null;
+        }
+
+        $answeredNone = \App\Models\Activity::where('subject_type', Patient::class)
+            ->where('subject_id', $patient->id)
+            ->where('event', 'treatment_visit.none_today')
+            ->whereDate('occurred_at', today())->exists();
+        if ($answeredNone) {
+            return null;
+        }
+
+        // Prefill plan ONLY when exactly one accepted plan exists — never guess.
+        $acceptedPlans = $patient->treatmentPlans()
+            ->whereNotNull('accepted_at')->pluck('id');
+
+        return [
+            'patient_id'     => $patient->id,
+            'patient_name'   => $patient->name,
+            'appointment_id' => $appointment->id,
+            'plan_id'        => $acceptedPlans->count() === 1 ? $acceptedPlans->first() : null,
+        ];
     }
 
     public function show(Consultation $consultation, Patient $patient = null)
@@ -420,7 +467,8 @@ class ConsultationController extends Controller
         // Return to the consultation view so the doctor can continue their workflow
         return redirect()
             ->route('consultations.show', $consultation)
-            ->with('success', 'Consultation updated.');
+            ->with('success', 'Consultation updated.')
+            ->with('visit_gate', $this->visitGateData($consultation->patient));
     }
 
     public function destroy(Patient $patient, Consultation $consultation)

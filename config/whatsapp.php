@@ -66,6 +66,18 @@ return [
             'label'     => 'Appointment reminder',
             'body_vars' => ['name', 'date', 'time'],
             'sample'    => 'Hi {{1}}, this is a reminder of your dental appointment on {{2}} at {{3}}. Reply here if you need to reschedule.',
+            // Slice 4 (2026-08-05): quick-reply buttons, sent only when the
+            // caller supplies an 'appointment_id' (see OutboundMessageService
+            // ::buildButtonComponents()). The Meta-approved template itself
+            // must be defined with these three quick-reply buttons in this
+            // order for the payloads below to line up with what Meta renders.
+            // id_prefix + "_appt_{id}" is the exact button-id format
+            // InboundMessageService::handleInteractiveReply() (Slice 2) parses.
+            'buttons' => [
+                ['id_prefix' => 'confirm',    'text' => 'Confirm'],
+                ['id_prefix' => 'reschedule', 'text' => 'Reschedule'],
+                ['id_prefix' => 'cancel',     'text' => 'Cancel'],
+            ],
         ],
 
         'appointment_confirmation' => [

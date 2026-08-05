@@ -266,6 +266,8 @@ Route::middleware('auth')->group(function () {
         Route::put('/visits/{visit}',             [App\Http\Controllers\TreatmentVisitController::class, 'update'])->name('visits.update')->middleware('module:patients,edit');
         Route::delete('/visits/{visit}',          [App\Http\Controllers\TreatmentVisitController::class, 'destroy'])->name('visits.destroy')->middleware('module:patients,delete');
         Route::get('/visits/{visit}/print',       [App\Http\Controllers\TreatmentVisitController::class, 'print'])->name('visits.print');
+        // UX-04 — recorded "No Treatment Done Today" answer from the post-consultation gate.
+        Route::post('/patients/{patient}/visits/none-today', [App\Http\Controllers\TreatmentVisitController::class, 'noneToday'])->name('visits.none-today')->middleware('module:patients,edit');
 
         // ── Consult Assist (AJAX) ──────────────────────────────────────────────
         // Receives chief complaint text, returns matched specialties from treatment_knowledge.
@@ -591,6 +593,8 @@ Route::middleware('auth')->group(function () {
     // ── Notifications ──
     Route::get('/notifications',               [\App\Http\Controllers\NotificationsController::class, 'index'])->name('notifications.index');
     Route::get('/notifications/unread',        [\App\Http\Controllers\NotificationsController::class, 'unread'])->name('notifications.unread');
+    // UX-07 — sidebar workflow queue badges (pending billing prompts, draft lab cases)
+    Route::get('/notifications/nav-badges',    [\App\Http\Controllers\NotificationsController::class, 'navBadges'])->name('notifications.navBadges');
     // mark-all-read must come BEFORE {id}/read to avoid wildcard conflict
     Route::post('/notifications/mark-all-read',[\App\Http\Controllers\NotificationsController::class, 'markAllRead'])->name('notifications.markAllRead');
     Route::post('/notifications/{id}/read',    [\App\Http\Controllers\NotificationsController::class, 'markRead'])->name('notifications.read');

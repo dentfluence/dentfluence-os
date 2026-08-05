@@ -130,10 +130,18 @@
         <div style="padding:12px 0 4px;">
             <div class="df-nav-section-label" style="font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.20em;text-transform:uppercase;color:rgba(185,130,210,0.38);padding:0 16px 5px;">Operations</div>
             @if($user->canAccess('finance'))
+                {{-- UX-07: pending billing-prompt queue badge — the "doctor
+                     finished, front desk should bill" signal, replacing the
+                     verbal handoff. Count is populated ONLY by the async
+                     poller below (immediately on load, then every 30s) —
+                     never queried during page render, so the Phase 4 perf
+                     contract (eager pages don't touch lazy-tab tables) holds. --}}
                 @include('components.sidebar-item', [
-                    'href'  => route('finance.dashboard'),
-                    'label' => 'Accounts & Finance',
-                    'icon'  => '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+                    'href'       => route('finance.dashboard'),
+                    'label'      => 'Accounts & Finance',
+                    'icon'       => '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+                    'badgeCount' => 0,
+                    'badgeType'  => 'warning',
                 ])
             @endif
             @if($user->canAccess('inventory'))
@@ -146,10 +154,15 @@
                 ])
             @endif
             @if($user->canAccess('lab'))
+                {{-- UX-07: draft lab-case queue badge — cases auto-drafted from
+                     treatment visits, waiting to be sent to the vendor.
+                     Poller-populated only; see the perf-contract note above. --}}
                 @include('components.sidebar-item', [
-                    'href'  => route('lab.index'),
-                    'label' => 'Lab',
-                    'icon'  => '<path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/>',
+                    'href'       => route('lab.index'),
+                    'label'      => 'Lab',
+                    'icon'       => '<path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/>',
+                    'badgeCount' => 0,
+                    'badgeType'  => 'brand',
                 ])
             @endif
             @if($user->canAccess('tasks'))
@@ -336,5 +349,47 @@
         }
         #df-shell[data-sidebar="collapsed"] .df-nav-item:hover::after { opacity: 1; }
     </style>
+
+    {{-- UX-07 (Freeze Spec, 2026-08-05) — 30s badge poller. Keeps the Billing
+         and Lab queue badges live between page loads so front desk sees new
+         work from the chair without the verbal handoff. Read-only endpoint,
+         role-scoped counts, no websockets in V1 by decree. --}}
+    <script>
+    (function () {
+        const URL = @js(route('notifications.navBadges'));
+        const targets = [
+            { path: @js(parse_url(route('finance.dashboard'), PHP_URL_PATH)), key: 'billing_prompts', type: 'warning' },
+            { path: @js(parse_url(route('lab.index'), PHP_URL_PATH)),         key: 'lab_drafts',      type: 'brand' },
+        ];
+        function apply(counts) {
+            targets.forEach(t => {
+                const item = document.querySelector('a[data-nav-href="' + t.path + '"]');
+                if (!item) return; // role can't see this nav item
+                let badge = item.querySelector('.df-nav-badge');
+                const n = counts[t.key] || 0;
+                if (n > 0) {
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'df-nav-badge badge-' + t.type + ' df-nav-badge-text';
+                        item.appendChild(badge);
+                    }
+                    badge.textContent = n > 99 ? '99+' : n;
+                } else if (badge) {
+                    badge.remove();
+                }
+            });
+        }
+        async function poll() {
+            try {
+                const r = await fetch(URL, { headers: { 'Accept': 'application/json' } });
+                if (r.ok) apply(await r.json());
+            } catch (e) { /* offline — badge keeps its last value */ }
+        }
+        // Immediate first poll (badges are never server-rendered — perf
+        // contract), then refresh every 30s.
+        poll();
+        setInterval(poll, 30000);
+    })();
+    </script>
 
 </aside>

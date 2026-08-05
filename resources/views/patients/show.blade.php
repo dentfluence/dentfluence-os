@@ -88,14 +88,51 @@ function patientProfile() {
         },
 
         init() {
+            // UX-02/03 (Freeze Spec, 2026-08-05) — tab state precedence:
+            //   explicit #hash  >  appointment-type default  >  'profile'.
+            // 'membership' was missing from validTabs (deep links broke) — fixed.
+            const validTabs = ['profile','consultation','treatment-plan','visits','lab','prescriptions','billing','wallet','membership','documents','notes'];
             const hash = window.location.hash.replace('#','');
-            const validTabs = ['profile','consultation','treatment-plan','visits','lab','prescriptions','billing','wallet','documents','notes'];
             if (validTabs.includes(hash)) {
                 this.activeTab = hash;
+            } else {
+                // UX-03 — server-derived default from today's appointment type.
+                // A default only: every tab stays one click away.
+                const serverDefault = @json($defaultTab ?? 'profile');
+                if (validTabs.includes(serverDefault)) this.activeTab = serverDefault;
             }
+
             // Lazy loader: fetch a tab's fragment the first time it opens.
-            this.$watch('activeTab', (tab) => this.ensureTab(tab));
+            // UX-02 — also mirror the active tab into the hash so refresh keeps
+            // the user's place and Back walks through their tab history.
+            this.$watch('activeTab', (tab) => {
+                this.ensureTab(tab);
+                if (window.location.hash.replace('#','') !== tab) {
+                    window.location.hash = tab;   // creates a history entry → Back works
+                }
+            });
+            window.addEventListener('hashchange', () => {
+                const h = window.location.hash.replace('#','');
+                if (validTabs.includes(h) && this.activeTab !== h) this.activeTab = h;
+            });
             if (this.activeTab !== 'profile') this.ensureTab(this.activeTab);
+
+            // UX-05 — prefilled handoff deep link from the consultation gate:
+            // ?open_visit=1&appointment_id=…&plan_id=… opens the Add Visit form
+            // pre-linked. Params are stripped afterwards so refresh doesn't
+            // re-open the modal.
+            const qp = new URLSearchParams(window.location.search);
+            if (qp.get('open_visit') === '1') {
+                const detail = {
+                    appointment_id:    qp.get('appointment_id') || null,
+                    treatment_plan_id: qp.get('plan_id') || null,
+                };
+                this.openTabThen('visits', () =>
+                    window.dispatchEvent(new CustomEvent('open-visit-form', { detail })));
+                ['open_visit','appointment_id','plan_id'].forEach(k => qp.delete(k));
+                history.replaceState(null, '',
+                    window.location.pathname + (qp.toString() ? '?' + qp.toString() : '') + '#visits');
+            }
         },
 
         /**

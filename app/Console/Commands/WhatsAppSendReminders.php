@@ -82,8 +82,12 @@ class WhatsAppSendReminders extends Command
                 'appointment_reminder',
                 ['name' => $first, 'date' => $date, 'time' => $time],
                 [
-                    'patient_id' => $patient->id,
-                    'dedup_key'  => 'appt:' . $appt->id . ':' . $targetDate->toDateString(),
+                    'patient_id'     => $patient->id,
+                    'dedup_key'      => 'appt:' . $appt->id . ':' . $targetDate->toDateString(),
+                    // Slice 4 (2026-08-05): lets sendTemplate() attach the
+                    // Confirm/Reschedule/Cancel quick-reply buttons — see
+                    // config('whatsapp.templates.appointment_reminder.buttons').
+                    'appointment_id' => $appt->id,
                 ],
             );
 

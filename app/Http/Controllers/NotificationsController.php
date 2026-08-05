@@ -58,6 +58,26 @@ class NotificationsController extends Controller
         ]);
     }
 
+    // ── AJAX: sidebar workflow queue badges (UX-07, Freeze Spec 2026-08-05) ──
+    // Read-side surfacing of rows that ALREADY exist (pending billing prompts,
+    // draft lab cases) — no new events, no writes. Polled every 30s by the
+    // sidebar so front desk / lab see new work without the verbal handoff.
+    // Counts are role-scoped: you only receive numbers for modules you can see.
+
+    public function navBadges()
+    {
+        $user = Auth::user();
+
+        return response()->json([
+            'billing_prompts' => $user->canAccess('finance')
+                ? \App\Models\BillingPrompt::where('status', 'pending')->count()
+                : 0,
+            'lab_drafts' => $user->canAccess('lab')
+                ? \App\Models\LabCase::where('status', 'draft')->count()
+                : 0,
+        ]);
+    }
+
     // ── Mark single notification as read ─────────────────────────────────────
 
     public function markRead(int $id)

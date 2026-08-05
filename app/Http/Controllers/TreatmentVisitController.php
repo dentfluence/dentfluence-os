@@ -46,7 +46,36 @@ class TreatmentVisitController extends Controller
 
     public function destroy(TreatmentVisit $visit): JsonResponse
     {
-        $visit->delete();
+        // G1 — service handles dependent cleanup (items, pending prompts)
+        // and refuses to delete a visit whose items are already invoiced.
+        $this->service->delete($visit);
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * UX-04 — record the explicit "No Treatment Done Today" answer from the
+     * post-consultation gate. A recorded answer (not a silent dismissal):
+     * it suppresses the gate for the rest of the day and renders the
+     * progress strip's Treatment Visit step as "skipped".
+     */
+    public function noneToday(\Illuminate\Http\Request $request, Patient $patient): JsonResponse
+    {
+        $data = $request->validate([
+            'appointment_id' => ['nullable', 'integer', 'exists:appointments,id'],
+        ]);
+
+        app(\App\Services\Relationship\ActivityEngine::class)->log(
+            subject:     $patient,
+            event:       'treatment_visit.none_today',
+            actor:       $request->user(),
+            metadata:    [
+                'patient_id'     => $patient->id,
+                'appointment_id' => $data['appointment_id'] ?? null,
+                'date'           => now()->toDateString(),
+            ],
+            description: 'Doctor confirmed no treatment was performed today',
+        );
 
         return response()->json(['success' => true]);
     }

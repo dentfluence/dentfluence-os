@@ -250,8 +250,14 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
          | is declared before nothing ambiguous; "/visits/{visit}" is a distinct
          | path so it never clashes with the patient list route.
          */
-        Route::get('/patients/{patient}/visits/form-options', [TreatmentVisitController::class, 'formOptions']);
-        Route::get('/visits/{visit}',                         [TreatmentVisitController::class, 'show']);
+        // Freeze Spec G1 (2026-08-05): these two reads return patient PHI +
+        // vitals + prescriptions and were reachable by ANY authenticated token
+        // (audit P0, confirmed by TreatmentVisitAuthorizationAndParityTest).
+        // Gated on patients,view to match every other PHI read in this file.
+        Route::middleware('api.role:module:patients,view')->group(function () {
+            Route::get('/patients/{patient}/visits/form-options', [TreatmentVisitController::class, 'formOptions']);
+            Route::get('/visits/{visit}',                         [TreatmentVisitController::class, 'show']);
+        });
         // Slice 1.2: visit writes on owner-configured patients,edit / ,delete
         // (mirrors web visits.store/update/destroy) instead of a dentist list.
         Route::middleware('api.role:module:patients,edit')->group(function () {

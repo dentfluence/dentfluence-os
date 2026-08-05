@@ -4,11 +4,10 @@ namespace App\Services\Whatsapp;
 
 use App\Integration\IntegrationEngine;
 use App\Models\AuditLog;
-use App\Models\ConsentPurpose;
 use App\Models\Patient;
-use App\Models\PatientConsent;
 use App\Models\WaMessage;
 use App\Models\WaThread;
+use App\Services\Relationship\CommunicationGuard;
 use App\Support\Features\Feature;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -36,6 +35,9 @@ class OutboundMessageService
 {
     public function __construct(
         protected WhatsAppCloudService $client = new WhatsAppCloudService(),
+        // Slice 3 (2026-08-05): single source of truth for WhatsApp consent —
+        // see consentGate() below.
+        protected CommunicationGuard $consentGuard = new CommunicationGuard(),
     ) {}
 
     /**
@@ -155,25 +157,23 @@ class OutboundMessageService
     {
         $patient = $thread->patient;
 
-        $key = $category === 'marketing'
-            ? config('whatsapp.consent.marketing_purpose_key', 'marketing_promotions')
-            : config('whatsapp.consent.service_purpose_key', 'whatsapp_comms');
-
         if ($patient) {
-            $purpose = ConsentPurpose::where('key', $key)->first();
-            if (! $purpose) {
-                return ['allowed' => false, 'reason' => "Consent purpose '{$key}' is missing — run ConsentPurposeSeeder."];
-            }
-
-            $consent = PatientConsent::where('patient_id', $patient->id)
-                ->where('consent_purpose_id', $purpose->id)
-                ->first();
-
-            if ($consent && $consent->isGranted()) {
-                return ['allowed' => true, 'reason' => null];
-            }
-
-            return ['allowed' => false, 'reason' => "Patient has not granted '{$purpose->name}' consent (DPDP)."];
+            // Slice 3 (2026-08-05): this used to run its own independent
+            // ConsentPurpose/PatientConsent lookup here — byte-for-byte the
+            // same query CommunicationGuard::hasWhatsAppConsent() already
+            // runs. Reusing it removes the second copy; there is now exactly
+            // one place WhatsApp consent is decided.
+            //
+            // Behaviour is unchanged: CommunicationGuard resolves the same
+            // purpose key this method always used — $category is 'service' or
+            // 'marketing' here, and 'marketing' is (by default, and unless a
+            // clinic has customised config('relationship_rules
+            // .communication_guard.promotional_types') to remove it) one of
+            // the promotional types CommunicationGuard checks — so passing
+            // $category straight through as the $type argument resolves to
+            // the identical marketing/service purpose key this method already
+            // used.
+            return $this->consentGuard->hasWhatsAppConsent($patient, $category);
         }
 
         // No patient record on this number.
@@ -205,7 +205,9 @@ class OutboundMessageService
      * @param string $templateKey  a key from config('whatsapp.templates').
      * @param array  $vars         variable values, keyed by the template's body_vars
      *                             names, e.g. ['name'=>'Asha','date'=>'1 Jul','time'=>'4 PM'].
-     * @param array  $opts         patient_id, lead_id, sent_by_id.
+     * @param array  $opts         patient_id, lead_id, sent_by_id, dedup_key,
+     *                             appointment_id (Slice 4 — only needed when the
+     *                             template config defines 'buttons').
      */
     public function sendTemplate(string $phone, string $templateKey, array $vars = [], array $opts = []): array
     {
@@ -252,6 +254,11 @@ class OutboundMessageService
         // Order the variables as the approved template expects ({{1}}, {{2}}, …).
         $ordered    = $this->orderedVars($def, $vars);
         $components = $this->buildBodyComponents($ordered);
+        // Slice 4 (2026-08-05): quick-reply buttons — no-op (empty array,
+        // array_merge is then a no-op) unless the template config defines
+        // 'buttons' AND the caller passed 'appointment_id'. Every existing
+        // template/caller is unaffected.
+        $components = array_merge($components, $this->buildButtonComponents($def, $opts['appointment_id'] ?? null));
         $preview    = $this->fillSample($def['sample'] ?? '', $ordered);
 
         // ── RECORD ─────────────────────────────────────────────────────────────
@@ -359,6 +366,44 @@ class OutboundMessageService
             $i++;
         }
         return $sample;
+    }
+
+    /**
+     * Build Meta's quick-reply "button" components for an interactive
+     * template (Slice 4, 2026-08-05). Mirrors buildBodyComponents() above —
+     * same reuse of the existing components-array pattern, just for buttons
+     * instead of body variables.
+     *
+     * Returns [] (no buttons sent) unless the template config defines
+     * 'buttons' AND an appointment id was supplied — every existing template
+     * and every existing caller that doesn't pass appointment_id behaves
+     * exactly as before.
+     */
+    protected function buildButtonComponents(array $def, ?int $appointmentId): array
+    {
+        $buttons = $def['buttons'] ?? [];
+        if (empty($buttons) || ! $appointmentId) {
+            return [];
+        }
+
+        $components = [];
+        foreach (array_values($buttons) as $index => $button) {
+            $prefix = $button['id_prefix'] ?? null;
+            if (! $prefix) {
+                continue;
+            }
+
+            $components[] = [
+                'type'       => 'button',
+                'sub_type'   => 'quick_reply',
+                'index'      => (string) $index,
+                'parameters' => [
+                    ['type' => 'payload', 'payload' => "{$prefix}_appt_{$appointmentId}"],
+                ],
+            ];
+        }
+
+        return $components;
     }
 
     // ──────────────────────────────────────────────────────────────────────────

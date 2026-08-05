@@ -206,6 +206,60 @@ class PatientController extends Controller
         // Family & Contacts (Phase 3) — view-model owned by the service since Phase 4.
         $data += $this->profileService->familyPanel($patient, $data['activeMembership'] ?? null);
 
+        // ── UX-03 + UX-08 (Freeze Spec, 2026-08-05) — read-side only. ─────────
+        // Today's appointment drives (a) the DEFAULT opening tab (never a
+        // restriction; an explicit #hash always wins client-side) and (b) the
+        // derived one-line workflow strip in the header. All values below are
+        // derived from existing facts — nothing here writes or owns state.
+        $todayAppointment = $patient->appointments()
+            ->whereDate('appointment_date', today())
+            ->where('status', '!=', 'cancelled')
+            ->orderBy('appointment_time')
+            ->first();
+
+        // 'treatment' → land on the Visits tab; consultation / follow-up →
+        // Consultation (frozen D1 ruling: review-type sits closer to assessment,
+        // and the UX-04 gate catches the treatment case).
+        $data['defaultTab'] = ($todayAppointment && $todayAppointment->type === 'treatment')
+            ? 'visits' : 'profile';
+        if ($todayAppointment && $todayAppointment->type !== 'treatment') {
+            $data['defaultTab'] = 'consultation';
+        }
+
+        $data['todayFlow'] = null;
+        if ($todayAppointment) {
+            $consultToday = \App\Models\Consultation::where('patient_id', $patient->id)
+                ->whereDate('consultation_date', today())->exists();
+            $visitToday = $patient->treatmentVisits()
+                ->whereDate('visit_date', today())->first();
+            $noneToday = \App\Models\Activity::where('subject_type', Patient::class)
+                ->where('subject_id', $patient->id)
+                ->where('event', 'treatment_visit.none_today')
+                ->whereDate('occurred_at', today())->exists();
+            $billingPending = $visitToday
+                ? \App\Models\BillingPrompt::where('trigger_type', 'treatment_visit')
+                    ->where('trigger_id', $visitToday->id)
+                    ->where('status', 'pending')->exists()
+                : false;
+
+            $steps = [];
+            $steps[] = ['label' => 'Consultation', 'state' => $consultToday ? 'done' : 'pending'];
+            if ($todayAppointment->type === 'treatment' || $visitToday) {
+                $steps[] = [
+                    'label' => 'Treatment Visit',
+                    'state' => $visitToday ? 'done' : ($noneToday ? 'skipped' : 'pending'),
+                ];
+                if ($visitToday) {
+                    $steps[] = ['label' => 'Billing', 'state' => $billingPending ? 'pending' : 'done'];
+                }
+            }
+
+            $data['todayFlow'] = [
+                'appointment_type' => $todayAppointment->type,
+                'steps'            => $steps,
+            ];
+        }
+
         return view('patients.show', $data);
     }
 

@@ -1154,6 +1154,52 @@
 </div>
 {{-- /min-h-screen --}}
 
+{{-- ══════════════════════════════════════════════════════════════════════
+     UX-04 (Freeze Spec, 2026-08-05) — Treatment Visit gate.
+     Renders ONCE, from the flash set by ConsultationController::visitGateData()
+     (treatment appointment today + no visit + not already answered). Two
+     buttons only — "Remind Me Later" was explicitly rejected by the freeze
+     review: a recorded answer, never a silent dismissal.
+══════════════════════════════════════════════════════════════════════ --}}
+@if(session('visit_gate'))
+@php $vg = session('visit_gate'); @endphp
+<div x-data="{ open: true, saving: false,
+        async noneToday() {
+            this.saving = true;
+            try {
+                await fetch(@js(route('visits.none-today', $vg['patient_id'])), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                               'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
+                    body: JSON.stringify({ appointment_id: @js($vg['appointment_id']) }),
+                });
+            } catch (e) { console.error(e); }
+            this.open = false; this.saving = false;
+        } }"
+     x-show="open" x-cloak
+     class="fixed inset-0 z-[160] flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/40" @click="open = false"></div>
+    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+        <div class="text-sm font-semibold text-gray-900 mb-1">Treatment Visit not recorded</div>
+        <p class="text-xs text-gray-500 mb-5">
+            Today's appointment for {{ $vg['patient_name'] }} is a <span class="font-medium">treatment</span> appointment,
+            but no Treatment Visit has been recorded yet. Procedures, billing, lab work and treatment
+            progress all flow from the Treatment Visit.
+        </p>
+        <div class="flex items-center justify-end gap-2">
+            <button @click="noneToday()" :disabled="saving"
+                    class="px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">
+                No Treatment Done Today
+            </button>
+            <a href="{{ route('patients.show', $vg['patient_id']) }}?open_visit=1&appointment_id={{ $vg['appointment_id'] }}{{ $vg['plan_id'] ? '&plan_id=' . $vg['plan_id'] : '' }}#visits"
+               class="px-4 py-2 text-xs font-semibold text-white bg-[#6a0f70] hover:bg-[#570c5d] rounded-lg">
+                Open Treatment Visit
+            </a>
+        </div>
+    </div>
+</div>
+@endif
+
 @endsection
 
 @push('styles')

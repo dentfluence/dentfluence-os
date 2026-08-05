@@ -15,6 +15,27 @@ $_implantMovementsByVisit = \App\Models\Inventory\StockMovement::where('referenc
 $_catalogIdByInventoryItem = \App\Models\Inventory\ImplantCatalog::whereNotNull('inventory_item_id')
     ->pluck('id', 'inventory_item_id');
 
+// Medical Alerts — presentation-only (08-05): same derivation already used by
+// patients/profile/header.blade.php's "Clinical Alerts" banner, reused here so
+// the encounter view surfaces them without a second data source. $patient is
+// already loaded for this tab; no new query, no schema change.
+$_clinicalAlerts = [];
+if (!empty($patient->medical_conditions)) {
+    foreach ($patient->medical_conditions as $mc) {
+        if (trim($mc)) $_clinicalAlerts[] = ['text' => trim($mc), 'type' => 'condition'];
+    }
+}
+if (!empty($patient->allergies)) {
+    foreach ($patient->allergies as $al) {
+        if (trim($al)) $_clinicalAlerts[] = ['text' => 'Allergy: '.trim($al), 'type' => 'allergy'];
+    }
+}
+if (!empty($patient->medical_alert)) {
+    foreach (array_map('trim', explode(',', $patient->medical_alert)) as $ma) {
+        if ($ma) $_clinicalAlerts[] = ['text' => $ma, 'type' => 'alert'];
+    }
+}
+
 $visitsJson = $patient->treatmentVisits->map(function($v) use ($_rxCollection, $_implantMovementsByVisit, $_catalogIdByInventoryItem) {
     return [
         'id'               => $v->id,
@@ -161,15 +182,14 @@ $appointmentsJson = ($patient->appointments ?? collect())
                          ($a->treatmentCategory ? ' · ' . $a->treatmentCategory->name : ''),
         'doctor_id'   => (string)($a->doctor_id ?? ''),
         'status'      => $a->status,
+        // Redesign meta-line: appointment type drives the visit_type default
+        // (consultation/treatment/follow-up → visit_type mapping in JS).
+        'type'        => $a->type,
     ]);
 @endphp
 
 <style>
-    .tv-rx-input { border:1px solid #e5e7eb;border-radius:5px;padding:5px 6px;font-size:12px;color:#374151;background:white;outline:none;transition:border-color .15s;width:100%;min-width:0; }
-    .tv-rx-input:focus { border-color:#6a0f70; }
-    .tv-rx-pill { display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:600;border:1.5px solid #e5e7eb;background:white;cursor:pointer;color:#6b7280;transition:all .12s;white-space:nowrap; }
-    .tv-rx-pill:hover { border-color:#6a0f70;color:#6a0f70; }
-    .tv-rx-pill.on { background:#6a0f70;border-color:#380740;color:white; }
+    /* UX-06: .tv-rx-* styles removed with the dead embedded Rx entry UI. */
     .tv-stage-btn { padding:4px 10px;font-size:11px;font-weight:600;border:1.5px solid #e5e7eb;border-radius:99px;cursor:pointer;transition:all .15s;background:white;color:#6b7280; }
     .tv-stage-btn:hover { border-color:#6a0f70;color:#6a0f70; }
     .tv-stage-btn.done { background:#16a34a;border-color:#15803d;color:white; }
@@ -185,33 +205,13 @@ $appointmentsJson = ($patient->appointments ?? collect())
     x-transition:enter-start="opacity-0 translate-y-1"
     x-transition:enter-end="opacity-100 translate-y-0"
     x-data="treatmentVisits()"
-    @open-visit-form.window="openAddForm()"
+    @open-visit-form.window="openAddForm($event.detail || {})"
     class="w-full px-6 py-6"
 >
 
-    {{-- Summary bar --}}
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-        @php
-            $tvAll          = $patient->treatmentVisits;
-            $tvCompleted    = $tvAll->where('status','completed')->count();
-            $tvOngoing      = $tvAll->whereIn('status',['scheduled','in_chair'])->count();
-            // F2: count visits with pending billing items (not yet invoiced)
-            $tvBillingItems = $tvAll->sum(fn($v) => $v->visitItems->where('billing_status','pending')->count());
-            $tvBilledItems  = $tvAll->sum(fn($v) => $v->visitItems->where('billing_status','!=','pending')->count());
-        @endphp
-        @foreach([
-            ['Total Visits',     $tvAll->count(),     'bg-[#6a0f70]', 'text-white',     null],
-            ['Completed',        $tvCompleted,         'bg-green-600', 'text-white',     null],
-            ['In Progress',      $tvOngoing,           'bg-blue-600',  'text-white',     null],
-            ['Items Pending Billing', $tvBillingItems, 'bg-white',     $tvBillingItems > 0 ? 'text-amber-600 font-bold' : 'text-gray-400', 'border border-gray-200'],
-            ['Items Billed',     $tvBilledItems,       'bg-white',     'text-green-700', 'border border-gray-200'],
-        ] as [$label, $val, $bg, $col, $extra])
-        <div class="rounded-lg px-4 py-3 {{ $bg }} {{ $extra }}">
-            <div class="text-[10px] uppercase tracking-wide opacity-70 mb-0.5 {{ $bg === 'bg-white' ? 'text-gray-400' : 'text-white' }}">{{ $label }}</div>
-            <div class="text-lg font-bold {{ $col }}">{{ $val }}</div>
-        </div>
-        @endforeach
-    </div>
+    {{-- UX-01 (Freeze Spec, 2026-08-05): the per-patient KPI summary bar was
+         removed — dashboard aggregates don't belong on a data-entry tab.
+         Clinic-wide visit analytics move to a reporting surface in V2. --}}
 
     {{-- Phase 5, Slice 3 — Workflow Engine read-only preview.
          Sourced from the Slice 2 shadow WorkflowInstance(s) for this patient's
@@ -288,14 +288,8 @@ $appointmentsJson = ($patient->appointments ?? collect())
         </button>
     </div>
 
-    {{-- Filter + Search --}}
-    <div class="flex flex-wrap items-center gap-2 mb-4">
-        <template x-for="f in filters" :key="f.key">
-            <button @click="activeFilter = f.key"
-                    :class="activeFilter === f.key ? 'bg-[#6a0f70] text-white border-[#6a0f70]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#6a0f70] hover:text-[#6a0f70]'"
-                    class="px-3 py-1.5 text-xs font-medium rounded-full border transition-colors"
-                    x-text="f.label"></button>
-        </template>
+    {{-- Search (UX-01: filter chips removed — search carries the load) --}}
+    <div class="flex items-center mb-4">
         <div class="ml-auto">
             <input x-model="search" type="text" placeholder="Search treatment, tooth, notes…"
                    class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 w-52 focus:outline-none focus:border-[#6a0f70]">
@@ -314,10 +308,10 @@ $appointmentsJson = ($patient->appointments ?? collect())
                     </svg>
                 </div>
                 <p class="text-sm font-semibold text-gray-600 mb-1"
-                   x-text="search || activeFilter !== 'all' ? 'No visits match this filter' : 'No visits recorded yet'"></p>
+                   x-text="search ? 'No visits match this search' : 'No visits recorded yet'"></p>
                 <p class="text-xs text-gray-400">
-                    <span x-show="!search && activeFilter === 'all'">Click "Add Visit" to record the first visit.</span>
-                    <span x-show="search || activeFilter !== 'all'">Try clearing the filter or search.</span>
+                    <span x-show="!search">Click "Add Visit" to record the first visit.</span>
+                    <span x-show="search">Try clearing the search.</span>
                 </p>
             </div>
         </template>
@@ -531,7 +525,7 @@ $appointmentsJson = ($patient->appointments ?? collect())
          x-transition:leave="transition ease-in duration-200"
          x-transition:leave-start="opacity-100 scale-100"
          x-transition:leave-end="opacity-0 scale-95"
-         class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] max-w-5xl h-[90vh] bg-white shadow-2xl z-[150] flex flex-col rounded-2xl overflow-hidden"
+         class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] max-w-5xl h-[90vh] bg-white shadow-2xl z-[150] flex flex-col rounded-2xl overflow-hidden max-sm:w-screen max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none"
          style="display:none">
 
         {{-- Header --}}
@@ -583,12 +577,27 @@ $appointmentsJson = ($patient->appointments ?? collect())
                     </div>
                 </div>
 
-                {{-- ── SECTION 1: Visit Header ── --}}
-                <div>
-                    <div class="tv-section-legend">Visit Details</div>
-                    <div class="grid grid-cols-2 gap-3">
-
-                        {{-- LAYER 0: Link Appointment --}}
+                {{-- ══ REDESIGN (Treatment_Visit_V1_UX_Redesign_Spec, 2026-08-05) ══
+                     META LINE — date/doctor/appointment/visit-type consolidated
+                     into one auto-populated line. Same x-models, same payload;
+                     the four inputs live in the [change] editor below. --}}
+                <div class="lg:col-span-2">
+                    <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5">
+                        <div class="text-xs text-gray-600 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                            <span class="font-semibold text-gray-800" x-text="metaDateLabel"></span>
+                            <span class="text-gray-300">·</span>
+                            <span>{{ auth()->user()->name }}</span>
+                            <span class="text-gray-300">·</span>
+                            <span x-text="metaApptLabel"></span>
+                            <span class="text-gray-300">·</span>
+                            <span class="capitalize font-medium" x-text="form.visit_type"></span>
+                        </div>
+                        <button type="button" @click="metaOpen = !metaOpen"
+                                class="text-xs font-semibold text-[#6a0f70] hover:underline flex-shrink-0 ml-3"
+                                x-text="metaOpen ? 'done' : 'change'"></button>
+                    </div>
+                    <div x-show="metaOpen" x-collapse class="mt-2 grid grid-cols-2 gap-3 border border-gray-100 rounded-lg p-3 bg-white">
+                        {{-- Link Appointment (moved from Layer 0 — same x-model, same onAppointmentChange) --}}
                         <div class="col-span-2" x-show="TV_APPOINTMENTS.length > 0">
                             <label class="text-xs font-semibold text-gray-600 block mb-1">
                                 Link Appointment
@@ -604,6 +613,162 @@ $appointmentsJson = ($patient->appointments ?? collect())
                                 </template>
                             </select>
                         </div>
+                        {{-- Visit Date (moved) --}}
+                        <div>
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Visit Date</label>
+                            <input type="date" x-model="form.visit_date"
+                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                        </div>
+                        {{-- Visit Type (moved — auto-derived from appointment type, still editable) --}}
+                        <div>
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Visit Type</label>
+                            <select x-model="form.visit_type"
+                                    class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                                <option value="treatment">Treatment</option>
+                                <option value="followup">Follow-up</option>
+                                <option value="emergency">Emergency</option>
+                                <option value="recall">Recall</option>
+                            </select>
+                        </div>
+                        {{-- Status (previously implicit — chairside saves default 'completed'
+                             per the approved spec; exposed here for the exceptional case) --}}
+                        <div>
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Status</label>
+                            <select x-model="form.status"
+                                    class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                                <option value="completed">Completed</option>
+                                <option value="in_chair">In Chair</option>
+                                <option value="scheduled">Scheduled</option>
+                                <option value="cancelled">Cancelled</option>
+                                <option value="no_show">No Show</option>
+                            </select>
+                        </div>
+                        {{-- Doctor (moved — read-only, from logged-in user) --}}
+                        <div>
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Doctor</label>
+                            <div class="w-full text-sm border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-gray-700 font-medium">
+                                {{ auth()->user()->name }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- ZONE 0 · WHERE WE ARE — read-only continuity card. DERIVED
+                     ONLY (spec constraint): built from the visits + plans JSON
+                     already loaded for this tab. Writes nothing, owns nothing. --}}
+                <div class="lg:col-span-2" x-show="zone0LastLine || zone0PlanLines.length" x-cloak>
+                    <div class="bg-purple-50/50 border border-purple-100 rounded-lg px-4 py-3 space-y-1">
+                        <div class="text-[10px] font-bold uppercase tracking-[.07em] text-[#6a0f70]">Where we are</div>
+                        <p x-show="zone0LastLine" class="text-xs text-gray-700" x-text="zone0LastLine"></p>
+                        <template x-for="line in zone0PlanLines" :key="line">
+                            <p class="text-xs text-gray-600" x-text="line"></p>
+                        </template>
+                    </div>
+                </div>
+
+                {{-- ── MEDICAL ALERTS + VITALS — moved directly below the Patient
+                     Brief (08-05, presentation-only). Alerts are derived/read-only
+                     (same source as the page-header banner); Vitals keeps its
+                     existing collapsible fields, same x-models/payload, only the
+                     position changed. --}}
+                @if(count($_clinicalAlerts))
+                <div class="lg:col-span-2">
+                    <div class="flex items-center gap-1.5 flex-wrap px-3 py-2 rounded-lg" style="background:#fff5f5; border-left:3px solid #dc2626;">
+                        <span class="flex items-center gap-1 text-red-700 font-bold text-[10px] tracking-widest uppercase flex-shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                            Medical Alerts
+                        </span>
+                        @foreach($_clinicalAlerts as $alert)
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full
+                                {{ $alert['type'] === 'allergy' ? 'bg-amber-50 text-amber-700 border border-amber-300' : 'bg-red-50 text-red-700 border border-red-300' }}">
+                                {{ $alert['text'] }}
+                            </span>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
+
+                <div class="lg:col-span-2">
+                    <button type="button" @click="vitalsOpen = !vitalsOpen"
+                            class="w-full flex items-center gap-2 text-left group">
+                        <span class="text-[10px] font-bold uppercase tracking-[.07em] text-[#6a0f70] flex items-center gap-2">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                            Vitals
+                            <span class="text-gray-400 font-normal normal-case">— optional</span>
+                        </span>
+                        <span x-show="form.bp_systolic||form.bp_diastolic||form.pulse_rate||form.spo2||form.temperature||form.blood_sugar||form.weight||form.vitals_notes"
+                              class="text-[9px] font-semibold text-green-700 bg-green-50 border border-green-100 rounded-full px-2 py-0.5">recorded</span>
+                        <span class="flex-1 h-px bg-gray-100"></span>
+                        <svg :class="vitalsOpen ? 'rotate-180' : ''" class="transition-transform text-gray-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+
+                    <div x-show="vitalsOpen" x-collapse class="mt-3 grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Blood Pressure <span class="text-gray-400 font-normal">(mmHg)</span></label>
+                            <div class="flex items-center gap-1">
+                                <input type="number" x-model="form.bp_systolic" min="40" max="300" placeholder="Sys"
+                                       class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                                <span class="text-gray-400 font-semibold">/</span>
+                                <input type="number" x-model="form.bp_diastolic" min="20" max="200" placeholder="Dia"
+                                       class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Pulse <span class="text-gray-400 font-normal">(bpm)</span></label>
+                            <input type="number" x-model="form.pulse_rate" min="20" max="250" placeholder="e.g. 72"
+                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Oxygen — SpO₂ <span class="text-gray-400 font-normal">(%)</span></label>
+                            <input type="number" x-model="form.spo2" min="50" max="100" placeholder="e.g. 98"
+                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Temperature <span class="text-gray-400 font-normal">(°C)</span></label>
+                            <input type="number" step="0.1" x-model="form.temperature" min="30" max="45" placeholder="e.g. 36.8"
+                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Blood Sugar <span class="text-gray-400 font-normal">(mg/dL)</span></label>
+                            <input type="number" x-model="form.blood_sugar" min="20" max="800" placeholder="e.g. 110"
+                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Sugar Reading Type</label>
+                            <select x-model="form.blood_sugar_type"
+                                    class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                                <option value="">— Select —</option>
+                                <option value="random">Random (RBS)</option>
+                                <option value="fasting">Fasting (FBS)</option>
+                                <option value="pp">Post-Prandial (PP)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Weight <span class="text-gray-400 font-normal">(kg)</span></label>
+                            <input type="number" step="0.1" x-model="form.weight" min="1" max="400" placeholder="e.g. 65"
+                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="text-xs font-semibold text-gray-600 block mb-1">Vitals Note <span class="text-gray-400 font-normal">(optional)</span></label>
+                            <input type="text" x-model="form.vitals_notes" maxlength="255" placeholder="e.g. BP high — advised to consult physician before extraction"
+                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                        </div>
+                    </div>
+                </div>
+
+                {{-- ── ZONE 1 · HERO — Clinical Notes + Today's Work unified
+                     (08-05, presentation-only). Notes moved out of the collapsed
+                     drawer to lead this card; same x-model/dusk/payload key. The
+                     procedure picker immediately below is unchanged. --}}
+                <div class="lg:col-span-2">
+                    <div class="tv-section-legend">Today's Clinical Notes</div>
+                    <textarea x-model="form.notes" rows="3"
+                              dusk="visit-notes"
+                              placeholder="Document what was done today, observations, patient response…"
+                              class="w-full text-base border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:border-[#6a0f70] focus:ring-2 focus:ring-[#6a0f70]/10 resize-none mb-5"></textarea>
+
+                    <div class="tv-section-legend">Today's Work</div>
+                    <div class="grid grid-cols-2 gap-3">
 
                         {{-- LAYER 1: Treatment Plan --}}
                         <div class="col-span-2">
@@ -633,15 +798,29 @@ $appointmentsJson = ($patient->appointments ?? collect())
                             <template x-if="!planItemsLoading && planItems.length > 0">
                                 <div>
                                     <p class="text-[10px] text-gray-400 mb-1.5">Tick every treatment done this visit. Star marks the primary one (drives stage-tracker &amp; clinical fields below).</p>
-                                    <div class="space-y-1.5 mb-2">
+                                    {{-- Delta 4 (R-2): bulk outcome bar — dense mode only. Loops the
+                                         existing per-item setter; payload stays per-item. --}}
+                                    <div x-show="densePicker" x-cloak class="flex flex-wrap items-center gap-1.5 mb-2">
+                                        <span class="text-[10px] text-gray-400">Apply to all selected:</span>
+                                        <template x-for="(label, key) in workOutcomes" :key="'bulk-' + key">
+                                            <button type="button" @click="bulkOutcome(key)"
+                                                    class="px-2 py-0.5 text-[10px] font-semibold border border-gray-200 rounded text-gray-500 hover:border-[#6a0f70] hover:text-[#6a0f70] transition-colors">
+                                                <span x-text="label"></span>
+                                            </button>
+                                        </template>
+                                    </div>
+                                    {{-- Delta 3 (R-1): dense checklist layout for >6 plan items
+                                         (FMR / implant rehab) — same rows, scrollable, full-width. --}}
+                                    <div class="space-y-1.5 mb-2" :class="densePicker ? 'max-h-64 overflow-y-auto pr-1' : ''">
                                         <template x-for="pi in planItems" :key="pi.id">
                                             <div>
                                                 <div class="flex items-center gap-1">
                                                     <button type="button"
                                                             @click="togglePlanItem(pi)"
-                                                            :class="isPlanItemSelected(pi.id)
+                                                            :class="(isPlanItemSelected(pi.id)
                                                                 ? 'bg-[#6a0f70] border-[#380740] text-white shadow-sm'
-                                                                : 'bg-white border-gray-200 text-gray-700 hover:border-[#6a0f70] hover:bg-purple-50'"
+                                                                : 'bg-white border-gray-200 text-gray-700 hover:border-[#6a0f70] hover:bg-purple-50')
+                                                                + (densePicker ? ' w-full justify-between' : '')"
                                                             class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all">
                                                         <span x-text="pi.treatment_name"></span>
                                                         <span x-show="pi.tooth_number" class="opacity-60" x-text="'· T' + pi.tooth_number"></span>
@@ -755,35 +934,82 @@ $appointmentsJson = ($patient->appointments ?? collect())
                             </div>
                         </div>
 
-                        {{-- LAYER 3: Add-on treatments --}}
-                        <div class="col-span-2">
-                            <div class="flex items-center justify-between mb-1.5">
-                                <label class="text-xs font-semibold text-gray-600">Add-on Treatments</label>
-                                <button type="button" @click="addCustomItem()"
-                                        class="flex items-center gap-1 text-xs font-semibold text-[#6a0f70] hover:underline">
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                                    Add treatment
-                                </button>
-                            </div>
-                            <template x-if="addonItems.length === 0">
-                                <p class="text-[11px] text-gray-400 italic">No add-ons. Click "Add treatment" to include extra treatments for today.</p>
-                            </template>
-                            <div class="space-y-1.5">
-                                <template x-for="(item, idx) in addonItems" :key="idx">
-                                    <div class="flex items-center gap-2 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2">
-                                        <input type="text" x-model="item.treatment_name" @input.debounce.400ms="_checkRepeatWork()"
-                                               placeholder="Treatment name"
-                                               class="flex-1 text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white">
-                                        <input type="text" x-model="item.tooth_number" @input.debounce.400ms="_checkRepeatWork()"
-                                               placeholder="Tooth"
-                                               class="w-16 text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white">
-                                        <button type="button" @click="addonItems.splice(idx,1); _checkRepeatWork()"
-                                                class="p-1 text-red-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                        </button>
+                        {{-- UNIFIED WORK LIST (redesign): the former "Procedures for
+                             Billing" grid, relocated here so selection and the
+                             recorded/billable rows are ONE list. Same visitItems
+                             array, same save payload. The former Layer-3 "Add-on
+                             Treatments" UI is absorbed by "+ Other treatment" below
+                             (addonItems state kept, always empty — merge on save
+                             unchanged). --}}
+                        <div class="col-span-2" x-show="visitItems.length > 0">
+                            <label class="text-xs font-semibold text-gray-600 block mb-1.5">Recorded items</label>
+                            <div class="space-y-2">
+                                <template x-for="(item, idx) in visitItems" :key="idx">
+                                    <div class="bg-purple-50 border border-purple-100 rounded-lg p-3">
+                                        {{-- Delta 1 (Final Freeze): collapsed one-line row; ✎ expands
+                                             the editor. _open is client-only UI state (like _isOther)
+                                             and is ignored by the server's validated() keys. --}}
+                                        <div x-show="!item._open" class="flex items-center gap-2">
+                                            <span class="text-xs font-semibold text-gray-800" x-text="item.treatment_name || '— unnamed —'"></span>
+                                            <span x-show="item.tooth_number" class="text-xs text-gray-500" x-text="'T' + item.tooth_number"></span>
+                                            <span x-show="item.material_option" class="text-xs text-gray-400" x-text="item.material_option"></span>
+                                            <span class="text-xs text-gray-600 ml-auto" x-text="'Rs. ' + fmt(item.suggested_price || 0)"></span>
+                                            <button type="button" @click="item._open = true"
+                                                    class="p-1 text-gray-400 hover:text-[#6a0f70] rounded transition-colors" title="Edit item">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                            </button>
+                                            <button type="button" @click="visitItems.splice(idx, 1)"
+                                                    class="p-1 text-red-300 hover:text-red-500 rounded transition-colors" title="Remove item">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                            </button>
+                                        </div>
+                                        <div x-show="item._open" class="flex items-start gap-2">
+                                            <div class="flex-1 grid grid-cols-2 max-sm:grid-cols-1 gap-2">
+                                                <div>
+                                                    <label class="text-[10px] font-semibold text-gray-500 block mb-1">Treatment *</label>
+                                                    <input type="text" x-model="item.treatment_name" @input.debounce.400ms="_checkRepeatWork()"
+                                                           class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
+                                                           placeholder="Treatment name">
+                                                </div>
+                                                <div>
+                                                    <label class="text-[10px] font-semibold text-gray-500 block mb-1">Material / Option</label>
+                                                    <input type="text" x-model="item.material_option"
+                                                           class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
+                                                           placeholder="e.g. Ceramic, Zirconia">
+                                                </div>
+                                                <div>
+                                                    <label class="text-[10px] font-semibold text-gray-500 block mb-1">Tooth #</label>
+                                                    <input type="text" x-model="item.tooth_number" @input.debounce.400ms="_checkRepeatWork()"
+                                                           class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
+                                                           placeholder="e.g. 26">
+                                                </div>
+                                                <div>
+                                                    <label class="text-[10px] font-semibold text-gray-500 block mb-1">Suggested Price (Rs. )</label>
+                                                    <input type="number" x-model="item.suggested_price" min="0"
+                                                           class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
+                                                           placeholder="0">
+                                                </div>
+                                            </div>
+                                            <div class="mt-5 flex-shrink-0 flex flex-col gap-1">
+                                                <button type="button" @click="item._open = false"
+                                                        class="p-1 text-gray-400 hover:text-[#6a0f70] hover:bg-purple-50 rounded transition-colors" title="Done editing">
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                                </button>
+                                                <button type="button" @click="visitItems.splice(idx, 1)"
+                                                        class="p-1 text-red-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="Remove item">
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </template>
                             </div>
+                        </div>
+                        <div class="col-span-2">
+                            <button type="button" @click="addBillingItem()"
+                                    class="w-full text-xs font-semibold text-[#6a0f70] border border-dashed border-[#c4a0c7] rounded-lg px-4 py-2.5 hover:bg-purple-50 hover:border-[#6a0f70] transition-colors">
+                                + Other treatment (custom line)
+                            </button>
                         </div>
 
                         {{-- Tooth Chart --}}
@@ -874,49 +1100,10 @@ $appointmentsJson = ($patient->appointments ?? collect())
                             </div>
                         </div>
 
-                        {{-- Doctor (auto from logged-in user) --}}
-                        <div>
-                            <label class="text-xs font-semibold text-gray-600 block mb-1">Doctor</label>
-                            <div class="w-full text-sm border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-gray-700 font-medium">
-                                {{ auth()->user()->name }}
-                            </div>
-                        </div>
-
-                        {{-- Date --}}
-                        <div>
-                            <label class="text-xs font-semibold text-gray-600 block mb-1">Visit Date</label>
-                            <input type="date" x-model="form.visit_date"
-                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
-                        </div>
-
-                        {{-- Visit Type --}}
-                        <div>
-                            <label class="text-xs font-semibold text-gray-600 block mb-1">Visit Type</label>
-                            <select x-model="form.visit_type"
-                                    class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
-                                <option value="treatment">Treatment</option>
-                                <option value="followup">Follow-up</option>
-                                <option value="emergency">Emergency</option>
-                                <option value="recall">Recall</option>
-                            </select>
-                        </div>
-
                     </div>
-
-                    {{-- Mark treatment as complete --}}
-                    <div x-show="form.treatment_plan_id" class="mt-3">
-                        <label class="flex items-center gap-2 cursor-pointer select-none group">
-                            <input type="checkbox" x-model="form.mark_treatment_complete"
-                                   class="w-4 h-4 rounded border-gray-300 text-[#6a0f70] focus:ring-[#6a0f70] cursor-pointer">
-                            <span class="text-sm font-medium text-gray-700 group-hover:text-[#6a0f70] transition-colors">
-                                Mark this treatment as <strong>complete</strong>
-                            </span>
-                        </label>
-                        <p x-show="form.mark_treatment_complete"
-                           class="text-xs text-amber-600 mt-1 ml-6">
-                            The linked treatment plan will be marked as completed.
-                        </p>
-                    </div>
+                    {{-- Doctor / Date / Visit Type / mark-complete moved:
+                         meta line above (first three) and Zone 3 Wrap-Up
+                         (mark-complete) per the approved redesign spec. --}}
                 </div>
 
                 {{-- ── SECTION 2: Treatment Status + Stages ── --}}
@@ -941,110 +1128,15 @@ $appointmentsJson = ($patient->appointments ?? collect())
                     </div>
                 </div>
 
-                {{-- ── LAB CASE PROMPT ── --}}
-                {{-- Shows when the selected treatment is flagged as needs_lab --}}
-                <div x-show="labNeeded" x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0 -translate-y-1"
-                     x-transition:enter-end="opacity-100 translate-y-0"
-                     class="border-2 border-amber-300 bg-amber-50 rounded-xl overflow-hidden">
-
-                    {{-- Header bar --}}
-                    <div class="flex items-center justify-between px-4 py-3 bg-amber-100 border-b border-amber-200">
-                        <div class="flex items-center gap-2">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>
-                            <span class="text-sm font-bold text-amber-900">Lab Case Required</span>
-                            <span class="text-xs font-medium text-amber-700 bg-amber-200 px-2 py-0.5 rounded-full" x-text="form.treatment_name"></span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs text-amber-700">Create lab case now?</span>
-                            <button type="button" @click="labCase.enabled = !labCase.enabled"
-                                    :class="labCase.enabled ? 'bg-amber-600 border-amber-700' : 'bg-white border-amber-300'"
-                                    class="relative inline-flex h-5 w-9 items-center rounded-full border-2 transition-colors flex-shrink-0">
-                                <span :class="labCase.enabled ? 'translate-x-4 bg-white' : 'translate-x-0.5 bg-amber-300'"
-                                      class="inline-block h-3.5 w-3.5 transform rounded-full transition-transform"></span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {{-- Lab case form (collapsible) --}}
-                    <div x-show="labCase.enabled" x-collapse class="p-4 space-y-3">
-                        <div class="grid grid-cols-2 gap-3">
-
-                            {{-- Lab Vendor --}}
-                            <div class="col-span-2">
-                                <label class="text-xs font-semibold text-amber-800 block mb-1">Lab / Vendor</label>
-                                <select x-model="labCase.lab_vendor_id"
-                                        class="w-full text-sm border border-amber-200 bg-white rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500">
-                                    <option value="">— Select lab —</option>
-                                    @foreach($labVendorsList as $v)
-                                    <option value="{{ $v->id }}">{{ $v->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            {{-- Work Category --}}
-                            <div>
-                                <label class="text-xs font-semibold text-amber-800 block mb-1">Work Category</label>
-                                <select x-model="labCase.work_category" @change="labCase.work_subtype = ''"
-                                        class="w-full text-sm border border-amber-200 bg-white rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500">
-                                    <option value="">— Select category —</option>
-                                    @foreach(\App\Models\LabCase::WORK_CATEGORIES as $cat => $subtypes)
-                                    <option value="{{ $cat }}">{{ $cat }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            {{-- Work Subtype (dynamic based on category) --}}
-                            <div>
-                                <label class="text-xs font-semibold text-amber-800 block mb-1">Subtype / Material</label>
-                                <select x-model="labCase.work_subtype"
-                                        class="w-full text-sm border border-amber-200 bg-white rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500">
-                                    <option value="">— Select subtype —</option>
-                                    <template x-for="st in labSubtypes" :key="st">
-                                        <option :value="st" x-text="st"></option>
-                                    </template>
-                                </select>
-                            </div>
-
-                            {{-- Priority --}}
-                            <div>
-                                <label class="text-xs font-semibold text-amber-800 block mb-1">Priority</label>
-                                <div class="flex gap-2">
-                                    @foreach(['routine' => 'Routine', 'urgent' => 'Urgent', 'express' => 'Express'] as $pKey => $pLabel)
-                                    <button type="button" @click="labCase.priority = '{{ $pKey }}'"
-                                            :class="labCase.priority === '{{ $pKey }}'
-                                                ? '{{ $pKey === 'routine' ? 'bg-gray-200 border-gray-400 text-gray-800' : ($pKey === 'urgent' ? 'bg-amber-400 border-amber-600 text-white' : 'bg-red-500 border-red-700 text-white') }}'
-                                                : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400'"
-                                            class="flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-all">
-                                        {{ $pLabel }}
-                                    </button>
-                                    @endforeach
-                                </div>
-                            </div>
-
-                            {{-- Expected Return Date --}}
-                            <div>
-                                <label class="text-xs font-semibold text-amber-800 block mb-1">Expected Return</label>
-                                <input type="date" x-model="labCase.expected_return_date"
-                                       class="w-full text-sm border border-amber-200 bg-white rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500">
-                            </div>
-
-                            {{-- Instructions --}}
-                            <div class="col-span-2">
-                                <label class="text-xs font-semibold text-amber-800 block mb-1">Lab Instructions</label>
-                                <textarea x-model="labCase.instructions" rows="2"
-                                          placeholder="Shade, special instructions, try-in date…"
-                                          class="w-full text-sm border border-amber-200 bg-white rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500 resize-none"></textarea>
-                            </div>
-
-                        </div>
-                        <p class="text-[11px] text-amber-700">
-                            A <strong>Draft</strong> lab case will be created when you save this visit. You can send it to the lab from the Lab module.
-                        </p>
-                    </div>
+                {{-- ── SECTION 3: Smart Clinical Fields — "Procedure Worksheets"
+                     (08-05, presentation-only). Collapsed by design: exactly one
+                     x-show="form.treatment_name === '…'" card renders at a time,
+                     for the selected procedure. Eyebrow label added; no logic
+                     change. --}}
+                <div x-show="['RCT','Implant','Filling','Scaling','Extraction','Crown Prep'].includes(form.treatment_name)" x-cloak
+                     class="lg:col-span-2 text-[10px] font-bold uppercase tracking-[.07em] text-gray-400 -mb-1">
+                    Procedure Worksheet
                 </div>
-
-                {{-- ── SECTION 3: Smart Clinical Fields ── --}}
 
                 {{-- RCT --}}
                 <div x-show="form.treatment_name === 'RCT'">
@@ -1302,161 +1394,169 @@ $appointmentsJson = ($patient->appointments ?? collect())
                     </div>
                 </div>
 
-                {{-- ── SECTION 4: Notes ── --}}
-                <div>
-                    <div class="tv-section-legend">Clinical Notes</div>
-                    <textarea x-model="form.notes" rows="3"
-                              dusk="visit-notes"
-                              placeholder="Document what was done today, observations, patient response…"
-                              class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70] resize-none"></textarea>
+                {{-- ══ ZONE 3 · WRAP-UP (redesign) — system consequences the
+                     doctor reviews: lab draft, billing preview, completion.
+                     The old 'Procedures for Billing' section was removed: its
+                     item grid moved into Zone 1 (unified work list); billing
+                     here is a read-only PREVIEW of the same BillingPrompt the
+                     service composes on save. --}}
+
+                {{-- Zone 3 receipt legend (Final Freeze): system voice — the
+                     doctor reviews consequences here, not another form. --}}
+                <div class="lg:col-span-2 -mb-2">
+                    <div class="tv-section-legend">When you save, Dentfluence will…</div>
                 </div>
 
-                {{-- ── SECTION 4b: Vitals (optional, collapsible) ── --}}
-                <div>
-                    {{-- Header toggle --}}
-                    <button type="button" @click="vitalsOpen = !vitalsOpen"
-                            class="w-full flex items-center gap-2 text-left group">
-                        <span class="text-[10px] font-bold uppercase tracking-[.07em] text-[#6a0f70] flex items-center gap-2">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                            Vitals
-                            <span class="text-gray-400 font-normal normal-case">— optional</span>
-                        </span>
-                        {{-- "recorded" pill when any vital is filled --}}
-                        <span x-show="form.bp_systolic||form.bp_diastolic||form.pulse_rate||form.spo2||form.temperature||form.blood_sugar||form.weight||form.vitals_notes"
-                              class="text-[9px] font-semibold text-green-700 bg-green-50 border border-green-100 rounded-full px-2 py-0.5">recorded</span>
-                        <span class="flex-1 h-px bg-gray-100"></span>
-                        <svg :class="vitalsOpen ? 'rotate-180' : ''" class="transition-transform text-gray-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    </button>
+                {{-- ── LAB CASE PROMPT ── --}}
+                {{-- Shows when the selected treatment is flagged as needs_lab --}}
+                <div x-show="labNeeded" x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 -translate-y-1"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     class="border-2 border-amber-300 bg-amber-50 rounded-xl overflow-hidden">
 
-                    {{-- Fields --}}
-                    <div x-show="vitalsOpen" x-collapse class="mt-3 grid grid-cols-2 gap-3">
-                        {{-- Blood Pressure --}}
-                        <div>
-                            <label class="text-xs font-semibold text-gray-600 block mb-1">Blood Pressure <span class="text-gray-400 font-normal">(mmHg)</span></label>
-                            <div class="flex items-center gap-1">
-                                <input type="number" x-model="form.bp_systolic" min="40" max="300" placeholder="Sys"
-                                       class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
-                                <span class="text-gray-400 font-semibold">/</span>
-                                <input type="number" x-model="form.bp_diastolic" min="20" max="200" placeholder="Dia"
-                                       class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
-                            </div>
+                    {{-- Header bar --}}
+                    <div class="flex items-center justify-between px-4 py-3 bg-amber-100 border-b border-amber-200">
+                        <div class="flex items-center gap-2">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>
+                            <span class="text-sm font-bold text-amber-900">Lab Case Required</span>
+                            <span class="text-xs font-medium text-amber-700 bg-amber-200 px-2 py-0.5 rounded-full" x-text="form.treatment_name"></span>
                         </div>
-                        {{-- Pulse --}}
-                        <div>
-                            <label class="text-xs font-semibold text-gray-600 block mb-1">Pulse <span class="text-gray-400 font-normal">(bpm)</span></label>
-                            <input type="number" x-model="form.pulse_rate" min="20" max="250" placeholder="e.g. 72"
-                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
-                        </div>
-                        {{-- SpO2 --}}
-                        <div>
-                            <label class="text-xs font-semibold text-gray-600 block mb-1">Oxygen — SpO₂ <span class="text-gray-400 font-normal">(%)</span></label>
-                            <input type="number" x-model="form.spo2" min="50" max="100" placeholder="e.g. 98"
-                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
-                        </div>
-                        {{-- Temperature --}}
-                        <div>
-                            <label class="text-xs font-semibold text-gray-600 block mb-1">Temperature <span class="text-gray-400 font-normal">(°C)</span></label>
-                            <input type="number" step="0.1" x-model="form.temperature" min="30" max="45" placeholder="e.g. 36.8"
-                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
-                        </div>
-                        {{-- Blood Sugar --}}
-                        <div>
-                            <label class="text-xs font-semibold text-gray-600 block mb-1">Blood Sugar <span class="text-gray-400 font-normal">(mg/dL)</span></label>
-                            <input type="number" x-model="form.blood_sugar" min="20" max="800" placeholder="e.g. 110"
-                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
-                        </div>
-                        {{-- Blood Sugar type --}}
-                        <div>
-                            <label class="text-xs font-semibold text-gray-600 block mb-1">Sugar Reading Type</label>
-                            <select x-model="form.blood_sugar_type"
-                                    class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
-                                <option value="">— Select —</option>
-                                <option value="random">Random (RBS)</option>
-                                <option value="fasting">Fasting (FBS)</option>
-                                <option value="pp">Post-Prandial (PP)</option>
-                            </select>
-                        </div>
-                        {{-- Weight --}}
-                        <div>
-                            <label class="text-xs font-semibold text-gray-600 block mb-1">Weight <span class="text-gray-400 font-normal">(kg)</span></label>
-                            <input type="number" step="0.1" x-model="form.weight" min="1" max="400" placeholder="e.g. 65"
-                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
-                        </div>
-                        {{-- Vitals notes --}}
-                        <div class="col-span-2">
-                            <label class="text-xs font-semibold text-gray-600 block mb-1">Vitals Note <span class="text-gray-400 font-normal">(optional)</span></label>
-                            <input type="text" x-model="form.vitals_notes" maxlength="255" placeholder="e.g. BP high — advised to consult physician before extraction"
-                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#6a0f70]">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-amber-700">Create lab case now?</span>
+                            <button type="button" @click="labCase.enabled = !labCase.enabled"
+                                    :class="labCase.enabled ? 'bg-amber-600 border-amber-700' : 'bg-white border-amber-300'"
+                                    class="relative inline-flex h-5 w-9 items-center rounded-full border-2 transition-colors flex-shrink-0">
+                                <span :class="labCase.enabled ? 'translate-x-4 bg-white' : 'translate-x-0.5 bg-amber-300'"
+                                      class="inline-block h-3.5 w-3.5 transform rounded-full transition-transform"></span>
+                            </button>
                         </div>
                     </div>
-                </div>
 
+                    {{-- Lab case form (collapsible) --}}
+                    <div x-show="labCase.enabled" x-collapse class="p-4 space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
 
-                {{-- ── SECTION 5: Procedures for Billing (F2) ── --}}
-                <div>
-                    <div class="tv-section-legend">Procedures for Billing</div>
-                    <p class="text-xs text-gray-400 mb-3">Procedures selected above (from plan + add-ons) appear here. Front desk builds the invoice from these.</p>
+                            {{-- Lab Vendor --}}
+                            <div class="col-span-2">
+                                <label class="text-xs font-semibold text-amber-800 block mb-1">Lab / Vendor</label>
+                                <select x-model="labCase.lab_vendor_id"
+                                        class="w-full text-sm border border-amber-200 bg-white rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500">
+                                    <option value="">— Select lab —</option>
+                                    @foreach($labVendorsList as $v)
+                                    <option value="{{ $v->id }}">{{ $v->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
 
-                    {{-- Selected / custom items editor --}}
-                    <div class="space-y-2 mb-3">
-                        <template x-for="(item, idx) in visitItems" :key="idx">
-                            <div class="bg-purple-50 border border-purple-100 rounded-lg p-3">
-                                <div class="flex items-start gap-2">
-                                    <div class="flex-1 grid grid-cols-2 gap-2">
-                                        <div>
-                                            <label class="text-[10px] font-semibold text-gray-500 block mb-1">Treatment *</label>
-                                            <input type="text" x-model="item.treatment_name" @input.debounce.400ms="_checkRepeatWork()"
-                                                   class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
-                                                   placeholder="Treatment name">
-                                        </div>
-                                        <div>
-                                            <label class="text-[10px] font-semibold text-gray-500 block mb-1">Material / Option</label>
-                                            <input type="text" x-model="item.material_option"
-                                                   class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
-                                                   placeholder="e.g. Ceramic, Zirconia">
-                                        </div>
-                                        <div>
-                                            <label class="text-[10px] font-semibold text-gray-500 block mb-1">Tooth #</label>
-                                            <input type="text" x-model="item.tooth_number" @input.debounce.400ms="_checkRepeatWork()"
-                                                   class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
-                                                   placeholder="e.g. 26">
-                                        </div>
-                                        <div>
-                                            <label class="text-[10px] font-semibold text-gray-500 block mb-1">Suggested Price (Rs. )</label>
-                                            <input type="number" x-model="item.suggested_price" min="0"
-                                                   class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
-                                                   placeholder="0">
-                                        </div>
-                                    </div>
-                                    <button type="button" @click="visitItems.splice(idx, 1)"
-                                            class="mt-5 flex-shrink-0 p-1 text-red-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            {{-- Work Category --}}
+                            <div>
+                                <label class="text-xs font-semibold text-amber-800 block mb-1">Work Category</label>
+                                <select x-model="labCase.work_category" @change="labCase.work_subtype = ''"
+                                        class="w-full text-sm border border-amber-200 bg-white rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500">
+                                    <option value="">— Select category —</option>
+                                    @foreach(\App\Models\LabCase::WORK_CATEGORIES as $cat => $subtypes)
+                                    <option value="{{ $cat }}">{{ $cat }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            {{-- Work Subtype (dynamic based on category) --}}
+                            <div>
+                                <label class="text-xs font-semibold text-amber-800 block mb-1">Subtype / Material</label>
+                                <select x-model="labCase.work_subtype"
+                                        class="w-full text-sm border border-amber-200 bg-white rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500">
+                                    <option value="">— Select subtype —</option>
+                                    <template x-for="st in labSubtypes" :key="st">
+                                        <option :value="st" x-text="st"></option>
+                                    </template>
+                                </select>
+                            </div>
+
+                            {{-- Priority --}}
+                            <div>
+                                <label class="text-xs font-semibold text-amber-800 block mb-1">Priority</label>
+                                <div class="flex gap-2">
+                                    @foreach(['routine' => 'Routine', 'urgent' => 'Urgent', 'express' => 'Express'] as $pKey => $pLabel)
+                                    <button type="button" @click="labCase.priority = '{{ $pKey }}'"
+                                            :class="labCase.priority === '{{ $pKey }}'
+                                                ? '{{ $pKey === 'routine' ? 'bg-gray-200 border-gray-400 text-gray-800' : ($pKey === 'urgent' ? 'bg-amber-400 border-amber-600 text-white' : 'bg-red-500 border-red-700 text-white') }}'
+                                                : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400'"
+                                            class="flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-all">
+                                        {{ $pLabel }}
                                     </button>
+                                    @endforeach
                                 </div>
                             </div>
-                        </template>
-                    </div>
 
-                    <button type="button" @click="addBillingItem()"
-                            class="w-full text-xs font-semibold text-[#6a0f70] border border-dashed border-[#c4a0c7] rounded-lg px-4 py-2.5 hover:bg-purple-50 hover:border-[#6a0f70] transition-colors">
-                        + Add custom billing line
-                    </button>
-
-                    {{-- Estimated total + billing prompt note --}}
-                    <template x-if="visitItems.length > 0">
-                        <div class="mt-3 px-3 py-2.5 bg-amber-50 border border-amber-100 rounded-lg flex items-center justify-between">
+                            {{-- Expected Return Date --}}
                             <div>
-                                <p class="text-xs font-semibold text-amber-800">Est. Total: Rs.  <span x-text="fmt(visitItemsTotal)"></span></p>
-                                <p class="text-[10px] text-amber-600 mt-0.5">A billing prompt will be sent to front desk when you save.</p>
+                                <label class="text-xs font-semibold text-amber-800 block mb-1">Expected Return</label>
+                                <input type="date" x-model="labCase.expected_return_date"
+                                       class="w-full text-sm border border-amber-200 bg-white rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500">
                             </div>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+
+                            {{-- Instructions --}}
+                            <div class="col-span-2">
+                                <label class="text-xs font-semibold text-amber-800 block mb-1">Lab Instructions</label>
+                                <textarea x-model="labCase.instructions" rows="2"
+                                          placeholder="Shade, special instructions, try-in date…"
+                                          class="w-full text-sm border border-amber-200 bg-white rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500 resize-none"></textarea>
+                            </div>
+
                         </div>
-                    </template>
+                        <p class="text-[11px] text-amber-700">
+                            A <strong>Draft</strong> lab case will be created when you save this visit. You can send it to the lab from the Lab module.
+                        </p>
+                    </div>
                 </div>
 
-                {{-- ── SECTION 7: Next Visit ── --}}
+                {{-- Billing preview (read-only) --}}
+                <div class="lg:col-span-2" x-show="visitItems.length > 0" x-cloak>
+                    <div class="px-4 py-3 bg-amber-50 border border-amber-100 rounded-lg">
+                        <p class="text-xs font-semibold text-amber-800">Front desk will be prompted to bill:</p>
+                        <p class="text-xs text-amber-700 mt-0.5" x-text="billingPreview"></p>
+                        <p class="text-[10px] text-amber-600 mt-1">Est. total Rs. <span x-text="fmt(visitItemsTotal)"></span> · prompt is sent when you save.</p>
+                    </div>
+                </div>
+
+                {{-- Completion (moved from Section 1; smart-surfaced when every
+                     planned item selected today is 'Completed Today'). Same
+                     checkbox, same payload key, same automation (recall task +
+                     plan re-derivation). --}}
+                <div class="lg:col-span-2" x-show="form.treatment_plan_id" x-cloak>
+                    <div :class="allPlannedCompletedToday ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white'" class="border rounded-lg px-4 py-3">
+                        <p x-show="allPlannedCompletedToday && !form.mark_treatment_complete" class="text-xs font-semibold text-green-700 mb-1">All planned work selected today is marked “Completed Today”.</p>
+                        <label class="flex items-center gap-2 cursor-pointer select-none group">
+                            <input type="checkbox" x-model="form.mark_treatment_complete"
+                                   class="w-4 h-4 rounded border-gray-300 text-[#6a0f70] focus:ring-[#6a0f70] cursor-pointer">
+                            <span class="text-sm font-medium text-gray-700 group-hover:text-[#6a0f70] transition-colors">
+                                Mark this treatment as <strong>complete</strong>
+                            </span>
+                        </label>
+                        <p x-show="form.mark_treatment_complete" class="text-xs text-amber-600 mt-1 ml-6">
+                            This will mark the linked treatment plan as completed and schedule a 6-month recall task for the front desk.
+                        </p>
+                    </div>
+                </div>
+
+                {{-- ── SECTION 7: Next Visit (part of the Zone 3 receipt) ── --}}
                 <div>
                     <div class="tv-section-legend">Next Visit</div>
+                    {{-- Final Freeze: quick chips compute the EXISTING
+                         next_visit_date field; purpose auto-suggested from the
+                         primary treatment when empty. Same payload keys. --}}
+                    <div class="flex flex-wrap items-center gap-1.5 mb-2">
+                        @foreach([2 => '2 days', 7 => '1 week', 14 => '2 weeks'] as $days => $chip)
+                        <button type="button" @click="setNextVisitIn({{ $days }})"
+                                class="px-2.5 py-1 text-[11px] font-semibold border rounded-lg transition-colors"
+                                :class="isNextVisitIn({{ $days }})
+                                    ? 'bg-[#6a0f70] border-[#380740] text-white'
+                                    : 'bg-white border-gray-200 text-gray-500 hover:border-[#6a0f70] hover:text-[#6a0f70]'">
+                            {{ $chip }}
+                        </button>
+                        @endforeach
+                        <span class="text-[10px] text-gray-400 ml-1">or pick a date below</span>
+                    </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="text-xs font-semibold text-gray-600 block mb-1">Next Visit Date</label>
@@ -1477,14 +1577,22 @@ $appointmentsJson = ($patient->appointments ?? collect())
                     </div>
                 </div>
 
+                {{-- Clinical Notes + Vitals relocated (08-05, presentation-only):
+                     Notes now renders as the hero at the top of Today's Work;
+                     Vitals now renders directly below the Patient Brief (Zone 0).
+                     Same x-models / dusk selectors / payload keys — location only.
+                     drawerOpen/vitalsOpen state and edit-resync logic untouched. --}}
+
         </div>{{-- end grid --}}
         </div>{{-- end body --}}
 
-        {{-- Footer --}}
-        <div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
-            <button @click="closeForm()" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 font-medium">
+        {{-- Footer — Delta 2: live micro-summary derived from existing state,
+             sitting beside Save so the last thing read is what gets committed. --}}
+        <div class="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <button @click="closeForm()" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 font-medium flex-shrink-0">
                 Cancel
             </button>
+            <span class="text-[11px] text-gray-500 text-right ml-auto max-sm:hidden" x-text="footerSummary"></span>
             <button @click="saveVisit()" :disabled="saving" dusk="visit-save"
                     class="inline-flex items-center gap-2 bg-[#6a0f70] hover:bg-[#570c5d] disabled:opacity-60 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
                 <svg x-show="saving" class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1514,18 +1622,8 @@ function treatmentVisits() {
         visits: {{ Js::from($visitsJson) }},
         stages: TV_STAGES,
 
-        activeFilter: 'all',
+        // UX-01: filter chips removed — search is the single narrowing control.
         search: '',
-        filters: [
-            { key: 'all',       label: 'All' },
-            { key: 'treatment', label: 'Treatment' },
-            { key: 'followup',  label: 'Follow-up' },
-            { key: 'emergency', label: 'Emergency' },
-            { key: 'scheduled', label: 'Scheduled' },
-            { key: 'in_chair',  label: 'In Chair' },
-            { key: 'completed', label: 'Completed' },
-            { key: 'due',       label: 'Billing Pending' },
-        ],
 
         formOpen: false,
         saving: false,
@@ -1540,6 +1638,9 @@ function treatmentVisits() {
         selectedTeeth: [],
         // Vitals collapsible (collapsed by default — optional section)
         vitalsOpen: false,
+        // Redesign (2026-08-05): meta-line editor + notes/vitals drawer toggles
+        metaOpen: false,
+        drawerOpen: false,
         // Treatment plans for the dropdown — seeded from server, refreshed on form open
         // so a plan created/accepted in the Plan tab shows up WITHOUT a page reload.
         treatmentPlans: @json($treatmentPlansJson),
@@ -1570,10 +1671,6 @@ function treatmentVisits() {
 
         get filteredVisits() {
             let out = this.visits;
-            if (['scheduled','in_chair','completed','cancelled','no_show'].includes(this.activeFilter)) out = out.filter(v => v.status === this.activeFilter);
-            else if (this.activeFilter === 'due')        out = out.filter(v => v.visit_items && v.visit_items.some(i => i.billing_status === 'pending'));
-            else if (this.activeFilter !== 'all')        out = out.filter(v => v.visit_type === this.activeFilter);
-
             if (this.search.trim()) {
                 const q = this.search.toLowerCase();
                 out = out.filter(v =>
@@ -1601,6 +1698,111 @@ function treatmentVisits() {
             return !!(this.form.treatment_name && TV_LAB_TREATMENTS[this.form.treatment_name]);
         },
 
+        // ── Redesign getters (2026-08-05) — presentation only, derived only ──
+
+        /** Meta line: "Today, 05 Aug 2026" or the picked date. */
+        get metaDateLabel() {
+            const t = new Date().toISOString().slice(0,10);
+            return this.form.visit_date === t
+                ? 'Today, ' + this._fmtDate(t)
+                : this._fmtDate(this.form.visit_date);
+        },
+
+        /** Meta line: linked appointment label, or a quiet placeholder. */
+        get metaApptLabel() {
+            if (!this.form.appointment_id) return 'no appointment linked';
+            const a = TV_APPOINTMENTS.find(x => String(x.id) === String(this.form.appointment_id));
+            return a ? a.label : 'appointment #' + this.form.appointment_id;
+        },
+
+        /** Zone 0 line 1 — last visit, compiled from structured facts only. */
+        get zone0LastLine() {
+            if (this.editingVisit || !this.visits.length) return '';
+            const v = [...this.visits].sort((a,b) => new Date(b.visit_date||0) - new Date(a.visit_date||0))[0];
+            if (!v) return '';
+            const items = (v.visit_items || []).map(i =>
+                i.treatment_name
+                + (i.tooth_number ? ' T' + i.tooth_number : '')
+                + (i.work_outcome ? ' — ' + (this.workOutcomes[i.work_outcome] || i.work_outcome) : '')
+            ).join(', ');
+            const what = items || v.treatment_name || v.procedure || 'visit recorded';
+            const st = (v.completed_stages || []).length;
+            return 'Last visit ' + this._fmtDate(v.visit_date) + ': ' + what
+                + (st ? ' · ' + st + ' stage' + (st > 1 ? 's' : '') + ' done' : '');
+        },
+
+        /** Zone 0 course lines — plan name + DerivedProgressService label. */
+        get zone0PlanLines() {
+            if (this.editingVisit) return [];
+            return this.treatmentPlans.slice(0, 2).map(p =>
+                'Plan "' + p.plan_name + '" — ' + (p.progress || 'no work recorded yet'));
+        },
+
+        /** Zone 3 billing preview — mirrors the BillingPrompt description the
+         *  service composes on save (same label · material · tooth shape). */
+        get billingPreview() {
+            return this.visitItems.map(i => {
+                let l = i.treatment_name || '—';
+                if (i.material_option) l += ' (' + i.material_option + ')';
+                if (i.tooth_number)    l += ' — Tooth ' + i.tooth_number;
+                return l;
+            }).join(', ');
+        },
+
+        /** Completion suggestion — every planned item picked today is
+         *  'Completed Today'. Styling only; never auto-checks the box. */
+        get allPlannedCompletedToday() {
+            const planned = this.visitItems.filter(i => i.treatment_plan_item_id);
+            return planned.length > 0 && planned.every(i => i.work_outcome === 'completed_today');
+        },
+
+        /** Delta 2 — footer micro-summary. Derived from existing state only:
+         *  no duplicate calculations (reuses visitItemsTotal / labCase /
+         *  mark_treatment_complete). */
+        get footerSummary() {
+            const n = this.visitItems.length;
+            if (n === 0) return '0 items · review only';
+            const parts = [n + (n === 1 ? ' item' : ' items'), 'Rs. ' + this.fmt(this.visitItemsTotal)];
+            if (this.labCase.enabled)               parts.push('lab draft');
+            if (this.form.mark_treatment_complete)  parts.push('plan completes');
+            return parts.join(' · ');
+        },
+
+        /** Delta 3 (R-1) — dense picker layout for complex cases (FMR,
+         *  implant rehab). Pure layout switch; same rows, same handlers. */
+        get densePicker() {
+            return this.planItems.length > 6;
+        },
+
+        /** Delta 4 (R-2) — bulk outcome for dense mode. Loops the EXISTING
+         *  per-item setter, so every item carries its own work_outcome in the
+         *  payload exactly as if tapped individually. */
+        bulkOutcome(key) {
+            this.planItems.forEach(pi => {
+                const row = this.visitItems.find(i => i.treatment_plan_item_id == pi.id);
+                if (row) row.work_outcome = key;
+            });
+        },
+
+        /** Chip active-state: is next_visit_date exactly N days from today? */
+        isNextVisitIn(days) {
+            const d = new Date(); d.setDate(d.getDate() + days);
+            return this.form.next_visit_date === d.toISOString().slice(0, 10);
+        },
+
+        /** Next-visit chips — compute the EXISTING next_visit_date field
+         *  client-side; suggest a purpose from the primary treatment when the
+         *  field is still empty. Presentation over existing payload keys. */
+        setNextVisitIn(days) {
+            const d = new Date(); d.setDate(d.getDate() + days);
+            this.form.next_visit_date = d.toISOString().slice(0, 10);
+            if (!this.form.next_visit_type) {
+                const map = { 'RCT': 'RCT Next Step', 'Extraction': 'Suture Removal',
+                              'Crown Prep': 'Crown Try-in', 'Implant': 'Implant Review' };
+                this.form.next_visit_type = map[this.form.treatment_name] || 'Review';
+            }
+        },
+
         // Work subtypes for the selected lab category
         get labSubtypes() {
             return TV_LAB_CATEGORIES[this.labCase.work_category] || [];
@@ -1611,7 +1813,10 @@ function treatmentVisits() {
                 appointment_id: '',
                 visit_date: new Date().toISOString().slice(0,10),
                 visit_type: 'treatment',
-                status: 'scheduled',
+                // Redesign: a chairside save documents work that HAPPENED —
+                // 'completed' is the honest default (approved spec decision).
+                // Editable in the meta-line editor for the exceptional case.
+                status: 'completed',
                 doctor_id: '{{ auth()->id() }}',
                 treatment_plan_id: '',
                 plan_item_id: '',        // selected plan item (layer 2)
@@ -1637,13 +1842,17 @@ function treatmentVisits() {
             };
         },
 
-        // When an appointment is selected, auto-fill visit_date and doctor
+        // When an appointment is selected, auto-fill visit_date, doctor and
+        // (redesign) the visit_type default from the appointment's type.
+        // A default only — the meta-line editor can still override it.
         onAppointmentChange() {
             if (!this.form.appointment_id) return;
             const appt = TV_APPOINTMENTS.find(a => String(a.id) === String(this.form.appointment_id));
             if (!appt) return;
             if (appt.date)      this.form.visit_date = appt.date;
             if (appt.doctor_id) this.form.doctor_id  = appt.doctor_id;
+            const typeMap = { 'treatment': 'treatment', 'follow-up': 'followup' };
+            if (appt.type && typeMap[appt.type]) this.form.visit_type = typeMap[appt.type];
         },
 
         onTreatmentChange() {
@@ -1861,22 +2070,13 @@ function treatmentVisits() {
             return this.form.scale_quadrants.split(',').map(s=>s.trim()).includes(q);
         },
 
-        // ── Rx helpers ──
-        rxOpen: false,
-        rxAddDrug() {
-            this.form.prescription_drugs.push({name:'',sos:false,morning:'',noon:'',night:'',duration:'',dur_unit:'days',total_qty:'',food:'',language:'English',instruction:''});
-        },
-        rxCalcTotal(i) {
-            const d = this.form.prescription_drugs[i];
-            const perDay = (parseFloat(d.morning)||0)+(parseFloat(d.noon)||0)+(parseFloat(d.night)||0);
-            const dur = parseFloat(d.duration)||0;
-            const mult = d.dur_unit==='weeks'?7:1;
-            d.total_qty = perDay>0&&dur>0 ? Math.ceil(perDay*dur*mult) : '';
-        },
-        rxToggleInstr(instr) {
-            const idx = this.form.prescription_instructions.indexOf(instr);
-            idx>=0 ? this.form.prescription_instructions.splice(idx,1) : this.form.prescription_instructions.push(instr);
-        },
+        // UX-06 (Freeze Spec): the embedded per-visit Rx entry UI was removed in
+        // an earlier slice; its orphaned helpers (rxOpen/rxAddDrug/rxCalcTotal/
+        // rxToggleInstr) are now deleted too. Prescriptions are written ONLY
+        // through the shared prescription-panel Blade component (Consultation,
+        // Prescriptions tab, and the per-visit "Write Prescription" link below).
+        // NB: never spell that component as a literal tag in this file — Blade
+        // compiles component tags even inside JS comments.
 
         // ── F2: Visit items + plan item helpers ──────────────────────────────
 
@@ -2022,7 +2222,9 @@ function treatmentVisits() {
             });
         },
 
-        // Billing section: add a blank custom billing line
+        // Add a blank custom line — starts EXPANDED (Delta 1): a blank row
+        // has nothing to show collapsed. Plan-picked items start collapsed
+        // because they arrive complete.
         addBillingItem() {
             this.visitItems.push({
                 treatment_plan_item_id: null,
@@ -2031,10 +2233,11 @@ function treatmentVisits() {
                 tooth_number:    '',
                 suggested_price: '',
                 notes:           '',
+                _open:           true,
             });
         },
 
-        openAddForm() {
+        openAddForm(prefill = {}) {
             this.editingVisit = null;
             this.form = this._blank();
             this.visitItems    = [];
@@ -2047,7 +2250,22 @@ function treatmentVisits() {
             this.repeatWarnings = []; this.repeatReason = '';
             this.txSearch = ''; this.txSuggestions = []; this.txSuggestOpen = false;
             this.labCase = { enabled: false, lab_vendor_id: '', work_category: '', work_subtype: '', priority: 'routine', expected_return_date: '', instructions: '' };
+            this.metaOpen = false; this.drawerOpen = false; this.vitalsOpen = false;
             this.loadTreatmentPlans();   // refresh plan list so new/accepted plans show without reload
+
+            // UX-05 (Freeze Spec) — prefilled handoff from the consultation gate.
+            // Appointment link auto-fills date + doctor via onAppointmentChange().
+            // Plan is prefilled ONLY when the caller resolved exactly one accepted
+            // plan — never guess between multiple (frozen guardrail).
+            if (prefill.appointment_id) {
+                this.form.appointment_id = String(prefill.appointment_id);
+                this.onAppointmentChange();
+            }
+            if (prefill.treatment_plan_id) {
+                this.form.treatment_plan_id = String(prefill.treatment_plan_id);
+                this.onPlanChange();
+            }
+
             this.formOpen = true;
         },
 
@@ -2139,6 +2357,11 @@ function treatmentVisits() {
             this.errorMsg = '';
             // Reset lab case (no editing of existing lab cases from here — use Lab module)
             this.labCase = { enabled: false, lab_vendor_id: '', work_category: '', work_subtype: '', priority: 'routine', expected_return_date: '', instructions: '' };
+            // Redesign: auto-open the drawer when the visit already carries a
+            // note or vitals, so existing content is never hidden on edit.
+            this.drawerOpen = !!(visit.notes || visit.vitals_notes || visit.bp_systolic || visit.pulse_rate || visit.temperature || visit.weight);
+            this.vitalsOpen = !!(visit.bp_systolic || visit.pulse_rate || visit.temperature || visit.weight || visit.vitals_notes);
+            this.metaOpen = false;
             this.loadTreatmentPlans();   // refresh plan list so new/accepted plans show without reload
             this.formOpen = true;
         },
@@ -2153,11 +2376,24 @@ function treatmentVisits() {
             this.planItems  = [];
             this.otherActive = false;
             this.selectedTeeth = [];
+            this.metaOpen = false; this.drawerOpen = false; this.vitalsOpen = false;
             this.repeatWarnings = []; this.repeatReason = '';
             this.txSearch = ''; this.txSuggestions = []; this.txSuggestOpen = false;
         },
 
         async saveVisit() {
+            // Delta 1 — auto-expand any recorded item missing its treatment
+            // name so the invalid field is visible, never hidden in a
+            // collapsed row.
+            let hasUnnamed = false;
+            this.visitItems.forEach(i => {
+                if (!(i.treatment_name || '').trim()) { i._open = true; hasUnnamed = true; }
+            });
+            if (hasUnnamed) {
+                this.errorMsg = 'Every recorded item needs a treatment name.';
+                return;
+            }
+
             // Repeat work flagged but no reason given — block and prompt for it.
             this._checkRepeatWork();
             if (this.repeatWarnings.length > 0 && !this.repeatReason.trim()) {

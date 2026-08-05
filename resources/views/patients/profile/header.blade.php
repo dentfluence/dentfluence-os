@@ -389,6 +389,34 @@
     </div>
     @endif
 
+    {{-- UX-08 (Freeze Spec, 2026-08-05) — derived workflow strip.
+         One compact line, shown ONLY when a today's appointment exists.
+         Every tick is DERIVED from existing facts (consultation row, visit row,
+         billing prompt) by PatientController@show — this strip stores nothing,
+         writes nothing, and owns no state. "Skipped" comes from the recorded
+         "No Treatment Done Today" answer (UX-04). --}}
+    @if(!empty($todayFlow))
+    <div class="flex items-center gap-2 mt-2 mx-1 text-xs flex-wrap" dusk="today-flow-strip">
+        <span class="text-gray-400 font-semibold uppercase tracking-wide text-[10px]">
+            Today ({{ ucfirst($todayFlow['appointment_type']) }})
+        </span>
+        @foreach($todayFlow['steps'] as $i => $step)
+            @if($i > 0)<span class="text-gray-300">→</span>@endif
+            <span class="inline-flex items-center gap-1
+                {{ $step['state'] === 'done' ? 'text-green-700' : ($step['state'] === 'skipped' ? 'text-gray-400 line-through' : 'text-amber-600') }}">
+                @if($step['state'] === 'done')
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                @elseif($step['state'] === 'skipped')
+                    <span class="text-[10px]">–</span>
+                @else
+                    <span class="w-2 h-2 rounded-full border border-current inline-block"></span>
+                @endif
+                {{ $step['label'] }}
+            </span>
+        @endforeach
+    </div>
+    @endif
+
     {{-- Tabs — capsule pill nav. Money tabs (Billing/Wallet) only render for
          roles holding the finance View flag — same rule as the Journey
          Timeline's per-event filter; the fragment endpoint enforces it
