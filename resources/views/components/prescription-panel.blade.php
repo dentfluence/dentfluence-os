@@ -44,6 +44,7 @@
             'form_type' => $formType,
             'food'      => $row['food']      ?? '',
             'sos'       => (bool) ($row['sos']   ?? false),
+            'sos_dose'  => isset($row['sos_dose']) && $row['sos_dose'] !== '' ? (string) $row['sos_dose'] : '',
             'morn'      => $dose($row['morn']  ?? null),
             'noon'      => $dose($row['noon']  ?? null),
             'night'     => $dose($row['night'] ?? null),
@@ -133,7 +134,7 @@
         selectedInstr: {{ $instrJson }},
 
         addDrug() {
-            this.drugs.push({ drug:'', drug_id:null, form_type:'tablet', food:'', sos:false, morn:false, noon:false, night:false, duration:'', unit:'days' });
+            this.drugs.push({ drug:'', drug_id:null, form_type:'tablet', food:'', sos:false, sos_dose:'', morn:false, noon:false, night:false, duration:'', unit:'days' });
         },
 
         // Single-unit forms don't multiply by dose × duration
@@ -247,7 +248,7 @@
                                 this.loading = true;
                                 this._timer = setTimeout(async () => {
                                     try {
-                                        const res = await fetch('/api/rx/drugs/search?q=' + encodeURIComponent(val));
+                                        const res = await fetch('/api/rx/drugs/search?q=' + encodeURIComponent(val) + '&form_type=' + encodeURIComponent(row.form_type));
                                         const data = await res.json();
                                         this.results = Array.isArray(data) ? data : (data.drugs ?? []);
                                         this.showDrop = true;
@@ -296,7 +297,7 @@
                         style="position:relative;">
 
                         {{-- Form type select (first — user picks type, then searches) --}}
-                        <select x-model="row.form_type" @change="onFormTypeChange(row)"
+                        <select x-model="row.form_type" @change="onFormTypeChange(row); if (q.length >= 2) onInput(q)"
                                 style="margin-bottom:4px;width:100%;font-size:11px;border:1px solid #e5e7eb;border-radius:4px;padding:3px 6px;color:#374151;background:#fff;outline:none;">
                             <optgroup label="Solid">
                                 <option value="tablet">Tablet</option>
@@ -390,9 +391,18 @@
                         </div>
                     </div>{{-- /typeahead --}}
 
-                    <div class="rx-checkbox-wrap">
+                    <div class="rx-checkbox-wrap" style="flex-direction:column;gap:3px;">
                         <input type="checkbox" x-model="row.sos"
                                style="width:15px;height:15px;accent-color:#dc2626;cursor:pointer;">
+                        {{-- Dose per SOS ("as needed") use — same ml-vs-count
+                             distinction as Morn/Noon/Night, only shown once
+                             SOS is ticked so the row stays compact otherwise. --}}
+                        <template x-if="row.sos">
+                            <input type="number" min="0" step="0.5" x-model.number="row.sos_dose"
+                                   :placeholder="isLiquid(row) ? 'ml' : 'qty'"
+                                   :title="isLiquid(row) ? 'ml per SOS dose' : 'quantity per SOS dose'"
+                                   class="rx-input rx-input-center" style="padding:3px 2px;font-size:10px;">
+                        </template>
                     </div>
                     {{-- Morn / Noon / Night: ml number input for liquids, checkbox otherwise --}}
                     <div class="rx-checkbox-wrap">

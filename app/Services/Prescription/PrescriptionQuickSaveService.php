@@ -154,6 +154,7 @@ class PrescriptionQuickSaveService
                 'afternoon'       => $this->doseValue($row['noon'] ?? null),
                 'night'           => $this->doseValue($row['night'] ?? null),
                 'is_sos'          => !empty($row['sos']),
+                'sos_dose'        => !empty($row['sos']) ? $this->doseValue($row['sos_dose'] ?? null) : null,
                 'duration'        => (int) ($row['duration'] ?? 0),
                 'duration_unit'   => $row['unit'] ?? 'days',
                 'dispensing_type' => $drug?->dispensing_type ?? RxDrug::DISPENSING_UNIT,

@@ -23,13 +23,16 @@
         ? $rx->items->map(function ($item) {
             // Liquids carry their millilitre amount through to the panel;
             // solids collapse to a boolean so the checkbox re-highlights.
-            $liquid = in_array(strtolower((string) $item->dosage_form), ['syrup', 'suspension', 'drops'], true);
+            // Uses the model's keyword-based isLiquidDose() (not an exact
+            // match) so compound labels like "Oral Suspension" still count.
+            $liquid = $item->isLiquidDose();
             return [
                 'drug'      => trim($item->drug_name . ($item->strength ? ' ' . $item->strength : '')),
                 'drug_id'   => $item->drug_id,
                 'form_type' => strtolower($item->dosage_form ?: 'tablet'),
                 'food'      => $item->food_advice ?? '',
                 'sos'       => (bool) $item->is_sos,
+                'sos_dose'  => $item->is_sos && $item->sos_dose ? (string) $item->sos_dose : '',
                 'morn'      => $liquid ? (float) $item->morning   : ((float) $item->morning   > 0),
                 'noon'      => $liquid ? (float) $item->afternoon : ((float) $item->afternoon > 0),
                 'night'     => $liquid ? (float) $item->night     : ((float) $item->night     > 0),

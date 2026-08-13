@@ -14,7 +14,7 @@ class PrescriptionItem extends Model
         // Dispensing snapshot — copied from drug master at time of prescribing
         'dispensing_type', 'unit_label',
         // Dosing
-        'morning', 'afternoon', 'night', 'is_sos',
+        'morning', 'afternoon', 'night', 'is_sos', 'sos_dose',
         'duration', 'duration_unit',
         'quantity', 'quantity_manual',
         // Instructions
@@ -29,6 +29,7 @@ class PrescriptionItem extends Model
         'morning'         => 'float',
         'afternoon'       => 'float',
         'night'           => 'float',
+        'sos_dose'        => 'float',
     ];
 
     public function drug()         { return $this->belongsTo(RxDrug::class, 'drug_id'); }
@@ -79,10 +80,22 @@ class PrescriptionItem extends Model
         return in_array($type, [RxDrug::DISPENSING_UNIT, RxDrug::DISPENSING_VOLUME]);
     }
 
-    /** Liquid forms are dosed in millilitres (syrup / suspension / drops). */
+    /**
+     * Liquid forms are dosed in millilitres (syrup / suspension / drops).
+     * `dosage_form` is a free-text snapshot from the drug master (e.g. "Oral
+     * Suspension", "Paediatric Drops") rather than a clean enum, so this is a
+     * keyword match — not an exact one — otherwise compound labels would
+     * silently fall through as "solid" and print without the ml unit.
+     */
     public function isLiquidDose(): bool
     {
-        return in_array(strtolower((string) $this->dosage_form), ['syrup', 'suspension', 'drops'], true);
+        $form = strtolower((string) $this->dosage_form);
+        foreach (['syrup', 'suspension', 'drop'] as $kw) {
+            if (str_contains($form, $kw)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -96,6 +109,23 @@ class PrescriptionItem extends Model
         }
         $num = rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
         return $this->isLiquidDose() ? $num . ' ml' : $num;
+    }
+
+    /**
+     * SOS cell for print: "SOS" alone when no amount was recorded (legacy
+     * rows, or a doctor who left it blank), otherwise "SOS · 5 ml" /
+     * "SOS · 1" so the dispensing amount for the as-needed dose is explicit.
+     */
+    public function sosCell(): string
+    {
+        if (! $this->is_sos) {
+            return '—';
+        }
+        if (! (float) $this->sos_dose) {
+            return 'SOS';
+        }
+        $num = rtrim(rtrim(number_format((float) $this->sos_dose, 2, '.', ''), '0'), '.');
+        return 'SOS · ' . $num . ($this->isLiquidDose() ? ' ml' : '');
     }
 
     /**

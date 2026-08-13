@@ -118,13 +118,15 @@ class PrescriptionController extends ApiController
     /** Typeahead search across brand / generic / category / composition. */
     public function drugSearch(Request $request): JsonResponse
     {
-        $term = trim((string) $request->get('q', ''));
+        $term     = trim((string) $request->get('q', ''));
+        $formType = trim((string) $request->get('form_type', ''));
         if (strlen($term) < 2) {
             return $this->success([], '');
         }
 
         $drugs = RxDrug::active()
             ->search($term)
+            ->ofFormType($formType ?: null)
             ->with(['generic', 'category', 'route', 'defaultFoodInstruction'])
             ->limit(15)
             ->get()

@@ -311,9 +311,9 @@
                         </div>
                     @endif
                 </td>
-                {{-- SOS --}}
+                {{-- SOS — shows the recorded per-dose amount when set, e.g. "SOS · 5 ml" --}}
                 <td style="text-align:center;">
-                    @if($item->is_sos)<span class="sos-badge">SOS</span>@else —@endif
+                    @if($item->is_sos)<span class="sos-badge">{{ $item->sosCell() }}</span>@else —@endif
                 </td>
                 {{-- Morn / Noon / Night — "5 ml" for liquids, plain count otherwise --}}
                 <td style="text-align:center;">{{ $item->doseCell($item->morning) }}</td>

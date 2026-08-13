@@ -195,7 +195,7 @@
                                 {{-- SOS --}}
                                 <div class="flex justify-center w-10">
                                     @if($item->is_sos)
-                                        <span class="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-bold">SOS</span>
+                                        <span class="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-bold">{{ $item->sosCell() }}</span>
                                     @else
                                         <span class="text-xs text-gray-300">—</span>
                                     @endif

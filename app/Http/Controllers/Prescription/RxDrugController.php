@@ -69,12 +69,17 @@ class RxDrugController extends Controller
 
     /**
      * AJAX drug search — returns JSON for prescription form autocomplete.
+     * Legacy endpoint (not called by the current <x-prescription-panel>
+     * flow, which uses Api\V1\PrescriptionController::drugSearch instead),
+     * kept in sync in case anything still links to it.
      */
     public function search(Request $request)
     {
-        $term  = $request->get('q', '');
+        $term     = $request->get('q', '');
+        $formType = $request->get('form_type', '');
         $drugs = RxDrug::active()
                        ->search($term)
+                       ->ofFormType($formType ?: null)
                        ->with(['generic', 'category', 'defaultFoodInstruction'])
                        ->limit(15)
                        ->get()

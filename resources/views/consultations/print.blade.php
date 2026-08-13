@@ -485,10 +485,10 @@
                     @if($item->strength)<div class="rx-sub">{{ $item->strength }}{{ $item->dosage_form ? ' · '.$item->dosage_form : '' }}</div>@endif
                     @if($item->food_advice || $item->instructions)<div class="rx-sub">@if($item->food_advice){{ $item->food_advice }}@endif @if($item->instructions)· {{ $item->instructions }}@endif</div>@endif
                 </td>
-                <td style="text-align:center;">{{ $item->is_sos ? 'SOS' : '—' }}</td>
-                <td style="text-align:center;">{{ $item->morning ?: '—' }}</td>
-                <td style="text-align:center;">{{ $item->afternoon ?: '—' }}</td>
-                <td style="text-align:center;">{{ $item->night ?: '—' }}</td>
+                <td style="text-align:center;">{{ $item->sosCell() }}</td>
+                <td style="text-align:center;">{{ $item->doseCell($item->morning) }}</td>
+                <td style="text-align:center;">{{ $item->doseCell($item->afternoon) }}</td>
+                <td style="text-align:center;">{{ $item->doseCell($item->night) }}</td>
                 <td>{{ $item->duration ? $item->duration . ' ' . ($item->duration_unit ?? 'days') : '—' }}</td>
             </tr>
             @endforeach

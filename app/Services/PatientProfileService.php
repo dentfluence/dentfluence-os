@@ -136,7 +136,10 @@ class PatientProfileService
 
                 return $base + [
                     'treatmentVisits' => $patient->treatmentVisits,
-                    'doctors'         => \App\Models\User::where('role', 'doctor')->orderBy('name')->get(),
+                    'doctors'         => \App\Models\User::where('is_active', true)
+                        ->where(fn ($q) => $q->whereIn('role', \App\Models\User::DOCTOR_ROLES)->orWhere('name', 'like', 'Dr.%'))
+                        ->orderBy('name')
+                        ->get(),
                     'treatments'      => $this->treatmentsWithConsentFlag(),
                     'implantCatalog'  => ImplantCatalog::active()
                         ->with('inventoryItem.stocks')

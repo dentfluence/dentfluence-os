@@ -108,4 +108,50 @@ class RxDrug extends Model
               ->orWhereHas('category', fn($c) => $c->where('name',  'like', "%{$term}%"));
         });
     }
+
+    /**
+     * Keyword groups for each prescription-form "form_type" slug used by the
+     * Rx typeahead (resources/views/components/prescription-panel.blade.php).
+     * `dosage_form` is free text (e.g. "Dispersible Tablet", "Topical Gel"),
+     * not an enum, so slugs are matched by keyword — same words the frontend
+     * already uses to auto-detect form_type FROM dosage_form on pick(). Keeping
+     * one keyword list shared by both directions avoids the two drifting apart.
+     */
+    public static function formTypeKeywords(): array
+    {
+        return [
+            'tablet'     => ['tablet', 'tab'],
+            'capsule'    => ['capsule', 'cap'],
+            'lozenge'    => ['lozenge'],
+            'syrup'      => ['syrup'],
+            'suspension' => ['suspension'],
+            'drops'      => ['drop'],
+            'mouthwash'  => ['mouthwash', 'rinse', 'gargle'],
+            'gel'        => ['gel'],
+            'cream'      => ['cream', 'ointment'],
+            'toothpaste' => ['toothpaste'],
+            'brush'      => ['brush', 'applicator'],
+            'spray'      => ['spray'],
+            'injection'  => ['injection', 'inj'],
+        ];
+    }
+
+    /**
+     * Restrict results to drugs whose dosage_form matches the picked form_type
+     * (e.g. only syrups when the doctor has selected "Syrup"). Unknown/blank
+     * slugs (including 'other') are left unfiltered — 'other' is a catch-all.
+     */
+    public function scopeOfFormType($q, ?string $slug)
+    {
+        $keywords = self::formTypeKeywords()[$slug] ?? null;
+        if (!$keywords) {
+            return $q;
+        }
+
+        return $q->where(function ($q) use ($keywords) {
+            foreach ($keywords as $kw) {
+                $q->orWhere('dosage_form', 'like', "%{$kw}%");
+            }
+        });
+    }
 }
