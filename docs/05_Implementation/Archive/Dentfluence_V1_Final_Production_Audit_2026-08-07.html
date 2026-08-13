@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dentfluence V1 — Final Production Readiness Audit — 2026-08-07</title>
+<style>
+  :root{--ink:#1a1f2e;--mut:#5a6072;--line:#dfe3ea;--bg:#f7f8fa;--red:#c0392b;--amber:#b7791f;--green:#1e7e4a;--blue:#1f4e8c;--redbg:#fdecea;--amberbg:#fdf6e3;--greenbg:#e8f5ee;--bluebg:#eaf1fa;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,Arial,sans-serif;color:var(--ink);background:#fff;font-size:13.5px;line-height:1.5;max-width:1000px;margin:0 auto;padding:32px 40px}
+  h1{font-size:24px;margin-bottom:2px}
+  h2{font-size:17px;margin:34px 0 10px;padding:7px 12px;background:var(--ink);color:#fff;border-radius:4px}
+  h3{font-size:14px;margin:18px 0 6px;color:var(--blue)}
+  p{margin:6px 0}
+  .sub{color:var(--mut);font-size:12.5px;margin-bottom:14px}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12.8px}
+  th{background:var(--bg);text-align:left;padding:6px 8px;border:1px solid var(--line);font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--mut)}
+  td{padding:6px 8px;border:1px solid var(--line);vertical-align:top}
+  tr:nth-child(even) td{background:#fbfcfd}
+  .tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap}
+  .p0{background:var(--redbg);color:var(--red)} .p1{background:var(--amberbg);color:var(--amber)} .p2{background:var(--bluebg);color:var(--blue)}
+  .ok{background:var(--greenbg);color:var(--green)} .warn{background:var(--amberbg);color:var(--amber)} .bad{background:var(--redbg);color:var(--red)}
+  .ship{background:var(--greenbg);color:var(--green)} .fix{background:var(--amberbg);color:var(--amber)} .v11{background:var(--bluebg);color:var(--blue)}
+  .verdict{border:3px solid var(--amber);background:var(--amberbg);border-radius:8px;padding:16px 20px;margin:14px 0}
+  .verdict h3{color:var(--amber);font-size:20px;margin:0 0 6px}
+  .box{border:1px solid var(--line);border-left:4px solid var(--blue);background:var(--bg);padding:10px 14px;border-radius:4px;margin:10px 0}
+  .box.red{border-left-color:var(--red);background:var(--redbg)}
+  .box.green{border-left-color:var(--green);background:var(--greenbg)}
+  code{background:#eef0f4;padding:1px 5px;border-radius:3px;font-size:12px;font-family:Consolas,monospace}
+  .ev{color:var(--mut);font-size:11.8px;font-family:Consolas,monospace}
+  .kpi{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
+  .kpi div{flex:1;min-width:130px;border:1px solid var(--line);border-radius:6px;padding:10px 14px;text-align:center}
+  .kpi b{display:block;font-size:22px}
+  .kpi span{font-size:11.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+  ul,ol{margin:6px 0 6px 22px}
+  li{margin:3px 0}
+  .meta{border-bottom:2px solid var(--ink);padding-bottom:12px;margin-bottom:8px}
+  @media print{ body{padding:10mm;font-size:11px;max-width:none} h2{break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact} table,.verdict,.box{break-inside:avoid} .tag,th,.kpi div{-webkit-print-color-adjust:exact;print-color-adjust:exact} }
+</style>
+</head>
+<body>
+
+<div class="meta">
+  <h1>DENTFLUENCE V1 — FINAL PRODUCTION READINESS AUDIT</h1>
+  <p class="sub">Scope: Daily production use at <b>Tulip Dental only</b> · Date: 7 August 2026 · Basis: full static code audit of <code>Dentfluence Web</code> (repo @ b4a1a66, 05 Aug) + governance record · Mindset: <i>“If it works, freeze it. If it is safe, ship it. If it is not essential, defer it.”</i></p>
+</div>
+
+<div class="kpi">
+  <div><b style="color:var(--amber)">GO*</b><span>Verdict (with conditions)</span></div>
+  <div><b style="color:var(--red)">4</b><span>P0 blockers</span></div>
+  <div><b style="color:var(--amber)">7</b><span>P1 pre-launch fixes</span></div>
+  <div><b>154</b><span>test classes</span></div>
+  <div><b>1,228</b><span>routes</span></div>
+  <div><b>424</b><span>migrations</span></div>
+</div>
+
+<div class="box green"><b>The one-paragraph truth:</b> The clinical and financial core of Dentfluence is production-grade. Plan lifecycle has a verified single writer, money paths are transactional with row locks and racy-numbering eliminated, invoice/receipt/wallet operations are audit-logged with a daily tamper-check, RBAC is enforced web + API, PHI field encryption is live, and 154 test classes cover the canon. What is <b>not</b> ready is the safety net around the app: <b>there are no backups, no error visibility, one AI chat endpoint that bypasses RBAC entirely, and consultation photos sitting on a world-readable public disk.</b> None of these needs a redesign. All four are fixable in days. Fix them, deploy, go live.</div>
+
+<!-- ============ SECTION 1 ============ -->
+<h2>SECTION 1 — PRODUCTION READINESS: Can Tulip Dental start tomorrow?</h2>
+<p><b>No — but it can start in ~7 working days.</b> The daily workflow (register → appoint → consult → plan → visit → bill → pay) works and is safe. The four P0 items below are non-negotiable for a system holding medical records; everything else can follow.</p>
+
+<h3>P0 — Critical Blockers (medico-legal / data-loss class)</h3>
+<table>
+<tr><th style="width:26%">Item</th><th>Finding (verified in code)</th><th style="width:32%">Minimum fix — no redesign</th></tr>
+<tr><td><span class="tag p0">P0-1</span> <b>No backups exist</b></td><td>No backup package in <code>composer.json</code>. Zero backup entries among the 22 jobs in <code>routes/console.php</code>. <code>backup.sh</code> exists at repo root but is wired to nothing. A single disk failure on the VPS = every patient record gone.</td><td>Wire <code>backup.sh</code> as a nightly cron on the VPS (mysqldump + <code>storage/</code>), copy off-server (rclone/scp), and run one restore drill. ~half a day.</td></tr>
+<tr><td><span class="tag p0">P0-2</span> <b>AI assistant bypasses RBAC</b></td><td>Verified: <code>AssistantService::runTool()</code> executes any tool with <b>zero</b> permission checks — grep for <code>canAccess|Gate::|authorize(</code> across <code>app/Services/Assistant/</code> returns nothing. Any logged-in user (front desk, HR) can read any patient’s balance, payments, visit history, KPIs via chat. Enabled by default (<code>ASSISTANT_ENABLED=true</code>).</td><td><b>Set <code>ASSISTANT_ENABLED=false</code> for V1.</b> One env line. Proper per-tool <code>canAccess()</code> gating is V1.1 work. Do not ship the bypass.</td></tr>
+<tr><td><span class="tag p0">P0-3</span> <b>Consultation photos are public</b></td><td><code>config/filesystems.php:62-67</code>: <code>consultation-photos</code> disk = <code>visibility: public</code>, served at <code>/storage/consultations/…</code> with no auth. Clinical PHI reachable by URL. (Contrast: clinical media correctly uses the private disk + <code>SecureMediaController</code>.)</td><td>Repoint the disk to private root and serve through the existing <code>secure-media</code> route. Move existing files. ~half a day; reuses existing plumbing.</td></tr>
+<tr><td><span class="tag p0">P0-4</span> <b>Failures are invisible</b></td><td>No Sentry/Flare/anything in <code>composer.json</code>. <code>LOG_STACK=single</code> → one unbounded unrotated log. <code>MAIL_MAILER</code> defaults to <code>log</code> → every briefing/SLA email silently vanishes. If cron dies, all 22 scheduled jobs stop with no alert (the runbook itself warns this).</td><td><code>LOG_STACK=daily</code>, set a real mailer, wire the already-present <code>slack</code> log channel to a webhook for <code>critical</code>. Env + config only.</td></tr>
+</table>
+
+<h3>P1 — Must Fix Before Go-Live</h3>
+<table>
+<tr><th style="width:26%">Item</th><th>Finding</th><th style="width:30%">Fix</th></tr>
+<tr><td><span class="tag p1">P1-1</span> Uncommitted work in tree</td><td>5 modified + 9 untracked files — the entire Treatment Visit final sprint (controller, form, partials, print view, new test) lives only on the E: drive. One disk hiccup loses it. Stray duplicate <code>_treatment-visit-bootstrap.php</code> (non-blade) also present.</td><td>Delete the stray file, commit, run full suite, tag.</td></tr>
+<tr><td><span class="tag p1">P1-2</span> Production <code>.env</code> hardening</td><td><code>SESSION_SECURE_COOKIE</code> and <code>SESSION_ENCRYPT</code> commented out in the example; <code>APP_DEBUG=true</code> default; <code>PRM_WA_APP_SECRET</code> unset while the WhatsApp webhook defaults <b>enabled</b> (<code>config/prm.php:104</code>) — its only protection is that secret. <code>.env.example</code> omits every WHATSAPP_/META_/REVIEWS_ var.</td><td>Set all on prod; rebuild <code>.env.example</code> from the runbook so the next deploy can’t miss one.</td></tr>
+<tr><td><span class="tag p1">P1-3</span> PHI encryption backfill unverified</td><td>Encrypted casts are live on Patient/Consultation/Identifiers, but casts read plaintext gracefully until <code>php artisan patients:encrypt-phi</code> has run. Never confirmed on prod.</td><td>Run it on prod; spot-check ciphertext in DB.</td></tr>
+<tr><td><span class="tag p1">P1-4</span> Lab &amp; vendor attachments on public disk</td><td><code>LabController.php:555</code> / <code>LabCaseAttachment.php:51</code> and <code>VendorInvoiceService.php:73</code> store on the <code>public</code> disk. Lab attachments can carry patient identifiers.</td><td>Same private-disk + secure-media treatment as P0-3.</td></tr>
+<tr><td><span class="tag p1">P1-5</span> Communication queue: no pagination</td><td><code>CommunicationController.php:79-81</code> loads the <b>entire</b> <code>communication_queue</code> with <code>->get()</code>; the 1,810-item recall backlog already lives there and the engine writes daily. This screen will crawl, then die.</td><td>Add <code>paginate()</code> + default status filter. Hours, not days.</td></tr>
+<tr><td><span class="tag p1">P1-6</span> Recall backlog throttle</td><td>1,810 backlogged recall items. WhatsApp is saved today only by <code>WHATSAPP_DRY_RUN=true</code> default. Enabling live sends without a daily cap = 1,810-message blast + Meta ban risk.</td><td>Hard daily send cap before flipping dry-run off. (Already a known TODO.)</td></tr>
+<tr><td><span class="tag p1">P1-7</span> Unthrottled auth-adjacent endpoints</td><td>Forgot-PIN and mobile-OTP routes (<code>web.php:45-51</code>) have no <code>throttle</code>; <code>/hr/scan</code> and <code>/r/{token}</code> are public and unthrottled.</td><td>Add <code>throttle:5,1</code> / <code>throttle:30,1</code>. Minutes.</td></tr>
+</table>
+
+<h3>P2 — Can Wait (do after go-live)</h3>
+<table>
+<tr><th style="width:30%">Item</th><th>Why it can wait</th></tr>
+<tr><td><span class="tag p2">P2-1</span> <code>last_visit_date</code> fires on Consultations only</td><td>Writer exists (Observer, monotonic — verified) but treatment-visit-only patients don’t advance it, so recall mis-targets them. Recall is throttled/dry-run at launch anyway; wire <code>treatment_visits</code> in V1.1.</td></tr>
+<tr><td><span class="tag p2">P2-2</span> <code>route:cache</code> skipped in deploy</td><td>Closure routes block it; per-request cost on 1,228 routes is tolerable for one clinic. Convert closures later.</td></tr>
+<tr><td><span class="tag p2">P2-3</span> Payment 20-second dedupe heuristic</td><td>Row-lock + 20s identical-payment guard is adequate for one front desk. Client idempotency keys = V1.1.</td></tr>
+<tr><td><span class="tag p2">P2-4</span> Cascade-delete chains under soft deletes</td><td>188 cascade FKs (patient → visits → invoices → receipts) are only dangerous via <code>forceDelete()</code>/raw SQL. Policy rule for now: never hard-delete; no code change needed.</td></tr>
+<tr><td><span class="tag p2">P2-5</span> Cache store = database, minimal caching</td><td>9 <code>Cache::remember</code> calls total. Fine at Tulip’s scale. Redis is already configured in env, unswitched.</td></tr>
+<tr><td><span class="tag p2">P2-6</span> Duplicate migration filename stems, no CI, stale docs</td><td>Hygiene. Zero production impact for a single instance where migrations already ran in order.</td></tr>
+<tr><td><span class="tag p2">P2-7</span> HR sidebar entry ungated</td><td>Nav visibility only (<code>sidebar.blade.php:205</code>); routes remain permission-gated. Cosmetic authz tidy-up.</td></tr>
+</table>
+
+<!-- ============ SECTION 2 ============ -->
+<h2>SECTION 2 — MODULE FREEZE REVIEW</h2>
+<table>
+<tr><th>Module</th><th style="width:12%">Verdict</th><th>Basis</th></tr>
+<tr><td><b>Patients</b></td><td><span class="tag ok">✅ FREEZE</span></td><td>V1.1 hardened + variants, 117 tests green, merge/undo shipped, duplicate-phone warning live, register() sole mint point.</td></tr>
+<tr><td><b>Appointments</b></td><td><span class="tag ok">✅ FREEZE</span></td><td>Overlap conflict now SQL-side (Carbon-500 fix verified in code, in deployed commit range); date-bounded eager-loaded calendar; 13 test files.</td></tr>
+<tr><td><b>Consultations</b></td><td><span class="tag ok">✅ FREEZE</span></td><td>S1–S11 complete and <b>committed</b> (39b1121 “production ready for V1 freeze”), 44 tests, clinical JSON encrypted, wiring observer closes appointments + writes last_visit_date.</td></tr>
+<tr><td><b>Treatment Plans</b></td><td><span class="tag ok">✅ FREEZE</span></td><td>Freeze F1–F5 in; verified <b>only one</b> status writer in codebase (<code>PlanLifecycleService:125</code>); billing-integrity unique index correct with the second-index trap explicitly refused in the migration docblock.</td></tr>
+<tr><td><b>Treatment Visits</b></td><td><span class="tag warn">⚠ Minor Fixes Only</span></td><td>UX frozen (“approved with minor refinements”), 712/712 reported green — but the whole final sprint is <b>uncommitted</b> (P1-1). Commit → re-run suite → deploy. No feature work.</td></tr>
+<tr><td><b>Billing / Payments / Wallet</b></td><td><span class="tag ok">✅ FREEZE</span></td><td>All money writes in transactions; invoice/receipt numbering row-locked (max+1 race eliminated); wallet locked per-patient; rollback S1 shipped; dedicated financial audit logs.</td></tr>
+<tr><td><b>Inventory</b></td><td><span class="tag ok">✅ FREEZE</span></td><td>Hardened + deployed (9d089f2). Stock ops locked and transactional; GRN reversal + idempotency fields migrated.</td></tr>
+<tr><td><b>Prescriptions</b></td><td><span class="tag ok">✅ FREEZE</span></td><td>Stable, own audit log, syrup-ml dosing + weight shipped.</td></tr>
+<tr><td><b>Lab</b></td><td><span class="tag warn">⚠ Minor Fixes Only</span></td><td>Works; attachments must move off the public disk (P1-4) and v2 phases need one smoke pass. No rebuild.</td></tr>
+<tr><td><b>PRE / Relationships</b></td><td><span class="tag warn">⚠ Minor Fixes Only</span></td><td>Engine live; queue screen needs pagination (P1-5); backlog needs throttle (P1-6) before live sends. Largest test suite in repo (20 files).</td></tr>
+<tr><td><b>WhatsApp</b></td><td><span class="tag warn">⚠ Minor Fixes Only</span></td><td>Code done + CEO-accepted; webhook fail-closed with real HMAC verification; interactive replies wired. Remaining work is <b>external config only</b> (Meta app secret, templates approval). Ship with dry-run until validated.</td></tr>
+<tr><td><b>Marketing / Blog Hub</b></td><td><span class="tag ok">✅ FREEZE</span></td><td>Live in production already. (Remember hard-refresh after deploys — no JS cache-busting.)</td></tr>
+<tr><td><b>Reviews</b></td><td><span class="tag warn">⚠ Minor Fixes Only</span></td><td>Needs <code>REVIEWS_GOOGLE_URL</code> + config to switch on. Launch OFF, enable in week 2. Not a blocker.</td></tr>
+<tr><td><b>Reports / Analytics</b></td><td><span class="tag ok">✅ FREEZE</span></td><td>Projection-based, rebuilt on 15-min schedule; adequate.</td></tr>
+<tr><td><b>Daily Huddle</b></td><td><span class="tag ok">✅ FREEZE</span></td><td>Scheduled 08:00, visit-logged wiring shipped.</td></tr>
+<tr><td><b>Membership</b></td><td><span class="tag ok">✅ FREEZE</span></td><td>Stable; the one mobile module confirmed tested-working.</td></tr>
+<tr><td><b>HR / Attendance</b></td><td><span class="tag warn">⚠ Minor Fixes Only</span></td><td>Add throttle to public <code>/hr/scan</code> (P1-7); gate the sidebar entry (P2-7).</td></tr>
+<tr><td><b>Settings / Clinic Administration</b></td><td><span class="tag ok">✅ FREEZE</span></td><td>v2 R1/R2 shipped. Remaining reorganization = V1.1 by definition.</td></tr>
+<tr><td><b>AI Assistant (Tulip)</b></td><td><span class="tag bad">❌ Production Blocker</span></td><td>RBAC bypass (P0-2). Disable via env for V1; authorization layer → V1.1.</td></tr>
+<tr><td><b>Voice Notes / Receipt Scan</b></td><td><span class="tag v11">📦 V1.1</span></td><td>Depends on local ollama models; not part of daily core.</td></tr>
+<tr><td><b>ABDM / FHIR · HQ module · DPDP module</b></td><td><span class="tag v11">📦 V1.1+</span></td><td>Design-only / multi-clinic / deadline 2027. Flags stay off.</td></tr>
+</table>
+
+<!-- ============ SECTION 3 ============ -->
+<h2>SECTION 3 — WEB ↔ ANDROID PARITY</h2>
+<p><b>Decision: launch web-first. Android is a companion, not a gate.</b> Parity sits around ~50% and most mobile slices are code-complete but untested. The API layer itself is strong — in fact stricter than web: Sanctum auth, <code>throttle:120,1</code>, and per-route <code>api.role:module:x,action</code> RBAC across 26 controllers, with the legacy admin string-bypass removed.</p>
+<h3>Production-critical parity only</h3>
+<ul>
+<li><b>Usable on Android today (tested):</b> Membership. <b>Ship.</b> ✅ SHIP NOW</li>
+<li><b>Code-complete, untested:</b> patient profile, treatment plan view, consultation create, prescriptions, record payment, inventory, accounts. Rule for V1: <b>doctors may read on mobile; all money entry happens on web</b> until each mobile write-path passes one smoke test. 🔧 FIX BEFORE SHIP (the rule, not the code)</li>
+<li><b>Everything cosmetic</b> (Infinity OS reskin, colour cards, quick-add polish): 📦 MOVE TO V1.1</li>
+</ul>
+<p>No mobile parity item blocks Tulip’s daily operations — the clinic runs on desktop at the front desk and chairside.</p>
+
+<!-- ============ SECTION 4 ============ -->
+<h2>SECTION 4 — ACTIVITY LOG / AUDIT TRAIL</h2>
+<div class="box green"><b>This is a strength. Ship it.</b> Generic model auditing (<code>Auditable</code> trait → <code>audit_logs</code> with user, before/after, IP, device; secrets stripped; audit failure never blocks the write) · auth events logged (login, failed login, logout, 2FA) · dedicated <b>financial</b> audit logs (billing, wallet, manual discounts, EMI) · AI tool calls logged to <code>ai_action_logs</code> · daily <code>audit:verify</code> integrity check that alerts all admins in-app on failure · admin UI for review.</div>
+<h3>Mandatory gaps (only these)</h3>
+<ol>
+<li><b>Re-anchor the audit hash chain after final deploy</b> — the runbook requires it; skipping makes <code>audit:verify</code> scream forever. 🔧 FIX BEFORE SHIP</li>
+<li><b>Backups are part of medico-legal traceability</b> — an audit trail that can be lost with the disk isn’t one (P0-1). 🔧 FIX BEFORE SHIP</li>
+<li>Everything else (log analytics, retention tuning beyond <code>logs:prune</code>): 📦 MOVE TO V1.1</li>
+</ol>
+
+<!-- ============ SECTION 5 ============ -->
+<h2>SECTION 5 — SECURITY REVIEW (production risks only)</h2>
+<table>
+<tr><th style="width:20%">Area</th><th style="width:12%">Status</th><th>Evidence / required action</th></tr>
+<tr><td>Authentication</td><td><span class="tag ok">OK</span></td><td>Session auth + optional TOTP 2FA enforced pre-login; login throttled 5/min web + API; absolute session timeout 12h enforced by middleware.</td></tr>
+<tr><td>Authorization / RBAC</td><td><span class="tag ok">OK</span></td><td>All web routes inside <code>auth</code> group; <code>module:x</code> middleware → <code>canAccess()</code>; API mirrors per-route. Owner-configured roles are canonical (constitutional rule respected).</td></tr>
+<tr><td>AI endpoint</td><td><span class="tag bad">P0</span></td><td>RBAC bypass — disable for V1 (P0-2).</td></tr>
+<tr><td>Patient privacy / PHI</td><td><span class="tag warn">P0/P1</span></td><td>Field encryption live (address, complaints, meds, allergies, gov IDs, clinical JSON, 2FA secrets); phone/email deliberately plaintext for search — acceptable. <b>But:</b> consultation photos public (P0-3), lab/vendor attachments public (P1-4), backfill unverified (P1-3).</td></tr>
+<tr><td>DPDP readiness</td><td><span class="tag ok">OK for V1</span></td><td>Consent purposes seeded, WhatsApp consent guard ON in prod, service/marketing consent split per template. Full DPDP module deadline is May 2027 — not a launch gate.</td></tr>
+<tr><td>Input validation</td><td><span class="tag ok">OK</span></td><td>FormRequest/inline validation throughout; API returns clean error envelopes.</td></tr>
+<tr><td>File upload security</td><td><span class="tag warn">P1</span></td><td>Clinical uploads: private disk + authenticated serving + download audit ✔ — but <b>no MIME whitelist</b> (<code>file|max:51200</code> only). Add <code>mimes:jpg,jpeg,png,pdf,mp4,…</code>. One-line fix. 🔧</td></tr>
+<tr><td>Session security</td><td><span class="tag warn">P1</span></td><td><code>SESSION_SECURE_COOKIE</code> / <code>SESSION_ENCRYPT</code> must be set on prod (P1-2).</td></tr>
+<tr><td>Rate limiting</td><td><span class="tag warn">P1</span></td><td>Login/API covered; forgot-PIN, OTP, <code>/hr/scan</code>, <code>/r/{token}</code> unthrottled (P1-7).</td></tr>
+<tr><td>CSRF</td><td><span class="tag ok">OK</span></td><td><b>Zero</b> CSRF exclusions in the whole app; webhook lives on the stateless API stack.</td></tr>
+<tr><td>XSS</td><td><span class="tag ok">OK</span></td><td>127 raw echoes audited by sample — all server-controlled icon/SVG markup, not user input.</td></tr>
+<tr><td>SQL injection</td><td><span class="tag ok">OK</span></td><td>Eloquent/parameterized throughout; the few <code>whereRaw</code> (overlap check) use bound params.</td></tr>
+<tr><td>Secrets</td><td><span class="tag ok">OK</span></td><td>.env + SQL dumps git-ignored (“must never reach GitHub — patient data”); zero hardcoded tokens found by pattern sweep.</td></tr>
+<tr><td>Webhooks</td><td><span class="tag ok">OK*</span></td><td>Fail-closed HMAC (<code>hash_equals</code> on <code>X-Hub-Signature-256</code>), rejects when secret unset. *Enabled-by-default → the app secret <b>must</b> be set on prod (P1-2). Unused webhook controllers are unrouted = unreachable ✔.</td></tr>
+<tr><td>Backups / DR</td><td><span class="tag bad">P0</span></td><td>None (P0-1). Docker volumes are not a backup.</td></tr>
+</table>
+
+<!-- ============ SECTION 6 ============ -->
+<h2>SECTION 6 — DATA INTEGRITY</h2>
+<table>
+<tr><th style="width:22%">Area</th><th style="width:12%">Status</th><th>Evidence</th></tr>
+<tr><td>Transactions</td><td><span class="tag ok">OK</span></td><td>61 files use DB::transaction; every money path verified wrapped (payments, invoices, wallet ×7, plan billing, rollback, discounts, stock ×5, finance).</td></tr>
+<tr><td>Concurrency / races</td><td><span class="tag ok">OK</span></td><td>Invoice/Receipt/FinalBill numbering uses <code>lockForUpdate()->max()</code> inside transactions (max+1 race explicitly eliminated); wallet row-locked per patient; stock locked; stock-count double-submit locked.</td></tr>
+<tr><td>Idempotency</td><td><span class="tag ok">OK for V1</span></td><td>Payment double-click blocked by invoice row-lock + 20s identical-submission guard. Heuristic, not key-based — acceptable for one front desk (P2-3).</td></tr>
+<tr><td>Duplicate prevention</td><td><span class="tag ok">OK</span></td><td>Patient dup-phone warning (deliberately soft — families share phones); appointment overlap SQL-side with explicit <code>allow_overlap</code> escape hatch; plan-item-teeth protected by DB unique index.</td></tr>
+<tr><td>Billing integrity index</td><td><span class="tag ok">OK</span></td><td>Exactly one unique index — <code>(treatment_plan_item_id, tooth_number)</code>. Migration docblock <b>explicitly refuses</b> the forbidden second unique on <code>invoice_item_id</code> and refuses to run over dirty data. Textbook.</td></tr>
+<tr><td>Single-writer contracts</td><td><span class="tag ok">OK</span></td><td>Verified: only <code>PlanLifecycleService:125</code> writes plan status in the entire codebase; both controllers mark status <code>prohibited</code> in validation.</td></tr>
+<tr><td>FKs + soft deletes</td><td><span class="tag ok">OK*</span></td><td>Soft deletes on every core model (73 migrations); FKs everywhere. *188 cascade clauses = hard-delete landmine → policy: never <code>forceDelete()</code>/raw-delete patients (P2-4).</td></tr>
+<tr><td>Migration safety</td><td><span class="tag warn">P2</span></td><td>424 migrations, none newer than 08-04 (the 08-05 sprint is views/controllers only — good). Duplicate filename stems exist but already applied in order on the single instance. Never reorder/move migrations (standing rule).</td></tr>
+<tr><td>Rollback safety</td><td><span class="tag ok">OK</span></td><td>Billing rollback S1 shipped; GRN reversal fields migrated; patient merge has undo.</td></tr>
+</table>
+
+<!-- ============ SECTION 7 ============ -->
+<h2>SECTION 7 — PERFORMANCE (bottlenecks only)</h2>
+<ul>
+<li><span class="tag p1">P1</span> <b>Communication queue index</b> — unpaginated full-table <code>->get()</code> + 4 clone-count badge queries per load, on a table with a 1,810-row backlog that grows daily. The only screen that will actually fall over. Fix: paginate + default filter (P1-5). 🔧 FIX BEFORE SHIP</li>
+<li><span class="tag ok">OK</span> <b>Dashboard, appointments, patients, timeline</b> — all verified eager-loaded (<code>with(...)</code>), date-bounded or paginated (81 <code>paginate()</code> calls across 47 controllers). Patient timeline uses constrained <code>limit(10)</code> loads. No action.</li>
+<li><span class="tag p2">P2</span> <b><code>route:cache</code> skipped</b> (closure routes) — measurable but tolerable; convert closures in V1.1. 📦</li>
+<li><span class="tag p2">P2</span> <b>Cache store = database, ~9 cache calls total</b> — fine for one clinic; Redis switch is a V1.1 toggle. 📦</li>
+<li><span class="tag p2">P2</span> <b>Media growth</b> — local disk via Docker volume; monitor disk in the weekly ops check; S3 is V1.5. 📦</li>
+</ul>
+
+<!-- ============ SECTION 8 ============ -->
+<h2>SECTION 8 — QA: minimum testing before launch</h2>
+<h3>Critical (blocks go-live)</h3>
+<ol>
+<li>Commit P1-1, then run the <b>full PHPUnit suite</b> against <code>dentfluence_testing</code> and confirm the 712-green claim on the committed tree (it has only ever been reported, not independently re-run post-commit).</li>
+<li><b>Money-path smoke</b>: run <code>dentfluence:smoke</code> (rollback mode) on prod after deploy — invoice → payment → receipt → wallet.</li>
+<li><b>Backup restore drill</b>: take the first backup, restore to a scratch DB, open a patient record. A backup that never restored is a rumor.</li>
+<li><b>RBAC walk</b>: one pass per real Tulip role (owner, doctor, receptionist) — confirm no access where none is granted, and confirm the assistant chat is gone.</li>
+<li><b>Secure media check</b>: logged-out request to a consultation-photo URL and a clinical-media URL must both fail after P0-3.</li>
+</ol>
+<h3>High</h3>
+<ol>
+<li>End-to-end clinical chain on real Tulip data: register → appoint → consult → plan → present → accept → visit → bill → pay → print.</li>
+<li>Appointment overlap: same doctor/time double-book attempt on prod build (verifies the Carbon-500 fix live).</li>
+<li>WhatsApp E2E in <b>dry-run</b>: reminder render, webhook signature reject (bad HMAC), interactive Confirm/Cancel round-trip.</li>
+<li>Patient merge + undo on staging data.</li>
+</ol>
+<h3>Medium</h3>
+<ol>
+<li>Print views (plan, prescription, visit, receipt) on the clinic printer.</li>
+<li>Android read-path smoke on the tested module set.</li>
+<li><code>docker compose ps</code> + queue/scheduler health after deploy (the runbook’s known crash-loop incident).</li>
+</ol>
+
+<!-- ============ SECTION 9 ============ -->
+<h2>SECTION 9 — PRODUCTION GO-LIVE CHECKLIST</h2>
+<table>
+<tr><th style="width:24%">Item</th><th>Action / verification</th></tr>
+<tr><td>Database backup</td><td>Nightly mysqldump via <code>backup.sh</code> in cron; off-server copy; restore drill passed; <code>storage/</code> included.</td></tr>
+<tr><td>Environment variables</td><td><code>APP_ENV=production</code>, <code>APP_DEBUG=false</code>, <code>SESSION_SECURE_COOKIE=true</code>, <code>SESSION_ENCRYPT=true</code>, <code>ASSISTANT_ENABLED=false</code>, <code>PRM_WA_APP_SECRET</code>, <code>WHATSAPP_*</code> (keep <code>WHATSAPP_DRY_RUN=true</code> initially), <code>MAIL_MAILER</code> real, <code>LOG_STACK=daily</code>, <code>LOG_SLACK_WEBHOOK_URL</code>. Env change ⇒ <code>--force-recreate</code>.</td></tr>
+<tr><td>Cron</td><td>Scheduler container running; <code>crontab -l | grep schedule:run</code> per runbook; all 22 jobs listed in <code>docs/automation-map.md</code>.</td></tr>
+<tr><td>Queue workers</td><td><code>docker compose ps</code> shows <code>queue</code> up; after every deploy run <code>queue:restart</code> then restart the container (known stale-timestamp crash-loop).</td></tr>
+<tr><td>Storage links</td><td><code>storage:link --force</code> (deploy.sh does it); confirm secure-media routes serve, public /storage/consultations does NOT (post-fix).</td></tr>
+<tr><td>SSL</td><td>HTTPS on srv1791841.hstgr.cloud; keep dentfluence.in unexposed (standing directive).</td></tr>
+<tr><td>Monitoring / error tracking</td><td>Slack log channel on <code>critical</code>; <code>/up</code> + <code>/api/v1/ping</code> in an uptime pinger; <code>audit:verify</code> daily (already alerts admins in-app).</td></tr>
+<tr><td>Logging</td><td><code>LOG_STACK=daily</code> (14-day rotation); <code>logs:prune</code> weekly already scheduled.</td></tr>
+<tr><td>Mail</td><td>Real mailer configured; send one test briefing.</td></tr>
+<tr><td>WhatsApp</td><td>Meta app secret set → webhook HMAC live; templates approved in Meta; dry-run E2E passed; daily send cap in place; then flip <code>WHATSAPP_DRY_RUN=false</code> for appointment reminders only.</td></tr>
+<tr><td>SMS</td><td>None exists — confirm Tulip accepts WhatsApp+email only for V1 (recommended: yes).</td></tr>
+<tr><td>Notifications</td><td>In-app AppNotification path verified via the audit:verify admin alert.</td></tr>
+<tr><td>PHI</td><td><code>patients:encrypt-phi</code> executed; ciphertext spot-checked.</td></tr>
+<tr><td>Audit chain</td><td>Re-anchored after final deploy per <code>docs/deploy-runbook-2026-07-14.md</code>.</td></tr>
+<tr><td>Deploy</td><td><code>bash deploy.sh</code> (migrate --force, config:cache, view:cache, projection rebuild, queue+scheduler restart). Hard-refresh browsers after (no JS cache-busting).</td></tr>
+<tr><td>Rollback plan</td><td>Runbook ROLLBACK section rehearsed once; DB backup taken immediately before go-live migration.</td></tr>
+</table>
+
+<!-- ============ SECTION 10 ============ -->
+<h2>SECTION 10 — GO / NO GO</h2>
+<div class="verdict">
+<h3>⚖ GO WITH CONDITIONS</h3>
+<p><b>Why not NO-GO:</b> the core is genuinely strong — verified single-writer plan lifecycle, transactional locked money paths, enforced RBAC on web and API, live PHI encryption, fail-closed webhooks, zero CSRF exclusions, no hardcoded secrets, a tamper-checked audit trail, and 154 test classes. Nothing in the daily clinical/financial workflow requires redesign or rebuild.</p>
+<p><b>Why not unconditional GO:</b> four P0s are unacceptable for a medical-records system on day one — <b>no backups, an RBAC-bypassing AI endpoint, publicly readable consultation photos, and total blindness to failures.</b> Every one of them is env-config or half-day plumbing. That is exactly what “GO WITH CONDITIONS” is for.</p>
+<p><b>Conditions (all four P0 + seven P1, per Sections 1 &amp; 9):</b> complete by Day 7 of the plan below, then start supervised daily use at Tulip.</p>
+</div>
+
+<!-- ============ SECTION 11 ============ -->
+<h2>SECTION 11 — 14-DAY EXECUTION PLAN (fix-before-ship only)</h2>
+<table>
+<tr><th style="width:10%">Day</th><th>Work</th><th style="width:14%">Gate</th></tr>
+<tr><td><b>1</b></td><td>Delete stray <code>_treatment-visit-bootstrap.php</code>; commit the Treatment Visit sprint (P1-1); run full PHPUnit suite; tag.</td><td>Suite green</td></tr>
+<tr><td><b>2</b></td><td>P0-3 + P1-4: consultation-photos, lab, vendor attachments → private disk, served via existing secure-media; migrate existing files; add MIME whitelist to clinical upload validation.</td><td>Logged-out URL test fails</td></tr>
+<tr><td><b>3</b></td><td>P0-2: <code>ASSISTANT_ENABLED=false</code> + hide nav entry. P1-7: throttle forgot-PIN/OTP/hr-scan/review-token routes.</td><td>Chat gone; 429s confirmed</td></tr>
+<tr><td><b>4</b></td><td>P0-1: wire <code>backup.sh</code> nightly (DB + storage), off-server copy, retention 14/60.</td><td>First backup exists off-VPS</td></tr>
+<tr><td><b>5</b></td><td>P0-4: LOG_STACK=daily, Slack channel on critical, real MAIL_MAILER, uptime ping on <code>/up</code>. Test one forced error + one mail.</td><td>Alert received</td></tr>
+<tr><td><b>6</b></td><td>P1-2: full production <code>.env</code> pass (debug, cookies, session encrypt, PRM secret, WhatsApp keys w/ dry-run); rebuild .env.example. P1-3: run <code>patients:encrypt-phi</code> on prod, verify ciphertext.</td><td>Env checklist signed</td></tr>
+<tr><td><b>7</b></td><td>Deploy (<code>bash deploy.sh</code>); re-anchor audit chain; <code>docker compose ps</code>; run <code>dentfluence:smoke</code>; RBAC walk per role.</td><td><b>All P0 closed</b></td></tr>
+<tr><td><b>8</b></td><td>P1-5: paginate communication queue + default filter. P1-6: daily recall send cap. Deploy.</td><td>Queue screen &lt;1s</td></tr>
+<tr><td><b>9</b></td><td>Backup <b>restore drill</b> to scratch DB. WhatsApp dry-run E2E incl. bad-HMAC reject + interactive replies.</td><td>Restore verified</td></tr>
+<tr><td><b>10</b></td><td>Full clinical-chain UAT with Tulip staff on real data (register → … → pay → print). Log papercuts, fix only breakages.</td><td>Staff sign-off</td></tr>
+<tr><td><b>11</b></td><td><b>Go-live Day 1 (supervised):</b> morning huddle, live appointments, billing at the desk. Watch logs all day.</td><td>Day survives</td></tr>
+<tr><td><b>12</b></td><td>Triage Day-1 issues; fix only breakages. Enable WhatsApp live for appointment reminders, small capped batch.</td><td>Reminders delivered</td></tr>
+<tr><td><b>13</b></td><td>Second supervised day; print-path checks; Android read-only smoke for doctors.</td><td>Stable</td></tr>
+<tr><td><b>14</b></td><td>Review week: logs, audit:verify record, backup logs. <b>Declare V1 FROZEN.</b> Open the V1.1 list (Section 13) — nothing enters V1 after today.</td><td>Freeze declared</td></tr>
+</table>
+
+<!-- ============ SECTION 12 ============ -->
+<h2>SECTION 12 — FEATURES TO FREEZE NOW</h2>
+<table>
+<tr><th style="width:30%">Feature</th><th>Why freeze</th></tr>
+<tr><td>Canonical treatment lifecycle (Plan=promise, Visit=fact, billing from visits)</td><td>The supreme contract, implemented and test-canonized. Any change now reopens every module. ✅ SHIP NOW</td></tr>
+<tr><td>PlanLifecycleService single-writer</td><td>Verified sole writer; the discipline is worth more than any feature. ✅ SHIP NOW</td></tr>
+<tr><td>Billing engine (invoices, payments, wallet, EMI, discounts, rollback)</td><td>Transactional, locked, audited. Touching money code without a Tulip-reported defect is pure risk. ✅ SHIP NOW</td></tr>
+<tr><td>Patients incl. merge/undo, variants, dup-warning</td><td>Two hardening rounds + 117 tests. Done means done. ✅ SHIP NOW</td></tr>
+<tr><td>Consultations S1–S11</td><td>Committed as “production ready for V1 freeze”. ✅ SHIP NOW</td></tr>
+<tr><td>Treatment Visit UX (4-zone form, worksheet, print)</td><td>UX formally frozen after 9-scenario stress test; standing rule already refuses changes without a Tulip-validated issue. ✅ SHIP NOW (after commit)</td></tr>
+<tr><td>Appointments incl. overlap engine</td><td>Works; escape hatch exists for deliberate double-booking. ✅ SHIP NOW</td></tr>
+<tr><td>Inventory + GRN/reversal</td><td>Hardened, deployed, closed. ✅ SHIP NOW</td></tr>
+<tr><td>WhatsApp code path (templates, webhook, interactive replies, consent guard)</td><td>Code accepted by CEO; only external Meta config remains. Further dev explicitly stopped. ✅ SHIP NOW</td></tr>
+<tr><td>RBAC model (owner-configured roles, module permissions, API mirror)</td><td>Constitutional; never hardcode job titles. ✅ SHIP NOW</td></tr>
+<tr><td>Audit trail + audit:verify</td><td>Strong as-is; only the re-anchor step remains. ✅ SHIP NOW</td></tr>
+<tr><td>Settings v2 (R1/R2 scope)</td><td>Shipped scope frozen; remaining reorg is V1.1 by prior decision. ✅ SHIP NOW</td></tr>
+</table>
+
+<!-- ============ SECTION 13 ============ -->
+<h2>SECTION 13 — MOVE TO V1.1 (everything not required for Tulip production)</h2>
+<table>
+<tr><th style="width:34%">Item</th><th>Note</th></tr>
+<tr><td>AI Assistant (Tulip) re-enable</td><td>Only after per-tool <code>canAccess()</code> gating. 📦</td></tr>
+<tr><td>Voice notes · receipt scan (ollama)</td><td>📦</td></tr>
+<tr><td>Android write-path completion + Infinity OS reskin + all mobile polish</td><td>Read-only companion for V1. 📦</td></tr>
+<tr><td>UI redesigns of any kind (incl. remaining Settings reorg, dashboard polish)</td><td>Standing directive #004 already halts these. 📦</td></tr>
+<tr><td><code>last_visit_date</code> writer for treatment visits (+ consultation_id wiring)</td><td>Improves recall accuracy; recall is capped at launch anyway. 📦</td></tr>
+<tr><td>Client idempotency keys for payments</td><td>20s heuristic suffices for one desk. 📦</td></tr>
+<tr><td>Closure-route conversion → enable <code>route:cache</code>; Redis cache switch; broader caching</td><td>📦</td></tr>
+<tr><td>CI pipeline, migration-hygiene cleanup, .env.example overhaul beyond the launch rebuild</td><td>📦</td></tr>
+<tr><td>Reviews module activation, marketing integrations (GBP/Meta), PPX, microsite</td><td>Parked by prior decisions; week-2+ at earliest. 📦</td></tr>
+<tr><td>Advanced analytics, insight flags (Phase 6), workflow engine expansion</td><td>Built, flags off — keep off. 📦</td></tr>
+<tr><td>clinic_id tenant isolation, HQ, multi-clinic, cloud pivot, ABDM, DPDP module, standalone CRM, ecosystem</td><td>V1.5/V2/2027 — nothing here affects Tulip tomorrow. 📦</td></tr>
+<tr><td>SMS channel</td><td>Doesn’t exist; WhatsApp+mail cover V1. 📦</td></tr>
+<tr><td>S3/off-box media storage</td><td>Monitor disk for now. 📦</td></tr>
+</table>
+
+<!-- ============ FINAL ============ -->
+<h2>FINAL CEO DIRECTIVE — SUMMARY OF LABELS</h2>
+<table>
+<tr><th>Recommendation</th><th style="width:18%">Label</th></tr>
+<tr><td>Entire clinical + financial core, RBAC, audit trail, WhatsApp code path, all ✅-FREEZE modules (Section 12)</td><td><span class="tag ship">✅ SHIP NOW</span></td></tr>
+<tr><td>Backups + restore drill (P0-1)</td><td><span class="tag fix">🔧 FIX BEFORE SHIP</span></td></tr>
+<tr><td>Disable AI assistant via env (P0-2)</td><td><span class="tag fix">🔧 FIX BEFORE SHIP</span></td></tr>
+<tr><td>Consultation photos + lab/vendor attachments → private (P0-3, P1-4)</td><td><span class="tag fix">🔧 FIX BEFORE SHIP</span></td></tr>
+<tr><td>Error visibility: daily logs, Slack alerts, real mailer (P0-4)</td><td><span class="tag fix">🔧 FIX BEFORE SHIP</span></td></tr>
+<tr><td>Commit uncommitted sprint + re-run suite (P1-1)</td><td><span class="tag fix">🔧 FIX BEFORE SHIP</span></td></tr>
+<tr><td>Production .env hardening + PHI backfill + webhook secret (P1-2, P1-3)</td><td><span class="tag fix">🔧 FIX BEFORE SHIP</span></td></tr>
+<tr><td>Communication-queue pagination + recall cap (P1-5, P1-6)</td><td><span class="tag fix">🔧 FIX BEFORE SHIP</span></td></tr>
+<tr><td>Throttle stray public endpoints + MIME whitelist (P1-7, upload validation)</td><td><span class="tag fix">🔧 FIX BEFORE SHIP</span></td></tr>
+<tr><td>Everything in Section 13 — without exception</td><td><span class="tag v11">📦 MOVE TO V1.1</span></td></tr>
+</table>
+
+<p class="sub" style="margin-top:22px;border-top:1px solid var(--line);padding-top:10px">Prepared 2026-08-07 · Audit basis: three independent full-repo verification passes (security, data integrity, operations) with file-level evidence, spot-checked; governance record 2026-05 → 2026-08. Verdict: <b>GO WITH CONDITIONS — 4 P0 + 7 P1, closable in 7 working days, go-live Day 11, V1 freeze Day 14.</b></p>
+
+</body>
+</html>

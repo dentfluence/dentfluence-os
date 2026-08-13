@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dentfluence V1 — Final Implementation Readiness Report — Tulip Dental Production Deployment Assessment</title>
+<style>
+  :root{--ink:#1a1f2e;--mut:#5a6072;--line:#dfe3ea;--bg:#f7f8fa;--red:#c0392b;--amber:#b7791f;--green:#1e7e4a;--blue:#1f4e8c;--violet:#702070;--redbg:#fdecea;--amberbg:#fdf6e3;--greenbg:#e8f5ee;--bluebg:#eaf1fa;--violetbg:#f4e8f4;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,Arial,sans-serif;color:var(--ink);background:#fff;font-size:13.5px;line-height:1.5;max-width:1010px;margin:0 auto;padding:32px 40px}
+  h1{font-size:23px;margin-bottom:2px}
+  h2{font-size:17px;margin:34px 0 10px;padding:7px 12px;background:var(--ink);color:#fff;border-radius:4px}
+  h3{font-size:14px;margin:18px 0 6px;color:var(--blue)}
+  p{margin:6px 0}
+  .sub{color:var(--mut);font-size:12.5px;margin-bottom:14px}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12.7px}
+  th{background:var(--bg);text-align:left;padding:6px 8px;border:1px solid var(--line);font-size:11.8px;text-transform:uppercase;letter-spacing:.03em;color:var(--mut)}
+  td{padding:6px 8px;border:1px solid var(--line);vertical-align:top}
+  tr:nth-child(even) td{background:#fbfcfd}
+  .tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap}
+  .ok{background:var(--greenbg);color:var(--green)} .warn{background:var(--amberbg);color:var(--amber)} .bad{background:var(--redbg);color:var(--red)} .info{background:var(--bluebg);color:var(--blue)} .v11{background:var(--violetbg);color:var(--violet)}
+  .verdict{border:3px solid var(--amber);background:var(--amberbg);border-radius:8px;padding:16px 20px;margin:14px 0}
+  .verdict h3{color:var(--amber);font-size:19px;margin:0 0 6px}
+  .box{border:1px solid var(--line);border-left:4px solid var(--blue);background:var(--bg);padding:10px 14px;border-radius:4px;margin:10px 0}
+  .box.red{border-left-color:var(--red);background:var(--redbg)}
+  .box.green{border-left-color:var(--green);background:var(--greenbg)}
+  .box.amber{border-left-color:var(--amber);background:var(--amberbg)}
+  code{background:#eef0f4;padding:1px 5px;border-radius:3px;font-size:12px;font-family:Consolas,monospace}
+  .score-grid{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
+  .score-grid div{flex:1;min-width:118px;border:1px solid var(--line);border-radius:6px;padding:9px 10px;text-align:center}
+  .score-grid b{display:block;font-size:21px}
+  .score-grid span{font-size:10.3px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em}
+  .sc-g b{color:var(--green)} .sc-a b{color:var(--amber)} .sc-r b{color:var(--red)} .sc-b b{color:var(--blue)}
+  .flow{font-family:Consolas,monospace;font-size:12.3px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:12px 16px;margin:8px 0;line-height:1.75}
+  .flow .s{color:var(--green);font-weight:700} .flow .f{color:var(--amber);font-weight:700} .flow .x{color:var(--red);font-weight:700}
+  ul,ol{margin:6px 0 6px 22px}
+  li{margin:3px 0}
+  .meta{border-bottom:2px solid var(--ink);padding-bottom:12px;margin-bottom:8px}
+  .rolescore{float:right;font-weight:800;font-size:15px}
+  @media print{ body{padding:9mm;font-size:10.6px;max-width:none} h2{break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact} table,.verdict,.box,.flow{break-inside:avoid} .tag,th,.score-grid div{-webkit-print-color-adjust:exact;print-color-adjust:exact} }
+
+  .tabbar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:4px;background:#fff;padding:10px 0 8px;border-bottom:2px solid var(--ink);margin-bottom:6px}
+  .tabbtn{font-family:inherit;font-size:12px;font-weight:600;padding:7px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--mut);cursor:pointer}
+  .tabbtn:hover{color:var(--ink);border-color:var(--mut)}
+  .tabbtn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .pane{display:none}
+  .pane.active{display:block}
+  .pane > h2:first-child{margin-top:10px}
+  @media print{ .tabbar{display:none} .pane{display:block !important} }
+</style>
+</head>
+<body>
+
+
+<div class="meta">
+  <h1>DENTFLUENCE V1 — FINAL IMPLEMENTATION READINESS REPORT</h1>
+  <p style="font-size:15px;color:var(--violet);font-weight:600">Tulip Dental Production Deployment Assessment · Third Independent Audit</p>
+  <p class="sub">Date: 7 August 2026 · Scope: <b>Can Tulip Dental switch off every old system tomorrow at 8:00 AM and run only on Dentfluence?</b> · Method: full workflow trace through blade views, controllers, services, observers, scheduled commands, routes and API — two independent code-tracing passes on top of the two prior audits (architecture 08-03, production readiness 08-07 AM). Every claim below is file-evidenced; anything unverifiable from the repository is marked as such.</p>
+</div>
+
+<div class="tabbar" id="tabbar"><button class="tabbtn active" data-tab="t0">Overview & Verdict</button><button class="tabbtn" data-tab="t1">Day Simulation</button><button class="tabbtn" data-tab="t2">Role Readiness</button><button class="tabbtn" data-tab="t3">Android</button><button class="tabbtn" data-tab="t4">Automation & AI</button><button class="tabbtn" data-tab="t5">Gaps & Human Factors</button><button class="tabbtn" data-tab="t6">Vs Competitors</button><button class="tabbtn" data-tab="t7">Risk & Freeze</button><button class="tabbtn" data-tab="t8">Predictions</button><button class="tabbtn" data-tab="t9">CEO Recommendation</button><button class="tabbtn" data-tab="t10">V1 Roadmap (V1-V4)</button><button class="tabbtn" data-tab="t11" style="border-color:var(--green);color:var(--green);font-weight:800">✔ Path to Final V1</button></div>
+<div class="pane active" id="t0">
+<h2>SCORECARD</h2>
+<div class="score-grid">
+  <div class="sc-a"><b>84</b><span>Overall Production</span></div>
+  <div class="sc-g"><b>88</b><span>Clinical</span></div>
+  <div class="sc-a"><b>80</b><span>Operational</span></div>
+  <div class="sc-g"><b>92</b><span>Financial</span></div>
+  <div class="sc-a"><b>58</b><span>Android</span></div>
+  <div class="sc-a"><b>78</b><span>Automation</span></div>
+  <div class="sc-r"><b>25</b><span>AI</span></div>
+</div>
+<div class="score-grid">
+  <div class="sc-a"><b>76</b><span>Multi-user</span></div>
+  <div class="sc-a"><b>74</b><span>Security (today)</span></div>
+  <div class="sc-g"><b>82</b><span>Performance</span></div>
+  <div class="sc-g"><b>81</b><span>Maintainability</span></div>
+  <div class="sc-r"><b>35</b><span>SaaS Readiness</span></div>
+  <div class="sc-a" style="border-width:2px;border-color:var(--amber)"><b>84</b><span>OVERALL CEO SCORE</span></div>
+</div>
+<div class="box"><b>Implementation readiness percentages (bottom of report, Section 13):</b> Core Web (Tulip operations) <b>93%</b> · Financial engine <b>95%</b> · Automation engine <b>82%</b> · Android companion <b>58%</b> · AI assistant <b>25% (disable for V1)</b> · <b>Overall Tulip implementation readiness: 90%</b></div>
+
+<!-- ================= SECTION 1 ================= -->
+
+<h2>SECTION 1 — CAN TULIP DENTAL GO LIVE?</h2>
+<div class="verdict">
+<h3>⚖ YES WITH CONDITIONS</h3>
+<p><b>Yes, because the clinical-financial spine holds end to end.</b> This audit walked the actual chain in code: registration (6 required fields, 30-second modal with duplicate-guard), booking (global modal with quick-register and walk-in tabs), consultation → one-click treatment plan (<code>treatment-plans.from-consultation</code>), a properly modelled present/accept/defer/reject/revert decision flow, a visit form that auto-loads plan items into a worksheet, a billing prompt that pre-fills the invoice from the visit, a payment modal covering all 9 Indian payment modes with wallet allocation, receipt generation, a full Rx pad with print/PDF/WhatsApp routes, a real cashbook for the evening cash tally, and a purpose-built <b>competitor migration importer with Clinicia and Bestosys column profiles</b> for day-1 patient cutover. No step in the money or clinical path is missing.</p>
+<p><b>Conditions, because two classes of issues remain.</b> First, the 4 P0 + 7 P1 items from the morning production audit stand (no backups, AI RBAC bypass, public consultation photos, zero error visibility, uncommitted sprint, env hardening — all closable in ~7 days). Second, this audit found the <b>go-live configuration is currently a no-op</b>: <code>.env</code> has WhatsApp in dry-run with blank credentials and <code>MAIL_MAILER=log</code>, which silently disables every reminder, review request, morning briefing and evening summary. The clinic can operate manually on day 1 — but the automation layer the staff will be told exists <b>does not fire until three env values change.</b></p>
+<p><b>What it is not:</b> it is not blocked by missing features. Every friction point found (Section 7) has a manual workaround a trained receptionist can absorb.</p>
+</div>
+
+<!-- ================= SECTION 2 ================= -->
+
+</div>
+<div class="pane" id="t1">
+<h2>SECTION 2 — DAY IN THE LIFE SIMULATION (traced in code, not assumed)</h2>
+
+<div class="flow">
+08:00 &nbsp;OWNER opens Dashboard → <span class="s">WORKS</span>: 4 KPI cards (waiting/in-chair/done, collected today, outstanding, pending lab), alert strip, Today's Schedule with per-row patient links, link to /huddle web board. <span class="f">FRICTION</span>: the CLI huddle (tulip:huddle 08:00) writes to storage/logs/daily-huddle.log — a briefing nobody can read; the web /huddle board is a separate implementation. Morning-briefing EMAIL goes to log (MAIL_MAILER=log).<br>
+08:15 &nbsp;PATIENT CALLS → RECEPTION books → <span class="s">WORKS via global modal</span>: typeahead, quick-register inline, duplicate-phone warning, walk-in tab. <span class="x">TRAP</span>: the standalone Book Appointment PAGE cannot take a new patient — "Create new patient" navigates away and discards the half-typed booking. Train staff on the modal only.<br>
+08:30 &nbsp;NEW PATIENT arrives → REGISTRATION → <span class="s">WORKS</span>: 5-tab modal, 6 required fields, "Save &amp; skip remaining", paper-form photo scan prefill, family-link duplicate flow with 3 exits.<br>
+09:00 &nbsp;CHECK-IN → <span class="f">PARTIAL</span>: a live queue page (/appointments/today: 30-s auto-refresh, chair utilization, Check In / Start / Done / No-Show) EXISTS but is <b>orphaned — linked from no menu</b>. Reception must know the URL.<br>
+09:10 &nbsp;DOCTOR starts consultation → <span class="x">GAP</span>: no "Start Consultation" on any appointment. Path is appointment → patient profile → Consultation tab → New Consultation (3 screens, chief complaint re-typed). The appointment_id link is an optional dropdown buried in the backdating strip — so the appointment→consultation wiring observer <b>almost never fires</b>, the appointment stays "in chair", and someone must press Done manually.<br>
+09:40 &nbsp;CONSULTATION done → TREATMENT PLAN → <span class="s">WORKS — best handoff in the app</span>: one violet button, prefilled from the consultation.<br>
+10:00 &nbsp;PLAN presented chairside → <span class="s">WORKS</span>: Present/Estimate → Accept (gated on presented) / Defer / Reject / Revert-with-reason, all inline AJAX; print with patient QR; consent form picker.<br>
+10:20 &nbsp;TREATMENT VISIT → <span class="f">PARTIAL</span>: accepted plan card has "Bill from Plan" but <b>no "Start Visit" button</b> — switch to Visits tab, Add Visit, re-select plan from dropdown; then the worksheet auto-loads plan items (good). The post-consultation visit gate exists but only fires for appointment type = 'treatment'.<br>
+11:00 &nbsp;VISIT saved → BILLING → <span class="f">PARTIAL</span>: save is silent JSON; a BillingPrompt is queued and surfaces as an amber banner on the patient's Billing tab + a sidebar badge (30-s poll). "Build Invoice" pre-fills items from the visit — <b>no re-picking</b> — but nothing actively tells the desk the patient is walking over with money owed.<br>
+11:10 &nbsp;PAYMENT → <span class="s">WORKS</span>: in-page modal, 9 modes with mode-conditional fields, wallet/advance allocation, "₹X recorded. Receipt N generated." <span class="f">FRICTION</span>: receipt print is not one click — back on the invoice, find the payment row, click the receipt number, new tab. No WhatsApp button anywhere in billing views.<br>
+11:30 &nbsp;PRESCRIPTION → <span class="f">PARTIAL</span>: full Rx pad with print?auto=1 and PDF — but the consultation's "Rx" button routes to a profile TAB, not the pad: 3 screens from the chair.<br>
+12:00 &nbsp;LAB work needed → <span class="s">WORKS — automatic</span>: the visit's lab section spawns a draft LabCase inheriting teeth; 9-status lifecycle via one transition service (web + API); overdue cases become urgent tasks daily at 09:00; on final_received a "call patient in" task fires. Monthly vendor reconciliation screen exists (draft→review→approved/disputed).<br>
+13:00 &nbsp;CHECKOUT → <span class="x">GAP</span>: nothing prompts "book next appointment / set recall". The visit form's next_visit_date/type quick-chips are collected and <b>read by nothing on the server</b> — display-only theatre. Recall is entirely the background engine keyed on last_visit_date.<br>
+16:00 &nbsp;WHATSAPP → <span class="f">PARTIAL</span>: desk sends are wa.me click-to-chat links (patient header, calendar queue) — staff's own phone, interim by design; Rx has a real API send route. Automated reminders (10:00) and review requests (11:00) are coded and consent-gated but currently <b>dry-run no-ops</b>.<br>
+18:00 &nbsp;END OF DAY → <span class="x">GAP</span>: no day-close screen. Pieces exist — Finance dashboard cash-in-hand, Cashbook (day-wise in/out/net/running balance), payment-mode breakdown ("real data, not a mock split"), Income tabs — but the receptionist tours 3-4 screens to close the till. Evening summary is an email (currently to log).<br>
+</div>
+<p><b>Bottom line of the simulation:</b> every workflow completes; six of them complete only because a human remembers the next step. That is operable — clinics ran on paper — but Week-1 training must cover exactly these six hand-offs (Section 7 list).</p>
+
+<!-- ================= SECTION 3 ================= -->
+
+</div>
+<div class="pane" id="t2">
+<h2>SECTION 3 — ROLE READINESS</h2>
+<table>
+<tr><th style="width:15%">Role</th><th>Assessment (evidence-based)</th><th style="width:9%">Score</th></tr>
+<tr><td><b>Owner</b></td><td>Can run the clinic. 6-tab Reports (appointments, revenue, patients, treatment, lab, inventory) with day/mode granularity, KPI dashboard, huddle report, cashbook, GST + CA Export for the accountant. Gaps: <b>no revenue-per-doctor</b> anywhere in ReportsController (appointment counts per doctor only) — the first report an owner asks for; analytics snapshots job is shadow-only.</td><td><b>85</b></td></tr>
+<tr><td><b>Manager</b></td><td>Can monitor: web huddle board (schedule, safety flags, money to collect, opportunities, no-shows, tasks, lab, inventory alerts, new patients), accountability view, SLA alert email at 14:00, task engine with shift reminders every 5 min. Gaps: briefings are email-only (currently log-only); no single end-of-day console.</td><td><b>82</b></td></tr>
+<tr><td><b>Front Desk</b></td><td>Can work a full day: booking modal with quick-register + walk-in, 30-second registration, check-in queue (once linked in nav), billing prompt → prefilled invoice, 9-mode payment modal, wallet handling. Carries the burden of the six manual hand-offs: pressing Done on appointments, watching the billing badge, prompting rebooking at checkout, sending wa.me messages from a phone.</td><td><b>80</b></td></tr>
+<tr><td><b>Assistant / Associate Doctor</b></td><td>Can work independently: consultation (5 types), one-click plan creation, present/accept chairside, visit worksheet from plan items, Rx pad with drug master + pediatric ml dosing + consent gate, lab case auto-spawned from visit. Friction: 3 screens to reach the consultation form and 3 to the Rx pad; no chairside "start visit" from the plan.</td><td><b>84</b></td></tr>
+<tr><td><b>Accounts</b></td><td><b>Strongest role.</b> Transactional locked billing, cashbook, real payment-mode split, expense entry with OCR bill scan, vendors, banking, vouchers, GST view, CA export, wallet register, monthly lab reconciliation workflow. Payroll is a register (list/create/delete) — not a payroll engine; fine for one clinic.</td><td><b>92</b></td></tr>
+<tr><td><b>Lab coordinator</b></td><td>Operable: 3 creation surfaces, 9-status flow through one transition service, auto-tasks on overdue, auto comm-close on terminal states, reconciliation. Attachment privacy is a P1 (public disk).</td><td><b>85</b></td></tr>
+<tr><td><b>Marketing</b></td><td>Blog Hub is live and complete (CRUD, versioning, publish). Reviews module coded, gated on live WhatsApp. GBP/Meta integrations parked by decision. Adequate for V1's single clinic; not a growth engine yet.</td><td><b>70</b></td></tr>
+</table>
+
+<!-- ================= SECTION 4 ================= -->
+
+</div>
+<div class="pane" id="t3">
+<h2>SECTION 4 — ANDROID READINESS</h2>
+<div class="box amber"><b>Declaration:</b> No Flutter/Dart source exists in this repository (verified: zero <code>pubspec.yaml</code>, zero <code>.dart</code> files; only a roadmap document). The Flutter app itself is <b>not verifiable from the available code.</b> This section therefore audits the API contract the app consumes (fully verifiable) plus the governance record of app testing.</div>
+<p><b>The API is not the bottleneck.</b> 28 Api/V1 controllers, ~125 write routes, Sanctum auth, per-route <code>api.role:module:x,action</code> RBAC (stricter than web), and full write parity on the five critical flows: create appointment (incl. walk-in, block-slot, reschedule, status), create consultation (all 4 typed variants + COHA), record payment (incl. EMI, wallet, discounts, void), create/edit visit, prescriptions (incl. finalize/repeat/alerts). Even treatment-plan present/accept/defer/partial-accept and invoice creation are present. API gaps: finance module entirely (expenses/payroll/cashbook/GST), patient import, lab reconciliation, HR, settings.</p>
+<table>
+<tr><th>User on Android only</th><th style="width:16%">Classification</th><th>Why</th></tr>
+<tr><td><b>Doctor (read + light write)</b></td><td><span class="tag warn">Needs Small Work</span></td><td>API supports the full clinical day; the app's write paths are code-complete but untested per governance record (only Membership confirmed tested). One smoke pass per flow away from "Ready".</td></tr>
+<tr><td><b>Assistant</b></td><td><span class="tag warn">Needs Small Work</span></td><td>Same basis — visit/consultation writes exist server-side, unvalidated client-side.</td></tr>
+<tr><td><b>Owner</b></td><td><span class="tag warn">Needs Small Work</span></td><td>Dashboard/Report API controllers exist (read-only by design). Usable for monitoring once app read paths are smoke-tested.</td></tr>
+<tr><td><b>Manager</b></td><td><span class="tag warn">Needs Small Work</span></td><td>Huddle API is rich (yesterday-flow, comms-push, task assign). Untested client.</td></tr>
+<tr><td><b>Receptionist</b></td><td><span class="tag bad">Not Ready</span></td><td>Desk work is dense multi-window work (calendar + patient + billing simultaneously); no finance API; the desk stays on desktop for V1 by design.</td></tr>
+</table>
+<p><b>V1 rule (restated from audit #2):</b> Android ships as a read-first companion; every mobile write path earns production status only after one supervised smoke test. All polish → V1.1. <b>Android readiness: 58/100</b> (API ~85, app unverifiable/untested ~45, weighted).</p>
+
+<!-- ================= SECTION 5 ================= -->
+
+</div>
+<div class="pane" id="t4">
+<h2>SECTION 5 — AUTOMATION READINESS</h2>
+<p class="sub">22 scheduled jobs verified in <code>routes/console.php</code>, all <code>withoutOverlapping()</code>. Design philosophy is consistent and deliberate: <b>automation creates tasks for humans; only consented, transactional messages auto-send.</b> That is the right call for an Indian clinic — but today the auto-send half is disabled by config.</p>
+<table>
+<tr><th>Automation</th><th style="width:16%">Class</th><th>Evidence / caveat</th></tr>
+<tr><td>Appointment reminders (calls)</td><td><span class="tag info">Semi-automatic</span></td><td>08:00 job creates "Reminder call" tasks for reception — no message sent, by design.</td></tr>
+<tr><td>Appointment reminders (WhatsApp)</td><td><span class="tag ok">Fully automatic*</span></td><td>10:00 job sends Meta template with Confirm/Reschedule/Cancel buttons, dedup-keyed, consent-gated. <b>*Dry-run no-op today</b>; blocked sends are counted only in a logfile — no staff-facing "blocked" report.</td></tr>
+<tr><td>Recall</td><td><span class="tag info">Semi-automatic</span></td><td>07:00 engine, 6 triggers → communication_queue for staff action; service docblock: "no automatic send pipeline". Correct for V1; the queue screen needs pagination (P1) and the 1,810 backlog needs a cap.</td></tr>
+<tr><td>Payment overdue</td><td><span class="tag info">Semi-automatic</span></td><td>07:15 scan → payment.overdue event → follow-up task (≥₹500, day-3). </td></tr>
+<tr><td>Review requests</td><td><span class="tag ok">Fully automatic*</span></td><td>11:00, one-per-appointment-ever, targets yesterday's done appointments. *Gated on live WhatsApp.</td></tr>
+<tr><td>Birthdays</td><td><span class="tag info">Semi-automatic</span></td><td>Explicit design: emits event → staff task; "a human decides whether to send". 360-day cooldown.</td></tr>
+<tr><td>Lab overdue → tasks</td><td><span class="tag ok">Fully automatic</span></td><td>09:00; urgent task to manager/admin; trial-untouched-2-days → doctor review task; dedup via active_task_id.</td></tr>
+<tr><td>Daily huddle</td><td><span class="tag warn">Automatic but undelivered</span></td><td>Generation automatic; scheduled output goes to a logfile. The web /huddle board is the real delivery — link it and delete the log ritual.</td></tr>
+<tr><td>Briefings / SLA / evening summary</td><td><span class="tag ok">Fully automatic*</span></td><td>07:05 / 14:00 / 18:00 — all EMAIL (Mail::to), no in-app fallback. *Dead while MAIL_MAILER=log.</td></tr>
+<tr><td>Membership expiry</td><td><span class="tag info">Semi-automatic</span></td><td>30-days-out scan → renewal call task, 25-day cooldown.</td></tr>
+<tr><td>Notifications (in-app)</td><td><span class="tag ok">Automatic</span></td><td>Producers: lab events (richest), task assignment, shift reminders (5-min), periodic task nudges (2-h), audit-verify failure → all admins. 30-s sidebar polling.</td></tr>
+<tr><td>Inventory low-stock</td><td><span class="tag bad">Manual</span></td><td><b>The one genuinely missing automation.</b> No scheduled job, no observer, no notification — status computed on-read; surfaces only in huddle + reports. A stockout will happen unless someone looks.</td></tr>
+<tr><td>Journey engine</td><td><span class="tag info">Semi-automatic</span></td><td>ActivityEngine events → RulesEngine → TaskEngine chain is live (overdue, birthday, lab-ready, membership, escalation ₹30k/2h). Fires tasks, not messages.</td></tr>
+<tr><td>Reports</td><td><span class="tag ok">Automatic</span></td><td>Projections rebuilt every 15 min (today + analytics; analytics snapshot is shadow-only for now).</td></tr>
+</table>
+<p><b>Automation readiness 78/100:</b> the engine is real and thoughtfully gated, minus points because its two delivery channels (WhatsApp, mail) are dead in current config, the huddle ships to a logfile, and inventory has nothing.</p>
+
+<!-- ================= SECTION 6 ================= -->
+
+<h2>SECTION 6 — AI READINESS</h2>
+<table>
+<tr><th>Capability</th><th style="width:12%">Rating</th><th>Assessment</th></tr>
+<tr><td><b>Assistant "Tulip" (current)</b></td><td><span class="tag bad">Disable for V1</span></td><td>Real tool-calling architecture (11 tools, confirm-gated writes, action log) — but <code>runTool()</code> has zero permission checks (re-verified twice). 25/100 as shipped. <code>ASSISTANT_ENABLED=false</code> is a go-live condition.</td></tr>
+<tr><td><b>Vision form-scan (current)</b></td><td><span class="tag ok">V1 — keep</span></td><td>Registration "scan paper form" prefill and expense bill OCR (ReceiptScanService) are shipped, scoped, low-risk. The quiet AI wins.</td></tr>
+<tr><td><b>Voice notes / local AI (ollama, whisper)</b></td><td><span class="tag v11">V1.1</span></td><td>Config present (private-disk PHI note is correct); depends on local models; not part of daily core.</td></tr>
+<tr><td><b>Clinical AI / decision support</b></td><td><span class="tag v11">V2</span></td><td>Rx alert-check endpoints exist as rules, not AI. Anything generative-clinical needs the authorization layer plus a validation protocol first.</td></tr>
+<tr><td><b>Reception AI (auto-reply, triage)</b></td><td><span class="tag v11">V2</span></td><td>Chatbot webhook controller exists unrouted. Build only after WhatsApp live traffic exists to learn from.</td></tr>
+</table>
+<p><b>Sequencing recommendation:</b> V1 = vision prefill only. V1.1 = re-enable Tulip behind per-tool <code>canAccess()</code> + read-only. V2 = write tools, voice, reception AI. This matches CEO Directive #004 exactly.</p>
+
+<!-- ================= SECTION 7 ================= -->
+
+</div>
+<div class="pane" id="t5">
+<h2>SECTION 7 — WORKFLOW GAPS ("What should I do next?" points)</h2>
+<table>
+<tr><th style="width:34%">Gap (all code-verified)</th><th style="width:14%">Severity</th><th>Disposition</th></tr>
+<tr><td>1. <code>/appointments/today</code> live queue orphaned — linked from no menu</td><td><span class="tag bad">High</span></td><td><b>🔧 FIX BEFORE SHIP</b> — one sidebar/dashboard link. Minutes of work, unlocks the best screen for the desk.</td></tr>
+<tr><td>2. No "Start Consultation" from an appointment; appointment_id never set → appointments never auto-close</td><td><span class="tag bad">High</span></td><td><b>🔧 FIX BEFORE SHIP (minimal form)</b> — add one "Start Consultation" link on the today-queue card passing <code>appointment_id</code>; the observer already does the rest. Not a redesign — one link + one prefill. Full flow polish → V1.1.</td></tr>
+<tr><td>3. Standalone Book Appointment page discards typed data when patient is new</td><td><span class="tag warn">Medium</span></td><td><b>Training + V1.1</b> — train desk on the global modal (which does everything right); fix or retire the standalone page in V1.1.</td></tr>
+<tr><td>4. Accepted plan → no "Start Visit" button (tab switch + re-select)</td><td><span class="tag warn">Medium</span></td><td><b>📦 V1.1</b> — workaround is 3 clicks; visit gate already covers treatment-type appointments.</td></tr>
+<tr><td>5. Visit saved silently; billing prompt discoverable only via tab/badge</td><td><span class="tag warn">Medium</span></td><td><b>📦 V1.1</b> (toast/redirect); Week-1 training: desk checks the badge after every chair turnover.</td></tr>
+<tr><td>6. No checkout prompt for next appointment / recall</td><td><span class="tag warn">Medium</span></td><td><b>📦 V1.1</b> — desk SOP for now; recall engine is the backstop.</td></tr>
+<tr><td>7. <code>next_visit_date/type</code> collected, consumed by nothing</td><td><span class="tag warn">Medium</span></td><td><b>📦 V1.1</b> — either wire to recall or remove the fields; today it's theatre that erodes trust.</td></tr>
+<tr><td>8. Rx button routes to a tab, not the pad (3 screens)</td><td><span class="tag info">Low</span></td><td><b>📦 V1.1</b>.</td></tr>
+<tr><td>9. Receipt print not one-click post-payment; no WhatsApp in billing views</td><td><span class="tag info">Low</span></td><td><b>📦 V1.1</b>.</td></tr>
+<tr><td>10. No end-of-day close screen (cashbook + income + appointments tour)</td><td><span class="tag info">Low</span></td><td><b>📦 V1.1</b> — cashbook covers the tally; a one-page EOD is the single highest-value V1.1 screen.</td></tr>
+<tr><td>11. Huddle CLI writes to a logfile nobody reads</td><td><span class="tag info">Low</span></td><td><b>🔧 FIX BEFORE SHIP</b> — remove from scheduler or repoint; staff use the web board.</td></tr>
+<tr><td>12. Calendar grid doesn't auto-refresh (queue panel only)</td><td><span class="tag warn">Medium</span></td><td><b>📦 V1.1</b> — 60-s poll on the grid; meanwhile: two desks share the queue view, not the week view.</td></tr>
+</table>
+
+<!-- ================= SECTION 8 ================= -->
+
+<h2>SECTION 8 — HUMAN FACTORS</h2>
+<table>
+<tr><th style="width:22%">Factor</th><th>Assessment</th></tr>
+<tr><td>Clicks / screen switching</td><td>Money path is tight (modal-based payment, inline plan decisions). Clinical path is the switch-heavy one: 3 screens to consultation, 3 to Rx, 2 tabs plan→visit. A chairside doctor touches ~4-6 screens per patient vs ~2-3 in mature systems.</td></tr>
+<tr><td>Learning curve</td><td>Low for desk (modals, plain forms, 6 required fields); moderate for doctors (must learn which entry points work — modal vs page, queue URL). The in-app Help Centre is real: 34 KB role-aware content covering 19 screens + workflow guides, with per-route contextual guide component. Use it in Week-1 training.</td></tr>
+<tr><td>Fatigue / data-entry burden</td><td>Registration burden is minimal (6 fields + skip). Consultation forms are dense but typed variants (Same Issue, Minor Visit, Emergency) exist precisely to shortcut repeat work. The two dead next-visit fields add ~5 wasted seconds per visit — remove or wire (Section 7.7).</td></tr>
+<tr><td>Speed</td><td>Screens verified eager-loaded and date-bounded; 30-s/60-s polling keeps the desk fresh without websockets. Acceptable on clinic hardware; no heavy JS frameworks.</td></tr>
+<tr><td>Chairside usability</td><td>Good once inside the patient profile (tabs hold everything); weak getting there from the schedule. The one-glance worksheet with plan items is genuinely chairside-grade.</td></tr>
+<tr><td>Reception usability</td><td>Strong on booking/registration/payment; the six remembered hand-offs (Section 7) are the fatigue risk — they are exactly the things receptionists forget at 6 PM on a busy day.</td></tr>
+</table>
+
+<!-- ================= SECTION 9 ================= -->
+
+</div>
+<div class="pane" id="t6">
+<h2>SECTION 9 — COMPARISON AGAINST LEADING DENTAL SYSTEMS</h2>
+<p class="sub">Workflow-quality comparison, not feature counting. Benchmarks: Dentrix, Eaglesoft (US legacy desktop); Open Dental (open source); Curve, CareStack, Denticon, Dentally, Sensei Cloud, tab32 (cloud PMS); Cliniko, Practice-Web (lightweight). Assessment from industry knowledge of these products; Dentfluence side is code-verified.</p>
+<table>
+<tr><th style="width:18%">Dimension</th><th style="width:12%">Position</th><th>Detail</th></tr>
+<tr><td>Clinical workflow (plan lifecycle)</td><td><span class="tag ok">AHEAD</span></td><td>The plan=promise / visit=fact / billing-from-visits contract with a single status writer and append-only decision ledger is <b>stricter than any benchmark</b> — Dentrix/Eaglesoft let front desk mutate treatment status freely; Open Dental's plan model is looser. This discipline is Dentfluence's core IP.</td></tr>
+<tr><td>Financial workflow (India)</td><td><span class="tag ok">AHEAD</span></td><td>UPI/cash/EMI modes, wallet/advance, GST view, CA export, cashbook — none of the US benchmarks handle Indian clinic accounting; Indian competitors (Clinicia, Bestosys — whose export formats Dentfluence already imports) are far shallower on integrity (no locked numbering, no financial audit trail).</td></tr>
+<tr><td>Audit &amp; privacy</td><td><span class="tag ok">AHEAD</span></td><td>Hash-chained audit log with daily tamper verification + field-level PHI encryption exceeds every benchmark listed, including Open Dental.</td></tr>
+<tr><td>WhatsApp-first communication</td><td><span class="tag ok">AHEAD (when live)</span></td><td>Consent-gated Cloud API with interactive replies beats the SMS/email stacks of US systems for the Indian market; behind until the dry-run flag flips.</td></tr>
+<tr><td>Migration tooling</td><td><span class="tag ok">AHEAD</span></td><td>Named competitor import profiles with annotated column quirks — most PMS vendors make you pay for migration services.</td></tr>
+<tr><td>Reception workflow</td><td><span class="tag warn">BEHIND</span></td><td>Dentrix/Curve/Dentally have decades-refined front-desk flow: one-screen check-in→chair→checkout with next-appointment prompt. Dentfluence has the pieces but six manual hand-offs (Section 7).</td></tr>
+<tr><td>Appointment book UX</td><td><span class="tag info">EQUAL−</span></td><td>Drag-drop with conflict guard = parity; no live multi-user grid refresh, no online booking / patient self-scheduling (Dentally, CareStack, Cliniko all have it). Microsite is parked.</td></tr>
+<tr><td>Imaging / charting</td><td><span class="tag bad">BEHIND</span></td><td><b>No X-ray/imaging-device integration and no perio charting</b> — Dentrix, Eaglesoft, Open Dental, CareStack all have both. Tooth chart exists (permanent only; pediatric dentition absent). For an Indian GP practice this is survivable; it is the largest clinical feature gap vs benchmarks.</td></tr>
+<tr><td>Insurance / claims</td><td><span class="tag info">N/A-EQUAL</span></td><td>US claims engines don't apply to Tulip's cash/UPI market; no Indian TPA integration either (V2 if corporate patients matter).</td></tr>
+<tr><td>Reports</td><td><span class="tag info">EQUAL−</span></td><td>6-tab reports = solid; misses revenue-per-doctor and production-per-hour that every US PMS leads with.</td></tr>
+<tr><td>Mobile</td><td><span class="tag warn">BEHIND</span></td><td>Curve/CareStack/tab32 mobile is mature; Dentfluence's API is competitive but the app is unproven.</td></tr>
+<tr><td>AI</td><td><span class="tag info">EQUAL</span></td><td>Benchmarks ship narrow AI (Overjet-style radiograph reads, CareStack assist). Dentfluence's vision prefill is comparable; Tulip assistant is ahead architecturally, behind on safety — everyone is early here.</td></tr>
+<tr><td>Architecture / customization</td><td><span class="tag ok">AHEAD of legacy, EQUAL to cloud</span></td><td>Modern Laravel 13 + API + feature flags beats Dentrix/Eaglesoft desktop tech by a generation; comparable to CareStack/Denticon internally.</td></tr>
+<tr><td>Scalability / multi-location</td><td><span class="tag bad">BEHIND</span></td><td>Denticon/CareStack are multi-location natives; Dentfluence's branch scope is deliberately inert and the data plane is single-tenant. Fine for Tulip; the SaaS gap.</td></tr>
+<tr><td>Security</td><td><span class="tag ok">AHEAD (post-conditions)</span></td><td>After the 4 P0s close: RBAC + encryption + audit chain + fail-closed webhooks is a stronger posture than the desktop incumbents ever had.</td></tr>
+</table>
+<p><b>Net position:</b> Dentfluence is already a top-quartile product on <i>integrity</i> (money, audit, lifecycle) and India-fit, mid-pack on front-desk polish, and bottom-quartile on imaging and multi-location — exactly the profile of a V1 built by a clinician who cared about the right things first.</p>
+
+<!-- ================= SECTION 10 ================= -->
+
+</div>
+<div class="pane" id="t7">
+<h2>SECTION 10 — PRODUCTION RISK MATRIX</h2>
+<table>
+<tr><th style="width:10%">Level</th><th>Risk</th><th>Mitigation</th></tr>
+<tr><td><span class="tag bad">CRITICAL</span></td><td>No backups (data-loss = practice-loss) · AI RBAC bypass · consultation photos public · failures invisible (no error tracking, mail→log)</td><td>The 4 P0s — Days 1-7 of the standing execution plan.</td></tr>
+<tr><td><span class="tag bad">HIGH</span></td><td>Automation silently dead (WhatsApp dry-run + blank creds, mail→log) while staff are told it works · uncommitted Treatment Visit sprint on one disk · cron/queue-worker stop = all 22 jobs stop unalerted · appointments never auto-close → queue statuses wrong by 10 AM</td><td>Env flip with staged WhatsApp enable (capped); commit Day 1; uptime ping + Slack channel; today-queue link + Start-Consultation link.</td></tr>
+<tr><td><span class="tag warn">MEDIUM</span></td><td>Communication queue unpaginated over 1,810 backlog · lab/vendor attachments public · missed billing prompts → uncollected revenue · calendar not live for two desks · inventory stockout (no alerts) · VPS outage = total stop (no offline mode) · no revenue-per-doctor for owner</td><td>P1 fixes + Week-1 SOPs (badge check per turnover, weekly inventory review, printed morning schedule as downtime fallback).</td></tr>
+<tr><td><span class="tag info">LOW</span></td><td>next_visit fields unread · Rx/receipt click depth · standalone booking page trap · huddle logfile ritual · payroll is a register only · stale .env.example</td><td>V1.1 batch; training notes.</td></tr>
+<tr><td><span class="tag ok">VERY LOW</span></td><td>Race conditions on money/stock (locked) · double-booking (guarded) · CSRF/XSS/SQLi (verified clean) · duplicate patients (guarded) · plan status corruption (single writer)</td><td>Already engineered away — the strongest part of the system.</td></tr>
+</table>
+
+<!-- ================= SECTION 11 ================= -->
+
+<h2>SECTION 11 — V1 FREEZE VALIDATION</h2>
+<table>
+<tr><th>Module</th><th style="width:18%">Verdict</th><th>Basis</th></tr>
+<tr><td>Patients · Consultations · Treatment Plans · Billing/Wallet · Inventory · Prescriptions · Appointments engine · Huddle · Membership · Settings v2 · Marketing/Blog · Reports</td><td><span class="tag ok">FREEZE IMMEDIATELY</span></td><td>Complete, tested, disciplined. Any further development here is risk without return.</td></tr>
+<tr><td>Treatment Visits</td><td><span class="tag warn">MINOR FIX ONLY</span></td><td>Commit the sprint, re-run suite, deploy. Nothing else.</td></tr>
+<tr><td>WhatsApp</td><td><span class="tag warn">MINOR FIX ONLY</span></td><td>External Meta config + staged enable. Code frozen (CEO already ordered STOP).</td></tr>
+<tr><td>PRE / Communication OS</td><td><span class="tag warn">MINOR FIX ONLY</span></td><td>Queue pagination + recall cap; consolidation of the duplicate recall UIs is V1.1.</td></tr>
+<tr><td>Lab</td><td><span class="tag warn">MINOR FIX ONLY</span></td><td>Attachments to private disk; one reconciliation smoke test.</td></tr>
+<tr><td>HR</td><td><span class="tag warn">MINOR FIX ONLY</span></td><td>Throttle /hr/scan; role_id/role code retirement is V1.1.</td></tr>
+<tr><td>Workflow glue (today-queue link, Start-Consultation link, huddle scheduler entry)</td><td><span class="tag warn">MINOR FIX ONLY</span></td><td>Three one-line changes that convert six manual hand-offs into three. Explicitly not redesign.</td></tr>
+<tr><td>AI Assistant · Voice · Receipt-scan expansion · ABDM · HQ · Analytics snapshots cutover · Reviews activation · Android write-paths · EOD screen · next-visit wiring</td><td><span class="tag v11">V1.1</span></td><td>Valuable, non-blocking. Sequenced after two clean production weeks.</td></tr>
+<tr><td>New consultation types · UI redesigns · marketplace/SaaS features · imaging module · online booking</td><td><span class="tag bad">REJECT (for V1 cycle)</span></td><td>Nothing enters V1. Imaging and online booking are the first V2 conversations, not V1.1.</td></tr>
+</table>
+
+<!-- ================= SECTION 12 ================= -->
+
+</div>
+<div class="pane" id="t8">
+<h2>SECTION 12 — WHAT HAPPENS IF TULIP USES DENTFLUENCE TOMORROW?</h2>
+<table>
+<tr><th style="width:12%">Horizon</th><th>Prediction (grounded in the findings above)</th></tr>
+<tr><td><b>Week 1</b></td><td>Registration, booking and payments go smoothly — the desk will like the modals. Pain shows up in status discipline: appointments pile up "in chair" because nothing closes them; 2-3 billing prompts get missed until the badge SOP sticks; a doctor complains it takes three screens to start writing; someone books on the standalone page and loses a half-typed booking; staff phone-WhatsApp because automated reminders are still dry-run. Evening cash tally works first try (cashbook). Expect 5-10 papercut reports — log them, fix only breakages.</td></tr>
+<tr><td><b>Month 1</b></td><td>WhatsApp goes live capped; confirm/cancel replies start updating the queue and reception call-load visibly drops. The recall queue becomes the manager's daily habit — pagination fix proves necessary. First stockout occurs (no inventory alerts) → weekly stock-review SOP is born. Owner asks for revenue-per-doctor (promise it in V1.1). First real restore-drill from backups should happen this month whether needed or not.</td></tr>
+<tr><td><b>Month 3</b></td><td>Data compounds: last_visit_date now accurate for consultation patients, recall targeting improves; visit-only patients gap (P2) becomes measurable → wire it in V1.1. Media storage growth becomes visible on the VPS disk — monitor. Staff fluency makes the six hand-offs invisible; the V1.1 glue batch (EOD screen, start-visit button, toast) lands and Net Promoter jumps more than any feature would.</td></tr>
+<tr><td><b>Month 6</b></td><td>The system is boring — which is the goal. Pressure arrives from success: a second chair/doctor wants per-role logins (BranchScope activation + role_id retirement), corporate patients raise TPA/insurance questions, and Dr. Sumit starts the clinic #2 conversation — which triggers the real V2 gate: clinic_id isolation before any second tenant. DPDP full-lifecycle work (DSAR, breach register) should start now for the May 2027 deadline.</td></tr>
+</table>
+
+<!-- ================= SECTION 13 ================= -->
+
+</div>
+<div class="pane" id="t9">
+<h2>SECTION 13 — FINAL CEO RECOMMENDATION (one page)</h2>
+<div class="box green">
+<p><b>Can Dr. Sumit stop development and start implementation? YES — after a 7-day hardening pass. Development stops; implementation starts.</b></p>
+<p><b>What exactly remains (production blockers only, nothing else):</b></p>
+<p><b>Days 1-7 — the standing P0/P1 list from audit #2, unchanged:</b> commit the Treatment Visit sprint · backups wired + one restore drill · <code>ASSISTANT_ENABLED=false</code> · consultation-photos + lab/vendor attachments to private disk · error visibility (daily logs, Slack alert, real mailer) · production .env hardening incl. <code>PRM_WA_APP_SECRET</code> · verify <code>patients:encrypt-phi</code> ran · paginate communication queue · cap recall sends · throttle stray endpoints.</p>
+<p><b>Plus three one-line glue fixes this audit adds (not redesign):</b> link <code>/appointments/today</code> in the sidebar · add a "Start Consultation" link on the queue card that passes <code>appointment_id</code> (the auto-close observer already exists and is waiting for exactly this) · remove or repoint the logfile huddle scheduler entry.</p>
+<p><b>Plus the config flip that makes the automation real:</b> WhatsApp credentials + staged dry-run-off for appointment reminders only, capped; Brevo SMTP credentials for the briefing emails.</p>
+<p><b>Everything else — EOD screen, start-visit button, Rx shortcut, next-visit wiring, revenue-per-doctor, Android write-paths, Tulip re-enablement, imaging, online booking — is V1.1 or later and must not delay go-live.</b> The system's integrity core (money, audit, lifecycle, privacy) is already better than the incumbents Tulip would be leaving. The remaining weaknesses are training-absorbable friction, not failure modes.</p>
+<p><b>Final readiness estimate:</b> Core Web (Tulip operations): <b>93%</b> · Financial engine: <b>95%</b> · Automation engine: <b>82%</b> (100% coded, held back by config + delivery gaps) · Android companion: <b>58%</b> (API 85%, app unverifiable from this repo) · AI assistant: <b>25%</b> (disabled for V1 by design) · <b>Overall Tulip implementation readiness: 90%.</b> The last 10% is one week of ops work and two weeks of habit — not code.</p>
+</div>
+
+<!-- ================= SECTION 14 ================= -->
+
+</div>
+<div class="pane" id="t10">
+<h2>SECTION 14 — PATH TO "V1 COMPLETE": THE EXECUTION SEQUENCE</h2>
+<div class="box">
+<b>Product ladder (locked):</b><br>
+<b>V1</b> — Fully functional automation unit. No voice, no AI. All workflows and automations live; every role productive; web + Android parity; KPIs complete.<br>
+<b>V2</b> — Voice inputs / transcripts (capture only).<br>
+<b>V3</b> — Processing &amp; suggestions from voice inputs/commands (read-only intelligence).<br>
+<b>V4</b> — AI Secretary (acts on your behalf, confirm-gated writes).
+</div>
+<div class="box amber"><b>One correction to the V1 definition before the plan — "exact parity" is the wrong target.</b> Screen-for-screen Android parity would take months and deliver zero extra clinic value: nobody bills GST or runs payroll from a phone. The achievable, correct V1 target is <b>role-based parity</b>: every role can complete their full daily job on Android — doctor (consult → plan → visit → Rx), assistant, owner (KPIs), manager (huddle, tasks, approvals). Front desk stays desktop-first by design (dense multi-window work). The API already supports this today (~125 write routes, full clinical lifecycle); what remains is client-side validation, not server construction. Accept this definition and V1-complete is ~8 weeks; insist on "exact" and it becomes ~5 months for the same clinical outcome.</div>
+
+<h3>Phase A — Week 1 · PRODUCTION HARDENING (go-live gate)</h3>
+<table>
+<tr><th style="width:8%">Day</th><th>Work</th><th style="width:22%">Exit test</th></tr>
+<tr><td>1</td><td>Commit the Treatment Visit sprint (delete stray <code>_treatment-visit-bootstrap.php</code>); run full suite; tag.</td><td>Suite green on committed tree</td></tr>
+<tr><td>2</td><td>Consultation-photos + lab/vendor attachments → private disk via existing secure-media; MIME whitelist on clinical uploads.</td><td>Logged-out URL fetch fails</td></tr>
+<tr><td>3</td><td><code>ASSISTANT_ENABLED=false</code>; throttle forgot-PIN/OTP//hr/scan//r/token; the 3 glue links (sidebar → /appointments/today; "Start Consultation" on queue card passing appointment_id; remove logfile-huddle scheduler entry).</td><td>Queue reachable from nav; appointment auto-closes after a linked consultation</td></tr>
+<tr><td>4</td><td>Backups: nightly <code>backup.sh</code> (DB + storage) in cron, off-server copy, retention 14/60.</td><td>Backup exists off-VPS</td></tr>
+<tr><td>5</td><td>Error visibility: <code>LOG_STACK=daily</code>, Slack channel on critical, real MAIL_MAILER (Brevo creds), uptime ping on <code>/up</code>.</td><td>Forced error → alert received; test mail delivered</td></tr>
+<tr><td>6</td><td>Production .env pass (APP_DEBUG=false, SESSION_SECURE_COOKIE, SESSION_ENCRYPT, PRM_WA_APP_SECRET); run + verify <code>patients:encrypt-phi</code>; paginate communication queue; recall send cap.</td><td>Env checklist signed; queue screen &lt;1s</td></tr>
+<tr><td>7</td><td>Deploy; re-anchor audit chain; <code>docker compose ps</code>; <code>dentfluence:smoke</code>; RBAC walk per role; patient import dry-run with real Clinicia/Bestosys export.</td><td><b>Tulip live on web</b></td></tr>
+</table>
+
+<h3>Phase B — Week 2 · WORKFLOW GLUE (the six hand-offs → zero)</h3>
+<p>Ship as one batch of small, independent slices — each is a button/redirect/link on existing plumbing, not redesign. Order: (1) "Start Visit" button on the accepted-plan card (prefill plan_id into the existing openAddForm); (2) visit-save → toast + redirect to the billing prompt; (3) checkout status "Done" → "Book next appointment?" modal reusing the global booking modal; (4) wire <code>next_visit_date</code> → creates a recall queue entry (or delete both fields — decide once, this week); (5) consultation Rx button → Rx pad directly; (6) payment success → one-click receipt print + WhatsApp-receipt button reusing the consent-gated link endpoint; (7) fix-or-retire the standalone booking page; (8) 60-second poll on the calendar grid. <b>Exit test:</b> a full patient cycle — call → book → arrive → consult → plan → accept → visit → bill → pay → receipt → rebook — with <b>zero</b> URL-typing and zero "remember to check" steps.</p>
+
+<h3>Phase C — Week 3 · AUTOMATION GOES LIVE</h3>
+<p>Staged, capped, observable: (1) WhatsApp credentials + Meta template approval → <code>WHATSAPP_DRY_RUN=false</code> for <b>appointment reminders only</b>, daily cap, watch 3 days; (2) enable confirmations + interactive Confirm/Reschedule/Cancel round-trip; (3) recall sends capped (backlog drains over weeks, not one blast); (4) review requests on; (5) briefing/evening-summary emails confirmed delivered; (6) build the ONE missing automation — a scheduled low-stock alert command reusing <code>StockStatusService</code> → AppNotification + huddle (half a day, completes the "automation unit" claim); (7) add a blocked-consent counter to the huddle so staff see who is NOT getting reminders. <b>Exit test:</b> every row of the Section 5 table reads Fully/Semi-automatic <b>and firing</b>, with delivery visible in-app or in inbox — nothing terminating in a logfile.</p>
+
+<h3>Phase D — Weeks 4-6 · ANDROID ROLE-PARITY</h3>
+<p>The Flutter app leaves "code-complete, untested" only through supervised smoke passes against production API, one role at a time, fixing only breakages: <b>Week 4 — Doctor:</b> login/2FA, patient search + profile, consultation create (all types), plan view + present/accept, visit create with worksheet, Rx create + PDF. <b>Week 5 — Owner + Manager:</b> dashboard KPIs, reports read, huddle board, task assign/complete, approvals; add the one missing read API this needs (a day-summary finance read endpoint — the only new server code in this phase). <b>Week 6 — Assistant + payments:</b> record payment, wallet, inventory lookups, lab status updates; then a full parallel day — one doctor runs Android-only alongside the web desk. <b>Exit test:</b> the role-parity checklist (doctor/assistant/owner/manager: every daily task ✓ on Android) is green and each flow was demonstrated on a real device against prod. This lifts Android readiness 58 → ~85.</p>
+
+<h3>Phase E — Week 7 · KPI COMPLETION</h3>
+<p>(1) Revenue-per-doctor in Reports (join payments → invoice items → visits → doctor — the schema already supports it); (2) cut over the analytics snapshot projection (already built, shadow-only — flag on, verify against live numbers for a week); (3) one-page End-of-Day screen: today's collections by mode + pending billing prompts + tomorrow's schedule + cash-in-hand (all four queries already exist in FinanceController/Dashboard — this is composition, not construction); (4) chair-utilization + no-show rate on the owner dashboard. <b>Exit test:</b> owner answers "how did we do today, who produced it, what's tomorrow" from two screens (web) and one (Android).</p>
+
+<h3>Phase F — Week 8 · V1 FREEZE</h3>
+<p>Full regression suite + smoke on prod · backup restore drill #2 · Help Centre content updated for the new glue · docs refreshed · tag <code>v1.0.0</code> · <b>declare V1 FROZEN — after this, only defect fixes enter; every idea goes to the V2 ladder.</b></p>
+
+<h3>The ladder beyond V1 (sequence discipline)</h3>
+<table>
+<tr><th style="width:8%">Ver</th><th>Scope</th><th>Prerequisite that must come from the version before it</th></tr>
+<tr><td><b>V2</b></td><td>Voice inputs + transcripts — capture only. Local whisper (config already present), voice notes stored on the private disk (PHI note already in config), attached to consultations/visits as documents. No interpretation.</td><td>V1's stable clinical records to attach transcripts to; consent framework already live.</td></tr>
+<tr><td><b>V3</b></td><td>Processing &amp; suggestions from voice/commands — read-only intelligence (draft clinical notes from transcript, suggest plan items, flag follow-ups). Human accepts everything.</td><td><b>The per-tool authorization layer</b> — build <code>canAccess()</code> gating into the assistant tool interface FIRST (this is also what un-disables Tulip). V2's transcript corpus to process.</td></tr>
+<tr><td><b>V4</b></td><td>AI Secretary — acts on your behalf: books, reminds, drafts, escalates; confirm-gated writes. The existing Tulip architecture (tools + confirm cards + action log) is already the correct skeleton for this.</td><td>V3's proven read-only accuracy + the authorization layer battle-tested + months of V1 workflow data to learn the clinic's patterns from.</td></tr>
+</table>
+<div class="box green"><b>Operating rules for the whole sequence (unchanged from your own governance):</b> one slice → stop → report → approval. No phase starts before the previous phase's exit test passes. Nothing skips the ladder — voice before processing, processing before autonomy. And the standing question gates every task: <i>does this move V1 to production?</i> If the answer is no, it waits.</div>
+
+
+</div>
+<div class="pane" id="t11">
+<h2>PATH TO FINAL V1 — COMPLETE STEP-BY-STEP EXECUTION SEQUENCE</h2>
+<p class="sub">Every step from today's tree to a frozen, fully-operating V1 (web + Android role-parity + all automation live). Steps are the smallest actionable unit — tick the checkbox as each completes (saved in this browser). Rules: work strictly in order inside a phase · a phase's GATE must pass before the next phase starts · Artisan commands are listed for Dr. Sumit to run manually · no step here is a redesign or a new feature beyond the two explicitly marked BUILD items.</p>
+
+<h3>PHASE A — Day 1 · Repo hygiene &amp; commit (nothing is safe until it's in git)</h3>
+<table>
+<tr><th style="width:6%">✔</th><th style="width:4%">#</th><th>Step</th><th style="width:34%">Where / Command</th></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s1"></td><td>1</td><td>Delete the stray non-blade duplicate file</td><td><code>resources/views/patients/partials/_treatment-visit-bootstrap.php</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s2"></td><td>2</td><td>Review the 5 modified files (TreatmentVisitController, treatment-visits-tab, patients/show, visits/print, routes/web.php) + 9 untracked (form + 4 partials + TreatmentVisitFormPageTest + 3 report .md)</td><td><code>git status --short</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s3"></td><td>3</td><td>Clear compiled views, run the FULL suite, confirm 712 green on this exact tree</td><td><code>php artisan view:clear</code> · <code>php artisan test</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s4"></td><td>4</td><td>Commit everything, tag release candidate, push</td><td><code>git add -A && git commit</code> · tag <code>v1.0.0-rc1</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s5"></td><td>5</td><td>Check no migration is pending locally vs prod</td><td><code>php artisan migrate:status</code> (local + VPS)</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s6"></td><td>6</td><td>Rebuild <code>.env.example</code> to include every required var (WHATSAPP_*, PRM_WA_*, META_*, REVIEWS_*, ANTHROPIC, LOG_SLACK) so no future deploy can miss one</td><td><code>.env.example</code> (currently stock-Laravel only)</td></tr>
+</table>
+<div class="box green"><b>GATE A:</b> suite green on committed tree · <code>git status</code> clean · tag pushed.</div>
+
+<h3>PHASE B — Days 2-3 · Security &amp; privacy fixes (P0-2, P0-3, P1-4, P1-7)</h3>
+<table>
+<tr><th style="width:6%">✔</th><th style="width:4%">#</th><th>Step</th><th style="width:34%">Where</th></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s7"></td><td>7</td><td>Repoint <code>consultation-photos</code> disk to the private root (<code>storage/app/private/consultations</code>), remove <code>visibility: public</code></td><td><code>config/filesystems.php:62-67</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s8"></td><td>8</td><td>Serve consultation photos through the existing authenticated route; update any blade referencing <code>/storage/consultations</code></td><td><code>SecureMediaController</code> · <code>web.php:1171-1174</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s9"></td><td>9</td><td>Move existing photo files from public to private path; verify a logged-out URL fetch now fails</td><td>one-time move script/command</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s10"></td><td>10</td><td>Lab case attachments → private disk + secure serving</td><td><code>LabController.php:555</code> · <code>LabCaseAttachment.php:51</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s11"></td><td>11</td><td>Vendor invoice attachments → private disk</td><td><code>VendorInvoiceService.php:73</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s12"></td><td>12</td><td>Add MIME whitelist to clinical upload validation (<code>mimes:jpg,jpeg,png,webp,pdf,mp4,mov,dcm</code> as appropriate)</td><td><code>ClinicalFileController.php:80</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s13"></td><td>13</td><td>Disable the AI assistant for V1 + hide its nav/chat entry</td><td><code>ASSISTANT_ENABLED=false</code> · <code>config/assistant.php:19</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s14"></td><td>14</td><td>Throttle forgot-PIN + mobile-OTP routes (<code>throttle:5,1</code>)</td><td><code>routes/web.php:45-51</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s15"></td><td>15</td><td>Throttle <code>/hr/scan</code> (<code>throttle:30,1</code>) and <code>/r/{token}</code> review pages</td><td><code>web.php:62</code> · <code>reviews.php:15-16</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s16"></td><td>16</td><td>Gate the HR sidebar entry behind <code>canAccess</code> (nav-only leak)</td><td><code>partials/sidebar.blade.php:205</code></td></tr>
+</table>
+<div class="box green"><b>GATE B:</b> logged-out fetch of a consultation photo, lab attachment and vendor invoice all fail · assistant chat gone · 429 on hammered PIN/OTP/scan endpoints.</div>
+
+<h3>PHASE C — Days 4-5 · Backups &amp; error visibility (P0-1, P0-4)</h3>
+<table>
+<tr><th style="width:6%">✔</th><th style="width:4%">#</th><th>Step</th><th style="width:34%">Where</th></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s17"></td><td>17</td><td>Wire <code>backup.sh</code> (mysqldump + <code>storage/</code>) as a nightly VPS cron (02:30)</td><td>repo-root <code>backup.sh</code> → crontab</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s18"></td><td>18</td><td>Off-server copy (rclone/scp to second location) + retention 14 daily / 8 weekly</td><td>VPS cron</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s19"></td><td>19</td><td><b>Restore drill #1:</b> restore last night's dump to a scratch DB, open a patient, verify encrypted fields decrypt</td><td>scratch schema on VPS</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s20"></td><td>20</td><td>Switch logging to rotation: <code>LOG_STACK=daily</code></td><td><code>.env.production</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s21"></td><td>21</td><td>Wire the existing slack log channel: <code>LOG_SLACK_WEBHOOK_URL</code>, add slack to the stack for <code>critical</code></td><td><code>config/logging.php</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s22"></td><td>22</td><td>Real mailer: Brevo SMTP credentials (placeholders today), send one test briefing</td><td><code>.env.production:70-78</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s23"></td><td>23</td><td>External uptime ping on <code>/up</code> and <code>/api/v1/ping</code> (e.g. UptimeRobot)</td><td>free monitor service</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s24"></td><td>24</td><td>Cron dead-man switch: append a healthchecks.io ping to the scheduler so a silent cron death alerts you</td><td><code>routes/console.php</code> (one line)</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s25"></td><td>25</td><td>Force one error + one critical log → confirm Slack alert arrives</td><td>manual test</td></tr>
+</table>
+<div class="box green"><b>GATE C:</b> restore drill passed · forced error alerted · test mail delivered · cron dead-man live.</div>
+
+<h3>PHASE D — Days 6-7 · Production env, deploy &amp; verification</h3>
+<table>
+<tr><th style="width:6%">✔</th><th style="width:4%">#</th><th>Step</th><th style="width:34%">Where / Command</th></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s26"></td><td>26</td><td><code>APP_ENV=production</code>, <code>APP_DEBUG=false</code></td><td><code>.env.production</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s27"></td><td>27</td><td><code>SESSION_SECURE_COOKIE=true</code>, <code>SESSION_ENCRYPT=true</code></td><td><code>.env.production</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s28"></td><td>28</td><td>Set <code>PRM_WA_APP_SECRET</code> + <code>PRM_WA_VERIFY_TOKEN</code> (webhook defaults ENABLED — this is its only protection)</td><td><code>config/prm.php:104</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s29"></td><td>29</td><td>Fill WhatsApp Cloud creds (<code>PHONE_NUMBER_ID</code>, <code>ACCESS_TOKEN</code>, <code>BUSINESS_ACCOUNT_ID</code>) — <b>keep <code>WHATSAPP_DRY_RUN=true</code></b></td><td><code>.env.production:139-143</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s30"></td><td>30</td><td>Set <code>REVIEWS_GOOGLE_URL</code> (Google review deep-link)</td><td><code>.env.production</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s31"></td><td>31</td><td>Run PHI backfill on prod + spot-check ciphertext in DB</td><td><code>php artisan patients:encrypt-phi</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s32"></td><td>32</td><td>Deploy (env changed ⇒ force-recreate)</td><td><code>bash deploy.sh</code> · <code>docker compose up -d --force-recreate</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s33"></td><td>33</td><td>Post-deploy ritual: containers up, worker not crash-looping (known stale-timestamp bug)</td><td><code>docker compose ps</code> · <code>php artisan queue:restart</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s34"></td><td>34</td><td>Re-anchor the audit hash chain (else <code>audit:verify</code> alarms daily)</td><td>per <code>docs/deploy-runbook-2026-07-14.md</code> step 4</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s35"></td><td>35</td><td>Money-path smoke on prod (rollback mode)</td><td><code>php artisan dentfluence:smoke</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s36"></td><td>36</td><td>RBAC walk: owner / doctor / receptionist logins — no access where none granted; verify appointment-overlap block live on prod</td><td>manual, 30 min</td></tr>
+</table>
+<div class="box green"><b>GATE D = GO-LIVE READY (web):</b> all P0 closed · smoke green · RBAC verified. Tulip can start supervised daily use after Phase G cutover.</div>
+
+<h3>PHASE E — Week 2 · Workflow glue — every hand-off becomes a button</h3>
+<table>
+<tr><th style="width:6%">✔</th><th style="width:4%">#</th><th>Step</th><th style="width:34%">Where</th></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s37"></td><td>37</td><td>Sidebar + dashboard link to the live queue <code>/appointments/today</code> (currently orphaned)</td><td><code>sidebar.blade.php</code> · <code>dashboard/index.blade.php</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s38"></td><td>38</td><td>Queue card: patient name → patient profile link (cards are dead ends today)</td><td><code>appointments/today.blade.php:134-165</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s39"></td><td>39</td><td>Queue card: <b>"Start Consultation"</b> button → <code>patients.consultations.create</code> with <code>?appointment_id=</code></td><td><code>appointments/today.blade.php</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s40"></td><td>40</td><td>Consultation create: pre-select the passed appointment (the observer then auto-closes it + writes last_visit_date — zero new logic)</td><td><code>ConsultationController.php:49-55</code> · <code>consultations/create.blade.php:554</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s41"></td><td>41</td><td>Prefill chief complaint from the appointment's complaint field on that same path</td><td>same form</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s42"></td><td>42</td><td>Accepted-plan card: <b>"Start Visit"</b> button beside "Bill from Plan" → opens visit form with <code>plan_id</code> prefilled (reuse the existing <code>open_visit</code>/<code>openAddForm(prefill)</code> mechanism)</td><td><code>treatment-plan-tab.blade.php:1300</code> · <code>treatment-visit-form-script.blade.php:684-694</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s43"></td><td>43</td><td>Visit save: replace silent JSON close with toast "Visit saved — billing prompt created" + inline <b>"Build Invoice now"</b> link to <code>billing.createFromPrompt</code></td><td><code>TreatmentVisitController::store()</code> · form script</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s44"></td><td>44</td><td>Widen the visit gate: fire for consultation-type appointments too, not only <code>type='treatment'</code></td><td><code>ConsultationController::visitGateData():199</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s45"></td><td>45</td><td>Checkout: on status→Done, show <b>"Book next appointment?"</b> prompt that opens the existing global booking modal prefilled with the patient</td><td><code>AppointmentController::updateStatus():307-320</code> + queue JS</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s46"></td><td>46</td><td><b>Decide once:</b> wire <code>next_visit_date/type</code> → creates a communication_queue recall entry on visit save, <b>or</b> delete both fields. (Recommended: wire — it's ~20 lines in TreatmentVisitService.)</td><td><code>TreatmentVisitService.php:72,672</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s47"></td><td>47</td><td>Consultation "Rx" button → Rx create form directly (not the profile tab)</td><td><code>consultations/show.blade.php:110-112,638</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s48"></td><td>48</td><td>Payment success: auto-open the new receipt (<code>?auto=1</code> print pattern already exists in Rx) instead of hunting the payment row</td><td><code>billing/show.blade.php:342-379,1170</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s49"></td><td>49</td><td>WhatsApp button on invoice + receipt views (reuse the consent-gated <code>communication.whatsapp.link</code> endpoint — zero new backend)</td><td><code>resources/views/billing/*</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s50"></td><td>50</td><td>Standalone booking page: embed the same quick-register partial the global modal uses (controller already accepts first/last/mobile) — or make the page redirect to the modal</td><td><code>appointments/create.blade.php:88,246</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s51"></td><td>51</td><td>Calendar grid auto-refresh: 60-s poll on the week/day grid (queue panel already polls)</td><td><code>appointments/index.blade.php:2104</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s52"></td><td>52</td><td>Communication queue: <code>paginate(50)</code> + default status filter + collapse the 4 clone-counts into one grouped query</td><td><code>CommunicationController.php:79-89</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s53"></td><td>53</td><td>Recall daily send cap (config value, e.g. 40/day) enforced in the send path</td><td><code>RecallEngineService</code> / send command</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s54"></td><td>54</td><td>Remove (or repoint to mail) the logfile-only <code>tulip:huddle</code> scheduler entry — the web /huddle board is the delivery</td><td><code>routes/console.php:293-296</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s55"></td><td>55</td><td>Run full suite again; add small feature tests for steps 39-46; deploy</td><td><code>php artisan test</code> · <code>bash deploy.sh</code></td></tr>
+</table>
+<div class="box green"><b>GATE E:</b> one full patient cycle (call→book→arrive→consult→plan→accept→visit→bill→pay→receipt→rebook) completed by a receptionist + doctor with ZERO url-typing, zero tab-hunting, zero "remember to" steps.</div>
+
+<h3>PHASE F — Week 3 · Automation goes live (staged, capped, observable)</h3>
+<table>
+<tr><th style="width:6%">✔</th><th style="width:4%">#</th><th>Step</th><th style="width:34%">Where</th></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s56"></td><td>56</td><td>Submit <code>appointment_reminder</code> template (with Confirm/Reschedule/Cancel buttons) for Meta approval; verify all 7 templates approved</td><td>Meta Business Manager · <code>config/whatsapp.php</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s57"></td><td>57</td><td>Webhook GET handshake on prod (verify token) + bad-HMAC POST rejected with 401</td><td><code>/api/v1/webhooks/prm/whatsapp</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s58"></td><td>58</td><td>Dry-run E2E: run <code>whatsapp:send-reminders</code>, inspect payloads + consent-blocked count in the log</td><td><code>storage/logs/whatsapp-reminders.log</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s59"></td><td>59</td><td>Flip <code>WHATSAPP_DRY_RUN=false</code> — <b>reminders only</b>, daily cap, staff phones as first recipients; watch 3 days</td><td><code>.env.production</code> + <code>--force-recreate</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s60"></td><td>60</td><td>Live interactive round-trip: patient taps Confirm/Cancel → queue status updates / cancel executes</td><td><code>InboundMessageService:122-165</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s61"></td><td>61</td><td>Enable appointment confirmations on booking</td><td>template <code>appointment_confirmation</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s62"></td><td>62</td><td>Enable recall sends under the Phase-E cap — the 1,810 backlog drains over ~6 weeks, never as a blast</td><td>recall pipeline</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s63"></td><td>63</td><td>Enable review requests (<code>reviews:request</code> 11:00; one-per-appointment guard already exists)</td><td><code>REVIEWS_ENABLED</code> + google URL</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s64"></td><td>64</td><td>Confirm morning briefing (07:05), SLA alert (14:00), evening summary (18:00) arrive in real inboxes</td><td>Brevo delivery logs</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s65"></td><td>65</td><td><b>BUILD (half-day):</b> <code>inventory:scan-low-stock</code> daily 07:25 — reuse <code>StockStatusService</code>, AppNotification to manager + huddle line. The one missing automation.</td><td>new command + <code>routes/console.php</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s66"></td><td>66</td><td><b>BUILD (small):</b> blocked-consent counter on the huddle ("N patients not receiving reminders — no WhatsApp consent") so silence is visible</td><td><code>HuddleService</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s67"></td><td>67</td><td>Extend <code>last_visit_date</code> writer to treatment visits (observer or service hook, monotonic like the consultation one) — recall accuracy for visit-only patients</td><td><code>ConsultationClinicalWiringObserver</code> pattern → <code>TreatmentVisitService</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s68"></td><td>68</td><td>Clean orphan relationship rows before recall volume rises</td><td><code>php artisan relationship:backfill --apply</code></td></tr>
+</table>
+<div class="box green"><b>GATE F:</b> every automation row in Section 5 firing AND delivering somewhere a human looks (in-app, inbox, or WhatsApp) — nothing terminating in a logfile.</div>
+
+<h3>PHASE G — Cutover · Data migration &amp; go-live at Tulip (overlaps Phase E week)</h3>
+<table>
+<tr><th style="width:6%">✔</th><th style="width:4%">#</th><th>Step</th><th style="width:34%">Where</th></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s69"></td><td>69</td><td>Verify Settings → Data tab actually renders the import form (flagged unverified after an 08-03 cleanup)</td><td><code>settings.index?tab=data</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s70"></td><td>70</td><td>Export full patient base from the old software (Clinicia/Bestosys export)</td><td>old system</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s71"></td><td>71</td><td>Import preview → check the first-10 mapping + duplicate count → import (chunked 500/transaction; legacy UHID preserved as patient_id)</td><td><code>PatientImportExportController</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s72"></td><td>72</td><td>Spot-check 20 imported patients incl. phone-duplicate families</td><td>manual</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s73"></td><td>73</td><td>Masters setup: branches, doctors, operatories, treatment categories + pricing, consent purposes (seeder), Rx drug master, letterheads/print templates</td><td>Clinic Administration</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s74"></td><td>74</td><td>Staff accounts: one per human (no shared logins), owner-configured roles + module permissions matrix, 2FA on admin/owner accounts</td><td>Roles &amp; Permissions</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s75"></td><td>75</td><td>Opening balances: outstanding patient dues entered as opening invoices; advances as wallet deposits (SOP: one line item "Opening balance", dated cutover day)</td><td>Billing / Wallet</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s76"></td><td>76</td><td>Re-enter ACTIVE treatment plans only (patients mid-treatment) + next 2 weeks of appointments</td><td>manual, front desk + doctor</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s77"></td><td>77</td><td>Inventory opening stock: product bulk import + opening stock-count session</td><td><code>InventoryProductImportController</code> · Stock Count</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s78"></td><td>78</td><td>Training half-day 1 (desk): global booking modal ONLY, today-queue screen, billing-badge SOP, payment modal, cashbook EOD, wa.me sends</td><td>Help Centre as courseware</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s79"></td><td>79</td><td>Training half-day 2 (doctors): queue→Start Consultation, typed consultation variants, plan present/accept chairside, visit worksheet, Rx</td><td>Help Centre</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s80"></td><td>80</td><td>Downtime SOP printed &amp; posted: morning schedule print, paper fallback forms, who to call (no offline mode exists)</td><td>one A4 sheet</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s81"></td><td>81</td><td>Parallel day: old system READ-ONLY, Dentfluence primary; evening compare collections both systems</td><td>1 clinic day</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s82"></td><td>82</td><td><b>GO-LIVE DAY (supervised):</b> old software off; papercut log open; evening review; backup confirmed that night</td><td>—</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s83"></td><td>83</td><td>Week-1 rhythm: daily 15-min papercut review; fix ONLY breakages; everything else → V1.1 register</td><td>—</td></tr>
+</table>
+<div class="box green"><b>GATE G:</b> Tulip runs a full week on Dentfluence alone · evening cash tally matches physically · zero data-loss incidents.</div>
+
+<h3>PHASE H — Weeks 4-6 · Android role-parity (module by module, fix-only)</h3>
+<table>
+<tr><th style="width:6%">✔</th><th style="width:4%">#</th><th>Step</th><th style="width:34%">Scope</th></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s84"></td><td>84</td><td>Build + distribute current APK; device matrix (doctor's phone + one spare); point at prod API</td><td>Flutter repo · <code>flutter pub get</code> first (known gotcha)</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s85"></td><td>85</td><td>Smoke: login, 2FA, token refresh, logout-all</td><td><code>/api/v1/auth/*</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s86"></td><td>86</td><td>Doctor read paths: patient search, profile, timeline, clinical files view</td><td>Patient/PatientProfile controllers</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s87"></td><td>87</td><td>Consultation create — all 4 typed variants + COHA — against prod</td><td><code>POST /patients/{p}/consultations*</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s88"></td><td>88</td><td>Treatment plan: view, mark-presented, accept/defer/reject, partial-accept</td><td><code>/treatment-plans/{plan}/*</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s89"></td><td>89</td><td>Visit create with worksheet from plan items; edit; verify billing prompt appears on web after mobile visit</td><td><code>POST /patients/{p}/visits</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s90"></td><td>90</td><td>Prescription: create, finalize, repeat, PDF; drug alerts endpoints</td><td><code>/prescriptions*</code> + <code>/rx/*</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s91"></td><td>91</td><td>Clinical photo upload from phone camera → lands on PRIVATE disk → visible on web</td><td><code>POST /patients/{p}/clinical-files</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s92"></td><td>92</td><td>Appointments: book, walk-in, reschedule, status updates from phone</td><td><code>/appointments*</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s93"></td><td>93</td><td>Payments: record payment (all modes), wallet credit, EMI installment; verify receipt on web</td><td><code>POST /invoices/{i}/payments</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s94"></td><td>94</td><td>Owner: dashboard KPIs + 6 report tabs read on mobile</td><td>Dashboard/Report controllers (read-only)</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s95"></td><td>95</td><td><b>BUILD (1 day, only new server code in this phase):</b> finance day-summary read endpoint (collections by mode + cash-in-hand) for the owner app view</td><td><code>Api/V1</code> — new read route</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s96"></td><td>96</td><td>Manager: huddle board, task assign/complete, notifications on mobile</td><td>Huddle API</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s97"></td><td>97</td><td>Assistant: inventory lookups, stock status, lab case status transitions</td><td>Inventory/Lab API</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s98"></td><td>98</td><td>Membership regression (the one already-tested module)</td><td>Membership API</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s99"></td><td>99</td><td>Full parallel day: one doctor works Android-ONLY beside the web desk; log every stumble; fix only breakages</td><td>1 clinic day</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s100"></td><td>100</td><td>Sign the role-parity checklist (doctor / assistant / owner / manager: every daily task ✓ on Android)</td><td>this document</td></tr>
+</table>
+<div class="box green"><b>GATE H:</b> parity checklist signed on real devices against prod. Android 58 → ~85.</div>
+
+<h3>PHASE I — Week 7 · KPI completion + Week 8 · FREEZE</h3>
+<table>
+<tr><th style="width:6%">✔</th><th style="width:4%">#</th><th>Step</th><th style="width:34%">Where</th></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s101"></td><td>101</td><td><b>BUILD:</b> revenue-per-doctor in Reports (payments → invoice items → visits → doctor join; schema supports it today)</td><td><code>ReportsController::buildRevenueData():417</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s102"></td><td>102</td><td><b>BUILD:</b> one-page End-of-Day screen — today's collections by mode, pending billing prompts, cash-in-hand, tomorrow's schedule (all 4 queries already exist; composition only)</td><td>new route + view over <code>FinanceController</code>/<code>DashboardController</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s103"></td><td>103</td><td>Analytics snapshot cutover: flag ON, verify against live numbers for one week, then retire the shadow note</td><td><code>RebuildAnalyticsSnapshots</code> + feature flag</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s104"></td><td>104</td><td>Chair-utilization % + no-show rate cards on owner dashboard (queue page already computes utilization — reuse)</td><td><code>appointments/today.blade.php</code> logic → dashboard</td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s105"></td><td>105</td><td>Full regression suite + prod smoke + <b>restore drill #2</b></td><td><code>php artisan test</code> · <code>dentfluence:smoke</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s106"></td><td>106</td><td>Update Help Centre content for the new glue (queue buttons, EOD screen); refresh deploy runbook</td><td><code>resources/help/content.php</code> · <code>docs/</code></td></tr>
+<tr><td><input type="checkbox" class="stepchk" data-step="s107"></td><td>107</td><td>Tag <code>v1.0.0</code> · <b>DECLARE V1 FROZEN</b> · open the V1.1/V2 register — after this, only defect fixes enter V1</td><td><code>git tag v1.0.0</code></td></tr>
+</table>
+<div class="box green"><b>GATE I = V1 COMPLETE:</b> all workflows buttoned, all automations live and observed, role-parity on Android signed, owner KPIs answerable from two screens, system frozen. Next conversation is V2 (voice capture).</div>
+
+<div class="box amber"><b>Explicitly NOT in this path (so nobody sneaks them in):</b> AI assistant re-enable (V1.1 — needs per-tool canAccess first) · voice/transcripts (V2) · imaging/perio charting · online booking/microsite · clinic_id multi-tenant · GBP/Meta integrations · UI redesigns · payroll engine · SMS channel · Reception-parity Android. Every one of these delays V1 and none of them is needed for Tulip to operate.</div>
+</div>
+
+<p class="sub" style="margin-top:22px;border-top:1px solid var(--line);padding-top:10px">Prepared 2026-08-07 (third independent audit) · Basis: two full workflow-tracing passes across blade views, controllers, services, observers, scheduler, routes and API, spot-checked; prior audits 2026-08-03 and 2026-08-07 AM; governance record 2026-05 → 2026-08. Flutter app source is not present in this repository — Android conclusions are API-contract-based and marked accordingly. Verdict: <b>YES WITH CONDITIONS — stop development, start implementation after the 7-day hardening pass. Overall CEO Score: 84/100. Implementation readiness: 90%.</b></p>
+
+
+
+<script>
+document.querySelectorAll('.tabbtn').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.tabbtn').forEach(function(x){x.classList.remove('active');});
+    document.querySelectorAll('.pane').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');
+    document.getElementById(b.dataset.tab).classList.add('active');
+    window.scrollTo({top:0});
+  });
+});
+// Path-to-V1 step checkboxes — persisted in this browser
+(function(){
+  var KEY = 'dfl_v1path_steps_20260807';
+  var state = {};
+  try{ state = JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){}
+  var boxes = document.querySelectorAll('.stepchk');
+  function refreshCount(){
+    var done = 0; boxes.forEach(function(b){ if(b.checked) done++; });
+    var el = document.getElementById('stepcount');
+    if(el) el.textContent = done + ' / ' + boxes.length + ' steps complete';
+  }
+  boxes.forEach(function(b){
+    if(state[b.dataset.step]) b.checked = true;
+    b.addEventListener('change', function(){
+      state[b.dataset.step] = b.checked;
+      localStorage.setItem(KEY, JSON.stringify(state));
+      refreshCount();
+    });
+  });
+  var bar = document.querySelector('#t11 .sub');
+  if(bar){
+    var span = document.createElement('div');
+    span.id = 'stepcount';
+    span.style.cssText = 'font-weight:800;color:var(--green);font-size:14px;margin:4px 0 8px';
+    bar.after(span);
+  }
+  refreshCount();
+})();
+</script>
+</body>
+</html>

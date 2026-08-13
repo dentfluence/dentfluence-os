@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dentfluence V1 — Final Go-Live Audit — Tulip Dental (Audit #4)</title>
+<style>
+  :root{--ink:#1a1f2e;--mut:#5a6072;--line:#dfe3ea;--bg:#f7f8fa;--red:#c0392b;--amber:#b7791f;--green:#1e7e4a;--blue:#1f4e8c;--violet:#702070;--redbg:#fdecea;--amberbg:#fdf6e3;--greenbg:#e8f5ee;--bluebg:#eaf1fa;--violetbg:#f4e8f4;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,Arial,sans-serif;color:var(--ink);background:#fff;font-size:13.5px;line-height:1.5;max-width:1010px;margin:0 auto;padding:32px 40px}
+  h1{font-size:22px;margin-bottom:2px}
+  h2{font-size:16.5px;margin:30px 0 10px;padding:7px 12px;background:var(--ink);color:#fff;border-radius:4px}
+  h3{font-size:14px;margin:16px 0 6px;color:var(--blue)}
+  p{margin:6px 0}
+  .sub{color:var(--mut);font-size:12.5px;margin-bottom:14px}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12.6px}
+  th{background:var(--bg);text-align:left;padding:6px 8px;border:1px solid var(--line);font-size:11.7px;text-transform:uppercase;letter-spacing:.03em;color:var(--mut)}
+  td{padding:6px 8px;border:1px solid var(--line);vertical-align:top}
+  tr:nth-child(even) td{background:#fbfcfd}
+  .tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap}
+  .ok{background:var(--greenbg);color:var(--green)} .warn{background:var(--amberbg);color:var(--amber)} .bad{background:var(--redbg);color:var(--red)} .info{background:var(--bluebg);color:var(--blue)} .v11{background:var(--violetbg);color:var(--violet)}
+  .verdict{border:3px solid var(--amber);background:var(--amberbg);border-radius:8px;padding:16px 20px;margin:14px 0}
+  .verdict h3{color:var(--amber);font-size:19px;margin:0 0 6px}
+  .box{border:1px solid var(--line);border-left:4px solid var(--blue);background:var(--bg);padding:10px 14px;border-radius:4px;margin:10px 0}
+  .box.red{border-left-color:var(--red);background:var(--redbg)}
+  .box.green{border-left-color:var(--green);background:var(--greenbg)}
+  .box.amber{border-left-color:var(--amber);background:var(--amberbg)}
+  code{background:#eef0f4;padding:1px 5px;border-radius:3px;font-size:12px;font-family:Consolas,monospace}
+  .score-grid{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
+  .score-grid div{flex:1;min-width:130px;border:1px solid var(--line);border-radius:6px;padding:9px 10px;text-align:center}
+  .score-grid b{display:block;font-size:22px}
+  .score-grid span{font-size:10.3px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em}
+  .sc-g b{color:var(--green)} .sc-a b{color:var(--amber)} .sc-r b{color:var(--red)}
+  .flow{font-family:Consolas,monospace;font-size:12.2px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:12px 16px;margin:8px 0;line-height:1.7}
+  .flow .s{color:var(--green);font-weight:700} .flow .f{color:var(--amber);font-weight:700} .flow .x{color:var(--red);font-weight:700}
+  ul,ol{margin:6px 0 6px 22px}
+  li{margin:3px 0}
+  .meta{border-bottom:2px solid var(--ink);padding-bottom:12px;margin-bottom:8px}
+  .tabbar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:4px;background:#fff;padding:10px 0 8px;border-bottom:2px solid var(--ink);margin-bottom:6px}
+  .tabbtn{font-family:inherit;font-size:11.6px;font-weight:600;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--mut);cursor:pointer}
+  .tabbtn:hover{color:var(--ink);border-color:var(--mut)}
+  .tabbtn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .pane{display:none}
+  .pane.active{display:block}
+  .pane > h2:first-child{margin-top:10px}
+  @media print{ body{padding:9mm;font-size:10.4px;max-width:none} .tabbar{display:none} .pane{display:block !important} h2{break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact} table,.verdict,.box,.flow{break-inside:avoid} .tag,th,.score-grid div{-webkit-print-color-adjust:exact;print-color-adjust:exact} }
+</style>
+</head>
+<body>
+
+<div class="meta">
+  <h1>DENTFLUENCE V1 — FINAL GO-LIVE AUDIT (AUDIT #4)</h1>
+  <p style="font-size:14.5px;color:var(--violet);font-weight:600">Final Implementation &amp; Production Readiness Audit before Tulip Dental Go-Live · Independent Panel Assessment</p>
+  <p class="sub">7 August 2026 · <b>The benchmark is not software.</b> The benchmark is a busy Indian dental clinic that has successfully operated for years on Google Sheets + WhatsApp + paper + a PMS. The only question: <b>can Dentfluence V1 replace that ecosystem with equal or better reliability, every single day?</b> · Evidence: four full code-verification passes this cycle (security, data integrity, operations, workflow trace), three prior audit reports, governance record, and the Dr. Neha Aggarwal CRM webinar treated as Voice-of-Customer research. Nothing below is assumed; unverifiable items are marked.</p>
+</div>
+
+<div class="tabbar" id="tabbar"><button class="tabbtn active" data-tab="t0">1 · Executive Summary</button><button class="tabbtn" data-tab="t1">2 · Production Readiness</button><button class="tabbtn" data-tab="t2">3 · Day Simulation</button><button class="tabbtn" data-tab="t3">4 · Role Readiness</button><button class="tabbtn" data-tab="t4">5 · Web↔Android</button><button class="tabbtn" data-tab="t5">6+15 · CRUD &amp; Freeze</button><button class="tabbtn" data-tab="t6">7 · Automation</button><button class="tabbtn" data-tab="t7">8+9 · Audit &amp; Security</button><button class="tabbtn" data-tab="t8">10+11 · Data &amp; Perf</button><button class="tabbtn" data-tab="t9">12 · Escape Points</button><button class="tabbtn" data-tab="t10">13 · Voice of Customer</button><button class="tabbtn" data-tab="t11">14 · Dr. System</button><button class="tabbtn" data-tab="t12">16+17 · Go / No-Go</button><button class="tabbtn" data-tab="t13">18 · 14-Day Plan + CEO</button></div>
+
+<!-- ============ TAB 0 : EXEC SUMMARY ============ -->
+<div class="pane active" id="t0">
+<h2>SECTION 1 — EXECUTIVE SUMMARY</h2>
+<div class="score-grid">
+  <div class="sc-a"><b>84/100</b><span>Overall Readiness</span></div>
+  <div class="sc-g"><b>88%</b><span>Confidence (post-conditions)</span></div>
+  <div class="sc-a"><b>MEDIUM → LOW</b><span>Risk (today → after 7 days)</span></div>
+  <div class="sc-a"><b>GO*</b><span>Final Verdict (with conditions)</span></div>
+</div>
+<div class="box"><b>The honest assessment against the real benchmark.</b> The ecosystem Tulip would be replacing — Sheets + WhatsApp + paper + PMS — has three virtues no software audit should dismiss: it never crashes, it needs no training, and it works when the internet doesn't. Its fatal weaknesses are the ones Dr. Aggarwal's own webinar admits: everything depends on disciplined humans, nothing is enforced, nothing is audited, follow-ups die with staff turnover, and the owner sees only what someone remembered to type into a cell. <b>Dentfluence V1 wins where the manual ecosystem structurally cannot:</b> one-patient-one-record enforced by the database instead of discipline, follow-ups that create themselves as assigned tasks, money that cannot be recorded outside a locked transactional trail, a tamper-checked audit chain, and duplicate/overlap/race protection that a spreadsheet will never have. <b>The manual ecosystem currently wins on exactly three things:</b> it has backups-by-redundancy (paper doesn't disappear when a disk dies — Dentfluence has NO backups today), it degrades gracefully (Dentfluence has zero offline capability), and it is already trained-in. Two of those three are closable in days; the third is a training week. That is the whole gap.</div>
+<p><b>Verdict: GO WITH CONDITIONS.</b> 4 P0 + 7 P1, all environment/plumbing-level, closable in ~7 working days; supervised cutover Day 11; nothing requires redesign. Detailed support in every tab.</p>
+</div>
+
+<!-- ============ TAB 1 : PRODUCTION READINESS ============ -->
+<div class="pane" id="t1">
+<h2>SECTION 2 — PRODUCTION READINESS: Can Tulip start tomorrow morning?</h2>
+<p><b>No — tomorrow it would be less reliable than the Sheets ecosystem, because of backups alone. In ~7 working days — yes, more reliable.</b></p>
+<h3>P0 — Critical Blockers</h3>
+<table>
+<tr><th style="width:26%">Item</th><th>Evidence</th><th style="width:26%">Fix</th></tr>
+<tr><td><span class="tag bad">P0-1</span> No backups of any kind</td><td>No backup package; zero backup jobs among 22 scheduled commands; <code>backup.sh</code> exists unwired. Paper never loses a decade of records to one disk; today Dentfluence can.</td><td>Nightly <code>backup.sh</code> + off-server copy + restore drill. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td><span class="tag bad">P0-2</span> AI assistant bypasses RBAC</td><td><code>AssistantService::runTool()</code> — zero permission checks (verified twice); enabled by default.</td><td><code>ASSISTANT_ENABLED=false</code>. One line. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td><span class="tag bad">P0-3</span> Consultation photos world-readable</td><td><code>config/filesystems.php:62-67</code> — public disk, unauthenticated URL.</td><td>Private disk + existing secure-media route. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td><span class="tag bad">P0-4</span> Failures invisible</td><td>No error tracker; single unrotated log; <code>MAIL_MAILER=log</code>; cron death silent.</td><td>Daily logs + Slack channel + real mailer + dead-man ping. 🔧 FIX BEFORE SHIP</td></tr>
+</table>
+<h3>P1 — Must Fix Before Go-Live</h3>
+<table>
+<tr><th>Item</th><th style="width:30%">Fix</th></tr>
+<tr><td><span class="tag warn">P1-1</span> Treatment Visit final sprint uncommitted (5 modified + 9 untracked files on one disk)</td><td>Commit, re-run suite, tag. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td><span class="tag warn">P1-2</span> Production .env: DEBUG on, secure-cookie/session-encrypt unset, <code>PRM_WA_APP_SECRET</code> unset while inbound webhook defaults ENABLED (<code>config/prm.php:104</code>)</td><td>Env hardening pass. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td><span class="tag warn">P1-3</span> PHI encryption backfill never verified on prod (casts read plaintext gracefully until run)</td><td><code>php artisan patients:encrypt-phi</code> + ciphertext spot-check. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td><span class="tag warn">P1-4</span> Lab + vendor attachments on public disk (can carry patient identifiers)</td><td>Private disk. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td><span class="tag warn">P1-5</span> Communication queue loads entire table (<code>->get()</code> over 1,810-row backlog, growing daily)</td><td>Paginate + default filter. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td><span class="tag warn">P1-6</span> Recall backlog uncapped — enabling live sends = 1,810-message blast risk</td><td>Daily send cap. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td><span class="tag warn">P1-7</span> Forgot-PIN / OTP / /hr/scan / /r/{token} unthrottled; clinical upload has no MIME whitelist</td><td>Throttle + <code>mimes:</code> rule. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td><span class="tag warn">P1-8 (glue)</span> Live queue page orphaned; no Start-Consultation link so appointments never auto-close; logfile huddle</td><td>Three one-line links. 🔧 FIX BEFORE SHIP</td></tr>
+</table>
+<h3>P2 — Can Wait</h3>
+<p><code>last_visit_date</code> not advanced by visit-only patients · <code>route:cache</code> skipped · 20-second payment dedupe heuristic · cascade-FK landmine (protected by soft deletes; policy: never force-delete) · database cache store · duplicate migration stems · no CI · HR sidebar ungated (nav only) · calendar grid refresh · <code>next_visit_date</code> fields unread. All 📦 MOVE TO V1.1 (workflow-tightening subset lands in glue week).</p>
+</div>
+
+<!-- ============ TAB 2 : DAY SIMULATION ============ -->
+<div class="pane" id="t2">
+<h2>SECTION 3 — DAY-IN-THE-LIFE SIMULATION</h2>
+<p class="sub">Full clinic day traced through blade views + controllers (workflow-trace pass, 07 Aug). <span class="s" style="color:var(--green);font-weight:700">WORKS</span> / <span style="color:var(--amber);font-weight:700">FRICTION</span> / <span style="color:var(--red);font-weight:700">GAP</span>.</p>
+<div class="flow">
+<b>MORNING OPENING</b> — Dashboard: 4 KPI cards, alert strip, today's schedule with patient links → <span class="s">WORKS</span>. Web /huddle board (schedule, safety flags, money to collect, lab, inventory, tasks) → <span class="s">WORKS</span>. <span class="f">FRICTION</span>: scheduled huddle text goes to a logfile; briefing email currently dead (mail→log).<br>
+<b>RECEPTION / APPOINTMENTS / WALK-INS</b> — Global booking modal: typeahead + quick-register + walk-in tab + duplicate-phone warning → <span class="s">WORKS</span>. <span class="x">GAP</span>: standalone booking page discards typed data for new patients — train modal-only. Live check-in queue exists (Check In/Start/Done/No-Show, 30-s refresh) but <span class="x">orphaned from nav</span>.<br>
+<b>REGISTRATION</b> — 5-tab modal, 6 required fields, save-&amp;-skip, paper-form photo scan prefill, family-link duplicate flow → <span class="s">WORKS (30 seconds)</span>.<br>
+<b>CONSULTATION</b> — <span class="x">GAP</span>: no Start-Consultation from any appointment (3 screens; complaint re-typed; appointment never auto-closes because appointment_id is never passed — observer exists and waits). Five consultation types → <span class="s">WORKS</span>.<br>
+<b>TREATMENT PLANNING</b> — One-click plan from consultation, prefilled → <span class="s">WORKS — cleanest handoff in the app</span>. Present → Accept(gated) / Defer / Reject / Revert-with-reason, print with QR, consent picker → <span class="s">WORKS</span>.<br>
+<b>TREATMENT VISITS</b> — <span class="f">FRICTION</span>: no Start-Visit on the accepted plan card (tab-switch + reselect); worksheet then auto-loads plan items → <span class="s">WORKS</span>. Visit save is silent JSON → <span class="f">FRICTION</span>.<br>
+<b>PRESCRIPTION</b> — Full pad, drug master, pediatric ml dosing, print?auto=1, PDF, WhatsApp route → <span class="s">WORKS</span>. <span class="f">FRICTION</span>: Rx button routes to a profile tab (3 screens).<br>
+<b>BILLING / PAYMENT</b> — BillingPrompt pre-fills invoice from visit (no re-picking) → <span class="s">WORKS</span>; discovery is a tab banner + 30-s badge → <span class="f">FRICTION</span>. Payment modal: 9 modes, wallet allocation, receipt generated → <span class="s">WORKS</span>; receipt print not one-click → <span class="f">FRICTION</span>; no WhatsApp in billing views → <span class="f">FRICTION</span>.<br>
+<b>LAB</b> — Draft case auto-spawned from visit with teeth inherited; 9-status lifecycle; overdue → urgent tasks; lab-ready → call-patient task; monthly reconciliation → <span class="s">WORKS</span>.<br>
+<b>INVENTORY</b> — Stock status on-read, locked movements, GRN/reversal → <span class="s">WORKS</span>. <span class="x">GAP</span>: zero low-stock alerting — huddle line + reports only.<br>
+<b>FOLLOW-UP / RECALL</b> — Engine (6 triggers) queues staff actions daily 07:00 → <span class="s">WORKS as designed (semi-auto)</span>. <span class="x">GAP</span>: nothing prompts rebooking at checkout; next_visit fields consumed by nothing.<br>
+<b>REPORTS</b> — 6 tabs, day/mode revenue, filters → <span class="s">WORKS</span>. <span class="f">FRICTION</span>: no revenue-per-doctor.<br>
+<b>CLOSING</b> — Cashbook day-wise in/out/net/running balance + real payment-mode split → <span class="s">WORKS</span>. <span class="f">FRICTION</span>: no single end-of-day screen (3-4 screen tour); evening summary is email (dead until mailer fixed).<br>
+<b>OWNER REVIEW</b> — KPIs + reports + huddle report → <span class="s">WORKS</span>, minus revenue-per-doctor.
+</div>
+<p><b>Count: 0 broken workflows · 3 gaps closed by one-line links · 6 frictions absorbed by training until glue week.</b> Against the benchmark: every one of these frictions already exists in worse form in the manual ecosystem (a diary can't remind anyone either) — but the manual ecosystem never pretends otherwise. Fix the three links before Day 1 so the software keeps its promises.</p>
+</div>
+
+<!-- ============ TAB 3 : ROLE READINESS ============ -->
+<div class="pane" id="t3">
+<h2>SECTION 4 — ROLE READINESS: can each person complete an entire working day?</h2>
+<table>
+<tr><th style="width:16%">Role</th><th style="width:10%">Full day?</th><th>Why</th><th style="width:9%">Confidence</th></tr>
+<tr><td><b>Owner</b></td><td><span class="tag ok">YES</span></td><td>KPIs, 6-tab reports, cashbook, GST/CA export, huddle report, audit-verify alerts. Missing only revenue-per-doctor (uses Sheets today for that anyway — see Escape Points).</td><td>85%</td></tr>
+<tr><td><b>Manager</b></td><td><span class="tag ok">YES</span></td><td>Huddle board + accountability view, task engine with shift/periodic reminders, SLA alert, recall queue oversight. Email digests dead until mailer fix.</td><td>82%</td></tr>
+<tr><td><b>Reception / Front Desk</b></td><td><span class="tag warn">PARTIAL → YES after glue</span></td><td>Booking/registration/payment excellent; carries 6 remembered hand-offs today; 3 become buttons in the fix list. Desk is desktop-first by design.</td><td>78% → 88%</td></tr>
+<tr><td><b>Associate Dentist</b></td><td><span class="tag ok">YES</span></td><td>Full clinical chain works; friction is screen-count, not capability. Typed consultation variants cut repeat work.</td><td>84%</td></tr>
+<tr><td><b>Assistant</b></td><td><span class="tag ok">YES</span></td><td>Visit worksheet, clinical files (private, watermarked), lab status updates, inventory lookups.</td><td>80%</td></tr>
+<tr><td><b>Accounts</b></td><td><span class="tag ok">YES</span></td><td>Strongest role: locked transactional billing, cashbook, mode split, expenses with OCR scan, vendors, banking, vouchers, GST, CA export, wallet, lab reconciliation. Payroll = register only (matches what clinics do in Sheets today).</td><td>92%</td></tr>
+<tr><td><b>Lab coordinator</b></td><td><span class="tag ok">YES</span></td><td>Full lifecycle + auto-tasks + reconciliation. Attachment privacy fix pending (P1-4).</td><td>85%</td></tr>
+<tr><td><b>Marketing</b></td><td><span class="tag warn">PARTIAL</span></td><td>Blog Hub live; reviews gated on live WhatsApp; GBP/Meta parked by decision. Enough for V1's single clinic.</td><td>70%</td></tr>
+</table>
+</div>
+
+<!-- ============ TAB 4 : WEB<->ANDROID ============ -->
+<div class="pane" id="t4">
+<h2>SECTION 5 — WEB ↔ ANDROID WORKFLOW PARITY</h2>
+<div class="box amber">Flutter source is not in this repository (verified: zero .dart files) — app-side conclusions are API-contract-based and marked accordingly. The API itself: 28 controllers, ~125 write routes, Sanctum + per-route module RBAC, full clinical lifecycle including plan present/accept, invoice creation, payments, typed consultations.</div>
+<table>
+<tr><th>Role</th><th style="width:22%">Web+Android together = complete workflow?</th><th>Production-critical gap?</th></tr>
+<tr><td>Owner</td><td><span class="tag ok">YES</span> (web complete; Android read via Dashboard/Report API)</td><td>None. Android finance day-summary is a nice-to-have read endpoint. 📦 MOVE TO V1.1</td></tr>
+<tr><td>Doctor / Assistant</td><td><span class="tag ok">YES</span> (web complete; Android write paths exist server-side, app untested)</td><td>None blocking — web covers 100% of the day. Android write validation is post-go-live role-parity work. 📦 MOVE TO V1.1</td></tr>
+<tr><td>Manager</td><td><span class="tag ok">YES</span> (huddle/task API rich)</td><td>None. 📦 MOVE TO V1.1</td></tr>
+<tr><td>Reception</td><td><span class="tag ok">YES — web only, by design</span></td><td>None: no finance/import API, and none needed; desk work is desktop work.</td></tr>
+</table>
+<p><b>Ruling:</b> zero production-critical parity gaps because the web app alone completes every role's day. Android is a companion whose write paths get smoke-validated after go-live (membership already tested-working). Cosmetic parity: ignored per the audit rules. ✅ SHIP NOW (web-first) · 📦 Android validation MOVE TO V1.1.</p>
+</div>
+
+<!-- ============ TAB 5 : CRUD + FREEZE CERTIFICATES ============ -->
+<div class="pane" id="t5">
+<h2>SECTION 6 — CRUD COMPLETENESS (per production module)</h2>
+<p class="sub">C=Create V=View E=Edit D=Delete(soft) P=Print X=Export Pm=Permissions AL=Activity Log WF=Workflow complete. ✓ verified in code · — not applicable · ? not re-verified this pass.</p>
+<table>
+<tr><th>Module</th><th>C</th><th>V</th><th>E</th><th>D</th><th>P</th><th>X</th><th>Pm</th><th>AL</th><th>WF</th><th style="width:14%">Class</th></tr>
+<tr><td>Patients (incl. import/export, merge+undo)</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span></td></tr>
+<tr><td>Appointments (book/walk-in/drag-drop/status)</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>?</td><td>—</td><td>✓</td><td>✓</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span> (schedule print: add to downtime SOP)</td></tr>
+<tr><td>Consultations (5 types)</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>✓</td><td>✓</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span></td></tr>
+<tr><td>Treatment Plans (present/accept/defer/reject/revert)</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓ (+QR)</td><td>—</td><td>✓</td><td>✓ (decision ledger)</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span></td></tr>
+<tr><td>Treatment Visits (worksheet, print)</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>✓</td><td>✓</td><td>✓</td><td><span class="tag warn">⚠ Minor</span> — commit sprint first</td></tr>
+<tr><td>Prescriptions (print/PDF/WhatsApp/repeat)</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓ PDF</td><td>✓</td><td>✓ (own log)</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span></td></tr>
+<tr><td>Billing (invoice/receipt/final bill/void/EMI/discount)</td><td>✓</td><td>✓</td><td>✓</td><td>✓ (cancel)</td><td>✓</td><td>✓ PDF</td><td>✓ (role-billing)</td><td>✓ (financial logs)</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span></td></tr>
+<tr><td>Wallet / Advances</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>—</td><td>—</td><td>✓</td><td>✓</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span></td></tr>
+<tr><td>Finance (income/expense/cashbook/GST/CA export/vouchers)</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓ (vouchers)</td><td>✓ CSV+CA</td><td>✓</td><td>✓</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span></td></tr>
+<tr><td>Inventory (products/stock/PO/GRN/implants/counts)</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>✓ import</td><td>✓</td><td>✓</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span> (deployed)</td></tr>
+<tr><td>Lab (cases/transitions/reconciliation)</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>?</td><td>—</td><td>✓</td><td>✓ (events+comms)</td><td>✓</td><td><span class="tag warn">⚠ Minor</span> — attachments private (P1-4)</td></tr>
+<tr><td>PRE / Recall / Communication queue</td><td>✓</td><td>✓</td><td>✓</td><td>✓ (dismiss)</td><td>—</td><td>—</td><td>✓</td><td>✓</td><td>✓</td><td><span class="tag warn">⚠ Minor</span> — pagination (P1-5) + cap (P1-6)</td></tr>
+<tr><td>WhatsApp (templates/webhook/interactive)</td><td>✓</td><td>✓</td><td>—</td><td>—</td><td>—</td><td>—</td><td>✓</td><td>✓ (blocked-send audit)</td><td>✓</td><td><span class="tag warn">⚠ Minor</span> — external Meta config only</td></tr>
+<tr><td>Tasks (Action Board)</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>—</td><td>✓</td><td>✓</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span></td></tr>
+<tr><td>Daily Huddle</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>?</td><td>—</td><td>✓</td><td>✓</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span> (kill logfile entry)</td></tr>
+<tr><td>HR (staff/attendance/roles)</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>—</td><td>✓ (throttle /hr/scan)</td><td>✓</td><td>✓</td><td><span class="tag warn">⚠ Minor</span> (P1-7)</td></tr>
+<tr><td>Reports (6 tabs)</td><td>—</td><td>✓</td><td>—</td><td>—</td><td>?</td><td>? (no export found)</td><td>✓</td><td>—</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span> — export 📦 V1.1</td></tr>
+<tr><td>Membership</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>—</td><td>✓</td><td>✓</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span></td></tr>
+<tr><td>Marketing / Blog</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>—</td><td>✓</td><td>✓ (versioning)</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span> (live)</td></tr>
+<tr><td>Settings / Clinic Administration</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>✓ (patient data tab)</td><td>✓</td><td>✓</td><td>✓</td><td><span class="tag ok">✅ FREEZE</span> (v2 scope)</td></tr>
+<tr><td>AI Assistant</td><td colspan="9">Disabled for V1 (P0-2)</td><td><span class="tag bad">❌ Blocker → disable</span></td></tr>
+</table>
+
+<h2>SECTION 15 — FEATURE FREEZE CERTIFICATE</h2>
+<table>
+<tr><th>Module</th><th style="width:11%">Freeze today?</th><th style="width:11%">Confidence</th><th style="width:18%">Lifetime before redesign</th><th style="width:12%">Redesign needed?</th></tr>
+<tr><td>Patients</td><td>YES</td><td>95%</td><td>3+ yrs (schema outlives UI)</td><td>NO</td></tr>
+<tr><td>Consultations</td><td>YES</td><td>92%</td><td>2-3 yrs</td><td>NO</td></tr>
+<tr><td>Treatment Plans (lifecycle contract)</td><td>YES</td><td>95%</td><td>3+ yrs — this IS the product's constitution</td><td>NO</td></tr>
+<tr><td>Treatment Visits</td><td>YES (after commit)</td><td>90%</td><td>2-3 yrs (UX already frozen by stress-test)</td><td>NO</td></tr>
+<tr><td>Billing / Wallet / Finance</td><td>YES</td><td>95%</td><td>3+ yrs</td><td>NO</td></tr>
+<tr><td>Appointments</td><td>YES</td><td>90%</td><td>2 yrs (grid live-refresh will be wanted)</td><td>NO</td></tr>
+<tr><td>Prescriptions</td><td>YES</td><td>93%</td><td>3 yrs</td><td>NO</td></tr>
+<tr><td>Inventory</td><td>YES (already closed)</td><td>95%</td><td>2-3 yrs (controller refactor someday, not redesign)</td><td>NO</td></tr>
+<tr><td>Lab</td><td>YES (after P1-4)</td><td>88%</td><td>2 yrs</td><td>NO</td></tr>
+<tr><td>PRE / Recall</td><td>YES (after P1-5/6)</td><td>85%</td><td>18-24 mo (duplicate recall UIs consolidate in V1.1)</td><td>NO (consolidation, not redesign)</td></tr>
+<tr><td>WhatsApp</td><td>YES (code)</td><td>90%</td><td>2 yrs (Graph version drift to unify in V1.1)</td><td>NO</td></tr>
+<tr><td>Huddle / Tasks / Membership / Marketing / Settings / HR / Reports</td><td>YES</td><td>85-92%</td><td>2-3 yrs</td><td>NO</td></tr>
+<tr><td>AI Assistant</td><td>NO — disabled</td><td>—</td><td>Re-enters V1.1 behind authorization layer</td><td>NO (authorization addition, not redesign)</td></tr>
+</table>
+<p><b>Panel ruling: no module in the V1 surface requires redesign. Freeze is justified everywhere the labels above say so.</b></p>
+</div>
+
+<!-- ============ TAB 6 : AUTOMATION ============ -->
+<div class="pane" id="t6">
+<h2>SECTION 7 — AUTOMATION READINESS (existing automations only; tightening only)</h2>
+<table>
+<tr><th>Automation</th><th style="width:15%">Class</th><th>Tightening (no new ideas)</th></tr>
+<tr><td>Appointment reminder tasks (08:00)</td><td><span class="tag info">Semi-automatic</span></td><td>None. ✅ SHIP NOW</td></tr>
+<tr><td>WhatsApp reminders (10:00, consent-gated, dedup-keyed, interactive buttons)</td><td><span class="tag ok">Fully automatic</span></td><td>Currently dry-run/blank creds — flip staged + capped. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td>Recall engine (07:00, 6 triggers → staff queue)</td><td><span class="tag info">Semi-automatic (by design)</span></td><td>Cap backlog drain (P1-6); paginate the screen (P1-5). 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td>Payment-overdue task (07:15)</td><td><span class="tag info">Semi-automatic</span></td><td>None. ✅ SHIP NOW</td></tr>
+<tr><td>Review requests (11:00, once-ever guard)</td><td><span class="tag ok">Fully automatic</span></td><td>Gated on live WhatsApp — enable in week 2. ✅ SHIP NOW</td></tr>
+<tr><td>Birthday tasks (07:20, human-decides design)</td><td><span class="tag info">Semi-automatic</span></td><td>None. ✅ SHIP NOW</td></tr>
+<tr><td>Lab overdue → urgent tasks (09:00) · lab-ready → call task</td><td><span class="tag ok">Fully automatic</span></td><td>None. ✅ SHIP NOW</td></tr>
+<tr><td>Treatment journey (ActivityEngine → Rules → Tasks; ₹30k/2h escalation)</td><td><span class="tag info">Semi-automatic</span></td><td>None. ✅ SHIP NOW</td></tr>
+<tr><td>Daily huddle generation</td><td><span class="tag warn">Automatic, mis-delivered</span></td><td>Kill the logfile scheduler entry; web board is delivery. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td>Briefing / SLA / evening digests (email)</td><td><span class="tag ok">Fully automatic</span></td><td>Dead until real mailer (P0-4). 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td>In-app notifications (lab, tasks, shifts, audit-verify)</td><td><span class="tag ok">Fully automatic</span></td><td>None (30-s poll adequate). ✅ SHIP NOW</td></tr>
+<tr><td>Activity logging (Auditable trait + engines)</td><td><span class="tag ok">Fully automatic</span></td><td>Re-anchor chain post-deploy. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td>Report projections (15-min rebuilds)</td><td><span class="tag ok">Fully automatic</span></td><td>None. ✅ SHIP NOW</td></tr>
+<tr><td>Queues / background jobs (8 queued jobs; WhatsApp/reminders deliberately synchronous)</td><td><span class="tag ok">Sound design</span></td><td>Post-deploy <code>queue:restart</code> ritual (known crash-loop); cron dead-man ping. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td>Inventory low-stock</td><td><span class="tag bad">Manual (nothing exists)</span></td><td>Weekly stock-review SOP for V1; the scan command is the one sanctioned V1.1 build. 📦 MOVE TO V1.1 (SOP covers go-live)</td></tr>
+</table>
+<p><b>Against the benchmark:</b> the manual ecosystem has zero of these — every reminder, recall and follow-up is a human remembering. Dentfluence's task-first automation is not a nice-to-have; it is the entire justification for switching. Which is exactly why the dry-run/mail-to-log state is a P0-class condition: launching with dead automation would make Dentfluence a slower Google Sheet.</p>
+</div>
+
+<!-- ============ TAB 7 : AUDIT + SECURITY ============ -->
+<div class="pane" id="t7">
+<h2>SECTION 8 — ACTIVITY LOG &amp; AUDIT TRAIL</h2>
+<table>
+<tr><th>Action class</th><th style="width:12%">Traceable?</th><th>Mechanism</th></tr>
+<tr><td>Create / Edit / Delete (all core models)</td><td><span class="tag ok">YES</span></td><td><code>Auditable</code> trait → audit_logs: user, before/after, IP, device; secrets stripped; failure never blocks the write.</td></tr>
+<tr><td>Payments / Refunds / Discounts / EMI / Wallet</td><td><span class="tag ok">YES</span></td><td>Dedicated BillingAuditLog + FinanceAuditLog + AuditLog events across BillingController, WalletService, ManualDiscountService, EmiScheduleService.</td></tr>
+<tr><td>Treatment plan approve / reject / defer / revert</td><td><span class="tag ok">YES</span></td><td>Append-only plan_decisions ledger + immutable presented_at.</td></tr>
+<tr><td>Treatment visits</td><td><span class="tag ok">YES</span></td><td>Auditable + BillingPrompt trail.</td></tr>
+<tr><td>Lab</td><td><span class="tag ok">YES</span></td><td>lab_case_events + observer comm log + transition service.</td></tr>
+<tr><td>Inventory</td><td><span class="tag ok">YES</span></td><td>Stock movements + GRN reversal records.</td></tr>
+<tr><td>Appointments (status, reschedule)</td><td><span class="tag ok">YES</span></td><td>Auditable.</td></tr>
+<tr><td>Security events (login, failed login, logout, 2FA)</td><td><span class="tag ok">YES</span></td><td>AuditLog::event in Auth/TwoFactor controllers (web + API).</td></tr>
+<tr><td>Clinical media downloads</td><td><span class="tag ok">YES</span></td><td>SecureMediaController audit-logs downloads.</td></tr>
+<tr><td>Prints (invoice/plan/Rx print events)</td><td><span class="tag warn">PARTIAL</span></td><td>Print views are GETs, not distinctly logged. Benchmark note: paper logs nothing either. 📦 MOVE TO V1.1</td></tr>
+<tr><td>AI tool calls</td><td><span class="tag ok">YES</span></td><td>ai_action_logs (module disabled anyway).</td></tr>
+<tr><td>Trail integrity</td><td><span class="tag ok">YES</span></td><td>Daily <code>audit:verify</code> hash-chain check → in-app alert to all admins. Re-anchor after deploy. 🔧 FIX BEFORE SHIP</td></tr>
+</table>
+
+<h2>SECTION 9 — SECURITY (production risks only)</h2>
+<table>
+<tr><th>Area</th><th style="width:10%">Status</th><th>Note</th></tr>
+<tr><td>Authentication / session</td><td><span class="tag ok">OK</span></td><td>Throttled login, optional TOTP 2FA, 12-h absolute timeout. Set secure-cookie + session-encrypt on prod (P1-2). 🔧</td></tr>
+<tr><td>Authorization / RBAC</td><td><span class="tag ok">OK</span></td><td>module: middleware → canAccess() web + API; owner-configured roles; legacy admin bypass removed. ✅ SHIP NOW</td></tr>
+<tr><td>AI endpoint</td><td><span class="tag bad">P0</span></td><td>Disable (P0-2). 🔧</td></tr>
+<tr><td>Patient privacy / PHI</td><td><span class="tag warn">P0/P1</span></td><td>Field encryption live (address, complaints, meds, allergies, gov IDs, clinical JSON); fix public photo/lab disks; verify backfill. 🔧</td></tr>
+<tr><td>DPDP readiness</td><td><span class="tag ok">OK for V1</span></td><td>Consent purposes + WhatsApp consent guard ON; full lifecycle (DSAR/breach/retention) deadline May 2027 — not a launch gate. ✅ SHIP NOW</td></tr>
+<tr><td>Input validation / CSRF / XSS / SQLi</td><td><span class="tag ok">OK</span></td><td>Zero CSRF exclusions; raw echoes are server-controlled; parameterized queries. ✅ SHIP NOW</td></tr>
+<tr><td>Secrets</td><td><span class="tag ok">OK</span></td><td>.env + SQL dumps git-ignored; zero hardcoded tokens by pattern sweep. ✅ SHIP NOW</td></tr>
+<tr><td>Backups / disaster recovery</td><td><span class="tag bad">P0</span></td><td>None exist. The single dimension where paper currently beats Dentfluence. 🔧</td></tr>
+<tr><td>Webhooks</td><td><span class="tag ok">OK*</span></td><td>Fail-closed HMAC; *inbound defaults enabled → set app secret (P1-2). 🔧</td></tr>
+</table>
+</div>
+
+<!-- ============ TAB 8 : DATA + PERFORMANCE ============ -->
+<div class="pane" id="t8">
+<h2>SECTION 10 — DATA INTEGRITY</h2>
+<table>
+<tr><th>Area</th><th style="width:10%">Status</th><th>Evidence</th></tr>
+<tr><td>Transactions</td><td><span class="tag ok">OK</span></td><td>61 files; every money path wrapped (payments, invoices, wallet ×7, plan billing, rollback, discounts, stock ×5). ✅ SHIP NOW</td></tr>
+<tr><td>Race conditions / concurrency</td><td><span class="tag ok">OK</span></td><td>20 <code>lockForUpdate</code> sites; invoice/receipt/final-bill numbering serialized ("load-bearing, not defensive"); wallet + stock row-locked; optimistic stale-update guard on patient/appointment edits.</td></tr>
+<tr><td>Duplicate prevention</td><td><span class="tag ok">OK</span></td><td>Phone-dup warning (soft by design — families share phones); SQL-side overlap guard on all 5 booking paths incl. drag-drop; DB unique on plan-item-teeth.</td></tr>
+<tr><td>Idempotency</td><td><span class="tag ok">OK for V1</span></td><td>Row-lock + 20-s identical-payment guard; WhatsApp dedup keys. Client keys 📦 V1.1.</td></tr>
+<tr><td>FKs / soft deletes / rollback</td><td><span class="tag ok">OK*</span></td><td>Soft deletes everywhere; billing rollback + GRN reversal + merge undo shipped. *188 cascade FKs ⇒ policy: never force-delete. 📦 V1.1 hardening</td></tr>
+<tr><td>Migration safety</td><td><span class="tag ok">OK</span></td><td>424 applied in order on the single instance; never reorder (standing rule); integrity migration refuses dirty data.</td></tr>
+</table>
+<h2>SECTION 11 — PERFORMANCE (bottlenecks only)</h2>
+<table>
+<tr><th>Surface</th><th style="width:10%">Status</th><th>Note</th></tr>
+<tr><td>Dashboard / Appointments / Patients / Timeline / Visits</td><td><span class="tag ok">OK</span></td><td>Eager-loaded, date-bounded, 81 paginate() calls; timeline constrained limit(10). ✅ SHIP NOW</td></tr>
+<tr><td>Communication queue</td><td><span class="tag bad">P1</span></td><td>Unpaginated full-table get() + 4 clone-counts. The one screen that will fall over. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td>Media</td><td><span class="tag ok">OK</span></td><td>Local disk via Docker volume; watch disk growth monthly. 📦 V1.1 (S3 later)</td></tr>
+<tr><td>Queries / caching / large DB</td><td><span class="tag ok">OK for one clinic</span></td><td>DB cache store, 9 cache calls, no route:cache (closure routes). All tolerable at Tulip scale. 📦 V1.1</td></tr>
+</table>
+</div>
+
+<!-- ============ TAB 9 : ESCAPE POINTS ============ -->
+<div class="pane" id="t9">
+<h2>SECTION 12 — ESCAPE POINT ANALYSIS</h2>
+<p class="sub">Every situation where staff would leave Dentfluence for Sheets / Excel / WhatsApp / paper / diary / calculator / another PMS. This is the decisive section against the real benchmark — every escape is a vote that the old ecosystem is still better at that job.</p>
+<table>
+<tr><th style="width:20%">Escape</th><th style="width:10%">Role</th><th>Why they'd escape</th><th style="width:9%">Blocker?</th><th style="width:22%">Solvable WITHOUT new features?</th></tr>
+<tr><td>📓 <b>Diary at checkout</b> for "next visit"</td><td>Reception</td><td>Nothing prompts rebooking when status→Done; next_visit chips are collected but read by nothing — the diary is currently MORE reliable.</td><td><span class="tag warn">P1-glue</span></td><td>YES — one prompt reusing the existing global booking modal + 20 lines wiring next_visit→recall queue. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td>📱 <b>Personal WhatsApp</b> for patient messages</td><td>Reception / Doctor</td><td>Desk sends are wa.me links opening the staff member's own phone (interim by design); billing has no send at all; automated sends are dry-run.</td><td><span class="tag warn">P1-config</span></td><td>YES — Cloud API is fully coded; flip creds + staged enable; add the existing consent-gated link button to billing views. 🔧 FIX BEFORE SHIP</td></tr>
+<tr><td>📊 <b>Excel for revenue-per-doctor</b></td><td>Owner</td><td>No such report exists; owner will export/retype into Sheets monthly — recreating exactly the habit Dentfluence exists to kill.</td><td><span class="tag info">No (day-1)</span></td><td>YES in spirit — one query on existing schema. Scheduled week 7; until then it's a monthly annoyance, not an operating failure. 📦 MOVE TO V1.1</td></tr>
+<tr><td>🧮 <b>Calculator at day close</b></td><td>Reception / Accounts</td><td>No single EOD screen — but Cashbook + mode-split already compute everything; the calculator habit is training, not a gap.</td><td><span class="tag ok">No</span></td><td>YES — training on Cashbook day 1; EOD composition screen in V1.1. ✅ SHIP NOW (cashbook)</td></tr>
+<tr><td>📄 <b>Paper during internet/VPS outage</b></td><td>Everyone</td><td>Zero offline capability (verified: no service worker, all stores DB-backed). Paper is the only fallback and always will be for V1.</td><td><span class="tag info">Accepted risk</span></td><td>PARTIAL — printed morning schedule + paper fallback SOP + uptime monitoring + backups make the outage survivable and recoverable. The Sheets ecosystem has the same dependency (Sheets needs internet too); paper is both systems' fallback. ✅ SHIP NOW (SOP)</td></tr>
+<tr><td>📒 <b>Google Sheet for leads</b></td><td>Reception / Owner</td><td>Website/Meta lead webhooks are built but unrouted — web leads arrive by phone/DM and someone might start a sheet.</td><td><span class="tag ok">No</span></td><td>YES — the Lead Pipeline UI exists for manual entry today; webhook routing is one line each when those channels matter. 📦 MOVE TO V1.1</td></tr>
+<tr><td>🗒 <b>Phone notes for follow-up ownership</b></td><td>All staff</td><td>Old habit. Dentfluence's task engine (assignee, due, shift reminders every 5 min, 2-h nudges) is strictly stronger — this escape dies with training, not code.</td><td><span class="tag ok">No</span></td><td>YES — training + huddle accountability view. ✅ SHIP NOW</td></tr>
+<tr><td>📋 <b>Old PMS for clinical history</b></td><td>Doctor</td><td>Only if migration is half-done: imported patients carry demographics, not clinical history. Doctors will reopen the old PMS for pre-cutover treatment detail.</td><td><span class="tag info">Accepted (bounded)</span></td><td>PARTIAL — keep old PMS read-only for 6-12 months as archive (standard practice); active plans re-entered at cutover (step 76). Not solvable without building history importers — correctly rejected for V1. ✅ SHIP NOW (read-only archive policy)</td></tr>
+<tr><td>🧾 <b>Excel for stock counts</b></td><td>Assistant</td><td>None — stock-count sessions with double-submit locking exist and beat a sheet.</td><td><span class="tag ok">No</span></td><td>N/A — no escape. ✅ SHIP NOW</td></tr>
+<tr><td>📕 <b>Attendance register</b></td><td>HR / Staff</td><td>None — /hr/scan QR flow exists (throttle it, P1-7).</td><td><span class="tag ok">No</span></td><td>✅ SHIP NOW</td></tr>
+</table>
+<div class="box green"><b>Ruling:</b> 10 candidate escapes; <b>2 are real and fixable before ship</b> (checkout rebooking, WhatsApp-from-the-system), <b>2 are bounded accepted risks with SOPs</b> (outage paper, old-PMS archive), and the rest are either training or already stronger inside Dentfluence. After the fix list, the honest count of daily escapes is ZERO — which is precisely the "One Entry Principle" the webinar preached, enforced by software instead of discipline.</div>
+</div>
+
+<!-- ============ TAB 10 : VOICE OF CUSTOMER ============ -->
+<div class="pane" id="t10">
+<h2>SECTION 13 — VOICE OF CUSTOMER VALIDATION (Dr. Aggarwal CRM webinar)</h2>
+<p class="sub">The webinar taught discipline-by-spreadsheet: One Patient = One Row Forever · separate Lead and CRM sheets · CRM ≠ PMS · process over technology · data over memory · systems over people. Its admitted limits: heavy manual entry, manual follow-ups/recalls, no automation, no Android, multi-user limits, and total dependence on disciplined staff. The question: does Dentfluence V1 solve what dentists actually asked for?</p>
+<table>
+<tr><th style="width:17%">Dentist pain point (webinar)</th><th style="width:16%">Current solution (Sheets/Dr. System)</th><th style="width:24%">Dentfluence V1</th><th style="width:8%">Ready?</th><th style="width:8%">Priority</th></tr>
+<tr><td>One patient = one row forever; duplicates</td><td>Manual discipline; breaks with new staff</td><td>Enforced by DB: single register() mint path, phone-dup guard with family-link flow, merge+undo. Discipline replaced by constraint.</td><td><span class="tag ok">YES — better</span></td><td>✅ SHIP NOW</td></tr>
+<tr><td>Lead vs existing patient confusion</td><td>Two separate sheets, manually cross-checked</td><td>Lead Pipeline distinct from Patients; conversion links the records; one DB so no cross-checking.</td><td><span class="tag ok">YES</span></td><td>✅ SHIP NOW</td></tr>
+<tr><td>CRM ≠ PMS (two systems, double entry)</td><td>Sheets CRM beside a PMS; every patient typed twice</td><td><b>Dissolved:</b> PRE (CRM) and clinical/billing (PMS) share one patient record. The webinar's biggest structural complaint stops existing.</td><td><span class="tag ok">YES — better</span></td><td>✅ SHIP NOW</td></tr>
+<tr><td>Follow-up ownership ("whose call is it?")</td><td>Column with a name; no reminder, no proof</td><td>Tasks with assignee + due + shift reminders (5-min) + periodic nudges + huddle accountability view + audit trail of who did what.</td><td><span class="tag ok">YES — better</span></td><td>✅ SHIP NOW</td></tr>
+<tr><td>Recall workflow (6-month, post-op, plan-no-appt)</td><td>Manual date column; someone must scan it daily</td><td>Engine with 6 triggers runs itself at 07:00 → staff queue with templated notes; capped drain of backlog.</td><td><span class="tag ok">YES</span> (semi-auto by design)</td><td>🔧 cap first</td></tr>
+<tr><td>Multiple treatment opportunities per patient</td><td>Extra columns, quickly unreadable</td><td>Plan lifecycle with per-item decisions (accept/defer/reject/partial) + decision ledger; deferred items are queryable, not forgotten cells.</td><td><span class="tag ok">YES — better</span></td><td>✅ SHIP NOW</td></tr>
+<tr><td>Multi-doctor / multi-receptionist chaos</td><td>Sheet edit collisions; last write wins silently</td><td>Per-user logins, RBAC, stale-update guard, row-locked money, audit per user. <i>Caveat: calendar grid needs manual refresh between desks.</i></td><td><span class="tag ok">YES</span></td><td>✅ SHIP NOW · grid 📦 V1.1</td></tr>
+<tr><td>Staff accountability ("who dropped this?")</td><td>Assumption and argument</td><td>Hash-chained audit log + huddle accountability + task history. The single largest upgrade over the entire manual ecosystem.</td><td><span class="tag ok">YES — better</span></td><td>✅ SHIP NOW</td></tr>
+<tr><td>Call tracking</td><td>Notebook / memory</td><td>Reminder-call tasks + missed-calls module (Relationship) + logged outcomes. Basic but present.</td><td><span class="tag warn">PARTIAL</span></td><td>📦 V1.1 (deepen)</td></tr>
+<tr><td>WhatsApp communication</td><td>Staff personal phones; zero record</td><td>Cloud API: consent-gated templates, interactive Confirm/Cancel, full thread record — once creds flip. Until then it's the same personal-phone escape.</td><td><span class="tag warn">PARTIAL → YES</span></td><td>🔧 FIX BEFORE SHIP</td></tr>
+<tr><td>Patient history at a glance</td><td>Scrolling a row of 40 columns</td><td>Profile timeline + tabs (consultations, plans, visits, Rx, billing, files, comms).</td><td><span class="tag ok">YES — better</span></td><td>✅ SHIP NOW</td></tr>
+<tr><td>Lost / dormant leads</td><td>Rows nobody re-reads</td><td>Pipeline stages + ₹30k/2h auto-escalation + recall triggers for plan-no-appointment.</td><td><span class="tag ok">YES</span></td><td>✅ SHIP NOW</td></tr>
+<tr><td>Android usage</td><td>Sheets app (painful) / none</td><td>API complete for clinical day; app untested — web-first at launch.</td><td><span class="tag warn">PARTIAL</span></td><td>📦 V1.1</td></tr>
+<tr><td>Data ownership / one-time cost fear</td><td>Own the sheet; fear subscriptions</td><td>Self-hosted on own VPS; data is theirs; no per-seat SaaS lock-in for Tulip.</td><td><span class="tag ok">YES</span></td><td>✅ SHIP NOW</td></tr>
+<tr><td>Easy for new reception staff to learn</td><td>Sheets win on day-1 simplicity — honest loss</td><td>More screens than a sheet, mitigated by 6-field registration, modals, and a real in-app Help Centre (19 screens documented). Training week required.</td><td><span class="tag warn">PARTIAL</span></td><td>✅ SHIP NOW (training)</td></tr>
+<tr><td>Owner dashboard / pipeline visibility</td><td>Owner builds pivot tables at night</td><td>Live KPIs, 6 report tabs, huddle report, cashbook — minus revenue-per-doctor.</td><td><span class="tag ok">YES</span></td><td>✅ · rev/doctor 📦 V1.1</td></tr>
+</table>
+<div class="box green"><b>Answers to the seven questions:</b> <b>(1) Solved better:</b> one-patient-one-record, CRM+PMS unification, accountability, multi-treatment tracking, follow-up ownership, history, duplicates, data ownership. <b>(2) Partially:</b> WhatsApp (config), call tracking depth, Android, new-staff simplicity. <b>(3) Need tightening:</b> checkout→rebook, recall cap, queue pagination — all in the fix list. <b>(4) Manual tasks now automated:</b> recall scanning, follow-up task creation, payment-overdue chasing, lab-overdue chasing, review requests, birthday lists, daily huddle assembly, report compilation. <b>(5) Workflows that end Sheets dependence:</b> the queue+task+audit chain — the sheet's only job was remembering; Dentfluence remembers structurally. <b>(6) Dr. System still better at:</b> day-1 simplicity, zero-infrastructure resilience, zero cost — real virtues, not solvable by adding software, only by training + backups + SOPs. <b>(7) Can Dentfluence replace Dr. System + PMS today?</b> After the 7-day fix list: <b>YES</b> — it is the first system in this comparison that is both halves at once, with enforcement the manual stack can never have.</div>
+</div>
+
+<!-- ============ TAB 11 : DR SYSTEM COMPARISON ============ -->
+<div class="pane" id="t11">
+<h2>SECTION 14 — DR. SYSTEM vs DENTFLUENCE (workflow maturity, not features)</h2>
+<table>
+<tr><th style="width:20%">Workflow</th><th style="width:12%">Winner</th><th>Why</th></tr>
+<tr><td>Lead capture &amp; pipeline</td><td><span class="tag ok">Dentfluence</span></td><td>Stages + escalation + conversion-to-patient vs a sheet tab; (webhook auto-capture pending V1.1).</td></tr>
+<tr><td>CRM ↔ PMS integration</td><td><span class="tag ok">Dentfluence</span></td><td>One database. Dr. System's own model concedes this by requiring a separate PMS.</td></tr>
+<tr><td>Existing-patient lifecycle</td><td><span class="tag ok">Dentfluence</span></td><td>Timeline + recall triggers + membership + wallet vs one eternal row.</td></tr>
+<tr><td>Treatment journey / multi-treatment tracking</td><td><span class="tag ok">Dentfluence</span></td><td>Plan→decision→visit→billing contract with single-writer status; a sheet cannot express this without becoming unmaintainable.</td></tr>
+<tr><td>Follow-up &amp; recall discipline</td><td><span class="tag ok">Dentfluence</span></td><td>The sheet needs a disciplined human every morning; the engine runs at 07:00 regardless of who quit last week. <i>Systems over people — the webinar's own slogan, actually implemented.</i></td></tr>
+<tr><td>One Entry Principle</td><td><span class="tag info">Equal</span></td><td>Both enforce it — Dr. System by rule, Dentfluence by schema. Dentfluence survives staff turnover; the sheet doesn't.</td></tr>
+<tr><td>Role management &amp; staff accountability</td><td><span class="tag ok">Dentfluence</span></td><td>RBAC + per-user audit + accountability board vs shared sheet edited anonymously.</td></tr>
+<tr><td>Activity/audit trail</td><td><span class="tag ok">Dentfluence</span></td><td>Hash-chained, tamper-checked daily. Sheets version history is not an audit trail.</td></tr>
+<tr><td>Automation</td><td><span class="tag ok">Dentfluence</span></td><td>22 scheduled jobs vs zero (the webinar lists "no automation" as a known limitation).</td></tr>
+<tr><td>Android</td><td><span class="tag info">Equal (today)</span></td><td>Sheets mobile is miserable; Dentfluence app is unproven. Web mobile-browser access gives Dentfluence a slight practical edge.</td></tr>
+<tr><td>Reporting / owner dashboard</td><td><span class="tag ok">Dentfluence</span></td><td>Live KPIs vs hand-built pivots; (revenue-per-doctor pending).</td></tr>
+<tr><td>Security &amp; privacy</td><td><span class="tag ok">Dentfluence (post-P0)</span></td><td>Encryption + RBAC + consent gating vs a sheet shared to personal Google accounts — the manual stack is a DPDP incident waiting to happen.</td></tr>
+<tr><td>Data ownership</td><td><span class="tag info">Equal</span></td><td>Both self-owned; Dentfluence adds structure (and needs backups to keep the claim honest — P0-1).</td></tr>
+<tr><td>Ease of adoption / training new staff</td><td><span class="tag bad">Dr. System</span></td><td>Honest loss: anyone can edit a sheet in 5 minutes. Dentfluence needs a training week and the Help Centre. This is the price of enforcement.</td></tr>
+<tr><td>Cost &amp; infrastructure resilience</td><td><span class="tag bad">Dr. System</span></td><td>Free, no VPS, no cron, no queue worker, "never down" (in truth: Sheets needs internet too). Dentfluence answers with monitoring + backups + SOPs — after the P0s, not before.</td></tr>
+<tr><td>Workflow quality overall</td><td><span class="tag ok">Dentfluence</span></td><td>The webinar taught process-over-technology because the technology didn't exist for its audience. Dentfluence is that process, made structural: 13 workflows better, 4 equal, 2 honestly worse (simplicity, zero-cost resilience) — both addressed by training and the P0 fixes rather than by code.</td></tr>
+</table>
+</div>
+
+<!-- ============ TAB 12 : IMPLEMENTATION + GO/NO-GO ============ -->
+<div class="pane" id="t12">
+<h2>SECTION 16 — IMPLEMENTATION READINESS (starting Monday)</h2>
+<table>
+<tr><th style="width:12%">Horizon</th><th>Prediction &amp; workflow tightening only</th></tr>
+<tr><td><b>Week 1</b></td><td>Booking/registration/payments smooth; appointments pile up "in chair" until the Start-Consultation link ships; 2-3 billing prompts missed until the badge SOP sticks; one booking lost to the standalone page (train modal-only); staff phone-WhatsApp persists until creds flip; evening tally matches via cashbook first try. Tighten: daily 15-min papercut review, fix breakages only.</td></tr>
+<tr><td><b>Month 1</b></td><td>WhatsApp live + capped: confirm/cancel replies visibly cut call load; recall queue becomes manager habit; first stockout → weekly stock-review SOP; owner asks for revenue-per-doctor (promised V1.1); first real restore drill this month regardless. Tighten: recall cap value, huddle attendance.</td></tr>
+<tr><td><b>Month 3</b></td><td>last_visit_date data compounds, recall precision improves; visit-only-patient gap becomes measurable → wire it; VPS disk growth check; the six hand-offs are invisible habit; glue batch (EOD screen, start-visit button) lands and satisfaction jumps. Tighten: nothing structural — resist all feature pressure until the V1.1 window.</td></tr>
+</table>
+
+<h2>SECTION 17 — GO / NO-GO</h2>
+<div class="verdict">
+<h3>⚖ GO WITH CONDITIONS</h3>
+<p><b>Evidence for GO:</b> zero broken workflows in the full-day code trace; money paths transactional, locked, serialized and audited; plan lifecycle single-writer verified; PHI field encryption live; RBAC enforced on 100% of routed surfaces; 154 test classes; migration importer with the exact column maps of the systems being replaced; every Voice-of-Customer structural pain point solved or dissolved. Against the true benchmark — the disciplined-human ecosystem — Dentfluence is structurally more reliable in 13 of 19 compared workflows and equal in 4.</p>
+<p><b>The conditions (all evidence-backed, all ≤7 days):</b> the 4 P0s (backups — the one place paper still wins; AI bypass; public photos; invisible failures), the 7+1 P1s (commit, env, PHI verify, attachment disks, queue pagination, recall cap, throttles, three glue links), and the config flip that turns the automation layer from dry-run theatre into the actual reason to switch.</p>
+<p><b>Not conditions:</b> anything in the V1.1 column. No redesigns, no new modules, no architecture changes were found necessary by any of the four audit passes.</p>
+</div>
+</div>
+
+<!-- ============ TAB 13 : 14-DAY PLAN + CEO ANSWER ============ -->
+<div class="pane" id="t13">
+<h2>SECTION 18 — 14-DAY EXECUTION PLAN (🔧 FIX BEFORE SHIP only)</h2>
+<table>
+<tr><th style="width:8%">Day</th><th>Work (every item is a 🔧 from this report — nothing else)</th><th style="width:20%">Gate</th></tr>
+<tr><td><b>1</b></td><td>Delete stray bootstrap file; commit Treatment Visit sprint; full suite; tag rc1; <code>migrate:status</code> check; rebuild .env.example.</td><td>Suite green, tree clean</td></tr>
+<tr><td><b>2</b></td><td>Consultation-photos + lab + vendor attachments → private disk via secure-media; move existing files; MIME whitelist.</td><td>Logged-out fetch fails</td></tr>
+<tr><td><b>3</b></td><td><code>ASSISTANT_ENABLED=false</code>; throttle PIN/OTP//hr/scan//r/token; glue links: sidebar→today-queue, queue-card→patient, queue-card→Start Consultation (passes appointment_id), kill logfile-huddle entry.</td><td>Chat gone; appointment auto-closes</td></tr>
+<tr><td><b>4</b></td><td>Backups: nightly cron + off-server copy + retention; <b>restore drill #1</b>.</td><td>Restore verified</td></tr>
+<tr><td><b>5</b></td><td><code>LOG_STACK=daily</code>; Slack critical channel; Brevo SMTP live; uptime ping /up; cron dead-man ping; forced-error test.</td><td>Alert + test mail received</td></tr>
+<tr><td><b>6</b></td><td>.env hardening (DEBUG off, secure cookie, session encrypt, PRM_WA_APP_SECRET, WhatsApp creds w/ dry-run, REVIEWS_GOOGLE_URL); <code>patients:encrypt-phi</code> + ciphertext check; comm-queue pagination; recall cap.</td><td>Env signed; queue &lt;1s</td></tr>
+<tr><td><b>7</b></td><td>Deploy (--force-recreate); re-anchor audit chain; compose ps + queue:restart ritual; <code>dentfluence:smoke</code>; RBAC walk; verify overlap-guard live.</td><td><b>All P0 closed</b></td></tr>
+<tr><td><b>8</b></td><td>Checkout→"Book next appointment?" prompt (reuses global modal); wire next_visit→recall entry; visit-save toast + Build-Invoice link.</td><td>Cycle test: zero remembered steps</td></tr>
+<tr><td><b>9</b></td><td>WhatsApp dry-run E2E (payload inspect, bad-HMAC 401, interactive round-trip on staff phones); Meta template approval confirmed.</td><td>E2E green in dry-run</td></tr>
+<tr><td><b>10</b></td><td>Cutover prep: verify Settings→Data import form renders; import Tulip patient base (preview→import); spot-check 20; masters + staff accounts + 2FA; opening balances SOP; active plans + 2 weeks of appointments entered.</td><td>Data live &amp; spot-checked</td></tr>
+<tr><td><b>11</b></td><td>Training half-days (desk: modal-only, queue, badge SOP, cashbook · doctors: queue→consult, plan chairside, worksheet, Rx); downtime SOP posted; <b>parallel day</b> — old system read-only.</td><td>Collections match both systems</td></tr>
+<tr><td><b>12</b></td><td><b>GO-LIVE (supervised).</b> Old software off. Papercut log open. Evening: cashbook tally + backup confirmed.</td><td>Day survives</td></tr>
+<tr><td><b>13</b></td><td>Triage papercuts (fix breakages only); flip <code>WHATSAPP_DRY_RUN=false</code> — reminders only, capped, staff numbers first.</td><td>First live reminders delivered</td></tr>
+<tr><td><b>14</b></td><td>Second supervised day; print-path checks; confirm briefing/evening emails arriving; week-1 review; log V1.1 register; <b>declare production freeze of scope</b>.</td><td>Freeze declared</td></tr>
+</table>
+<p class="sub">The full 107-step tracker (including post-go-live Android parity and KPI phases) lives in the Implementation Readiness Report's "Path to Final V1" tab — this 14-day plan is its 🔧-only subset.</p>
+
+<h2>FINAL CEO QUESTION — "Would YOU shut everything down and run Tulip on Dentfluence V1 from Monday?"</h2>
+<div class="verdict">
+<h3>⚖ YES WITH CONDITIONS</h3>
+<p>As the owner responsible for patient care, staff productivity and business continuity: <b>I would not switch tomorrow morning — because tomorrow, a dead disk erases every patient record and nothing even tells me the system is failing. On those two counts alone, paper is still safer tonight.</b></p>
+<p><b>I would switch on Day 12 of the plan above, and I would not look back.</b> By then: backups exist and have been restored once; failures alert my phone; PHI is encrypted and private; every P1 is closed; the six hand-offs are buttons; the automation actually fires; my staff trained on a Help Centre that already exists; and my patient base migrated through an importer built for the exact software I'm leaving. From that morning, Dentfluence is structurally more reliable than the Sheets + WhatsApp + paper + PMS ecosystem it replaces — because it is the first version of that ecosystem where the discipline lives in the system instead of in whichever receptionist hasn't resigned yet. <i>Systems over people. Data over memory. Accountability over assumptions.</i> The webinar's creed, finally enforced by something that cannot forget.</p>
+<p><b>Every recommendation in this report carries exactly one label — ✅ SHIP NOW, 🔧 FIX BEFORE SHIP, or 📦 MOVE TO V1.1 — and the 🔧 list is finite, small, and 14 days long. Execute it.</b></p>
+</div>
+</div>
+
+<p class="sub" style="margin-top:22px;border-top:1px solid var(--line);padding-top:10px">Audit #4 (final) · 2026-08-07 · Panel basis: four code-verification passes this cycle + three prior audit reports + governance record + CRM webinar VoC summary. Benchmark: the real manual ecosystem, not software. Verdict: <b>GO WITH CONDITIONS · YES WITH CONDITIONS · switch on Day 12.</b></p>
+
+<script>
+document.querySelectorAll('.tabbtn').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.tabbtn').forEach(function(x){x.classList.remove('active');});
+    document.querySelectorAll('.pane').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');
+    document.getElementById(b.dataset.tab).classList.add('active');
+    window.scrollTo({top:0});
+  });
+});
+</script>
+</body>
+</html>

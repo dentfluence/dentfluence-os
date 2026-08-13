@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Patient;
 use App\Models\TreatmentVisit;
+use App\Services\PatientProfileService;
 use App\Services\TreatmentVisitService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,8 +19,34 @@ use Illuminate\Http\Request;
  */
 class TreatmentVisitController extends Controller
 {
-    public function __construct(private TreatmentVisitService $service)
+    public function __construct(
+        private TreatmentVisitService $service,
+        private PatientProfileService $profileService,
+    ) {
+    }
+
+    /**
+     * Dedicated Treatment Visit form page (08-05, presentation-only).
+     * Reuses PatientProfileService::tabData('visits') — the exact same
+     * data the Treatment Visits tab fragment loads — so there is one
+     * source of truth for what this page needs, not a second query set.
+     */
+    public function create(Request $request, Patient $patient)
     {
+        $data = $this->profileService->tabData($patient, 'visits');
+
+        return view('patients.treatment-visit-form', $data + [
+            'prefillAppointmentId' => $request->query('appointment_id'),
+            'prefillPlanId'        => $request->query('plan_id'),
+        ]);
+    }
+
+    public function edit(TreatmentVisit $visit)
+    {
+        $patient = $visit->patient;
+        $data    = $this->profileService->tabData($patient, 'visits');
+
+        return view('patients.treatment-visit-form', $data + ['visit' => $visit]);
     }
 
     public function store(Request $request, Patient $patient): JsonResponse
@@ -83,7 +110,10 @@ class TreatmentVisitController extends Controller
     // ── Print visit ───────────────────────────────────────────────────────────
     public function print(TreatmentVisit $visit)
     {
-        $visit->load(['patient', 'doctor']);
+        // Closure sprint (08-05): case sheet was missing billed procedures
+        // and lab case info because they were never eager-loaded here —
+        // additive only, print.blade.php now renders them when present.
+        $visit->load(['patient', 'doctor', 'visitItems', 'labCases.vendor']);
         $print  = \App\Models\AppSetting::group('print');
         $clinic = \App\Models\AppSetting::group('clinic');
         return view('visits.print', compact('visit', 'print', 'clinic'));

@@ -1,0 +1,25 @@
+{
+  "cookies": [
+    {
+      "name": "XSRF-TOKEN",
+      "value": "eyJpdiI6Ii82VzNvSTVPODFpMFZCZ2NZNVM3Ync9PSIsInZhbHVlIjoiUVFoRFZRRktTbnVQQUpOWEF5aDd4S1ppL0dFNURJY2VZZjA2ZStaMndCajZMa09DbTVaQTBZTHFVMEw5Um5DaUpiVFFGd3VMaUhIN0dMTUNuL2w4cFdqS1NmcDdrWlBGa1JCN2pZbFB3bE9HR1pOeVl2V01iT0R6cFhRdXRiUmQiLCJtYWMiOiJkOWI5MWM2MGFjZmE4NGU0OWRkYzRmOTdkMmYxY2JkOTE3NmQ0YjBhNTViMzM3NzhhMTQ0MGRlY2QyNjVjNTFhIiwidGFnIjoiIn0%3D",
+      "domain": "dentfluence.test",
+      "path": "/",
+      "expires": 1786341469.18314,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "laravel-session",
+      "value": "eyJpdiI6IjdTQzZ4aHZRY0xFVWU3bCtqS1ZPcXc9PSIsInZhbHVlIjoiUitCRitrMzJGQnRDbDNKWkhGTENkMkZKOEFBRVB4SFhGNGpPaC9TMXViNkFYanV2VlA0UWJlNmV6MTNSVnBSMWdyUGFsaGFiUmZRRGdXdVhoYnhxRXVzOE90SUxiNDdqUTl2UHh4N2FjYkNmTU1hck9sM0tkenVJVGo5R29heEciLCJtYWMiOiI4ZmIxNjcyNzgxY2IxMzgwNjRhMjI3NDQzMzVhNGQzOWU3OGQ1MGZiYjM0ODUxYjZkNGU0OGY0MGViZTNkZGFiIiwidGFnIjoiIn0%3D",
+      "domain": "dentfluence.test",
+      "path": "/",
+      "expires": 1786341469.183316,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

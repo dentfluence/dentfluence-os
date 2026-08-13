@@ -118,20 +118,20 @@ function patientProfile() {
             if (this.activeTab !== 'profile') this.ensureTab(this.activeTab);
 
             // UX-05 — prefilled handoff deep link from the consultation gate:
-            // ?open_visit=1&appointment_id=…&plan_id=… opens the Add Visit form
-            // pre-linked. Params are stripped afterwards so refresh doesn't
-            // re-open the modal.
+            // ?open_visit=1&appointment_id=…&plan_id=… used to open the Add
+            // Visit modal inline; the visit form is now a dedicated page
+            // (08-05, presentation-only), so this navigates there directly
+            // instead of switching tabs and dispatching an in-page event.
+            // The query-param contract from the consultation gate's redirect
+            // (patients/tabs/consultation.blade.php:1194) is unchanged.
             const qp = new URLSearchParams(window.location.search);
             if (qp.get('open_visit') === '1') {
-                const detail = {
-                    appointment_id:    qp.get('appointment_id') || null,
-                    treatment_plan_id: qp.get('plan_id') || null,
-                };
-                this.openTabThen('visits', () =>
-                    window.dispatchEvent(new CustomEvent('open-visit-form', { detail })));
-                ['open_visit','appointment_id','plan_id'].forEach(k => qp.delete(k));
-                history.replaceState(null, '',
-                    window.location.pathname + (qp.toString() ? '?' + qp.toString() : '') + '#visits');
+                const params = new URLSearchParams();
+                if (qp.get('appointment_id')) params.set('appointment_id', qp.get('appointment_id'));
+                if (qp.get('plan_id'))        params.set('plan_id', qp.get('plan_id'));
+                window.location.href = '{{ url("patients/{$patient->id}/visits/create") }}'
+                    + (params.toString() ? '?' + params.toString() : '');
+                return;
             }
         },
 
@@ -179,9 +179,11 @@ function patientProfile() {
             this.$nextTick(() => { if (fn) fn(); });
         },
 
-        /** "New Visit" / "Add Follow-up" — open Visits tab, then its add form. */
+        /** "New Visit" / "Add Follow-up" — navigate to the dedicated Treatment
+         *  Visit form page (08-05, presentation-only; used to open the modal
+         *  inline via a dispatched event). Same callers, same method name. */
         openVisitForm() {
-            this.openTabThen('visits', () => window.dispatchEvent(new CustomEvent('open-visit-form')));
+            window.location.href = '{{ url("patients/{$patient->id}/visits/create") }}';
         },
 
         /** Quick action — open Membership tab, then the enroll modal. */

@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Your Treatment Plan — Tulip Dental | Dentfluence</title>
+<style>
+  :root{
+    --accent:#8B2FC9;
+    --accent-2:#D6249F;
+    --accent-soft:#F4EAFB;
+    --accent-soft-2:#FCE9F5;
+    --ink:#1C1B1F;
+    --ink-soft:#5A5763;
+    --line:#E6E2EC;
+    --bg:#FBFAFC;
+    --card:#FFFFFF;
+    --good:#1E8A5F;
+    --radius:14px;
+    --shadow:0 2px 10px rgba(30,20,50,0.06);
+    --shadow-lg:0 10px 36px rgba(30,20,50,0.18);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* HEADER */
+  header.topbar{
+    position:sticky;top:0;z-index:50;
+    background:rgba(255,255,255,0.97);
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);
+  }
+  .topbar-inner{max-width:820px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14.5px;letter-spacing:.2px;}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-2));flex:0 0 auto;}
+  .header-actions{display:flex;align-items:center;gap:8px;}
+  .info-link-btn{background:#fff;border:1px solid var(--line);color:var(--ink-soft);font-weight:600;font-size:12px;padding:8px 12px;border-radius:20px;cursor:pointer;white-space:nowrap;}
+  .cart-btn{
+    display:flex;align-items:center;gap:8px;background:var(--accent-soft);border:1px solid #E4CFF3;color:var(--accent);
+    font-weight:700;font-size:13px;padding:9px 14px;border-radius:24px;cursor:pointer;white-space:nowrap;
+  }
+  .cart-btn .cart-count{background:var(--accent);color:#fff;border-radius:50%;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0 4px;}
+
+  /* Progress */
+  .journey-progress{max-width:820px;margin:0 auto;padding:10px 16px 0;}
+  .progress-track{height:5px;background:var(--line);border-radius:6px;overflow:hidden;}
+  .progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:6px;transition:width .3s ease;}
+  .progress-label{font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:6px;letter-spacing:.03em;text-transform:uppercase;}
+
+  main{max-width:640px;margin:0 auto;padding:20px 16px 70px;}
+  .journey-step{display:none;animation:fade .22s ease;}
+  .journey-step.active{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+  .step-eyebrow{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:6px;}
+  h1.step-h1{font-size:22px;margin:0 0 10px;font-weight:800;letter-spacing:-.2px;}
+  p.step-p{font-size:14.5px;color:var(--ink-soft);margin:0 0 12px;}
+
+  /* Step 1: before */
+  .before-photo{
+    background:repeating-linear-gradient(135deg,#F7F4FA,#F7F4FA 10px,#F1EBF7 10px,#F1EBF7 20px);
+    border:1.5px dashed #CBB9E0;border-radius:var(--radius);
+    min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;padding:24px;margin-bottom:18px;
+  }
+  .before-photo .icon{width:48px;height:48px;border-radius:50%;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:20px;}
+  .before-photo b{font-size:13.5px;}
+  .before-photo span{font-size:12px;color:var(--ink-soft);max-width:260px;}
+  .problem-list{list-style:none;margin:0;padding:0;}
+  .problem-list li{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:8px;font-size:13.5px;font-weight:600;}
+  .problem-list li .pi{font-size:16px;}
+
+  /* Step 2 */
+  .transition-box{background:linear-gradient(135deg,var(--accent-soft),var(--accent-soft-2));border-radius:var(--radius);padding:16px;margin-top:16px;}
+  .transition-box h2{margin:0 0 6px;font-size:15px;}
+  .transition-box p{margin:0;font-size:13.5px;color:#5c2a86;}
+
+  /* Step 3 foundation */
+  .foundation-item{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 14px;margin-bottom:9px;}
+  .foundation-item .fi-top{display:flex;justify-content:space-between;align-items:baseline;}
+  .foundation-item .fi-title{font-weight:700;font-size:14px;}
+  .foundation-item .fi-price{font-weight:800;font-size:14.5px;}
+  .foundation-item .fi-meta{font-size:12px;color:var(--ink-soft);margin-top:3px;}
+  .essential-note{font-size:12px;color:var(--ink-soft);margin:10px 0 14px;}
+  .temp-banner{
+    display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#FFF6E3,#FFEFD6);
+    border:1px solid #F3DDA8;border-radius:var(--radius);padding:13px 16px;margin:14px 0;
+  }
+  .temp-banner .ic{font-size:20px;flex:0 0 auto;}
+  .temp-banner b{display:block;font-size:13.5px;}
+  .temp-banner span{font-size:12.5px;color:#8A5B00;}
+  .temp-banner .tprice{margin-left:auto;font-weight:800;font-size:14px;color:#8A5B00;white-space:nowrap;}
+  .phase-total-box{background:var(--ink);color:#fff;border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;margin-top:16px;}
+  .phase-total-box .ptl{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;opacity:.75;}
+  .phase-total-box .ptv{font-size:19px;font-weight:800;}
+
+  /* Product cards (reused for steps 4,5,6) */
+  .mini-substep{font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:10px;}
+  .decision-head{margin-bottom:10px;}
+  .decision-head h2{font-size:16px;margin:0 0 2px;font-weight:800;}
+  .decision-head .dsub{font-size:12.5px;color:var(--ink-soft);}
+  .card-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .card-grid.cols-3{grid-template-columns:1fr 1fr 1fr;}
+  @media(max-width:560px){.card-grid, .card-grid.cols-3{grid-template-columns:1fr;}}
+
+  .product-card{
+    position:relative;background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:7px;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .product-card.added{border-color:var(--accent);box-shadow:0 4px 16px rgba(139,47,201,.12);background:linear-gradient(180deg,#fff,var(--accent-soft) 400%);}
+  .product-card .pc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
+  .product-card .pc-title{font-size:15px;font-weight:800;}
+  .product-card .pc-desc{font-size:12.5px;color:var(--ink-soft);}
+  .product-card .pc-adv{font-size:11.5px;color:var(--good);margin-top:2px;}
+  .product-card .pc-lim{font-size:11.5px;color:#9A7B00;}
+  .product-card .pc-price{font-size:16px;font-weight:800;color:var(--ink);margin-top:2px;}
+  .product-card .pc-price small{font-size:11px;font-weight:600;color:var(--ink-soft);}
+  .add-btn{margin-top:4px;border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;background:var(--ink);color:#fff;}
+  .add-btn.added{background:var(--good);}
+  .info-icon-btn{background:var(--bg);border:1px solid var(--line);color:var(--ink-soft);border-radius:50%;width:22px;height:22px;font-size:11px;font-weight:700;cursor:pointer;flex:0 0 auto;}
+
+  .info-pop{
+    display:none;position:absolute;top:calc(100% + 8px);left:0;right:0;background:#fff;border:1px solid var(--line);
+    border-radius:12px;padding:12px 13px;box-shadow:var(--shadow-lg);z-index:20;text-align:left;
+  }
+  .info-pop .ip-row{margin-bottom:6px;}
+  .info-pop .ip-row:last-child{margin-bottom:0;}
+  .info-pop .ip-label{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);font-weight:700;}
+  .info-pop .ip-val{font-size:12px;color:var(--ink);margin-top:1px;}
+  @media(hover:hover){
+    .product-card.hoverable:hover .info-pop{display:block;}
+  }
+
+  .options-intro{font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;}
+  .conditional-sub{border-top:1px dashed var(--line);margin-top:20px;padding-top:18px;}
+
+  .step-nav{display:flex;justify-content:space-between;gap:10px;margin-top:22px;}
+  .nav-btn{flex:1;padding:12px;border-radius:12px;border:1.5px solid var(--line);background:#fff;font-weight:700;font-size:13.5px;cursor:pointer;color:var(--ink);}
+  .nav-btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;border:none;}
+  .nav-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  /* Review */
+  .review-section{margin-bottom:16px;}
+  .review-section h3{font-size:13.5px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);}
+  .review-list{list-style:none;margin:0;padding:0;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  .review-list li{display:flex;justify-content:space-between;font-size:13.5px;padding:11px 14px;border-bottom:1px solid var(--line);}
+  .review-list li:last-child{border-bottom:none;}
+  .review-list .rlabel{color:var(--ink-soft);}
+  .review-list .rval{font-weight:700;text-align:right;}
+  .review-meta-row{display:flex;gap:10px;}
+  .review-meta-row .rm{flex:1;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center;}
+  .review-meta-row .rm b{display:block;font-size:15px;}
+  .review-meta-row .rm span{font-size:11px;color:var(--ink-soft);}
+  .invest-final{background:linear-gradient(135deg,var(--accent-soft),var(--accent-soft-2));border-radius:14px;padding:18px;text-align:center;margin:16px 0;}
+  .invest-final .il{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);}
+  .invest-final .iv{font-size:30px;font-weight:800;color:var(--accent);margin-top:4px;}
+  .invest-final small{display:block;margin-top:8px;font-size:11px;color:var(--ink-soft);line-height:1.5;}
+  .payment-card{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px 15px;margin-bottom:10px;cursor:pointer;transition:border-color .15s;}
+  .payment-card.selected{border-color:var(--accent);background:var(--accent-soft);}
+  .payment-card .pp-top{display:flex;justify-content:space-between;align-items:center;}
+  .payment-card .pp-title{font-weight:800;font-size:14px;}
+  .payment-card .pp-badge{font-size:10.5px;font-weight:700;color:var(--accent);border:1px solid #E4CFF3;background:#fff;border-radius:20px;padding:3px 9px;}
+  .payment-card.selected .pp-badge{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .payment-card .pp-desc{font-size:12px;color:var(--ink-soft);margin:4px 0 10px;}
+  .payment-stage-row{display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;border-bottom:1px dashed var(--line);}
+  .payment-stage-row:last-child{border-bottom:none;}
+  .payment-stage-row span:last-child{font-weight:700;}
+  .emi-figure{font-size:19px;font-weight:800;color:var(--accent);margin:4px 0 2px;}
+  .emi-sub{font-size:11.5px;color:var(--ink-soft);}
+  .emi-explore-btn{margin-top:10px;width:100%;border:1.5px solid var(--accent);background:#fff;color:var(--accent);border-radius:10px;padding:9px;font-size:12.5px;font-weight:700;cursor:pointer;}
+  .emi-disclaimer{font-size:10.5px;color:var(--ink-soft);margin-top:8px;line-height:1.4;}
+
+  /* AOCP */
+  .aocp-card{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;cursor:pointer;transition:border-color .15s;}
+  .aocp-card.selected{border-color:var(--accent);box-shadow:0 4px 16px rgba(139,47,201,.12);background:linear-gradient(180deg,#fff,var(--accent-soft) 400%);}
+  .aocp-card .ac-top{display:flex;justify-content:space-between;align-items:center;}
+  .aocp-card .ac-title{font-weight:800;font-size:15px;}
+  .aocp-card .ac-badge{font-size:10.5px;font-weight:700;color:var(--ink-soft);border:1px solid var(--line);background:#fff;border-radius:20px;padding:3px 9px;}
+  .aocp-card.selected .ac-badge{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .aocp-card .ac-price{font-size:19px;font-weight:800;margin:6px 0 8px;}
+  .aocp-card .ac-price small{font-size:11.5px;font-weight:600;color:var(--ink-soft);}
+  .aocp-benefits{list-style:none;margin:0 0 12px;padding:0;}
+  .aocp-benefits li{font-size:12.5px;color:var(--ink-soft);margin-bottom:5px;}
+  .aocp-calc-box{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 13px;margin-top:4px;}
+  .aocp-calc-row{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--ink-soft);}
+  .aocp-calc-row.strong{color:var(--ink);font-weight:700;border-top:1px dashed var(--line);margin-top:4px;padding-top:8px;}
+  .aocp-calc-row.net{color:var(--good);font-weight:800;font-size:13px;}
+  .aocp-note{font-size:11px;color:var(--ink-soft);margin-top:8px;line-height:1.4;}
+
+  .cta-row{display:flex;flex-direction:column;gap:9px;margin-top:6px;}
+  .btn{border:none;border-radius:12px;padding:12px 16px;font-size:13.5px;font-weight:700;cursor:pointer;width:100%;}
+  .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;}
+  .btn-secondary{background:#fff;border:1.5px solid var(--line);color:var(--ink);}
+
+  /* Generic cards used in overlay */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:var(--shadow);}
+  .card h3{margin:0 0 8px;font-size:15px;}
+  .card p{margin:0;font-size:14px;color:var(--ink-soft);}
+  ul.finding-list{margin:10px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink-soft);}
+  ul.finding-list li{margin-bottom:4px;}
+
+  /* ODONTOGRAM */
+  .odontogram-card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px 12px 14px;box-shadow:var(--shadow);overflow-x:auto;}
+  .arch-wrap{min-width:460px;max-width:560px;margin:0 auto;}
+  .arch-row{display:flex;justify-content:center;gap:4px;}
+  .arch-row.upper{margin-bottom:6px;}
+  .arch-midline{height:1px;background:var(--line);margin:2px 30px 8px;}
+  .tooth-shape{
+    position:relative;width:26px;height:36px;border-radius:8px 8px 4px 4px;background:#F1EFF5;border:1px solid #DDD8E5;
+    display:flex;align-items:flex-end;justify-content:center;font-size:9px;font-weight:700;color:#B4AFC0;
+    padding-bottom:3px;flex:0 0 auto;transition:transform .15s;
+  }
+  .tooth-shape.lower{border-radius:4px 4px 8px 8px;align-items:flex-start;padding-bottom:0;padding-top:3px;}
+  .tooth-shape.documented{cursor:pointer;}
+  .tooth-shape.fx{background:#FDEBEB;border-color:#F3C9C9;color:#B23A3A;}
+  .tooth-shape.car{background:#FFF3E2;border-color:#F5DBAD;color:#B5651D;}
+  .tooth-shape.root{background:#EFEFF3;border-color:#C9C4D4;color:#5A5763;}
+  .tooth-shape.miss{background:#fff;border:1.5px dashed #C7C4CF;color:#B0ADB8;}
+  .tooth-shape.gross{background:#F8DEDE;border-color:#EBB9B9;color:#8C1F1F;}
+  @media(hover:hover){
+    .tooth-shape.documented:hover{transform:translateY(-4px);z-index:6;}
+    .tooth-shape.documented:hover .tooth-pop{display:block;}
+  }
+  .tooth-pop{
+    display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+    width:190px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 12px;
+    box-shadow:var(--shadow-lg);text-align:left;z-index:20;
+  }
+  .tooth-shape.lower .tooth-pop{bottom:auto;top:calc(100% + 8px);}
+  .tooth-pop b{font-size:13px;display:block;margin-bottom:2px;}
+  .tooth-pop .tp-finding{font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;}
+  .tooth-pop .tp-label{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);font-weight:700;}
+  .tooth-pop .tp-treatment{font-size:12px;color:var(--ink);margin-top:2px;line-height:1.4;}
+  .odo-legend{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:18px;font-size:11px;color:var(--ink-soft);}
+  .odo-legend span{display:flex;align-items:center;gap:5px;}
+  .odo-legend i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+  .odo-hint{text-align:center;font-size:11.5px;color:var(--ink-soft);margin-top:10px;}
+
+  .phase-card{position:relative;padding-left:20px;border-left:2px solid var(--line);margin-left:8px;padding-bottom:20px;}
+  .phase-card:last-child{border-left-color:transparent;padding-bottom:0;}
+  .phase-dot{position:absolute;left:-9px;top:0;width:16px;height:16px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-2));border:3px solid var(--bg);}
+  .phase-num{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;}
+  .phase-title{font-size:16px;font-weight:800;margin:2px 0 5px;}
+
+  .doctor-box{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);}
+  .doctor-box .who{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .doctor-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:0 0 auto;}
+  .doctor-box .who b{font-size:14px;}
+  .doctor-box .who span{display:block;font-size:12px;color:var(--ink-soft);}
+  .doctor-box blockquote{margin:0;font-size:14.5px;color:var(--ink);font-style:italic;line-height:1.6;}
+
+  /* INFO OVERLAY (secondary info, outside main journey) */
+  .info-overlay{position:fixed;inset:0;background:#fff;z-index:130;display:none;flex-direction:column;}
+  .info-overlay.show{display:flex;}
+  .info-overlay-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#fff;}
+  .info-overlay-head h3{margin:0;font-size:15.5px;}
+  .info-tabbar{display:flex;gap:6px;overflow-x:auto;padding:10px 16px;border-bottom:1px solid var(--line);}
+  .info-tab-btn{flex:0 0 auto;font-size:12px;font-weight:600;padding:7px 12px;border-radius:20px;border:1px solid var(--line);background:#fff;color:var(--ink-soft);cursor:pointer;white-space:nowrap;}
+  .info-tab-btn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .info-overlay-body{flex:1;overflow-y:auto;padding:16px;max-width:640px;margin:0 auto;width:100%;}
+  .info-tab-panel{display:none;}
+  .info-tab-panel.active{display:block;}
+  .drawer-close{background:var(--bg);border:1px solid var(--line);border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:15px;color:var(--ink-soft);}
+
+  /* CART DRAWER */
+  .drawer-overlay{position:fixed;inset:0;background:rgba(20,10,30,.45);z-index:90;display:none;}
+  .drawer-overlay.show{display:block;}
+  .drawer{
+    position:fixed;top:0;right:0;height:100%;width:400px;max-width:100%;background:#fff;z-index:95;
+    box-shadow:var(--shadow-lg);transform:translateX(100%);transition:transform .25s ease;
+    display:flex;flex-direction:column;
+  }
+  .drawer.show{transform:translateX(0);}
+  @media(max-width:520px){
+    .drawer{width:100%;top:auto;bottom:0;height:88%;border-radius:18px 18px 0 0;transform:translateY(100%);}
+    .drawer.show{transform:translateY(0);}
+  }
+  .drawer-head{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;}
+  .drawer-head h3{margin:0;font-size:16px;}
+  .drawer-body{flex:1;overflow-y:auto;padding:16px 18px;}
+  .cart-item{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);gap:10px;}
+  .cart-item:last-child{border-bottom:none;}
+  .cart-item .ci-label{font-size:13.5px;font-weight:600;}
+  .cart-item .ci-sub{font-size:11.5px;color:var(--ink-soft);}
+  .cart-item .ci-price{font-size:13.5px;font-weight:700;white-space:nowrap;}
+  .cart-group-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);margin:14px 0 4px;}
+  .cart-group-label:first-child{margin-top:0;}
+  .invest-box{background:linear-gradient(135deg,var(--accent-soft),var(--accent-soft-2));border-radius:14px;padding:16px;margin-top:16px;}
+  .invest-box .il{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);}
+  .invest-box .iv{font-size:26px;font-weight:800;color:var(--accent);margin-top:2px;}
+  .invest-box small{display:block;margin-top:8px;font-size:11px;color:var(--ink-soft);line-height:1.5;}
+  .drawer-foot{padding:14px 18px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:9px;}
+
+  /* Mobile / tap generic info sheet */
+  .sheet-overlay{position:fixed;inset:0;background:rgba(20,10,30,.4);z-index:150;display:none;}
+  .sheet-overlay.show{display:block;}
+  .info-sheet{
+    position:fixed;left:0;right:0;bottom:0;background:#fff;z-index:155;border-radius:18px 18px 0 0;
+    padding:20px 20px 26px;max-width:480px;margin:0 auto;transform:translateY(100%);transition:transform .22s ease;
+    box-shadow:var(--shadow-lg);max-height:70vh;overflow-y:auto;
+  }
+  .info-sheet.show{transform:translateY(0);}
+  .info-sheet .is-title{font-size:17px;font-weight:800;}
+  .info-sheet .is-sub{font-size:13px;font-weight:700;color:var(--accent);margin:3px 0 12px;}
+  .info-sheet .is-row{margin-bottom:10px;}
+  .info-sheet .is-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);font-weight:700;}
+  .info-sheet .is-val{font-size:13.5px;margin-top:2px;}
+  .info-sheet .is-close{margin-top:10px;width:100%;border:none;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;font-weight:700;font-size:13px;cursor:pointer;}
+
+  /* Confirmation modal */
+  .modal-overlay{position:fixed;inset:0;background:rgba(20,10,30,.5);display:none;align-items:center;justify-content:center;z-index:170;padding:20px;}
+  .modal-overlay.show{display:flex;}
+  .modal-box{background:#fff;border-radius:18px;padding:24px 20px 26px;max-width:400px;width:100%;text-align:center;animation:popup .2s ease;}
+  @keyframes popup{from{transform:scale(.95);opacity:0;}to{transform:scale(1);opacity:1;}}
+  .modal-icon{width:50px;height:50px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:22px;}
+  .modal-box h3{margin:0 0 8px;font-size:16.5px;}
+  .modal-box p{font-size:13.5px;color:var(--ink-soft);margin:0 0 16px;}
+  .modal-close{background:var(--accent);color:#fff;border:none;padding:11px 18px;border-radius:10px;font-weight:700;font-size:13.5px;cursor:pointer;width:100%;}
+
+  small.footnote{display:block;color:var(--ink-soft);font-size:11px;margin-top:4px;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand"><span class="dot"></span>Dentfluence · Tulip Dental</div>
+    <div class="header-actions">
+      <button class="info-link-btn" onclick="openInfoOverlay()">More about your case</button>
+      <button class="cart-btn" onclick="openDrawer()">🛒 My Plan <span class="cart-count" id="cartCount">0</span></button>
+    </div>
+  </div>
+  <div class="journey-progress">
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-label" id="progressLabel">STEP 1 OF 7 · BEFORE / PROBLEM</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- STEP 1: BEFORE / PROBLEM -->
+  <section class="journey-step active" data-step="1">
+    <div class="step-eyebrow">01 · Before</div>
+    <h1 class="step-h1">Your Teeth Today</h1>
+    <div class="before-photo">
+      <div class="icon">📷</div>
+      <b>Your before photograph</b>
+      <span>Your clinical photograph will appear here.</span>
+    </div>
+    <ul class="problem-list">
+      <li><span class="pi">🦷</span> Broken front teeth</li>
+      <li><span class="pi">➖</span> Missing back teeth</li>
+      <li><span class="pi">⏳</span> Severe tooth wear</li>
+      <li><span class="pi">⚠️</span> Multiple damaged / decayed teeth</li>
+      <li><span class="pi">↕️</span> Collapsed bite</li>
+    </ul>
+    <div class="step-nav">
+      <button class="nav-btn" disabled>← Back</button>
+      <button class="nav-btn primary" onclick="goNext()">NEXT → UNDERSTAND MY PLAN</button>
+    </div>
+  </section>
+
+  <!-- STEP 2: YOUR TREATMENT PLAN -->
+  <section class="journey-step" data-step="2">
+    <div class="step-eyebrow">02 · Your Treatment Plan</div>
+    <h1 class="step-h1">Your Treatment Plan</h1>
+    <p class="step-p">Your treatment has been planned in stages to restore the health, function and appearance of your teeth.</p>
+    <p class="step-p">Because several back teeth are missing, your front teeth have been taking excessive load. This has contributed to severe wear and fracture.</p>
+    <p class="step-p">Simply replacing the front teeth permanently would not address the underlying problem.</p>
+    <p class="step-p">Your treatment therefore starts by creating a stable foundation and then rebuilding the missing support before completing the final teeth.</p>
+    <div class="transition-box">
+      <h2>Now You Can Choose</h2>
+      <p>Your doctor has already selected the treatment options that are clinically suitable for you. In the next steps, you can choose between those options.</p>
+    </div>
+    <div class="step-nav">
+      <button class="nav-btn" onclick="goBack()">← Back</button>
+      <button class="nav-btn primary" onclick="goNext()">EXPLORE MY OPTIONS →</button>
+    </div>
+  </section>
+
+  <!-- STEP 3: MANDATORY FOUNDATION -->
+  <section class="journey-step" data-step="3">
+    <div class="step-eyebrow">03 · Your Foundation</div>
+    <h1 class="step-h1">Step 1 — Your Foundation</h1>
+    <p class="step-p">These treatments are required as part of your planned rehabilitation.</p>
+
+    <div class="foundation-item">
+      <div class="fi-top"><span class="fi-title">Root Canal Treatment</span><span class="fi-price">₹21,000</span></div>
+      <div class="fi-meta">3 teeth (11, 12, 21) · Approx. visits: 3</div>
+    </div>
+    <div class="foundation-item">
+      <div class="fi-top"><span class="fi-title">Extractions</span><span class="fi-price">₹8,000</span></div>
+      <div class="fi-meta">4 teeth — retained roots (13, 17, 23, 27) · Approx. visits: 2</div>
+    </div>
+    <div class="foundation-item">
+      <div class="fi-top"><span class="fi-title">Cleaning / disease control</span><span class="fi-price">₹4,000</span></div>
+      <div class="fi-meta">Scaling &amp; professional cleaning · Approx. visits: 1</div>
+    </div>
+    <div class="foundation-item">
+      <div class="fi-top"><span class="fi-title">Caries filling &amp; records</span><span class="fi-price">₹3,000</span></div>
+      <div class="fi-meta">Filling (22) + OPG/records review · Approx. visits: 1</div>
+    </div>
+
+    <p class="essential-note"><b>Essential treatment.</b> These treatments are required as part of your planned rehabilitation and are not optional.</p>
+
+    <div class="temp-banner">
+      <div class="ic">🦷</div>
+      <div><b>Your front teeth</b><span>Temporary front teeth can be provided early — target approximately 2 weeks. You do not have to wait 4–5 months.</span></div>
+      <div class="tprice">₹15,000</div>
+    </div>
+
+    <div class="phase-total-box">
+      <div><div class="ptl">This phase — Foundation + Temporary Front Teeth</div></div>
+      <div class="ptv">₹51,000</div>
+    </div>
+
+    <div class="step-nav">
+      <button class="nav-btn" onclick="goBack()">← Back</button>
+      <button class="nav-btn primary" onclick="goNext()">CONTINUE →</button>
+    </div>
+  </section>
+
+  <!-- STEP 4: TREATMENT OPTIONS (tooth14 then tooth46 + posterior) -->
+  <section class="journey-step" data-step="4">
+    <div class="step-eyebrow">04 · Treatment Options</div>
+    <h1 class="step-h1">Let's Choose Your Treatment</h1>
+    <p class="options-intro">Only options your doctor has already approved as clinically suitable are shown below. You choose one.</p>
+
+    <div class="mini-substep" id="optionsSubstepLabel"></div>
+    <div class="decision-head">
+      <h2 id="optTitle"></h2>
+      <span class="dsub" id="optSub"></span>
+    </div>
+    <div class="card-grid" id="cards-options"></div>
+
+    <div class="conditional-sub" id="posteriorSub" style="display:none;">
+      <div class="decision-head">
+        <h2>Posterior Rehabilitation — Tooth 46 site</h2>
+        <span class="dsub">Both approved for this site</span>
+      </div>
+      <div class="card-grid" id="cards-posterior"></div>
+    </div>
+
+    <div class="step-nav">
+      <button class="nav-btn" onclick="goBack()">← Back</button>
+      <button class="nav-btn primary" onclick="goNext()" id="optionsNextBtn">NEXT →</button>
+    </div>
+  </section>
+
+  <!-- STEP 5: IMPLANT OPTIONS -->
+  <section class="journey-step" data-step="5">
+    <div class="step-eyebrow">05 · Implant Options</div>
+    <h1 class="step-h1">Choose Your Implant</h1>
+    <p class="step-p">Your treatment plan requires implant-supported replacement in the areas selected by your doctor.</p>
+    <div class="card-grid" id="cards-implant"></div>
+    <div class="foundation-item" id="abutmentNote" style="margin-top:12px;">
+      <div class="fi-top"><span class="fi-title">Abutment</span><span class="fi-price" id="abutmentPrice">₹0</span></div>
+      <div class="fi-meta" id="abutmentMeta">Required connector component for each implant — fixed component, not brand-dependent.</div>
+    </div>
+    <small class="footnote">No clinical superiority is implied between systems. Example / prototype pricing. Tap ⓘ for details.</small>
+    <div class="step-nav">
+      <button class="nav-btn" onclick="goBack()">← Back</button>
+      <button class="nav-btn primary" onclick="goNext()">NEXT →</button>
+    </div>
+  </section>
+
+  <!-- STEP 6: FINAL CROWN OPTIONS -->
+  <section class="journey-step" data-step="6">
+    <div class="step-eyebrow">06 · Final Crown Options</div>
+    <h1 class="step-h1">Choose Your Final Teeth</h1>
+    <p class="step-p">Your doctor has already determined that final crowns are required — for root-canal-treated teeth and implant-supported sites. Here you choose the material level.</p>
+    <div class="card-grid cols-3" id="cards-crown"></div>
+    <small class="footnote">Example / prototype pricing. Tap ⓘ for details.</small>
+    <div class="step-nav">
+      <button class="nav-btn" onclick="goBack()">← Back</button>
+      <button class="nav-btn primary" onclick="goNext()">REVIEW MY PLAN →</button>
+    </div>
+  </section>
+
+  <!-- STEP 7: REVIEW TREATMENT -->
+  <section class="journey-step" data-step="7">
+    <div class="step-eyebrow">07 · Review Treatment</div>
+    <h1 class="step-h1">Review Your Treatment</h1>
+    <p class="step-p">Here's everything your treatment includes, before we look at optional benefits or payment.</p>
+
+    <div class="review-section">
+      <h3>Doctor's Foundation</h3>
+      <ul class="review-list">
+        <li><span class="rlabel">Root canal treatment</span><span class="rval">3 teeth · ₹21,000</span></li>
+        <li><span class="rlabel">Extractions</span><span class="rval">4 teeth · ₹8,000</span></li>
+        <li><span class="rlabel">Cleaning &amp; disease control</span><span class="rval">₹4,000</span></li>
+        <li><span class="rlabel">Filling &amp; records</span><span class="rval">₹3,000</span></li>
+        <li><span class="rlabel">Temporary front teeth</span><span class="rval">₹15,000</span></li>
+      </ul>
+    </div>
+
+    <div class="review-section">
+      <h3>Your Choices</h3>
+      <ul class="review-list" id="reviewChoicesList"></ul>
+    </div>
+
+    <div class="review-meta-row">
+      <div class="rm"><b id="reviewVisits">—</b><span>Estimated visits</span></div>
+      <div class="rm"><b>4–5 months</b><span>Estimated duration</span></div>
+    </div>
+
+    <div class="step-eyebrow" style="margin-top:14px;">Your Investment</div>
+    <div class="invest-final">
+      <div class="il">Estimated Treatment Investment</div>
+      <div class="iv" id="reviewTotal">₹0</div>
+      <small>Current working estimate based on your selections and today's clinical findings. Final amount confirmed after final clinical planning.</small>
+    </div>
+
+    <div class="step-nav">
+      <button class="nav-btn" onclick="goBack()">← Back</button>
+      <button class="nav-btn primary" onclick="goNext()">CONTINUE →</button>
+    </div>
+  </section>
+
+  <!-- STEP 8: AOCP BENEFIT -->
+  <section class="journey-step" data-step="8">
+    <div class="step-eyebrow">08 · AOCP Benefit</div>
+    <h1 class="step-h1">You May Also Add AOCP</h1>
+    <p class="step-p">AOCP is Tulip Dental's patient benefit plan designed to provide additional savings and preventive benefits during your treatment. This is entirely optional — you can continue without it.</p>
+
+    <div class="aocp-card" id="aocpAddCard" onclick="selectAocp(true)">
+      <div class="ac-top">
+        <span class="ac-title">AOCP</span>
+        <span class="ac-badge" id="aocpAddBadge">SELECT</span>
+      </div>
+      <div class="ac-price">₹2,999 <small>/ year</small></div>
+      <ul class="aocp-benefits">
+        <li>✓ 10% discount on eligible dental treatment</li>
+        <li>✓ Scaling included</li>
+        <li>✓ Maximum treatment discount: ₹10,000</li>
+      </ul>
+      <div class="aocp-calc-box">
+        <div class="aocp-calc-row"><span>Your current eligible treatment</span><span id="aocpEligible">₹0</span></div>
+        <div class="aocp-calc-row"><span>10% discount</span><span id="aocpRaw">₹0</span></div>
+        <div class="aocp-calc-row"><span>Maximum allowed discount</span><span>₹10,000</span></div>
+        <div class="aocp-calc-row strong"><span>Your applicable discount</span><span id="aocpApplied">₹0</span></div>
+        <div class="aocp-calc-row"><span>AOCP membership</span><span id="aocpFeeDisplay">₹2,999</span></div>
+        <div class="aocp-calc-row net"><span>Net potential benefit</span><span id="aocpNet">₹0</span></div>
+      </div>
+      <div class="aocp-note">Scaling is included as an AOCP benefit. Discount = MIN(10% of eligible treatment, ₹10,000).</div>
+    </div>
+
+    <div class="aocp-card" id="aocpSkipCard" onclick="selectAocp(false)">
+      <div class="ac-top">
+        <span class="ac-title">Continue Without AOCP</span>
+        <span class="ac-badge" id="aocpSkipBadge">SELECT</span>
+      </div>
+      <div class="aocp-note" style="margin-top:6px;">No membership added. Your treatment investment stays exactly as calculated in the previous step.</div>
+    </div>
+
+    <div class="step-nav">
+      <button class="nav-btn" onclick="goBack()">← Back</button>
+      <button class="nav-btn primary" onclick="goNext()">CONTINUE →</button>
+    </div>
+  </section>
+
+  <!-- STEP 9: PAYMENT PLAN -->
+  <section class="journey-step" data-step="9">
+    <div class="step-eyebrow">09 · Payment Plan</div>
+    <h1 class="step-h1">How Would You Like To Plan Your Payment?</h1>
+    <p class="step-p">Your investment total stays the same either way — this is only about how you'd like to structure payments.</p>
+    <div id="paymentPlanCards"></div>
+    <div class="step-nav">
+      <button class="nav-btn" onclick="goBack()">← Back</button>
+      <button class="nav-btn primary" onclick="goNext()">CONTINUE →</button>
+    </div>
+  </section>
+
+  <!-- STEP 10: FINAL REVIEW -->
+  <section class="journey-step" data-step="10">
+    <div class="step-eyebrow">10 · Final Review</div>
+    <h1 class="step-h1">Your Final Plan</h1>
+
+    <div class="review-section">
+      <h3>Treatment</h3>
+      <ul class="review-list">
+        <li><span class="rlabel">Mandatory treatment</span><span class="rval" id="frMandatory">₹0</span></li>
+        <li><span class="rlabel">Patient-selected treatments</span><span class="rval" id="frChoices">₹0</span></li>
+        <li><span class="rlabel">Material selections</span><span class="rval" id="frMaterials">₹0</span></li>
+      </ul>
+    </div>
+
+    <div class="review-section" id="frAocpSection">
+      <h3>AOCP</h3>
+      <ul class="review-list" id="frAocpList"></ul>
+    </div>
+
+    <div class="invest-final">
+      <div class="il">Final Estimated Investment</div>
+      <div class="iv" id="frTotal">₹0</div>
+      <small>Current working estimate based on your selections and today's clinical findings. Final amount confirmed after final clinical planning.</small>
+    </div>
+
+    <div class="review-section">
+      <h3>Payment Plan</h3>
+      <ul class="review-list">
+        <li><span class="rlabel">Selected payment structure</span><span class="rval" id="frPaymentPlan">—</span></li>
+      </ul>
+    </div>
+
+    <div class="cta-row">
+      <button class="btn btn-secondary" onclick="changeMyPlan()">CHANGE MY PLAN</button>
+      <button class="btn btn-primary" onclick="openModal('discuss')">DISCUSS MY PLAN WITH DOCTOR</button>
+    </div>
+  </section>
+
+</main>
+
+<!-- Generic mobile/tap info sheet (teeth + product details) -->
+<div class="sheet-overlay" id="infoSheetOverlay" onclick="closeInfoSheet()"></div>
+<div class="info-sheet" id="infoSheet">
+  <div class="is-title" id="isTitle"></div>
+  <div class="is-sub" id="isSub"></div>
+  <div id="isBody"></div>
+  <button class="is-close" onclick="closeInfoSheet()">Close</button>
+</div>
+
+<!-- Secondary info overlay: Clinical Findings / Why / Journey / Doctor's Note -->
+<div class="info-overlay" id="infoOverlay">
+  <div class="info-overlay-head">
+    <h3>More About Your Case</h3>
+    <button class="drawer-close" onclick="closeInfoOverlay()">✕</button>
+  </div>
+  <div class="info-tabbar" id="infoTabbar"></div>
+  <div class="info-overlay-body">
+
+    <div class="info-tab-panel active" data-itab="findings">
+      <div class="card" style="margin-bottom:12px;">
+        <h3>Your dental chart</h3>
+        <p>Tap or hover any highlighted tooth to see the finding and planned treatment.</p>
+      </div>
+      <div class="odontogram-card">
+        <div class="arch-wrap">
+          <div class="arch-row upper" id="archUpper"></div>
+          <div class="arch-midline"></div>
+          <div class="arch-row lower" id="archLower"></div>
+        </div>
+        <div class="odo-legend">
+          <span><i style="background:#F3C9C9"></i>Fractured</span>
+          <span><i style="background:#F5DBAD"></i>Carious</span>
+          <span><i style="background:#C9C4D4"></i>Root piece</span>
+          <span><i style="background:#EBB9B9"></i>Grossly decayed</span>
+          <span><i style="background:#fff;border:1px dashed #C7C4CF"></i>Missing</span>
+        </div>
+        <div class="odo-hint">Only teeth with documented findings are highlighted and tappable.</div>
+      </div>
+      <div class="card" style="margin-top:14px;">
+        <h3>Additional whole-mouth findings</h3>
+        <ul class="finding-list">
+          <li>Generalized severe attrition (wearing down of teeth)</li>
+          <li>Multiple missing posterior teeth</li>
+          <li>Collapsed bite / reduced vertical dimension</li>
+          <li>Excessive anterior occlusal loading</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="info-tab-panel" data-itab="why">
+      <div class="card">
+        <h3>Why this plan</h3>
+        <p>You came to us because of the fractured front teeth. However, the examination and OPG showed significant loss of posterior support, severe wear and a collapsed bite.</p>
+        <p style="margin-top:10px;">Therefore, treating only the front teeth permanently would not address the underlying problem.</p>
+        <p style="margin-top:10px;">Your plan is designed to first create a stable foundation and then complete the final rehabilitation.</p>
+      </div>
+    </div>
+
+    <div class="info-tab-panel" data-itab="journey">
+      <div class="card">
+        <div class="phase-card">
+          <div class="phase-dot"></div>
+          <div class="phase-num">Phase 1</div>
+          <div class="phase-title">Foundation</div>
+          <p>RCT + extractions + disease control.</p>
+        </div>
+        <div class="phase-card">
+          <div class="phase-dot"></div>
+          <div class="phase-num">Phase 2 · ~2 weeks</div>
+          <div class="phase-title">Temporary Front Teeth</div>
+          <p>Provisional restoration of your front teeth.</p>
+        </div>
+        <div class="phase-card">
+          <div class="phase-dot"></div>
+          <div class="phase-num">Phase 3</div>
+          <div class="phase-title">Posterior Support</div>
+          <p>Implants / bridges as planned.</p>
+        </div>
+        <div class="phase-card">
+          <div class="phase-dot"></div>
+          <div class="phase-num">Phase 4</div>
+          <div class="phase-title">Final Rehabilitation</div>
+          <p>PFM / Zirconia according to your selected option.</p>
+        </div>
+        <p style="margin-top:6px;font-weight:600;color:var(--ink);">Overall: approximately 4–5 months.</p>
+      </div>
+    </div>
+
+    <div class="info-tab-panel" data-itab="doctor">
+      <div class="doctor-box">
+        <div class="who">
+          <div class="doctor-avatar">DR</div>
+          <div><b>Doctor's Note</b><span>Dr. Sumit · Tulip Dental</span></div>
+        </div>
+        <blockquote>"I can restore your front teeth immediately, but I do not recommend treating them as the final solution in isolation. Because the posterior support and bite have been compromised, my recommendation is to first create a stable foundation and then complete the definitive rehabilitation."</blockquote>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h3>My Treatment Plan</h3>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="cart-group-label">Required</div>
+    <div id="cartRequired"></div>
+    <div class="cart-group-label">My treatment choices</div>
+    <div id="cartTreatmentChoices"></div>
+    <div class="cart-group-label">My material choices</div>
+    <div id="cartMaterialChoices"></div>
+    <div class="cart-group-label" id="cartAocpLabel" style="display:none;">AOCP</div>
+    <div id="cartAocp"></div>
+
+    <div class="invest-box">
+      <div class="il">Estimated Investment</div>
+      <div class="iv" id="cartTotal">₹0</div>
+      <small>Current working estimate based on your selections and today's clinical findings. Final amount confirmed after final clinical planning. Temporary component cost may be adjusted into the definitive treatment as per clinic policy.</small>
+    </div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-secondary" onclick="closeDrawer()">Change Selection</button>
+    <button class="btn btn-primary" onclick="closeDrawerAndReview()">Review Complete Plan</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box">
+    <div class="modal-icon" id="modalIcon">✓</div>
+    <h3 id="modalTitle">Saved</h3>
+    <p id="modalText">Your plan has been saved.</p>
+    <button class="modal-close" onclick="closeModal()">Close</button>
+  </div>
+</div>
+
+<script>
+  const state = {
+    tooth14: 'rct',
+    tooth46: 'extract',
+    crownMaterial: 'zirconia',
+    implantBrand: 'biohorizons',
+    posterior: 'implant',
+    paymentPlan: 'payAsYouGo',
+    aocp: false
+  };
+
+  const PRICING = {
+    foundationFixed: 4000 + 8000 + 21000 + 1500 + 1500, // 36000
+    temporary: 15000,
+    toothChoice: { rct: 7000, extract: 2000 },
+    implantUnit: { dentium: 30000, biohorizons: 35000 },
+    abutmentUnit: 5000,
+    crownUnit: { pfm: 8000, zirconia: 20000, premiumZirconia: 28000 },
+    bridge: { pfm: 18000, zirconia: 24000, premiumZirconia: 32000 },
+    finalCrownCount: 14,
+    aocp: { fee: 2999, rate: 0.10, maxDiscount: 10000 }
+  };
+
+  function toINR(n){ return "₹" + Math.round(n).toLocaleString('en-IN'); }
+
+  // ================= JOURNEY NAVIGATION =================
+  const TOTAL_STEPS = 10;
+  const STEP_LABELS = ['BEFORE / PROBLEM','YOUR TREATMENT PLAN','MANDATORY FOUNDATION','TREATMENT DECISIONS','IMPLANT CHOICE','CROWN MATERIAL CHOICE','REVIEW TREATMENT','AOCP BENEFIT','PAYMENT PLAN','FINAL REVIEW'];
+  let currentStep = 1;
+  let optionsSub = 0; // 0 = tooth14, 1 = tooth46
+
+  function goNext(){
+    if(currentStep === 4){
+      if(optionsSub === 0){ optionsSub = 1; renderStep(); return; }
+      currentStep = 5; optionsSub = 0; renderStep(); return;
+    }
+    if(currentStep < TOTAL_STEPS){ currentStep++; renderStep(); }
+  }
+  function goBack(){
+    if(currentStep === 4 && optionsSub === 1){ optionsSub = 0; renderStep(); return; }
+    if(currentStep === 5){ currentStep = 4; optionsSub = 1; renderStep(); return; }
+    if(currentStep > 1){ currentStep--; renderStep(); }
+  }
+  function changeMyPlan(){ currentStep = 4; optionsSub = 0; renderStep(); }
+
+  function renderStep(){
+    document.querySelectorAll('.journey-step').forEach(s=>{
+      s.classList.toggle('active', parseInt(s.dataset.step) === currentStep);
+    });
+    document.getElementById('progressFill').style.width = (currentStep/TOTAL_STEPS*100) + '%';
+    document.getElementById('progressLabel').textContent = 'STEP ' + currentStep + ' OF ' + TOTAL_STEPS + ' · ' + STEP_LABELS[currentStep-1];
+    window.scrollTo({top:0, behavior:'smooth'});
+
+    if(currentStep === 4) renderOptionsStep();
+    if(currentStep === 5) renderImplantStep();
+    if(currentStep === 6) renderCrownStep();
+    if(currentStep === 7) renderReviewStep();
+    if(currentStep === 8) renderAocpStep();
+    if(currentStep === 9) renderPaymentPlans();
+    if(currentStep === 10) renderFinalReviewStep();
+  }
+
+  // ================= STEP 4: TREATMENT OPTIONS =================
+  const TOOTH_OPTIONS = {
+    tooth14: {
+      title:'Tooth 14', sub:'Both options are clinically suitable for this tooth',
+      opts:[
+        {value:'rct', title:'Root Canal Treatment', desc:'Save the natural tooth root. Its crown is chosen separately in the Final Crown step.', price:PRICING.toothChoice.rct},
+        {value:'extract', title:'Extraction', desc:'Remove the tooth. Replacement (implant or bridge) is planned separately in a later step.', price:PRICING.toothChoice.extract}
+      ]
+    },
+    tooth46: {
+      title:'Tooth 46', sub:'Both options are clinically acceptable for this tooth',
+      opts:[
+        {value:'rct', title:'Root Canal Treatment', desc:'Save the natural tooth root. Its crown is chosen separately in the Final Crown step.', price:PRICING.toothChoice.rct},
+        {value:'extract', title:'Extraction', desc:'Remove the tooth. Replacement (implant or bridge) is planned separately in a later step.', price:PRICING.toothChoice.extract}
+      ]
+    }
+  };
+  const posteriorOptions = [
+    {value:'implant', title:'Implant-Supported', desc:'A dedicated implant restores this site independently.', priceLabel:'Uses 1 of 4 planned implants'},
+    {value:'bridge', title:'Bridge', desc:'A 3-unit bridge anchored on neighbouring teeth.', dynamic:true}
+  ];
+
+  function renderOptionsStep(){
+    const key = optionsSub === 0 ? 'tooth14' : 'tooth46';
+    const def = TOOTH_OPTIONS[key];
+    document.getElementById('optionsSubstepLabel').textContent = 'Decision ' + (optionsSub+1) + ' of 2';
+    document.getElementById('optTitle').textContent = def.title;
+    document.getElementById('optSub').textContent = def.sub;
+
+    const wrap = document.getElementById('cards-options');
+    wrap.innerHTML = '';
+    def.opts.forEach(opt=>{
+      const isAdded = state[key] === opt.value;
+      const card = document.createElement('div');
+      card.className = 'product-card' + (isAdded?' added':'');
+      card.innerHTML = `
+        <div class="pc-title">${opt.title}</div>
+        <div class="pc-desc">${opt.desc}</div>
+        <div class="pc-price">${toINR(opt.price)}</div>
+        <button class="add-btn ${isAdded?'added':''}">${isAdded ? '✓ SELECTED' : 'SELECT'}</button>
+      `;
+      card.querySelector('.add-btn').onclick = ()=>{ state[key] = opt.value; if(key==='tooth46' && opt.value==='rct'){ state.posterior='implant'; } renderOptionsStep(); recalc(); };
+      wrap.appendChild(card);
+    });
+
+    const posteriorSub = document.getElementById('posteriorSub');
+    if(key === 'tooth46' && state.tooth46 === 'extract'){
+      posteriorSub.style.display = 'block';
+      const pwrap = document.getElementById('cards-posterior');
+      pwrap.innerHTML = '';
+      posteriorOptions.forEach(opt=>{
+        const isAdded = state.posterior === opt.value;
+        const priceLabel = opt.dynamic ? toINR(PRICING.bridge[state.crownMaterial]) : opt.priceLabel;
+        const card = document.createElement('div');
+        card.className = 'product-card' + (isAdded?' added':'');
+        card.innerHTML = `
+          <div class="pc-title">${opt.title}</div>
+          <div class="pc-desc">${opt.desc}</div>
+          <div class="pc-price">${priceLabel}</div>
+          <button class="add-btn ${isAdded?'added':''}">${isAdded ? '✓ SELECTED' : 'SELECT'}</button>
+        `;
+        card.querySelector('.add-btn').onclick = ()=>{ state.posterior = opt.value; renderOptionsStep(); recalc(); };
+        pwrap.appendChild(card);
+      });
+    } else {
+      posteriorSub.style.display = 'none';
+    }
+
+    document.getElementById('optionsNextBtn').textContent = (optionsSub === 0) ? 'NEXT →' : 'CONTINUE →';
+  }
+
+  // ================= STEP 5: IMPLANT OPTIONS =================
+  const IMPLANT_INFO = {
+    dentium:{
+      title:'Dentium', price:PRICING.implantUnit.dentium,
+      what:'Established two-piece titanium implant system used worldwide.',
+      advantages:'Reliable long-term track record, cost-effective.',
+      considerations:'Standard healing protocol.',
+      clinical:'Screw-retained, titanium body.'
+    },
+    biohorizons:{
+      title:'BioHorizons', price:PRICING.implantUnit.biohorizons,
+      what:'Established implant system with a surface technology designed to support surrounding bone and tissue.',
+      advantages:'Widely used internationally, strong surface technology.',
+      considerations:'Slightly higher cost than some alternatives.',
+      clinical:'Screw-retained, titanium body.'
+    }
+  };
+  function renderImplantStep(){
+    const wrap = document.getElementById('cards-implant');
+    wrap.innerHTML = '';
+    Object.keys(IMPLANT_INFO).forEach(key=>{
+      const info = IMPLANT_INFO[key];
+      const isAdded = state.implantBrand === key;
+      const card = document.createElement('div');
+      card.className = 'product-card hoverable' + (isAdded?' added':'');
+      card.innerHTML = `
+        <div class="pc-top"><div class="pc-title">${info.title}</div><button class="info-icon-btn" type="button">ⓘ</button></div>
+        <div class="pc-desc">${info.what}</div>
+        <div class="pc-price">${toINR(info.price)} <small>/ implant</small></div>
+        <button class="add-btn ${isAdded?'added':''}">${isAdded ? '✓ ADDED TO MY PLAN' : 'SELECT'}</button>
+        <div class="info-pop">
+          <div class="ip-row"><div class="ip-label">What it is</div><div class="ip-val">${info.what}</div></div>
+          <div class="ip-row"><div class="ip-label">Advantages</div><div class="ip-val">${info.advantages}</div></div>
+          <div class="ip-row"><div class="ip-label">Considerations</div><div class="ip-val">${info.considerations}</div></div>
+          <div class="ip-row"><div class="ip-label">Clinical characteristics</div><div class="ip-val">${info.clinical}</div></div>
+          <div class="ip-row"><div class="ip-label">Cost</div><div class="ip-val">${toINR(info.price)} / implant</div></div>
+        </div>
+      `;
+      card.querySelector('.add-btn').onclick = ()=>{ state.implantBrand = key; renderImplantStep(); recalc(); };
+      card.querySelector('.info-icon-btn').onclick = (e)=>{
+        e.stopPropagation();
+        openInfoSheet(info.title, 'Implant system', `
+          <div class="is-row"><div class="is-label">What it is</div><div class="is-val">${info.what}</div></div>
+          <div class="is-row"><div class="is-label">Advantages</div><div class="is-val">${info.advantages}</div></div>
+          <div class="is-row"><div class="is-label">Considerations</div><div class="is-val">${info.considerations}</div></div>
+          <div class="is-row"><div class="is-label">Clinical characteristics</div><div class="is-val">${info.clinical}</div></div>
+          <div class="is-row"><div class="is-label">Cost</div><div class="is-val">${toINR(info.price)} / implant</div></div>
+        `);
+      };
+      wrap.appendChild(card);
+    });
+    const b = computeBreakdown();
+    document.getElementById('abutmentPrice').textContent = toINR(b.abutmentTotal);
+    document.getElementById('abutmentMeta').textContent = 'Required connector component × ' + b.implantCount + ' implant(s) — fixed component, not brand-dependent. Prototype pricing.';
+  }
+
+  // ================= STEP 6: FINAL CROWN OPTIONS =================
+  const CROWN_INFO = {
+    pfm:{
+      title:'PFM', price:PRICING.crownUnit.pfm,
+      desc:'Porcelain fused to a metal substructure.',
+      advantages:'Strong, cost-effective, long clinical history.',
+      limitations:'A slight metal margin may show over time; less translucent than all-ceramic options.'
+    },
+    zirconia:{
+      title:'Regular Zirconia', price:PRICING.crownUnit.zirconia,
+      desc:'Metal-free zirconia crown.',
+      advantages:'High strength, good aesthetics, biocompatible.',
+      limitations:'Slightly less translucent than premium multilayer zirconia.'
+    },
+    premiumZirconia:{
+      title:'Premium Zirconia', price:PRICING.crownUnit.premiumZirconia,
+      desc:'Multilayered, high-translucency zirconia.',
+      advantages:'Closest match to natural tooth aesthetics, premium finish.',
+      limitations:'Higher cost.'
+    }
+  };
+  function renderCrownStep(){
+    const wrap = document.getElementById('cards-crown');
+    wrap.innerHTML = '';
+    Object.keys(CROWN_INFO).forEach(key=>{
+      const info = CROWN_INFO[key];
+      const isAdded = state.crownMaterial === key;
+      const card = document.createElement('div');
+      card.className = 'product-card hoverable' + (isAdded?' added':'');
+      card.innerHTML = `
+        <div class="pc-top"><div class="pc-title">${info.title}</div><button class="info-icon-btn" type="button">ⓘ</button></div>
+        <div class="pc-desc">${info.desc}</div>
+        <div class="pc-price">${toINR(info.price)} <small>/ tooth</small></div>
+        <div class="pc-adv">+ ${info.advantages}</div>
+        <div class="pc-lim">– ${info.limitations}</div>
+        <button class="add-btn ${isAdded?'added':''}">${isAdded ? '✓ ADDED TO MY PLAN' : 'ADD TO MY PLAN'}</button>
+        <div class="info-pop">
+          <div class="ip-row"><div class="ip-label">Description</div><div class="ip-val">${info.desc}</div></div>
+          <div class="ip-row"><div class="ip-label">Advantages</div><div class="ip-val">${info.advantages}</div></div>
+          <div class="ip-row"><div class="ip-label">Limitations</div><div class="ip-val">${info.limitations}</div></div>
+          <div class="ip-row"><div class="ip-label">Cost</div><div class="ip-val">${toINR(info.price)} / tooth</div></div>
+        </div>
+      `;
+      card.querySelector('.add-btn').onclick = ()=>{ state.crownMaterial = key; renderCrownStep(); recalc(); };
+      card.querySelector('.info-icon-btn').onclick = (e)=>{
+        e.stopPropagation();
+        openInfoSheet(info.title, 'Final crown material', `
+          <div class="is-row"><div class="is-label">Description</div><div class="is-val">${info.desc}</div></div>
+          <div class="is-row"><div class="is-label">Advantages</div><div class="is-val">${info.advantages}</div></div>
+          <div class="is-row"><div class="is-label">Limitations</div><div class="is-val">${info.limitations}</div></div>
+          <div class="is-row"><div class="is-label">Cost</div><div class="is-val">${toINR(info.price)} / tooth</div></div>
+        `);
+      };
+      wrap.appendChild(card);
+    });
+  }
+
+  // ================= STEP 7: REVIEW =================
+  function crownLabel(key){ return key==='pfm'?'PFM':(key==='zirconia'?'Regular Zirconia':'Premium Zirconia'); }
+
+  function renderReviewStep(){
+    const b = computeBreakdown();
+    const ul = document.getElementById('reviewChoicesList');
+    const rows = [
+      ['Tooth 14 — procedure', state.tooth14==='rct' ? 'Root Canal Treatment' : 'Extraction'],
+      ['Tooth 46 — procedure', state.tooth46==='rct' ? 'Root Canal Treatment' : 'Extraction'],
+    ];
+    if(state.tooth46==='extract'){
+      rows.push(['Posterior replacement (46 site)', state.posterior==='implant' ? 'Implant-supported' : 'Bridge']);
+    }
+    rows.push(['Implant', (state.implantBrand==='dentium'?'Dentium':'BioHorizons') + ' × ' + b.implantCount]);
+    rows.push(['Abutment', '× ' + b.implantCount]);
+    rows.push(['Final crown material', crownLabel(state.crownMaterial) + ' × ' + PRICING.finalCrownCount]);
+    ul.innerHTML = rows.map(r=>`<li><span class="rlabel">${r[0]}</span><span class="rval">${r[1]}</span></li>`).join('');
+
+    document.getElementById('reviewVisits').textContent = estimateVisits();
+    document.getElementById('reviewTotal').textContent = toINR(b.total);
+  }
+
+  function estimateVisits(){
+    // foundation(6) + temporary(1) + implants(3) + final restorations(3)
+    return '12–14';
+  }
+
+  // ================= PAYMENT PLAN =================
+  function selectPaymentPlan(key){
+    state.paymentPlan = key;
+    renderPaymentPlans();
+  }
+
+  function renderPaymentPlans(){
+    const wrap = document.getElementById('paymentPlanCards');
+    if(!wrap) return;
+    const f = computeFinal(); // payment plans are calculated AFTER the AOCP decision
+    const emiMonths = 24;
+    const emiFrom = Math.ceil((f.adjustedTotal / emiMonths) / 100) * 100;
+
+    const cards = [
+      {
+        key:'payAsYouGo', title:'Pay As You Go',
+        desc:'Pay according to treatment stages, as each stage is completed.',
+        body:`
+          <div class="payment-stage-row"><span>Foundation${state.aocp ? ' (incl. AOCP)' : ''}</span><span>${toINR(f.stageStartAdj)}</span></div>
+          <div class="payment-stage-row"><span>Implant stage</span><span>${toINR(f.stageImplant)}</span></div>
+          <div class="payment-stage-row"><span>Final restoration</span><span>${toINR(f.stageFinal)}</span></div>
+        `
+      },
+      {
+        key:'stageWise', title:'Stage-Wise Payment',
+        desc:'Pay in three fixed milestones across your treatment.',
+        body:`
+          <div class="payment-stage-row"><span>At treatment start</span><span>${toINR(f.adjustedTotal*0.4)}</span></div>
+          <div class="payment-stage-row"><span>During implant phase</span><span>${toINR(f.adjustedTotal*0.35)}</span></div>
+          <div class="payment-stage-row"><span>At final restoration</span><span>${toINR(f.adjustedTotal*0.25)}</span></div>
+        `
+      },
+      {
+        key:'emi', title:'EMI / Financing',
+        desc:'Spread your payment into fixed monthly instalments.',
+        body:`
+          <div class="emi-figure">${toINR(emiFrom)} <span style="font-size:12px;font-weight:600;color:var(--ink-soft);">/ month</span></div>
+          <div class="emi-sub">for up to ${emiMonths} months (example calculation)</div>
+          <button class="emi-explore-btn" type="button" onclick="event.stopPropagation();openModal('emi')">EXPLORE EMI</button>
+          <div class="emi-disclaimer">Example / prototype figure only — not a financing offer. No lender, interest rate or approval is implied. Actual financing options, if available, would be confirmed directly with the clinic.</div>
+        `
+      }
+    ];
+
+    wrap.innerHTML = cards.map(c => `
+      <div class="payment-card ${state.paymentPlan===c.key?'selected':''}" onclick="selectPaymentPlan('${c.key}')">
+        <div class="pp-top">
+          <span class="pp-title">${c.title}</span>
+          <span class="pp-badge">${state.paymentPlan===c.key ? '✓ SELECTED' : 'SELECT'}</span>
+        </div>
+        <div class="pp-desc">${c.desc}</div>
+        ${c.body}
+      </div>
+    `).join('');
+  }
+
+  // ================= STEP 8: AOCP =================
+  function selectAocp(value){
+    state.aocp = value;
+    renderAocpStep();
+    recalc();
+  }
+
+  function renderAocpStep(){
+    const b = computeBreakdown();
+    const calc = computeAocp(b.total);
+    document.getElementById('aocpEligible').textContent = toINR(b.total);
+    document.getElementById('aocpRaw').textContent = toINR(calc.raw);
+    document.getElementById('aocpApplied').textContent = toINR(calc.applied);
+    document.getElementById('aocpNet').textContent = (calc.net >= 0 ? '' : '−') + toINR(Math.abs(calc.net));
+
+    document.getElementById('aocpAddCard').classList.toggle('selected', state.aocp === true);
+    document.getElementById('aocpAddBadge').textContent = state.aocp === true ? '✓ ADDED' : 'SELECT';
+    document.getElementById('aocpSkipCard').classList.toggle('selected', state.aocp === false);
+    document.getElementById('aocpSkipBadge').textContent = state.aocp === false ? '✓ SELECTED' : 'SELECT';
+  }
+
+  // ================= STEP 10: FINAL REVIEW =================
+  function paymentPlanLabel(key){
+    if(key==='payAsYouGo') return 'Pay As You Go';
+    if(key==='stageWise') return 'Stage-Wise Payment';
+    return 'EMI / Financing';
+  }
+
+  function renderFinalReviewStep(){
+    const f = computeFinal();
+    document.getElementById('frMandatory').textContent = toINR(f.mandatoryTotal);
+    document.getElementById('frChoices').textContent = toINR(f.toothChoicesTotal + f.implantsTotal + f.abutmentTotal + f.bridgeCost);
+    document.getElementById('frMaterials').textContent = toINR(f.finalCrownsTotal);
+
+    const aocpSection = document.getElementById('frAocpSection');
+    const aocpList = document.getElementById('frAocpList');
+    if(state.aocp){
+      aocpSection.style.display = 'block';
+      aocpList.innerHTML = `
+        <li><span class="rlabel">Membership</span><span class="rval">+ ${toINR(PRICING.aocp.fee)}</span></li>
+        <li><span class="rlabel">AOCP discount</span><span class="rval">− ${toINR(f.aocpCalc.applied)}</span></li>
+      `;
+    } else {
+      aocpSection.style.display = 'block';
+      aocpList.innerHTML = `<li><span class="rlabel">AOCP</span><span class="rval">Not added</span></li>`;
+    }
+
+    document.getElementById('frTotal').textContent = toINR(f.adjustedTotal);
+    document.getElementById('frPaymentPlan').textContent = paymentPlanLabel(state.paymentPlan);
+  }
+
+  // ================= ODONTOGRAM =================
+  const TOOTH_INFO = {
+    11:{cls:'fx', finding:'Fractured', treatment:'Temporary anterior restoration → definitive rehabilitation'},
+    12:{cls:'fx', finding:'Fractured', treatment:'Temporary anterior restoration → definitive rehabilitation'},
+    13:{cls:'root', finding:'Root piece', treatment:'Extraction'},
+    14:{cls:'car', finding:'Carious', dynamicTooth:'tooth14'},
+    17:{cls:'root', finding:'Root piece', treatment:'Extraction'},
+    21:{cls:'car', finding:'Carious', treatment:'Root canal treatment, then a separately chosen crown (anterior rehabilitation)'},
+    22:{cls:'car', finding:'Carious', treatment:'Caries filling'},
+    23:{cls:'root', finding:'Root piece', treatment:'Extraction'},
+    27:{cls:'root', finding:'Root piece', treatment:'Extraction'},
+    45:{cls:'miss', finding:'Missing', treatment:'Implant-supported restoration (planned)'},
+    46:{cls:'gross', finding:'Grossly decayed', dynamicTooth:'tooth46'}
+  };
+  const UPPER_ROW = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
+  const LOWER_ROW = [48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
+
+  function getTreatmentText(num){
+    const info = TOOTH_INFO[num];
+    if(info.dynamicTooth){
+      const val = state[info.dynamicTooth];
+      const chosen = val === 'rct' ? 'Root canal treatment (crown chosen separately)' : 'Extraction';
+      return 'Root canal treatment OR extraction — your choice (both clinically approved). Currently selected: ' + chosen + '.';
+    }
+    return info.treatment;
+  }
+  function buildToothButton(num, isLower){
+    const info = TOOTH_INFO[num];
+    const el = document.createElement('div');
+    if(!info){ el.className = 'tooth-shape' + (isLower?' lower':''); return el; }
+    el.className = 'tooth-shape documented ' + info.cls + (isLower?' lower':'');
+    el.innerHTML = `${num}
+      <div class="tooth-pop">
+        <b>Tooth ${num}</b>
+        <div class="tp-finding">${info.finding}</div>
+        <div class="tp-label">Planned treatment</div>
+        <div class="tp-treatment">${getTreatmentText(num)}</div>
+      </div>`;
+    el.addEventListener('click', ()=> openInfoSheet('Tooth ' + num, info.finding, `<div class="is-row"><div class="is-label">Planned treatment</div><div class="is-val">${getTreatmentText(num)}</div></div>`));
+    return el;
+  }
+  function renderOdontogram(){
+    const u = document.getElementById('archUpper');
+    const l = document.getElementById('archLower');
+    if(!u || !l) return;
+    u.innerHTML = ''; l.innerHTML = '';
+    UPPER_ROW.forEach(n=> u.appendChild(buildToothButton(n,false)) );
+    LOWER_ROW.forEach(n=> l.appendChild(buildToothButton(n,true)) );
+  }
+
+  // ================= GENERIC INFO SHEET (mobile tap) =================
+  function openInfoSheet(title, sub, bodyHtml){
+    document.getElementById('isTitle').textContent = title;
+    document.getElementById('isSub').textContent = sub;
+    document.getElementById('isBody').innerHTML = bodyHtml;
+    document.getElementById('infoSheet').classList.add('show');
+    document.getElementById('infoSheetOverlay').classList.add('show');
+  }
+  function closeInfoSheet(){
+    document.getElementById('infoSheet').classList.remove('show');
+    document.getElementById('infoSheetOverlay').classList.remove('show');
+  }
+
+  // ================= SECONDARY INFO OVERLAY =================
+  const INFO_TABS = [['findings','Clinical Findings'],['why',"Why This Plan"],['journey','Treatment Journey'],['doctor',"Doctor's Note"]];
+  function buildInfoTabs(){
+    const bar = document.getElementById('infoTabbar');
+    bar.innerHTML = '';
+    INFO_TABS.forEach(([key,label])=>{
+      const b = document.createElement('button');
+      b.className = 'info-tab-btn' + (key==='findings' ? ' active' : '');
+      b.textContent = label;
+      b.dataset.itab = key;
+      b.onclick = ()=>{
+        document.querySelectorAll('.info-tab-panel').forEach(p=>p.classList.toggle('active', p.dataset.itab===key));
+        document.querySelectorAll('.info-tab-btn').forEach(x=>x.classList.toggle('active', x.dataset.itab===key));
+      };
+      bar.appendChild(b);
+    });
+  }
+  function openInfoOverlay(){ document.getElementById('infoOverlay').classList.add('show'); renderOdontogram(); }
+  function closeInfoOverlay(){ document.getElementById('infoOverlay').classList.remove('show'); }
+
+  // ================= PRICING =================
+  function computeBreakdown(){
+    const mandatoryTotal = PRICING.foundationFixed + PRICING.temporary; // 51000
+
+    let implantCount = 4;
+    let bridgeCost = 0;
+    if(state.tooth46 === 'extract' && state.posterior === 'bridge'){
+      implantCount = 3;
+      bridgeCost = PRICING.bridge[state.crownMaterial];
+    }
+    const implantsTotal = implantCount * PRICING.implantUnit[state.implantBrand];
+    const abutmentTotal = implantCount * PRICING.abutmentUnit;
+    const finalCrownsTotal = PRICING.finalCrownCount * PRICING.crownUnit[state.crownMaterial];
+    const finalRestorationsTotal = finalCrownsTotal + bridgeCost;
+    const toothChoicesTotal = PRICING.toothChoice[state.tooth14] + PRICING.toothChoice[state.tooth46];
+
+    const choicesTotal = toothChoicesTotal + implantsTotal + abutmentTotal + finalRestorationsTotal;
+    const total = mandatoryTotal + choicesTotal;
+
+    // Payment-plan stage groupings (illustrative, matches actual component costs)
+    const stageStart = mandatoryTotal + toothChoicesTotal;       // foundation + tooth procedures
+    const stageImplant = implantsTotal + abutmentTotal + bridgeCost; // mid-treatment: implants/abutments/bridge
+    const stageFinal = finalCrownsTotal;                          // final restoration crowns
+
+    return {
+      mandatoryTotal, choicesTotal, implantsTotal, abutmentTotal, finalRestorationsTotal, finalCrownsTotal,
+      bridgeCost, implantCount, toothChoicesTotal, total, stageStart, stageImplant, stageFinal
+    };
+  }
+
+  // AOCP Discount = MIN(10% of eligible treatment, ₹10,000)
+  function computeAocp(eligibleTotal){
+    const raw = eligibleTotal * PRICING.aocp.rate;
+    const applied = Math.min(raw, PRICING.aocp.maxDiscount);
+    const net = applied - PRICING.aocp.fee;
+    return { raw, applied, net };
+  }
+
+  // Layers the optional AOCP membership/discount on top of the treatment breakdown
+  function computeFinal(){
+    const b = computeBreakdown();
+    const aocpCalc = computeAocp(b.total);
+    const aocpAdjustment = state.aocp ? (PRICING.aocp.fee - aocpCalc.applied) : 0; // can be negative (net saving)
+    const adjustedTotal = b.total + aocpAdjustment;
+    const stageStartAdj = b.stageStart + aocpAdjustment;
+    return Object.assign({}, b, { aocpCalc, aocpAdjustment, adjustedTotal, stageStartAdj });
+  }
+
+  function cartCount(){
+    let n = 4; // tooth14, tooth46, crownMaterial, implantBrand
+    if(state.tooth46 === 'extract') n += 1;
+    return n;
+  }
+
+  function recalc(){
+    document.getElementById('cartCount').textContent = cartCount();
+    renderCartDrawer();
+    renderOdontogram();
+    if(currentStep === 4) {/* handled by callers */}
+    if(currentStep === 5) renderImplantStep();
+    if(currentStep === 6) renderCrownStep();
+    if(currentStep === 7) renderReviewStep();
+    if(currentStep === 8) renderAocpStep();
+    if(currentStep === 9) renderPaymentPlans();
+    if(currentStep === 10) renderFinalReviewStep();
+  }
+
+  function cartRow(label, sub, price){
+    return `<div class="cart-item"><div><div class="ci-label">✓ ${label}</div><div class="ci-sub">${sub}</div></div><div class="ci-price">${price!==null?toINR(price):'—'}</div></div>`;
+  }
+
+  function renderCartDrawer(){
+    const b = computeBreakdown();
+
+    // REQUIRED — mandatory, doctor-defined, never bundled with a choice
+    document.getElementById('cartRequired').innerHTML = [
+      cartRow('Root Canal Treatment', 'Tooth 11', 7000),
+      cartRow('Root Canal Treatment', 'Tooth 12', 7000),
+      cartRow('Root Canal Treatment', 'Tooth 21', 7000),
+      cartRow('Extraction', 'Tooth 13 — retained root', 2000),
+      cartRow('Extraction', 'Tooth 17 — retained root', 2000),
+      cartRow('Extraction', 'Tooth 23 — retained root', 2000),
+      cartRow('Extraction', 'Tooth 27 — retained root', 2000),
+      cartRow('Cleaning & disease control', 'Scaling', 4000),
+      cartRow('Caries filling', 'Tooth 22', 1500),
+      cartRow('Records & OPG review', 'Already completed', 1500),
+      cartRow('Temporary front teeth', '~2 weeks, provisional', 15000)
+    ].join('');
+
+    // MY TREATMENT CHOICES — procedure-level choices, kept separate from materials
+    const tc = [
+      cartRow(state.tooth14==='rct' ? 'Root Canal Treatment' : 'Extraction', 'Tooth 14', PRICING.toothChoice[state.tooth14]),
+      cartRow(state.tooth46==='rct' ? 'Root Canal Treatment' : 'Extraction', 'Tooth 46', PRICING.toothChoice[state.tooth46])
+    ];
+    if(state.tooth46 === 'extract' && state.posterior === 'bridge'){
+      tc.push(cartRow('Bridge', 'Tooth 46 site — 3-unit, ' + crownLabel(state.crownMaterial), b.bridgeCost));
+    }
+    tc.push(cartRow('Implant', (state.implantBrand==='dentium'?'Dentium':'BioHorizons') + ' × ' + b.implantCount, b.implantsTotal));
+    tc.push(cartRow('Abutment', '× ' + b.implantCount, b.abutmentTotal));
+    document.getElementById('cartTreatmentChoices').innerHTML = tc.join('');
+
+    // MY MATERIAL CHOICES — material-level choice only
+    document.getElementById('cartMaterialChoices').innerHTML = [
+      cartRow(crownLabel(state.crownMaterial) + ' Crown', '× ' + PRICING.finalCrownCount, b.finalCrownsTotal)
+    ].join('');
+
+    // AOCP — shown only once the patient has made a choice on the AOCP step, kept separate from treatment pricing
+    const f = computeFinal();
+    const aocpLabel = document.getElementById('cartAocpLabel');
+    const aocpWrap = document.getElementById('cartAocp');
+    if(state.aocp){
+      aocpLabel.style.display = 'block';
+      aocpWrap.innerHTML = [
+        cartRow('AOCP Membership', 'per year', PRICING.aocp.fee),
+        `<div class="cart-item"><div><div class="ci-label">✓ AOCP Treatment Benefit</div><div class="ci-sub">10% capped at ₹10,000</div></div><div class="ci-price">− ${toINR(f.aocpCalc.applied)}</div></div>`
+      ].join('');
+    } else {
+      aocpLabel.style.display = 'none';
+      aocpWrap.innerHTML = '';
+    }
+
+    document.getElementById('cartTotal').textContent = toINR(f.adjustedTotal);
+  }
+
+  // ================= DRAWER / MODAL =================
+  function openDrawer(){
+    document.getElementById('drawer').classList.add('show');
+    document.getElementById('drawerOverlay').classList.add('show');
+    renderCartDrawer();
+  }
+  function closeDrawer(){
+    document.getElementById('drawer').classList.remove('show');
+    document.getElementById('drawerOverlay').classList.remove('show');
+  }
+  function closeDrawerAndReview(){
+    closeDrawer();
+    currentStep = 10; optionsSub = 0; renderStep();
+  }
+  function openModal(type){
+    const icon = document.getElementById('modalIcon');
+    const title = document.getElementById('modalTitle');
+    const text = document.getElementById('modalText');
+    if(type === 'save'){
+      icon.textContent = '💾'; title.textContent = 'Plan Saved';
+      text.textContent = 'Your treatment plan has been saved. You can return to it anytime from this link.';
+    } else if(type === 'discuss'){
+      icon.textContent = '📅'; title.textContent = 'Discussion Requested';
+      text.textContent = 'Tulip Dental has been notified. The clinic will reach out to schedule a discussion about your plan.';
+    } else if(type === 'whatsapp'){
+      icon.textContent = '💬'; title.textContent = 'Plan Ready to Share';
+      text.textContent = 'A summary of your plan is ready to send via WhatsApp to yourself or a family member. (Simulated in this prototype.)';
+    } else if(type === 'emi'){
+      icon.textContent = 'ℹ️'; title.textContent = 'About EMI / Financing';
+      text.textContent = 'This figure is an illustrative example only, calculated by dividing your estimated total across months. It is not a financing offer — no lender, interest rate or approval is implied. Actual financing options, if available, would be confirmed directly with the clinic.';
+    }
+    document.getElementById('modalOverlay').classList.add('show');
+  }
+  function closeModal(){ document.getElementById('modalOverlay').classList.remove('show'); }
+
+  // ================= INIT =================
+  buildInfoTabs();
+  renderOdontogram();
+  renderStep();
+  recalc();
+</script>
+
+</body>
+</html>

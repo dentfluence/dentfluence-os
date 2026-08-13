@@ -262,6 +262,10 @@ Route::middleware('auth')->group(function () {
         Route::delete('/treatment-plan-items/{item}',  [TreatmentPlanController::class, 'destroyItem'])->name('treatment-plan-items.destroy')->middleware('module:patients,delete');
 
         // Treatment Visits — Slice 1.2 gates.
+        // Dedicated form page (08-05, presentation-only) — replaces the modal.
+        // GET/read actions only; store()/update() below are unchanged.
+        Route::get('/patients/{patient}/visits/create', [App\Http\Controllers\TreatmentVisitController::class, 'create'])->name('visits.create')->middleware('module:patients,edit');
+        Route::get('/visits/{visit}/edit',        [App\Http\Controllers\TreatmentVisitController::class, 'edit'])->name('visits.edit')->middleware('module:patients,edit');
         Route::post('/patients/{patient}/visits', [App\Http\Controllers\TreatmentVisitController::class, 'store'])->name('visits.store')->middleware('module:patients,edit');
         Route::put('/visits/{visit}',             [App\Http\Controllers\TreatmentVisitController::class, 'update'])->name('visits.update')->middleware('module:patients,edit');
         Route::delete('/visits/{visit}',          [App\Http\Controllers\TreatmentVisitController::class, 'destroy'])->name('visits.destroy')->middleware('module:patients,delete');

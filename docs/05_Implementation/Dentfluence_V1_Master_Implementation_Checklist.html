@@ -1,0 +1,2291 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dentfluence V1 — Master Implementation Checklist</title>
+<style>
+:root{--ink:#1a1f2e;--mut:#5a6072;--line:#dfe3ea;--bg:#f7f8fa;--red:#c0392b;--amber:#b7791f;--green:#1e7e4a;--blue:#1f4e8c;--violet:#702070;--redbg:#fdecea;--amberbg:#fdf6e3;--greenbg:#e8f5ee;--bluebg:#eaf1fa;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,Arial,sans-serif;color:var(--ink);background:#fff;font-size:13.3px;line-height:1.5;max-width:1010px;margin:0 auto;padding:26px 40px}
+h1{font-size:21px} h2{font-size:16px;margin:24px 0 8px;padding:7px 12px;background:var(--ink);color:#fff;border-radius:4px} h3{font-size:13.5px;color:var(--blue);margin:0 0 6px}
+.sub{color:var(--mut);font-size:12.3px;margin-bottom:10px}
+.meta{border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:8px}
+.tracker{position:sticky;top:0;z-index:30;background:#fff;border-bottom:2px solid var(--ink);padding:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tracker .tk{border:1px solid var(--line);border-radius:6px;padding:5px 10px;font-size:11.4px;color:var(--mut)}
+.tracker .tk b{display:block;font-size:13.5px;color:var(--ink)}
+.tracker .bar{flex:1;min-width:120px;height:10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.tracker .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--green))}
+.tabbar{display:flex;flex-wrap:wrap;gap:4px;padding:8px 0;border-bottom:1px solid var(--line);margin-bottom:6px}
+.tabbtn{font-family:inherit;font-size:11.4px;font-weight:600;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--mut);cursor:pointer}
+.tabbtn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.pane{display:none}.pane.active{display:block}
+.task{border:1px solid var(--line);border-radius:8px;margin:10px 0;overflow:hidden}
+.task.done{border-color:var(--green);background:var(--greenbg)}
+.thead{display:flex;gap:10px;align-items:center;padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.task.done .thead{background:var(--greenbg)}
+.stbox{display:flex;gap:5px;align-items:center;font-size:11.5px;font-weight:700;color:var(--green);cursor:pointer}
+.stbox input{width:16px;height:16px;accent-color:var(--green);cursor:pointer}
+.tno{font-size:11px;font-weight:800;color:var(--violet);background:#f4e8f4;padding:1px 8px;border-radius:10px}
+.ttitle{flex:1;font-weight:700;font-size:13.5px}
+.ttime{font-size:11px;color:var(--mut);background:#fff;border:1px solid var(--line);border-radius:10px;padding:1px 8px}
+.tbody{padding:8px 12px}
+.trow{display:flex;gap:10px;padding:3px 0;font-size:12.6px}
+.trow>b{width:110px;flex-shrink:0;font-size:10.8px;text-transform:uppercase;letter-spacing:.03em;color:var(--mut);padding-top:2px}
+.trow ol{margin:0 0 0 18px}
+.trow li{margin:2px 0}
+.vbox{display:flex;gap:6px;align-items:center;font-weight:700;color:var(--blue);cursor:pointer}
+.vbox input{width:15px;height:15px;accent-color:var(--blue)}
+.evwrap{flex:1;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tk-ev{flex:1;min-width:180px;font-size:12px;padding:4px 8px;border:1px solid var(--line);border-radius:5px;font-family:inherit}
+.stopcard{border:2px solid var(--red);background:var(--redbg);border-radius:8px;padding:10px 14px;margin:14px 0;font-size:13px}
+.stopsub{font-size:11.5px;color:var(--mut)}
+.exitcard{border:2px solid var(--green);background:var(--greenbg);border-radius:8px;padding:12px 16px;margin:16px 0}
+.exitcard h3{color:var(--green)}
+.exitlist{list-style:none;margin:6px 0}
+.exitlist li{margin:4px 0;font-size:12.8px}
+.exitlist input{width:15px;height:15px;accent-color:var(--green);margin-right:6px}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12.4px}
+th{background:var(--bg);text-align:left;padding:6px 8px;border:1px solid var(--line);font-size:11.3px;text-transform:uppercase;color:var(--mut)}
+td{padding:6px 8px;border:1px solid var(--line);vertical-align:top}
+.toolrow{display:flex;gap:10px;align-items:center;margin:8px 0}
+@media print{ body{padding:8mm;font-size:9.8px;max-width:none} .tabbar,.toolrow{display:none} .tracker{position:static} .pane{display:block !important} .task,.stopcard,.exitcard{break-inside:avoid} h2{break-after:avoid} .tk-ev{border:1px solid #bbb;min-height:14px} *{-webkit-print-color-adjust:exact;print-color-adjust:exact} }
+</style></head><body>
+
+<div class="meta">
+<h1>DENTFLUENCE V1 — MASTER IMPLEMENTATION CHECKLIST</h1>
+<p class="sub">The single canonical execution document · consolidates all four audits, the 14-day plan and the 107-step tracker into 131 dependency-ordered tasks across 6 locked phases · one task = one checkbox = one verification = one completion · reference task numbers in all future discussions · new requests go through the Implementation Check and, unless required for safe operation, to the V1.1 register — never into this list. Generated 2026-08-07 under the CEO Implementation Directive.</p>
+</div>
+
+<div class="tracker" id="tracker">
+ <div class="tk"><b id="tkPhase">—</b>Current phase</div>
+ <div class="tk"><b id="tkDone">0 / 131</b>Tasks complete</div>
+ <div class="tk"><b id="tkRemain">—</b>Remaining</div>
+ <div class="tk"><b id="tkPct">0%</b>Progress</div>
+ <div class="bar"><i id="tkBar" style="width:0%"></i></div>
+ <div class="tk"><b id="tkTime">—</b>Est. remaining</div>
+ <div class="tk" style="max-width:270px"><b id="tkNext" style="font-size:11.5px">—</b>Next approved task / current blocker</div>
+</div>
+
+<div class="tabbar"><button class="tabbtn active" data-tab="P1">Phase 1 · 🔧 Fix Before Ship</button><button class="tabbtn" data-tab="P2">Phase 2 · Production Freeze</button><button class="tabbtn" data-tab="P3">Phase 3 · Tulip Internal Implementation</button><button class="tabbtn" data-tab="P4">Phase 4 · Operational Stabilization</button><button class="tabbtn" data-tab="P5">Phase 5 · Android Workflow Parity</button><button class="tabbtn" data-tab="P6">Phase 6 · V1 Complete</button><button class="tabbtn" data-tab="JR" style="border-color:var(--violet);color:var(--violet)">Implementation Journal</button></div>
+<div class="pane active" id="P1"><h2>Phase 1 · 🔧 Fix Before Ship</h2><p class="sub">Days 1-7 — close every P0/P1 and the workflow glue. Nothing ships to Tulip before this phase exits.</p>
+<div class="task" id="T1">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T1"> <span>Complete</span></label>
+    <span class="tno">Task 1</span>
+    <span class="ttitle">Delete stray duplicate bootstrap file</span>
+    <span class="ttime">5 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Remove the accidental non-blade duplicate before it ships.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Open resources/views/patients/partials/</li><li>Delete _treatment-visit-bootstrap.php (keep treatment-visit-bootstrap.blade.php)</li><li>Confirm no reference: grep '_treatment-visit-bootstrap' across resources/</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>File gone; grep returns nothing.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T1"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Grep output — <input type="text" class="tk-ev" data-t="T1" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T2">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T2"> <span>Complete</span></label>
+    <span class="tno">Task 2</span>
+    <span class="ttitle">Review uncommitted Treatment Visit sprint files</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Know exactly what is being committed.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 1</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Run: git status --short</li><li>Confirm 5 modified: TreatmentVisitController, treatment-visits-tab, patients/show, visits/print, routes/web.php</li><li>Confirm untracked: treatment-visit-form + 4 partials + TreatmentVisitFormPageTest</li><li>Decide: keep or move the 3 report .md files into docs/</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Every file accounted for; nothing unexpected.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T2"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">git status output — <input type="text" class="tk-ev" data-t="T2" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T3">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T3"> <span>Complete</span></label>
+    <span class="tno">Task 3</span>
+    <span class="ttitle">Clear views and run the full test suite</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Prove 712-green on this exact tree.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 2</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>php artisan view:clear</li><li>php artisan test</li><li>Record pass/fail counts</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Suite fully green.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T3"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Test summary line — <input type="text" class="tk-ev" data-t="T3" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T4">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T4"> <span>Complete</span></label>
+    <span class="tno">Task 4</span>
+    <span class="ttitle">Commit, push and tag v1.0.0-rc1</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>The sprint stops living on one disk.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 3 green</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>git add -A</li><li>git commit -m 'treatment-visits: final sprint (UX freeze + form page)'</li><li>git tag v1.0.0-rc1</li><li>git push &amp;&amp; git push --tags</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Tag visible on remote.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T4"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Commit hash — <input type="text" class="tk-ev" data-t="T4" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T5">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T5"> <span>Complete</span></label>
+    <span class="tno">Task 5</span>
+    <span class="ttitle">Verify migration status local vs production</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>No hidden pending migrations before the deploy.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 4</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Local: php artisan migrate:status | grep -i pending</li><li>VPS: same inside the app container</li><li>Reconcile any difference before proceeding</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Zero pending on both, or a written plan for each.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T5"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Both outputs — <input type="text" class="tk-ev" data-t="T5" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T6">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T6"> <span>Complete</span></label>
+    <span class="tno">Task 6</span>
+    <span class="ttitle">Rebuild .env.example with every required variable</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Future deploys cannot miss a variable.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Add WHATSAPP_* block (ENABLED, DRY_RUN, PHONE_NUMBER_ID, ACCESS_TOKEN, BUSINESS_ACCOUNT_ID, DEFAULT_CC)</li><li>Add PRM_WA_APP_SECRET, PRM_WA_VERIFY_TOKEN, PRM_WEBHOOK_WA_ENABLED</li><li>Add REVIEWS_ENABLED, REVIEWS_GOOGLE_URL, META_*, LOG_SLACK_WEBHOOK_URL, ANTHROPIC_API_KEY</li><li>Commit</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>.env.example diff covers all runtime env() reads.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T6"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Commit hash — <input type="text" class="tk-ev" data-t="T6" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="stopcard">⛔ <b>STOP 1 — Repo safe</b> — Suite green · git clean · tag pushed · journal updated. Do not continue until all four are true.<br><span class="stopsub">Run tests · smoke where applicable · commit · update the journal. Only then continue.</span></div>
+<div class="task" id="T7">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T7"> <span>Complete</span></label>
+    <span class="tno">Task 7</span>
+    <span class="ttitle">Repoint consultation-photos disk to private</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>PHI photos must not be world-readable.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>STOP 1</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Edit config/filesystems.php:62-67</li><li>root =&gt; storage_path('app/private/consultations')</li><li>Remove 'visibility' =&gt; 'public' and the public url line</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Disk definition private.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T7"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Diff — <input type="text" class="tk-ev" data-t="T7" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T8">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T8"> <span>Complete</span></label>
+    <span class="tno">Task 8</span>
+    <span class="ttitle">Serve consultation photos via secure-media</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Authenticated, audited serving only.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 7</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Find blades/controllers building /storage/consultations URLs</li><li>Replace with the existing secure-media route (SecureMediaController, web.php:1171-1174)</li><li>php artisan view:clear</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>All photo URLs go through auth.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T8"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Diff + one URL sample — <input type="text" class="tk-ev" data-t="T8" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T9">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T9"> <span>Complete</span></label>
+    <span class="tno">Task 9</span>
+    <span class="ttitle">Move existing photo files to the private path</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Old files must follow the new rule.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 8</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Copy storage/app/public/consultations → storage/app/private/consultations</li><li>Verify count matches</li><li>Remove originals after verification</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Files served only via auth route.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T9"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">File counts — <input type="text" class="tk-ev" data-t="T9" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T10">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T10"> <span>Complete</span></label>
+    <span class="tno">Task 10</span>
+    <span class="ttitle">Verify logged-out photo fetch fails</span>
+    <span class="ttime">5 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Prove the fix.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 9</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Log out</li><li>Request an old public URL and a new secure URL</li><li>Both must fail (404/403 and redirect-to-login)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>No anonymous access path remains.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T10"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T10" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T11">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T11"> <span>Complete</span></label>
+    <span class="tno">Task 11</span>
+    <span class="ttitle">Move lab case attachments to private disk</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Lab attachments can carry patient identifiers.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 10</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Edit LabController.php:555 store call → private disk</li><li>Edit LabCaseAttachment.php:51 URL accessor → secure route</li><li>Move existing files; verify logged-out fetch fails</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Lab attachments authenticated-only.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T11"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Diff + screenshot — <input type="text" class="tk-ev" data-t="T11" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T12">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T12"> <span>Complete</span></label>
+    <span class="tno">Task 12</span>
+    <span class="ttitle">Move vendor invoice attachments to private disk</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Same flaw, same fix.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 11</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Edit VendorInvoiceService.php:73</li><li>Move existing files</li><li>Verify logged-out fetch fails</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Vendor files authenticated-only.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T12"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Diff — <input type="text" class="tk-ev" data-t="T12" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T13">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T13"> <span>Complete</span></label>
+    <span class="tno">Task 13</span>
+    <span class="ttitle">Add MIME whitelist to clinical uploads</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Stop arbitrary file types entering clinical storage.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Edit ClinicalFileController.php:80</li><li>'file' =&gt; 'required|file|max:51200|mimes:jpg,jpeg,png,webp,heic,pdf,mp4,mov'</li><li>Test one allowed + one blocked upload</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Blocked type rejected with validation error.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T13"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T13" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T14">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T14"> <span>Complete</span></label>
+    <span class="tno">Task 14</span>
+    <span class="ttitle">Disable AI assistant for V1</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>RBAC bypass must not ship (P0-2).</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Set ASSISTANT_ENABLED=false in .env.production</li><li>Hide chat entry in layout/nav</li><li>Verify /assistant routes return 403/404 for normal users</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Assistant unreachable.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T14"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T14" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T15">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T15"> <span>Complete</span></label>
+    <span class="tno">Task 15</span>
+    <span class="ttitle">Throttle forgot-PIN and mobile-OTP routes</span>
+    <span class="ttime">5 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Brute-force protection parity with login.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>routes/web.php:45-51 → -&gt;middleware('throttle:5,1')</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>6th rapid attempt returns 429.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T15"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Route diff — <input type="text" class="tk-ev" data-t="T15" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T16">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T16"> <span>Complete</span></label>
+    <span class="tno">Task 16</span>
+    <span class="ttitle">Throttle /hr/scan and /r/{token}</span>
+    <span class="ttime">5 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Public endpoints need rate limits.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>web.php:62 → throttle:30,1</li><li>reviews.php:15-16 → throttle:30,1</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>429 on hammering.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T16"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Route diff — <input type="text" class="tk-ev" data-t="T16" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T17">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T17"> <span>Complete</span></label>
+    <span class="tno">Task 17</span>
+    <span class="ttitle">Gate HR sidebar entry</span>
+    <span class="ttime">5 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Nav should respect permissions like everything else.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>partials/sidebar.blade.php:205 → wrap in canAccess('hr') check</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>HR hidden for users without the module.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T17"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T17" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T18">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T18"> <span>Complete</span></label>
+    <span class="tno">Task 18</span>
+    <span class="ttitle">Re-run suite and commit security block</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Lock in Block B.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Tasks 7-17</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>php artisan test</li><li>git add -A &amp;&amp; git commit -m 'security: private media disks, throttles, assistant off, mime whitelist'</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Green + committed.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T18"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Commit hash — <input type="text" class="tk-ev" data-t="T18" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="stopcard">⛔ <b>STOP 2 — Privacy sealed</b> — All logged-out media fetches fail · assistant gone · throttles verified · suite green · committed.<br><span class="stopsub">Run tests · smoke where applicable · commit · update the journal. Only then continue.</span></div>
+<div class="task" id="T19">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T19"> <span>Complete</span></label>
+    <span class="tno">Task 19</span>
+    <span class="ttitle">Link the live queue in sidebar + dashboard</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>/appointments/today is orphaned; it is the desk's best screen.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>STOP 2</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Add sidebar item 'Today Queue' → route to /appointments/today</li><li>Add dashboard button next to 'Full Calendar'</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Queue reachable in one click.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T19"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T19" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T20">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T20"> <span>Complete</span></label>
+    <span class="tno">Task 20</span>
+    <span class="ttitle">Queue card: link patient name to profile</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Cards are dead ends today.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 19</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>appointments/today.blade.php:134-165 → wrap patient name in link to patients.show</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Click-through works.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T20"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T20" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T21">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T21"> <span>Complete</span></label>
+    <span class="tno">Task 21</span>
+    <span class="ttitle">Queue card: add Start Consultation button</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>The missing hand-off that leaves appointments stuck in-chair.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 20</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Add button → patients.consultations.create with ?appointment_id={id}</li><li>Show only for checked-in/in-chair statuses</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Button renders with correct id.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T21"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T21" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T22">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T22"> <span>Complete</span></label>
+    <span class="tno">Task 22</span>
+    <span class="ttitle">Consultation form: consume appointment_id</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Observer auto-close fires only when appointment_id is set.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 21</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>ConsultationController create(): read request('appointment_id'), pass to view</li><li>consultations/create.blade.php:554 → pre-select that appointment</li><li>Prefill chief complaint from the appointment if empty</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Arriving from queue pre-links the appointment.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T22"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Diff — <input type="text" class="tk-ev" data-t="T22" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T23">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T23"> <span>Complete</span></label>
+    <span class="tno">Task 23</span>
+    <span class="ttitle">Verify appointment auto-closes after consultation</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Prove the wiring end-to-end.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 22</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Queue: Check In → Start Consultation → save consultation</li><li>Confirm appointment status = done (ConsultationClinicalWiringObserver:68-85)</li><li>Confirm patients.last_visit_date advanced</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Status flips without manual Done.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T23"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot of queue — <input type="text" class="tk-ev" data-t="T23" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T24">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T24"> <span>Complete</span></label>
+    <span class="tno">Task 24</span>
+    <span class="ttitle">Remove logfile-only huddle scheduler entry</span>
+    <span class="ttime">5 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>A briefing nobody can read is noise.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>routes/console.php:293-296 → delete the tulip:huddle schedule (web /huddle stays)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Entry gone; /huddle board unaffected.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T24"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Diff — <input type="text" class="tk-ev" data-t="T24" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T25">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T25"> <span>Complete</span></label>
+    <span class="tno">Task 25</span>
+    <span class="ttitle">Commit glue block</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Lock in Block C.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Tasks 19-24</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>php artisan test (targeted)</li><li>Commit 'glue: today-queue nav, start-consultation handoff, huddle scheduler cleanup'</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Committed.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T25"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Commit hash — <input type="text" class="tk-ev" data-t="T25" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="stopcard">⛔ <b>STOP 3 — Hand-offs wired</b> — Queue linked · start-consultation closes appointments · committed.<br><span class="stopsub">Run tests · smoke where applicable · commit · update the journal. Only then continue.</span></div>
+<div class="task" id="T26">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T26"> <span>Complete</span></label>
+    <span class="tno">Task 26</span>
+    <span class="ttitle">Configure and test backup.sh manually</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>First working backup before automating it.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>STOP 3</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Review repo-root backup.sh (DB dump + storage/)</li><li>Run once on VPS</li><li>Verify archive contents (tables + files)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Valid archive produced.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T26"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Archive listing — <input type="text" class="tk-ev" data-t="T26" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T27">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T27"> <span>Complete</span></label>
+    <span class="tno">Task 27</span>
+    <span class="ttitle">Schedule nightly backup cron</span>
+    <span class="ttime">5 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Runs every night at 02:30 without a human.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 26</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>crontab -e on VPS → 30 2 * * * bash /opt/dentfluence/backup.sh</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Cron entry live.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T27"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">crontab -l output — <input type="text" class="tk-ev" data-t="T27" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T28">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T28"> <span>Complete</span></label>
+    <span class="tno">Task 28</span>
+    <span class="ttitle">Off-server backup copy + retention</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>A backup on the same disk is not a backup.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 27</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Configure rclone/scp target (second server, object storage, or drive)</li><li>Append copy step to backup.sh</li><li>Retention: keep 14 daily + 8 weekly</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Last night's archive exists off-VPS.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T28"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Remote listing — <input type="text" class="tk-ev" data-t="T28" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T29">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T29"> <span>Complete</span></label>
+    <span class="tno">Task 29</span>
+    <span class="ttitle">RESTORE DRILL #1</span>
+    <span class="ttime">30 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>A backup that never restored is a rumor.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 28</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Create scratch DB, restore last dump</li><li>Point a scratch .env at it, open a patient</li><li>Verify encrypted fields decrypt and media paths resolve</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Patient record fully readable from backup.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T29"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot + notes — <input type="text" class="tk-ev" data-t="T29" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T30">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T30"> <span>Complete</span></label>
+    <span class="tno">Task 30</span>
+    <span class="ttitle">Switch to daily log rotation</span>
+    <span class="ttime">5 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Unbounded single log is a disk bomb.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>LOG_STACK=daily in .env.production (14-day retention default)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>New dated logfile appears.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T30"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">ls storage/logs — <input type="text" class="tk-ev" data-t="T30" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T31">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T31"> <span>Complete</span></label>
+    <span class="tno">Task 31</span>
+    <span class="ttitle">Wire Slack alerts for critical errors</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Failures must reach a phone.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Create Slack/Discord webhook</li><li>LOG_SLACK_WEBHOOK_URL in .env.production</li><li>Add slack channel at critical level to the stack in config/logging.php</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Test critical log arrives in channel.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T31"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T31" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T32">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T32"> <span>Complete</span></label>
+    <span class="tno">Task 32</span>
+    <span class="ttitle">Real mailer credentials + test send</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Briefing/SLA/evening digests are dead while MAIL_MAILER=log.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Fill Brevo SMTP creds in .env.production:70-78</li><li>Trigger comm:morning-briefing manually</li><li>Confirm inbox delivery</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Mail received by a real address.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T32"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T32" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T33">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T33"> <span>Complete</span></label>
+    <span class="tno">Task 33</span>
+    <span class="ttitle">Uptime monitor + cron dead-man ping</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Silent cron death currently stops all 22 jobs invisibly.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>UptimeRobot (or similar) on /up and /api/v1/ping</li><li>healthchecks.io ping appended to the scheduler (one line in routes/console.php)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Both monitors green; test alert fires when paused.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T33"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshots — <input type="text" class="tk-ev" data-t="T33" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T34">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T34"> <span>Complete</span></label>
+    <span class="tno">Task 34</span>
+    <span class="ttitle">Forced-failure alert test</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Prove the visibility chain end-to-end.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Tasks 31-33</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Trigger a deliberate exception on a test route</li><li>Confirm Slack alert + daily log entry</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Alert received within a minute.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T34"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T34" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="stopcard">⛔ <b>STOP 4 — Safety net live</b> — Backup restored once · alerts proven · mail delivering · monitors green.<br><span class="stopsub">Run tests · smoke where applicable · commit · update the journal. Only then continue.</span></div>
+<div class="task" id="T35">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T35"> <span>Complete</span></label>
+    <span class="tno">Task 35</span>
+    <span class="ttitle">Harden production .env (app + session)</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Close the config P1s.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>STOP 4</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>APP_ENV=production, APP_DEBUG=false</li><li>SESSION_SECURE_COOKIE=true, SESSION_ENCRYPT=true</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Values confirmed via config inside container.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T35"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">tinker/config output — <input type="text" class="tk-ev" data-t="T35" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T36">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T36"> <span>Complete</span></label>
+    <span class="tno">Task 36</span>
+    <span class="ttitle">Set WhatsApp webhook secrets</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Inbound webhook defaults ENABLED — the secret is its only lock.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>PRM_WA_APP_SECRET + PRM_WA_VERIFY_TOKEN in .env.production</li><li>(config/prm.php:104 keeps webhook on)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Secrets set.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T36"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Env checklist — <input type="text" class="tk-ev" data-t="T36" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T37">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T37"> <span>Complete</span></label>
+    <span class="tno">Task 37</span>
+    <span class="ttitle">Fill WhatsApp Cloud credentials (keep dry-run)</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Ready to flip later; safe today.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>WHATSAPP_PHONE_NUMBER_ID, ACCESS_TOKEN, BUSINESS_ACCOUNT_ID</li><li>WHATSAPP_ENABLED=true, WHATSAPP_DRY_RUN=true</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Creds present; dry-run confirmed.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T37"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Env checklist — <input type="text" class="tk-ev" data-t="T37" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T38">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T38"> <span>Complete</span></label>
+    <span class="tno">Task 38</span>
+    <span class="ttitle">Set REVIEWS_GOOGLE_URL</span>
+    <span class="ttime">5 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Review requests need the destination link.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Google review deep-link into .env.production</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Set.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T38"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Env checklist — <input type="text" class="tk-ev" data-t="T38" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T39">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T39"> <span>Complete</span></label>
+    <span class="tno">Task 39</span>
+    <span class="ttitle">Run patients:encrypt-phi on production</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Casts read plaintext gracefully until backfilled — verify, don't assume.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 35</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>php artisan patients:encrypt-phi (inside container)</li><li>SELECT address FROM patients LIMIT 3 → must be ciphertext</li><li>Open same patient in UI → decrypts correctly</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>DB ciphertext + UI plaintext.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T39"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Query screenshot — <input type="text" class="tk-ev" data-t="T39" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T40">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T40"> <span>Complete</span></label>
+    <span class="tno">Task 40</span>
+    <span class="ttitle">Paginate the communication queue</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Unpaginated full-table get() over a 1,810-row backlog (P1-5).</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>CommunicationController.php:79-81 → paginate(50)</li><li>Default status filter (pending) instead of 'all'</li><li>Blade pagination links</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Queue loads &lt;1s.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T40"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Timing note — <input type="text" class="tk-ev" data-t="T40" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T41">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T41"> <span>Complete</span></label>
+    <span class="tno">Task 41</span>
+    <span class="ttitle">Collapse queue badge counts to one query</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>4 clone-counts per load is waste.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 40</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Replace with single selectRaw grouped count</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>One query in debugbar/log.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T41"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Diff — <input type="text" class="tk-ev" data-t="T41" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T42">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T42"> <span>Complete</span></label>
+    <span class="tno">Task 42</span>
+    <span class="ttitle">Add recall daily send cap</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>1,810 backlog must drain, never blast (P1-6).</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Config value recall.daily_send_cap (e.g. 40)</li><li>Enforce in the send path before dispatch</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Cap respected in dry-run test.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T42"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Diff + log — <input type="text" class="tk-ev" data-t="T42" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T43">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T43"> <span>Complete</span></label>
+    <span class="tno">Task 43</span>
+    <span class="ttitle">Commit config/perf block</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Lock in Block E.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Tasks 35-42</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Suite → commit 'hardening: env, phi backfill, queue pagination, recall cap'</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Committed.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T43"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Commit hash — <input type="text" class="tk-ev" data-t="T43" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="stopcard">⛔ <b>STOP 5 — Config hardened</b> — PHI verified encrypted · queue fast · cap in place · env signed off.<br><span class="stopsub">Run tests · smoke where applicable · commit · update the journal. Only then continue.</span></div>
+<div class="task" id="T44">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T44"> <span>Complete</span></label>
+    <span class="tno">Task 44</span>
+    <span class="ttitle">Add Start Visit button on accepted plan card</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Kill the tab-switch + re-select dance.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>STOP 5</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>treatment-plan-tab.blade.php ~:1300 beside Bill-from-Plan</li><li>Link → patients.show?open_visit=1&amp;plan_id={id}#visits (existing openAddForm prefill)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>One click from plan to prefilled visit form.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T44"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T44" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T45">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T45"> <span>Complete</span></label>
+    <span class="tno">Task 45</span>
+    <span class="ttitle">Visit save: toast + Build Invoice link</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Silent JSON save hides money.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>On save success show toast 'Visit saved — billing prompt created'</li><li>Include link to billing.createFromPrompt for that prompt</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Desk sees the money path immediately.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T45"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T45" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T46">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T46"> <span>Complete</span></label>
+    <span class="tno">Task 46</span>
+    <span class="ttitle">Checkout rebook prompt</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>The diary at the front desk dies here.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>On queue status→done, confirm dialog 'Book next appointment?'</li><li>Yes → open existing global booking modal prefilled with patient</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Rebooking offered at every checkout.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T46"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T46" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T47">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T47"> <span>Complete</span></label>
+    <span class="tno">Task 47</span>
+    <span class="ttitle">Wire next_visit_date to the recall queue</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Two fields of theatre become real.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>TreatmentVisitService: after save, if next_visit_date set → create communication_queue recall entry (due that date, note = next_visit_type)</li><li>Dedup: skip if an open entry exists for patient+date</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Saved visit creates a queue entry.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T47"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">DB row screenshot — <input type="text" class="tk-ev" data-t="T47" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T48">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T48"> <span>Complete</span></label>
+    <span class="tno">Task 48</span>
+    <span class="ttitle">Rx button → prescription pad directly</span>
+    <span class="ttime">5 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>3 screens becomes 1.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>consultations/show.blade.php:110-112 and :638 → route('patients.prescriptions.create', patient)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Chairside Rx in one click.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T48"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T48" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T49">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T49"> <span>Complete</span></label>
+    <span class="tno">Task 49</span>
+    <span class="ttitle">Receipt auto-open after payment + WhatsApp buttons on billing</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>One-click receipt; message from the system, not a personal phone.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>billing/show payment success → open receipt print (?auto=1 pattern from Rx)</li><li>Add consent-gated communication.whatsapp.link button on invoice + receipt views</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Receipt prints in one click; WhatsApp button present.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T49"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshots — <input type="text" class="tk-ev" data-t="T49" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T50">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T50"> <span>Complete</span></label>
+    <span class="tno">Task 50</span>
+    <span class="ttitle">Fix standalone booking page for new patients</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>It currently discards a half-typed booking.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>appointments/create.blade.php → embed the quick-register partial from the global modal (controller already accepts first/last/mobile)</li><li>Remove the data-losing patients.create link</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>New-patient booking completes on the page.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T50"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T50" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T51">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T51"> <span>Complete</span></label>
+    <span class="tno">Task 51</span>
+    <span class="ttitle">Suite + commit workflow block</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Lock in Block F.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Tasks 44-50</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>php artisan test</li><li>Commit 'workflow: start-visit, billing toast, rebook prompt, next-visit wiring, rx/receipt shortcuts, booking page'</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Green + committed.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T51"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Commit hash — <input type="text" class="tk-ev" data-t="T51" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="stopcard">⛔ <b>STOP 6 — Zero remembered steps</b> — Full cycle test on local: register→book→arrive→consult→plan→accept→visit→bill→pay→receipt→rebook with no URL-typing and no memory steps.<br><span class="stopsub">Run tests · smoke where applicable · commit · update the journal. Only then continue.</span></div>
+<div class="task" id="T52">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T52"> <span>Complete</span></label>
+    <span class="tno">Task 52</span>
+    <span class="ttitle">Deploy everything to production</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Ship Phase 1.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>STOP 6</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>bash deploy.sh</li><li>docker compose up -d --force-recreate (env changed)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Deploy completes clean.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T52"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Deploy log tail — <input type="text" class="tk-ev" data-t="T52" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T53">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T53"> <span>Complete</span></label>
+    <span class="tno">Task 53</span>
+    <span class="ttitle">Post-deploy container ritual</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Known worker crash-loop gotcha.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 52</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>docker compose ps → all Up</li><li>php artisan queue:restart → restart queue container</li><li>Tail logs 5 min for crash loops</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Queue + scheduler stable.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T53"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">compose ps output — <input type="text" class="tk-ev" data-t="T53" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T54">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T54"> <span>Complete</span></label>
+    <span class="tno">Task 54</span>
+    <span class="ttitle">Re-anchor the audit hash chain</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Else audit:verify alarms every morning.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 53</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Follow docs/deploy-runbook-2026-07-14.md step 4</li><li>Run php artisan audit:verify manually</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Verify passes clean.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T54"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Command output — <input type="text" class="tk-ev" data-t="T54" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T55">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T55"> <span>Complete</span></label>
+    <span class="tno">Task 55</span>
+    <span class="ttitle">Production smoke test</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Money paths on prod.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 54</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>php artisan dentfluence:smoke (rollback mode)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>All smoke checks pass.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T55"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Output — <input type="text" class="tk-ev" data-t="T55" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T56">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T56"> <span>Complete</span></label>
+    <span class="tno">Task 56</span>
+    <span class="ttitle">Verify overlap guard + stale-edit guard live</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Two receptionists, one calendar.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 55</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Attempt same-doctor same-time double-book → blocked (allow_overlap works when explicit)</li><li>Two-tab patient edit → second save warns stale</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Both guards fire on prod.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T56"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshots — <input type="text" class="tk-ev" data-t="T56" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T57">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T57"> <span>Complete</span></label>
+    <span class="tno">Task 57</span>
+    <span class="ttitle">RBAC walk: Owner + Admin</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Access matches the matrix.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 52</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Login as owner: all modules reachable</li><li>Confirm assistant chat absent</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Matches expectations.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T57"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T57" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T58">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T58"> <span>Complete</span></label>
+    <span class="tno">Task 58</span>
+    <span class="ttitle">RBAC walk: Doctor</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Clinical yes, finance per matrix.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 57</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Login as doctor role: patients/consult/plan/visit/Rx reachable</li><li>Finance/settings blocked per matrix</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Matches matrix.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T58"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T58" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T59">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T59"> <span>Complete</span></label>
+    <span class="tno">Task 59</span>
+    <span class="ttitle">RBAC walk: Receptionist</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Desk scope only.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 58</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Login as reception: booking/billing/queue reachable</li><li>Clinical edit + settings blocked per matrix</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Matches matrix.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T59"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T59" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T60">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T60"> <span>Complete</span></label>
+    <span class="tno">Task 60</span>
+    <span class="ttitle">WhatsApp dry-run end-to-end</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Prove the pipeline before any live send.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 52</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Run whatsapp:send-reminders → inspect payloads + blocked-consent counts in log</li><li>POST webhook with bad HMAC → 401</li><li>Simulate interactive Confirm reply → communication.confirmed logged</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Pipeline correct in dry-run.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T60"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Log excerpts — <input type="text" class="tk-ev" data-t="T60" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="exitcard"><h3>PHASE EXIT — Phase 1 · 🔧 Fix Before Ship</h3>
+<ul class="exitlist"><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P1-0"> All 4 P0 closed with evidence (backups+restore, assistant off, private media, alerts live)</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P1-1"> All P1 closed (commit, env, PHI verified, attachments, pagination, cap, throttles, glue)</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P1-2"> Suite green on prod code; smoke green on prod</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P1-3"> RBAC walks match the permission matrix</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P1-4"> Full-cycle test passes with zero remembered steps</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P1-5"> Owner (Dr. Sumit) approval recorded in journal</label></li></ul>
+<div class="trow"><b>Approval</b><span class="evwrap">Owner approval note — <input type="text" class="tk-ev" data-t="EXIT-P1-appr" placeholder="approved by / date"></span></div>
+<div class="stopsub">No task in the next phase may start until every box above is ticked with evidence in the journal.</div></div></div>
+<div class="pane" id="P2"><h2>Phase 2 · Production Freeze</h2><p class="sub">CRUD / print / automation / notification verification on production, then the freeze declaration. Only 4 fix types accepted afterwards.</p>
+<div class="task" id="T61">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T61"> <span>Complete</span></label>
+    <span class="tno">Task 61</span>
+    <span class="ttitle">CRUD verify: Patients</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Create/view/edit/archive + logs on prod.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Phase 1 exit</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Register test patient (6 fields) → view → edit → archive</li><li>Trigger duplicate-phone flow with a family number</li><li>Check audit_logs rows for each action</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>All actions logged with user id.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T61"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">audit_logs screenshot — <input type="text" class="tk-ev" data-t="T61" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T62">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T62"> <span>Complete</span></label>
+    <span class="tno">Task 62</span>
+    <span class="ttitle">CRUD verify: Appointments</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Booking surface + overlap + drag-drop.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Book via global modal (existing + quick-register + walk-in tab)</li><li>Drag-drop reschedule; overlap attempt blocked</li><li>Status walk: check-in → in-chair → done</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>All paths work; conflicts blocked.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T62"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T62" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T63">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T63"> <span>Complete</span></label>
+    <span class="tno">Task 63</span>
+    <span class="ttitle">CRUD verify: Consultations (5 types)</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Standard, Same Issue, Minor Visit, Emergency, COHA.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Create one of each type on the test patient</li><li>Verify appointment auto-close on the linked one</li><li>Edit + view each</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>All 5 types complete.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T63"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T63" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T64">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T64"> <span>Complete</span></label>
+    <span class="tno">Task 64</span>
+    <span class="ttitle">CRUD verify: Treatment Plan lifecycle</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Present→accept/defer/reject/revert + ledger.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 63</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Create plan from consultation (one click)</li><li>Present → accept; defer + reject others; revert one with reason</li><li>Check plan_decisions ledger rows; print with QR</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Ledger append-only rows match actions.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T64"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">plan_decisions screenshot — <input type="text" class="tk-ev" data-t="T64" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T65">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T65"> <span>Complete</span></label>
+    <span class="tno">Task 65</span>
+    <span class="ttitle">CRUD verify: Treatment Visits</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Worksheet + billing prompt + print.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 64</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Start Visit from plan card (new button)</li><li>Save with work outcome → toast + billing prompt</li><li>Print visit</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Prompt created; print correct.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T65"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshots — <input type="text" class="tk-ev" data-t="T65" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T66">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T66"> <span>Complete</span></label>
+    <span class="tno">Task 66</span>
+    <span class="ttitle">CRUD verify: Billing end-to-end</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Money path with all modes + audit.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 65</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Build invoice from prompt (items prefilled)</li><li>Record payments: cash, UPI, card; wallet allocation</li><li>Receipt auto-opens; void one receipt with reason</li><li>Check BillingAuditLog entries</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Every money action logged.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T66"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Financial log screenshot — <input type="text" class="tk-ev" data-t="T66" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T67">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T67"> <span>Complete</span></label>
+    <span class="tno">Task 67</span>
+    <span class="ttitle">CRUD verify: Prescriptions</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Pad, print, PDF, repeat.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Create Rx from consultation (direct button)</li><li>Print ?auto=1 + PDF; repeat an Rx</li><li>Pediatric ml dosing renders</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>All outputs correct.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T67"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">PDF sample — <input type="text" class="tk-ev" data-t="T67" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T68">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T68"> <span>Complete</span></label>
+    <span class="tno">Task 68</span>
+    <span class="ttitle">CRUD verify: Lab lifecycle</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Case → transitions → reconciliation.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Auto-spawn case from a visit lab section</li><li>Walk statuses: order_placed → impression_sent → final_received → complete</li><li>Confirm lab-ready task fired; open monthly reconciliation screen</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Full lifecycle + side-effects fire.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T68"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T68" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T69">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T69"> <span>Complete</span></label>
+    <span class="tno">Task 69</span>
+    <span class="ttitle">CRUD verify: Inventory</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Stock, GRN, reversal, counts.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Stock in/out an item; verify movement rows</li><li>GRN receive + reverse once</li><li>Stock-count session double-submit blocked</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>All movements consistent.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T69"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T69" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T70">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T70"> <span>Complete</span></label>
+    <span class="tno">Task 70</span>
+    <span class="ttitle">CRUD verify: Finance + wallet</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Expenses, cashbook, GST view, CA export.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Add expense (try OCR scan)</li><li>Open cashbook for today; mode split matches payments made</li><li>Run CA export + GST view</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Figures reconcile with test payments.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T70"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Cashbook screenshot — <input type="text" class="tk-ev" data-t="T70" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T71">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T71"> <span>Complete</span></label>
+    <span class="tno">Task 71</span>
+    <span class="ttitle">Automation verify: run each scheduled command once</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>All 21 remaining jobs produce their artifact.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Manually run: recall:run, payments:scan-overdue, birthdays:scan, lab:create-overdue-tasks, membership:scan-expiring, reviews:request (dry), whatsapp:send-reminders (dry), comm:* three digests</li><li>Verify tasks/queue rows/mails created per design</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Each command's output artifact exists.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T71"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Log lines — <input type="text" class="tk-ev" data-t="T71" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T72">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T72"> <span>Complete</span></label>
+    <span class="tno">Task 72</span>
+    <span class="ttitle">Notifications verify</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>In-app channel works.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Assign a task → assignee bell within 30s</li><li>Lab status change → notification</li><li>audit:verify manual run → clean (no admin alert)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>All three arrive.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T72"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshots — <input type="text" class="tk-ev" data-t="T72" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T73">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T73"> <span>Complete</span></label>
+    <span class="tno">Task 73</span>
+    <span class="ttitle">Print pack verification</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Every patient-facing artifact on the clinic printer.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Print: plan (with QR), visit, Rx, invoice, receipt, voucher</li><li>Check letterhead, patient details, doctor, footer on each</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>All 6 print correctly on paper.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T73"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Photos — <input type="text" class="tk-ev" data-t="T73" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T74">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T74"> <span>Complete</span></label>
+    <span class="tno">Task 74</span>
+    <span class="ttitle">Declare code freeze + tag v1.0.0</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>From here: only production bugs, security, blockers, parity.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Tasks 61-73</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>git tag v1.0.0 &amp;&amp; git push --tags</li><li>Record freeze declaration in journal</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Freeze recorded.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T74"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Tag + journal entry — <input type="text" class="tk-ev" data-t="T74" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="exitcard"><h3>PHASE EXIT — Phase 2 · Production Freeze</h3>
+<ul class="exitlist"><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P2-0"> Every module CRUD-verified on production with logs</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P2-1"> Print pack verified on the physical clinic printer</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P2-2"> All scheduled automations produce their artifacts</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P2-3"> v1.0.0 tagged</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P2-4"> Change control active: only 4 fix types accepted from now on</label></li></ul>
+<div class="trow"><b>Approval</b><span class="evwrap">Owner approval note — <input type="text" class="tk-ev" data-t="EXIT-P2-appr" placeholder="approved by / date"></span></div>
+<div class="stopsub">No task in the next phase may start until every box above is ticked with evidence in the journal.</div></div></div>
+<div class="pane" id="P3"><h2>Phase 3 · Tulip Internal Implementation</h2><p class="sub">Data migration, masters, accounts, training, parallel day, go-live.</p>
+<div class="task" id="T75">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T75"> <span>Complete</span></label>
+    <span class="tno">Task 75</span>
+    <span class="ttitle">Verify patient import form renders</span>
+    <span class="ttime">5 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Flagged unverified after an 08-03 cleanup.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Phase 2 exit</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Open Settings → Data tab</li><li>Confirm upload form + template downloads render</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Form usable.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T75"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T75" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T76">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T76"> <span>Complete</span></label>
+    <span class="tno">Task 76</span>
+    <span class="ttitle">Export patient base from old software</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Source file for migration.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 75</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Export full patient list (Clinicia/Bestosys format)</li><li>Save xlsx/csv ≤5MB (split if larger)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Export file ready.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T76"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Row count — <input type="text" class="tk-ev" data-t="T76" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T77">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T77"> <span>Complete</span></label>
+    <span class="tno">Task 77</span>
+    <span class="ttitle">Import preview + mapping check</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Trust the mapping before committing.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 76</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Upload with correct source profile</li><li>Review first-10 preview + duplicate count</li><li>Fix column issues if any</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Preview matches reality.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T77"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T77" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T78">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T78"> <span>Complete</span></label>
+    <span class="tno">Task 78</span>
+    <span class="ttitle">Run full patient import</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>The base moves.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 77</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Execute import (500-row chunks)</li><li>Note imported/skipped counts</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Counts match export minus dupes.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T78"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Import summary — <input type="text" class="tk-ev" data-t="T78" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T79">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T79"> <span>Complete</span></label>
+    <span class="tno">Task 79</span>
+    <span class="ttitle">Spot-check 20 imported patients</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Verify fidelity incl. family phone shares.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 78</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Pick 20 across the alphabet incl. duplicates-by-phone</li><li>Check name, phone, UHID (legacy id preserved), DOB, address</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>20/20 correct or corrections logged.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T79"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Checklist — <input type="text" class="tk-ev" data-t="T79" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T80">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T80"> <span>Complete</span></label>
+    <span class="tno">Task 80</span>
+    <span class="ttitle">Masters: branches, doctors, operatories</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Physical clinic mirrored.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Create/verify branch, all doctors, chairs/operatories</li><li>Doctor colors + working hours if used</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Booking dropdowns correct.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T80"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T80" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T81">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T81"> <span>Complete</span></label>
+    <span class="tno">Task 81</span>
+    <span class="ttitle">Masters: treatment categories + pricing</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Plans and billing depend on this.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Review categories + treatments against Tulip's rate card</li><li>Fix prices; add missing common treatments</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Rate card matches reality.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T81"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Sign-off — <input type="text" class="tk-ev" data-t="T81" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T82">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T82"> <span>Complete</span></label>
+    <span class="tno">Task 82</span>
+    <span class="ttitle">Masters: Rx drug library check</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Chairside speed depends on it.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Doctors review top-50 drugs, doses, syrup ml entries</li><li>Add missing favourites</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Doctors sign off.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T82"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Sign-off — <input type="text" class="tk-ev" data-t="T82" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T83">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T83"> <span>Complete</span></label>
+    <span class="tno">Task 83</span>
+    <span class="ttitle">Consent purposes + print templates</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Compliance + letterhead.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Verify ConsentPurposeSeeder ran (whatsapp_comms, marketing_promotions)</li><li>Letterhead/clinic details on plan/Rx/invoice prints</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Prints carry correct identity.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T83"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Print sample — <input type="text" class="tk-ev" data-t="T83" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T84">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T84"> <span>Complete</span></label>
+    <span class="tno">Task 84</span>
+    <span class="ttitle">Create staff accounts + permission matrix</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>One human = one login. No sharing.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Create each staff user with role per matrix</li><li>Owner-configured roles; verify one permission per role spot-check</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Everyone has own login.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T84"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Matrix doc — <input type="text" class="tk-ev" data-t="T84" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T85">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T85"> <span>Complete</span></label>
+    <span class="tno">Task 85</span>
+    <span class="ttitle">Enable 2FA for owner + admin</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Highest-privilege accounts protected.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 84</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Enrol TOTP for owner/admin accounts</li><li>Test login with code</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>2FA enforced.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T85"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T85" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T86">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T86"> <span>Complete</span></label>
+    <span class="tno">Task 86</span>
+    <span class="ttitle">Opening balances entry</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Money history starts clean.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 79</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>List patients with outstanding dues from old system</li><li>One opening invoice each (single line 'Opening balance', cutover date)</li><li>Advances → wallet deposits</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Outstanding report matches old system total.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T86"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Reconciliation note — <input type="text" class="tk-ev" data-t="T86" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T87">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T87"> <span>Complete</span></label>
+    <span class="tno">Task 87</span>
+    <span class="ttitle">Re-enter ACTIVE treatment plans</span>
+    <span class="ttime">Session</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Mid-treatment patients continue seamlessly.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 79</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>List actively-in-treatment patients (typically 20-60)</li><li>Doctor re-creates each active plan; mark presented/accepted as reality</li><li>Do NOT re-enter historical completed work (old PMS stays read-only archive)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Every mid-treatment patient has a live plan.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T87"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Count log — <input type="text" class="tk-ev" data-t="T87" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T88">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T88"> <span>Complete</span></label>
+    <span class="tno">Task 88</span>
+    <span class="ttitle">Enter next 2 weeks of appointments</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>The book is full on day 1.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 80</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Copy upcoming appointments from old system/diary into calendar</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Calendar matches the diary.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T88"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T88" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T89">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T89"> <span>Complete</span></label>
+    <span class="tno">Task 89</span>
+    <span class="ttitle">Inventory products + opening stock</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Stock truth from day 1.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Bulk import product list (InventoryProductImport)</li><li>Opening stock-count session for the storeroom</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Stock levels match shelf.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T89"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Count session — <input type="text" class="tk-ev" data-t="T89" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="stopcard">⛔ <b>STOP 7 — Data live</b> — Patients imported + spot-checked · masters signed · balances reconcile · plans re-entered · calendar loaded.<br><span class="stopsub">Run tests · smoke where applicable · commit · update the journal. Only then continue.</span></div>
+<div class="task" id="T90">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T90"> <span>Complete</span></label>
+    <span class="tno">Task 90</span>
+    <span class="ttitle">Training half-day: front desk</span>
+    <span class="ttime">Half-day</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Modal-only booking, queue, badge SOP, cashbook.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>STOP 7</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Global modal booking incl. quick-register + walk-in</li><li>Today-queue: check-in → start consult → done → rebook prompt</li><li>Billing prompt badge SOP; payment modal; receipt + WhatsApp button</li><li>EOD: cashbook tally; Help Centre tour</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Desk completes a mock patient cycle unaided.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T90"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Trainer sign-off — <input type="text" class="tk-ev" data-t="T90" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T91">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T91"> <span>Complete</span></label>
+    <span class="tno">Task 91</span>
+    <span class="ttitle">Training half-day: doctors + assistants</span>
+    <span class="ttime">Half-day</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Chairside flow end-to-end.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>STOP 7</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Queue → Start Consultation (types) → plan → present/accept chairside</li><li>Start Visit → worksheet → save (toast) → Rx direct → print</li><li>Lab case from visit; clinical photo upload</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Each doctor completes a mock cycle unaided.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T91"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Trainer sign-off — <input type="text" class="tk-ev" data-t="T91" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T92">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T92"> <span>Complete</span></label>
+    <span class="tno">Task 92</span>
+    <span class="ttitle">Downtime SOP posted</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Paper fallback for outages (accepted escape).</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Print A4: morning-schedule print step, paper forms location, who to call, re-entry rule</li><li>Post at reception</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>SOP visible at desk.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T92"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Photo — <input type="text" class="tk-ev" data-t="T92" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T93">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T93"> <span>Complete</span></label>
+    <span class="tno">Task 93</span>
+    <span class="ttitle">Parallel run day</span>
+    <span class="ttime">Full day</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Old system read-only; Dentfluence primary.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Tasks 90-92</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Run the real day in Dentfluence</li><li>Old system consulted read-only</li><li>Evening: compare collections + appointments both systems</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Totals match; staff confidence OK.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T93"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Comparison sheet — <input type="text" class="tk-ev" data-t="T93" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T94">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T94"> <span>Complete</span></label>
+    <span class="tno">Task 94</span>
+    <span class="ttitle">GO-LIVE DAY (supervised)</span>
+    <span class="ttime">Full day</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Old software off.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 93</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Open with morning huddle board</li><li>Papercut log open all day; fix nothing live unless breakage</li><li>Evening: cashbook tally vs cash drawer; verify nightly backup ran</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Full day completed on Dentfluence alone.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T94"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Journal entry — <input type="text" class="tk-ev" data-t="T94" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="exitcard"><h3>PHASE EXIT — Phase 3 · Tulip Internal Implementation</h3>
+<ul class="exitlist"><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P3-0"> Tulip completed a full live day, old systems off</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P3-1"> Evening cash tally matched physically</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P3-2"> Backup ran the night of go-live</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P3-3"> Papercut log triaged: breakages fixed, rest → V1.1 register</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P3-4"> Staff can operate unaided (trainer sign-offs on file)</label></li></ul>
+<div class="trow"><b>Approval</b><span class="evwrap">Owner approval note — <input type="text" class="tk-ev" data-t="EXIT-P3-appr" placeholder="approved by / date"></span></div>
+<div class="stopsub">No task in the next phase may start until every box above is ticked with evidence in the journal.</div></div></div>
+<div class="pane" id="P4"><h2>Phase 4 · Operational Stabilization</h2><p class="sub">Two live weeks: automation staged on, role sign-offs, escape points closed.</p>
+<div class="task" id="T95">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T95"> <span>Complete</span></label>
+    <span class="tno">Task 95</span>
+    <span class="ttitle">Daily 15-min papercut review (week 1 ritual)</span>
+    <span class="ttime">15 min/day</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Fix breakages only; log everything else.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Phase 3 exit</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Each evening: walk the papercut log with staff</li><li>Classify: breakage (fix) vs annoyance (V1.1 register)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Log shrinking day over day.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T95"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Log — <input type="text" class="tk-ev" data-t="T95" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T96">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T96"> <span>Complete</span></label>
+    <span class="tno">Task 96</span>
+    <span class="ttitle">Flip WhatsApp live: reminders only, capped</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>First real sends, blast-proof.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Phase 3 exit</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Meta template approval confirmed</li><li>WHATSAPP_DRY_RUN=false + force-recreate</li><li>Cap active; staff numbers first in tomorrow's batch</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>First live reminders delivered.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T96"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Delivery screenshot — <input type="text" class="tk-ev" data-t="T96" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T97">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T97"> <span>Complete</span></label>
+    <span class="tno">Task 97</span>
+    <span class="ttitle">Monitor reminders 3 days</span>
+    <span class="ttime">15 min/day</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Delivery + blocked-consent visibility.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 97</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Check delivery status + blocked counts each morning</li><li>Log consent gaps for front desk to collect consent</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Stable delivery; consent list worked.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T97"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T97" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T98">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T98"> <span>Complete</span></label>
+    <span class="tno">Task 98</span>
+    <span class="ttitle">Enable booking confirmations</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Second template goes live.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 98</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Enable appointment_confirmation on booking path</li><li>Verify on next real booking</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Confirmation received.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T98"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T98" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T99">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T99"> <span>Complete</span></label>
+    <span class="tno">Task 99</span>
+    <span class="ttitle">Live interactive replies verified</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Confirm/Reschedule/Cancel round-trip in production.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 98</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Patient (or staff phone) taps Confirm → queue reflects</li><li>Cancel → appointment cancelled via engine</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Round-trip works live.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T99"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Queue screenshot — <input type="text" class="tk-ev" data-t="T99" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T100">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T100"> <span>Complete</span></label>
+    <span class="tno">Task 100</span>
+    <span class="ttitle">Enable recall sends (capped drain)</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>1,810 backlog drains over ~6 weeks.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 98</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Enable recall pipeline sends under the cap</li><li>Watch first day's batch</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Cap-sized batch went out.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T100"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Log — <input type="text" class="tk-ev" data-t="T100" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T101">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T101"> <span>Complete</span></label>
+    <span class="tno">Task 101</span>
+    <span class="ttitle">Enable review requests</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Yesterday's done appointments get the ask.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 98</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Confirm REVIEWS_ENABLED + google URL live</li><li>Verify one request delivered</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>First review request delivered.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T101"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T101" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T102">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T102"> <span>Complete</span></label>
+    <span class="tno">Task 102</span>
+    <span class="ttitle">Verify digests arriving daily</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Briefing 07:05, SLA 14:00, evening 18:00.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Check inboxes for all three over one day</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>All three in inboxes.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T102"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T102" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T103">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T103"> <span>Complete</span></label>
+    <span class="tno">Task 103</span>
+    <span class="ttitle">Backup restore drill #2</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Prove restore with real production data volume.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Restore latest nightly to scratch; open records</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Restore clean.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T103"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T103" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T104">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T104"> <span>Complete</span></label>
+    <span class="tno">Task 104</span>
+    <span class="ttitle">Weekly stock review SOP</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Covers the missing low-stock automation for V1.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Assign owner: assistant reviews Inventory low/critical list every Monday</li><li>Add to huddle agenda</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>First review done.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T104"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Huddle note — <input type="text" class="tk-ev" data-t="T104" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T105">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T105"> <span>Complete</span></label>
+    <span class="tno">Task 105</span>
+    <span class="ttitle">Role sign-off: Owner</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Full day inside Dentfluence, no sheets.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Owner runs a day: KPIs, reports, cashbook, huddle report, approvals</li><li>List anything still done outside the system</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Zero outside-system steps (or accepted).</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T105"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Signed checklist — <input type="text" class="tk-ev" data-t="T105" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T106">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T106"> <span>Complete</span></label>
+    <span class="tno">Task 106</span>
+    <span class="ttitle">Role sign-off: Manager</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Monitoring + accountability inside the system.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Huddle board, tasks, recall queue, SLA mail, staff accountability view</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Zero outside-system steps.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T106"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Signed checklist — <input type="text" class="tk-ev" data-t="T106" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T107">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T107"> <span>Complete</span></label>
+    <span class="tno">Task 107</span>
+    <span class="ttitle">Role sign-off: Reception / Front Desk</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>The heaviest user.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Full day: booking, registration, queue, billing, payments, rebooking, WhatsApp from system</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Diary + personal WhatsApp retired.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T107"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Signed checklist — <input type="text" class="tk-ev" data-t="T107" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T108">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T108"> <span>Complete</span></label>
+    <span class="tno">Task 108</span>
+    <span class="ttitle">Role sign-off: Associate Doctor + Assistant</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Chairside complete.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Full day: queue→consult→plan→visit→Rx→lab→photos</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Zero paper clinical notes (or accepted).</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T108"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Signed checklist — <input type="text" class="tk-ev" data-t="T108" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T109">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T109"> <span>Complete</span></label>
+    <span class="tno">Task 109</span>
+    <span class="ttitle">Role sign-off: Accounts</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Reconciliation without Excel.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Day + week close: cashbook, mode split, expenses, vendors, GST/CA export</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Excel retired for daily ops.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T109"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Signed checklist — <input type="text" class="tk-ev" data-t="T109" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T110">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T110"> <span>Complete</span></label>
+    <span class="tno">Task 110</span>
+    <span class="ttitle">Role sign-off: Lab coordinator</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Cases + reconciliation inside the system.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Live cases walked; monthly reconciliation prepared</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Notebook retired.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T110"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Signed checklist — <input type="text" class="tk-ev" data-t="T110" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T111">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T111"> <span>Complete</span></label>
+    <span class="tno">Task 111</span>
+    <span class="ttitle">Escape-point final review</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Eliminated or formally accepted, in writing.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Tasks 106-111</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Walk the 10-item escape list from Audit #4</li><li>Mark each: ELIMINATED or ACCEPTED (outage-paper, old-PMS archive)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Zero unaccounted escapes.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T111"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Signed list — <input type="text" class="tk-ev" data-t="T111" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="exitcard"><h3>PHASE EXIT — Phase 4 · Operational Stabilization</h3>
+<ul class="exitlist"><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P4-0"> Two stable weeks</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P4-1"> All automations live and observed</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P4-2"> All 7 role sign-offs on file</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P4-3"> Escape list closed</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P4-4"> Google Sheets not required for any daily operation</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P4-5"> Paper registers retired except accepted fallbacks</label></li></ul>
+<div class="trow"><b>Approval</b><span class="evwrap">Owner approval note — <input type="text" class="tk-ev" data-t="EXIT-P4-appr" placeholder="approved by / date"></span></div>
+<div class="stopsub">No task in the next phase may start until every box above is ticked with evidence in the journal.</div></div></div>
+<div class="pane" id="P5"><h2>Phase 5 · Android Workflow Parity</h2><p class="sub">Role-based parity validated on real devices against production. Fix-only.</p>
+<div class="task" id="T112">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T112"> <span>Complete</span></label>
+    <span class="tno">Task 112</span>
+    <span class="ttitle">Build + install current APK</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Devices ready against production.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Phase 4 exit</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Flutter repo: flutter pub get (known first-step gotcha) → build APK</li><li>Install on doctor's phone + one spare; point at prod API</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>App opens against prod.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T112"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T112" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T113">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T113"> <span>Complete</span></label>
+    <span class="tno">Task 113</span>
+    <span class="ttitle">Auth smoke on device</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Login, 2FA, token, logout-all.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 113</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Login as doctor (2FA account)</li><li>Logout-all from web → app session revoked</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Token lifecycle correct.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T113"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T113" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T114">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T114"> <span>Complete</span></label>
+    <span class="tno">Task 114</span>
+    <span class="ttitle">Doctor reads: search, profile, timeline, files</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Chairside lookup.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 114</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Search imported patients; open profile; view a clinical photo</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Reads correct + fast.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T114"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T114" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T115">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T115"> <span>Complete</span></label>
+    <span class="tno">Task 115</span>
+    <span class="ttitle">Consultation create on Android</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>First mobile write.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 115</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Create standard consultation on test patient → verify on web</li><li>Try one typed variant</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Rows identical web-side.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T115"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Web screenshot — <input type="text" class="tk-ev" data-t="T115" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T116">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T116"> <span>Complete</span></label>
+    <span class="tno">Task 116</span>
+    <span class="ttitle">Plan decisions on Android</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Present/accept parity.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 116</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>View plan; mark presented; accept</li><li>Verify decision ledger rows</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Ledger matches web behaviour.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T116"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T116" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T117">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T117"> <span>Complete</span></label>
+    <span class="tno">Task 117</span>
+    <span class="ttitle">Visit + billing prompt from mobile</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>The money hand-off must survive mobile.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 117</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Create visit with plan items on device</li><li>Verify billing prompt appears on web desk</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Prompt fires cross-platform.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T117"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Web screenshot — <input type="text" class="tk-ev" data-t="T117" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T118">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T118"> <span>Complete</span></label>
+    <span class="tno">Task 118</span>
+    <span class="ttitle">Prescription on Android</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Create, finalize, PDF.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 117</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Create + finalize Rx on device; open PDF</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>PDF correct.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T118"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">PDF — <input type="text" class="tk-ev" data-t="T118" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T119">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T119"> <span>Complete</span></label>
+    <span class="tno">Task 119</span>
+    <span class="ttitle">Clinical photo upload from camera</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Mobile capture → private disk.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 115</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Upload photo via app → confirm private-disk path + visible on web</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Photo secured + visible.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T119"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Web screenshot — <input type="text" class="tk-ev" data-t="T119" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T120">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T120"> <span>Complete</span></label>
+    <span class="tno">Task 120</span>
+    <span class="ttitle">Appointments from mobile</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Book/walk-in/status.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 114</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Book, walk-in, reschedule, status update from device</li><li>Overlap attempt → blocked</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Parity with web rules.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T120"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T120" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T121">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T121"> <span>Complete</span></label>
+    <span class="tno">Task 121</span>
+    <span class="ttitle">Payment recording on Android</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Money writes with same guards.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 118</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Record payment on device → receipt visible web-side</li><li>Wallet allocation once</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Receipt + logs correct.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T121"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Screenshot — <input type="text" class="tk-ev" data-t="T121" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T122">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T122"> <span>Complete</span></label>
+    <span class="tno">Task 122</span>
+    <span class="ttitle">Owner + manager mobile day</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>KPIs, reports, huddle, tasks.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 114</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Owner: dashboard + reports read on device</li><li>Manager: huddle + assign a task</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Both roles read/act.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T122"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T122" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T123">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T123"> <span>Complete</span></label>
+    <span class="tno">Task 123</span>
+    <span class="ttitle">Inventory + lab on mobile</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Assistant scope.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 114</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Stock lookup; one lab status transition from device</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Actions land correctly.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T123"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T123" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T124">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T124"> <span>Complete</span></label>
+    <span class="tno">Task 124</span>
+    <span class="ttitle">Membership regression</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>The already-tested module stays green.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 114</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Walk membership view/renew path on device</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>No regression.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T124"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Notes — <input type="text" class="tk-ev" data-t="T124" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T125">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T125"> <span>Complete</span></label>
+    <span class="tno">Task 125</span>
+    <span class="ttitle">Doctor Android-only parallel day</span>
+    <span class="ttime">Full day</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>The real test.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Tasks 113-125</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>One doctor runs the entire clinical day on the phone beside the web desk</li><li>Log every stumble; fix only breakages</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Day completes; stumbles triaged.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T125"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Stumble log — <input type="text" class="tk-ev" data-t="T125" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T126">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T126"> <span>Complete</span></label>
+    <span class="tno">Task 126</span>
+    <span class="ttitle">Sign role-parity checklist</span>
+    <span class="ttime">15 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Formal close of Phase 5.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 126</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Doctor/assistant/owner/manager: every daily task ✓ on Android</li><li>File in journal</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Checklist signed.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T126"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Signed doc — <input type="text" class="tk-ev" data-t="T126" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="exitcard"><h3>PHASE EXIT — Phase 5 · Android Workflow Parity</h3>
+<ul class="exitlist"><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P5-0"> All mobile write-paths smoke-tested against production</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P5-1"> Cross-platform hand-offs verified (mobile visit → web billing prompt)</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P5-2"> Android-only doctor day completed</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P5-3"> Role-parity checklist signed for V1 scope (reception explicitly web-only by design)</label></li></ul>
+<div class="trow"><b>Approval</b><span class="evwrap">Owner approval note — <input type="text" class="tk-ev" data-t="EXIT-P5-appr" placeholder="approved by / date"></span></div>
+<div class="stopsub">No task in the next phase may start until every box above is ticked with evidence in the journal.</div></div></div>
+<div class="pane" id="P6"><h2>Phase 6 · V1 Complete</h2><p class="sub">Final evidence walk and the declaration.</p>
+<div class="task" id="T127">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T127"> <span>Complete</span></label>
+    <span class="tno">Task 127</span>
+    <span class="ttitle">Full regression + prod smoke</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Final green.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Phase 5 exit</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>php artisan test (local, committed tree)</li><li>dentfluence:smoke on prod</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Both green.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T127"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Outputs — <input type="text" class="tk-ev" data-t="T127" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T128">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T128"> <span>Complete</span></label>
+    <span class="tno">Task 128</span>
+    <span class="ttitle">Success-criteria walk (all 12)</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Evidence-based, not assumed.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 128</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Tick each criterion with pointer to its evidence (role sign-offs, escape list, backup logs, parity checklist)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>12/12 hold with evidence.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T128"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Criteria sheet — <input type="text" class="tk-ev" data-t="T128" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T129">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T129"> <span>Complete</span></label>
+    <span class="tno">Task 129</span>
+    <span class="ttitle">Sheets + paper formally retired</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>The old ecosystem ends on record.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Task 129</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>List each old sheet/register → mark RETIRED or ACCEPTED-FALLBACK</li><li>Old PMS marked read-only archive (6-12 months)</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Written retirement list.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T129"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Signed list — <input type="text" class="tk-ev" data-t="T129" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T130">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T130"> <span>Complete</span></label>
+    <span class="tno">Task 130</span>
+    <span class="ttitle">Update Help Centre + runbook</span>
+    <span class="ttime">20 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>Docs match the shipped reality.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>None</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>resources/help/content.php: queue buttons, rebook prompt, receipt flow</li><li>Refresh deploy runbook with new env vars + backup steps</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Docs current.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T130"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Commit hash — <input type="text" class="tk-ev" data-t="T130" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="task" id="T131">
+  <div class="thead">
+    <label class="stbox"><input type="checkbox" class="tk-done" data-t="T131"> <span>Complete</span></label>
+    <span class="tno">Task 131</span>
+    <span class="ttitle">V1 COMPLETE declaration</span>
+    <span class="ttime">10 min</span>
+  </div>
+  <div class="tbody">
+    <div class="trow"><b>Objective</b><span>The finish line.</span></div>
+    <div class="trow"><b>Prerequisites</b><span>Tasks 128-131</span></div>
+    <div class="trow"><b>Exact steps</b><ol><li>Owner signs declaration in journal</li><li>Open the V1.1 register (everything deferred, nothing lost)</li><li>Celebrate — then stop. V1.1 planning is a NEW conversation.</li></ol></div>
+    <div class="trow"><b>Expected result</b><span>Declaration + V1.1 register exist.</span></div>
+    <div class="trow"><b>Verification</b><label class="vbox"><input type="checkbox" class="tk-ver" data-t="T131"> Passed</label></div>
+    <div class="trow"><b>Evidence</b><span class="evwrap">Journal entry — <input type="text" class="tk-ev" data-t="T131" placeholder="commit hash / screenshot name / note"></span></div>
+  </div>
+</div>
+<div class="exitcard"><h3>PHASE EXIT — Phase 6 · V1 Complete</h3>
+<ul class="exitlist"><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P6-0"> All 12 success criteria evidenced</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P6-1"> Sheets/paper retirement list signed</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P6-2"> Docs updated</label></li><li><label><input type="checkbox" class="tk-exit" data-t="EXIT-P6-3"> Owner declaration recorded — V1 COMPLETE; V1.1 planning may begin</label></li></ul>
+<div class="trow"><b>Approval</b><span class="evwrap">Owner approval note — <input type="text" class="tk-ev" data-t="EXIT-P6-appr" placeholder="approved by / date"></span></div>
+<div class="stopsub">No task in the next phase may start until every box above is ticked with evidence in the journal.</div></div></div>
+<div class="pane" id="JR"><h2>Implementation Journal (append-only)</h2>
+<p class="sub">Auto-appends when a task is marked Complete. Entries persist in this browser. Use Export to copy the journal into git (docs/) as the permanent record.</p>
+<div class="toolrow"><button id="jrExport" class="tabbtn">Copy journal as text</button><span id="jrMsg" class="sub"></span></div>
+<table id="jrTable"><tr><th style="width:12%">Date</th><th style="width:8%">Task</th><th>Title</th><th style="width:26%">Evidence</th><th style="width:10%">Verified</th><th style="width:10%">Result</th></tr></table>
+</div>
+
+<p class="sub" style="border-top:1px solid var(--line);padding-top:8px;margin-top:16px">Rules: work strictly in order · STOP cards halt work until satisfied · phase exits are evidence-based, never assumed · frozen modules accept only production bugs / security / blockers / parity · everything else is 📦 V1.1. This page saves progress in this browser; print for the paper copy; export the journal into docs/ weekly.</p>
+
+<script>
+var META = [{"id": "T1", "ph": "P1", "min": 5, "title": "Delete stray duplicate bootstrap file"}, {"id": "T2", "ph": "P1", "min": 10, "title": "Review uncommitted Treatment Visit sprint files"}, {"id": "T3", "ph": "P1", "min": 15, "title": "Clear views and run the full test suite"}, {"id": "T4", "ph": "P1", "min": 10, "title": "Commit, push and tag v1.0.0-rc1"}, {"id": "T5", "ph": "P1", "min": 10, "title": "Verify migration status local vs production"}, {"id": "T6", "ph": "P1", "min": 15, "title": "Rebuild .env.example with every required variable"}, {"id": "T7", "ph": "P1", "min": 10, "title": "Repoint consultation-photos disk to private"}, {"id": "T8", "ph": "P1", "min": 20, "title": "Serve consultation photos via secure-media"}, {"id": "T9", "ph": "P1", "min": 15, "title": "Move existing photo files to the private path"}, {"id": "T10", "ph": "P1", "min": 5, "title": "Verify logged-out photo fetch fails"}, {"id": "T11", "ph": "P1", "min": 20, "title": "Move lab case attachments to private disk"}, {"id": "T12", "ph": "P1", "min": 15, "title": "Move vendor invoice attachments to private disk"}, {"id": "T13", "ph": "P1", "min": 10, "title": "Add MIME whitelist to clinical uploads"}, {"id": "T14", "ph": "P1", "min": 10, "title": "Disable AI assistant for V1"}, {"id": "T15", "ph": "P1", "min": 5, "title": "Throttle forgot-PIN and mobile-OTP routes"}, {"id": "T16", "ph": "P1", "min": 5, "title": "Throttle /hr/scan and /r/{token}"}, {"id": "T17", "ph": "P1", "min": 5, "title": "Gate HR sidebar entry"}, {"id": "T18", "ph": "P1", "min": 15, "title": "Re-run suite and commit security block"}, {"id": "T19", "ph": "P1", "min": 10, "title": "Link the live queue in sidebar + dashboard"}, {"id": "T20", "ph": "P1", "min": 10, "title": "Queue card: link patient name to profile"}, {"id": "T21", "ph": "P1", "min": 15, "title": "Queue card: add Start Consultation button"}, {"id": "T22", "ph": "P1", "min": 20, "title": "Consultation form: consume appointment_id"}, {"id": "T23", "ph": "P1", "min": 10, "title": "Verify appointment auto-closes after consultation"}, {"id": "T24", "ph": "P1", "min": 5, "title": "Remove logfile-only huddle scheduler entry"}, {"id": "T25", "ph": "P1", "min": 10, "title": "Commit glue block"}, {"id": "T26", "ph": "P1", "min": 20, "title": "Configure and test backup.sh manually"}, {"id": "T27", "ph": "P1", "min": 5, "title": "Schedule nightly backup cron"}, {"id": "T28", "ph": "P1", "min": 20, "title": "Off-server backup copy + retention"}, {"id": "T29", "ph": "P1", "min": 30, "title": "RESTORE DRILL #1"}, {"id": "T30", "ph": "P1", "min": 5, "title": "Switch to daily log rotation"}, {"id": "T31", "ph": "P1", "min": 15, "title": "Wire Slack alerts for critical errors"}, {"id": "T32", "ph": "P1", "min": 15, "title": "Real mailer credentials + test send"}, {"id": "T33", "ph": "P1", "min": 15, "title": "Uptime monitor + cron dead-man ping"}, {"id": "T34", "ph": "P1", "min": 10, "title": "Forced-failure alert test"}, {"id": "T35", "ph": "P1", "min": 10, "title": "Harden production .env (app + session)"}, {"id": "T36", "ph": "P1", "min": 10, "title": "Set WhatsApp webhook secrets"}, {"id": "T37", "ph": "P1", "min": 10, "title": "Fill WhatsApp Cloud credentials (keep dry-run)"}, {"id": "T38", "ph": "P1", "min": 5, "title": "Set REVIEWS_GOOGLE_URL"}, {"id": "T39", "ph": "P1", "min": 15, "title": "Run patients:encrypt-phi on production"}, {"id": "T40", "ph": "P1", "min": 20, "title": "Paginate the communication queue"}, {"id": "T41", "ph": "P1", "min": 15, "title": "Collapse queue badge counts to one query"}, {"id": "T42", "ph": "P1", "min": 15, "title": "Add recall daily send cap"}, {"id": "T43", "ph": "P1", "min": 10, "title": "Commit config/perf block"}, {"id": "T44", "ph": "P1", "min": 15, "title": "Add Start Visit button on accepted plan card"}, {"id": "T45", "ph": "P1", "min": 15, "title": "Visit save: toast + Build Invoice link"}, {"id": "T46", "ph": "P1", "min": 20, "title": "Checkout rebook prompt"}, {"id": "T47", "ph": "P1", "min": 20, "title": "Wire next_visit_date to the recall queue"}, {"id": "T48", "ph": "P1", "min": 5, "title": "Rx button \u2192 prescription pad directly"}, {"id": "T49", "ph": "P1", "min": 20, "title": "Receipt auto-open after payment + WhatsApp buttons on billing"}, {"id": "T50", "ph": "P1", "min": 20, "title": "Fix standalone booking page for new patients"}, {"id": "T51", "ph": "P1", "min": 15, "title": "Suite + commit workflow block"}, {"id": "T52", "ph": "P1", "min": 15, "title": "Deploy everything to production"}, {"id": "T53", "ph": "P1", "min": 10, "title": "Post-deploy container ritual"}, {"id": "T54", "ph": "P1", "min": 15, "title": "Re-anchor the audit hash chain"}, {"id": "T55", "ph": "P1", "min": 10, "title": "Production smoke test"}, {"id": "T56", "ph": "P1", "min": 10, "title": "Verify overlap guard + stale-edit guard live"}, {"id": "T57", "ph": "P1", "min": 10, "title": "RBAC walk: Owner + Admin"}, {"id": "T58", "ph": "P1", "min": 10, "title": "RBAC walk: Doctor"}, {"id": "T59", "ph": "P1", "min": 10, "title": "RBAC walk: Receptionist"}, {"id": "T60", "ph": "P1", "min": 20, "title": "WhatsApp dry-run end-to-end"}, {"id": "T61", "ph": "P2", "min": 15, "title": "CRUD verify: Patients"}, {"id": "T62", "ph": "P2", "min": 15, "title": "CRUD verify: Appointments"}, {"id": "T63", "ph": "P2", "min": 20, "title": "CRUD verify: Consultations (5 types)"}, {"id": "T64", "ph": "P2", "min": 20, "title": "CRUD verify: Treatment Plan lifecycle"}, {"id": "T65", "ph": "P2", "min": 15, "title": "CRUD verify: Treatment Visits"}, {"id": "T66", "ph": "P2", "min": 20, "title": "CRUD verify: Billing end-to-end"}, {"id": "T67", "ph": "P2", "min": 10, "title": "CRUD verify: Prescriptions"}, {"id": "T68", "ph": "P2", "min": 20, "title": "CRUD verify: Lab lifecycle"}, {"id": "T69", "ph": "P2", "min": 20, "title": "CRUD verify: Inventory"}, {"id": "T70", "ph": "P2", "min": 15, "title": "CRUD verify: Finance + wallet"}, {"id": "T71", "ph": "P2", "min": 20, "title": "Automation verify: run each scheduled command once"}, {"id": "T72", "ph": "P2", "min": 10, "title": "Notifications verify"}, {"id": "T73", "ph": "P2", "min": 15, "title": "Print pack verification"}, {"id": "T74", "ph": "P2", "min": 10, "title": "Declare code freeze + tag v1.0.0"}, {"id": "T75", "ph": "P3", "min": 5, "title": "Verify patient import form renders"}, {"id": "T76", "ph": "P3", "min": 20, "title": "Export patient base from old software"}, {"id": "T77", "ph": "P3", "min": 15, "title": "Import preview + mapping check"}, {"id": "T78", "ph": "P3", "min": 15, "title": "Run full patient import"}, {"id": "T79", "ph": "P3", "min": 20, "title": "Spot-check 20 imported patients"}, {"id": "T80", "ph": "P3", "min": 15, "title": "Masters: branches, doctors, operatories"}, {"id": "T81", "ph": "P3", "min": 20, "title": "Masters: treatment categories + pricing"}, {"id": "T82", "ph": "P3", "min": 15, "title": "Masters: Rx drug library check"}, {"id": "T83", "ph": "P3", "min": 15, "title": "Consent purposes + print templates"}, {"id": "T84", "ph": "P3", "min": 20, "title": "Create staff accounts + permission matrix"}, {"id": "T85", "ph": "P3", "min": 10, "title": "Enable 2FA for owner + admin"}, {"id": "T86", "ph": "P3", "min": 20, "title": "Opening balances entry"}, {"id": "T87", "ph": "P3", "min": 0, "title": "Re-enter ACTIVE treatment plans"}, {"id": "T88", "ph": "P3", "min": 20, "title": "Enter next 2 weeks of appointments"}, {"id": "T89", "ph": "P3", "min": 20, "title": "Inventory products + opening stock"}, {"id": "T90", "ph": "P3", "min": 0, "title": "Training half-day: front desk"}, {"id": "T91", "ph": "P3", "min": 0, "title": "Training half-day: doctors + assistants"}, {"id": "T92", "ph": "P3", "min": 10, "title": "Downtime SOP posted"}, {"id": "T93", "ph": "P3", "min": 0, "title": "Parallel run day"}, {"id": "T94", "ph": "P3", "min": 0, "title": "GO-LIVE DAY (supervised)"}, {"id": "T95", "ph": "P4", "min": 15, "title": "Daily 15-min papercut review (week 1 ritual)"}, {"id": "T96", "ph": "P4", "min": 10, "title": "Flip WhatsApp live: reminders only, capped"}, {"id": "T97", "ph": "P4", "min": 15, "title": "Monitor reminders 3 days"}, {"id": "T98", "ph": "P4", "min": 10, "title": "Enable booking confirmations"}, {"id": "T99", "ph": "P4", "min": 10, "title": "Live interactive replies verified"}, {"id": "T100", "ph": "P4", "min": 10, "title": "Enable recall sends (capped drain)"}, {"id": "T101", "ph": "P4", "min": 10, "title": "Enable review requests"}, {"id": "T102", "ph": "P4", "min": 10, "title": "Verify digests arriving daily"}, {"id": "T103", "ph": "P4", "min": 20, "title": "Backup restore drill #2"}, {"id": "T104", "ph": "P4", "min": 10, "title": "Weekly stock review SOP"}, {"id": "T105", "ph": "P4", "min": 15, "title": "Role sign-off: Owner"}, {"id": "T106", "ph": "P4", "min": 15, "title": "Role sign-off: Manager"}, {"id": "T107", "ph": "P4", "min": 15, "title": "Role sign-off: Reception / Front Desk"}, {"id": "T108", "ph": "P4", "min": 15, "title": "Role sign-off: Associate Doctor + Assistant"}, {"id": "T109", "ph": "P4", "min": 15, "title": "Role sign-off: Accounts"}, {"id": "T110", "ph": "P4", "min": 15, "title": "Role sign-off: Lab coordinator"}, {"id": "T111", "ph": "P4", "min": 15, "title": "Escape-point final review"}, {"id": "T112", "ph": "P5", "min": 20, "title": "Build + install current APK"}, {"id": "T113", "ph": "P5", "min": 10, "title": "Auth smoke on device"}, {"id": "T114", "ph": "P5", "min": 10, "title": "Doctor reads: search, profile, timeline, files"}, {"id": "T115", "ph": "P5", "min": 15, "title": "Consultation create on Android"}, {"id": "T116", "ph": "P5", "min": 15, "title": "Plan decisions on Android"}, {"id": "T117", "ph": "P5", "min": 15, "title": "Visit + billing prompt from mobile"}, {"id": "T118", "ph": "P5", "min": 15, "title": "Prescription on Android"}, {"id": "T119", "ph": "P5", "min": 10, "title": "Clinical photo upload from camera"}, {"id": "T120", "ph": "P5", "min": 15, "title": "Appointments from mobile"}, {"id": "T121", "ph": "P5", "min": 15, "title": "Payment recording on Android"}, {"id": "T122", "ph": "P5", "min": 15, "title": "Owner + manager mobile day"}, {"id": "T123", "ph": "P5", "min": 15, "title": "Inventory + lab on mobile"}, {"id": "T124", "ph": "P5", "min": 10, "title": "Membership regression"}, {"id": "T125", "ph": "P5", "min": 0, "title": "Doctor Android-only parallel day"}, {"id": "T126", "ph": "P5", "min": 15, "title": "Sign role-parity checklist"}, {"id": "T127", "ph": "P6", "min": 20, "title": "Full regression + prod smoke"}, {"id": "T128", "ph": "P6", "min": 20, "title": "Success-criteria walk (all 12)"}, {"id": "T129", "ph": "P6", "min": 10, "title": "Sheets + paper formally retired"}, {"id": "T130", "ph": "P6", "min": 20, "title": "Update Help Centre + runbook"}, {"id": "T131", "ph": "P6", "min": 10, "title": "V1 COMPLETE declaration"}];
+var KEY = 'dfl_master_checklist_v1';
+var S = {}; try{ S = JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){}
+S.done = S.done||{}; S.ver = S.ver||{}; S.ev = S.ev||{}; S.journal = S.journal||[];
+function save(){ localStorage.setItem(KEY, JSON.stringify(S)); }
+var PHASE_LABEL = {P1:'Phase 1 · Fix Before Ship',P2:'Phase 2 · Production Freeze',P3:'Phase 3 · Tulip Implementation',P4:'Phase 4 · Stabilization',P5:'Phase 5 · Android Parity',P6:'Phase 6 · V1 Complete'};
+
+document.querySelectorAll('.tabbtn[data-tab]').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.tabbtn').forEach(function(x){x.classList.remove('active');});
+    document.querySelectorAll('.pane').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');
+    document.getElementById(b.dataset.tab).classList.add('active');
+    window.scrollTo({top:0});
+  });
+});
+
+function fmtTime(mins){
+  if(mins<60) return mins+' min';
+  var h=Math.floor(mins/60), m=mins%60;
+  return h+'h '+(m? m+'m':'');
+}
+function refresh(){
+  var done=0, remainMin=0, next=null;
+  META.forEach(function(t){
+    if(S.done[t.id]) done++;
+    else { remainMin += t.min; if(!next) next = t; }
+  });
+  var total = META.length;
+  document.getElementById('tkDone').textContent = done+' / '+total;
+  document.getElementById('tkRemain').textContent = (total-done);
+  var pct = Math.round(done/total*100);
+  document.getElementById('tkPct').textContent = pct+'%';
+  document.getElementById('tkBar').style.width = pct+'%';
+  document.getElementById('tkTime').textContent = fmtTime(remainMin)+' + scheduled days';
+  document.getElementById('tkPhase').textContent = next? PHASE_LABEL[next.ph] : 'V1 COMPLETE 🎉';
+  document.getElementById('tkNext').textContent = next? (next.id+' — '+next.title) : 'Declare V1 complete';
+}
+function renderJournal(){
+  var tb = document.getElementById('jrTable');
+  tb.querySelectorAll('tr:not(:first-child)').forEach(function(r){r.remove();});
+  S.journal.forEach(function(e){
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>'+e.date+'</td><td>'+e.task+'</td><td>'+e.title+'</td><td>'+(e.evidence||'—')+'</td><td>'+(e.verified?'✓':'—')+'</td><td>'+e.result+'</td>';
+    tb.appendChild(tr);
+  });
+}
+document.querySelectorAll('.tk-done').forEach(function(c){
+  var id=c.dataset.t;
+  if(S.done[id]){ c.checked=true; c.closest('.task').classList.add('done'); }
+  c.addEventListener('change', function(){
+    S.done[id]=c.checked;
+    c.closest('.task').classList.toggle('done', c.checked);
+    if(c.checked){
+      var m = META.find(function(t){return t.id===id;});
+      S.journal.push({date:new Date().toISOString().slice(0,10), task:id, title:m?m.title:'', evidence:S.ev[id]||'', verified:!!S.ver[id], result:'Complete'});
+    }
+    save(); refresh(); renderJournal();
+  });
+});
+document.querySelectorAll('.tk-ver').forEach(function(c){
+  var id=c.dataset.t;
+  if(S.ver[id]) c.checked=true;
+  c.addEventListener('change', function(){ S.ver[id]=c.checked; save(); });
+});
+document.querySelectorAll('.tk-exit').forEach(function(c){
+  var id=c.dataset.t;
+  if(S.ver[id]) c.checked=true;
+  c.addEventListener('change', function(){ S.ver[id]=c.checked; save(); });
+});
+document.querySelectorAll('.tk-ev').forEach(function(inp){
+  var id=inp.dataset.t;
+  if(S.ev[id]) inp.value=S.ev[id];
+  inp.addEventListener('change', function(){ S.ev[id]=inp.value; save(); });
+});
+document.getElementById('jrExport').addEventListener('click', function(){
+  var lines = S.journal.map(function(e){ return e.date+' | '+e.task+' | '+e.title+' | evidence: '+(e.evidence||'-')+' | verified: '+(e.verified?'yes':'no')+' | '+e.result; });
+  navigator.clipboard.writeText(lines.join('\n')).then(function(){ document.getElementById('jrMsg').textContent='Copied '+lines.length+' entries.'; });
+});
+refresh(); renderJournal();
+</script>
+</body></html>
