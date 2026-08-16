@@ -1202,6 +1202,100 @@
                     </div>
                 </div>
 
+                {{-- CARD 5b — Reception Next Action (Visit → Next Action, 08-14).
+
+                     The doctor answers "I finished this patient — what does
+                     reception need to do next?" ONCE, here, and is done. On
+                     save this becomes a canonical follow_ups row that surfaces
+                     to staff on its DUE date. No re-entry in tomorrow's Daily
+                     Huddle.
+
+                     Deliberately collapsed to a single button at rest: a visit
+                     needing no reception action costs the doctor zero extra
+                     fields. Three inputs per action — what / when / say what.
+
+                     Distinct from CARD 5 above: "Next Visit" is clinical intent
+                     for the next appointment (printed on the case sheet); this
+                     is a task for the front desk. Different owners, different
+                     records. --}}
+                <div class="bg-white border border-gray-200 rounded-lg shadow-sm px-4 py-3.5">
+                    <div class="tv-section-legend">Reception Next Action</div>
+
+                    <template x-if="!nextActions.length">
+                        <p class="text-[10px] text-gray-500 mb-2">Nothing needed from reception after this visit.</p>
+                    </template>
+
+                    <div class="space-y-2">
+                        <template x-for="(na, idx) in nextActions" :key="na._uid">
+                            <div class="border border-gray-200 rounded-lg p-2.5 bg-gray-50/60">
+                                <div class="flex items-center gap-1.5 mb-1.5">
+                                    {{-- Options rendered by Blade, not x-for. ACTION_TYPES is a
+                                         compile-time PHP constant, and an x-model select whose
+                                         options are built by a nested x-for can initialise before
+                                         those options exist — which would show "Wellness Call"
+                                         while state actually held a different key. --}}
+                                    <select x-model="na.action_type"
+                                            class="flex-1 text-xs font-semibold border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-[#6a0f70]">
+                                        @foreach(\App\Services\Clinical\VisitNextActionService::ACTION_TYPES as $naKey => $naCfg)
+                                        <option value="{{ $naKey }}">{{ $naCfg['label'] }}</option>
+                                        @endforeach
+                                    </select>
+                                    <button type="button" @click="removeNextAction(idx)"
+                                            title="Remove this action"
+                                            class="w-6 h-6 flex-shrink-0 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">&times;</button>
+                                </div>
+
+                                {{-- When. Three modes over one payload shape;
+                                     the resolved date is echoed back so the
+                                     doctor sees 12 Aug, not "after 4 days". --}}
+                                <div class="flex flex-wrap items-center gap-1 mb-1.5">
+                                    <button type="button" @click="na.due_mode = 'tomorrow'"
+                                            class="px-2 py-1 text-[11px] font-semibold border rounded-lg transition-colors"
+                                            :class="na.due_mode === 'tomorrow'
+                                                ? 'bg-[#6a0f70] border-[#380740] text-white'
+                                                : 'bg-white border-gray-200 text-gray-500 hover:border-[#6a0f70] hover:text-[#6a0f70]'">Tomorrow</button>
+                                    <button type="button" @click="na.due_mode = 'in_days'"
+                                            class="px-2 py-1 text-[11px] font-semibold border rounded-lg transition-colors"
+                                            :class="na.due_mode === 'in_days'
+                                                ? 'bg-[#6a0f70] border-[#380740] text-white'
+                                                : 'bg-white border-gray-200 text-gray-500 hover:border-[#6a0f70] hover:text-[#6a0f70]'">After X days</button>
+                                    <button type="button" @click="na.due_mode = 'on_date'"
+                                            class="px-2 py-1 text-[11px] font-semibold border rounded-lg transition-colors"
+                                            :class="na.due_mode === 'on_date'
+                                                ? 'bg-[#6a0f70] border-[#380740] text-white'
+                                                : 'bg-white border-gray-200 text-gray-500 hover:border-[#6a0f70] hover:text-[#6a0f70]'">Pick date</button>
+                                </div>
+
+                                <div x-show="na.due_mode === 'in_days'" x-cloak class="flex items-center gap-1.5 mb-1.5">
+                                    <input type="number" min="1" max="365" x-model="na.due_in_days"
+                                           class="w-16 text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#6a0f70]">
+                                    <span class="text-[11px] text-gray-500">days after this visit</span>
+                                </div>
+
+                                <div x-show="na.due_mode === 'on_date'" x-cloak class="mb-1.5">
+                                    <input type="date" x-model="na.due_date"
+                                           class="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#6a0f70]">
+                                </div>
+
+                                <textarea x-model="na.instruction" rows="2"
+                                          placeholder="Instruction for staff — e.g. Ask whether she has any pain or discomfort after the procedure."
+                                          class="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#6a0f70]"></textarea>
+
+                                <p class="text-[10px] text-gray-500 mt-1">
+                                    Reception will see this on
+                                    <span class="font-semibold text-[#6a0f70]" x-text="nextActionDueLabel(na)"></span>.
+                                </p>
+                            </div>
+                        </template>
+                    </div>
+
+                    <button type="button" @click="addNextAction()"
+                            x-show="nextActions.length < 5"
+                            class="w-full mt-2 px-3 py-1.5 text-[11px] font-semibold border border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-[#6a0f70] hover:text-[#6a0f70] transition-colors">
+                        + Next action for reception
+                    </button>
+                </div>
+
                 {{-- CARD 6 — Today's Summary. Reuses the EXISTING footerSummary
                      getter untouched (same one driving the sticky footer) —
                      split only for DISPLAY on its existing " · " separators

@@ -285,9 +285,15 @@ class FinanceReportsController extends Controller
             ->where('balance_total', '>', 0)
             ->orderByDesc('balance_total')->get();
 
-        $totalLiability = (float) $wallets->sum('balance_total');
+        // U8 rule 16 — the clinic's liability is the CASH-BACKED patient credit
+        // only. Promotional / clinic-funded credit was never money the clinic
+        // received, so it is a marketing commitment, not a debt. Summing both
+        // (the previous behaviour) overstated the liability by the whole
+        // promotional balance.
+        $totalLiability = (float) $wallets->sum('balance_patient_credit');
         $promoTotal     = (float) $wallets->sum('balance_promotional');
         $permTotal      = (float) $wallets->sum('balance_permanent');
+        $patientCredit  = (float) $wallets->sum('balance_patient_credit');
 
         // Outstanding after wallet: each patient's open balance minus their wallet.
         $openByPatient = Invoice::whereIn('status', ['draft', 'partial'])
@@ -315,7 +321,7 @@ class FinanceReportsController extends Controller
         $totalOutstanding = (float) $outstandingRows->sum('outstanding');
         $totalNet         = (float) $outstandingRows->sum('net');
 
-        return compact('wallets', 'totalLiability', 'promoTotal', 'permTotal',
+        return compact('wallets', 'totalLiability', 'promoTotal', 'permTotal', 'patientCredit',
             'outstandingRows', 'totalOutstanding', 'totalNet');
     }
 

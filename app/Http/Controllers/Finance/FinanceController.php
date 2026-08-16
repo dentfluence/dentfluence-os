@@ -1240,6 +1240,18 @@ class FinanceController extends Controller
         $from = $request->filled('from') ? $request->from : today()->startOfMonth()->toDateString();
         $to   = $request->filled('to')   ? $request->to   : today()->toDateString();
 
+        // U8 — a cash ADVANCE is real cash in the till, but it creates no
+        // InvoicePayment (rule 5), so it was invisible to the cashbook. It must
+        // be included or the drawer can never be tied out. Wallet-tender
+        // payments correctly stay OUT: no cash moves when credit is spent
+        // (rule 15).
+        $advanceCashIn = \App\Models\Finance\FinanceTransaction::where('type', 'advance')
+            ->where('payment_mode', 'cash')
+            ->where('status', 'active')
+            ->whereBetween('transaction_date', [$from, $to])
+            ->selectRaw('DATE(transaction_date) as d, SUM(amount) as total')
+            ->groupBy('d')->pluck('total', 'd');
+
         $cashIn  = InvoicePayment::where('payment_mode', 'cash')
             ->whereBetween('payment_date', [$from, $to])
             ->selectRaw('DATE(payment_date) as day, SUM(amount) as total')
@@ -1258,7 +1270,7 @@ class FinanceController extends Controller
 
         foreach ($period as $date) {
             $d   = $date->toDateString();
-            $in  = (float) ($cashIn[$d]  ?? 0);
+            $in  = (float) ($cashIn[$d] ?? 0) + (float) ($advanceCashIn[$d] ?? 0);
             $out = (float) ($cashOut[$d] ?? 0);
             $balance += $in - $out;
             $rows->push(['date' => $d, 'cash_in' => $in, 'cash_out' => $out, 'net' => $in - $out, 'balance' => $balance]);

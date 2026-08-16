@@ -12,6 +12,7 @@ class WalletTransaction extends Model
         'patient_id',
         'direction',
         'credit_type',
+        'funding',                 // U8: 'patient' (cash-backed liability) | 'clinic' (concession)
         'source',
         'campaign_name',
         'applicable_treatments',   // JSON array of treatment IDs; null = all

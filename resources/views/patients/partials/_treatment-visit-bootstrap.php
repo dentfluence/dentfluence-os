@@ -22,6 +22,18 @@ $_rxCollection = $prescriptions ?? collect();
 // Implant stock-usage lookups, batched once (not per-visit) to avoid N+1 —
 // used below to re-populate the "components used" picker when editing a visit.
 $_visitIds = $patient->treatmentVisits->pluck('id');
+
+// Visit → Next Action (08-14) — reception actions the doctor issued from each
+// visit, batched once to avoid N+1. Re-populates the Next Action repeater when
+// a visit is edited, so re-saving reconciles the SAME follow_ups rows instead
+// of creating duplicates. Only pending rows are editable; an executed call is
+// history and is filtered out here.
+$_nextActionsByVisit = \App\Models\FollowUp::fromVisit()
+    ->whereIn('treatment_visit_id', $_visitIds)
+    ->where('status', 'pending')
+    ->orderBy('due_date')
+    ->get()
+    ->groupBy('treatment_visit_id');
 $_implantMovementsByVisit = \App\Models\Inventory\StockMovement::where('reference_type', \App\Models\TreatmentVisit::class)
     ->whereIn('reference_id', $_visitIds)
     ->get()
@@ -50,7 +62,7 @@ if (!empty($patient->medical_alert)) {
     }
 }
 
-$visitsJson = $patient->treatmentVisits->map(function($v) use ($_rxCollection, $_implantMovementsByVisit, $_catalogIdByInventoryItem) {
+$visitsJson = $patient->treatmentVisits->map(function($v) use ($_rxCollection, $_implantMovementsByVisit, $_catalogIdByInventoryItem, $_nextActionsByVisit) {
     return [
         'id'               => $v->id,
         'appointment_id'   => $v->appointment_id,
@@ -133,6 +145,10 @@ $visitsJson = $patient->treatmentVisits->map(function($v) use ($_rxCollection, $
             'repeat_reason'          => $i->repeat_reason,
             'repeat_of_visit_item_id'=> $i->repeat_of_visit_item_id,
         ])->values()->all(),
+        // Visit → Next Action — pending reception actions issued from this visit
+        'next_actions' => collect($_nextActionsByVisit->get($v->id, collect()))
+            ->map(fn($f) => \App\Services\Clinical\VisitNextActionService::present($f))
+            ->values()->all(),
         // Linked formal prescription (new Prescription module)
         'linked_rx' => (function() use ($v, $_rxCollection) {
             $rx = $_rxCollection->where('visit_id', $v->id)->whereNotIn('status', ['cancelled'])->first();

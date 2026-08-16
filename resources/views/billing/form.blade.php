@@ -299,9 +299,9 @@
                 </div>
 
                 {{-- Wallet Credit --}}
-                @if(isset($wallet) && $wallet->hasBalance())
+                @if(isset($wallet) && $wallet->balance_promotional > 0)
                 <div class="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
-                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Wallet Credit</h3>
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Promotional Credit</h3>
 
                     {{-- Balance breakdown --}}
                     <div class="space-y-1 text-xs">
@@ -331,11 +331,11 @@
                     <div class="flex items-center gap-2 pt-1">
                         <input type="number" name="wallet_applied" id="walletApplied"
                                value="{{ old('wallet_applied', $invoice?->wallet_applied ?? 0) }}"
-                               min="0" max="{{ $wallet->balance_total }}" step="0.01" placeholder="0.00"
+                               min="0" max="{{ $wallet->balance_promotional }}" step="0.01" placeholder="0.00"
                                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
                                oninput="recalcTotals()">
                         <button type="button"
-                                onclick="document.getElementById('walletApplied').value={{ $wallet->balance_total }}; recalcTotals()"
+                                onclick="document.getElementById('walletApplied').value={{ $wallet->balance_promotional }}; recalcTotals()"
                                 class="px-2 py-2 text-[10px] bg-gray-100 text-gray-600 rounded hover:bg-gray-200 whitespace-nowrap">
                             Use All
                         </button>

@@ -279,7 +279,7 @@
             <tr>
                 <th style="width:22px;">#</th>
                 <th>Drug / Strength</th>
-                <th style="text-align:center;width:36px;">SOS</th>
+                <th style="text-align:center;width:44px;">SOS</th>
                 <th style="text-align:center;width:44px;">Morn</th>
                 <th style="text-align:center;width:44px;">Noon</th>
                 <th style="text-align:center;width:44px;">Night</th>
@@ -311,9 +311,15 @@
                         </div>
                     @endif
                 </td>
-                {{-- SOS — shows the recorded per-dose amount when set, e.g. "SOS · 5 ml" --}}
-                <td style="text-align:center;">
-                    @if($item->is_sos)<span class="sos-badge">{{ $item->sosCell() }}</span>@else —@endif
+                {{-- SOS — badge + a short second line for the dose amount when set,
+                     so "SOS · 10 ml" doesn't wrap mid-word in a ~44px column --}}
+                <td style="text-align:center;white-space:nowrap;">
+                    @if($item->is_sos)
+                        <span class="sos-badge">SOS</span>
+                        @if($item->sosDoseLabel())<div class="drug-sub" style="text-align:center;margin-top:2px;">{{ $item->sosDoseLabel() }}</div>@endif
+                    @else
+                        —
+                    @endif
                 </td>
                 {{-- Morn / Noon / Night — "5 ml" for liquids, plain count otherwise --}}
                 <td style="text-align:center;">{{ $item->doseCell($item->morning) }}</td>

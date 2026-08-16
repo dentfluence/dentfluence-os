@@ -726,7 +726,9 @@ class BillingController extends ApiController
                 $invoice->refresh();
                 $wallet    = Wallet::forPatient($patient->id);
                 $requested = (float) $request->wallet_applied;
-                $cap       = min($requested, (float) $wallet->balance_total, (float) $invoice->balance_due);
+                // U8 rule 9 — only CLINIC-FUNDED (promotional) credit may reduce an
+                // invoice. Patient credit is tendered at payment time instead.
+                $cap       = min($requested, (float) $wallet->balance_promotional, (float) $invoice->balance_due);
                 if ($cap > 0) {
                     $debited = (new WalletService())->debit(
                         patientId:    $patient->id,

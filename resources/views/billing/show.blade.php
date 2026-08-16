@@ -487,8 +487,9 @@
                 <div>
                     <label class="block text-xs font-medium text-gray-600 mb-1">Amount (Rs. ) <span class="text-red-500">*</span></label>
                     <input type="number" name="amount" id="pmtAmount" required
+                           min="0"
                            value="{{ old('amount', $invoice->balance_due) }}"
-                           min="0.01" step="0.01"
+                           step="0.01"
                            oninput="onAmountChange()"
                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
                 </div>
@@ -501,22 +502,22 @@
             </div>
 
             {{-- Use Wallet Credit (payment allocation) --}}
-            @if(isset($wallet) && $wallet->balance_total > 0)
+            @if(isset($wallet) && $wallet->balance_patient_credit > 0)
             <div class="bg-purple-50 border border-purple-100 rounded-lg p-3">
                 <div class="flex items-center justify-between mb-1">
-                    <label class="text-xs font-semibold text-[#6a0f70]">Use Wallet Credit</label>
-                    <span class="text-xs text-gray-500">Available: Rs. {{ number_format($wallet->balance_total, 2) }}</span>
+                    <label class="text-xs font-semibold text-[#6a0f70]">Use Patient Credit</label>
+                    <span class="text-xs text-gray-500">Available: Rs. {{ number_format($wallet->balance_patient_credit, 2) }}</span>
                 </div>
                 <div class="flex items-center gap-2">
                     <input type="number" name="wallet_used" id="pmtWallet" min="0" step="0.01" value="0"
-                           max="{{ min($wallet->balance_total, $invoice->balance_due) }}"
+                           max="{{ min($wallet->balance_patient_credit, $invoice->balance_due) }}"
                            data-balance="{{ (float) $invoice->balance_due }}"
                            oninput="onWalletUsedChange()"
                            class="flex-1 border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
                     <button type="button" onclick="useAllWallet()"
                             class="px-2 py-2 text-[10px] bg-purple-100 text-[#6a0f70] rounded hover:bg-purple-200 whitespace-nowrap">Use Max</button>
                 </div>
-                <p class="text-[11px] text-gray-500 mt-1">Wallet lowers the balance; the Amount above is the remaining cash to collect.</p>
+                <p class="text-[11px] text-gray-500 mt-1">Patient credit is a payment, like cash — it settles the invoice without changing the invoice value. The Amount above is the remaining cash to collect, and may be 0.</p>
             </div>
             @endif
 

@@ -169,6 +169,18 @@ class TreatmentVisit extends Model
                     ->where('trigger_type', 'treatment_visit');
     }
 
+    /**
+     * Reception next actions the doctor issued from this visit
+     * (Visit → Next Action, 2026-08-14). Canonical record is follow_ups —
+     * see App\Services\Clinical\VisitNextActionService for why that table
+     * and not communication_queue.
+     */
+    public function nextActions(): HasMany
+    {
+        return $this->hasMany(FollowUp::class, 'treatment_visit_id')
+                    ->orderBy('due_date');
+    }
+
     /** Visit items not yet invoiced. */
     public function unbilledItems()
     {

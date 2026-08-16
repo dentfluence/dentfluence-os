@@ -1431,15 +1431,39 @@ document.addEventListener('alpine:init', () => {
                                     style="font-size:.6rem;font-weight:700;color:var(--c-green);background:#f0fdf4;border:1px solid #86efac;border-radius:999px;padding:.15rem .5rem;cursor:pointer;white-space:nowrap;transition:background .12s;font-family:inherit;"
                                     onmouseover="this.style.background='#dcfce7'" onmouseout="this.style.background='#f0fdf4'"
                                 >+ Book</button>
+                                {{-- Visit → Next Action (08-14): the "+ Task" prompt is
+                                     suppressed once the doctor has already recorded a
+                                     next action for this patient at the chair. This is
+                                     the double entry being removed — the doctor used to
+                                     have to re-create here what they already decided
+                                     yesterday. The button still appears for patients
+                                     with NO doctor-issued action, so genuinely new,
+                                     unrelated tasks are unaffected. --}}
+                                @unless($yAppt->doctor_next_action ?? null)
                                 <button
                                     @click.stop="$dispatch('open-create-task', { patient_id: {{ $yAppt->patient_id }}, patient_name: '{{ addslashes($yAppt->patient->name ?? '') }}' }); window.dispatchEvent(new CustomEvent('open-create-task', { detail: { patient_id: {{ $yAppt->patient_id }}, patient_name: '{{ addslashes($yAppt->patient->name ?? '') }}' } }))"
                                     style="font-size:.6rem;font-weight:700;color:var(--c-accent);background:#f5f0ff;border:1px solid #c4b5fd;border-radius:999px;padding:.15rem .5rem;cursor:pointer;white-space:nowrap;transition:background .12s;font-family:inherit;"
                                     onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='#f5f0ff'"
                                 >+ Task</button>
+                                @endunless
                             </div>
                         </div>
                     @endif
                 </div>
+
+                {{-- Already handled by the doctor. Shown instead of asking staff
+                     to book what has already been booked. Purely informational —
+                     the action itself lives in the Comms List (today) or the
+                     Upcoming section (future). --}}
+                @if($yAppt->doctor_next_action ?? null)
+                <div style="display:flex;align-items:center;gap:.3rem;margin-top:.3rem;font-size:.64rem;padding:.2rem .35rem;background:#f0f9ff;border-radius:.3rem;">
+                    <svg width="10" height="10" fill="none" stroke="#0369a1" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <span style="color:#0369a1;">
+                        <span style="font-weight:700;">{{ $yAppt->doctor_next_action->label }}</span>
+                        booked for {{ \Carbon\Carbon::parse($yAppt->doctor_next_action->due_date)->format('d M') }}
+                    </span>
+                </div>
+                @endif
 
                 {{-- ── Row 4: Next work (from finishing notes) ── --}}
                 @if($yAppt->finishing_notes)
@@ -1617,6 +1641,54 @@ document.addEventListener('alpine:init', () => {
                 </div>
                 </template>
             </div>
+            @endforeach
+        </div>
+        @endif
+
+        {{-- ── UPCOMING — scheduled by the doctor at the chair ───────────────
+             Visit → Next Action (08-14). HUDDLE DATE ≠ EXECUTION DATE.
+
+             These are follow-ups a doctor already booked from a Visit Log
+             whose due date is still in the FUTURE. Shown here so the manager
+             can brief the call team days ahead — and so the workflow keeps
+             moving when the doctor is late, at home, or has not opened the app
+             at all. Read-only on purpose: there is nothing to action yet.
+
+             When the due date arrives, the SAME record (no copy, no second
+             row) moves into the Comms List above and onto Today's Actions,
+             where it becomes an executable call. --}}
+        @if(($upcomingDoctorActions ?? collect())->isNotEmpty())
+        <div style="margin-top:.5rem;padding-top:.45rem;border-top:1px solid var(--c-border);">
+            <div style="display:flex;align-items:center;gap:.4rem;padding:.2rem;">
+                <span style="background:#f0f9ff;color:#075985;padding:.15rem .45rem;border-radius:999px;font-size:.65rem;font-weight:700;">
+                    🗓 Upcoming — booked by doctor
+                </span>
+                <span class="hd-cs-count" style="background:#f0f9ff;color:#075985;">{{ $upcomingDoctorActions->count() }}</span>
+            </div>
+            <div style="font-size:.6rem;color:var(--c-muted);padding:0 .2rem .25rem;">Not due today — appears in the call list on its date.</div>
+
+            @foreach($upcomingDoctorActions as $upcoming)
+            <a href="{{ route('patients.show', $upcoming->patient_id) }}" class="hd-card"
+               style="cursor:pointer;text-decoration:none;color:inherit;display:block;margin-top:.3rem;border-left:3px solid #0ea5e9;opacity:.88;">
+                <div class="hd-cc" style="gap:.5rem;">
+                    <div class="hd-cc-body">
+                        <div class="hd-cc-type">{{ $upcoming->patient?->name ?? '—' }}</div>
+                        <div class="hd-cc-desc">
+                            <span style="font-weight:600;">{{ $upcoming->label }}</span>
+                            · {{ $upcoming->due_date->format('d M') }}
+                        </div>
+                        @if($upcoming->note)
+                        <div class="hd-cc-desc" style="font-style:italic;">“{{ Str::limit($upcoming->note, 70) }}”</div>
+                        @endif
+                        <div class="hd-cc-footer">
+                            <span class="hd-cc-by">
+                                {{ $upcoming->createdByUser?->name ? 'Dr. ' . $upcoming->createdByUser->name : 'Doctor' }}
+                                @if($upcoming->patient?->phone) · {{ $upcoming->patient->phone }} @endif
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </a>
             @endforeach
         </div>
         @endif

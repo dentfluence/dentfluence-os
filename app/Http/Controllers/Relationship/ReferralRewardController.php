@@ -66,6 +66,9 @@ class ReferralRewardController extends Controller
                 notes: 'Referral reward — referred ' . $referredPatient->name . ' (#' . $referredPatient->id . ')',
                 createdBy: $request->user()?->id,
                 campaignName: 'Referral Reward',
+                // U8 rule 12 — a referral reward is clinic-funded. The clinic never
+                // received this money, so it must never be withdrawable as cash.
+                funding: \App\Services\WalletService::FUNDING_CLINIC,
             );
 
             ReferralReward::create([

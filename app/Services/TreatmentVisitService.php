@@ -14,6 +14,7 @@ use App\Models\TreatmentPlan;
 use App\Models\TreatmentVisit;
 use App\Models\TreatmentPlanItem;
 use App\Models\TreatmentVisitItem;
+use App\Services\Clinical\VisitNextActionService;
 use App\Services\Relationship\ActivityEngine;
 use App\Services\TreatmentPlan\PlanLifecycleService;
 use Illuminate\Validation\ValidationException;
@@ -42,8 +43,10 @@ use Throwable;
  */
 class TreatmentVisitService
 {
-    public function __construct(private WorkflowShadowRunner $workflowShadow)
-    {
+    public function __construct(
+        private WorkflowShadowRunner $workflowShadow,
+        private VisitNextActionService $nextActions,
+    ) {
     }
 
     /**
@@ -145,7 +148,7 @@ class TreatmentVisitService
             'lab_case.priority'                => ['nullable', 'in:routine,urgent,express'],
             'lab_case.expected_return_date'    => ['nullable', 'date'],
             'lab_case.instructions'            => ['nullable', 'string'],
-        ];
+        ] + VisitNextActionService::rules();
     }
 
     /**
@@ -177,6 +180,12 @@ class TreatmentVisitService
 
             // Record implant placement + deduct stock for fixture/components used
             $this->recordImplantPlacementAndStock($visit, $data);
+
+            // Visit → Next Action. The doctor answered "what does reception do
+            // next?" once, here. This schedules it against the canonical
+            // follow_ups record so it surfaces to staff on its DUE date —
+            // no re-entry in tomorrow's Daily Huddle.
+            $this->nextActions->syncFromVisit($visit, $data['next_actions'] ?? null);
 
             // F1 — report the clinical fact to the Treatment Plan, which
             // re-derives its own lifecycle (Accepted → Treatment Started →
@@ -237,6 +246,12 @@ class TreatmentVisitService
             // Idempotent — re-saving the same visit won't double-deduct (see method docblock).
             $this->recordImplantPlacementAndStock($visit, $data);
 
+            // Visit → Next Action. Reconciles against follow_ups.treatment_visit_id,
+            // so re-opening and re-saving this visit edits the same rows instead
+            // of creating duplicate calls for the front desk. Completed rows are
+            // never touched — an executed call is history.
+            $this->nextActions->syncFromVisit($visit, $data['next_actions'] ?? null);
+
             // F1 — the recorded facts may have changed, so the plan re-derives.
             $this->reportClinicalFactToPlan($visit);
         });
@@ -280,6 +295,11 @@ class TreatmentVisitService
             // Hard delete — treatment_visit_items has no SoftDeletes.
             $visit->visitItems()->delete();
 
+            // Withdraw any next actions still waiting on the call team. A
+            // wellness call for a visit that no longer exists is an item
+            // reception cannot act on. Completed ones stay as history.
+            $this->nextActions->cancelForVisit($visit);
+
             $visit->delete(); // soft delete of the visit itself, as before
         });
     }
@@ -298,6 +318,9 @@ class TreatmentVisitService
             'implant_fixture_catalog_id' => true,
             'implant_components_used'    => true,
             'implant_lot_number'         => true,
+            // Handled by VisitNextActionService — writes follow_ups, not
+            // a treatment_visits column.
+            'next_actions'               => true,
         ];
     }
 
@@ -671,6 +694,16 @@ class TreatmentVisitService
             'chief_complaint'     => $v->chief_complaint,
             'next_visit_date'     => $v->next_visit_date?->format('Y-m-d'),
             'next_visit_type'     => $v->next_visit_type,
+            // Visit → Next Action — pending reception actions, ids included.
+            // Load-bearing: the web JS swaps this payload into its in-memory
+            // visit list after a save, and the edit form re-populates from it.
+            // Without the ids here, a SECOND edit in the same page session
+            // would submit id-less rows and orphan the originals.
+            'next_actions'        => $v->nextActions()
+                ->where('status', 'pending')
+                ->get()
+                ->map(fn ($f) => VisitNextActionService::present($f))
+                ->values()->all(),
             // RCT
             'rct_num_canals'         => $v->rct_num_canals,
             'rct_canal_lengths'      => $v->rct_canal_lengths ?? [],

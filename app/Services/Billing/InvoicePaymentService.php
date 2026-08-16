@@ -85,12 +85,13 @@ class InvoicePaymentService
         }
 
         $receipt = null;
+        $walletReceipt = null; // U8: receipt for the patient-credit tender leg
         $payment = null;
 
         DB::transaction(function () use (
             $in, $invoice, $mode, $emiType, $userId,
             $convenienceFee, $providerScheme, $providerBreakdown,
-            &$receipt, &$payment
+            &$receipt, &$walletReceipt, &$payment
         ) {
             // ── Concurrency guard (parity with web recordPayment) ────────────
             // Lock the invoice row so concurrent submissions serialize, then
@@ -123,29 +124,65 @@ class InvoicePaymentService
             // Parity with web recordPayment — only active when the caller
             // explicitly passes wallet_used (the mobile app may add this later;
             // absent key = unchanged behaviour).
+            // U8 rules 8 + 9 — patient credit is a TENDER, not a discount. It
+            // creates its own InvoicePayment / Receipt / income FinanceTransaction
+            // and never touches invoices.wallet_applied. Byte-parity with the web
+            // BillingController::recordPayment path.
             if ((float) ($in['wallet_used'] ?? 0) > 0) {
-                $wallet = Wallet::forPatient($invoice->patient_id);
-                $cap    = min((float) $in['wallet_used'], (float) $wallet->balance_total, (float) $invoice->balance_due);
-                if ($cap > 0) {
-                    $debited = (new WalletService())->debit(
-                        patientId: $invoice->patient_id,
-                        amount:    $cap,
-                        invoiceId: $invoice->id,
-                        createdBy: $userId,
-                    );
-                    if ($debited > 0) {
-                        $invoice->update(['wallet_applied' => (float) $invoice->wallet_applied + $debited]);
-                        $invoice->recalculate();
-                        $invoice->refresh();
-                    }
+                $walletResult = (new WalletService())->settleInvoiceFromCredit(
+                    invoice:     $invoice,
+                    amount:      (float) $in['wallet_used'],
+                    createdBy:   $userId,
+                    paymentDate: $in['payment_date'],
+                    notes:       'Paid from patient credit',
+                );
+
+                if ($walletResult['debited'] > 0) {
+                    $walletReceipt = $walletResult['receipt'];
+                    $invoice->refresh();
                 }
+            }
+
+            // ── G1 — split the cash tender: settlement vs advance ────────────
+            // Only what settles THIS invoice is revenue; the surplus is a
+            // liability (U8 rule 2). Identical to the previous behaviour whenever
+            // the payment does not exceed the balance.
+            $cashTendered     = (float) $in['amount'];
+            $settlementAmount = round(min($cashTendered, (float) $invoice->balance_due), 2);
+            $excessAmount     = round($cashTendered - $settlementAmount, 2);
+            if ($excessAmount < 0.01) {
+                $excessAmount     = 0.0;
+                $settlementAmount = $cashTendered;
+            }
+
+            // U8 rule 10 — settled entirely from patient credit: no cash leg.
+            if ($settlementAmount <= 0) {
+                if ($excessAmount > 0) {
+                    (new WalletService())->receiveAdvance(
+                        patient:     Patient::findOrFail($invoice->patient_id),
+                        amount:      $excessAmount,
+                        paymentMode: $mode,
+                        paymentDate: $in['payment_date'],
+                        notes:       'Excess payment from ' . $invoice->invoice_number,
+                        createdBy:   $userId,
+                    );
+                }
+
+                $receipt = $walletReceipt;
+
+                $invoice->refresh();
+                if ($invoice->isFullyPaid() && !$invoice->hasFinalBill()) {
+                    FinalBill::generateFromInvoice($invoice, $userId);
+                }
+
+                return;
             }
 
             // ── Direct EMI: compute instalment amount ────────────────────────
             $emiAmount = null;
             if ($mode === 'emi' && $emiType === 'direct' && ($in['emi_tenure'] ?? 0) > 0) {
                 $schedule  = EmiSchedule::buildSchedule(
-                    (float) $in['amount'],
+                    $settlementAmount,
                     (float) $in['emi_interest_rate'],
                     (int)   $in['emi_tenure'],
                     $in['emi_start_date']
@@ -171,7 +208,7 @@ class InvoicePaymentService
             $payment = InvoicePayment::create([
                 'invoice_id'             => $invoice->id,
                 'patient_id'             => $invoice->patient_id,
-                'amount'                 => $in['amount'],
+                'amount'                 => $settlementAmount,
                 'payment_mode'           => $mode,
                 'payment_date'           => $in['payment_date'],
                 'reference_no'           => $in['reference_no'] ?? null,
@@ -204,7 +241,7 @@ class InvoicePaymentService
             // Provider EMI: provider handles collection — no schedule needed here
             if ($mode === 'emi' && $emiType === 'direct' && ($in['emi_tenure'] ?? 0) > 0) {
                 $schedule = EmiSchedule::buildSchedule(
-                    (float) $in['amount'],
+                    $settlementAmount,
                     (float) $in['emi_interest_rate'],
                     (int)   $in['emi_tenure'],
                     $in['emi_start_date']
@@ -230,22 +267,20 @@ class InvoicePaymentService
             $invoice->refresh();
             $balanceAfter = (float) $invoice->balance_due;
 
-            // 3b. Excess payment → wallet credit (parity with web recordPayment).
-            // If the patient paid more than the invoice total, the surplus becomes
-            // permanent wallet credit (usable on future invoices). The full cash is
-            // already recorded as income, so no extra finance entry is needed here.
-            if ((float) $invoice->paid_amount > (float) $invoice->total_amount) {
-                $excess = round((float) $invoice->paid_amount - (float) $invoice->total_amount, 2);
-                if ($excess >= 0.01) {
-                    (new WalletService())->deposit(
-                        patientId:   $invoice->patient_id,
-                        amount:      $excess,
-                        paymentMode: $mode,
-                        notes:       'Excess payment from ' . $invoice->invoice_number,
-                        createdBy:   $userId,
-                        source:      'advance',
-                    );
-                }
+            // 3b. G1 — the surplus is an ADVANCE, not revenue (parity with web
+            // recordPayment). Routed through the same U8 path an over-the-counter
+            // advance uses: patient credit + its own ADV- receipt +
+            // FinanceTransaction type='advance'. The income entry below covers only
+            // the settlement, so the same rupee is never both revenue and a liability.
+            if ($excessAmount > 0) {
+                (new WalletService())->receiveAdvance(
+                    patient:     Patient::findOrFail($invoice->patient_id),
+                    amount:      $excessAmount,
+                    paymentMode: $mode,
+                    paymentDate: $in['payment_date'],
+                    notes:       'Excess payment from ' . $invoice->invoice_number,
+                    createdBy:   $userId,
+                );
             }
 
             // 4. Generate receipt(s)
@@ -284,7 +319,7 @@ class InvoicePaymentService
                     'invoice_id'         => $invoice->id,
                     'invoice_payment_id' => $payment->id,
                     'patient_id'         => $invoice->patient_id,
-                    'amount'             => (float) $in['amount'],
+                    'amount'             => $settlementAmount,
                     'payment_mode'       => $mode,
                     'receipt_date'       => $in['payment_date'],
                     'reference_no'       => $in['reference_no'] ?? null,
@@ -305,14 +340,14 @@ class InvoicePaymentService
             // For Provider EMI, net_amount reflects what clinic actually receives
             $financeNetAmount = ($mode === 'emi' && $emiType === 'provider' && $clinicNetAmount !== null)
                 ? $clinicNetAmount
-                : (float) $in['amount'];
+                : $settlementAmount;
 
             FinanceTransaction::create([
                 'type'              => 'income',
                 'direction'         => 'credit',
                 'source_type'       => InvoicePayment::class,
                 'source_id'         => $payment->id,
-                'amount'            => (float) $in['amount'],
+                'amount'            => $settlementAmount,
                 'net_amount'        => $financeNetAmount,
                 'payment_mode'      => $mode,
                 'payment_reference' => $in['reference_no'] ?? null,
@@ -330,7 +365,7 @@ class InvoicePaymentService
                 subject:        $payment,
                 event:          'payment.received',
                 actor:          null,
-                metadata:       ['patient_id' => $invoice->patient_id, 'invoice_id' => $invoice->id, 'amount' => (float) $in['amount']],
+                metadata:       ['patient_id' => $invoice->patient_id, 'invoice_id' => $invoice->id, 'amount' => $settlementAmount],
                 relationshipId: Patient::find($invoice->patient_id)?->relationship_id,
                 description:    'Payment recorded on invoice ' . $invoice->invoice_number,
             );
@@ -351,7 +386,9 @@ class InvoicePaymentService
                 $msg .= ' Convenience charge Rs. ' . number_format($convenienceFee, 2) . ' included in patient loan.';
             }
         } else {
-            $msg = 'Rs. ' . number_format((float) $in['amount'], 2) . ' recorded. Receipt ' . $receipt->receipt_number . ' generated.';
+            $msg = (float) $in['amount'] > 0
+                ? 'Rs. ' . number_format((float) $in['amount'], 2) . ' recorded. Receipt ' . ($receipt?->receipt_number ?? '-') . ' generated.'
+                : 'Settled from patient credit. Receipt ' . ($receipt?->receipt_number ?? '-') . ' generated.';
             if ($convenienceFee > 0) {
                 $msg .= ' Convenience fee Rs. ' . number_format($convenienceFee, 2) . ' applied.';
             }

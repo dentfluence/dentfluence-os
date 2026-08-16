@@ -45,6 +45,47 @@ function treatmentVisits() {
         repeatWarnings: [],   // [{treatment_name, tooth, date, originalItemId}]
         repeatReason: '',     // staff-entered reason (required when repeats exist)
 
+        // Visit → Next Action state. Kept OUT of `form` on purpose: `form` maps
+        // 1:1 onto treatment_visits columns, these rows become follow_ups.
+        // Same separation the lab case and visit items already use.
+        // Starts EMPTY — the doctor opts in with one tap, so a visit that needs
+        // no reception action is not one field longer than it was before.
+        nextActions: [],
+        // Stable repeater keys. Index keys make Alpine reuse DOM nodes across
+        // removals, which strands a <select> on the wrong row's value.
+        _nextActionUid: 0,
+
+        addNextAction() {
+            this.nextActions.push({
+                _uid:        ++this._nextActionUid,
+                id:          null,
+                action_type: 'wellness_call',
+                due_mode:    'tomorrow',
+                due_in_days: 3,
+                due_date:    '',
+                instruction: '',
+            });
+        },
+
+        removeNextAction(idx) { this.nextActions.splice(idx, 1); },
+
+        /** Human echo of when this action lands, so the doctor can see the
+         *  real date before saving. Anchored on visit_date (not today) — a
+         *  back-dated visit schedules from the day the patient was seen. */
+        nextActionDueLabel(row) {
+            const anchor = this.form.visit_date
+                ? new Date(this.form.visit_date + 'T00:00:00')
+                : new Date();
+            let due = new Date(anchor);
+            if (row.due_mode === 'tomorrow')      due.setDate(anchor.getDate() + 1);
+            else if (row.due_mode === 'in_days')  due.setDate(anchor.getDate() + (parseInt(row.due_in_days) || 1));
+            else if (row.due_mode === 'on_date') {
+                if (!row.due_date) return '—';
+                due = new Date(row.due_date + 'T00:00:00');
+            }
+            return due.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+        },
+
         // Lab case state — populated from the lab prompt section
         labCase: {
             enabled:              false,
@@ -678,6 +719,7 @@ function treatmentVisits() {
             this.repeatWarnings = []; this.repeatReason = '';
             this.txSearch = ''; this.txSuggestions = []; this.txSuggestOpen = false;
             this.labCase = { enabled: false, lab_vendor_id: '', work_category: '', work_subtype: '', priority: 'routine', expected_return_date: '', instructions: '' };
+            this.nextActions = [];
             this.metaOpen = false; this.drawerOpen = false; this.vitalsOpen = false;
             this.loadTreatmentPlans();   // refresh plan list so new/accepted plans show without reload
 
@@ -785,6 +827,21 @@ function treatmentVisits() {
             this.errorMsg = '';
             // Reset lab case (no editing of existing lab cases from here — use Lab module)
             this.labCase = { enabled: false, lab_vendor_id: '', work_category: '', work_subtype: '', priority: 'routine', expected_return_date: '', instructions: '' };
+            // Visit → Next Action — re-populate the PENDING actions this visit
+            // already scheduled, ids included. That id round-trip is what makes
+            // a re-save reconcile the same follow_ups rows instead of creating
+            // duplicate calls for the front desk (CEO Test Case 3). Actions the
+            // call team already completed are not returned by the bootstrap and
+            // so can never be edited away from here.
+            this.nextActions = (visit.next_actions || []).map(a => ({
+                _uid:        ++this._nextActionUid,
+                id:          a.id,
+                action_type: a.action_type || 'wellness_call',
+                due_mode:    'on_date',
+                due_in_days: 3,
+                due_date:    a.due_date || '',
+                instruction: a.instruction || '',
+            }));
             // Redesign: auto-open the drawer when the visit already carries a
             // note or vitals, so existing content is never hidden on edit.
             this.drawerOpen = !!(visit.notes || visit.vitals_notes || visit.bp_systolic || visit.pulse_rate || visit.temperature || visit.weight);
@@ -804,6 +861,7 @@ function treatmentVisits() {
             this.planItems  = [];
             this.otherActive = false;
             this.selectedTeeth = [];
+            this.nextActions = [];
             this.metaOpen = false; this.drawerOpen = false; this.vitalsOpen = false;
             this.repeatWarnings = []; this.repeatReason = '';
             this.txSearch = ''; this.txSuggestions = []; this.txSuggestOpen = false;
@@ -879,6 +937,21 @@ function treatmentVisits() {
                     tooth_number: this.form.tooth_number,
                     visit_items:  allVisitItems,
                     lab_case:     this.labCase.enabled ? this.labCase : null,
+                    // Visit → Next Action. ALWAYS sent (even empty) so the
+                    // server can tell "doctor removed the action" from "this
+                    // client doesn't know about next actions" — the service
+                    // treats a missing key as leave-alone, an empty array as
+                    // clear. Rows with a blank action type are dropped here.
+                    next_actions: this.nextActions
+                        .filter(a => a.action_type)
+                        .map(a => ({
+                            id:          a.id || null,
+                            action_type: a.action_type,
+                            due_mode:    a.due_mode,
+                            due_in_days: a.due_mode === 'in_days' ? (parseInt(a.due_in_days) || 1) : null,
+                            due_date:    a.due_mode === 'on_date' ? (a.due_date || null) : null,
+                            instruction: (a.instruction || '').trim() || null,
+                        })),
                 };
 
                 const resp = await fetch(url, {

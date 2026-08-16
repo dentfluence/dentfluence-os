@@ -269,6 +269,10 @@ class WalletController extends Controller
             createdBy:            auth()->id(),
             campaignName:         $request->credit_type === 'promotional' ? $request->campaign_name : null,
             applicableTreatments: $applicableTreatments,
+            // U8 rules 12/13 — Add Credit issues CLINIC money. No cash is received
+            // on this path, so it is a concession: not a liability, and never
+            // cash-refundable. Cash-backed credit arrives via receiveAdvance().
+            funding:              \App\Services\WalletService::FUNDING_CLINIC,
         );
 
         return redirect()->route('finance.wallets.show', $patient)

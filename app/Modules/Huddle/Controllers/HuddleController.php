@@ -554,6 +554,23 @@ class HuddleController extends Controller
                   ->where('follow_ups.created_at', '>=', $flowStart->toDateString())
                   ->whereNull('follow_ups.deleted_at');
             })
+            // Visit → Next Action (08-14) — and skip if the DOCTOR already
+            // answered this at the chair. Without this the Comms List would
+            // show the patient twice: once as this synthetic "Treatment
+            // Follow-up" suggestion, once as the doctor's real booked call
+            // from Section 3 below. That is the exact double-listing this
+            // workflow removes.
+            //
+            // Deliberately NOT bounded by created_at, unlike the clause above:
+            // a doctor-issued action due today may have been written days ago
+            // (that is the whole point of scheduling ahead).
+            ->whereNotExists(function ($q) {
+                $q->from('follow_ups')
+                  ->whereColumn('follow_ups.patient_id', 'appointments.patient_id')
+                  ->where('follow_ups.trigger_type', \App\Services\Clinical\VisitNextActionService::TRIGGER_TYPE)
+                  ->where('follow_ups.status', 'pending')
+                  ->whereNull('follow_ups.deleted_at');
+            })
             ->select([
                 'appointments.id',
                 'appointments.patient_id',
@@ -638,6 +655,50 @@ class HuddleController extends Controller
         // Reminders first, then follow-ups (synthetic + booked), then PRM comms
         $commList = $reminders->concat($followUps)->concat($bookedFollowUps)->concat($prmComms);
 
+        // ── Upcoming: actions the doctor scheduled from a Visit Log ───────────
+        //
+        // Visit → Next Action (08-14). THE HUDDLE DATE IS NOT THE EXECUTION
+        // DATE. A doctor who saw a patient on 8 Aug and said "call after 4
+        // days" produces an action due 12 Aug. On the 9 Aug huddle the manager
+        // must be able to SEE it — that is how the call team gets briefed
+        // without the doctor opening the app — but it must NOT be actionable
+        // yet.
+        //
+        // Hence: strictly FUTURE-dated (`due_date > today`), rendered read-only.
+        // Everything already due is untouched — it flows through Section 3
+        // above (`due_date <= today`) and through TodayActionsEngine's
+        // follow_up_calls category, exactly as before. There is only ever ONE
+        // follow_ups row; these are two views of it, not two records.
+        $upcomingDoctorActions = \App\Models\FollowUp::with([
+                'patient:id,name,phone,branch_id',
+                'createdByUser:id,name',
+            ])
+            ->fromVisit()
+            ->where('status', 'pending')
+            ->whereDate('due_date', '>', $today->toDateString())
+            ->whereHas('patient', fn ($q) => $q->where('branch_id', $branchId))
+            ->orderBy('due_date')
+            ->limit(20)
+            ->get();
+
+        // Which patients already have a doctor-issued action pending? Used by
+        // Yesterday's Flow to stop asking staff to book a follow-up the doctor
+        // has ALREADY booked — the double entry this workflow removes.
+        // Ordered due_date DESC because keyBy() keeps the LAST row per key —
+        // so a patient with several pending actions shows the SOONEST one.
+        // Already branch-scoped by $yPatIds.
+        $patientsWithDoctorAction = \App\Models\FollowUp::fromVisit()
+            ->where('status', 'pending')
+            ->whereIn('patient_id', $yPatIds)
+            ->orderByDesc('due_date')
+            ->get(['patient_id', 'label', 'due_date'])
+            ->keyBy('patient_id');
+
+        $yesterdaysAppointments = $yesterdaysAppointments->map(function ($row) use ($patientsWithDoctorAction) {
+            $row->doctor_next_action = $patientsWithDoctorAction->get($row->patient_id);
+            return $row;
+        });
+
         // ── Staff list for task quick-add ────────────────────────────────────
         $staff = User::where('branch_id', $branchId)
             ->where('is_active', true)
@@ -712,6 +773,7 @@ class HuddleController extends Controller
             'huddleNotes',
             'myTasks',
             'commList',
+            'upcomingDoctorActions',
             'doctors',
             'treatmentCategories',
             'timeSlots',

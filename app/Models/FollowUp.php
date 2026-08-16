@@ -15,6 +15,9 @@ class FollowUp extends Model
     protected $fillable = [
         'patient_id',
         'lead_id',
+        // Visit → Next Action (2026-08-14): the visit whose doctor authored
+        // this action. Also the idempotency key for re-saving that visit.
+        'treatment_visit_id',
         'label',
         'trigger_type',
         'trigger_value',
@@ -27,6 +30,7 @@ class FollowUp extends Model
         'appears_in',
         'auto_created',
         'assigned_to',
+        'created_by',
         'completed_at',
         'completed_by',
         'completion_note',
@@ -70,9 +74,25 @@ class FollowUp extends Model
         return $this->patient?->phone ?? $this->lead?->phone;
     }
 
+    /**
+     * The visit this action was issued from (Visit → Next Action, 2026-08-14).
+     * Null for every other follow-up source — leads, manual bookings, the
+     * Follow-up Engine's rule-driven rows.
+     */
+    public function treatmentVisit(): BelongsTo
+    {
+        return $this->belongsTo(TreatmentVisit::class);
+    }
+
     public function assignedUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    /** The doctor who issued the instruction at the chair. */
+    public function createdByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     public function completedByUser(): BelongsTo
@@ -113,6 +133,21 @@ class FollowUp extends Model
     {
         return $query->where('status', 'pending')
                      ->where('due_date', '>', Carbon::today());
+    }
+
+    /**
+     * Only the actions a doctor issued from a Visit Log.
+     *
+     * Used by the Daily Huddle to show FUTURE-dated work as read-only
+     * "upcoming" (so the manager can brief the call team days ahead) without
+     * it becoming actionable in the Communication List before its due date.
+     * Every existing due-today surface is unaffected — they filter on
+     * `due_date <= today` and simply never see these until they mature.
+     */
+    public function scopeFromVisit($query)
+    {
+        return $query->whereNotNull('treatment_visit_id')
+                     ->where('trigger_type', \App\Services\Clinical\VisitNextActionService::TRIGGER_TYPE);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

@@ -166,7 +166,7 @@
                     {{-- Column header row --}}
                     <div class="hidden sm:grid grid-cols-[2fr_auto_1fr_1fr_1fr_1.5fr_1fr] gap-2 text-xs font-bold text-gray-400 uppercase tracking-wide mb-2 px-1">
                         <span>Drug</span>
-                        <span class="text-center w-10">SOS</span>
+                        <span class="text-center w-12">SOS</span>
                         <span class="text-center">Morn</span>
                         <span class="text-center">Noon</span>
                         <span class="text-center">Night</span>
@@ -192,10 +192,14 @@
                                         <p class="text-xs text-gray-400 italic mt-0.5">{{ $item->instructions }}</p>
                                     @endif
                                 </div>
-                                {{-- SOS --}}
-                                <div class="flex justify-center w-10">
+                                {{-- SOS — badge + a short second line for the dose amount so
+                                     "SOS · 10 ml" doesn't wrap mid-word in a narrow column --}}
+                                <div class="flex flex-col items-center justify-center gap-0.5 w-12">
                                     @if($item->is_sos)
-                                        <span class="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-bold">{{ $item->sosCell() }}</span>
+                                        <span class="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-bold whitespace-nowrap">SOS</span>
+                                        @if($item->sosDoseLabel())
+                                            <span class="text-[10px] text-amber-600 font-semibold whitespace-nowrap">{{ $item->sosDoseLabel() }}</span>
+                                        @endif
                                     @else
                                         <span class="text-xs text-gray-300">—</span>
                                     @endif

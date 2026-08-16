@@ -469,7 +469,7 @@
             <tr>
                 <th style="width:18px;">#</th>
                 <th>Drug / Strength</th>
-                <th style="text-align:center;width:32px;">SOS</th>
+                <th style="text-align:center;width:40px;">SOS</th>
                 <th style="text-align:center;width:38px;">Morn</th>
                 <th style="text-align:center;width:38px;">Noon</th>
                 <th style="text-align:center;width:38px;">Night</th>
@@ -485,7 +485,14 @@
                     @if($item->strength)<div class="rx-sub">{{ $item->strength }}{{ $item->dosage_form ? ' · '.$item->dosage_form : '' }}</div>@endif
                     @if($item->food_advice || $item->instructions)<div class="rx-sub">@if($item->food_advice){{ $item->food_advice }}@endif @if($item->instructions)· {{ $item->instructions }}@endif</div>@endif
                 </td>
-                <td style="text-align:center;">{{ $item->sosCell() }}</td>
+                <td style="text-align:center;white-space:nowrap;">
+                    @if($item->is_sos)
+                        SOS
+                        @if($item->sosDoseLabel())<div class="rx-sub" style="text-align:center;">{{ $item->sosDoseLabel() }}</div>@endif
+                    @else
+                        —
+                    @endif
+                </td>
                 <td style="text-align:center;">{{ $item->doseCell($item->morning) }}</td>
                 <td style="text-align:center;">{{ $item->doseCell($item->afternoon) }}</td>
                 <td style="text-align:center;">{{ $item->doseCell($item->night) }}</td>

@@ -115,17 +115,32 @@ class PrescriptionItem extends Model
      * SOS cell for print: "SOS" alone when no amount was recorded (legacy
      * rows, or a doctor who left it blank), otherwise "SOS · 5 ml" /
      * "SOS · 1" so the dispensing amount for the as-needed dose is explicit.
+     * Kept for any single-line/plain-text context; UI table cells should
+     * prefer sosDoseLabel() rendered on its own line — "SOS · 10 ml" doesn't
+     * fit an ~32-44px table column and wraps badly mid-word.
      */
     public function sosCell(): string
     {
         if (! $this->is_sos) {
             return '—';
         }
-        if (! (float) $this->sos_dose) {
-            return 'SOS';
+        $label = $this->sosDoseLabel();
+        return $label ? 'SOS · ' . $label : 'SOS';
+    }
+
+    /**
+     * Just the amount part of an SOS dose ("10 ml" / "1"), or null if SOS
+     * isn't set or no amount was recorded. Meant to be rendered as its own
+     * short line under a plain "SOS" badge so narrow table columns don't
+     * wrap "SOS · 10 ml" across three lines.
+     */
+    public function sosDoseLabel(): ?string
+    {
+        if (! $this->is_sos || ! (float) $this->sos_dose) {
+            return null;
         }
         $num = rtrim(rtrim(number_format((float) $this->sos_dose, 2, '.', ''), '0'), '.');
-        return 'SOS · ' . $num . ($this->isLiquidDose() ? ' ml' : '');
+        return $num . ($this->isLiquidDose() ? ' ml' : '');
     }
 
     /**
