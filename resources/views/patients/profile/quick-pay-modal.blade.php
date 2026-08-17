@@ -69,6 +69,74 @@
                 </form>
             @else
 
+            {{-- ── Pay total outstanding (auto-allocated, oldest first) ────────
+                 One tender, allocated across every open invoice by the server.
+                 Staff does not pick an invoice. Surplus becomes Patient Credit.
+                 Simple tenders only — EMI and card-convenience-fee payments must
+                 still go through a single invoice below. --}}
+            <div id="qpAutoPayWrap">
+            <div id="qpAutoPay" class="border border-green-200 bg-green-50/40 rounded-xl p-4">
+                <div class="flex items-baseline justify-between mb-3">
+                    <p class="text-xs font-semibold text-green-800 uppercase tracking-wider">Pay Total Outstanding</p>
+                    <span class="text-[10px] text-green-700">auto-allocated, oldest invoice first</span>
+                </div>
+
+                <div class="flex items-baseline justify-between mb-3 px-1">
+                    <span class="text-xs text-gray-500">Total Outstanding</span>
+                    <span class="text-lg font-bold text-red-600">
+                        Rs. {{ number_format($unpaidInvoices->sum(fn($i) => (float) $i->balance_due), 2) }}
+                    </span>
+                </div>
+
+                <form method="POST" action="{{ route('billing.patientPayment', $patient) }}" class="space-y-3">
+                    @csrf
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Payment Amount</label>
+                            <input type="number" name="amount" step="0.01" min="0.01" required
+                                   value="{{ number_format($unpaidInvoices->sum(fn($i) => (float) $i->balance_due), 2, '.', '') }}"
+                                   class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Payment Mode</label>
+                            <select name="payment_mode" required
+                                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+                                <option value="cash">Cash</option>
+                                <option value="upi">UPI</option>
+                                <option value="card">Card</option>
+                                <option value="bank_transfer">Bank Transfer</option>
+                                <option value="cheque">Cheque</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Date</label>
+                            <input type="date" name="payment_date" value="{{ now()->toDateString() }}" required
+                                   class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Reference No.</label>
+                            <input type="text" name="reference_no" placeholder="Optional"
+                                   class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-gray-500 leading-relaxed">
+                        Pays the oldest outstanding invoice first. Anything left over after every
+                        invoice is settled is held as Patient Credit — it is not counted as income.
+                    </p>
+                    <button type="submit" class="w-full py-2.5 bg-green-600 text-white font-semibold text-sm rounded-lg hover:bg-green-700">
+                        Receive Payment &amp; Allocate
+                    </button>
+                </form>
+            </div>
+
+            <div class="flex items-center gap-3 py-1">
+                <div class="flex-1 h-px bg-gray-200"></div>
+                <span class="text-[10px] uppercase tracking-wider text-gray-400">or pay one invoice</span>
+                <div class="flex-1 h-px bg-gray-200"></div>
+            </div>
+            </div>
+
             {{-- Step 1: Pick an invoice --}}
             <div id="qpStep1">
                 <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Select Invoice to Pay</p>
@@ -370,6 +438,10 @@
         document.getElementById('qpBalanceLabel').textContent = 'Rs. ' + balance.toLocaleString('en-IN');
         document.getElementById('qpStep1').classList.add('hidden');
         document.getElementById('qpStep2').classList.remove('hidden');
+        // Single-invoice mode owns the modal: hide the auto-allocate block so the
+        // two payment forms are never on screen at the same time.
+        const apw = document.getElementById('qpAutoPayWrap');
+        if (apw) apw.classList.add('hidden');
         // sync radio with hidden select
         document.querySelector('input[name="payment_mode"][value="cash"]').checked = true;
         // reset EMI provider state (scheme breakdown depends on the selected invoice)
@@ -388,6 +460,8 @@
         const s1 = document.getElementById('qpStep1');
         const s2 = document.getElementById('qpStep2');
         if (s1 && s2) { s1.classList.remove('hidden'); s2.classList.add('hidden'); }
+        const apw = document.getElementById('qpAutoPayWrap');
+        if (apw) apw.classList.remove('hidden');
     };
 
     window.qpOnModeChange = function() {

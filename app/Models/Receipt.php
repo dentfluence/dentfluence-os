@@ -24,12 +24,14 @@ class Receipt extends Model
         'amount_paid_before',
         'balance_after',
         'notes',
+        'allocation_breakdown', // consolidated patient-tender receipts only
         'created_by',
         'receipt_type',   // 'patient_upfront' | 'provider_settlement' | null (regular)
     ];
 
     protected $casts = [
-        'receipt_date'       => 'date',
+        'receipt_date'         => 'date',
+        'allocation_breakdown' => 'array',
         'amount'             => 'decimal:2',
         'invoice_total'      => 'decimal:2',
         'amount_paid_before' => 'decimal:2',
@@ -106,6 +108,46 @@ class Receipt extends Model
         $seq = $last ? (int) substr($last, strlen($prefix)) : 0;
 
         return $prefix . str_pad($seq + 1, 5, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Patient-level allocation — consolidated tender receipts use their own
+     * PAY- series.
+     *
+     * One tender, one document, even when it settles several invoices. It is a
+     * third kind of document from RCP- (exactly one invoice settled) and ADV-
+     * (money in against no invoice at all), so it gets its own number space and
+     * the RCP- sequence keeps meaning exactly one thing — which matters for
+     * audit.
+     *
+     * Same concurrency contract as Receipt::nextNumber() — MUST be called inside
+     * a DB transaction; lockForUpdate serialises generation and the UNIQUE index
+     * on receipt_number is the backstop.
+     */
+    public static function nextAllocationNumber(): string
+    {
+        $year = now()->year;
+        $prefix = 'PAY-' . $year . '-';
+
+        $last = self::withTrashed()
+            ->whereYear('created_at', $year)
+            ->where('receipt_number', 'like', $prefix . '%')
+            ->lockForUpdate()
+            ->max('receipt_number');
+
+        $seq = $last ? (int) substr($last, strlen($prefix)) : 0;
+
+        return $prefix . str_pad($seq + 1, 5, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * True for a consolidated patient-tender receipt: settles one or more
+     * invoices (and possibly tops up Patient Credit) from a single payment.
+     * Identified by kind='payment' with no single owning invoice.
+     */
+    public function isAllocation(): bool
+    {
+        return $this->receipt_kind !== 'advance' && $this->invoice_id === null;
     }
 
     /** U8 — true for an advance receipt (money received before any service). */

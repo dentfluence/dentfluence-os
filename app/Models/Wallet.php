@@ -40,7 +40,20 @@ class Wallet extends Model
     /** Get or create wallet for a patient. */
     public static function forPatient(int $patientId): self
     {
-        return self::firstOrCreate(['patient_id' => $patientId]);
+        $wallet = self::firstOrCreate(['patient_id' => $patientId]);
+
+        // Promotional credit expires with the CALENDAR, not with a transaction.
+        // balance_promotional is a cached column refreshed by recalculate(), so
+        // a credit that lapsed overnight leaves the cache overstated until
+        // something happens to touch this wallet — which may be never. Re-sync
+        // only when the cache has actually drifted, so a normal read performs no
+        // write and only a genuinely lapsed wallet costs one.
+        if (abs((float) $wallet->balance_promotional - $wallet->availablePromotionalCredit()) > 0.009) {
+            $wallet->recalculate();
+            $wallet->refresh();
+        }
+
+        return $wallet;
     }
 
     /**
@@ -61,10 +74,16 @@ class Wallet extends Model
      */
     public function recalculate(): void
     {
+        // Gross promotional movement, kept ONLY for the double-spend warning
+        // below. It is deliberately NOT the balance: it counts credits that have
+        // since expired, which is exactly the bug this replaced.
         $promo = $this->transactions()
             ->where('credit_type', 'promotional')
             ->selectRaw('SUM(CASE WHEN direction="credit" THEN amount ELSE -amount END) as bal')
             ->value('bal') ?? 0;
+
+        // What the patient can actually spend today: unexpired, unconsumed.
+        $promoAvailable = $this->availablePromotionalCredit();
 
         $perm = $this->transactions()
             ->where('credit_type', 'permanent')
@@ -96,11 +115,110 @@ class Wallet extends Model
         }
 
         $this->update([
-            'balance_promotional'    => max(0, $promo),
+            'balance_promotional'    => max(0, $promoAvailable),
             'balance_permanent'      => max(0, $perm),
             'balance_patient_credit' => max(0, $patientCredit),
-            'balance_total'          => max(0, $promo + $perm),
+            'balance_total'          => max(0, $promoAvailable + $perm),
         ]);
+    }
+
+    /**
+     * SPENDABLE promotional credit right now: unexpired and not yet consumed.
+     *
+     * Why this is not a one-line WHERE clause. Promotional credit is issued in
+     * lots, each with its own expiry. Debit rows do NOT record which lot they
+     * drew from, so neither shortcut works:
+     *
+     *   SUM(unexpired credits) - SUM(all debits)
+     *       charges spending that came out of a since-lapsed lot against the
+     *       live ones, and under-reports.
+     *
+     *   naive FIFO over all lots
+     *       hands old spending to a lot that was ALREADY expired when the money
+     *       was spent — which it cannot have come from — and over-reports.
+     *
+     * So replay the ledger exactly the way WalletService::consumePromotional-
+     * Credits spent it: walk the debits oldest-first, and allocate each one FIFO
+     * by expiry across the lots that were live ON THAT DEBIT'S DATE (which is
+     * precisely what expiringCredits() returned at the time). Whatever survives
+     * the replay and has not lapsed as of today is the available balance.
+     *
+     * A lot with no expiry_date never expires. Promotional credit issued through
+     * the UI always carries one; this is here so an undated legacy row is not
+     * silently destroyed.
+     *
+     * Expiry boundary matches expiringCredits() exactly — a credit expiring
+     * TODAY is still spendable; expired means expiry_date < the date in question.
+     */
+    public function availablePromotionalCredit(): float
+    {
+        $lots = $this->transactions()
+            ->where('direction', 'credit')
+            ->where('credit_type', 'promotional')
+            ->reorder()
+            ->orderByRaw('expiry_date IS NULL, expiry_date ASC, id ASC')
+            ->get(['id', 'amount', 'expiry_date', 'created_at']);
+
+        if ($lots->isEmpty()) {
+            return 0.0;
+        }
+
+        $debits = $this->transactions()
+            ->where('direction', 'debit')
+            ->where('credit_type', 'promotional')
+            ->reorder()
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get(['id', 'amount', 'created_at']);
+
+        // Mutable remaining balance per lot, keyed by lot id.
+        $remaining = [];
+        foreach ($lots as $lot) {
+            $remaining[$lot->id] = (float) $lot->amount;
+        }
+
+        foreach ($debits as $debit) {
+            $needed  = (float) $debit->amount;
+            $spentOn = $debit->created_at?->copy()->startOfDay() ?? today();
+
+            foreach ($lots as $lot) {
+                if ($needed <= 0.009) {
+                    break;
+                }
+                if ($remaining[$lot->id] <= 0.009) {
+                    continue;
+                }
+                // A lot cannot fund a debit that predates it...
+                if ($lot->created_at !== null && $lot->created_at->gt($debit->created_at ?? now())) {
+                    continue;
+                }
+                // ...nor one made after the lot had already lapsed.
+                if ($lot->expiry_date !== null && $lot->expiry_date->lt($spentOn)) {
+                    continue;
+                }
+
+                $take                 = min($remaining[$lot->id], $needed);
+                $remaining[$lot->id] -= $take;
+                $needed              -= $take;
+            }
+            // Any unmatched remainder is a historical inconsistency, not a
+            // balance: ignore it rather than inventing a lot to charge it to.
+        }
+
+        $today     = today();
+        $available = 0.0;
+
+        foreach ($lots as $lot) {
+            if ($remaining[$lot->id] <= 0.009) {
+                continue;                                   // fully consumed
+            }
+            if ($lot->expiry_date !== null && $lot->expiry_date->lt($today)) {
+                continue;                                   // lapsed — history keeps it, the balance does not
+            }
+            $available += $remaining[$lot->id];
+        }
+
+        return round($available, 2);
     }
 
     /**

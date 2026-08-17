@@ -424,9 +424,10 @@ class WalletService
         string  $paymentMode,
         string  $paymentDate,
         ?string $notes = null,
-        ?int    $createdBy = null
+        ?int    $createdBy = null,
+        bool    $createReceipt = true
     ): WalletTransaction {
-        return DB::transaction(function () use ($patient, $amount, $paymentMode, $paymentDate, $notes, $createdBy) {
+        return DB::transaction(function () use ($patient, $amount, $paymentMode, $paymentDate, $notes, $createdBy, $createReceipt) {
             $tx = $this->deposit(
                 patientId:   $patient->id,
                 amount:      $amount,
@@ -439,6 +440,13 @@ class WalletService
 
             // U8 rule 3 — the patient's proof that they handed over cash.
             // No invoice, no invoice_payment: this document stands alone.
+            //
+            // $createReceipt = false is used ONLY by patient-level allocation,
+            // where the surplus is one leg of a larger tender that already has a
+            // single consolidated PAY- receipt covering the whole amount. The
+            // wallet credit and the liability entry below are still written, so
+            // the accounting is identical either way — only the paper differs.
+            if ($createReceipt) {
             Receipt::create([
                 'receipt_number'     => Receipt::nextAdvanceNumber(),
                 'receipt_kind'       => 'advance',
@@ -454,6 +462,7 @@ class WalletService
                 'notes'              => 'Advance received' . ($notes ? ' — ' . $notes : ''),
                 'created_by'         => $createdBy,
             ]);
+            }
 
             // U8 rule 2 — cash in, liability up. NOT revenue.
             FinanceTransaction::create([

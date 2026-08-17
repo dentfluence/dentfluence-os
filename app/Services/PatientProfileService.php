@@ -8,6 +8,7 @@ use App\Models\Finance\FinanceMembershipPlan;
 use App\Models\Finance\FinancePatientMembership;
 use App\Models\Finance\MembershipBenefitLog;
 use App\Models\Invoice;
+use App\Models\Receipt;
 use App\Models\Inventory\ImplantCatalog;
 use App\Models\Patient;
 use App\Models\PatientRelationshipNote;
@@ -162,6 +163,17 @@ class PatientProfileService
                     'invoices'         => Invoice::with(['items', 'payments', 'receipts', 'finalBill'])
                         ->where('patient_id', $patient->id)
                         ->orderByDesc('invoice_date')
+                        ->get(),
+                    // Patient-level receipts: PAY- (one tender allocated across
+                    // several invoices) and ADV- (money in against no invoice).
+                    // Both carry invoice_id = NULL, so they are unreachable via
+                    // invoice->receipts and the Billing tab could not see them at
+                    // all — the ledger silently under-reported credit by their
+                    // total. Loaded here because the view has no way to query.
+                    'patientReceipts'  => Receipt::where('patient_id', $patient->id)
+                        ->whereNull('invoice_id')
+                        ->orderBy('receipt_date')
+                        ->orderBy('id')
                         ->get(),
                     'billingPrompts'   => BillingPrompt::with(['invoice'])
                         ->forPatient($patient->id)

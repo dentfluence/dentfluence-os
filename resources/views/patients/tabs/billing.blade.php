@@ -90,25 +90,21 @@
                     $rcpt->view_url = route('billing.receipt', [$rcpt->invoice, $rcpt]);
                 }
 
-                // Advance payments straight into the wallet (no invoice yet) — these are real
-                // money received too, so they belong in the same Receipts list. Document is
-                // printed from the Wallet module (source='advance' → labelled "Receipt" there).
-                $advanceReceipts = (isset($wallet) && $wallet)
-                    ? $wallet->transactions()
-                        ->where('direction', 'credit')
-                        ->where('source', 'advance')
-                        ->get()
-                        ->map(function ($tx) use ($patient) {
-                            $tx->receipt_number = 'ADV-' . str_pad($tx->id, 6, '0', STR_PAD_LEFT);
-                            $tx->receipt_date   = $tx->created_at;
-                            $tx->reference_no   = null;
-                            $tx->invoice        = null;
-                            $tx->view_url       = route('finance.wallets.credit-note', [$patient, $tx]);
-                            return $tx;
-                        })
-                    : collect();
+                // Patient-level receipts — PAY- (one tender allocated across several
+                // invoices) and ADV- (money received against no invoice). Both carry
+                // invoice_id = NULL, so invoice->receipts can never reach them.
+                //
+                // These are the REAL Receipt rows. The previous version of this block
+                // synthesised an advance entry from WalletTransaction with a fabricated
+                // number ('ADV-' . str_pad($tx->id, 6)), which did not match the actual
+                // ADV-YYYY-NNNNN row U8 writes — two competing numbers for one document.
+                // One authoritative number now: whatever is stored on the receipt.
+                $patientLevelReceipts = ($patientReceipts ?? collect());
+                foreach ($patientLevelReceipts as $prcpt) {
+                    $prcpt->view_url = route('billing.patientReceipt', [$patient, $prcpt]);
+                }
 
-                $allReceipts   = $invoiceReceipts->concat($advanceReceipts)->sortByDesc('receipt_date');
+                $allReceipts   = $invoiceReceipts->concat($patientLevelReceipts)->sortByDesc('receipt_date');
                 $allFinalBills = ($invoices ?? collect())->filter(fn($i) => $i->finalBill)->map(fn($i) => $i->finalBill)->sortByDesc('generated_date');
             @endphp
 
@@ -227,8 +223,12 @@
                                     <div class="text-xs font-bold text-green-700">Rs. {{ number_format($rcpt->amount, 0) }}</div>
                                     @if($rcpt->invoice)
                                         <div class="text-[10px] text-gray-400 font-mono">{{ $rcpt->invoice->invoice_number }}</div>
-                                    @else
+                                    @elseif($rcpt->receipt_kind === 'advance')
                                         <div class="text-[10px] text-purple-500 font-mono">Advance · Wallet</div>
+                                    @else
+                                        <div class="text-[10px] text-blue-500 font-mono">
+                                            {{ count($rcpt->allocation_breakdown['invoices'] ?? []) }} invoice(s)
+                                        </div>
                                     @endif
                                 </div>
                                 <div class="opacity-0 group-hover:opacity-100 transition flex-shrink-0">
@@ -301,6 +301,7 @@
                         'status'      => $inv->status,
                         'inv'         => $inv,
                         'rcpt'        => null,
+                        'url'         => null,
                     ]);
 
                     foreach ($inv->receipts ?? [] as $rcpt) {
@@ -315,10 +316,38 @@
                             'status'      => 'paid',
                             'inv'         => $inv,
                             'rcpt'        => $rcpt,
+                            'url'         => route('billing.receipt', [$inv, $rcpt]),
                         ]);
                     }
                 }
 
+                // Patient-level receipts (invoice_id = NULL) — PAY- and ADV-.
+                // They belong to the patient, not to any one invoice, so the loop
+                // above can never see them. Without this the ledger's credit column
+                // was short by their total while Collected/Outstanding (which read
+                // invoice_payments) were right — the same page disagreeing with
+                // itself. Disjoint from $inv->receipts by definition, so nothing
+                // can be counted twice.
+                foreach (($patientReceipts ?? collect()) as $prcpt) {
+                    $ledgerEntries->push([
+                        'date'        => $prcpt->receipt_date,
+                        'sort_key'    => $prcpt->receipt_date?->format('Y-m-d') . '_B_' . $prcpt->id,
+                        'type'        => 'receipt',
+                        'ref'         => $prcpt->receipt_number,
+                        'description' => $prcpt->receipt_kind === 'advance'
+                            ? 'Advance · patient credit'
+                            : 'Allocated across ' . count($prcpt->allocation_breakdown['invoices'] ?? []) . ' invoice(s)',
+                        'debit'       => 0,
+                        'credit'      => (float) $prcpt->amount,
+                        'status'      => 'paid',
+                        'inv'         => null,
+                        'rcpt'        => $prcpt,
+                        'url'         => route('billing.patientReceipt', [$patient, $prcpt]),
+                    ]);
+                }
+
+                // Deterministic order: date, then invoices (_A_) before receipts
+                // (_B_) on the same date, then id.
                 $ledgerEntries = $ledgerEntries->sortBy('sort_key')->values();
 
                 // Compute running balance (debit increases balance owed, credit decreases)
@@ -395,8 +424,8 @@
                                         <a href="{{ route('billing.show', $row['inv']) }}"
                                                 class="hover:text-[#6a0f70] hover:underline">{{ $row['ref'] }}</a>
                                     @else
-                                        @if($row['rcpt'] && $row['inv'])
-                                            <a href="{{ route('billing.receipt', [$row['inv'], $row['rcpt']]) }}" target="_blank"
+                                        @if($row['rcpt'] && $row['url'])
+                                            <a href="{{ $row['url'] }}" target="_blank"
                                                class="hover:text-green-700 hover:underline">{{ $row['ref'] }}</a>
                                         @else
                                             {{ $row['ref'] }}
@@ -425,8 +454,8 @@
                                            class="text-gray-300 hover:text-[#b45309]" title="Print Invoice">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                                         </a>
-                                    @elseif($row['rcpt'] && $row['inv'])
-                                        <a href="{{ route('billing.receipt', [$row['inv'], $row['rcpt']]) }}" target="_blank"
+                                    @elseif($row['rcpt'] && $row['url'])
+                                        <a href="{{ $row['url'] }}" target="_blank"
                                            class="text-gray-300 hover:text-green-600" title="View Receipt">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                         </a>

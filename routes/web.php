@@ -546,6 +546,14 @@ Route::middleware('auth')->group(function () {
              ->parameters(['billing' => 'invoice']);
         Route::post('/billing/{invoice}/cancel',      [\App\Http\Controllers\BillingController::class, 'cancel'])->name('billing.cancel');
         Route::post('/billing/{invoice}/payment',     [\App\Http\Controllers\BillingController::class, 'recordPayment'])->name('billing.payment');
+        // Patient-level payment — ONE tender allocated oldest-first across every
+        // open invoice, surplus to Patient Credit. Additive: the per-invoice
+        // route above is untouched and still the only path for EMI / card
+        // convenience fee.
+        Route::post('/patients/{patient}/payment',
+            [\App\Http\Controllers\BillingController::class, 'recordPatientPayment'])->name('billing.patientPayment');
+        Route::get('/patients/{patient}/receipt/{receipt}',
+            [\App\Http\Controllers\BillingController::class, 'showAllocationReceipt'])->name('billing.patientReceipt');
         // Bill from Treatment Plan (partial multi-tooth invoicing)
         // S1 — storeFromPlan CREATES an invoice, so it carries finance,edit
         // rather than the group's view-level gate. The GET stays view-level.

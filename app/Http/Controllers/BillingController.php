@@ -28,6 +28,7 @@ use App\Services\Billing\PlanBillingRollbackService;
 use App\Services\Billing\TreatmentPlanBillingService;
 use App\Models\Wallet;
 use App\Services\MembershipBenefitService;
+use App\Services\Billing\PatientPaymentAllocationService;
 use App\Services\WalletService;
 use App\Services\CouponService;
 use App\Services\Relationship\ActivityEngine;
@@ -1766,6 +1767,91 @@ class BillingController extends Controller
         ])->pluck('value', 'key');
 
         return view('billing.receipt', compact('receipt', 'clinic'));
+    }
+
+    // ── Patient-level payment allocation ─────────────────────────────────────
+
+    /**
+     * Record ONE tender for a patient and let the system decide which invoices
+     * it pays: oldest first, surplus to Patient Credit.
+     *
+     * Staff never picks an invoice. The per-invoice recordPayment() above is
+     * untouched and remains the path for EMI and card-convenience-fee payments.
+     */
+    public function recordPatientPayment(Request $request, Patient $patient)
+    {
+        $validated = $request->validate([
+            'amount'            => 'required|numeric|min:0.01',
+            'payment_mode'      => 'required|in:' . implode(',', PatientPaymentAllocationService::ALLOWED_MODES),
+            'payment_date'      => 'required|date',
+            'reference_no'      => 'nullable|string|max:100',
+            'notes'             => 'nullable|string|max:500',
+            'clinic_account_id' => 'nullable|integer|exists:finance_bank_accounts,id',
+            'bank_name'         => 'nullable|string|max:120',
+            'cheque_no'         => 'nullable|string|max:50',
+            'cheque_date'       => 'nullable|date',
+        ]);
+
+        $allocator = app(PatientPaymentAllocationService::class);
+
+        if ($allocator->outstandingFor($patient) <= 0 && (float) $validated['amount'] > 0) {
+            // Nothing owed — this is a pure advance. Send it down the U8 path so
+            // it lands as a liability with its own ADV- receipt, rather than
+            // minting an allocation receipt that allocates to nothing.
+            (new WalletService())->receiveAdvance(
+                patient:     $patient,
+                amount:      (float) $validated['amount'],
+                paymentMode: $validated['payment_mode'],
+                paymentDate: $validated['payment_date'],
+                notes:       $validated['notes'] ?? null,
+                createdBy:   auth()->id(),
+            );
+
+            return back()->with('success',
+                '₹' . number_format((float) $validated['amount'], 2)
+                . ' received as patient credit — no outstanding invoices to settle.');
+        }
+
+        $result = $allocator->allocate($patient, $validated, auth()->id());
+
+        $msg = '₹' . number_format($result['tender'], 2) . ' received. Receipt '
+             . $result['receipt']->receipt_number . ' generated.';
+
+        if (count($result['allocations']) > 0) {
+            $msg .= ' Allocated across ' . count($result['allocations']) . ' invoice(s): ₹'
+                  . number_format($result['settled'], 2) . '.';
+        }
+        if ($result['surplus'] > 0) {
+            $msg .= ' ₹' . number_format($result['surplus'], 2)
+                  . ' held as patient credit (not revenue).';
+        }
+        if ($result['outstanding_after'] > 0) {
+            $msg .= ' Outstanding remaining: ₹' . number_format($result['outstanding_after'], 2) . '.';
+        } else {
+            $msg .= ' Outstanding cleared.';
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * Print view for a consolidated allocation receipt. It belongs to a patient,
+     * not to a single invoice, so it gets its own route rather than being forced
+     * through billing.receipt (which requires $receipt->invoice).
+     */
+    public function showAllocationReceipt(Patient $patient, Receipt $receipt)
+    {
+        if ((int) $receipt->patient_id !== (int) $patient->id) {
+            abort(403, 'Receipt does not belong to this patient.');
+        }
+
+        $receipt->load('patient');
+
+        $clinic = \App\Models\AppSetting::whereIn('key', [
+            'clinic_name', 'clinic_address', 'clinic_phone', 'clinic_email', 'clinic_gst_no'
+        ])->pluck('value', 'key');
+
+        return view('billing.allocation-receipt', compact('receipt', 'clinic'));
     }
 
     // ── Show Final Bill ───────────────────────────────────────────────────────
