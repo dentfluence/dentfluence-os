@@ -276,13 +276,35 @@
                 <h3 class="text-lg font-semibold text-blue-700">Refund from Wallet</h3>
                 <button onclick="document.getElementById('refundModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
             </div>
-            <p class="text-xs text-gray-500">Return money to the patient. Available: <strong>Rs. {{ number_format($wallet->balance_permanent, 2) }}</strong> (permanent credit only).</p>
+            @php
+                // A1 — refundable = patient-funded credit ONLY (U8 funding='patient').
+                // Promotional / clinic-funded credit is a concession, never the
+                // patient's money, and can never be paid out as cash.
+                $refundable = (float) ($wallet->balance_patient_credit ?? 0);
+            @endphp
+
+            @if($refundable < 0.01)
+                <div class="rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm text-gray-600">
+                    <p class="font-semibold text-gray-700 mb-1">Nothing to refund</p>
+                    <p class="text-xs">This patient has no refundable credit. Only money the patient actually
+                    paid in can be returned — promotional and clinic-funded credit never can.</p>
+                </div>
+                <div class="pt-1">
+                    <button type="button" onclick="document.getElementById('refundModal').classList.add('hidden')" class="w-full py-2.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">Close</button>
+                </div>
+            @else
+            <p class="text-xs text-gray-500">Return the patient's own money. Refunds are
+            <strong>all-or-nothing</strong> — partial refunds are not supported.</p>
             <form method="POST" action="{{ route('finance.wallets.refund', $patient) }}" class="space-y-3">
                 @csrf
+                <input type="hidden" name="amount" value="{{ number_format($refundable, 2, '.', '') }}">
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Amount (Rs.)</label>
-                        <input type="number" name="amount" step="0.01" min="1" max="{{ $wallet->balance_permanent }}" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Refund amount</label>
+                        <div class="w-full border border-blue-200 bg-blue-50 rounded-lg px-3 py-2 text-sm font-bold text-blue-800">
+                            Rs. {{ number_format($refundable, 2) }}
+                        </div>
+                        <p class="text-[10px] text-gray-400 mt-1">Full patient credit. Not editable.</p>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Mode</label>
@@ -304,10 +326,11 @@
                     <input type="text" name="reason" required minlength="3" placeholder="e.g. Treatment cancelled" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
                 </div>
                 <div class="flex gap-3 pt-1">
-                    <button type="submit" class="flex-1 py-2.5 bg-blue-600 text-white font-medium text-sm rounded-lg hover:bg-blue-700">Refund</button>
+                    <button type="submit" class="flex-1 py-2.5 bg-blue-600 text-white font-medium text-sm rounded-lg hover:bg-blue-700">Refund Rs. {{ number_format($refundable, 2) }}</button>
                     <button type="button" onclick="document.getElementById('refundModal').classList.add('hidden')" class="flex-1 py-2.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">Cancel</button>
                 </div>
             </form>
+            @endif
         </div>
     </div>
 

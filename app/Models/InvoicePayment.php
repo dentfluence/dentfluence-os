@@ -13,7 +13,7 @@ class InvoicePayment extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'invoice_id', 'patient_id', 'amount', 'payment_mode',
+        'invoice_id', 'receipt_id', 'patient_id', 'amount', 'payment_mode',
         'payment_date', 'reference_no', 'notes', 'created_by',
         // Clinic account received in (Phase 2 — Income Module)
         'clinic_account_id', 'clinic_account_name',

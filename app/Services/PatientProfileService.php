@@ -15,6 +15,8 @@ use App\Models\PatientRelationshipNote;
 use App\Models\Task;
 use App\Models\TreatmentOpportunity;
 use App\Models\Wallet;
+use App\Models\Finance\FinanceTransaction;
+use App\Models\WalletTransaction;
 use App\Models\Prescription\Prescription;
 use App\Services\MembershipBenefitService;
 use App\Services\Patient\FamilyLinkService;
@@ -182,6 +184,10 @@ class PatientProfileService
                         ->get(),
                     'wallet'           => Wallet::forPatient($patient->id),
                     'activeMembership' => MembershipBenefitService::getActive($patient->id),
+                    // A1 — wallet refunds. Money returned to the patient is a
+                    // real movement on their account and must appear in the
+                    // Billing Ledger as a DEBIT, with a document to point at.
+                    'walletRefunds'    => $this->walletRefunds($patient),
                 ];
 
             case 'wallet':
@@ -343,5 +349,52 @@ class PatientProfileService
             ->orderBy('name')
             ->get()
             ->each(fn ($t) => $t->consent_required = $consentIds->has($t->id));
+    }
+
+    /**
+     * A1 — wallet refunds for the Billing Ledger.
+     *
+     * Source of truth is the WalletTransaction written by
+     * WalletService::refundFullPatientCredit() — direction='debit',
+     * source='withdrawal'. That is the only wallet row representing cash
+     * leaving for the patient, and the finance mirror points back at it.
+     *
+     * Deliberately NOT queried as FinanceTransaction type='refund': receipt
+     * VOIDS write that same type (BillingController writes it in seven places),
+     * and a void already moves the ledger by removing its receipt. Reading by
+     * type would count those twice.
+     *
+     * No record is created for display. The reference is derived from the
+     * wallet row's primary key, so it is unique, stable and traceable straight
+     * back to the row it names.
+     */
+    private function walletRefunds(Patient $patient)
+    {
+        $refunds = WalletTransaction::where('patient_id', $patient->id)
+            ->where('direction', 'debit')
+            ->where('source', 'withdrawal')
+            ->reorder()
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        if ($refunds->isEmpty()) {
+            return $refunds;
+        }
+
+        // The refund DATE the operator entered lives on the finance mirror, not
+        // on the wallet row, so a back-dated refund still sorts correctly.
+        $dates = FinanceTransaction::where('type', 'refund')
+            ->where('source_type', WalletTransaction::class)
+            ->whereIn('source_id', $refunds->pluck('id'))
+            ->get(['source_id', 'transaction_date'])
+            ->pluck('transaction_date', 'source_id');
+
+        foreach ($refunds as $refund) {
+            $refund->refund_date  = $dates[$refund->id] ?? $refund->created_at;
+            $refund->reference_no = 'REF-' . str_pad((string) $refund->id, 6, '0', STR_PAD_LEFT);
+        }
+
+        return $refunds;
     }
 }

@@ -2,7 +2,7 @@
 @section('page-title', 'Wallet Management')
 
 @section('content')
-<div class="max-w-5xl mx-auto px-4 py-6">
+<div class="max-w-6xl mx-auto px-4 py-6">
 
     <a href="{{ route('finance.dashboard') }}" class="inline-block text-sm text-gray-500 hover:text-[#6a0f70] mb-4">← Finance</a>
 
@@ -22,27 +22,59 @@
         <div class="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-2 mb-4">{{ session('success') }}</div>
     @endif
 
-    {{-- ── Dashboard Cards ──────────────────────────────────────────── --}}
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        <div class="bg-white border border-gray-200 rounded-lg p-4 text-center">
-            <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Patients w/ Balance</div>
-            <div class="text-2xl font-bold text-[#6a0f70]">{{ number_format($patientsWithBalance) }}</div>
+    {{-- ── Dashboard Cards ────────────────────────────────────────────
+         Promotional (clinic concession) and Patient Credit (the patient's own
+         money) are kept in SEPARATE columns and never added together — they are
+         opposite things. Each shows the balance held and how much has actually
+         been consumed.
+
+         Figures are exact, not abbreviated: tabular-nums + whitespace-nowrap +
+         a smaller type size so a crore-scale number cannot spill out of its box.
+    --}}
+    <div class="grid grid-cols-1 lg:grid-cols-[auto_1fr_1fr] gap-3 mb-6">
+
+        {{-- Patients --}}
+        <div class="bg-white border border-gray-200 rounded-lg p-4 flex flex-col justify-center text-center lg:min-w-[150px]">
+            <div class="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Patients w/ Balance</div>
+            <div class="text-2xl font-bold text-[#6a0f70] tabular-nums">{{ number_format($patientsWithBalance) }}</div>
         </div>
-        <div class="bg-white border border-gray-200 rounded-lg p-4 text-center">
-            <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Outstanding</div>
-            <div class="text-2xl font-bold text-[#6a0f70]">Rs. {{ number_format($totalOutstanding, 0) }}</div>
+
+        {{-- Promotional — clinic-funded concession --}}
+        <div class="bg-white border border-amber-200 rounded-lg overflow-hidden">
+            <div class="bg-amber-50 px-4 py-1.5 border-b border-amber-200">
+                <span class="text-[11px] font-semibold text-amber-800 uppercase tracking-wide">Promotional Credit</span>
+                <span class="text-[10px] text-amber-600 ml-1">· clinic-funded, expires, not refundable</span>
+            </div>
+            <div class="grid grid-cols-2 divide-x divide-gray-100">
+                <div class="px-4 py-3">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wide">Available</div>
+                    <div class="text-lg font-bold text-amber-700 tabular-nums whitespace-nowrap">Rs. {{ number_format($promoAvailable, 0) }}</div>
+                </div>
+                <div class="px-4 py-3">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wide">Used (total)</div>
+                    <div class="text-lg font-bold text-gray-700 tabular-nums whitespace-nowrap">Rs. {{ number_format($promoUsedTotal, 0) }}</div>
+                    <div class="text-[10px] text-gray-400 tabular-nums whitespace-nowrap">This month Rs. {{ number_format($promoUsedMonth, 0) }}</div>
+                </div>
+            </div>
         </div>
-        <div class="bg-white border border-gray-200 rounded-lg p-4 text-center">
-            <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Credits This Month</div>
-            <div class="text-2xl font-bold text-green-600">Rs. {{ number_format($creditsThisMonth, 0) }}</div>
-        </div>
-        <div class="bg-white border border-gray-200 rounded-lg p-4 text-center">
-            <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Utilized This Month</div>
-            <div class="text-2xl font-bold text-red-500">Rs. {{ number_format($utilizedThisMonth, 0) }}</div>
-        </div>
-        <div class="bg-[#6a0f70] rounded-lg p-4 text-center text-white">
-            <div class="text-xs uppercase tracking-wide mb-1 opacity-80">Active Balance</div>
-            <div class="text-2xl font-bold">Rs. {{ number_format($activeBalance, 0) }}</div>
+
+        {{-- Patient credit — the patient's own money (U8 liability) --}}
+        <div class="bg-white border border-[#6a0f70]/25 rounded-lg overflow-hidden">
+            <div class="bg-[#f9f3fa] px-4 py-1.5 border-b border-[#6a0f70]/20">
+                <span class="text-[11px] font-semibold text-[#6a0f70] uppercase tracking-wide">Patient Credit</span>
+                <span class="text-[10px] text-[#6a0f70]/70 ml-1">· patient's own money, refundable</span>
+            </div>
+            <div class="grid grid-cols-2 divide-x divide-gray-100">
+                <div class="px-4 py-3">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wide">Held (liability)</div>
+                    <div class="text-lg font-bold text-[#6a0f70] tabular-nums whitespace-nowrap">Rs. {{ number_format($patientCredit, 0) }}</div>
+                </div>
+                <div class="px-4 py-3">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wide">Used (total)</div>
+                    <div class="text-lg font-bold text-gray-700 tabular-nums whitespace-nowrap">Rs. {{ number_format($creditUsedTotal, 0) }}</div>
+                    <div class="text-[10px] text-gray-400 tabular-nums whitespace-nowrap">This month Rs. {{ number_format($creditUsedMonth, 0) }}</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -155,10 +187,41 @@
 
         {{-- Active credit wallets --}}
         <div>
-            <h3 class="text-sm font-semibold text-gray-700 mb-3">Patients with Credit Balance</h3>
+            <div class="flex items-center justify-between flex-wrap gap-3 mb-3">
+                <h3 class="text-sm font-semibold text-gray-700">Patients with Credit Balance</h3>
+
+                {{-- Two different questions, two filters: whose money are we
+                     holding, versus who is only carrying a clinic concession. --}}
+                @php
+                    $filterTabs = [
+                        'all'    => 'All',
+                        'credit' => 'Has patient credit',
+                        'promo'  => 'Promotional only',
+                    ];
+                @endphp
+                <div class="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                    @foreach($filterTabs as $key => $label)
+                        <a href="{{ route('finance.wallet.index', ['filter' => $key]) }}"
+                           class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+                                  {{ $filter === $key ? 'bg-white text-[#6a0f70] shadow-sm' : 'text-gray-500 hover:text-gray-700' }}">
+                            {{ $label }}
+                            <span class="ml-1 tabular-nums {{ $filter === $key ? 'text-[#6a0f70]/60' : 'text-gray-400' }}">
+                                {{ number_format($walletCounts[$key]) }}
+                            </span>
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+
             @if($creditWallets->isEmpty())
                 <div class="bg-white border border-gray-200 rounded-lg px-6 py-8 text-center text-gray-400 text-sm">
-                    No patients have a credit balance yet.
+                    @if($filter === 'credit')
+                        No patient is currently holding their own credit.
+                    @elseif($filter === 'promo')
+                        No patient is holding promotional credit only.
+                    @else
+                        No patients have a credit balance yet.
+                    @endif
                 </div>
             @else
                 <div class="bg-white border border-gray-200 overflow-hidden rounded-lg">
@@ -166,9 +229,8 @@
                         <thead class="bg-gray-50 border-b border-gray-100">
                             <tr>
                                 <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500">Patient</th>
-                                <th class="text-right px-4 py-3 text-xs font-semibold text-gray-500">Credit Balance</th>
-                                <th class="text-right px-4 py-3 text-xs font-semibold text-gray-500">Promo Balance</th>
-                                <th class="text-right px-4 py-3 text-xs font-semibold text-gray-500">Total</th>
+                                <th class="text-right px-4 py-3 text-xs font-semibold text-[#6a0f70]">Patient Credit</th>
+                                <th class="text-right px-4 py-3 text-xs font-semibold text-amber-700">Promotional</th>
                                 <th class="px-4 py-3"></th>
                             </tr>
                         </thead>
@@ -183,18 +245,25 @@
                                         </a>
                                         <div class="text-xs text-gray-400">{{ $wallet->patient->phone }}</div>
                                     </td>
-                                    <td class="px-4 py-3 text-right text-purple-700 font-medium">
-                                        Rs. {{ number_format($wallet->balance_permanent, 0) }}
-                                    </td>
-                                    <td class="px-4 py-3 text-right text-amber-600 text-xs">
-                                        @if($wallet->balance_promotional > 0)
-                                            Rs. {{ number_format($wallet->balance_promotional, 0) }}
+                                    {{-- Patient's own money (U8 funding='patient'), matching the
+                                         "Patient Credit" card above. Reading balance_permanent here
+                                         made the table contradict its own page header. --}}
+                                    <td class="px-4 py-3 text-right font-semibold text-[#6a0f70] tabular-nums whitespace-nowrap">
+                                        @if($wallet->balance_patient_credit > 0)
+                                            Rs. {{ number_format($wallet->balance_patient_credit, 0) }}
                                         @else
                                             <span class="text-gray-300">—</span>
                                         @endif
                                     </td>
-                                    <td class="px-4 py-3 text-right font-bold text-[#6a0f70]">
-                                        Rs. {{ number_format($wallet->balance_total, 0) }}
+                                    {{-- Available promotional only — lapsed credit is excluded by
+                                         Wallet::availablePromotionalCredit(). No Total column: adding
+                                         a concession to a liability gives a number that means nothing. --}}
+                                    <td class="px-4 py-3 text-right font-semibold text-amber-700 tabular-nums whitespace-nowrap">
+                                        @if($wallet->balance_promotional > 0)
+                                            Rs. {{ number_format($wallet->balance_promotional, 0) }}
+                                        @else
+                                            <span class="text-gray-300">—</span>
+                                        @endif
                                     </td>
                                     <td class="px-4 py-3 flex items-center gap-3 justify-end">
                                         <a href="{{ route('finance.wallets.show', $wallet->patient) }}"

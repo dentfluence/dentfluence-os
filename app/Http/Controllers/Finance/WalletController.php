@@ -30,35 +30,84 @@ class WalletController extends Controller
         // Individual credit wallets — patients with any balance.
         // whereHas('patient') excludes wallets whose patient was deleted, so the view
         // never tries to build a patients.show URL from a null patient.
-        $creditWallets = Wallet::with('patient')
-            ->whereHas('patient')
-            ->where('balance_total', '>', 0)
-            ->orderByDesc('balance_total')
-            ->paginate(25);
+        //
+        // Filter, because "who owes us nothing but is holding a coupon" and "whose
+        // money are we actually sitting on" are two different questions and staff
+        // ask them separately:
+        //   credit = holds the patient's own money (a liability, refundable)
+        //   promo  = holds only a clinic-funded concession (expires, not refundable)
+        $filter = in_array($request->input('filter'), ['credit', 'promo'], true)
+            ? $request->input('filter')
+            : 'all';
+
+        $base = fn () => Wallet::whereHas('patient')->where('balance_total', '>', 0);
+
+        $walletCounts = [
+            'all'    => $base()->count(),
+            'credit' => $base()->where('balance_patient_credit', '>', 0)->count(),
+            'promo'  => $base()->where('balance_promotional', '>', 0)
+                               ->where('balance_patient_credit', '<=', 0)->count(),
+        ];
+
+        $creditWallets = $base()
+            ->with('patient')
+            ->when($filter === 'credit', fn ($q) => $q->where('balance_patient_credit', '>', 0))
+            ->when($filter === 'promo',  fn ($q) => $q->where('balance_promotional', '>', 0)
+                                                      ->where('balance_patient_credit', '<=', 0))
+            ->orderByDesc('balance_patient_credit')
+            ->orderByDesc('balance_promotional')
+            ->paginate(25)
+            ->withQueryString();
 
         // ── Dashboard cards ──────────────────────────────────────────────────
 
         $patientsWithBalance = Wallet::where('balance_total', '>', 0)->count();
 
-        $totalOutstanding = Wallet::sum('balance_total');
+        // ── Dashboard cards ──────────────────────────────────────────────────
+        // Promotional and patient credit are economically OPPOSITE things and
+        // must never be totalled into one figure:
+        //
+        //   Promotional / clinic-funded = a concession the clinic is giving away.
+        //                                 Expires. Never refundable. Marketing spend.
+        //   Patient credit (U8)         = the patient's own money, held by the
+        //                                 clinic. Never expires. Refundable. A LIABILITY.
+        //
+        // The old cards showed one blended "Total Outstanding" and then repeated
+        // it as "Active Balance" ($activeBalance = $totalOutstanding), so two of
+        // five cards carried the same blended number and neither told you which
+        // half was clinic money and which half was the patient's.
 
-        $creditsThisMonth = WalletTransaction::where('direction', 'credit')
+        // Balances held right now.
+        $promoAvailable = (float) Wallet::sum('balance_promotional');
+        $patientCredit  = (float) Wallet::sum('balance_patient_credit');
+
+        // Promotional consumed — concession actually given away against invoices.
+        $promoUsedTotal = (float) WalletTransaction::where('direction', 'debit')
+            ->where('credit_type', 'promotional')->sum('amount');
+
+        $promoUsedMonth = (float) WalletTransaction::where('direction', 'debit')
+            ->where('credit_type', 'promotional')
             ->whereMonth('created_at', now()->month)
-            ->whereYear('created_at',  now()->year)
-            ->sum('amount');
+            ->whereYear('created_at', now()->year)->sum('amount');
 
-        $utilizedThisMonth = WalletTransaction::where('direction', 'debit')
+        // Patient credit consumed — the patient's own money applied to invoices.
+        // Withdrawals are excluded on purpose: a refund is money handed BACK,
+        // not credit spent on treatment, and lumping the two together would
+        // overstate how much stored credit the clinic has actually earned out.
+        $creditUsedTotal = (float) WalletTransaction::where('direction', 'debit')
+            ->where('funding', 'patient')
+            ->where('source', '!=', 'withdrawal')->sum('amount');
+
+        $creditUsedMonth = (float) WalletTransaction::where('direction', 'debit')
+            ->where('funding', 'patient')
+            ->where('source', '!=', 'withdrawal')
             ->whereMonth('created_at', now()->month)
-            ->whereYear('created_at',  now()->year)
-            ->sum('amount');
-
-        // Active balance = sum of balance_total across all wallets (same as totalOutstanding)
-        $activeBalance = $totalOutstanding;
+            ->whereYear('created_at', now()->year)->sum('amount');
 
         return view('finance.wallets.index', compact(
-            'campaigns', 'creditWallets',
-            'patientsWithBalance', 'totalOutstanding',
-            'creditsThisMonth', 'utilizedThisMonth', 'activeBalance'
+            'campaigns', 'creditWallets', 'patientsWithBalance', 'filter', 'walletCounts',
+            'promoAvailable', 'promoUsedTotal', 'promoUsedMonth',
+            'patientCredit', 'creditUsedTotal', 'creditUsedMonth'
         ));
     }
 
@@ -332,63 +381,45 @@ class WalletController extends Controller
 
     // ── Refund (money OUT of wallet, back to patient) ─────────────────────────
 
+    /**
+     * A1 — FULL wallet refund. Tulip Dental does not do partial refunds.
+     *
+     * The old version validated the requested amount against balance_permanent
+     * but WalletService::withdraw() capped at balance_patient_credit, so a
+     * clinic-funded gift made the form offer money that could never actually be
+     * withdrawn: withdraw() returned 0.0, the closure returned early, no wallet
+     * row, no finance row, no audit row — and the flash message reported
+     * $request->amount as refunded. Cash left the drawer with nothing on the
+     * books. Eligibility and execution now live in one place and every failure
+     * throws.
+     */
     public function refund(Request $request, Patient $patient)
     {
         $this->ensureBilling(RoleBillingPermission::WALLET_REFUND);
 
         $request->validate([
-            'amount'       => 'required|numeric|min:1',
+            // No arbitrary amount. If one is submitted it is a CONFIRMATION
+            // value only — the service rejects it unless it equals the full
+            // refundable balance, so a request for a partial refund fails
+            // loudly instead of quietly becoming a full one.
+            'amount'       => 'nullable|numeric',
             'payment_mode' => 'required|in:cash,upi,bank_transfer,cheque,other',
             'refund_date'  => 'required|date',
             'reason'       => 'required|string|min:3|max:300',
         ]);
 
-        $wallet = Wallet::forPatient($patient->id);
-        if ((float) $request->amount > (float) $wallet->balance_permanent) {
-            return back()->withErrors(['amount' => 'Refund exceeds available wallet balance of Rs. ' . number_format($wallet->balance_permanent, 2) . '.'])->withInput();
-        }
-
-        DB::transaction(function () use ($request, $patient) {
-            $withdrawn = $this->walletService->withdraw(
-                patientId:   $patient->id,
-                amount:      (float) $request->amount,
-                paymentMode: $request->payment_mode,
-                notes:       'Refund: ' . $request->reason,
-                createdBy:   auth()->id(),
-            );
-
-            if ($withdrawn <= 0) {
-                return;
-            }
-
-            // Finance mirror — money leaving the clinic.
-            $tx = WalletTransaction::where('patient_id', $patient->id)
-                ->where('source', 'withdrawal')->latest()->first();
-
-            FinanceTransaction::create([
-                'type'              => 'refund',
-                'direction'         => 'debit',
-                'source_type'       => WalletTransaction::class,
-                'source_id'         => $tx?->id,
-                'amount'            => $withdrawn,
-                'net_amount'        => $withdrawn,
-                'payment_mode'      => $request->payment_mode,
-                'patient_id'        => $patient->id,
-                'status'            => 'active',
-                'transaction_date'  => $request->refund_date,
-                'notes'             => 'Wallet refund — ' . $request->reason,
-                'created_by'        => auth()->id(),
-            ]);
-
-            if ($tx) {
-                BillingAuditLog::record('wallet_refund', $tx,
-                    'Refund Rs. ' . number_format($withdrawn, 2) . ' (' . $request->payment_mode . '). ' . $request->reason,
-                    auth()->id(), 'Wallet · ' . $patient->name);
-            }
-        });
+        $result = $this->walletService->refundFullPatientCredit(
+            patientId:      $patient->id,
+            paymentMode:    $request->payment_mode,
+            refundDate:     $request->refund_date,
+            reason:         $request->reason,
+            createdBy:      auth()->id(),
+            expectedAmount: $request->filled('amount') ? (float) $request->amount : null,
+        );
 
         return redirect()->route('finance.wallets.show', $patient)
-            ->with('success', '₹' . number_format($request->amount, 0) . ' refunded from ' . $patient->name . "'s wallet.");
+            ->with('success', '₹' . number_format($result['refunded'], 2)
+                . ' refunded from ' . $patient->name . "'s wallet — full patient credit returned.");
     }
 
     // ── Adjustment (manual correction, credit or debit) ───────────────────────
@@ -428,7 +459,17 @@ class WalletController extends Controller
     public function creditNote(Patient $patient, WalletTransaction $transaction)
     {
         abort_if($transaction->patient_id !== $patient->id, 404);
-        abort_if($transaction->direction !== 'credit', 404);
+
+        // Credits (advance receipt / credit note) and the ONE debit that is a
+        // patient-facing document: a wallet refund. Every other debit is an
+        // internal consumption against an invoice — the invoice receipt is that
+        // document, so those stay blocked. Reusing this route deliberately: a
+        // refund voucher is the same kind of object, and a second route would
+        // just be a duplicate.
+        $isRefund = $transaction->direction === 'debit'
+                 && $transaction->source    === 'withdrawal';
+
+        abort_if($transaction->direction !== 'credit' && ! $isRefund, 404);
 
         $clinicName    = AppSetting::get('clinic_name', config('app.name'));
         $clinicAddress = AppSetting::get('clinic_address', '');

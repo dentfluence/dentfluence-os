@@ -11,9 +11,16 @@
         // it's proof of payment, not a credit adjustment. Promotional/goodwill wallet
         // credits (no money changed hands) keep the Credit Note document.
         $isAdvance = $transaction->source === 'advance';
+        // A wallet refund is money going OUT — the patient's own credit returned
+        // to them. Same document family, opposite direction, so it gets its own
+        // wording and its own REF- reference rather than being dressed up as a
+        // receipt for money received.
+        $isRefund  = $transaction->direction === 'debit' && $transaction->source === 'withdrawal';
+        $docTitle  = $isRefund ? 'Refund Voucher' : ($isAdvance ? 'Receipt' : 'Credit Note');
+        $docPrefix = $isRefund ? 'REF-' : ($isAdvance ? 'RCP-ADV-' : 'CN-');
         $pm = \App\Models\AppSetting::printMargins(['top' => '24px', 'bottom' => '24px', 'left' => '32px', 'right' => '32px']);
     @endphp
-    <title>{{ $isAdvance ? 'Receipt' : 'Credit Note' }} — {{ $patient->name }}</title>
+    <title>{{ $docTitle }} — {{ $patient->name }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -242,8 +249,8 @@
             </div>
         </div>
         <div class="doc-label">
-            <h1>{{ $isAdvance ? 'Receipt' : 'Credit Note' }}</h1>
-            <div class="ref">Ref: {{ $isAdvance ? 'RCP-ADV-' : 'CN-' }}{{ str_pad($transaction->id, 6, '0', STR_PAD_LEFT) }}</div>
+            <h1>{{ $docTitle }}</h1>
+            <div class="ref">Ref: {{ $docPrefix }}{{ str_pad($transaction->id, 6, '0', STR_PAD_LEFT) }}</div>
             <div class="doc-date">Date: {{ $transaction->created_at->format('d F Y') }}</div>
         </div>
     </div>
@@ -271,7 +278,10 @@
         <tbody>
             <tr>
                 <td>
-                    <strong>{{ $isAdvance ? 'Advance Payment Received' : 'Credit Balance Added' }}</strong>
+                    <strong>{{ $isRefund ? 'Patient Credit Refunded' : ($isAdvance ? 'Advance Payment Received' : 'Credit Balance Added') }}</strong>
+                    @if($isRefund && $transaction->payment_mode)
+                        <br><span style="color:#777;font-size:12px;">Returned via {{ ucfirst(str_replace('_', ' ', $transaction->payment_mode)) }}</span>
+                    @endif
                     @if($isAdvance && $transaction->payment_mode)
                         <br><span style="color:#777;font-size:12px;">Paid via {{ ucfirst(str_replace('_', ' ', $transaction->payment_mode)) }}</span>
                     @endif
@@ -281,7 +291,7 @@
                 </td>
                 <td>
                     <span style="background:#f3e8ff;color:#6a0f70;font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600;">
-                        {{ $isAdvance ? 'Advance Payment' : 'Credit Balance' }}
+                        {{ $isRefund ? 'Refund' : ($isAdvance ? 'Advance Payment' : 'Credit Balance') }}
                     </span>
                 </td>
                 <td style="text-align:right;font-weight:700;color:#6a0f70;">
@@ -289,7 +299,7 @@
                 </td>
             </tr>
             <tr class="amount-row">
-                <td colspan="2" style="font-size:13px;color:#555;font-weight:600;">{{ $isAdvance ? 'Total Received' : 'Total Credit' }}</td>
+                <td colspan="2" style="font-size:13px;color:#555;font-weight:600;">{{ $isRefund ? 'Total Refunded' : ($isAdvance ? 'Total Received' : 'Total Credit') }}</td>
                 <td style="text-align:right;">Rs. {{ number_format($transaction->amount, 2) }}</td>
             </tr>
         </tbody>
@@ -310,7 +320,9 @@
         </div>
     @else
         <div class="no-expiry-banner">
-            @if($isAdvance)
+            @if($isRefund)
+                <strong>Refund settled</strong> — Rs. {{ number_format($transaction->amount, 2) }} of {{ $patient->name }}'s wallet credit has been returned in full. The wallet credit balance is now nil.
+            @elseif($isAdvance)
                 <strong>No expiry</strong> — This amount has been credited to {{ $patient->name }}'s wallet and will be adjusted against future invoices.
             @else
                 <strong>No expiry</strong> — This credit balance carries over indefinitely and can be used at any future visit.
@@ -321,7 +333,11 @@
     {{-- ── Conditions ──────────────────────────────────────────────────────── --}}
     <div class="conditions">
         <strong>Terms & Conditions:</strong><br>
-        @if($isAdvance)
+        @if($isRefund)
+            • This voucher confirms Rs. {{ number_format($transaction->amount, 2) }} of wallet credit refunded to {{ $patient->name }}{{ $transaction->payment_mode ? ' via ' . ucfirst(str_replace('_', ' ', $transaction->payment_mode)) : '' }}.<br>
+            • Only the patient's own paid-in credit is refundable. Promotional and clinic-funded credit is not refundable and is unaffected by this refund.<br>
+            • Wallet refunds are made in full; partial refunds are not issued.<br>
+        @elseif($isAdvance)
             • This receipt confirms Rs. {{ number_format($transaction->amount, 2) }} received from {{ $patient->name }}{{ $transaction->payment_mode ? ' via ' . ucfirst(str_replace('_', ' ', $transaction->payment_mode)) : '' }}.<br>
             • The amount has been added to the patient's wallet and will be adjusted against future invoices.<br>
             • Not redeemable for cash; applicable only for treatments/services at {{ $clinicName }}.<br>

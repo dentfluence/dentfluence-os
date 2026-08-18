@@ -554,6 +554,10 @@ Route::middleware('auth')->group(function () {
             [\App\Http\Controllers\BillingController::class, 'recordPatientPayment'])->name('billing.patientPayment');
         Route::get('/patients/{patient}/receipt/{receipt}',
             [\App\Http\Controllers\BillingController::class, 'showAllocationReceipt'])->name('billing.patientReceipt');
+        // A2 — correct/reverse a consolidated PAY- tender. Admin-only inside the
+        // controller, same gate as the invoice-receipt void. Never refunds.
+        Route::post('/patients/{patient}/receipt/{receipt}/void',
+            [\App\Http\Controllers\BillingController::class, 'voidPatientReceipt'])->name('billing.patientReceipt.void');
         // Bill from Treatment Plan (partial multi-tooth invoicing)
         // S1 — storeFromPlan CREATES an invoice, so it carries finance,edit
         // rather than the group's view-level gate. The GET stays view-level.

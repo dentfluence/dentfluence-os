@@ -359,72 +359,36 @@ class BillingController extends ApiController
         }
 
         $data = $request->validate([
-            'amount'       => 'required|numeric|min:1',
+            // A1 — no arbitrary amount. Confirmation value only; the service
+            // rejects anything that is not the full refundable balance.
+            'amount'       => 'nullable|numeric',
             'payment_mode' => 'required|in:cash,upi,bank_transfer,cheque,other',
             'refund_date'  => 'required|date',
             'reason'       => 'required|string|min:3|max:300',
         ]);
 
+        // Eligibility, execution, finance mirror and audit all happen inside one
+        // transaction in the service; a failure throws instead of silently
+        // returning 0.0 (which is how the old path paid out cash with no record).
+        $result = (new WalletService())->refundFullPatientCredit(
+            patientId:      $pt->id,
+            paymentMode:    $data['payment_mode'],
+            refundDate:     $data['refund_date'],
+            reason:         $data['reason'],
+            createdBy:      $request->user()->id,
+            expectedAmount: array_key_exists('amount', $data) && $data['amount'] !== null
+                                ? (float) $data['amount']
+                                : null,
+        );
+
         $wallet = Wallet::forPatient($pt->id);
-        if ((float) $data['amount'] > (float) $wallet->balance_permanent) {
-            return $this->error(
-                'Refund exceeds available wallet balance of Rs. ' . number_format($wallet->balance_permanent, 2) . '.',
-                [], 422
-            );
-        }
-
-        $withdrawn = 0.0;
-
-        DB::transaction(function () use ($data, $pt, $request, &$withdrawn) {
-            $withdrawn = (new WalletService())->withdraw(
-                patientId:   $pt->id,
-                amount:      (float) $data['amount'],
-                paymentMode: $data['payment_mode'],
-                notes:       'Refund: ' . $data['reason'],
-                createdBy:   $request->user()->id,
-            );
-
-            if ($withdrawn <= 0) {
-                return;
-            }
-
-            $tx = WalletTransaction::where('patient_id', $pt->id)
-                ->where('source', 'withdrawal')->latest()->first();
-
-            FinanceTransaction::create([
-                'type'             => 'refund',
-                'direction'        => 'debit',
-                'source_type'      => WalletTransaction::class,
-                'source_id'        => $tx?->id,
-                'amount'           => $withdrawn,
-                'net_amount'       => $withdrawn,
-                'payment_mode'     => $data['payment_mode'],
-                'patient_id'       => $pt->id,
-                'status'           => 'active',
-                'transaction_date' => $data['refund_date'],
-                'notes'            => 'Wallet refund — ' . $data['reason'],
-                'created_by'       => $request->user()->id,
-            ]);
-
-            if ($tx) {
-                BillingAuditLog::record('wallet_refund', $tx,
-                    'Refund Rs. ' . number_format($withdrawn, 2) . ' (' . $data['payment_mode'] . '). ' . $data['reason'],
-                    $request->user()->id, 'Wallet · ' . $pt->name);
-            }
-        });
-
-        if ($withdrawn <= 0) {
-            return $this->error('Refund could not be applied (amount may exceed balance).', [], 422);
-        }
-
-        $wallet->refresh();
 
         return $this->success([
             'patient_id'      => $pt->id,
             'patient_name'    => $pt->name,
-            'amount_refunded' => $withdrawn,
+            'amount_refunded' => $result['refunded'],
             'wallet_balance'  => (float) $wallet->balance_total,
-        ], '₹' . number_format($withdrawn, 0) . ' refunded from ' . $pt->name . "'s wallet.", 201);
+        ], '₹' . number_format($result['refunded'], 2) . ' refunded from ' . $pt->name . "'s wallet.", 201);
     }
 
     /* =========================================================================

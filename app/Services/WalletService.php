@@ -11,6 +11,7 @@ use App\Models\Receipt;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * WalletService
@@ -498,6 +499,237 @@ class WalletService
      * credit (promotional, referral reward, admin gift) can never be withdrawn:
      * the clinic never received that money, so it cannot pay it out.
      */
+    /**
+     * A2 — a corrected tender becomes patient credit, NOT a refund.
+     *
+     * Used when a payment was really received but allocated to the wrong invoice.
+     * The cash never left the clinic, so nothing is refunded: the money reverts to
+     * what it actually is — the patient's money, held by the clinic, available for
+     * the correct invoice. source='payment_reversal' so it can never be mistaken
+     * for a refund by the ledger (which reads source='withdrawal') or by reports.
+     */
+    public function holdTenderAsCredit(
+        int     $patientId,
+        float   $amount,
+        string  $reference,
+        ?string $notes = null,
+        ?int    $createdBy = null
+    ): ?WalletTransaction {
+        if ($amount < 0.01) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($patientId, $amount, $reference, $notes, $createdBy) {
+            $wallet = Wallet::forPatient($patientId);
+
+            $tx = WalletTransaction::create([
+                'wallet_id'    => $wallet->id,
+                'patient_id'   => $patientId,
+                'direction'    => 'credit',
+                'credit_type'  => 'permanent',
+                'funding'      => self::FUNDING_PATIENT,
+                'source'       => 'payment_reversal',
+                'amount'       => $amount,
+                'notes'        => 'Payment corrected (' . $reference . ') — tender held as patient credit'
+                                  . ($notes ? '. ' . $notes : ''),
+                'created_by'   => $createdBy,
+            ]);
+
+            $wallet->recalculate();
+
+            return $tx;
+        });
+    }
+
+    /**
+     * A2 — remove patient credit that was never real money (duplicate / wrong
+     * entry being reversed).
+     *
+     * Refuses if the credit has since been consumed: reversing less than the full
+     * amount would leave the wallet and the invoices telling different stories.
+     * The caller is expected to block the whole correction on this exception.
+     *
+     * @throws ValidationException when the credit is no longer available.
+     */
+    public function reverseUnusedCredit(
+        int     $patientId,
+        float   $amount,
+        string  $reference,
+        ?int    $createdBy = null
+    ): ?WalletTransaction {
+        if ($amount < 0.01) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($patientId, $amount, $reference, $createdBy) {
+            $wallet = Wallet::forPatientLocked($patientId);
+            $wallet->recalculate();
+            $wallet->refresh();
+
+            if ((float) $wallet->balance_patient_credit + 0.009 < $amount) {
+                throw ValidationException::withMessages([
+                    'void' => 'This payment created Rs. ' . number_format($amount, 2)
+                            . ' of patient credit and only Rs. '
+                            . number_format((float) $wallet->balance_patient_credit, 2)
+                            . ' remains — the rest has already been used on another invoice. '
+                            . 'It cannot be reversed. Handle the difference as a separate, '
+                            . 'authorised refund or credit adjustment instead.',
+                ]);
+            }
+
+            $tx = WalletTransaction::create([
+                'wallet_id'    => $wallet->id,
+                'patient_id'   => $patientId,
+                'direction'    => 'debit',
+                'credit_type'  => 'permanent',
+                'funding'      => self::FUNDING_PATIENT,
+                'source'       => 'payment_reversal',
+                'amount'       => $amount,
+                'notes'        => 'Payment reversed (' . $reference . ') — credit was never received',
+                'created_by'   => $createdBy,
+            ]);
+
+            $wallet->recalculate();
+
+            return $tx;
+        });
+    }
+
+    /**
+     * A1 — FULL refund of a patient's refundable, patient-funded wallet credit.
+     *
+     * FROZEN BUSINESS RULE (Tulip Dental): wallet refunds are all-or-nothing.
+     * There is no partial refund. The operation therefore takes NO amount from
+     * the caller — it determines the refundable balance itself, under a row
+     * lock, and refunds exactly that. $expectedAmount is a confirmation value
+     * only: if a client sends one and it does not match the real refundable
+     * balance, the refund is REJECTED rather than quietly rounded to the full
+     * amount (an operator who asked for 5,000 must never be handed 10,000).
+     *
+     * Eligibility is balance_patient_credit and nothing else — money the
+     * patient actually handed over (U8 `funding='patient'`). Promotional and
+     * clinic-funded credit is a concession, never the patient's money, and can
+     * never leave the building as cash. It stays in wallet history untouched.
+     *
+     * ACCOUNTING. A refund reverses an advance; it is not a cost of doing
+     * business:
+     *
+     *   Patient advance / liability   -X   (wallet debit, funding='patient')
+     *   Cash / bank                   -X   (FinanceTransaction type='refund')
+     *   Revenue                        0   (no income row is written)
+     *   Expense                        0   (finance_expenses is never touched;
+     *                                       'refund' is its own reported type)
+     *
+     * ATOMICITY. Everything below happens in ONE transaction and every failure
+     * path THROWS rather than returning a falsy value. The predecessor
+     * (withdraw() + controller-side finance row) could silently return 0.0 and
+     * leave the caller reporting success with no ledger entry at all — cash out
+     * of the drawer, nothing on the books. That shape is deliberately gone:
+     * either all four records exist, or none do.
+     *
+     * @return array{refunded: float, transaction: WalletTransaction, finance_transaction: FinanceTransaction}
+     *
+     * @throws ValidationException when there is nothing refundable, or when a
+     *         partial amount was requested.
+     */
+    public function refundFullPatientCredit(
+        int     $patientId,
+        string  $paymentMode,
+        string  $refundDate,
+        string  $reason,
+        ?int    $createdBy = null,
+        ?float  $expectedAmount = null
+    ): array {
+        return DB::transaction(function () use (
+            $patientId, $paymentMode, $refundDate, $reason, $createdBy, $expectedAmount
+        ) {
+            // Row lock FIRST, then recompute from the ledger: two counters
+            // clicking Refund at the same moment must serialise, or the same
+            // credit is paid out twice.
+            $wallet = Wallet::forPatientLocked($patientId);
+            $wallet->recalculate();
+            $wallet->refresh();
+
+            $refundable = round((float) $wallet->balance_patient_credit, 2);
+
+            if ($refundable < 0.01) {
+                throw ValidationException::withMessages([
+                    'refund' => 'This patient has no refundable credit. '
+                              . 'Only money the patient actually paid in can be refunded — '
+                              . 'promotional and clinic-funded credit never can.',
+                ]);
+            }
+
+            if ($expectedAmount !== null && abs(round($expectedAmount, 2) - $refundable) > 0.009) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Partial wallet refunds are not supported. The full refundable '
+                              . 'balance is Rs. ' . number_format($refundable, 2)
+                              . ' and a refund must be for exactly that amount.',
+                ]);
+            }
+
+            $patient = Patient::findOrFail($patientId);
+
+            // 1. Wallet debit — the liability comes down.
+            $tx = WalletTransaction::create([
+                'wallet_id'    => $wallet->id,
+                'patient_id'   => $patientId,
+                'direction'    => 'debit',
+                'credit_type'  => 'permanent',
+                'funding'      => self::FUNDING_PATIENT,
+                'source'       => 'withdrawal',
+                'amount'       => $refundable,
+                'payment_mode' => $paymentMode,
+                'notes'        => 'Refund: ' . $reason,
+                'created_by'   => $createdBy,
+            ]);
+
+            $wallet->recalculate();
+            $wallet->refresh();
+
+            // 2. Post-condition. A full refund must leave nothing refundable.
+            //    If it does, something raced us despite the lock — roll the whole
+            //    thing back rather than hand out cash against a stale number.
+            if ((float) $wallet->balance_patient_credit > 0.009) {
+                throw new \RuntimeException(
+                    'Wallet refund aborted: patient credit did not settle to zero '
+                    . '(left Rs. ' . number_format($wallet->balance_patient_credit, 2) . ').'
+                );
+            }
+
+            // 3. Finance mirror — cash leaving. NOT an expense, NOT negative
+            //    revenue: its own 'refund' type, reported in its own column.
+            $financeTx = FinanceTransaction::create([
+                'type'              => 'refund',
+                'direction'         => 'debit',
+                'source_type'       => WalletTransaction::class,
+                'source_id'         => $tx->id,
+                'amount'            => $refundable,
+                'net_amount'        => $refundable,
+                'payment_mode'      => $paymentMode,
+                'patient_id'        => $patientId,
+                'status'            => 'active',
+                'transaction_date'  => $refundDate,
+                'notes'             => 'Wallet refund — reversal of patient advance. ' . $reason,
+                'created_by'        => $createdBy,
+            ]);
+
+            // 4. Audit.
+            if ($createdBy !== null) {
+                BillingAuditLog::record('wallet_refund', $tx,
+                    'Full refund Rs. ' . number_format($refundable, 2)
+                    . ' (' . $paymentMode . '). ' . $reason,
+                    $createdBy, 'Wallet · ' . $patient->name);
+            }
+
+            return [
+                'refunded'            => $refundable,
+                'transaction'         => $tx,
+                'finance_transaction' => $financeTx,
+            ];
+        });
+    }
+
     public function withdraw(
         int     $patientId,
         float   $amount,

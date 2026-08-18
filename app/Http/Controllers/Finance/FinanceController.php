@@ -346,10 +346,29 @@ class FinanceController extends Controller
         return back()->with('success', 'Invoice restored.');
     }
 
+    /**
+     * Restoring a receipt must undo the whole void, not just the receipt row.
+     * Voiding touches six records; the old one-liner restored one, which left the
+     * ledger showing the credit while the invoice stayed unpaid.
+     */
     public function restoreReceipt(int $id)
     {
-        Receipt::onlyTrashed()->findOrFail($id)->restore();
-        return back()->with('success', 'Receipt restored.');
+        $result = app(\App\Services\Billing\ReceiptRestoreService::class)
+            ->restore($id, auth()->id());
+
+        if ($result['already_active']) {
+            return back()->with('success', 'Receipt ' . $result['receipt']->receipt_number
+                . ' is already active — nothing changed.');
+        }
+
+        $msg = 'Receipt ' . $result['receipt']->receipt_number . ' restored. ₹'
+             . number_format($result['amount'], 2) . ' reinstated';
+
+        if ($result['invoices'] !== []) {
+            $msg .= ' against ' . implode(', ', array_unique($result['invoices']));
+        }
+
+        return back()->with('success', $msg . '.');
     }
 
     public function restoreBill(int $id)

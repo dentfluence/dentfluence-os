@@ -86,6 +86,37 @@
     <button class="btn btn-close" onclick="window.close()">Close</button>
 </div>
 
+@if($receipt->voided_at)
+    {{-- A2 — the receipt is preserved, marked, and never deleted. --}}
+    <div style="border:2px solid #b91c1c;background:#fef2f2;border-radius:10px;padding:14px 16px;margin-bottom:20px;">
+        <div style="font-size:14px;font-weight:700;color:#b91c1c;letter-spacing:1px;">REVERSED — NOT VALID</div>
+        <div style="font-size:12px;color:#7f1d1d;margin-top:4px;">
+            {{ $receipt->void_correction_type === 'not_received' ? 'Money never received — duplicate or mistaken entry' : 'Money received — held as patient credit' }}
+            · {{ $receipt->voided_at->format('d M Y H:i') }}
+        </div>
+        <div style="font-size:12px;color:#7f1d1d;margin-top:2px;">{{ $receipt->void_reason }}</div>
+    </div>
+@elseif(auth()->check() && auth()->user()->isAdminRole() && ! $isAdvance)
+    {{-- Correction, NOT refund. No money is returned by this action. --}}
+    <div class="print-actions" style="display:block;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;">
+        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:8px;">Correct / reverse this payment</div>
+        <form method="POST" action="{{ route('billing.patientReceipt.void', [$receipt->patient, $receipt]) }}"
+              onsubmit="return confirm('Reverse this payment? This corrects the accounting entry. It does NOT refund any money.');">
+            @csrf
+            <select name="correction_type" required style="width:100%;padding:7px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;margin-bottom:8px;">
+                <option value="">— Was the money actually received? —</option>
+                <option value="received">YES — the money is in hand and still owed to the patient → held as patient credit</option>
+                <option value="not_received">NO — duplicate or mistaken entry, no money arrived → no credit created</option>
+            </select>
+            <input type="text" name="void_reason" required minlength="5" maxlength="500"
+                   placeholder="Reason (required, kept in the audit trail)"
+                   style="width:100%;padding:7px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;margin-bottom:8px;">
+            <button type="submit" class="btn" style="background:#b91c1c;color:#fff;">Reverse payment</button>
+            <span style="font-size:11px;color:#64748b;margin-left:8px;">No money is refunded by this action.</span>
+        </form>
+    </div>
+@endif
+
 <div class="rcp-header">
     <div>
         <div class="clinic-name">{{ $clinic['clinic_name'] ?? config('app.name') }}</div>

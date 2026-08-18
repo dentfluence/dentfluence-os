@@ -29,6 +29,7 @@ use App\Services\Billing\TreatmentPlanBillingService;
 use App\Models\Wallet;
 use App\Services\MembershipBenefitService;
 use App\Services\Billing\PatientPaymentAllocationService;
+use App\Services\Billing\PatientPaymentVoidService;
 use App\Services\WalletService;
 use App\Services\CouponService;
 use App\Services\Relationship\ActivityEngine;
@@ -1829,6 +1830,56 @@ class BillingController extends Controller
             $msg .= ' Outstanding remaining: ₹' . number_format($result['outstanding_after'], 2) . '.';
         } else {
             $msg .= ' Outstanding cleared.';
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * A2 — correct/reverse a consolidated PAY- tender.
+     *
+     * VOID IS NOT REFUND. Nothing here returns money. Admin-only, matching the
+     * existing invoice-receipt void gate exactly — an ordinary finance-view user
+     * has no reversal authority.
+     */
+    public function voidPatientReceipt(Request $request, Patient $patient, Receipt $receipt)
+    {
+        if ((int) $receipt->patient_id !== (int) $patient->id) {
+            abort(403, 'Receipt does not belong to this patient.');
+        }
+
+        if (! auth()->user()->isAdminRole()) {
+            abort(403, 'Only admins can reverse a payment.');
+        }
+
+        $validated = $request->validate([
+            'correction_type' => 'required|in:' . implode(',', PatientPaymentVoidService::CORRECTION_TYPES),
+            'void_reason'     => 'required|string|min:5|max:500',
+        ]);
+
+        $result = app(PatientPaymentVoidService::class)->void(
+            receipt:        $receipt,
+            correctionType: $validated['correction_type'],
+            reason:         $validated['void_reason'],
+            userId:         auth()->id(),
+        );
+
+        if ($result['already_voided']) {
+            return back()->with('success',
+                'Receipt ' . $receipt->receipt_number . ' was already reversed — nothing changed.');
+        }
+
+        $msg = 'Receipt ' . $receipt->receipt_number . ' reversed. ₹'
+             . number_format($result['reversed'], 2) . ' removed from '
+             . count($result['invoices']) . ' invoice(s).';
+
+        if ($result['credit_held'] > 0) {
+            $msg .= ' ₹' . number_format($result['credit_held'], 2)
+                  . ' is now held as patient credit — apply it to the correct invoice. No refund was issued.';
+        }
+        if ($result['credit_reversed'] > 0) {
+            $msg .= ' ₹' . number_format($result['credit_reversed'], 2)
+                  . ' of patient credit removed (never received).';
         }
 
         return back()->with('success', $msg);

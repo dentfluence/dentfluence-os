@@ -25,6 +25,8 @@ class Receipt extends Model
         'balance_after',
         'notes',
         'allocation_breakdown', // consolidated patient-tender receipts only
+        // A2 — a corrected receipt is VOIDED, never deleted.
+        'voided_at', 'void_reason', 'voided_by', 'void_correction_type',
         'created_by',
         'receipt_type',   // 'patient_upfront' | 'provider_settlement' | null (regular)
     ];
@@ -32,6 +34,7 @@ class Receipt extends Model
     protected $casts = [
         'receipt_date'         => 'date',
         'allocation_breakdown' => 'array',
+        'voided_at'            => 'datetime',
         'amount'             => 'decimal:2',
         'invoice_total'      => 'decimal:2',
         'amount_paid_before' => 'decimal:2',
@@ -148,6 +151,12 @@ class Receipt extends Model
     public function isAllocation(): bool
     {
         return $this->receipt_kind !== 'advance' && $this->invoice_id === null;
+    }
+
+    /** A2 — this receipt has been corrected/reversed. History is preserved. */
+    public function isVoided(): bool
+    {
+        return $this->voided_at !== null;
     }
 
     /** U8 — true for an advance receipt (money received before any service). */

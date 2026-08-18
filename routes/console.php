@@ -425,3 +425,19 @@ Schedule::command('logs:prune --apply')
     ->withoutOverlapping()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/logs-prune.log'));
+
+/*
+|--------------------------------------------------------------------------
+| Wallet balance re-sync
+|--------------------------------------------------------------------------
+| Promotional credit expires by the calendar, not by a transaction, so cached
+| wallet balances go stale on their own overnight. Wallet::forPatient() heals a
+| wallet when someone opens it; this heals the ones nobody opens, which is what
+| the Wallet Management list and its KPI totals read.
+|
+| Changes no ledger row — only recomputes derived columns. Safe to re-run.
+| Manual: php artisan wallet:recalculate  (add --dry-run to preview)
+*/
+Schedule::command('wallet:recalculate')
+    ->dailyAt('00:30')
+    ->withoutOverlapping();

@@ -329,25 +329,55 @@
                 // itself. Disjoint from $inv->receipts by definition, so nothing
                 // can be counted twice.
                 foreach (($patientReceipts ?? collect()) as $prcpt) {
+                    // A2 — a REVERSED receipt is not a credit any more. Its
+                    // InvoicePayment rows are already gone, so still counting its
+                    // amount here would double-reverse the patient's balance. The
+                    // row stays visible for history, at zero.
+                    $prVoided = $prcpt->voided_at !== null;
                     $ledgerEntries->push([
                         'date'        => $prcpt->receipt_date,
                         'sort_key'    => $prcpt->receipt_date?->format('Y-m-d') . '_B_' . $prcpt->id,
                         'type'        => 'receipt',
                         'ref'         => $prcpt->receipt_number,
-                        'description' => $prcpt->receipt_kind === 'advance'
-                            ? 'Advance · patient credit'
-                            : 'Allocated across ' . count($prcpt->allocation_breakdown['invoices'] ?? []) . ' invoice(s)',
+                        'description' => $prVoided
+                            ? 'REVERSED — ' . $prcpt->void_reason
+                            : ($prcpt->receipt_kind === 'advance'
+                                ? 'Advance · patient credit'
+                                : 'Allocated across ' . count($prcpt->allocation_breakdown['invoices'] ?? []) . ' invoice(s)'),
                         'debit'       => 0,
-                        'credit'      => (float) $prcpt->amount,
-                        'status'      => 'paid',
+                        'credit'      => $prVoided ? 0 : (float) $prcpt->amount,
+                        'status'      => $prVoided ? 'void' : 'paid',
                         'inv'         => null,
                         'rcpt'        => $prcpt,
                         'url'         => route('billing.patientReceipt', [$patient, $prcpt]),
                     ]);
                 }
 
+                // A1 — wallet refunds. Money going BACK to the patient is a
+                // DEBIT: the clinic no longer holds it. Source is the wallet
+                // withdrawal row itself (see PatientProfileService::walletRefunds)
+                // — nothing is created here for display, and receipt voids are
+                // deliberately not swept in, so a refund can only appear once.
+                foreach (($walletRefunds ?? collect()) as $wref) {
+                    $rdate = $wref->refund_date;
+                    $ledgerEntries->push([
+                        'date'        => $rdate,
+                        'sort_key'    => ($rdate?->format('Y-m-d') ?? '') . '_C_' . $wref->id,
+                        'type'        => 'refund',
+                        'ref'         => $wref->reference_no,
+                        'description' => 'Patient credit refund'
+                            . ($wref->payment_mode ? ' · ' . ucfirst(str_replace('_', ' ', $wref->payment_mode)) : ''),
+                        'debit'       => (float) $wref->amount,
+                        'credit'      => 0,
+                        'status'      => 'refund',
+                        'inv'         => null,
+                        'rcpt'        => null,
+                        'url'         => route('finance.wallets.credit-note', [$patient, $wref]),
+                    ]);
+                }
+
                 // Deterministic order: date, then invoices (_A_) before receipts
-                // (_B_) on the same date, then id.
+                // (_B_) then refunds (_C_) on the same date, then id.
                 $ledgerEntries = $ledgerEntries->sortBy('sort_key')->values();
 
                 // Compute running balance (debit increases balance owed, credit decreases)
@@ -394,15 +424,18 @@
                             @foreach($ledgerRows as $row)
                             @php
                                 $isInvoice = $row['type'] === 'invoice';
+                                $isRefund  = $row['type'] === 'refund';
                                 $rowStatus = $row['status'];
                                 $statusBadge = match($rowStatus) {
+                                    'refund'    => ['bg-orange-50 text-orange-700 border-orange-200', 'Refunded'],
+                                    'void'      => ['bg-gray-100 text-gray-500 border-gray-300',       'Reversed'],
                                     'paid'      => ['bg-green-50 text-green-700 border-green-200',  'Paid'],
                                     'partial'   => ['bg-amber-50 text-amber-700 border-amber-200',  'Partial'],
                                     'cancelled' => ['bg-gray-100 text-gray-500 border-gray-200',    'Cancelled'],
                                     default     => ['bg-red-50 text-red-600 border-red-200',         'Unpaid'],
                                 };
                             @endphp
-                            <tr class="hover:bg-gray-50/60 {{ $isInvoice ? '' : 'bg-green-50/20' }}">
+                            <tr class="hover:bg-gray-50/60 {{ $isInvoice ? '' : ($isRefund ? 'bg-orange-50/30' : 'bg-green-50/20') }}">
                                 <td class="px-4 py-2.5 text-gray-500 whitespace-nowrap">
                                     {{ $row['date']?->format('d M Y') ?? '—' }}
                                 </td>
@@ -411,6 +444,11 @@
                                         <span class="inline-flex items-center gap-1 font-semibold text-amber-700">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z"/></svg>
                                             Invoice
+                                        </span>
+                                    @elseif($isRefund)
+                                        <span class="inline-flex items-center gap-1 font-semibold text-orange-700">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                                            Refund
                                         </span>
                                     @else
                                         <span class="inline-flex items-center gap-1 font-semibold text-green-700">
@@ -424,7 +462,7 @@
                                         <a href="{{ route('billing.show', $row['inv']) }}"
                                                 class="hover:text-[#6a0f70] hover:underline">{{ $row['ref'] }}</a>
                                     @else
-                                        @if($row['rcpt'] && $row['url'])
+                                        @if($row['url'])
                                             <a href="{{ $row['url'] }}" target="_blank"
                                                class="hover:text-green-700 hover:underline">{{ $row['ref'] }}</a>
                                         @else
@@ -454,7 +492,7 @@
                                            class="text-gray-300 hover:text-[#b45309]" title="Print Invoice">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                                         </a>
-                                    @elseif($row['rcpt'] && $row['url'])
+                                    @elseif($row['url'])
                                         <a href="{{ $row['url'] }}" target="_blank"
                                            class="text-gray-300 hover:text-green-600" title="View Receipt">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>

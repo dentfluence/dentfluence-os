@@ -132,6 +132,7 @@ class PatientPaymentAllocationService
             $actor       = $userId ? User::find($userId) : null;
             $remaining   = $tender;
             $allocations = [];
+            $paymentIds  = [];   // A2 — linked to the PAY- receipt once it exists
 
             foreach ($invoices as $invoice) {
                 if ($remaining < self::EPSILON) {
@@ -218,7 +219,8 @@ class PatientPaymentAllocationService
                     'balance_after'  => round((float) $invoice->balance_due, 2),
                 ];
 
-                $remaining = round($remaining - $take, 2);
+                $paymentIds[] = $payment->id;
+                $remaining    = round($remaining - $take, 2);
             }
 
             $settled = round(array_sum(array_column($allocations, 'amount')), 2);
@@ -273,6 +275,14 @@ class PatientPaymentAllocationService
                 ],
                 'created_by'           => $userId,
             ]);
+
+            // A2 — bind the payments to the receipt that covers them. Without this
+            // link a correction cannot know WHICH payments a PAY- receipt settled,
+            // and "reverse each allocation exactly once" becomes guesswork.
+            // Allocation behaviour itself is unchanged.
+            if ($paymentIds !== []) {
+                InvoicePayment::whereIn('id', $paymentIds)->update(['receipt_id' => $receipt->id]);
+            }
 
             return [
                 'receipt'           => $receipt,
