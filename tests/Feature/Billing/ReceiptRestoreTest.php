@@ -329,4 +329,166 @@ class ReceiptRestoreTest extends TestCase
         $this->assertNotNull(Receipt::withTrashed()->find($receipt->id)->deleted_at);
         $this->assertEqualsWithDelta(1500, $invoice->fresh()->balance_due, 0.01);
     }
+
+    // ── I: consolidated PAY- receipt — every allocation comes back ──────────
+
+    /**
+     * A PAY- receipt is patient-level: invoice_id is NULL and it owns N
+     * invoice_payments rows through invoice_payments.receipt_id. Restore must
+     * reinstate ALL of them, not the one a back-pointer happens to name.
+     *
+     * NOTE on the fixture: A2 corrects a PAY- receipt by setting voided_at and
+     * never deletes it, so production has no route that trashes one today. The
+     * trashed state is therefore constructed here directly — mirroring exactly
+     * what a soft-delete cascade would leave behind — because the service must
+     * handle the shape defensively regardless of which path produced it.
+     */
+    public function test_I_a_consolidated_receipt_restores_every_allocation(): void
+    {
+        $user     = $this->adminUser();
+        $patient  = $this->patient('Consolidated Restore');
+        $invoiceA = $this->invoiceFor($patient, 1000);
+        $invoiceB = $this->invoiceFor($patient, 500);
+
+        $this->actingAs($user)->post(route('billing.patientPayment', $patient), [
+            'amount'       => 1500,
+            'payment_mode' => 'cash',
+            'payment_date' => today()->toDateString(),
+        ])->assertRedirect();
+
+        $receipt = Receipt::where('patient_id', $patient->id)
+            ->whereNull('invoice_id')->latest('id')->firstOrFail();
+
+        $payments = InvoicePayment::where('receipt_id', $receipt->id)->get();
+        $this->assertCount(2, $payments, 'One tender should have allocated across both invoices.');
+
+        $ftBefore      = FinanceTransaction::count();
+        $paymentsBefore = InvoicePayment::withTrashed()->count();
+
+        // Trash it: income rows voided, allocations soft-deleted, receipt soft-deleted.
+        FinanceTransaction::where('source_type', InvoicePayment::class)
+            ->whereIn('source_id', $payments->pluck('id'))
+            ->update(['status' => 'voided']);
+        InvoicePayment::whereIn('id', $payments->pluck('id'))->get()
+            ->each(fn ($p) => $p->delete());
+        $receipt->delete();
+        $invoiceA->fresh()->recalculate();
+        $invoiceB->fresh()->recalculate();
+
+        $this->assertEqualsWithDelta(1000, $invoiceA->fresh()->balance_due, 0.01);
+        $this->assertEqualsWithDelta(500,  $invoiceB->fresh()->balance_due, 0.01);
+
+        $result = $this->restore($receipt->id, $user->id);
+
+        $this->assertSame(2, $result['payments_restored'],
+            'Both allocations must be reinstated, not just the back-pointed one.');
+        $this->assertTrue($result['restored']);
+        $this->assertEqualsWithDelta(1500, $result['amount'], 0.01);
+        $this->assertCount(2, $result['invoices']);
+        $this->assertEqualsWithDelta(0, $invoiceA->fresh()->balance_due, 0.01);
+        $this->assertEqualsWithDelta(0, $invoiceB->fresh()->balance_due, 0.01);
+
+        // Both allocations active again — and nothing minted to get there.
+        $this->assertSame(2, InvoicePayment::where('receipt_id', $receipt->id)->count());
+        $this->assertSame($paymentsBefore, InvoicePayment::withTrashed()->count());
+        $this->assertSame($ftBefore, FinanceTransaction::count());
+        $this->assertNull(Receipt::withTrashed()->find($receipt->id)->deleted_at);
+    }
+
+    // ── J: a failure midway leaves nothing half-restored ────────────────────
+
+    /**
+     * Rollback under partial mutation. Two allocations: the first has its income
+     * row, the second does not. The loop mutates the first, then refuses on the
+     * second. The transaction must unwind the first — a half-restored receipt is
+     * worse than one that never came back.
+     */
+    public function test_J_a_failure_midway_rolls_the_whole_restore_back(): void
+    {
+        $user     = $this->adminUser();
+        $patient  = $this->patient('Rollback Restore');
+        $invoiceA = $this->invoiceFor($patient, 1000);
+        $invoiceB = $this->invoiceFor($patient, 500);
+
+        $this->actingAs($user)->post(route('billing.patientPayment', $patient), [
+            'amount'       => 1500,
+            'payment_mode' => 'cash',
+            'payment_date' => today()->toDateString(),
+        ])->assertRedirect();
+
+        $receipt  = Receipt::where('patient_id', $patient->id)
+            ->whereNull('invoice_id')->latest('id')->firstOrFail();
+        $payments = InvoicePayment::where('receipt_id', $receipt->id)->orderBy('id')->get();
+
+        FinanceTransaction::where('source_type', InvoicePayment::class)
+            ->whereIn('source_id', $payments->pluck('id'))
+            ->update(['status' => 'voided']);
+        $payments->each(fn ($p) => $p->delete());
+        $receipt->delete();
+        $invoiceA->fresh()->recalculate();
+        $invoiceB->fresh()->recalculate();
+
+        // Destroy the SECOND allocation's income row only.
+        FinanceTransaction::where('source_type', InvoicePayment::class)
+            ->where('source_id', $payments->last()->id)
+            ->delete();
+
+        $balancesBefore = [$invoiceA->fresh()->balance_due, $invoiceB->fresh()->balance_due];
+
+        $threw = false;
+        try {
+            $this->restore($receipt->id, $user->id);
+        } catch (ValidationException $e) {
+            $threw = true;
+            $this->assertArrayHasKey('restore', $e->errors());
+        }
+        $this->assertTrue($threw, 'A missing income row must abort the restore.');
+
+        // Nothing partially applied: receipt still trashed, BOTH payments still
+        // trashed — including the one the loop had already touched.
+        $this->assertNotNull(Receipt::withTrashed()->find($receipt->id)->deleted_at);
+        foreach ($payments as $payment) {
+            $this->assertNotNull(
+                InvoicePayment::withTrashed()->find($payment->id)->deleted_at,
+                'Payment ' . $payment->id . ' was restored despite the failure.'
+            );
+        }
+        $this->assertEqualsWithDelta($balancesBefore[0], $invoiceA->fresh()->balance_due, 0.01);
+        $this->assertEqualsWithDelta($balancesBefore[1], $invoiceB->fresh()->balance_due, 0.01);
+    }
+
+    // ── K: the audit trail keeps both halves of the story ───────────────────
+
+    public function test_K_the_void_stays_on_record_and_the_restore_is_logged(): void
+    {
+        $user    = $this->adminUser();
+        $patient = $this->patient();
+        $invoice = $this->invoiceFor($patient, 1500);
+        $receipt = $this->payInvoice($user, $invoice, 1500);
+        $this->voidReceipt($user, $invoice, $receipt);
+
+        $voidLog = \App\Models\BillingAuditLog::where('action', 'void_receipt')
+            ->where('auditable_id', $receipt->id)->firstOrFail();
+
+        $this->restore($receipt->id, $user->id);
+
+        // The void entry is untouched — history is never rewritten.
+        $this->assertDatabaseHas('billing_audit_logs', [
+            'id'     => $voidLog->id,
+            'action' => 'void_receipt',
+            'reason' => $voidLog->reason,
+        ]);
+
+        // And the restore is its own entry, attributed and referenced.
+        $this->assertDatabaseHas('billing_audit_logs', [
+            'action'         => 'restore_receipt',
+            'auditable_id'   => $receipt->id,
+            'auditable_type' => Receipt::class,
+            'performed_by'   => $user->id,
+            'display_ref'    => $receipt->receipt_number,
+        ]);
+
+        $this->assertSame(1, \App\Models\BillingAuditLog::where('action', 'restore_receipt')
+            ->where('auditable_id', $receipt->id)->count());
+    }
 }
