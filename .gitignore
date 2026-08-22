@@ -44,3 +44,4 @@ node_modules/
 # Database dumps — must never reach GitHub (patient data)
 *.sql
 *.sql.gz
+_to_delete/ 
