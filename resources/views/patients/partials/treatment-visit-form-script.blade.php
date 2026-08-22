@@ -5,6 +5,9 @@ const TV_LAB_TREATMENTS = {{ Js::from($labTreatmentsMap) }};
 const TV_LAB_CATEGORIES = {{ Js::from(\App\Models\LabCase::WORK_CATEGORIES) }};
 const TV_APPOINTMENTS  = {{ Js::from($appointmentsJson) }};
 const TV_TREATMENTS    = {{ Js::from($treatmentsList) }};
+// Clinic procedure catalogue (name + price + lab flag) — the ONE list the
+// custom-procedure picker reads. See _treatment-visit-bootstrap.php.
+const TV_TREATMENT_CATALOG = {{ Js::from($treatmentsCatalog) }};
 
 function treatmentVisits() {
     return {
@@ -18,10 +21,16 @@ function treatmentVisits() {
         saving: false,
         errorMsg: '',
         editingVisit: null,
-        // Treatment typeahead
-        txSearch: '',
-        txSuggestions: [],
-        txSuggestOpen: false,
+        // Clinic procedure catalogue. The old page-level procedure typeahead
+        // (txSearch / txSuggestions / txSuggestOpen) was removed:
+        // a procedure now enters a visit through exactly TWO doors — the
+        // selected Treatment Plan, or "+ Add Custom Treatment". This list
+        // backs the per-row picker on a custom procedure only.
+        procedureCatalog: TV_TREATMENT_CATALOG,
+        // Stable id for custom procedure rows. Needed because a custom row has
+        // no plan item id to identify it by, and both the "primary treatment"
+        // marker and the x-for key must survive a row being removed.
+        _visitItemUid: 0,
         // Tooth chart state
         toothChartOpen: false,
         selectedTeeth: [],
@@ -36,7 +45,6 @@ function treatmentVisits() {
         // Plan items + visit items state
         planItems: [],
         planItemsLoading: false,
-        otherActive: false, // "Other / Not in plan" typeahead toggled on
         visitItems: [],   // billing line items (from plan + add-ons + custom)
         addonItems: [],   // layer-3 add-on procedures (lightweight, merged into visitItems on save)
         form: {},
@@ -123,9 +131,23 @@ function treatmentVisits() {
             return this.visitItems.reduce((s, i) => s + (parseFloat(i.suggested_price)||0), 0);
         },
 
-        // True when the selected treatment needs lab work
+        // True when this visit needs lab work: either the primary treatment
+        // is a lab treatment per the catalogue (unchanged behaviour), or the
+        // doctor switched "Lab Required?" ON on any procedure recorded today.
+        // There is still exactly ONE Lab Case per visit — this getter only
+        // decides whether the existing Lab Case card is revealed.
         get labNeeded() {
-            return !!(this.form.treatment_name && TV_LAB_TREATMENTS[this.form.treatment_name]);
+            if (this.form.treatment_name && TV_LAB_TREATMENTS[this.form.treatment_name]) return true;
+            return this.visitItems.some(i => i.lab_required === true);
+        },
+
+        /** What the Lab Case card names as the reason lab work is needed. */
+        get labReasonLabel() {
+            const flagged = this.visitItems
+                .filter(i => i.lab_required === true)
+                .map(i => i.treatment_name)
+                .filter(Boolean);
+            return flagged.length ? flagged.join(', ') : this.form.treatment_name;
         },
 
         // ── Redesign getters (2026-08-05) — presentation only, derived only ──
@@ -284,48 +306,100 @@ function treatmentVisits() {
             this._checkRepeatWork();
         },
 
-        // ── Treatment typeahead helpers ──
-        filterTx() {
-            const q = this.txSearch.toLowerCase().trim();
-            this.txSuggestions = q
-                ? TV_TREATMENTS.filter(t => t.toLowerCase().includes(q)).slice(0, 12)
-                : TV_TREATMENTS.slice(0, 12);
-            this.txSuggestOpen = this.txSuggestions.length > 0;
+        // ── Procedure catalogue helpers (custom procedures) ─────────────────
+        // Suggestions for ONE custom procedure row, scoped to that row's own
+        // box. There is deliberately no page-level procedure search any more.
+        procedureSuggestions(item) {
+            const q = (item._search || '').toLowerCase().trim();
+            const rows = q
+                ? this.procedureCatalog.filter(t => t.name.toLowerCase().includes(q))
+                : this.procedureCatalog;
+            return rows.slice(0, 12);
         },
-        selectTx(name) {
-            this.form.treatment_name = name;
-            this.txSearch            = name;
-            this.txSuggestOpen       = false;
-            if (this.otherActive) {
-                // Keep a single "other" billing line in sync with the typeahead pick,
-                // and make it the primary treatment (matches the old single-pick behavior).
-                this.visitItems = this.visitItems.filter(i => i._isOther !== true);
-                this.visitItems.push({
-                    _isOther:                true,
-                    treatment_plan_item_id:  null,
-                    treatment_name:          name,
-                    material_option:         '',
-                    tooth_number:            '',
-                    suggested_price:         '',
-                    notes:                   '',
-                });
-                this.form.plan_item_id = '__other__';
+
+        /**
+         * Pick a catalogue procedure for this custom row. Fills the suggested
+         * price from the catalogue (still fully editable) and pre-arms
+         * "Lab Required?" when the catalogue says the procedure needs lab work.
+         */
+        selectProcedure(item, row) {
+            item.treatment_name = row.name;
+            item._search        = row.name;
+            item._pickerOpen    = false;
+            item._inCatalog     = true;
+            if (item.suggested_price === '' || item.suggested_price === null || item.suggested_price === undefined) {
+                item.suggested_price = row.price || '';
             }
-            this.onTreatmentChange();
+            if (row.needs_lab) item.lab_required = true;
+            this._syncLabCaseFromItems();
+            this._adoptPrimaryIfFree(item);
+            this._checkRepeatWork();
         },
-        clearTx() {
-            this.form.treatment_name = '';
-            this.txSearch            = '';
-            this.txSuggestions       = [];
-            this.txSuggestOpen       = false;
-            if (this.otherActive) {
-                this.visitItems = this.visitItems.filter(i => i._isOther !== true);
-                if (this.form.plan_item_id === '__other__') {
-                    this._promoteNextPrimary();
-                    return;
+
+        /**
+         * A procedure the catalogue does not have yet. The doctor is never
+         * blocked from recording today's work — the typed name is used as-is.
+         * Writing it into the Treatments master is deliberately NOT done from
+         * a clinical form; that stays a Settings → Treatments action.
+         */
+        useTypedProcedure(item) {
+            const name = (item._search || '').trim();
+            if (!name || name === item.treatment_name) { item._pickerOpen = false; return; }
+            item.treatment_name = name;
+            item._pickerOpen    = false;
+            item._inCatalog     = this.procedureCatalog.some(t => t.name.toLowerCase() === name.toLowerCase());
+            this._syncLabCaseFromItems();
+            this._adoptPrimaryIfFree(item);
+            this._checkRepeatWork();
+        },
+
+        /**
+         * The custom procedure's own teeth changed (shared FDI picker).
+         * When that procedure is the visit's primary treatment, the visit-level
+         * tooth follows it — the Lab Case inherits ITS teeth from the visit, so
+         * a tooth picked only on the procedure would otherwise never reach lab.
+         */
+        onItemToothChange(item) {
+            if (this.isCustomItemPrimary(item)) {
+                this.form.tooth_number = item.tooth_number || '';
+                this._syncTeethFromString();
+            }
+            this._checkRepeatWork();
+        },
+
+        clearProcedure(item) {
+            const wasPrimary = this.isCustomItemPrimary(item);
+            item.treatment_name = '';
+            item._search        = '';
+            item._pickerOpen    = false;
+            item._inCatalog     = false;
+            if (wasPrimary) this._promoteNextPrimary();
+            this._syncLabCaseFromItems();
+        },
+
+        /**
+         * Per-procedure "Lab Required?" → the visit's ONE existing Lab Case.
+         * No second lab implementation: this only flips the same
+         * labCase.enabled flag the Lab Case card and the save payload already
+         * use, and seeds work_category from the catalogue when it knows one.
+         */
+        toggleItemLab(item) {
+            item.lab_required = !item.lab_required;
+            this._syncLabCaseFromItems();
+        },
+
+        _syncLabCaseFromItems() {
+            const anyLab = this.visitItems.some(i => i.lab_required === true);
+            if (anyLab) {
+                this.labCase.enabled = true;
+                if (!this.labCase.work_category) {
+                    const first = this.visitItems.find(i => i.lab_required === true);
+                    const info  = first ? TV_LAB_TREATMENTS[first.treatment_name] : null;
+                    if (info && info.work_category) this.labCase.work_category = info.work_category;
                 }
+            } else if (!this.labNeeded) {
+                this.labCase.enabled = false;
             }
-            this.onTreatmentChange();
         },
 
         _syncLabCase() {
@@ -337,8 +411,10 @@ function treatmentVisits() {
                 }
                 // Auto-enable the toggle when treatment changes to a lab-needing one
                 this.labCase.enabled = true;
-            } else {
-                // Reset if treatment changed to one without lab
+            } else if (! this.visitItems.some(i => i.lab_required === true)) {
+                // Reset ONLY when nothing recorded today asks for lab work — a
+                // per-procedure "Lab Required?" toggle must never be undone by
+                // a change of primary treatment.
                 this.labCase.enabled        = false;
                 this.labCase.work_category  = '';
                 this.labCase.work_subtype   = '';
@@ -557,7 +633,6 @@ function treatmentVisits() {
             this.form.current_stage = '';
             this.visitItems = [];
             this.planItems  = [];
-            this.otherActive = false;
             if (this.form.treatment_plan_id) this.loadPlanItems();
         },
 
@@ -611,10 +686,11 @@ function treatmentVisits() {
         },
 
         // After the primary item is removed, hand primary to whatever billing
-        // line is left (another plan item, or the "other" typeahead pick).
+        // line is left — another plan item first, otherwise a custom procedure.
         // Clears primary entirely when nothing is left selected.
         _promoteNextPrimary() {
-            const next = this.visitItems.find(i => i.treatment_plan_item_id) || this.visitItems.find(i => i._isOther);
+            const next = this.visitItems.find(i => i.treatment_plan_item_id)
+                      || this.visitItems.find(i => (i.treatment_name || '').trim());
             if (!next) {
                 this.form.plan_item_id   = '';
                 this.form.treatment_name = '';
@@ -624,12 +700,50 @@ function treatmentVisits() {
             if (next.treatment_plan_item_id) {
                 this.setPrimaryPlanItem({ id: next.treatment_plan_item_id, treatment_name: next.treatment_name });
             } else {
-                this.form.plan_item_id   = '__other__';
-                this.form.treatment_name = next.treatment_name;
-                this.form.tooth_number   = next.tooth_number || '';
-                this._syncTeethFromString();
-                this.onTreatmentChange();
+                this.setPrimaryCustomItem(next);
             }
+        },
+
+        // ── Custom procedures — the "+ Add Custom Treatment" door ────────────
+        // A custom procedure is simply a visit item with no treatment_plan_item_id.
+        // Past this point it is indistinguishable from a planned one: same array,
+        // same Recorded Items row, same Billing Preview line, same save payload.
+
+        isCustomItem(item)        { return !item.treatment_plan_item_id; },
+        isCustomItemPrimary(item) { return !!item._uid && this.form.plan_item_id === 'custom:' + item._uid; },
+
+        // Star a custom procedure as the visit's primary treatment — the one
+        // whose stage-tracker, procedure worksheet and lab prompt show.
+        setPrimaryCustomItem(item) {
+            if (!(item.treatment_name || '').trim()) return;
+            this.form.plan_item_id   = 'custom:' + item._uid;
+            this.form.treatment_name = item.treatment_name;
+            this.form.tooth_number   = item.tooth_number || '';
+            this._syncTeethFromString();
+            this.onTreatmentChange();
+        },
+
+        // The FIRST procedure recorded — planned or custom — drives the stage
+        // tracker. Never steals primary from a procedure already starred.
+        _adoptPrimaryIfFree(item) {
+            if (!this.form.plan_item_id || this.isCustomItemPrimary(item)) {
+                this.setPrimaryCustomItem(item);
+            }
+        },
+
+        // Single removal path for Recorded Items, so dropping the primary
+        // procedure hands primary on instead of leaving the stage tracker
+        // pointing at a treatment that is no longer recorded.
+        removeVisitItem(idx) {
+            const item = this.visitItems[idx];
+            if (!item) return;
+            const wasPrimary = item.treatment_plan_item_id
+                ? this.isPlanItemPrimary(item.treatment_plan_item_id)
+                : this.isCustomItemPrimary(item);
+            this.visitItems.splice(idx, 1);
+            if (wasPrimary) this._promoteNextPrimary();
+            this._syncLabCaseFromItems();
+            this._checkRepeatWork();
         },
 
         // Mark a selected plan item as the visit's primary treatment — the one
@@ -672,16 +786,10 @@ function treatmentVisits() {
             this._checkRepeatWork();
         },
 
-        // Layer-2 fallback: a treatment not listed in the accepted plan.
-        toggleOtherTreatment() {
-            this.otherActive = !this.otherActive;
-            if (!this.otherActive) {
-                this.txSearch = ''; this.txSuggestions = []; this.txSuggestOpen = false;
-                const wasPrimary = this.form.plan_item_id === '__other__';
-                this.visitItems = this.visitItems.filter(i => i._isOther !== true);
-                if (wasPrimary) this._promoteNextPrimary();
-            }
-        },
+        // (Removed) the old "Other / Not in Plan" toggle + its typeahead —
+        // a THIRD way a procedure could enter a visit, behaving unlike the
+        // other two. A treatment that is not in the plan is now added exactly
+        // like any other custom procedure, via addBillingItem() below.
 
         // Layer-3: add an add-on procedure row
         addCustomItem() {
@@ -691,17 +799,33 @@ function treatmentVisits() {
             });
         },
 
-        // Add a blank custom line — starts EXPANDED (Delta 1): a blank row
-        // has nothing to show collapsed. Plan-picked items start collapsed
-        // because they arrive complete.
+        /**
+         * Add a blank CUSTOM procedure — one of the two doors into Today's
+         * Procedures (the other is the selected Treatment Plan). Starts
+         * EXPANDED: a blank row has nothing to show collapsed, whereas a
+         * plan-picked item arrives complete and starts collapsed.
+         *
+         * Keys prefixed with _ are client-only UI state and never leave the
+         * browser (see itemPayload() in saveVisit).
+         *   teeth        — feeds the shared FDI picker (partials.tooth-chart);
+         *                  tooth stays OPTIONAL and never blocks saving.
+         *   lab_required — drives the visit's ONE existing Lab Case.
+         * material_option is deliberately absent: material / subtype belongs
+         * to the Lab Case workflow, not to a procedure line.
+         */
         addBillingItem() {
             this.visitItems.push({
+                _uid:                   ++this._visitItemUid,
                 treatment_plan_item_id: null,
                 treatment_name:  '',
-                material_option: '',
                 tooth_number:    '',
+                teeth:           [],
                 suggested_price: '',
                 notes:           '',
+                lab_required:    false,
+                _search:         '',
+                _pickerOpen:     false,
+                _inCatalog:      false,
                 _open:           true,
             });
         },
@@ -712,12 +836,10 @@ function treatmentVisits() {
             this.visitItems    = [];
             this.addonItems    = [];
             this.planItems     = [];
-            this.otherActive   = false;
             this.selectedTeeth = [];
             this.toothChartOpen = false;
             this.errorMsg = '';
             this.repeatWarnings = []; this.repeatReason = '';
-            this.txSearch = ''; this.txSuggestions = []; this.txSuggestOpen = false;
             this.labCase = { enabled: false, lab_vendor_id: '', work_category: '', work_subtype: '', priority: 'routine', expected_return_date: '', instructions: '' };
             this.nextActions = [];
             this.metaOpen = false; this.drawerOpen = false; this.vitalsOpen = false;
@@ -797,11 +919,25 @@ function treatmentVisits() {
                 weight:            visit.weight ?? '',
                 vitals_notes:      visit.vitals_notes || '',
             };
-            // Sync typeahead with existing treatment name
-            this.txSearch = visit.treatment_name || '';
-            this.txSuggestions = []; this.txSuggestOpen = false;
-            // populate visit items, addon items, plan items, and tooth chart state
-            this.visitItems = (visit.visit_items || []).map(i => ({...i}));
+            // populate visit items, addon items, plan items, and tooth chart state.
+            // Custom rows (no plan item id) are re-hydrated with the client-only
+            // UI state the picker/tooth-chart/lab toggle need — the server never
+            // stored it, and it is derived, not guessed: lab_required comes from
+            // the catalogue's own needs_lab flag for that procedure.
+            this._visitItemUid = 0;
+            this.visitItems = (visit.visit_items || []).map(i => {
+                const row = { ...i };
+                if (!row.treatment_plan_item_id) {
+                    row._uid         = ++this._visitItemUid;
+                    row._search      = row.treatment_name || '';
+                    row._pickerOpen  = false;
+                    row._inCatalog   = this.procedureCatalog.some(t =>
+                                          t.name.toLowerCase() === (row.treatment_name || '').toLowerCase());
+                    row.teeth        = this._teethSet(row.tooth_number);
+                    row.lab_required = !!TV_LAB_TREATMENTS[row.treatment_name];
+                }
+                return row;
+            });
             this.addonItems = [];
             this.planItems  = [];
             // Restore which billing line was the visit's primary treatment, matched
@@ -812,14 +948,10 @@ function treatmentVisits() {
             );
             if (primaryItem && primaryItem.treatment_plan_item_id) {
                 this.form.plan_item_id = primaryItem.treatment_plan_item_id;
-                this.otherActive = false;
             } else if (primaryItem) {
-                primaryItem._isOther = true;
-                this.form.plan_item_id = '__other__';
-                this.otherActive = true;
+                this.form.plan_item_id = 'custom:' + primaryItem._uid;
             } else {
                 this.form.plan_item_id = '';
-                this.otherActive = false;
             }
             if (this.form.treatment_plan_id) this.loadPlanItems();
             this._syncTeethFromString();
@@ -859,12 +991,10 @@ function treatmentVisits() {
             this.visitItems = [];
             this.addonItems = [];
             this.planItems  = [];
-            this.otherActive = false;
             this.selectedTeeth = [];
             this.nextActions = [];
             this.metaOpen = false; this.drawerOpen = false; this.vitalsOpen = false;
             this.repeatWarnings = []; this.repeatReason = '';
-            this.txSearch = ''; this.txSuggestions = []; this.txSuggestOpen = false;
         },
 
         async saveVisit() {
@@ -919,8 +1049,23 @@ function treatmentVisits() {
                         : { is_repeat: false, repeat_reason: null, repeat_of_visit_item_id: null };
                 };
 
+                // Only the keys the server contract knows. Client-only UI state
+                // (_open, _search, _uid, _pickerOpen, teeth, lab_required…) never
+                // leaves the browser — lab intent reaches the server through the
+                // lab_case payload below, which is the existing Lab Case channel.
+                const itemPayload = (i) => ({
+                    treatment_plan_item_id: i.treatment_plan_item_id ?? null,
+                    work_outcome:           i.work_outcome ?? null,
+                    treatment_name:         i.treatment_name,
+                    material_option:        i.material_option ?? null,
+                    tooth_number:           (i.tooth_number || '').toString().trim() || null,
+                    suggested_price:        (i.suggested_price === '' || i.suggested_price === null || i.suggested_price === undefined)
+                                                ? null : i.suggested_price,
+                    notes:                  i.notes ?? null,
+                });
+
                 const allVisitItems = [
-                    ...this.visitItems.map(i => ({ ...i, ...tagRepeat(i, i.treatment_name, i.tooth_number) })),
+                    ...this.visitItems.map(i => ({ ...itemPayload(i), ...tagRepeat(i, i.treatment_name, i.tooth_number) })),
                     ...this.addonItems.filter(a => a.treatment_name).map(a => ({
                         treatment_plan_item_id: null,
                         treatment_name:         a.treatment_name,

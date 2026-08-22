@@ -164,11 +164,25 @@ $stagesJson       = $treatmentStages;
 
 // All active treatments — select lab columns only after migration has run
 $_labColsExist  = \Illuminate\Support\Facades\Schema::hasColumn('treatments', 'needs_lab');
-$_selectCols    = $_labColsExist ? ['name','needs_lab','lab_work_category'] : ['name'];
+$_selectCols    = $_labColsExist
+                    ? ['id','name','default_price','needs_lab','lab_work_category']
+                    : ['id','name','default_price'];
 $_allTreatments = \App\Models\Treatment::where('is_active', true)
                       ->orderBy('sort_order')->orderBy('name')
                       ->get($_selectCols);
 $treatmentsList   = $_allTreatments->pluck('name')->all();
+
+// Clinic procedure catalogue for the "+ Add Custom Treatment" picker in
+// Today's Procedures. Name + catalogue price + lab flag only: picking a
+// procedure fills its Suggested Price and pre-arms the per-procedure
+// "Lab Required?" toggle, so the doctor never re-types what the catalogue
+// already knows. A procedure the catalogue does not have can still be
+// typed in and recorded -- the catalogue is a shortcut, not a gate.
+$treatmentsCatalog = $_allTreatments->map(fn($t) => [
+    'name'      => $t->name,
+    'price'     => (float) ($t->default_price ?? 0),
+    'needs_lab' => $_labColsExist ? (bool) $t->needs_lab : false,
+])->values()->all();
 
 // Map of treatment name → lab info (empty until migration runs)
 $labTreatmentsMap = $_labColsExist

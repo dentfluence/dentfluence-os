@@ -412,6 +412,12 @@
                      (renamed from "Today's Work" -- label only, zero logic
                      change); Intelligence Panel is passive system guidance,
                      visually secondary, also sticky so it stays in view. --}}
+                {{-- Shared FDI tooth-chart CSS + toothChartMixin(). @once-guarded
+                     and deliberately placed OUTSIDE every x-for, so a custom
+                     procedure's optional tooth picker reuses the SAME odontogram
+                     the Lab module already uses instead of a second one. --}}
+                @include('partials.tooth-chart-assets')
+
                 <div class="lg:grid lg:grid-cols-[3fr_4fr_3fr] lg:gap-6 lg:items-start">
 
                     {{-- LEFT 30% -- Today's Procedures. Sprint 2/Phase 2:
@@ -452,53 +458,14 @@
                             </select>
                         </div>
 
-                        {{-- SECTION 2 — Search Procedure. This is the former
-                             "No-plan fallback" typeahead block, relocated
-                             here (was after the plan-item picker) and
-                             restyled quieter/smaller so it reads as a helper,
-                             not the primary action. Phase 6 search-consistency
-                             pass: the outer plan-state x-show gate was
-                             removed so this control renders in this same
-                             slot regardless of Treatment Plan state (the eye
-                             should never have to hunt for it). Same
-                             txSearch/filterTx()/selectTx()/clearTx()/
-                             txSuggestions bindings, unchanged — selectTx()
-                             still only sets form.treatment_name/txSearch and
-                             does not push a visitItems row by itself. When a
-                             Treatment Plan IS selected, the separate "Add
-                             Custom Treatment" search entry point still stays
-                             inside Section 3 below — it could not be safely
-                             merged without changing its existing
-                             planItems.length>0 visibility rule or its
-                             otherActive-gated visitItems push, so it remains
-                             there, restyled to match. --}}
-                        <div class="col-span-2">
-                            <label class="text-[10px] font-normal text-gray-500 block mb-1">Search a procedure <span class="text-gray-500">(optional)</span></label>
-                            <div class="relative" @click.outside="txSuggestOpen = false">
-                                <div class="flex items-center gap-2 border-b border-gray-100 px-1 py-1 focus-within:border-[#6a0f70] transition-colors">
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                                    <input type="text"
-                                           x-model="txSearch"
-                                           @input="filterTx()"
-                                           @focus="filterTx(); txSuggestOpen = true"
-                                           @keydown.escape="txSuggestOpen = false"
-                                           @keydown.enter.prevent="txSuggestions.length && selectTx(txSuggestions[0])"
-                                           placeholder="Search treatment…"
-                                           class="flex-1 text-xs text-gray-500 outline-none bg-transparent"
-                                           autocomplete="off">
-                                    <button x-show="txSearch" type="button" @click="clearTx()" aria-label="Clear search"
-                                            class="text-gray-500 hover:text-gray-700 text-base leading-none flex-shrink-0">&times;</button>
-                                </div>
-                                <div x-show="txSuggestOpen && txSuggestions.length"
-                                     class="absolute left-0 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-30 max-h-48 overflow-y-auto">
-                                    <template x-for="sug in txSuggestions" :key="sug">
-                                        <button type="button" @mousedown.prevent="selectTx(sug)"
-                                                class="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 hover:text-[#6a0f70] transition-colors"
-                                                x-text="sug"></button>
-                                    </template>
-                                </div>
-                            </div>
-                        </div>
+                        {{-- (Removed) SECTION 2 — "Search a procedure". A visit
+                             now has exactly TWO doors into Today's Procedures:
+                             the selected Treatment Plan, or + Add Custom
+                             Treatment. A third, page-level procedure search that
+                             set form.treatment_name without recording a
+                             procedure was the source of the inconsistency this
+                             sprint removes. The catalogue is still reachable —
+                             it is the picker inside a custom procedure row. --}}
 
                         {{-- EMPTY STATE — shown only when nothing has been
                              recorded yet AND no plan is active (so the plan
@@ -617,48 +584,13 @@
                                             </div>
                                         </template>
                                     </div>
-                                    {{-- Fallback: treatment not in plan. Restyled quieter (Phase
-                                         3A) — could not be relocated to Section 2 without changing
-                                         its existing planItems.length>0 visibility rule, so it
-                                         stays here as the in-context "search something else"
-                                         option. Same otherActive/toggleOtherTreatment() binding. --}}
-                                    <button type="button"
-                                            @click="toggleOtherTreatment()"
-                                            :class="otherActive
-                                                ? 'bg-gray-100 border-gray-400 text-gray-700'
-                                                : 'bg-white border-dashed border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-600'"
-                                            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all">
-                                        Add Custom Treatment
-                                    </button>
+                                    {{-- (Removed) the in-panel "Add Custom Treatment"
+                                         button + its own typeahead. It duplicated the
+                                         Section 4 button below with different behaviour
+                                         (it wrote a single _isOther line). One button,
+                                         one behaviour, always visible. --}}
                                 </div>
                             </template>
-                            {{-- Typeahead when "Other" picked --}}
-                            <div x-show="otherActive" class="mt-2">
-                                <div class="relative" @click.outside="txSuggestOpen = false">
-                                    <div class="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-[#6a0f70] bg-white transition-colors">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                                        <input type="text"
-                                               x-model="txSearch"
-                                               @input="filterTx()"
-                                               @focus="filterTx(); txSuggestOpen = true"
-                                               @keydown.escape="txSuggestOpen = false"
-                                               @keydown.enter.prevent="txSuggestions.length && selectTx(txSuggestions[0])"
-                                               placeholder="Search treatment…"
-                                               class="flex-1 text-sm outline-none bg-transparent font-medium"
-                                               autocomplete="off">
-                                        <button x-show="txSearch" type="button" @click="clearTx()" aria-label="Clear search"
-                                                class="text-gray-500 hover:text-gray-700 text-lg leading-none flex-shrink-0">&times;</button>
-                                    </div>
-                                    <div x-show="txSuggestOpen && txSuggestions.length"
-                                         class="absolute left-0 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-30 max-h-48 overflow-y-auto">
-                                        <template x-for="sug in txSuggestions" :key="sug">
-                                            <button type="button" @mousedown.prevent="selectTx(sug)"
-                                                    class="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 hover:text-[#6a0f70] transition-colors"
-                                                    x-text="sug"></button>
-                                        </template>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
 
                         {{-- SECTION 5 — Recorded Items (UNIFIED WORK LIST).
@@ -677,58 +609,174 @@
                                 <span class="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-[#6a0f70] text-white text-[10px] font-bold" x-text="visitItems.length"></span>
                             </label>
                             <div class="space-y-1.5">
-                                <template x-for="(item, idx) in visitItems" :key="idx">
+                                {{-- Stable key: an index key makes Alpine reuse DOM nodes
+                                     across removals, which would strand a row's tooth
+                                     picker / catalogue box on the wrong item. --}}
+                                <template x-for="(item, idx) in visitItems"
+                                          :key="item.treatment_plan_item_id ? 'plan-' + item.treatment_plan_item_id : 'custom-' + item._uid">
                                     <div class="bg-purple-50 border border-purple-100 rounded-lg p-2 hover:border-purple-200 transition-colors">
-                                        {{-- Delta 1 (Final Freeze): collapsed one-line row; ✎ expands
-                                             the editor. _open is client-only UI state (like _isOther)
-                                             and is ignored by the server's validated() keys. --}}
+
+                                        {{-- COLLAPSED one-line row. Identical for a planned and a
+                                             custom procedure: past the point of entry the two are
+                                             the same kind of thing, only their origin differs. --}}
                                         <div x-show="!item._open" class="flex items-center gap-1.5">
-                                            <span class="text-xs font-semibold text-gray-800" x-text="item.treatment_name || '— unnamed —'"></span>
-                                            <span x-show="item.tooth_number" class="text-xs text-gray-500" x-text="'T' + item.tooth_number"></span>
-                                            <span x-show="item.material_option" class="text-xs text-gray-500" x-text="item.material_option"></span>
-                                            <span class="text-xs text-gray-600 ml-auto" x-text="'Rs. ' + fmt(item.suggested_price || 0)"></span>
+                                            {{-- Star: a custom procedure can be the visit's primary
+                                                 treatment too (plan items star from their own card
+                                                 above), so the stage tracker and procedure worksheet
+                                                 work on an unplanned visit exactly as on a planned one. --}}
+                                            <button type="button" x-show="!item.treatment_plan_item_id && item.treatment_name"
+                                                    @click="setPrimaryCustomItem(item)"
+                                                    :title="isCustomItemPrimary(item) ? 'Primary treatment for this visit' : 'Set as primary — drives stage-tracker & clinical fields'"
+                                                    :aria-label="isCustomItemPrimary(item) ? 'Primary treatment for this visit' : 'Set as primary treatment'"
+                                                    :class="isCustomItemPrimary(item) ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'"
+                                                    class="flex-shrink-0 transition-colors">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" :fill="isCustomItemPrimary(item) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                            </button>
+                                            <span class="text-xs font-semibold text-gray-800 truncate" x-text="item.treatment_name || '— unnamed —'"></span>
+                                            <span x-show="item.tooth_number" class="text-xs text-gray-500 flex-shrink-0" x-text="'T' + item.tooth_number"></span>
+                                            {{-- Legacy display only: Material / Option is no longer
+                                                 enterable anywhere — material and subtype belong to
+                                                 the Lab Case. Visits saved before this change still
+                                                 show what they already carry. --}}
+                                            <span x-show="item.material_option" class="text-xs text-gray-500 flex-shrink-0" x-text="item.material_option"></span>
+                                            <span x-show="item.lab_required" x-cloak class="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 flex-shrink-0">LAB</span>
+                                            <span class="text-xs text-gray-600 ml-auto flex-shrink-0" x-text="'Rs. ' + fmt(item.suggested_price || 0)"></span>
                                             <button type="button" @click="item._open = true"
-                                                    class="p-2 -m-1 text-gray-400 hover:text-[#6a0f70] rounded transition-colors" title="Edit item" aria-label="Edit item">
+                                                    class="p-2 -m-1 text-gray-400 hover:text-[#6a0f70] rounded transition-colors flex-shrink-0" title="Edit item" aria-label="Edit item">
                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                                             </button>
-                                            <button type="button" @click="visitItems.splice(idx, 1)"
-                                                    class="p-2 -m-1 text-red-300 hover:text-red-500 rounded transition-colors" title="Remove item" aria-label="Remove item">
+                                            <button type="button" @click="removeVisitItem(idx)"
+                                                    class="p-2 -m-1 text-red-300 hover:text-red-500 rounded transition-colors flex-shrink-0" title="Remove item" aria-label="Remove item">
                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                                             </button>
                                         </div>
+
+                                        {{-- EXPANDED editor. A custom procedure gets the catalogue
+                                             picker, the shared odontogram and the Lab Required
+                                             toggle; a plan-sourced procedure keeps the exact editor
+                                             it has always had (free-text name + free-text tooth), so
+                                             Treatment Plan behaviour is untouched. Material / Option
+                                             is gone from BOTH — it duplicated the Lab Case. --}}
                                         <div x-show="item._open" class="flex items-start gap-2">
-                                            <div class="flex-1 grid grid-cols-2 max-sm:grid-cols-1 gap-2">
+                                            <div class="flex-1 min-w-0 space-y-2">
+
+                                                {{-- Procedure --}}
                                                 <div>
-                                                    <label class="text-[10px] font-semibold text-gray-500 block mb-1">Treatment *</label>
-                                                    <input type="text" x-model="item.treatment_name" @input.debounce.400ms="_checkRepeatWork()"
-                                                           class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
-                                                           placeholder="Treatment name">
+                                                    <label class="text-[10px] font-semibold text-gray-500 block mb-1">Procedure <span class="text-red-400">*</span></label>
+
+                                                    {{-- Plan-sourced: unchanged control. --}}
+                                                    <template x-if="item.treatment_plan_item_id">
+                                                        <input type="text" x-model="item.treatment_name" @input.debounce.400ms="_checkRepeatWork()"
+                                                               class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
+                                                               placeholder="Treatment name">
+                                                    </template>
+
+                                                    {{-- Custom: pick from the clinic catalogue, or type
+                                                         a procedure the catalogue does not have yet —
+                                                         recording today's work must never be blocked on
+                                                         maintaining the master list. --}}
+                                                    <template x-if="!item.treatment_plan_item_id">
+                                                        <div class="relative" @click.outside="item._pickerOpen = false">
+                                                            <div class="flex items-center gap-1.5 border border-gray-200 rounded px-2 py-1.5 bg-white focus-within:border-[#6a0f70] transition-colors">
+                                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                                                                <input type="text"
+                                                                       x-model="item._search"
+                                                                       @focus="item._pickerOpen = true"
+                                                                       @input="item._pickerOpen = true"
+                                                                       @keydown.escape="item._pickerOpen = false"
+                                                                       @keydown.enter.prevent="const s = procedureSuggestions(item); s.length ? selectProcedure(item, s[0]) : useTypedProcedure(item)"
+                                                                       @blur="useTypedProcedure(item)"
+                                                                       placeholder="Select or type a procedure…"
+                                                                       class="flex-1 min-w-0 text-xs outline-none bg-transparent"
+                                                                       autocomplete="off">
+                                                                <button x-show="item._search" type="button" @click="clearProcedure(item)" aria-label="Clear procedure"
+                                                                        class="text-gray-400 hover:text-gray-600 text-base leading-none flex-shrink-0">&times;</button>
+                                                            </div>
+                                                            <div x-show="item._pickerOpen" x-cloak
+                                                                 class="absolute left-0 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-30 max-h-48 overflow-y-auto">
+                                                                <template x-for="row in procedureSuggestions(item)" :key="row.name">
+                                                                    <button type="button" @mousedown.prevent="selectProcedure(item, row)"
+                                                                            class="w-full flex items-center justify-between gap-2 text-left px-3 py-2 text-xs hover:bg-purple-50 hover:text-[#6a0f70] transition-colors">
+                                                                        <span class="truncate" x-text="row.name"></span>
+                                                                        <span class="text-[10px] text-gray-400 flex-shrink-0" x-show="row.price" x-text="'Rs. ' + fmt(row.price)"></span>
+                                                                    </button>
+                                                                </template>
+                                                                <div x-show="procedureSuggestions(item).length === 0" class="px-3 py-2 text-[11px] text-gray-500 leading-snug">
+                                                                    Not in the clinic catalogue. Press <strong>Enter</strong> to record it for this visit anyway.
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </template>
                                                 </div>
-                                                <div>
-                                                    <label class="text-[10px] font-semibold text-gray-500 block mb-1">Material / Option</label>
-                                                    <input type="text" x-model="item.material_option"
-                                                           class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
-                                                           placeholder="e.g. Ceramic, Zirconia">
+
+                                                <div class="grid grid-cols-2 max-sm:grid-cols-1 gap-2">
+                                                    {{-- Tooth — OPTIONAL. Scaling, a consultation and a
+                                                         full-mouth procedure have no single tooth, and
+                                                         a blank tooth never blocks saving. --}}
+                                                    <div>
+                                                        <label class="text-[10px] font-semibold text-gray-500 block mb-1">Tooth <span class="font-normal text-gray-400">(optional)</span></label>
+
+                                                        {{-- Plan-sourced: unchanged control. --}}
+                                                        <template x-if="item.treatment_plan_item_id">
+                                                            <input type="text" x-model="item.tooth_number" @input.debounce.400ms="_checkRepeatWork()"
+                                                                   class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
+                                                                   placeholder="e.g. 26">
+                                                        </template>
+
+                                                        {{-- Custom: the SAME FDI odontogram the Lab module
+                                                             uses (partials.tooth-chart). Nested x-data so
+                                                             toothChartMixin()'s toggleTooth(item, t) does
+                                                             not collide with this form's own visit-level
+                                                             toggleTooth(code) below. --}}
+                                                        <template x-if="!item.treatment_plan_item_id">
+                                                            <div x-data="toothChartMixin()" @click="$nextTick(() => onItemToothChange(item))">
+                                                                @include('partials.tooth-chart', ['target' => 'item', 'pickerId' => "'tvCustomItem'", 'buttonLabel' => 'Select tooth (optional)'])
+                                                            </div>
+                                                        </template>
+                                                    </div>
+
+                                                    {{-- Suggested Price — pre-filled from the catalogue
+                                                         when the procedure is known, always editable,
+                                                         and feeds Billing Preview + the front desk's
+                                                         billing prompt exactly like a plan procedure. --}}
+                                                    <div>
+                                                        <label class="text-[10px] font-semibold text-gray-500 block mb-1">Suggested Price (Rs. )</label>
+                                                        <input type="number" x-model="item.suggested_price" min="0"
+                                                               class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
+                                                               placeholder="0">
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <label class="text-[10px] font-semibold text-gray-500 block mb-1">Tooth #</label>
-                                                    <input type="text" x-model="item.tooth_number" @input.debounce.400ms="_checkRepeatWork()"
-                                                           class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
-                                                           placeholder="e.g. 26">
-                                                </div>
-                                                <div>
-                                                    <label class="text-[10px] font-semibold text-gray-500 block mb-1">Suggested Price (Rs. )</label>
-                                                    <input type="number" x-model="item.suggested_price" min="0"
-                                                           class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#6a0f70] bg-white"
-                                                           placeholder="0">
-                                                </div>
+
+                                                {{-- Lab Required? — OFF unless the catalogue says this
+                                                     procedure needs lab work. ON reveals the existing
+                                                     Lab Case card (right column); there is no second
+                                                     lab implementation and no per-item lab fields. --}}
+                                                <template x-if="!item.treatment_plan_item_id">
+                                                    <div>
+                                                        <div class="flex items-center justify-between gap-2">
+                                                            <span class="text-[10px] font-semibold text-gray-500">Lab Required?</span>
+                                                            <button type="button" @click="toggleItemLab(item)"
+                                                                    :aria-pressed="item.lab_required ? 'true' : 'false'"
+                                                                    aria-label="Lab required for this procedure"
+                                                                    :class="item.lab_required ? 'bg-amber-600 border-amber-700' : 'bg-white border-gray-300'"
+                                                                    class="relative inline-flex h-5 w-9 items-center rounded-full border-2 transition-colors flex-shrink-0">
+                                                                <span :class="item.lab_required ? 'translate-x-4 bg-white' : 'translate-x-0.5 bg-gray-300'"
+                                                                      class="inline-block h-3.5 w-3.5 transform rounded-full transition-transform"></span>
+                                                            </button>
+                                                        </div>
+                                                        <p x-show="item.lab_required" x-cloak class="text-[10px] text-amber-700 mt-1">
+                                                            Fill the lab details in the <strong>Lab Case</strong> card on the right.
+                                                        </p>
+                                                    </div>
+                                                </template>
+
                                             </div>
                                             <div class="mt-5 flex-shrink-0 flex flex-col gap-1">
                                                 <button type="button" @click="item._open = false"
                                                         class="p-2 -m-1 text-gray-400 hover:text-[#6a0f70] hover:bg-purple-50 rounded transition-colors" title="Done editing" aria-label="Done editing">
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                                 </button>
-                                                <button type="button" @click="visitItems.splice(idx, 1)"
+                                                <button type="button" @click="removeVisitItem(idx)"
                                                         class="p-2 -m-1 text-red-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="Remove item" aria-label="Remove item">
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                                                 </button>
@@ -1050,7 +1098,7 @@
                         <div class="flex items-center justify-between gap-2 mb-2">
                             <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 min-w-0">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>
-                                Required — <span class="truncate" x-text="form.treatment_name"></span>
+                                Required — <span class="truncate" x-text="labReasonLabel"></span>
                             </span>
                             <button type="button" @click="labCase.enabled = !labCase.enabled"
                                     :class="labCase.enabled ? 'bg-amber-600 border-amber-700' : 'bg-white border-amber-300'"
