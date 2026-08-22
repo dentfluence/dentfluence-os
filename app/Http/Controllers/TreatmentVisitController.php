@@ -57,6 +57,10 @@ class TreatmentVisitController extends Controller
         return response()->json([
             'success' => true,
             'visit'   => $this->service->format($visit),
+            // The visit just saved is history for the next one. Returning the
+            // recomputed map keeps repeat-work detection correct without a
+            // page reload, and without the browser deriving progress itself.
+            'procedure_progress' => $this->progressMapFor($patient->id),
         ]);
     }
 
@@ -68,7 +72,21 @@ class TreatmentVisitController extends Controller
         return response()->json([
             'success' => true,
             'visit'   => $this->service->format($visit),
+            'procedure_progress' => $this->progressMapFor($visit->patient_id),
         ]);
+    }
+
+    /**
+     * Canonical per-(procedure, tooth) clinical progress for this patient.
+     * Asked of DerivedProgressService, never computed here — see that class's
+     * frozen invariant.
+     *
+     * @return array<string,string>
+     */
+    private function progressMapFor(int $patientId): array
+    {
+        return app(\App\Services\Clinical\DerivedProgressService::class)
+            ->deriveProcedureProgressForPatient($patientId);
     }
 
     public function destroy(TreatmentVisit $visit): JsonResponse

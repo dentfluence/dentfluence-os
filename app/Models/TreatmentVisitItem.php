@@ -16,11 +16,22 @@ class TreatmentVisitItem extends Model
     public const WORK_WORKED_ON       = 'worked_on';
     public const WORK_COMPLETED_TODAY = 'completed_today';
 
-    /** Dentist-facing wording. Internal keys are never shown. */
+    /**
+     * Dentist-facing wording. Internal keys are never shown, and the key for
+     * the final state stays `completed_today` so no stored row has to move.
+     *
+     * The label reads "Treatment Complete", not "Completed Today", because
+     * that is what it actually means to every reader downstream: clinical
+     * progress is derived latest-fact-wins, so the newest outcome on a
+     * (procedure, tooth) IS its current state. Ticking this at the last visit
+     * of a course finishes that course; ticking "Worked On" at a later visit
+     * re-opens it. The old wording read as "done for today", which is how a
+     * mid-course RCT ended up being flagged as repeat work.
+     */
     public const WORK_OUTCOMES = [
         self::WORK_STARTED         => 'Started',
         self::WORK_WORKED_ON       => 'Worked On',
-        self::WORK_COMPLETED_TODAY => 'Completed Today',
+        self::WORK_COMPLETED_TODAY => 'Treatment Complete',
     ];
 
     protected $fillable = [

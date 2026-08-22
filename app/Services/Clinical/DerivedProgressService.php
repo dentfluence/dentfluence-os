@@ -33,6 +33,7 @@ use Illuminate\Support\Collection;
  *
  * READS ONLY:
  *   treatment_visit_items.work_outcome        (the captured clinical fact)
+ *   treatment_visit_items.treatment_name / tooth_number  (repeat-work lookup only)
  *   treatment_visit_items.treatment_plan_item_id
  *   treatment_visits.deleted_at               (validity)
  *   plan_decisions / plan_decision_items      (scope — what the patient agreed to)
@@ -117,6 +118,84 @@ class DerivedProgressService
         return $this->deriveTreatmentPlanProgress($plan)->hasAllWorkRecorded();
     }
 
+    /**
+     * Latest derived progress for every (procedure, tooth) pair this patient
+     * has on record — plan-linked AND ad-hoc work alike.
+     *
+     * This is precisely the question repeat-work detection asks: "is the
+     * previous instance of this procedure on this tooth actually FINISHED?"
+     * It is answered HERE, in the one service permitted to derive clinical
+     * progress, so the visit form never re-implements latest-fact-wins in
+     * JavaScript. A second derivation would be a second truth.
+     *
+     * Keys are "<lowercased treatment name>|<tooth token>". An item recorded
+     * against several teeth ("16, 17") registers under each tooth separately,
+     * because a treatment is finished per tooth, not per line. Items carrying
+     * no tooth register under an empty tooth token.
+     *
+     * A procedure with NO recorded outcome does not appear in the map at all.
+     * Absence therefore reads as "not finished", which is the safe answer:
+     * unfinished treatment is a continuation, never repeat work.
+     *
+     * @param  int|null  $excludeVisitId  the visit being edited — its own rows
+     *                                    are today's work, not history.
+     * @return array<string,string>  key => ClinicalProgress value
+     */
+    public function deriveProcedureProgressForPatient(int $patientId, ?int $excludeVisitId = null): array
+    {
+        $query = $this->baseValidFactsQuery()
+            ->where('treatment_visit_items.patient_id', $patientId)
+            ->orderBy('treatment_visits.visit_date')
+            ->orderBy('treatment_visit_items.id');
+
+        if ($excludeVisitId !== null) {
+            $query->where('treatment_visit_items.treatment_visit_id', '!=', $excludeVisitId);
+        }
+
+        $rows = $query->get([
+            'treatment_visit_items.id',
+            'treatment_visit_items.treatment_name',
+            'treatment_visit_items.tooth_number',
+            'treatment_visit_items.work_outcome',
+        ]);
+
+        $grouped = [];
+
+        foreach ($rows as $row) {
+            foreach (self::teethTokens($row->tooth_number) as $tooth) {
+                $grouped[self::procedureKey($row->treatment_name, $tooth)][] = $row;
+            }
+        }
+
+        $out = [];
+
+        foreach ($grouped as $key => $facts) {
+            $out[$key] = $this->progressFromFacts(collect($facts))->value;
+        }
+
+        return $out;
+    }
+
+    /**
+     * "RCT" + "46" -> "rct|46". The ONE place this key is built; the visit
+     * form mirrors it in JS and the tests pin the two together.
+     */
+    public static function procedureKey(?string $treatmentName, ?string $tooth): string
+    {
+        return mb_strtolower(trim((string) $treatmentName)) . '|' . trim((string) $tooth);
+    }
+
+    /** "16, 17" -> ['16','17']; blank -> ['']. */
+    private static function teethTokens(?string $toothNumber): array
+    {
+        $tokens = array_values(array_filter(
+            array_map('trim', preg_split('/[,\s]+/', (string) $toothNumber) ?: []),
+            fn ($t) => $t !== ''
+        ));
+
+        return $tokens === [] ? [''] : $tokens;
+    }
+
     // ── Validity — encapsulated. No caller may know these rules. ─────────────
 
     /**
@@ -131,11 +210,24 @@ class DerivedProgressService
      */
     private function validFactsQuery()
     {
+        return $this->baseValidFactsQuery()
+            ->whereNotNull('treatment_visit_items.treatment_plan_item_id');
+    }
+
+    /**
+     * Validity WITHOUT the plan-item requirement.
+     *
+     * Plan progress is only ever about plan items, so validFactsQuery() above
+     * keeps that constraint. Repeat-work detection is not: a walk-in RCT is
+     * still a real clinical fact about a real tooth, and asking "was the
+     * previous one finished?" must see it.
+     */
+    private function baseValidFactsQuery()
+    {
         return TreatmentVisitItem::query()
             ->join('treatment_visits', 'treatment_visits.id', '=', 'treatment_visit_items.treatment_visit_id')
             ->whereNull('treatment_visits.deleted_at')
-            ->whereNotNull('treatment_visit_items.work_outcome')
-            ->whereNotNull('treatment_visit_items.treatment_plan_item_id');
+            ->whereNotNull('treatment_visit_items.work_outcome');
     }
 
     /**

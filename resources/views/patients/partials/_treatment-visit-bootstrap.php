@@ -140,6 +140,7 @@ $visitsJson = $patient->treatmentVisits->map(function($v) use ($_rxCollection, $
             'tooth_number'           => $i->tooth_number,
             'suggested_price'        => (float)$i->suggested_price,
             'billing_status'         => $i->billing_status,
+            'work_outcome'           => $i->work_outcome,
             'notes'                  => $i->notes,
             'is_repeat'              => (bool)$i->is_repeat,
             'repeat_reason'          => $i->repeat_reason,
@@ -204,6 +205,13 @@ $labVendorsList     = \App\Models\LabVendor::where('is_active', true)->orderBy('
 // canonical Derived Progress Service, which answers from recorded clinical
 // work. Nothing is derived here; this only asks.
 $_progress = app(\App\Services\Clinical\DerivedProgressService::class);
+
+// Canonical clinical progress per (procedure, tooth) for THIS patient, keyed
+// "rct|46". Repeat-work detection in the visit form reads this map instead of
+// deciding for itself whether past work was finished -- one derivation, one
+// owner (DerivedProgressService). A procedure with no recorded outcome is
+// simply absent, which reads as "not finished", which is the safe answer.
+$procedureProgressJson = $_progress->deriveProcedureProgressForPatient($patient->id);
 
 $treatmentPlansJson = ($patient->treatmentPlans ?? collect())
     ->filter(fn($p) => !is_null($p->accepted_at))

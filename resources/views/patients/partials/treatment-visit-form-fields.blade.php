@@ -639,6 +639,7 @@
                                                  the Lab Case. Visits saved before this change still
                                                  show what they already carry. --}}
                                             <span x-show="item.material_option" class="text-xs text-gray-500 flex-shrink-0" x-text="item.material_option"></span>
+                                            <span x-show="item.work_outcome" x-cloak class="text-[9px] font-bold text-[#6a0f70] bg-purple-100 border border-purple-200 rounded px-1 flex-shrink-0" x-text="workOutcomes[item.work_outcome]"></span>
                                             <span x-show="item.lab_required" x-cloak class="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 flex-shrink-0">LAB</span>
                                             <span class="text-xs text-gray-600 ml-auto flex-shrink-0" x-text="'Rs. ' + fmt(item.suggested_price || 0)"></span>
                                             <button type="button" @click="item._open = true"
@@ -746,6 +747,34 @@
                                                                placeholder="0">
                                                     </div>
                                                 </div>
+
+                                                {{-- Treatment status — the SAME three clinical facts a
+                                                     plan procedure records, now available on ad-hoc work
+                                                     too. THIS is how a doctor tells Dentfluence a
+                                                     treatment is finished: the latest outcome recorded
+                                                     for a procedure on a tooth IS its current state, and
+                                                     repeat-work detection reads exactly that. Leaving it
+                                                     blank records no claim, and the treatment stays open
+                                                     — which is why a mid-course RCT is never flagged. --}}
+                                                <template x-if="!item.treatment_plan_item_id">
+                                                    <div>
+                                                        <label class="text-[10px] font-semibold text-gray-500 block mb-1">Treatment status <span class="font-normal text-gray-400">(optional)</span></label>
+                                                        <div class="flex flex-wrap items-center gap-1.5">
+                                                            <template x-for="(label, key) in workOutcomes" :key="'custom-outcome-' + key">
+                                                                <button type="button" @click="setItemOutcome(item, key)"
+                                                                        :class="itemOutcomeFor(item) === key
+                                                                            ? 'bg-[#6a0f70] border-[#380740] text-white'
+                                                                            : 'bg-white border-gray-200 text-gray-500 hover:border-[#6a0f70]'"
+                                                                        class="px-2.5 py-1 text-[11px] font-semibold border rounded-md transition-colors">
+                                                                    <span x-text="label"></span>
+                                                                </button>
+                                                            </template>
+                                                        </div>
+                                                        <p x-show="itemOutcomeFor(item) === 'completed_today'" x-cloak class="text-[10px] text-green-700 mt-1">
+                                                            Marks this procedure finished on this tooth. Recording it again later will be flagged as possible repeat work.
+                                                        </p>
+                                                    </div>
+                                                </template>
 
                                                 {{-- Lab Required? — OFF unless the catalogue says this
                                                      procedure needs lab work. ON reveals the existing
@@ -1195,7 +1224,7 @@
                      allPlannedCompletedToday getter. --}}
                 <div x-show="form.treatment_plan_id" x-cloak class="bg-white border border-gray-200 rounded-lg shadow-sm px-4 py-3.5">
                     <div class="tv-section-legend">Treatment Completion</div>
-                    <p x-show="allPlannedCompletedToday && !form.mark_treatment_complete" class="text-[11px] font-semibold text-green-700 mb-2">All planned work today is marked “Completed Today”.</p>
+                    <p x-show="allPlannedCompletedToday && !form.mark_treatment_complete" class="text-[11px] font-semibold text-green-700 mb-2">All planned work today is marked “Treatment Complete”.</p>
                     <div class="space-y-1.5">
                         <button type="button" @click="form.mark_treatment_complete = false"
                                 class="w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-colors"

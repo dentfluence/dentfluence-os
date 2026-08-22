@@ -591,13 +591,14 @@ class TreatmentVisitService
             $visit->visitItems()->create([
                 'patient_id'             => $visit->patient_id,
                 'treatment_plan_item_id' => $row['treatment_plan_item_id'] ?? null,
-                // Slice 2.4b — only meaningful for planned work. Ad-hoc "Other"
-                // treatments carry no plan item, so there is nothing to say
-                // "today's work" about; the outcome stays null rather than
-                // inventing one.
-                'work_outcome'           => ! empty($row['treatment_plan_item_id'])
-                                                ? ($row['work_outcome'] ?? null)
-                                                : null,
+                // Slice 2.4b originally NULLed this for ad-hoc work, on the
+                // reasoning that an outcome is only meaningful against a plan
+                // item. That was wrong in one important way: a walk-in RCT is
+                // still a real treatment on a real tooth, and with no outcome
+                // it could never be marked finished — so repeat-work detection
+                // could never tell a continuation from a genuine repeat on it.
+                // The dentist's own answer is recorded whatever the origin.
+                'work_outcome'           => $row['work_outcome'] ?? null,
                 'treatment_name'         => $row['treatment_name'],
                 'material_option'        => $row['material_option'] ?? null,
                 'tooth_number'           => $row['tooth_number'] ?? null,

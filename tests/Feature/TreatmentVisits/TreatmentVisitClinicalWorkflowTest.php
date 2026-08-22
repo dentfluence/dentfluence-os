@@ -210,7 +210,7 @@ class TreatmentVisitClinicalWorkflowTest extends TestCase
 
     // ── work_outcome ─────────────────────────────────────────────────────────
 
-    public function test_work_outcome_is_persisted_for_planned_items_and_nulled_for_adhoc_items(): void
+    public function test_work_outcome_is_persisted_for_planned_and_adhoc_items_alike(): void
     {
         $user    = $this->makeUser();
         $patient = $this->makePatient();
@@ -225,9 +225,10 @@ class TreatmentVisitClinicalWorkflowTest extends TestCase
                     'work_outcome'           => 'completed_today',
                 ],
                 [
-                    // Ad-hoc item — no plan link. Per TreatmentVisitService::
-                    // saveVisitItems(), work_outcome must be forced to null
-                    // here even though the client sent one.
+                    // Ad-hoc item — no plan link. Since 2026-08-22 its outcome
+                    // is kept: without one, ad-hoc work can never be marked
+                    // finished, and repeat-work detection cannot distinguish a
+                    // continuation from a genuine repeat.
                     'treatment_name' => 'Fluoride Application',
                     'work_outcome'   => 'started',
                 ],
@@ -241,7 +242,7 @@ class TreatmentVisitClinicalWorkflowTest extends TestCase
         $this->assertDatabaseHas('treatment_visit_items', [
             'treatment_name'         => 'Fluoride Application',
             'treatment_plan_item_id' => null,
-            'work_outcome'           => null,
+            'work_outcome'           => 'started',
         ]);
     }
 

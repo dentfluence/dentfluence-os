@@ -8,6 +8,10 @@ const TV_TREATMENTS    = {{ Js::from($treatmentsList) }};
 // Clinic procedure catalogue (name + price + lab flag) — the ONE list the
 // custom-procedure picker reads. See _treatment-visit-bootstrap.php.
 const TV_TREATMENT_CATALOG = {{ Js::from($treatmentsCatalog) }};
+// Canonical clinical progress per "procedure|tooth" for this patient, derived
+// SERVER-side by DerivedProgressService. Repeat-work detection reads it; it
+// never derives completion for itself. See _checkRepeatWork().
+const TV_PROCEDURE_PROGRESS = {{ Js::from($procedureProgressJson) }};
 
 function treatmentVisits() {
     return {
@@ -27,6 +31,8 @@ function treatmentVisits() {
         // selected Treatment Plan, or "+ Add Custom Treatment". This list
         // backs the per-row picker on a custom procedure only.
         procedureCatalog: TV_TREATMENT_CATALOG,
+        // Server-derived, read-only. Absent key = no finished work on record.
+        procedureProgress: TV_PROCEDURE_PROGRESS,
         // Stable id for custom procedure rows. Needed because a custom row has
         // no plan item id to identify it by, and both the "primary treatment"
         // marker and the x-for key must survive a row being removed.
@@ -493,6 +499,22 @@ function treatmentVisits() {
                         const overlap = this._teethSet(p.tooth).filter(t => teeth.includes(t));
                         overlap.forEach(t => {
                             const key = curName + '|' + t;
+
+                            // ── THE COMPLETION GATE ──────────────────────────
+                            // Repeat work means doing again something that was
+                            // FINISHED. A course of treatment still under way
+                            // is a continuation, and warning about it — then
+                            // demanding a written justification — teaches
+                            // doctors to dismiss the warning, which is how a
+                            // safety check stops being one.
+                            //
+                            // `procedureProgress` is derived server-side on the
+                            // canonical latest-valid-fact-wins rule. An absent
+                            // key means no outcome was ever recorded for this
+                            // procedure on this tooth, which reads as "not
+                            // finished" — the safe answer.
+                            if (this.procedureProgress[key] !== 'completed') return;
+
                             const existing = found[key];
                             if (!existing || (v.visit_date && v.visit_date > existing.date)) {
                                 found[key] = {
@@ -644,6 +666,18 @@ function treatmentVisits() {
         // Three words, no enums, no lifecycle. "Completed Today" means this
         // treatment finished at THIS visit — it does not close the plan.
         workOutcomes: @js(\App\Models\TreatmentVisitItem::WORK_OUTCOMES),
+
+        // Outcome on a CUSTOM procedure row. Plan-sourced rows are addressed
+        // by plan item id (workOutcomeFor / setWorkOutcome below); a custom row
+        // has no plan item, so it is addressed by the row itself. Same field,
+        // same three values, same downstream derivation.
+        itemOutcomeFor(item) {
+            return item.work_outcome || null;
+        },
+
+        setItemOutcome(item, key) {
+            item.work_outcome = (item.work_outcome === key) ? null : key;   // click again to clear
+        },
 
         workOutcomeFor(pi) {
             const row = this.visitItems.find(i => i.treatment_plan_item_id == pi.id);
@@ -1111,6 +1145,11 @@ function treatmentVisits() {
                 });
                 const data = await resp.json();
                 if (!resp.ok || !data.success) throw new Error(data.message || 'Save failed.');
+
+                // The visit just saved becomes history for the NEXT visit, so
+                // take the server's recomputed progress map rather than
+                // inferring the change here.
+                if (data.procedure_progress) this.procedureProgress = data.procedure_progress;
 
                 if (isEdit) {
                     const idx = this.visits.findIndex(v => v.id === this.editingVisit.id);

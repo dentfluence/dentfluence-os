@@ -189,7 +189,7 @@ class ClinicalWorkCaptureTest extends TestCase
 
     // ── Visits without plans are untouched ───────────────────────────────────
 
-    public function test_an_ad_hoc_visit_still_works_exactly_as_before(): void
+    public function test_an_ad_hoc_visit_records_no_outcome_unless_the_dentist_gives_one(): void
     {
         $patient = $this->patient();
 
@@ -201,19 +201,31 @@ class ClinicalWorkCaptureTest extends TestCase
         $item = TreatmentVisitItem::where('treatment_visit_id', $visit->id)->firstOrFail();
 
         $this->assertNull($item->treatment_plan_item_id);
-        $this->assertNull($item->work_outcome, 'ad-hoc work has no planned outcome to record');
+        // Silence is still silence: no outcome sent, no claim recorded. What
+        // changed (2026-08-22) is only that ad-hoc work MAY now carry one.
+        $this->assertNull($item->work_outcome);
     }
 
-    public function test_an_outcome_sent_for_unplanned_work_is_ignored_not_stored(): void
+    /**
+     * REVERSED 2026-08-22. Slice 2.4b discarded an outcome on unplanned work,
+     * reasoning that an outcome is only meaningful against a plan item.
+     *
+     * That cost more than it saved: with no outcome, a walk-in RCT could never
+     * be marked finished, so repeat-work detection could not tell a
+     * continuation of unfinished treatment from a genuine repeat — and it
+     * warned on both. The dentist's answer is recorded whatever the origin.
+     */
+    public function test_an_outcome_given_for_unplanned_work_is_now_stored(): void
     {
         $patient = $this->patient();
 
         $visit = $this->recordVisit($patient, null, [[
             'treatment_name' => 'Scaling',
-            'work_outcome'   => TreatmentVisitItem::WORK_COMPLETED_TODAY,   // nonsense without a plan item
+            'work_outcome'   => TreatmentVisitItem::WORK_COMPLETED_TODAY,
         ]]);
 
-        $this->assertNull(
+        $this->assertSame(
+            TreatmentVisitItem::WORK_COMPLETED_TODAY,
             TreatmentVisitItem::where('treatment_visit_id', $visit->id)->value('work_outcome'),
         );
     }
@@ -253,8 +265,12 @@ class ClinicalWorkCaptureTest extends TestCase
 
     public function test_the_dentist_only_ever_sees_three_plain_words(): void
     {
+        // "Completed Today" became "Treatment Complete" on 2026-08-22. The
+        // stored key is unchanged; only the word the dentist reads moved, and
+        // it moved because the old one described the visit while the value
+        // describes the treatment.
         $this->assertSame(
-            ['Started', 'Worked On', 'Completed Today'],
+            ['Started', 'Worked On', 'Treatment Complete'],
             array_values(TreatmentVisitItem::WORK_OUTCOMES),
         );
     }
