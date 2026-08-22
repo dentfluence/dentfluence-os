@@ -134,7 +134,7 @@ class ConsultationController extends Controller
             $this->quickSave->createFromPanel($request, $patient, [
                 'consultation_id' => $consultation->id,
                 'chief_complaint' => $consultation->chief_complaint,
-                'diagnosis'       => $consultation->primary_diagnosis,
+                'diagnosis'       => \Illuminate\Support\Str::limit((string) ($consultation->provisional_diagnosis ?: $consultation->primary_diagnosis), 240),
                 'source'          => Prescription::SOURCE_CONSULTATION,
             ], self::RX_NOTE_FIELD);
         }
@@ -417,7 +417,7 @@ class ConsultationController extends Controller
         if ($this->quickSave->panelHasDrugRows($request)) {
             $context = [
                 'chief_complaint' => $consultation->chief_complaint,
-                'diagnosis'       => $consultation->primary_diagnosis,
+                'diagnosis'       => \Illuminate\Support\Str::limit((string) ($consultation->provisional_diagnosis ?: $consultation->primary_diagnosis), 240),
             ];
 
             $existingRx = Prescription::where('consultation_id', $consultation->id)
@@ -519,6 +519,7 @@ class ConsultationController extends Controller
             'update_notes'            => 'required|string',
             'additional_findings'     => 'nullable|string',
             'primary_diagnosis'       => 'nullable|string',
+            'treatment_advised'       => 'nullable|string',
             'diagnosis_notes'         => 'nullable|string',
             'finishing_notes'         => 'nullable|string',
             // LEGACY (retired 2026-07-31, kept for rollback — see ConsultationController LEGACY block below)
@@ -597,6 +598,7 @@ class ConsultationController extends Controller
             'hopi_final'              => 'nullable|string',
             'additional_findings'     => 'nullable|string',
             'primary_diagnosis'       => 'nullable|string',
+            'treatment_advised'       => 'nullable|string',
             'diagnosis_notes'         => 'nullable|string',
             'finishing_notes'         => 'nullable|string',
             // previous_consultation_id is deliberately NOT accepted on update —
@@ -641,6 +643,7 @@ class ConsultationController extends Controller
             'chief_complaint'             => 'nullable|string',
             'hopi_final'                  => 'nullable|string',
             'primary_diagnosis'           => 'nullable|string',
+            'treatment_advised'           => 'nullable|string',
             'clinical_data'               => 'nullable|array',
             // Slice 1 fix (2026-08-01): the view used to post a single name="advice"
             // textarea duplicated across both the clinic-related and external/walk-in
@@ -748,6 +751,7 @@ class ConsultationController extends Controller
             'chief_complaint'             => 'nullable|string',
             'hopi_final'                  => 'nullable|string',
             'primary_diagnosis'           => 'nullable|string',
+            'treatment_advised'           => 'nullable|string',
             'clinical_data'               => 'nullable|array',
             'advice_clinic_related'       => 'nullable|string',
             'advice_external'             => 'nullable|string',
@@ -799,6 +803,7 @@ class ConsultationController extends Controller
             'hopi_final'                   => 'nullable|string',
             'clinical_data'                => 'nullable|array',
             'primary_diagnosis'            => 'nullable|string',
+            'treatment_advised'            => 'nullable|string',
             'emergency_treatment_rendered' => 'required|string',
             'advice'                       => 'nullable|string',
             'finishing_notes'              => 'nullable|string',
@@ -840,7 +845,7 @@ class ConsultationController extends Controller
             $this->quickSave->createFromPanel($request, $patient, [
                 'consultation_id' => $consultation->id,
                 'chief_complaint' => $consultation->chief_complaint,
-                'diagnosis'       => $consultation->primary_diagnosis,
+                'diagnosis'       => \Illuminate\Support\Str::limit((string) ($consultation->provisional_diagnosis ?: $consultation->primary_diagnosis), 240),
                 'source'          => Prescription::SOURCE_CONSULTATION,
             ], self::RX_NOTE_FIELD);
         }
@@ -889,6 +894,7 @@ class ConsultationController extends Controller
             'hopi_final'                   => 'nullable|string',
             'clinical_data'                => 'nullable|array',
             'primary_diagnosis'            => 'nullable|string',
+            'treatment_advised'            => 'nullable|string',
             'emergency_treatment_rendered' => 'required|string',
             'advice'                       => 'nullable|string',
             'finishing_notes'              => 'nullable|string',
@@ -902,7 +908,7 @@ class ConsultationController extends Controller
         if ($this->quickSave->panelHasDrugRows($request)) {
             $context = [
                 'chief_complaint' => $consultation->chief_complaint,
-                'diagnosis'       => $consultation->primary_diagnosis,
+                'diagnosis'       => \Illuminate\Support\Str::limit((string) ($consultation->provisional_diagnosis ?: $consultation->primary_diagnosis), 240),
             ];
 
             $existingRx = Prescription::where('consultation_id', $consultation->id)

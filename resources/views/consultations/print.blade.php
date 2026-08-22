@@ -388,14 +388,14 @@
 @if($hasDiagnosis)
 <div class="cp-section">
     <div class="cp-section-title">Provisional Diagnosis</div>
-    @if(filled($consultation->primary_diagnosis))
-    <div class="cp-row">
-        <span class="cp-label">Primary</span><span class="cp-colon">:</span>
-        <span class="cp-value" style="font-weight:600;">{{ $consultation->primary_diagnosis }}</span>
-    </div>
-    @endif
-    @if(filled($consultation->provisional_diagnosis))
-    <div class="cp-value" style="font-size:12.5px;">{{ $consultation->provisional_diagnosis }}</div>
+    {{-- 2026-08-22: ONE diagnosis line only. create.blade.php mirrors the single
+         Provisional Diagnosis textarea into primary_diagnosis via a hidden input,
+         so both columns hold identical text and the case paper printed it twice.
+         Prefer provisional (the field the doctor actually types into); fall back
+         to primary for older rows saved before the mirror existed. --}}
+    @php $cpDiagnosis = $consultation->provisional_diagnosis ?: $consultation->primary_diagnosis; @endphp
+    @if(filled($cpDiagnosis))
+    <div class="cp-value" style="font-size:12.5px;font-weight:600;">{{ $cpDiagnosis }}</div>
     @endif
     @if(filled($consultation->secondary_diagnosis))
     <div class="cp-row">
@@ -481,8 +481,20 @@
             <tr>
                 <td style="color:#94a3b8;">{{ $i + 1 }}.</td>
                 <td>
-                    <span class="rx-drug">{{ $item->drug_name ?: ($item->drug?->brand_name ?? '—') }}</span>
-                    @if($item->strength)<div class="rx-sub">{{ $item->strength }}{{ $item->dosage_form ? ' · '.$item->dosage_form : '' }}</div>@endif
+                    @php
+                        // Matches prescriptions/print.blade.php — the case paper
+                        // previously showed the bare name and buried the form in
+                        // the sub-line, with no fallback to the linked drug.
+                        $rxName = $item->drug_name ?: ($item->drug?->brand_name ?? '—');
+                        $rxForm = $item->dosage_form ?: ($item->drug?->dosage_form ?? '');
+                        $rxAbbr = \App\Support\DosageForm::abbreviate($rxForm);
+                        // Strength is often already inside the name ("Flexon 400+325mg").
+                        // Only repeat it underneath when it is not.
+                        $rxStrength = ($item->strength && stripos($rxName, (string) $item->strength) === false)
+                                        ? $item->strength : null;
+                    @endphp
+                    <span class="rx-drug">{{ $rxAbbr ? $rxAbbr.' ' : '' }}{{ $rxName }}</span>
+                    @if($rxStrength)<div class="rx-sub">{{ $rxStrength }}</div>@endif
                     @if($item->food_advice || $item->instructions)<div class="rx-sub">@if($item->food_advice){{ $item->food_advice }}@endif @if($item->instructions)· {{ $item->instructions }}@endif</div>@endif
                 </td>
                 <td style="text-align:center;white-space:nowrap;">
@@ -507,6 +519,14 @@
         <span class="cp-value">{{ $prescription->general_instructions }}</span>
     </div>
     @endif
+</div>
+@endif
+
+{{-- ── Treatment Advised ── --}}
+@if(filled($consultation->treatment_advised))
+<div class="cp-section">
+    <div class="cp-section-title">Treatment Advised</div>
+    <div class="cp-value" style="font-size:12.5px;white-space:pre-line;">{{ $consultation->treatment_advised }}</div>
 </div>
 @endif
 

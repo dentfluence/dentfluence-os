@@ -56,6 +56,7 @@ class StoreConsultationRequest extends FormRequest
 
             // 3-stage diagnosis
             'provisional_diagnosis'       => ['nullable', 'string'],
+            'treatment_advised'           => ['nullable', 'string'],
             'differential_diagnosis'      => ['nullable', 'string'],
             // primary_diagnosis is already declared below as the final diagnosis field
 

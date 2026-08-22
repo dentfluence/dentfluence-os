@@ -804,6 +804,13 @@
                                 {{-- Mirror to primary_diagnosis so controller/show pages still work --}}
                                 <input type="hidden" name="primary_diagnosis" :value="diagText">
                             </div>
+                            {{-- Treatment Advised (2026-08-22) — was previously typed
+                                 into Examination Findings because it had no field. --}}
+                            <div>
+                                <label class="df-label">Treatment Advised</label>
+                                <textarea name="treatment_advised" class="df-input" rows="4"
+                                          placeholder="e.g. RCT followed by core build-up and crown w.r.t. #17&#10;Extraction of #18 after reassessment&#10;Full-mouth scaling and periodontal evaluation">{{ old('treatment_advised', $consultation?->treatment_advised ?? '') }}</textarea>
+                            </div>
                             {{-- Consult Assist one-click suggestions --}}
                             <div>
                                 <label class="df-label">
