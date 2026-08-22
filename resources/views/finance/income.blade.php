@@ -296,11 +296,11 @@
     <div class="bg-white border border-[#e8d5f0] p-4">
         <p class="text-xs text-gray-500 uppercase tracking-widest mb-3">Payment Mode Breakdown — Selected Period</p>
         <div class="flex flex-wrap gap-4">
-            @foreach(['cash','card','upi','cheque','netbanking','emi','other'] as $m)
+            @foreach(\App\Enums\PaymentMode::values() as $m)
                 @if(isset($byMode[$m]))
                 <div class="flex items-center gap-2">
-                    <span class="inline-block w-3 h-3 rounded-full" style="background:{{ match($m){'cash'=>'#16a34a','upi'=>'#7c3aed','card'=>'#2563eb','cheque'=>'#d97706','netbanking'=>'#0891b2','emi'=>'#db2777',default=>'#6b7280'} }}"></span>
-                    <span class="text-sm text-gray-700 capitalize">{{ $m }}</span>
+                    <span class="inline-block w-3 h-3 rounded-full" style="background:{{ match($m){'cash'=>'#16a34a','upi'=>'#7c3aed','card'=>'#2563eb','debit_card'=>'#3b82f6','cheque'=>'#d97706','bank_transfer'=>'#0891b2','emi'=>'#db2777','wallet'=>'#14b8a6',default=>'#6b7280'} }}"></span>
+                    <span class="text-sm text-gray-700">{{ \App\Enums\PaymentMode::labelFor($m) }}</span>
                     <span class="text-sm font-semibold text-gray-900">Rs. {{ number_format($byMode[$m]->total, 0) }}</span>
                     <span class="text-xs text-gray-400">({{ $byMode[$m]->cnt }})</span>
                 </div>
@@ -353,8 +353,8 @@
                         @else<span class="text-gray-400">—</span>@endif
                     </td>
                     <td class="px-4 py-3">
-                        @php $modeColors=['cash'=>'green','upi'=>'purple','card'=>'blue','cheque'=>'yellow','netbanking'=>'cyan','emi'=>'pink','other'=>'gray']; $c=$modeColors[$payment->payment_mode]??'gray'; @endphp
-                        <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-{{ $c }}-100 text-{{ $c }}-700 capitalize">{{ str_replace('_',' ',$payment->payment_mode) }}</span>
+                        @php $modeColors=['cash'=>'green','upi'=>'purple','card'=>'blue','debit_card'=>'blue','cheque'=>'yellow','bank_transfer'=>'cyan','emi'=>'pink','wallet'=>'teal','other'=>'gray']; $c=$modeColors[$payment->payment_mode]??'gray'; @endphp
+                        <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-{{ $c }}-100 text-{{ $c }}-700">{{ \App\Enums\PaymentMode::labelFor($payment->payment_mode) }}</span>
                     </td>
                     <td class="px-4 py-3 text-xs text-gray-500 font-mono">{{ $payment->reference_no ?? '—' }}</td>
                     <td class="px-4 py-3 text-right font-semibold text-gray-900">Rs. {{ number_format($payment->amount, 2) }}</td>

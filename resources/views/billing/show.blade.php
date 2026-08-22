@@ -526,15 +526,10 @@
                 <label class="block text-xs font-medium text-gray-600 mb-1">Payment Mode <span class="text-red-500">*</span></label>
                 <select name="payment_mode" id="pmtMode" required onchange="onModeChange()"
                         class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                    <option value="cash"          @selected(old('payment_mode','cash')==='cash')>Cash</option>
-                    <option value="upi"           @selected(old('payment_mode')==='upi')>UPI</option>
-                    <option value="card"          @selected(old('payment_mode')==='card')>Credit Card</option>
-                    <option value="debit_card"    @selected(old('payment_mode')==='debit_card')>Debit Card</option>
-                    <option value="netbanking"    @selected(old('payment_mode')==='netbanking')>Net Banking</option>
-                    <option value="bank_transfer" @selected(old('payment_mode')==='bank_transfer')>Bank Transfer</option>
-                    <option value="cheque"        @selected(old('payment_mode')==='cheque')>Cheque</option>
-                    <option value="emi"           @selected(old('payment_mode')==='emi')>EMI</option>
-                    <option value="other"         @selected(old('payment_mode')==='other')>Other</option>
+                    @foreach (\App\Enums\PaymentMode::options(['wallet']) as $pm)
+                        <option value="{{ $pm['value'] }}"
+                            @selected(old('payment_mode', 'cash') === $pm['value'])>{{ $pm['label'] }}</option>
+                    @endforeach
                 </select>
             </div>
 
@@ -833,7 +828,7 @@ function onModeChange() {
     const mode = document.getElementById('pmtMode').value;
     hide('fieldRefNo'); hide('fieldCreditCard'); hide('fieldCheque'); hide('fieldEmi');
 
-    if (['upi','netbanking','bank_transfer'].includes(mode)) show('fieldRefNo');
+    if (['upi','bank_transfer'].includes(mode)) show('fieldRefNo');
     if (mode === 'card')   { show('fieldCreditCard'); onAmountChange(); }
     if (mode === 'cheque') show('fieldCheque');
     if (mode === 'emi')    show('fieldEmi');

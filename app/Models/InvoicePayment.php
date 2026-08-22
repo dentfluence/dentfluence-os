@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Finance\FinanceBankAccount;
+use App\Enums\PaymentMode;
 
 class InvoicePayment extends Model
 {
@@ -70,18 +71,9 @@ class InvoicePayment extends Model
         return (float) $this->amount + (float) ($this->convenience_fee ?? 0);
     }
 
+    /** A3 — one vocabulary. Historical values still render via labelFor(). */
     public function modeLabel(): string
     {
-        return match($this->payment_mode) {
-            'cash'          => 'Cash',
-            'card'          => 'Credit Card',
-            'debit_card'    => 'Debit Card',
-            'upi'           => 'UPI',
-            'cheque'        => 'Cheque',
-            'netbanking'    => 'Net Banking',
-            'bank_transfer' => 'Bank Transfer',
-            'emi'           => 'EMI',
-            default         => ucfirst($this->payment_mode),
-        };
+        return PaymentMode::labelFor($this->payment_mode);
     }
 }

@@ -90,7 +90,7 @@
     <thead><tr><th>Mode</th><th class="r">Count</th><th class="r">Amount (&#8377;)</th></tr></thead>
     <tbody>
     @foreach($data['byMode'] as $m)
-    <tr><td>{{ ucfirst($m->payment_mode) }}</td><td class="r">{{ $m->cnt }}</td><td class="r">{{ number_format($m->total, 0) }}</td></tr>
+    <tr><td>{{ \App\Enums\PaymentMode::labelFor($m->payment_mode) }}</td><td class="r">{{ $m->cnt }}</td><td class="r">{{ number_format($m->total, 0) }}</td></tr>
     @endforeach
     </tbody>
   </table>

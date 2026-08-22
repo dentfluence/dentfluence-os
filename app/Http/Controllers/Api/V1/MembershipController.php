@@ -10,6 +10,7 @@ use App\Models\Finance\MembershipBenefitLog;
 use App\Services\MembershipBenefitService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Enums\PaymentMode;
 
 /**
  * MembershipController (API v1)
@@ -21,7 +22,12 @@ use Illuminate\Http\Request;
  */
 class MembershipController extends ApiController
 {
-    private const PAYMENT_MODES = ['cash', 'upi', 'card', 'debit_card', 'netbanking', 'bank_transfer'];
+    // A3 — derived from the canonical enum. EMI and wallet are not offered
+    // for an enrolment fee; that exclusion predates A3 and is unchanged.
+    private static function paymentModes(): array
+    {
+        return array_values(array_diff(PaymentMode::values(), ['wallet', 'emi']));
+    }
 
     /** Active membership plan master (for the enroll form). */
     public function plans(Request $request): JsonResponse
@@ -33,7 +39,7 @@ class MembershipController extends ApiController
 
         return $this->success([
             'plans'         => $rows,
-            'payment_modes' => self::PAYMENT_MODES,
+            'payment_modes' => self::paymentModes(),
         ], '');
     }
 
@@ -117,7 +123,7 @@ class MembershipController extends ApiController
         $data = $request->validate([
             'plan_id'                   => 'required|exists:finance_membership_plans,id',
             'amount_paid'               => 'required|numeric|min:0',
-            'payment_mode'              => 'required|in:' . implode(',', self::PAYMENT_MODES),
+            'payment_mode'              => 'required|' . PaymentMode::rule(['wallet', 'emi']),
             'family_head_membership_id' => 'nullable|exists:finance_patient_memberships,id',
             'family_name'               => 'nullable|string|max:100',
             'start_date'                => 'nullable|date|before_or_equal:today',

@@ -198,7 +198,7 @@
     <div class="amount-block">
         <div class="lbl">Amount Received</div>
         <div class="amt">Rs. {{ number_format($receipt->amount, 2) }}</div>
-        <div class="mode">{{ strtoupper($receipt->payment_mode) }}</div>
+        <div class="mode">{{ strtoupper(\App\Enums\PaymentMode::labelFor($receipt->payment_mode)) }}</div>
     </div>
 
     {{-- Invoice summary --}}

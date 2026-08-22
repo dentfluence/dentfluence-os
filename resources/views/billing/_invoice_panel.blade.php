@@ -212,256 +212,17 @@
     <div id="panelPayForm" class="hidden border border-gray-200 rounded-xl p-4 space-y-3 mb-4">
         <p class="text-xs font-semibold text-gray-600 mb-2">Record Payment — Balance: <span class="text-red-500 font-bold">Rs. {{ number_format($invoice->balance_due, 2) }}</span></p>
 
-        <form method="POST" action="{{ route('billing.payment', $invoice) }}" id="panelPaymentForm">
-            @csrf
-            <input type="hidden" name="from_patient" value="{{ $fromPatient }}">
-            <input type="hidden" name="emi_type" id="pEmiType" value="direct">
-
-            {{-- Amount + Date --}}
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-xs font-medium text-gray-500 mb-1">Amount (Rs. ) *</label>
-                    <input type="number" name="amount" id="pAmount" required
-                           value="{{ $invoice->balance_due }}" min="0.01" step="0.01"
-                           oninput="pOnAmountChange()"
-                           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-gray-500 mb-1">Date *</label>
-                    <input type="date" name="payment_date" id="pDate" required
-                           value="{{ now()->format('Y-m-d') }}"
-                           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                </div>
-            </div>
-
-            {{-- Mode --}}
-            <div>
-                <label class="block text-xs font-medium text-gray-500 mb-1">Mode *</label>
-                <select name="payment_mode" id="pMode" required onchange="pOnModeChange()"
-                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                    <option value="cash">Cash</option>
-                    <option value="upi">UPI</option>
-                    <option value="card">Credit Card</option>
-                    <option value="debit_card">Debit Card</option>
-                    <option value="netbanking">Net Banking</option>
-                    <option value="bank_transfer">Bank Transfer</option>
-                    <option value="cheque">Cheque</option>
-                    <option value="emi">EMI</option>
-                    <option value="other">Other</option>
-                </select>
-            </div>
-
-            {{-- Reference (UPI / bank) --}}
-            <div id="pFieldRef" class="hidden">
-                <label class="block text-xs font-medium text-gray-500 mb-1">Transaction Reference No. *</label>
-                <input type="text" name="reference_no" placeholder="UTR / Transaction ID"
-                       class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-            </div>
-
-            {{-- Credit card fee --}}
-            <div id="pFieldCC" class="hidden space-y-2">
-                <div id="pCcFeePanel" class="hidden bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs">
-                    <div class="flex justify-between font-semibold text-amber-800">
-                        <span>Convenience Fee ({{ rtrim(rtrim(number_format((float) \App\Models\AppSetting::get('cc_convenience_rate', 2.5), 2), '0'), '.') }}%)</span>
-                        <span id="pCcFeeAmt">Rs. 0.00</span>
-                    </div>
-                    <p class="text-amber-600 mt-0.5">Applied on credit card payments above Rs. {{ number_format((float) \App\Models\AppSetting::get('cc_convenience_threshold', 10000), 0) }}.</p>
-                    <input type="hidden" name="convenience_fee" id="pConvFee" value="0">
-                </div>
-                <div id="pCcSplitWarn" class="hidden bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">
-                    Split transaction detected. The 2.5% fee is calculated on the combined daily total for this patient.
-                </div>
-            </div>
-
-            {{-- Cheque fields --}}
-            <div id="pFieldCheque" class="hidden space-y-2">
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Bank Name *</label>
-                        <input type="text" name="bank_name" placeholder="HDFC Bank"
-                               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Cheque No. *</label>
-                        <input type="text" name="cheque_no"
-                               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-gray-500 mb-1">Cheque Date *</label>
-                    <input type="date" name="cheque_date"
-                           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                </div>
-                <div class="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-xs text-yellow-800">
-                    <p class="font-semibold">Cheque Policy</p>
-                    <p class="mt-0.5">Receipt generated only after realisation. Bounce charges apply on dishonoured cheques.</p>
-                </div>
-            </div>
-
-            {{-- EMI section --}}
-            <div id="pFieldEmi" class="hidden space-y-3">
-                {{-- Sub-type toggle --}}
-                <div class="flex gap-2">
-                    <button type="button" id="pBtnDirect" onclick="pSwitchEmi('direct')"
-                            class="flex-1 py-2 text-xs font-semibold rounded-lg border border-purple-600 bg-purple-600 text-white">
-                        Direct EMI<br>
-                        <span class="font-normal opacity-80">Clinic collects instalments</span>
-                    </button>
-                    <button type="button" id="pBtnProvider" onclick="pSwitchEmi('provider')"
-                            class="flex-1 py-2 text-xs font-semibold rounded-lg border border-purple-200 bg-white text-purple-700 {{ $activeEmiProviders->isEmpty() ? 'opacity-40 cursor-not-allowed' : '' }}"
-                            {{ $activeEmiProviders->isEmpty() ? 'disabled title="No EMI providers configured in Settings"' : '' }}>
-                        Provider EMI<br>
-                        <span class="font-normal opacity-80">Provider pays clinic upfront</span>
-                    </button>
-                </div>
-
-                {{-- Direct EMI fields --}}
-                <div id="pDirectFields" class="space-y-2">
-                    <div>
-                        <label class="block text-xs text-gray-500 mb-1">Financer / Bank (optional)</label>
-                        <input type="text" name="emi_provider" placeholder="e.g. HDFC Card EMI, SBI EMI..."
-                               class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400">
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-xs text-gray-500 mb-1">Tenure (months) *</label>
-                            <select name="emi_tenure" id="pEmiTenure" onchange="pCalcEmi()"
-                                    class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
-                                <option value="">Select…</option>
-                                @foreach([3,6,9,12,18,24,36,48,60] as $m)
-                                <option value="{{ $m }}">{{ $m }} months</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-500 mb-1">Interest % p.a. *</label>
-                            <input type="number" name="emi_interest_rate" id="pEmiRate"
-                                   value="0" min="0" max="36" step="0.01" oninput="pCalcEmi()"
-                                   class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-xs text-gray-500 mb-1">First Auto-Debit Date *</label>
-                        <input type="date" name="emi_start_date" id="pEmiStart" onchange="pCalcEmi()"
-                               class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
-                    </div>
-                    {{-- Calc result --}}
-                    <div id="pEmiResult" class="hidden bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs space-y-1">
-                        <div class="flex justify-between font-semibold text-purple-800">
-                            <span>Monthly EMI</span><span id="pEmiMonthly">—</span>
-                        </div>
-                        <div class="flex justify-between text-purple-600">
-                            <span>Total Payable</span><span id="pEmiTotal">—</span>
-                        </div>
-                        <div class="flex justify-between text-purple-600">
-                            <span>Total Interest</span><span id="pEmiInterest">—</span>
-                        </div>
-                    </div>
-                    {{-- Schedule preview --}}
-                    <div id="pEmiScheduleWrap" class="hidden">
-                        <div class="flex items-center justify-between mb-1">
-                            <span class="text-xs font-medium text-gray-600">Instalment Schedule</span>
-                            <button type="button" onclick="pToggleEmiSchedule()" id="pEmiToggleBtn"
-                                    class="text-xs text-purple-600 hover:underline">Show</button>
-                        </div>
-                        <div id="pEmiScheduleTable" class="hidden overflow-x-auto rounded-lg border border-purple-100">
-                            <table class="w-full text-xs">
-                                <thead class="bg-purple-50">
-                                    <tr>
-                                        <th class="px-2 py-1.5 text-left text-purple-700">#</th>
-                                        <th class="px-2 py-1.5 text-left text-purple-700">Due Date</th>
-                                        <th class="px-2 py-1.5 text-right text-purple-700">Principal</th>
-                                        <th class="px-2 py-1.5 text-right text-purple-700">Interest</th>
-                                        <th class="px-2 py-1.5 text-right text-purple-700">EMI</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="pEmiScheduleBody" class="divide-y divide-purple-50 bg-white"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Provider EMI fields --}}
-                <div id="pProviderFields" class="hidden space-y-2">
-                    <div>
-                        <label class="block text-xs text-gray-500 mb-1">EMI Provider *</label>
-                        <select id="pProviderSel" onchange="pLoadSchemes()"
-                                class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
-                            <option value="">— Select Provider —</option>
-                            @foreach($activeEmiProviders as $ep)
-                            <option value="{{ $ep->id }}">{{ $ep->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div id="pSchemeWrap" class="hidden">
-                        <label class="block text-xs text-gray-500 mb-1">Scheme *</label>
-                        <select name="emi_provider_scheme_id" id="pSchemeSel" onchange="pApplyScheme()"
-                                class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
-                            <option value="">— Select Scheme —</option>
-                        </select>
-                    </div>
-                    {{-- Provider breakdown card --}}
-                    <div id="pProviderBreakdown" class="hidden bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-xs space-y-1">
-                        <p class="text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-1">Scheme Breakdown</p>
-                        <div class="flex justify-between text-indigo-900">
-                            <span>Patient Monthly EMI</span><span id="pPbMonthly" class="font-bold">—</span>
-                        </div>
-                        <div id="pPbUpfrontRow" class="hidden flex justify-between text-amber-700">
-                            <span>Upfront today (<span id="pPbUpfrontCount">0</span> EMI)</span>
-                            <span id="pPbUpfront" class="font-semibold">—</span>
-                        </div>
-                        <div class="border-t border-indigo-200 pt-1 mt-1 space-y-0.5">
-                            <div class="flex justify-between text-gray-500">
-                                <span>Clinic interest cost</span><span id="pPbClinicInterest">—</span>
-                            </div>
-                            <div class="flex justify-between text-gray-500">
-                                <span>GST on interest (18%)</span><span id="pPbGstInterest">—</span>
-                            </div>
-                            <div class="flex justify-between text-gray-600 font-medium">
-                                <span>Provider deduction</span><span id="pPbDeduction" class="text-red-500">—</span>
-                            </div>
-                        </div>
-                        <div class="border-t border-indigo-200 pt-1">
-                            <div class="flex justify-between text-green-700 font-semibold">
-                                <span>Clinic net amount</span><span id="pPbNet">—</span>
-                            </div>
-                        </div>
-                        <div id="pPbConvRow" class="hidden border-t border-amber-200 pt-1">
-                            <div class="flex justify-between text-amber-700 font-semibold">
-                                <span>Convenience charge (patient pays)</span><span id="pPbConv">—</span>
-                            </div>
-                            <div class="flex justify-between text-amber-900 font-bold">
-                                <span>Receipt total</span><span id="pPbReceiptTotal">—</span>
-                            </div>
-                            <input type="hidden" name="convenience_fee" id="pProvConvFee" value="0">
-                        </div>
-                        <input type="hidden" name="emi_upfront_amount" id="pProvUpfront" value="0">
-                        <p class="text-xs text-indigo-500 mt-1">
-                            Receipt #1 (upfront) is generated now for what the patient pays today. Receipt #2 (settlement) is generated when you click "Mark Provider Payment Received".
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            {{-- Notes --}}
-            <div>
-                <label class="block text-xs font-medium text-gray-500 mb-1">Notes</label>
-                <textarea name="notes" rows="2"
-                          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"></textarea>
-            </div>
-
-            <div class="flex gap-2 pt-1">
-                <button type="submit"
-                        class="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold text-sm rounded-lg">
-                    Save Payment
-                </button>
-                <button type="button"
-                        onclick="document.getElementById('panelPayForm').classList.add('hidden');document.querySelector('#panelPaySection button').classList.remove('hidden')"
-                        class="flex-1 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">
-                    Cancel
-                </button>
-            </div>
-        </form>
+        {{-- A3 follow-up stage 1: the per-invoice payment form now lives in ONE
+             partial. Ids and handler names are unchanged (prefix 'p'), so the
+             panel's existing JavaScript binds to exactly the same elements. --}}
+        @include('billing.partials.record-payment-form', [
+            'invoice'     => $invoice,
+            'idPrefix'    => 'p',
+            'fnPrefix'    => 'p',
+            'formId'      => 'panelPaymentForm',
+            'action'      => route('billing.payment', $invoice),
+            'fromPatient' => $fromPatient,
+        ])
     </div>
 </div>
 @endif
@@ -492,7 +253,7 @@ const ph = id => { const e = document.getElementById(id); if(e) e.classList.add(
 function pOnModeChange() {
     const mode = document.getElementById('pMode').value;
     ph('pFieldRef'); ph('pFieldCC'); ph('pFieldCheque'); ph('pFieldEmi');
-    if (['upi','netbanking','bank_transfer'].includes(mode)) ps('pFieldRef');
+    if (['upi','bank_transfer'].includes(mode)) ps('pFieldRef');
     if (mode === 'card')   { ps('pFieldCC'); pOnAmountChange(); }
     if (mode === 'cheque') ps('pFieldCheque');
     if (mode === 'emi')    ps('pFieldEmi');
@@ -506,8 +267,14 @@ function pOnAmountChange() {
         document.getElementById('pCcFeeAmt').textContent = 'Rs. ' + fee.toFixed(2);
         document.getElementById('pConvFee').value = fee;
         ps('pCcFeePanel');
+        // What the patient actually pays — amount + fee. billing/show has always
+        // shown this line; the panel did not, so the same card payment looked
+        // different depending on which screen you opened it from.
+        document.getElementById('pCcTotalAmt').textContent = 'Rs. ' + (amt + fee).toFixed(2);
+        ps('pCcTotal');
     } else {
         ph('pCcFeePanel');
+        ph('pCcTotal');
         document.getElementById('pConvFee').value = 0;
     }
 }

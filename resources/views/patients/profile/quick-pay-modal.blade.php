@@ -5,7 +5,9 @@
 @endphp
 
 <div id="quickPayModal"
-     class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+     {{-- z must clear the topbar (120) and mobile drawer (130) from layouts/app.blade.php;
+          at z-[60] the topbar painted OVER this modal and sliced its header. --}}
+     class="hidden fixed inset-0 z-[140] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
      onclick="if(event.target===this)closeQuickPayModal()">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]">
 
@@ -42,14 +44,9 @@
                         <div>
                             <label class="block text-xs font-medium text-gray-600 mb-1">Mode</label>
                             <select name="payment_mode" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
-                                <option value="cash">Cash</option>
-                                <option value="upi">UPI</option>
-                                <option value="card">Credit Card</option>
-                                <option value="debit_card">Debit Card</option>
-                                <option value="netbanking">Net Banking</option>
-                                <option value="bank_transfer">Bank Transfer</option>
-                                <option value="cheque">Cheque</option>
-                                <option value="other">Other</option>
+                                @foreach (\App\Enums\PaymentMode::options(['wallet', 'emi']) as $pm)
+                                    <option value="{{ $pm['value'] }}">{{ $pm['label'] }}</option>
+                                @endforeach
                             </select>
                         </div>
                     </div>
@@ -99,14 +96,14 @@
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-600 mb-1">Payment Mode</label>
-                            <select name="payment_mode" required
+                            <select name="payment_mode" id="fifoMode" required onchange="fifoOnModeChange()"
                                     class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
-                                <option value="cash">Cash</option>
-                                <option value="upi">UPI</option>
-                                <option value="card">Card</option>
-                                <option value="bank_transfer">Bank Transfer</option>
-                                <option value="cheque">Cheque</option>
-                                <option value="other">Other</option>
+                                {{-- A3 — driven by the allocator's own ALLOWED_MODES so this
+                                     picker can never offer a mode FIFO will reject. Narrower
+                                     than the canonical set by design. --}}
+                                @foreach (\App\Services\Billing\PatientPaymentAllocationService::ALLOWED_MODES as $pmv)
+                                    <option value="{{ $pmv }}">{{ \App\Enums\PaymentMode::labelFor($pmv) }}</option>
+                                @endforeach
                             </select>
                         </div>
                         <div>
@@ -120,6 +117,32 @@
                                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
                         </div>
                     </div>
+                    {{-- Cheque details. The allocator already persists bank_name /
+                         cheque_no / cheque_date / cheque_status and recordPatientPayment
+                         already validates them — this form simply never rendered them. --}}
+                    <div id="fifoCheque" class="hidden grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Bank Name</label>
+                            <input type="text" name="bank_name" placeholder="HDFC Bank" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Cheque No.</label>
+                            <input type="text" name="cheque_no" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Cheque Date</label>
+                            <input type="date" name="cheque_date" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+                        </div>
+                    </div>
+
+                    {{-- A3.x — Credit Card and EMI are not offered here at all. Say why,
+                         permanently, so staff are not left hunting for a missing option.
+                         The list itself comes from ALLOWED_MODES, so it cannot drift. --}}
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[11px] text-amber-800">
+                        Credit Card payments are available when paying a single invoice.
+                        For multiple outstanding invoices, please pay invoices individually.
+                    </div>
+
                     <p class="text-[11px] text-gray-500 leading-relaxed">
                         Pays the oldest outstanding invoice first. Anything left over after every
                         invoice is settled is held as Patient Credit — it is not counted as income.
@@ -187,221 +210,20 @@
                     </div>
                 </div>
 
-                <form method="POST" id="qpPayForm">
-                    @csrf
-                    <input type="hidden" name="from_patient" value="{{ $patient->id }}">
-                    <input type="hidden" name="emi_type" id="qpEmiType" value="direct">
-
-                    {{-- Amount + Date --}}
-                    <div class="grid grid-cols-2 gap-3 mb-3">
-                        <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">Amount (Rs. ) *</label>
-                            <input type="number" name="amount" id="qpAmount" required min="0.01" step="0.01"
-                                   oninput="qpOnAmountChange()"
-                                   class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">Date *</label>
-                            <input type="date" name="payment_date" id="qpDate" required
-                                   value="{{ now()->format('Y-m-d') }}"
-                                   class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                        </div>
-                    </div>
-
-                    {{-- Mode --}}
-                    <div class="mb-3">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Payment Mode *</label>
-                        <div class="grid grid-cols-4 gap-1.5">
-                            @foreach(['cash'=>'Cash','upi'=>'UPI','card'=>'Credit Card','cheque'=>'Cheque','netbanking'=>'NetBank','debit_card'=>'Debit Card','bank_transfer'=>'Transfer','emi'=>'EMI'] as $val => $lbl)
-                            <label class="flex items-center justify-center text-center px-1 py-2 text-[10px] font-medium border border-gray-200 rounded-lg cursor-pointer hover:border-green-400 hover:bg-green-50 has-[:checked]:border-green-500 has-[:checked]:bg-green-50 has-[:checked]:font-semibold transition">
-                                <input type="radio" name="payment_mode" value="{{ $val }}" class="sr-only" onchange="qpOnModeChange()" {{ $val === 'cash' ? 'checked' : '' }}>
-                                {{ $lbl }}
-                            </label>
-                            @endforeach
-                        </div>
-                        {{-- hidden select for form submission fallback --}}
-                        <select name="payment_mode" id="qpModeSelect" class="hidden">
-                            @foreach(['cash','upi','card','cheque','netbanking','debit_card','bank_transfer','emi'] as $v)
-                            <option value="{{ $v }}">{{ $v }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    {{-- Reference --}}
-                    <div id="qpFieldRef" class="hidden mb-3">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Reference No. *</label>
-                        <input type="text" name="reference_no" placeholder="UTR / Transaction ID"
-                               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-                    </div>
-
-                    {{-- CC Fee --}}
-                    <div id="qpFieldCC" class="hidden mb-3">
-                        <div id="qpCcFeePanel" class="hidden bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs">
-                            <div class="flex justify-between font-semibold text-amber-800">
-                                <span>Convenience Fee ({{ rtrim(rtrim(number_format((float) \App\Models\AppSetting::get('cc_convenience_rate', 2.5), 2), '0'), '.') }}%)</span><span id="qpCcFeeAmt">Rs. 0.00</span>
-                            </div>
-                            <p class="text-amber-600 mt-0.5">On credit-card payments above Rs. {{ number_format((float) \App\Models\AppSetting::get('cc_convenience_threshold', 10000), 0) }}.</p>
-                            <input type="hidden" name="convenience_fee" id="qpConvFee" value="0">
-                        </div>
-                    </div>
-
-                    {{-- Cheque --}}
-                    <div id="qpFieldCheque" class="hidden mb-3 space-y-2">
-                        <div class="grid grid-cols-2 gap-2">
-                            <div>
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Bank Name *</label>
-                                <input type="text" name="bank_name" placeholder="HDFC Bank"
-                                       class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Cheque No. *</label>
-                                <input type="text" name="cheque_no"
-                                       class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">Cheque Date *</label>
-                            <input type="date" name="cheque_date"
-                                   class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm">
-                        </div>
-                    </div>
-
-                    {{-- EMI (same Direct / Provider form as billing pages) --}}
-                    @php
-                        $qpActiveEmiProviders = \App\Models\EmiProvider::where('is_active', true)
-                            ->with(['schemes' => fn($q) => $q->where('is_active', true)])
-                            ->orderBy('name')->get();
-                    @endphp
-                    <div id="qpFieldEmi" class="hidden mb-3 space-y-3">
-                        {{-- Sub-type toggle --}}
-                        <div class="flex gap-2">
-                            <button type="button" id="qpBtnDirect" onclick="qpSwitchEmi('direct')"
-                                    class="flex-1 py-2 text-xs font-semibold rounded-lg border border-purple-600 bg-purple-600 text-white">
-                                Direct EMI<br>
-                                <span class="font-normal opacity-80">Clinic collects instalments</span>
-                            </button>
-                            <button type="button" id="qpBtnProvider" onclick="qpSwitchEmi('provider')"
-                                    class="flex-1 py-2 text-xs font-semibold rounded-lg border border-purple-200 bg-white text-purple-700 {{ $qpActiveEmiProviders->isEmpty() ? 'opacity-40 cursor-not-allowed' : '' }}"
-                                    {{ $qpActiveEmiProviders->isEmpty() ? 'disabled title="No EMI providers configured in Settings"' : '' }}>
-                                Provider EMI<br>
-                                <span class="font-normal opacity-80">Provider pays clinic upfront</span>
-                            </button>
-                        </div>
-
-                        {{-- Direct EMI fields --}}
-                        <div id="qpDirectFields" class="space-y-2">
-                            <div>
-                                <label class="block text-xs text-gray-500 mb-1">Financer / Bank (optional)</label>
-                                <input type="text" name="emi_provider" placeholder="e.g. HDFC Card EMI, SBI EMI..."
-                                       class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400">
-                            </div>
-                            <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label class="block text-xs text-gray-500 mb-1">Tenure *</label>
-                                    <select name="emi_tenure" id="qpEmiTenure" onchange="qpCalcEmi()"
-                                            class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
-                                        <option value="">Select…</option>
-                                        @foreach([3,6,9,12,18,24,36,48,60] as $m)
-                                        <option value="{{ $m }}">{{ $m }} months</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs text-gray-500 mb-1">Interest % p.a.</label>
-                                    <input type="number" name="emi_interest_rate" id="qpEmiRate"
-                                           value="0" min="0" max="36" step="0.01" oninput="qpCalcEmi()"
-                                           class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-xs text-gray-500 mb-1">First Auto-Debit Date *</label>
-                                <input type="date" name="emi_start_date" id="qpEmiStart" onchange="qpCalcEmi()"
-                                       class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
-                            </div>
-                            <div id="qpEmiResult" class="hidden bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs">
-                                <div class="flex justify-between font-semibold text-purple-800">
-                                    <span>Monthly EMI</span><span id="qpEmiMonthly">—</span>
-                                </div>
-                                <div class="flex justify-between text-purple-600 mt-0.5">
-                                    <span>Total Payable</span><span id="qpEmiTotal">—</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {{-- Provider EMI fields --}}
-                        <div id="qpProviderFields" class="hidden space-y-2">
-                            <div>
-                                <label class="block text-xs text-gray-500 mb-1">EMI Provider *</label>
-                                <select id="qpProviderSel" onchange="qpLoadSchemes()"
-                                        class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
-                                    <option value="">— Select Provider —</option>
-                                    @foreach($qpActiveEmiProviders as $ep)
-                                    <option value="{{ $ep->id }}">{{ $ep->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div id="qpSchemeWrap" class="hidden">
-                                <label class="block text-xs text-gray-500 mb-1">Scheme *</label>
-                                <select name="emi_provider_scheme_id" id="qpSchemeSel" onchange="qpApplyScheme()"
-                                        class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
-                                    <option value="">— Select Scheme —</option>
-                                </select>
-                            </div>
-                            {{-- Provider breakdown card --}}
-                            <div id="qpProviderBreakdown" class="hidden bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-xs space-y-1">
-                                <p class="text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-1">Scheme Breakdown</p>
-                                <div class="flex justify-between text-indigo-900">
-                                    <span>Patient Monthly EMI</span><span id="qpPbMonthly" class="font-bold">—</span>
-                                </div>
-                                <div id="qpPbUpfrontRow" class="hidden flex justify-between text-amber-700">
-                                    <span>Upfront today (<span id="qpPbUpfrontCount">0</span> EMI)</span>
-                                    <span id="qpPbUpfront" class="font-semibold">—</span>
-                                </div>
-                                <div class="border-t border-indigo-200 pt-1 mt-1 space-y-0.5">
-                                    <div class="flex justify-between text-gray-500">
-                                        <span>Clinic interest cost</span><span id="qpPbClinicInterest">—</span>
-                                    </div>
-                                    <div class="flex justify-between text-gray-500">
-                                        <span>GST on interest (18%)</span><span id="qpPbGstInterest">—</span>
-                                    </div>
-                                    <div class="flex justify-between text-gray-600 font-medium">
-                                        <span>Provider deduction</span><span id="qpPbDeduction" class="text-red-500">—</span>
-                                    </div>
-                                </div>
-                                <div class="border-t border-indigo-200 pt-1">
-                                    <div class="flex justify-between text-green-700 font-semibold">
-                                        <span>Clinic net amount</span><span id="qpPbNet">—</span>
-                                    </div>
-                                </div>
-                                <div id="qpPbConvRow" class="hidden border-t border-amber-200 pt-1">
-                                    <div class="flex justify-between text-amber-700 font-semibold">
-                                        <span>Convenience charge (patient pays)</span><span id="qpPbConv">—</span>
-                                    </div>
-                                    <div class="flex justify-between text-amber-900 font-bold">
-                                        <span>Receipt total</span><span id="qpPbReceiptTotal">—</span>
-                                    </div>
-                                    <input type="hidden" name="convenience_fee" id="qpProvConvFee" value="0" disabled>
-                                </div>
-                                <input type="hidden" name="emi_upfront_amount" id="qpProvUpfront" value="0">
-                                <p class="text-xs text-indigo-500 mt-1">
-                                    Receipt #1 (upfront) is generated now for what the patient pays today. Receipt #2 (settlement) is generated when you click "Mark Provider Payment Received".
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- Notes --}}
-                    <div class="mb-4">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Notes</label>
-                        <textarea name="notes" rows="2"
-                                  class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"></textarea>
-                    </div>
-
-                    <button type="submit"
-                            class="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-semibold text-sm rounded-xl transition">
-                        Save Payment
-                    </button>
-                </form>
+                {{-- Same per-invoice Record Payment form as the invoice screen. The action
+                     is set by qpSelectInvoice() when a specific invoice is chosen. --}}
+                @include('billing.partials.record-payment-form', [
+                    'invoice'       => $unpaidInvoices->first(),
+                    'idPrefix'      => 'qp',
+                    'fnPrefix'      => 'qp',
+                    'formId'        => 'qpPayForm',
+                    'action'        => '',
+                    'fromPatient'   => $patient->id,
+                    // this page defines the collection under its own name
+                    'activeEmiProviders' => $activeEmiProvidersQp,
+                    'submitLabel'   => 'Save Payment',
+                    'cancelOnclick' => 'qpBackToList()',
+                ])
             </div>
 
             @endif
@@ -442,8 +264,11 @@
         // two payment forms are never on screen at the same time.
         const apw = document.getElementById('qpAutoPayWrap');
         if (apw) apw.classList.add('hidden');
-        // sync radio with hidden select
-        document.querySelector('input[name="payment_mode"][value="cash"]').checked = true;
+        // Reset the mode picker for the newly chosen invoice. This used to poke a
+        // radio input; the shared partial renders a <select>, and the old line
+        // threw on null the moment an invoice was selected.
+        const modeSel = document.getElementById('qpMode');
+        if (modeSel) modeSel.value = 'cash';
         // reset EMI provider state (scheme breakdown depends on the selected invoice)
         const provSel = document.getElementById('qpProviderSel');
         if (provSel) {
@@ -465,15 +290,13 @@
     };
 
     window.qpOnModeChange = function() {
-        const checked = document.querySelector('input[name="payment_mode"]:checked');
-        const mode = checked ? checked.value : 'cash';
-        // sync hidden select
-        const sel = document.getElementById('qpModeSelect');
-        if (sel) sel.value = mode;
+        // The mode control is the shared partial's <select>, not the old radio grid.
+        const sel  = document.getElementById('qpMode');
+        const mode = sel ? sel.value : 'cash';
         const ph = id => { const e = document.getElementById(id); if(e) e.classList.add('hidden'); };
         const ps = id => { const e = document.getElementById(id); if(e) e.classList.remove('hidden'); };
         ph('qpFieldRef'); ph('qpFieldCC'); ph('qpFieldCheque'); ph('qpFieldEmi');
-        if (['upi','netbanking','bank_transfer'].includes(mode)) ps('qpFieldRef');
+        if (['upi','bank_transfer'].includes(mode)) ps('qpFieldRef');
         if (mode === 'card')   { ps('qpFieldCC'); qpOnAmountChange(); }
         if (mode === 'cheque') ps('qpFieldCheque');
         if (mode === 'emi')    { ps('qpFieldEmi'); qpSwitchEmi('direct'); }
@@ -565,9 +388,9 @@
     };
 
     window.qpOnAmountChange = function() {
-        const checked = document.querySelector('input[name="payment_mode"]:checked');
-        if (!checked || checked.value !== 'card') return;
-        const amt  = parseFloat(document.getElementById('qpAmount').value) || 0;
+        const sel = document.getElementById('qpMode');
+        if (!sel || sel.value !== 'card') return;
+        const amt = parseFloat(document.getElementById('qpAmount').value) || 0;
         const ph = id => { const e=document.getElementById(id); if(e) e.classList.add('hidden'); };
         const ps = id => { const e=document.getElementById(id); if(e) e.classList.remove('hidden'); };
         if (amt > CC_LIMIT) {
@@ -575,8 +398,11 @@
             document.getElementById('qpCcFeeAmt').textContent = 'Rs. ' + fee.toFixed(2);
             document.getElementById('qpConvFee').value = fee;
             ps('qpCcFeePanel');
+            document.getElementById('qpCcTotalAmt').textContent = 'Rs. ' + (amt + fee).toFixed(2);
+            ps('qpCcTotal');
         } else {
             ph('qpCcFeePanel');
+            ph('qpCcTotal');
             document.getElementById('qpConvFee').value = 0;
         }
     };
@@ -586,19 +412,79 @@
         const n = parseInt(document.getElementById('qpEmiTenure').value) || 0;
         const r = parseFloat(document.getElementById('qpEmiRate').value) || 0;
         const s = document.getElementById('qpEmiStart').value;
-        const res = document.getElementById('qpEmiResult');
-        if (!P || !n || !s) { res.classList.add('hidden'); return; }
-        let emi = r <= 0
-            ? Math.round(P / n * 100) / 100
-            : (() => { const mr=r/100/12; const f=Math.pow(1+mr,n); return Math.round(P*mr*f/(f-1)*100)/100; })();
-        document.getElementById('qpEmiMonthly').textContent = 'Rs. ' + emi.toFixed(2);
-        document.getElementById('qpEmiTotal').textContent   = 'Rs. ' + (emi * n).toFixed(2);
+        const res  = document.getElementById('qpEmiResult');
+        const wrap = document.getElementById('qpEmiScheduleWrap');
+        if (!P || !n || !s) { res.classList.add('hidden'); if (wrap) wrap.classList.add('hidden'); return; }
+
+        const mr  = r > 0 ? r / 100 / 12 : 0;
+        let   emi;
+        if (mr <= 0) {
+            emi = Math.round(P / n * 100) / 100;
+        } else {
+            const f = Math.pow(1 + mr, n);
+            emi = Math.round(P * mr * f / (f - 1) * 100) / 100;
+        }
+        const totalPayable  = emi * n;
+        const totalInterest = totalPayable - P;
+
+        document.getElementById('qpEmiMonthly').textContent = 'Rs. ' + emi.toFixed(2);
+        document.getElementById('qpEmiTotal').textContent   = 'Rs. ' + totalPayable.toFixed(2);
+        // Interest and the schedule below were never populated here. The shared
+        // partial renders both rows (the invoice screen has always had them), so
+        // without this they would sit permanently on "—".
+        const int = document.getElementById('qpEmiInterest');
+        if (int) int.textContent = 'Rs. ' + totalInterest.toFixed(2);
         res.classList.remove('hidden');
+
+        const tbody = document.getElementById('qpEmiScheduleBody');
+        if (!tbody || !wrap) return;
+        tbody.innerHTML = '';
+        let balance = P;
+        const startDate = new Date(s);
+        for (let i = 1; i <= n; i++) {
+            const dueDate = new Date(startDate);
+            dueDate.setMonth(dueDate.getMonth() + (i - 1));
+            const interestPart  = Math.round(balance * mr * 100) / 100;
+            const principalPart = Math.round((emi - interestPart) * 100) / 100;
+            balance = Math.round((balance - principalPart) * 100) / 100;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td class="px-2 py-1 text-gray-500">${i}</td>
+                <td class="px-2 py-1 text-gray-700">${dueDate.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</td>
+                <td class="px-2 py-1 text-right text-gray-700">Rs. ${principalPart.toFixed(2)}</td>
+                <td class="px-2 py-1 text-right text-gray-500">Rs. ${interestPart.toFixed(2)}</td>
+                <td class="px-2 py-1 text-right font-medium text-purple-700">Rs. ${emi.toFixed(2)}</td>`;
+            tbody.appendChild(tr);
+        }
+        wrap.classList.remove('hidden');
     };
 
-    // Make radio clicks trigger mode change
-    document.querySelectorAll('input[name="payment_mode"]').forEach(r => {
-        r.addEventListener('change', qpOnModeChange);
-    });
+    // The partial's schedule toggle calls this. It did not exist before the
+    // shared form was introduced, so the button would have thrown on click.
+    window.qpToggleEmiSchedule = function() {
+        const t = document.getElementById('qpEmiScheduleTable');
+        const b = document.getElementById('qpEmiToggleBtn');
+        if (!t || !b) return;
+        t.classList.toggle('hidden');
+        b.textContent = t.classList.contains('hidden') ? 'Show' : 'Hide';
+    };
+
+    // ── FIFO "Pay Total Outstanding" block ──────────────────────────────────
+    // Its own small handler: this form is a different operation from the
+    // per-invoice one (one tender across many invoices), so it deliberately has
+    // no EMI and no convenience fee — see PatientPaymentAllocationService.
+    window.fifoOnModeChange = function() {
+        const sel  = document.getElementById('fifoMode');
+        if (!sel) return;
+        const mode = sel.value;
+        const tog  = (id, on) => {
+            const e = document.getElementById(id);
+            if (e) e.classList.toggle('hidden', !on);
+        };
+        tog('fifoCheque', mode === 'cheque');
+    };
+    fifoOnModeChange();
+
+    // The shared partial's <select id="qpMode"> carries onchange="qpOnModeChange()"
+    // inline, so no extra wiring is needed here.
 })();
 </script>

@@ -215,7 +215,7 @@
                                     <div class="text-xs font-bold text-gray-800 font-mono">{{ $rcpt->receipt_number }}</div>
                                     <div class="text-[11px] text-gray-400 mt-0.5">
                                         {{ $rcpt->receipt_date?->format('d M Y') }}
-                                        · {{ ucfirst(str_replace('_',' ',$rcpt->payment_mode ?? '')) }}
+                                        · {{ \App\Enums\PaymentMode::labelFor($rcpt->payment_mode) }}
                                         @if($rcpt->reference_no) · {{ $rcpt->reference_no }} @endif
                                     </div>
                                 </div>
@@ -310,7 +310,7 @@
                             'sort_key'    => $rcpt->receipt_date?->format('Y-m-d') . '_B_' . $rcpt->id,
                             'type'        => 'receipt',
                             'ref'         => $rcpt->receipt_number,
-                            'description' => ucfirst(str_replace('_', ' ', $rcpt->payment_mode ?? '')) . ($rcpt->reference_no ? ' · '.$rcpt->reference_no : ''),
+                            'description' => \App\Enums\PaymentMode::labelFor($rcpt->payment_mode) . ($rcpt->reference_no ? ' · '.$rcpt->reference_no : ''),
                             'debit'       => 0,
                             'credit'      => (float) $rcpt->amount,
                             'status'      => 'paid',
@@ -366,7 +366,7 @@
                         'type'        => 'refund',
                         'ref'         => $wref->reference_no,
                         'description' => 'Patient credit refund'
-                            . ($wref->payment_mode ? ' · ' . ucfirst(str_replace('_', ' ', $wref->payment_mode)) : ''),
+                            . ($wref->payment_mode ? ' · ' . \App\Enums\PaymentMode::labelFor($wref->payment_mode) : ''),
                         'debit'       => (float) $wref->amount,
                         'credit'      => 0,
                         'status'      => 'refund',

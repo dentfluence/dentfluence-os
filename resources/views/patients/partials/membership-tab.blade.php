@@ -503,12 +503,9 @@
                     </label>
                     <select name="payment_mode"
                             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400 focus:outline-none">
-                        <option value="cash">Cash</option>
-                        <option value="upi">UPI</option>
-                        <option value="card">Credit Card</option>
-                        <option value="debit_card">Debit Card</option>
-                        <option value="netbanking">Net Banking</option>
-                        <option value="bank_transfer">Bank Transfer</option>
+                        @foreach (\App\Enums\PaymentMode::options(['wallet', 'emi']) as $pm)
+                            <option value="{{ $pm['value'] }}">{{ $pm['label'] }}</option>
+                        @endforeach
                     </select>
                 </div>
 

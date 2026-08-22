@@ -15,6 +15,7 @@ use App\Models\WalletTransaction;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Enums\PaymentMode;
 
 class WalletController extends Controller
 {
@@ -353,7 +354,9 @@ class WalletController extends Controller
 
         $request->validate([
             'amount'       => 'required|numeric|min:1',
-            'payment_mode' => 'required|in:cash,card,debit_card,upi,cheque,netbanking,bank_transfer,other',
+            // A3 — an advance is real tender arriving. EMI is meaningless here
+            // (nothing is being financed) and wallet is system-written.
+            'payment_mode' => 'required|' . PaymentMode::rule(['wallet', 'emi']),
             'payment_date' => 'required|date',
             'notes'        => 'nullable|string|max:300',
         ]);
@@ -403,7 +406,10 @@ class WalletController extends Controller
             // refundable balance, so a request for a partial refund fails
             // loudly instead of quietly becoming a full one.
             'amount'       => 'nullable|numeric',
-            'payment_mode' => 'required|in:cash,upi,bank_transfer,cheque,other',
+            // A3 — money leaving the clinic. Restricted to modes a clinic can
+            // actually pay out in; derived from the canonical enum, not restated.
+            // The resulting five are pinned by PaymentModeTest — A1 froze this set.
+            'payment_mode' => 'required|' . PaymentMode::rule(['card', 'debit_card', 'emi', 'wallet']),
             'refund_date'  => 'required|date',
             'reason'       => 'required|string|min:3|max:300',
         ]);

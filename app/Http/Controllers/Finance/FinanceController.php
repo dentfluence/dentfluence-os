@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
+use App\Enums\PaymentMode;
 
 /**
  * Finance Module Controller — F5: Finance Mirror + Accounts Module
@@ -139,14 +140,14 @@ class FinanceController extends Controller
         ])->toArray();
 
         // Collection by payment mode — respects the date filter (real data, not a mock split)
-        $modeLabels = [
-            'upi' => 'UPI', 'cash' => 'Cash', 'card' => 'Card', 'debit_card' => 'Debit Card',
-            'cheque' => 'Cheque', 'netbanking' => 'Net Banking', 'bank_transfer' => 'Bank Transfer',
-            'emi' => 'EMI', 'other' => 'Other',
-        ];
+        // A3 — derived, never restated. This map previously rendered 'card' as
+        // "Card"; it must read "Credit Card" everywhere.
+        $modeLabels = collect(PaymentMode::cases())
+            ->mapWithKeys(fn ($m) => [$m->value => $m->label()])
+            ->all();
         $modeColors = [
             'upi' => '#a855f7', 'cash' => '#22c55e', 'card' => '#60a5fa', 'debit_card' => '#60a5fa',
-            'cheque' => '#fbbf24', 'netbanking' => '#fbbf24', 'bank_transfer' => '#fbbf24',
+            'cheque' => '#fbbf24', 'bank_transfer' => '#fbbf24', 'wallet' => '#14b8a6',
             'emi' => '#f97316', 'other' => '#9ca3af',
         ];
         $byModeRaw = InvoicePayment::whereBetween('payment_date', [$from, $to])
@@ -200,7 +201,7 @@ class FinanceController extends Controller
         $search       = $request->input('search', '');
         $statusFilter = $request->input('status', '');
         $sortBy       = $request->input('sort', 'newest');
-        $modes        = ['cash', 'card', 'upi', 'cheque', 'netbanking', 'emi', 'other', 'bank_transfer', 'debit_card'];
+        $modes        = PaymentMode::values();   // A3 — canonical, netbanking retired
         $presets      = ['today', 'yesterday', 'week', 'month', 'quarter', 'fy'];
 
         // ── KPI strip (always shown) ───────────────────────────────────────

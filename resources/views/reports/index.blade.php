@@ -791,7 +791,7 @@ function initRevenueCharts() {
         options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
     });
 
-    const revModeLabels = @json($revByMode->pluck('payment_mode')->map(fn($m) => ucfirst($m)));
+    const revModeLabels = @json($revByMode->pluck('payment_mode')->map(fn($m) => \App\Enums\PaymentMode::labelFor($m)));
     const revModeData   = @json($revByMode->pluck('total'));
     new Chart(document.getElementById('revModeChart'), {
         type: 'doughnut',

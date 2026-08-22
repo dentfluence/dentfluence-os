@@ -178,7 +178,7 @@ new Chart(document.getElementById('profitChart'), {
 new Chart(document.getElementById('modeChart'), {
     type: 'doughnut',
     data: {
-        labels: {!! $revenueByMode->pluck('payment_mode')->map(fn($m)=>ucfirst($m))->toJson() !!},
+        labels: {!! $revenueByMode->pluck('payment_mode')->map(fn($m)=>\App\Enums\PaymentMode::labelFor($m))->toJson() !!},
         datasets: [{ data:{!! $revenueByMode->pluck('total')->toJson() !!},
             backgroundColor:['#16a34a','#7c3aed','#2563eb','#d97706','#0891b2','#db2777','#6b7280'] }]
     },

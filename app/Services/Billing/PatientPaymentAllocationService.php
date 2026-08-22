@@ -69,7 +69,31 @@ class PatientPaymentAllocationService
      * silently truncate) on the finance mirror. 'emi' and 'wallet' are excluded
      * by design, not by enum.
      */
-    public const ALLOWED_MODES = ['cash', 'upi', 'card', 'bank_transfer', 'cheque', 'other'];
+    /**
+     * A3 — modes accepted for a COMBINED patient-level tender.
+     *
+     * Deliberately narrower than the canonical set — SIX of the nine.
+     *
+     * EXCLUDED BY BUSINESS RULE (CEO, 2026-08-20). A combined tender settles
+     * several invoices at once, and two modes carry per-transaction data that
+     * cannot be attributed to any one of them:
+     *
+     *   card (CREDIT CARD) — carries a convenience fee computed once on the whole
+     *       swipe. There is no defensible way to attribute it across invoices,
+     *       and the clinic will NOT silently absorb it. Credit card is therefore
+     *       single-invoice only, where the fee has exactly one payment row to
+     *       live on. Removed 2026-08-20 (A3.x).
+     *   emi — an instalment schedule needs provider and tenure bound to ONE
+     *       invoice. Never add it here.
+     *
+     * `debit_card` IS allowed: it carries no convenience fee, so a combined
+     * tender is unambiguous.
+     * `wallet` is excluded — wallet tender is system-written by WalletService.
+     *
+     * Do not widen this list to "make the forms match". The forms differ because
+     * the accounting differs.
+     */
+    public const ALLOWED_MODES = ['cash', 'upi', 'debit_card', 'bank_transfer', 'cheque', 'other'];
 
     /** Money below this is rounding dust, not a payment. */
     private const EPSILON = 0.01;
@@ -97,8 +121,9 @@ class PatientPaymentAllocationService
 
         if (! in_array($mode, self::ALLOWED_MODES, true)) {
             throw ValidationException::withMessages([
-                'payment_mode' => 'This payment mode is not available for a combined patient payment. '
-                                . 'EMI and card-with-convenience-fee payments must be recorded against a single invoice.',
+                'payment_mode' => 'Credit Card payments are available when paying a single invoice. '
+                                . 'For multiple outstanding invoices, please pay invoices individually. '
+                                . '(EMI is also single-invoice only.)',
             ]);
         }
 

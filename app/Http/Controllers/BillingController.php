@@ -37,6 +37,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use App\Enums\PaymentMode;
 
 class BillingController extends Controller
 {
@@ -822,7 +823,9 @@ class BillingController extends Controller
             // cash leg may legitimately be 0. The combined tender total is
             // validated after this rule set (see the check below).
             'amount'            => 'required|numeric|min:0',
-            'payment_mode'      => 'required|in:cash,card,debit_card,upi,cheque,netbanking,bank_transfer,emi,other',
+            // A3 — canonical vocabulary. 'wallet' is excluded because wallet
+            // tender is system-written by WalletService, never staff-selected.
+            'payment_mode'      => 'required|' . PaymentMode::rule(['wallet']),
             'payment_date'      => 'required|date',
             'clinic_account_id' => 'nullable|exists:finance_bank_accounts,id',
             'reference_no'      => 'nullable|string|max:100',
@@ -831,8 +834,8 @@ class BillingController extends Controller
             'wallet_used'       => 'nullable|numeric|min:0',
         ];
 
-        // UPI / netbanking / bank_transfer — reference required
-        if (in_array($mode, ['upi', 'netbanking', 'bank_transfer'])) {
+        // UPI / bank transfer — reference required (A3: netbanking retired)
+        if (in_array($mode, ['upi', 'bank_transfer'])) {
             $rules['reference_no'] = 'required|string|max:100';
         }
 
@@ -1933,7 +1936,9 @@ class BillingController extends Controller
         $request->validate([
             'plan_id'                   => 'required|exists:finance_membership_plans,id',
             'amount_paid'               => 'required|numeric|min:0',
-            'payment_mode'              => 'required|in:cash,upi,card,debit_card,netbanking,bank_transfer',
+            // A3 — membership fee. EMI and wallet are not offered for an
+            // enrolment fee; that exclusion predates A3 and is unchanged.
+            'payment_mode'              => 'required|' . PaymentMode::rule(['wallet', 'emi']),
             'family_head_membership_id' => 'nullable|exists:finance_patient_memberships,id',
             'family_name'               => 'nullable|string|max:100',
             'start_date'                => 'nullable|date|before_or_equal:today', // backdated entry allowed, no future dates

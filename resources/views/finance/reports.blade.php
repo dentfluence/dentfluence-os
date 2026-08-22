@@ -580,7 +580,7 @@
                 <td class="px-4 py-2 text-gray-500">{{ $a->created_at?->format('d M Y') }}</td>
                 <td class="px-4 py-2">{{ $a->patient?->name }}</td>
                 <td class="px-4 py-2 text-right font-medium text-green-600">&#8377;{{ number_format($a->amount, 2) }}</td>
-                <td class="px-4 py-2 text-gray-500">{{ ucfirst(str_replace('_',' ', $a->payment_mode ?? '—')) }}</td>
+                <td class="px-4 py-2 text-gray-500">{{ \App\Enums\PaymentMode::labelFor($a->payment_mode) }}</td>
                 <td class="px-4 py-2 text-gray-500">{{ $a->notes }}</td>
             </tr>
             @empty

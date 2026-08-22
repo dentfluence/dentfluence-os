@@ -280,10 +280,10 @@
                 <td>
                     <strong>{{ $isRefund ? 'Patient Credit Refunded' : ($isAdvance ? 'Advance Payment Received' : 'Credit Balance Added') }}</strong>
                     @if($isRefund && $transaction->payment_mode)
-                        <br><span style="color:#777;font-size:12px;">Returned via {{ ucfirst(str_replace('_', ' ', $transaction->payment_mode)) }}</span>
+                        <br><span style="color:#777;font-size:12px;">Returned via {{ \App\Enums\PaymentMode::labelFor($transaction->payment_mode) }}</span>
                     @endif
                     @if($isAdvance && $transaction->payment_mode)
-                        <br><span style="color:#777;font-size:12px;">Paid via {{ ucfirst(str_replace('_', ' ', $transaction->payment_mode)) }}</span>
+                        <br><span style="color:#777;font-size:12px;">Paid via {{ \App\Enums\PaymentMode::labelFor($transaction->payment_mode) }}</span>
                     @endif
                     @if($transaction->notes)
                         <br><span style="color:#777;font-size:12px;">{{ $transaction->notes }}</span>
@@ -334,11 +334,11 @@
     <div class="conditions">
         <strong>Terms & Conditions:</strong><br>
         @if($isRefund)
-            • This voucher confirms Rs. {{ number_format($transaction->amount, 2) }} of wallet credit refunded to {{ $patient->name }}{{ $transaction->payment_mode ? ' via ' . ucfirst(str_replace('_', ' ', $transaction->payment_mode)) : '' }}.<br>
+            • This voucher confirms Rs. {{ number_format($transaction->amount, 2) }} of wallet credit refunded to {{ $patient->name }}{{ $transaction->payment_mode ? ' via ' . \App\Enums\PaymentMode::labelFor($transaction->payment_mode) : '' }}.<br>
             • Only the patient's own paid-in credit is refundable. Promotional and clinic-funded credit is not refundable and is unaffected by this refund.<br>
             • Wallet refunds are made in full; partial refunds are not issued.<br>
         @elseif($isAdvance)
-            • This receipt confirms Rs. {{ number_format($transaction->amount, 2) }} received from {{ $patient->name }}{{ $transaction->payment_mode ? ' via ' . ucfirst(str_replace('_', ' ', $transaction->payment_mode)) : '' }}.<br>
+            • This receipt confirms Rs. {{ number_format($transaction->amount, 2) }} received from {{ $patient->name }}{{ $transaction->payment_mode ? ' via ' . \App\Enums\PaymentMode::labelFor($transaction->payment_mode) : '' }}.<br>
             • The amount has been added to the patient's wallet and will be adjusted against future invoices.<br>
             • Not redeemable for cash; applicable only for treatments/services at {{ $clinicName }}.<br>
         @else

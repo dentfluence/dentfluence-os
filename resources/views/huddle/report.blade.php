@@ -202,7 +202,7 @@
                 <div class="lbl">By Payment Mode</div>
                 @forelse($byMode as $m)
                     <div class="rp-brk-row">
-                        <span class="k">{{ str_replace('_', ' ', $m->payment_mode) }} <span style="color:var(--c-muted)">({{ $m->cnt }})</span></span>
+                        <span class="k">{{ \App\Enums\PaymentMode::labelFor($m->payment_mode) }} <span style="color:var(--c-muted)">({{ $m->cnt }})</span></span>
                         <span class="v">₹{{ number_format((float) $m->total, 0) }}</span>
                     </div>
                 @empty

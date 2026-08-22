@@ -242,14 +242,9 @@
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Mode</label>
                         <select name="payment_mode" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-300">
-                            <option value="cash">Cash</option>
-                            <option value="upi">UPI</option>
-                            <option value="card">Credit Card</option>
-                            <option value="debit_card">Debit Card</option>
-                            <option value="netbanking">Net Banking</option>
-                            <option value="bank_transfer">Bank Transfer</option>
-                            <option value="cheque">Cheque</option>
-                            <option value="other">Other</option>
+                            @foreach (\App\Enums\PaymentMode::options(['wallet', 'emi']) as $pm)
+                                <option value="{{ $pm['value'] }}">{{ $pm['label'] }}</option>
+                            @endforeach
                         </select>
                     </div>
                 </div>

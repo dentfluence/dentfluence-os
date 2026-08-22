@@ -34,6 +34,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use App\Enums\PaymentMode;
 
 /**
  * BillingController (API v1)
@@ -46,17 +47,13 @@ use Illuminate\Validation\ValidationException;
  */
 class BillingController extends ApiController
 {
-    private const PAYMENT_MODES = [
-        ['value' => 'cash',          'label' => 'Cash'],
-        ['value' => 'upi',           'label' => 'UPI'],
-        ['value' => 'card',          'label' => 'Credit Card'],
-        ['value' => 'debit_card',    'label' => 'Debit Card'],
-        ['value' => 'netbanking',    'label' => 'Net Banking'],
-        ['value' => 'bank_transfer', 'label' => 'Bank Transfer'],
-        ['value' => 'cheque',        'label' => 'Cheque'],
-        ['value' => 'emi',           'label' => 'EMI'],
-        ['value' => 'other',         'label' => 'Other'],
-    ];
+    // A3 — the mobile picker renders this. It is DERIVED from the canonical
+    // enum rather than restated, so the app can never offer a mode the
+    // database will reject. 'wallet' is system-written, never selectable.
+    private static function paymentModes(): array
+    {
+        return PaymentMode::options(['wallet']);
+    }
 
     private const EMI_TENURES = [3, 6, 9, 12, 18, 24, 36, 48, 60];
 
@@ -116,7 +113,7 @@ class BillingController extends ApiController
 
         return $this->success([
             'invoice'                  => $this->invoiceSummary($inv),
-            'payment_modes'            => self::PAYMENT_MODES,
+            'payment_modes'            => self::paymentModes(),
             'emi_tenures'              => self::EMI_TENURES,
             'clinic_accounts'          => $accounts,
             'cc_convenience_threshold' => (float) AppSetting::get('cc_convenience_threshold', 10000),
@@ -146,7 +143,7 @@ class BillingController extends ApiController
         // ── Validation (base + mode-specific) — mirrors the web controller ────
         $rules = [
             'amount'            => 'required|numeric|min:0.01',
-            'payment_mode'      => 'required|in:cash,card,debit_card,upi,cheque,netbanking,bank_transfer,emi,other',
+            'payment_mode'      => 'required|' . PaymentMode::rule(['wallet']),
             'payment_date'      => 'required|date',
             'clinic_account_id' => 'nullable|exists:finance_bank_accounts,id',
             'reference_no'      => 'nullable|string|max:100',
@@ -158,7 +155,7 @@ class BillingController extends ApiController
             'wallet_used'       => 'nullable|numeric|min:0',
         ];
 
-        if (in_array($mode, ['upi', 'netbanking', 'bank_transfer'])) {
+        if (in_array($mode, ['upi', 'bank_transfer'])) {   // A3: netbanking retired
             $rules['reference_no'] = 'required|string|max:100';
         }
 
@@ -362,7 +359,10 @@ class BillingController extends ApiController
             // A1 — no arbitrary amount. Confirmation value only; the service
             // rejects anything that is not the full refundable balance.
             'amount'       => 'nullable|numeric',
-            'payment_mode' => 'required|in:cash,upi,bank_transfer,cheque,other',
+            // A3 — money leaving the clinic. Restricted to modes a clinic can
+            // actually pay out in; derived from the canonical enum, not restated.
+            // The resulting five are pinned by PaymentModeTest — A1 froze this set.
+            'payment_mode' => 'required|' . PaymentMode::rule(['card', 'debit_card', 'emi', 'wallet']),
             'refund_date'  => 'required|date',
             'reason'       => 'required|string|min:3|max:300',
         ]);
@@ -1128,7 +1128,7 @@ class BillingController extends ApiController
         // Validation identical to web Finance\WalletController::receiveAdvance.
         $request->validate([
             'amount'       => 'required|numeric|min:1',
-            'payment_mode' => 'required|in:cash,card,debit_card,upi,cheque,netbanking,bank_transfer,other',
+            'payment_mode' => 'required|' . PaymentMode::rule(['wallet', 'emi']),
             'payment_date' => 'required|date',
             'notes'        => 'nullable|string|max:300',
         ]);

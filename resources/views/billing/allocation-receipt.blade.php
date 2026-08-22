@@ -141,7 +141,7 @@
     </div>
     <div class="meta-box">
         <div class="label">Payment Mode</div>
-        <div class="value" style="text-transform:capitalize">{{ str_replace('_', ' ', $receipt->payment_mode) }}</div>
+        <div class="value">{{ \App\Enums\PaymentMode::labelFor($receipt->payment_mode) }}</div>
         @if($receipt->reference_no)
         <div class="sub">Ref: {{ $receipt->reference_no }}</div>
         @endif
@@ -151,7 +151,7 @@
 <div class="amount-block">
     <div class="lbl">Total Amount Received</div>
     <div class="amt">Rs. {{ number_format($receipt->amount, 2) }}</div>
-    <div class="mode">{{ strtoupper(str_replace('_', ' ', $receipt->payment_mode)) }}</div>
+    <div class="mode">{{ strtoupper(\App\Enums\PaymentMode::labelFor($receipt->payment_mode)) }}</div>
 </div>
 
 <div class="alloc">
