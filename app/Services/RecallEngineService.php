@@ -393,9 +393,19 @@ class RecallEngineService
         TreatmentVisit::query()
             ->whereDate('visit_date', $targetDate)
             ->where(function ($q) use ($excludedTypes) {
+                // R-3 fix (2026-08-24): SQL `NULL NOT LIKE '%x%'` evaluates to
+                // NULL (not TRUE), so every visit with a NULL visit_type or
+                // procedure was silently excluded from this trigger. Each
+                // exclusion must explicitly admit NULLs (nested closures, per
+                // the orWhere house rule — see reference_laravel_orwhere).
                 foreach ($excludedTypes as $type) {
-                    $q->where('visit_type', 'not like', "%{$type}%")
-                      ->where('procedure', 'not like', "%{$type}%");
+                    $q->where(function ($qq) use ($type) {
+                        $qq->whereNull('visit_type')
+                           ->orWhere('visit_type', 'not like', "%{$type}%");
+                    })->where(function ($qq) use ($type) {
+                        $qq->whereNull('procedure')
+                           ->orWhere('procedure', 'not like', "%{$type}%");
+                    });
                 }
             })
             ->whereNull('recall_queued_at')

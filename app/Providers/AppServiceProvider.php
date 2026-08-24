@@ -69,6 +69,12 @@ class AppServiceProvider extends ServiceProvider
         // writer-less) and closes its linked appointment (status -> done).
         Consultation::observe(\App\Observers\ConsultationClinicalWiringObserver::class);
 
+        // PRE Sprint A / register G-11 (2026-08-24): a saved treatment visit
+        // also advances patients.last_visit_date — until now only
+        // Consultations did, so patients under active treatment were still
+        // recalled as "not seen in 6 months" (recall R-9).
+        \App\Models\TreatmentVisit::observe(\App\Observers\TreatmentVisitClinicalWiringObserver::class);
+
         // Finance: keep every staff member mirrored into finance_vendors
         // (vendor_type = 'staff') so they appear in the Expense form's
         // Vendor dropdown for petty cash / reimbursements.

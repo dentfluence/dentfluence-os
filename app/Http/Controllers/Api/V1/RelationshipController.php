@@ -1445,6 +1445,16 @@ class RelationshipController extends ApiController
     {
         $comm = CommunicationQueue::findOrFail($queueId);
 
+        // Idempotency guard (PRE Sprint A, 2026-08-24): a double-tap or a
+        // simultaneous web completion must not re-run outcome automations on
+        // a row that is already closed. Mirrors TodayController::logAction.
+        if ($comm->status === 'closed') {
+            return $this->success(
+                ['activity_id' => null, 'outcome' => $comm->outcome, 'actions' => ['already_closed']],
+                'Already completed.'
+            );
+        }
+
         $validated = $request->validate([
             'outcome'              => ['required', 'string', 'in:' . implode(',', array_keys(CommunicationQueue::allCallOutcomes()))],
             'notes'                => ['nullable', 'string', 'max:1000'],

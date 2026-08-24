@@ -145,8 +145,11 @@ class PlanCommittedProjectionTest extends TestCase
         $this->assertEmpty($actions['opportunities'] ?? [],
             'an accepted plan is not an open opportunity needing a chase call');
 
-        // …and the board contract is still fourteen categories, not fifteen.
-        $this->assertCount(14, $actions);
+        // …and the board contract is fifteen categories: the original
+        // fourteen plus 'tasks' (PRE Sprint A / G-27, 2026-08-24 — RulesEngine
+        // system tasks now reach the board). Deliberate contract change,
+        // mirrored in TodayActionsCategoriesTest::ALL_CATEGORIES.
+        $this->assertCount(15, $actions);
     }
 
     // ── …but stays visible as awaiting scheduling ────────────────────────────

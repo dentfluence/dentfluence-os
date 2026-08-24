@@ -581,6 +581,13 @@
      ALPINE.JS CONTROLLER
      All drawer state lives here. One `open` item at a time.
 ══════════════════════════════════════════════════════════════════════ --}}
+@php
+    // Sprint A (2026-08-24): this template renders BOTH boards.
+    // boardMode 'today'   → Today's Actions (due today)
+    // boardMode 'pending' → Pending Calls (open, due before today)
+    $boardMode    = $boardMode    ?? 'today';
+    $pendingCount = $pendingCount ?? 0;
+@endphp
 <div
     x-data="todayActions()"
     @keydown.escape.window="closeDrawer()"
@@ -590,13 +597,16 @@
     <div class="ta-page-header">
         <div class="ta-page-header-title-col">
             <h1 class="ta-page-title">
-                @if($mode === 'today') Today's Actions
+                @if($boardMode === 'pending') Pending Calls
+                @elseif($mode === 'today') Today's Actions
                 @elseif($mode === 'future') Upcoming — {{ $selectedDate->format('d M Y') }}
                 @else Completed — {{ $selectedDate->format('d M Y') }}
                 @endif
             </h1>
             <p class="ta-page-sub">
-                @if($mode === 'today')
+                @if($boardMode === 'pending')
+                    Calls that were due earlier and are still open. Work these down to zero — completing or logging an outcome removes them.
+                @elseif($mode === 'today')
                     {{ now()->format('l, d F Y') }} &nbsp;·&nbsp; Generated from live patient data
                 @elseif($mode === 'future')
                     Preview based on today's data — call, follow-up, and recall dates already on file. A patient could still visit before then and drop off this list.
@@ -611,6 +621,22 @@
                 {{ $totalCount }} {{ Str::plural(($mode === 'today' ? 'action' : 'call'), $totalCount) }}
             </span>
 
+            @if($boardMode === 'today' && $mode === 'today')
+            {{-- Pending Calls — the missed-work backlog (Sprint A 2026-08-24).
+                 Red when non-empty: it is the accountability signal. --}}
+            <a href="{{ route('relationship.today.pending') }}"
+               style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;border:1px solid {{ $pendingCount > 0 ? '#c92a2a' : '#dfc5e1' }};background:{{ $pendingCount > 0 ? '#fff5f5' : '#fff' }};color:{{ $pendingCount > 0 ? '#c92a2a' : '#6a0f70' }};">
+                <i class="ti ti-phone-pause"></i> Pending Calls
+                <span style="min-width:18px;text-align:center;border-radius:9px;padding:1px 6px;background:{{ $pendingCount > 0 ? '#c92a2a' : '#e9dfea' }};color:{{ $pendingCount > 0 ? '#fff' : '#6a0f70' }};">{{ $pendingCount }}</span>
+            </a>
+            @elseif($boardMode === 'pending')
+            <a href="{{ route('relationship.today') }}"
+               style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid #dfc5e1;border-radius:8px;background:#fff;color:#6a0f70;font-size:12px;font-weight:600;text-decoration:none;">
+                <i class="ti ti-arrow-left"></i> Back to Today's Actions
+            </a>
+            @endif
+
+            @if($boardMode === 'today')
             {{-- Date picker — quick chips + a native date input for any day --}}
             <div style="display:flex;align-items:center;gap:6px;">
                 <a href="{{ route('relationship.today') }}"
@@ -625,6 +651,7 @@
                        onchange="window.location.href = '{{ route('relationship.today') }}?date=' + this.value"
                        style="padding:6px 10px;border:1px solid #dfc5e1;border-radius:8px;font-size:12px;color:#4e0a53;background:#fff;">
             </div>
+            @endif
 
             {{-- + Add Call (2026-07-08) — opens the same global Create Task
                  modal used by Huddle, pre-set to the Call category, so a
@@ -652,7 +679,10 @@
     @if($totalCount === 0)
     <div class="ta-all-done">
         <div class="ta-all-done-icon"><i class="ti ti-circle-check"></i></div>
-        @if($mode === 'today')
+        @if($boardMode === 'pending')
+            <div class="ta-all-done-title">No pending calls — nothing was missed</div>
+            <div class="ta-all-done-sub">Every call due before today has been completed or resolved. This is where missed calls collect, so empty is exactly right.</div>
+        @elseif($mode === 'today')
             <div class="ta-all-done-title">All done — you're caught up!</div>
             <div class="ta-all-done-sub">No outstanding actions right now. Check back tomorrow morning.</div>
         @elseif($mode === 'future')

@@ -57,7 +57,7 @@ class HuddleSnapshotTest extends TestCase
             public function __construct(public array $groups) {}
             // Signature must match the parent's generate(bool $includeDone = false): array
             // (the $includeDone param was added later; the stub was never updated).
-            public function generate(bool $includeDone = false): array { return $this->groups; }
+            public function generate(bool $includeDone = false, ?string $dueWindow = null): array { return $this->groups; }
         };
     }
 

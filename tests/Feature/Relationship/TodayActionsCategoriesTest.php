@@ -39,6 +39,9 @@ class TodayActionsCategoriesTest extends TestCase
         'follow_up_calls', 'appointment_reminders', 'pending_estimates',
         'membership_renewals', 'lab_ready', 'payment_reminders',
         'wellness_check_yesterday', 'logged_communications',
+        // Sprint A / G-27 (2026-08-24): automation (RulesEngine) tasks now
+        // reach the board — deliberate snapshot change.
+        'tasks',
         'missed_calls_yesterday', 'missed_appointments_yesterday',
     ];
 

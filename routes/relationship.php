@@ -39,6 +39,14 @@ Route::middleware(['web', 'auth', 'module:relationship'])->prefix('relationship'
     Route::get('/today', [TodayController::class, 'index'])
         ->name('today');
 
+    // Pending Calls (Sprint A, 2026-08-24) — the missed-work backlog board:
+    // open call-debt whose due date has passed. Same cards, same drawer,
+    // same log/dismiss/close endpoints as Today's Actions; only the due
+    // window differs. Declared before any /{id} routes for the same reason
+    // as /today itself.
+    Route::get('/today/pending', [TodayController::class, 'pending'])
+        ->name('today.pending');
+
     Route::post('/today/action', [TodayController::class, 'logAction'])
         ->name('today.action')
         ->middleware('module:relationship,edit');

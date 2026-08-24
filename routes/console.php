@@ -23,6 +23,26 @@ Artisan::command('inspire', function () {
 | Manual trigger: php artisan recall:run
 | Preview only:   php artisan recall:run --dry-run
 */
+/*
+|--------------------------------------------------------------------------
+| Follow-up Re-surfacing — PRE Sprint A (2026-08-24)
+|--------------------------------------------------------------------------
+| Daily aging pass: rows parked as waiting_for_patient by a call outcome
+| ("will call back", logged attempt, …) come back to status=pending on the
+| day their follow_up_date arrives — previously nothing ever brought them
+| back and rescheduled calls vanished from the board forever. Also keeps
+| is_overdue honest on open rows for the Pending Calls surface.
+| Runs BEFORE recall:run (07:00) and the morning briefing (07:05).
+|
+| Manual trigger: php artisan relationship:requeue-due
+| Preview only:   php artisan relationship:requeue-due --dry-run
+*/
+Schedule::command('relationship:requeue-due')
+    ->dailyAt('06:45')
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/recall-engine.log'));
+
 Schedule::command('recall:run')
     ->dailyAt('07:00')
     ->withoutOverlapping()

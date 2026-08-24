@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\LabCase;
 use App\Models\Lead;
 use App\Models\Patient;
+use App\Models\Task;
 use App\Models\TodayActionDismissal;
 use App\Models\TreatmentOpportunity;
 use App\Models\TreatmentVisit;
@@ -60,6 +61,9 @@ class TodayActionsEngine
     /** Per-request cache: "category|modelClass" => Collection of today's TodayActionDismissal rows. */
     private array $dismissalCache = [];
 
+    /** Due-window for call-debt categories: null (combined) | 'today' | 'overdue'. */
+    private ?string $dueWindow = null;
+
     public function __construct(
         private readonly YesterdayReviewService $yesterdayReview,
     ) {}
@@ -77,9 +81,18 @@ class TodayActionsEngine
      *
      * @return array<string, array>  Keys = category names; values = item arrays
      */
-    public function generate(bool $includeDone = false): array
+    public function generate(bool $includeDone = false, ?string $dueWindow = null): array
     {
         $this->includeDone = $includeDone;
+        // Sprint A (2026-08-24): due-window for the call-debt categories.
+        //   null      → legacy combined view (due today + overdue) — the
+        //               projector and Action Board keep this.
+        //   'today'   → only rows due today (or with no due date).
+        //   'overdue' → only rows due before today — the Pending Calls board.
+        // The window is applied INSIDE each category query (not post-filter),
+        // so the per-category cap cannot let old backlog crowd out rows that
+        // are genuinely due today.
+        $this->dueWindow = $dueWindow;
 
         $groups = [];
 
@@ -107,6 +120,15 @@ class TodayActionsEngine
             'payment_reminders'            => fn () => $this->paymentReminders(),
             'wellness_check_yesterday'     => fn () => $this->wellnessCheckYesterday(),
             'logged_communications'        => fn () => $this->loggedCommunications(),
+            // Sprint A / register G-27 (2026-08-24): automation output finally
+            // reaches reception. 8 of 9 RulesEngine rules create Tasks
+            // (task_type = 'system') and no Today category ever read them —
+            // they were visible only at /communication/tasks, behind the
+            // "PRE only, no Comm links" boundary. Human tasks are NOT listed
+            // here: manual comm tasks already reach this board through their
+            // companion CommunicationQueue row (TaskController), and listing
+            // them twice would recreate the duplicate-surfaces problem.
+            'tasks'                        => fn () => $this->systemTasks(),
         ];
 
         $health = [];
@@ -206,7 +228,7 @@ class TodayActionsEngine
     {
         return Lead::query()
             ->whereNotNull('followup_date')
-            ->where('followup_date', '<=', Carbon::today())
+            ->tap(fn ($q) => $this->applyDueWindow($q, 'followup_date'))
             ->whereNotIn('stage', ['converted', 'lost'])
             ->whereNotIn('id', $this->dismissedIds('lead_followups', Lead::class))
             ->orderBy('followup_date')
@@ -214,6 +236,10 @@ class TodayActionsEngine
             ->get()
             ->map(fn (Lead $lead) => [
                 'category'        => 'lead_followups',
+                // Sprint A (2026-08-24): normalized machine-readable due date —
+                // the Today (due today) vs Pending Calls (due earlier, still
+                // open) split keys off this. Null = "always today".
+                'due_date'        => $lead->followup_date?->toDateString(),
                 'patient_name'    => $lead->name,
                 'patient_id'      => null,
                 'lead_id'         => $lead->id,
@@ -247,7 +273,7 @@ class TodayActionsEngine
     {
         return TreatmentOpportunity::with('patient:id,name,phone,relationship_id')
             ->whereNotNull('follow_up_date')
-            ->where('follow_up_date', '<=', Carbon::today())
+            ->tap(fn ($q) => $this->applyDueWindow($q, 'follow_up_date'))
             ->whereNotIn('status', TreatmentOpportunity::CLOSED_STATUSES)
             ->whereNotIn('id', $this->dismissedIds('opportunities', TreatmentOpportunity::class))
             ->orderBy('follow_up_date')
@@ -255,6 +281,7 @@ class TodayActionsEngine
             ->get()
             ->map(fn (TreatmentOpportunity $opp) => [
                 'category'        => 'opportunities',
+                'due_date'        => $opp->follow_up_date?->toDateString(),
                 'patient_name'    => $opp->patient?->name ?? 'Unknown',
                 'patient_id'      => $opp->patient_id,
                 'lead_id'         => null,
@@ -303,11 +330,17 @@ class TodayActionsEngine
                         ->whereDate('updated_at', Carbon::today()));
                 }
             })
+            // Sprint A (2026-08-24): this query previously had NO date filter,
+            // so the 50 oldest backlog rows rendered daily forever while
+            // fresher due rows never fit inside the cap. The due-window keeps
+            // Today = due today (or undated), Pending = due earlier.
+            ->tap(fn ($q) => $this->applyDueWindow($q, 'follow_up_date', nullIsToday: true))
             ->orderBy('follow_up_date')
             ->limit($this->limit())
             ->get()
             ->map(fn (CommunicationQueue $item) => [
                 'category'        => 'recall_calls',
+                'due_date'        => $item->follow_up_date?->toDateString(),
                 'done'            => $this->queueDone($item),
                 'patient_name'    => $item->patient?->name ?? $item->person_name ?? 'Unknown',
                 'patient_id'      => $item->patient_id,
@@ -379,7 +412,7 @@ class TodayActionsEngine
                         ->whereDate('completed_at', Carbon::today()));
                 }
             })
-            ->whereDate('due_date', '<=', Carbon::today())
+            ->tap(fn ($q) => $this->applyDueWindow($q, 'due_date'))
             // 2026-07-26: honour "dismissed for today" the same way every other
             // dismissible category does — without this the card reappeared
             // immediately after a successful dismiss.
@@ -392,6 +425,7 @@ class TodayActionsEngine
 
                 return [
                     'category'        => 'follow_up_calls',
+                    'due_date'        => $fu->due_date?->toDateString(),
                     'done'            => $fu->status === 'completed' ? [
                         'outcome' => 'completed',
                         'notes'   => $fu->completion_note,
@@ -450,12 +484,14 @@ class TodayActionsEngine
                          ->where('purpose', '!=', 'recall_birthday');
                   });
             })
+            ->tap(fn ($q) => $this->applyDueWindow($q, 'follow_up_date', nullIsToday: true))
             ->orderByRaw("FIELD(priority,'high','medium','low')")
             ->orderBy('follow_up_date')
             ->limit($this->limit())
             ->get()
             ->map(fn (CommunicationQueue $item) => [
                 'category'        => 'logged_communications',
+                'due_date'        => $item->follow_up_date?->toDateString(),
                 'done'            => $this->queueDone($item),
                 'patient_name'    => $item->patient?->name ?? $item->person_name ?? 'Unknown',
                 'patient_id'      => $item->patient_id,
@@ -1224,6 +1260,126 @@ class TodayActionsEngine
      * follow_up_calls annotate themselves inline from their own status
      * columns and are not in this map.
      */
+    /**
+     * Apply the active due-window to a call-debt category query.
+     * $nullIsToday: rows with no due date count as "today" (queue rows created
+     * without a follow_up_date must surface immediately, never vanish).
+     */
+    private function applyDueWindow($query, string $column, bool $nullIsToday = false)
+    {
+        $today = Carbon::today();
+
+        return match ($this->dueWindow) {
+            'today' => $query->where(function ($q) use ($column, $today, $nullIsToday) {
+                $q->whereDate($column, $today->toDateString());
+                if ($nullIsToday) {
+                    $q->orWhereNull($column);
+                }
+            }),
+            'overdue' => $query->whereNotNull($column)
+                ->whereDate($column, '<', $today->toDateString()),
+            default => $nullIsToday
+                ? $query->where(function ($q) use ($column, $today) {
+                    $q->whereNull($column)
+                      ->orWhereDate($column, '<=', $today->toDateString());
+                })
+                : $query->whereDate($column, '<=', $today->toDateString()),
+        };
+    }
+
+    /**
+     * Honest, UNCAPPED count of overdue open call-debt — the Pending Calls
+     * badge. Deliberately not derived from generate() output, whose
+     * per-category cap would understate a real backlog (the "+1760 invisible"
+     * bug class from the 07-25 audit).
+     */
+    public function pendingCallsCount(): int
+    {
+        $today = Carbon::today()->toDateString();
+
+        try {
+            return CommunicationQueue::query()
+                    ->where('status', 'pending')
+                    ->whereNotNull('follow_up_date')
+                    ->whereDate('follow_up_date', '<', $today)
+                    ->count()
+                + FollowUp::query()
+                    ->where('status', 'pending')
+                    ->whereNotNull('due_date')
+                    ->whereDate('due_date', '<', $today)
+                    ->count()
+                + Lead::query()
+                    ->whereNotNull('followup_date')
+                    ->whereDate('followup_date', '<', $today)
+                    ->whereNotIn('stage', ['converted', 'lost'])
+                    ->count()
+                + TreatmentOpportunity::query()
+                    ->whereNotNull('follow_up_date')
+                    ->whereDate('follow_up_date', '<', $today)
+                    ->whereNotIn('status', TreatmentOpportunity::CLOSED_STATUSES)
+                    ->count()
+                + Task::query()
+                    ->where('task_type', 'system')
+                    ->whereIn('status', ['pending', 'escalated'])
+                    ->whereNotNull('due_date')
+                    ->whereDate('due_date', '<', $today)
+                    ->count();
+        } catch (\Throwable $e) {
+            Log::warning('TodayActionsEngine: pendingCallsCount failed', ['error' => $e->getMessage()]);
+            return 0;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CATEGORY — System Tasks (automation output; Sprint A / G-27, 2026-08-24)
+    // task_type = 'system' (TaskEngine::autoCreate via RulesEngine),
+    // status open, due today or earlier. Overdue rows flow to Pending Calls
+    // through the normalized due_date, same as every call-debt category.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private function systemTasks(): array
+    {
+        return Task::query()
+            ->with('patient:id,name,phone,relationship_id')
+            ->where('task_type', 'system')
+            ->whereIn('status', ['pending', 'escalated'])
+            ->whereNotNull('due_date')
+            ->tap(fn ($q) => $this->applyDueWindow($q, 'due_date'))
+            ->whereNotIn('id', $this->dismissedIds('tasks', Task::class))
+            ->orderBy('due_date')
+            ->limit($this->limit())
+            ->get()
+            ->map(fn (Task $task) => [
+                'category'        => 'tasks',
+                'due_date'        => $task->due_date?->toDateString(),
+                'patient_name'    => $task->patient?->name ?? $task->title,
+                'patient_id'      => $task->patient_id,
+                'lead_id'         => null,
+                'relationship_id' => $task->relationship_id,
+                'reason'          => $task->title
+                    . ($task->due_date && ! $task->due_date->isToday()
+                        ? ' — due ' . $task->due_date->format('d M Y')
+                        : ''),
+                'priority'        => $task->status === 'escalated'
+                    ? 'high'
+                    : ($task->priority ?? 'medium'),
+                'suggested_action'=> $task->description ?: 'Complete this follow-up task',
+                'link'            => $task->patient_id
+                    ? route('patients.show', $task->patient_id)
+                    : ($task->relationship_id
+                        ? route('relationship.profile', $task->relationship_id)
+                        : '#'),
+                'meta'            => [
+                    'id'        => $task->id,
+                    'phone'     => $task->patient?->phone,
+                    'category'  => $task->category,
+                    'due_date'  => $task->due_date?->format('d M Y'),
+                    'rule_task' => true,
+                ],
+            ])
+            ->toArray();
+    }
+
     private function annotateDone(array &$groups): void
     {
         $resolvers = [

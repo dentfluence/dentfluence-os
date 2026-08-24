@@ -63,6 +63,8 @@ class TodayController extends Controller
         // (vendor/lab/doctor/other) — "Other Calls" reads more plainly than
         // the old "Logged Communications". Same category key, same data.
         'logged_communications'         => 'Other Calls',
+        // Sprint A / G-27 (2026-08-24): automation-created follow-up tasks.
+        'tasks'                         => 'Follow-up Tasks',
     ];
 
     /**
@@ -86,6 +88,7 @@ class TodayController extends Controller
         'appointment_reminders_tomorrow'=> 'ti-calendar-event',
         'completed_calls'               => 'ti-circle-check',
         'logged_communications'         => 'ti-phone-outgoing',
+        'tasks'                         => 'ti-checklist',
     ];
 
     /**
@@ -110,6 +113,7 @@ class TodayController extends Controller
         'pending_estimates'            => 11, // estimate awaiting approval
         'payment_reminders'            => 12, // collections
         'membership_renewals'          => 13, // plan renewal reminder
+        'tasks'                        => 10, // automation follow-up tasks — same tier as opportunities
         'appointment_reminders'        => 14, // fallback bucket, only used if today/tomorrow split fails
         'appointment_reminders_tomorrow'=> 15, // confirm tomorrow morning's sessions — last
     ];
@@ -118,6 +122,7 @@ class TodayController extends Controller
         private readonly TodayActionsEngine    $engine,
         private readonly TodayActionsProjector $projector,
         private readonly ActivityEngine        $activityEngine,
+        private readonly \App\Services\Relationship\OutcomeAutomationService $outcomeAutomation,
     ) {}
 
     // ─────────────────────────────────────────────────────────────────────
@@ -170,7 +175,10 @@ class TodayController extends Controller
                 // includeDone: rows already handled today come back annotated
                 // with a 'done' key so the board can render them faded with
                 // their outcome instead of silently dropping them (2026-07-14).
-                $raw = $this->engine->generate(includeDone: true);
+                // dueWindow 'today' (Sprint A, 2026-08-24): the board shows
+                // only work due TODAY — overdue call-debt lives on the
+                // Pending Calls board instead of padding this one forever.
+                $raw = $this->engine->generate(includeDone: true, dueWindow: 'today');
             }
 
             // Split the single "appointment_reminders" bucket into "today" and
@@ -214,6 +222,24 @@ class TodayController extends Controller
             // resolve human labels for both that and the engine's 'done' info,
             // and sink done rows to the bottom of their card.
             $this->annotateCallState($raw, $today, $responseOpts);
+
+            // ── Sprint A (2026-08-24): Today vs Pending split ─────────────
+            // Today's Actions = what is due TODAY. An open call whose due
+            // date has already passed is not "today's work" — it is missed
+            // work, and it moves to the Pending Calls board (same cards,
+            // /relationship/today/pending) instead of silently padding this
+            // one forever. Items with no due_date (fresh enquiries, today's
+            // appointments, lab-ready, …) always belong to Today. Done rows
+            // stay on Today so finished work reads as finished.
+            // Projection-path safety net: the projector snapshot is combined
+            // (no due-window), so strip overdue items from the board here.
+            // On the live-engine path the window already excluded them and
+            // this is a no-op.
+            $this->extractPendingItems($raw, $today->toDateString());
+
+            // Badge count is UNCAPPED and query-based — never derived from
+            // the capped board sample (the "+1760 invisible" bug class).
+            $pendingCount = $this->engine->pendingCallsCount();
         }
 
         // Build enriched groups array for the view
@@ -247,6 +273,8 @@ class TodayController extends Controller
         });
 
         $totalCount    = array_sum(array_column($groups, 'count')); // open items only
+        $pendingCount  = $pendingCount ?? 0;
+        $boardMode     = 'today';
         $checklists    = config('relationship_rules.call_checklists', []);
         $nextActions   = $this->buildNextActions();
         $requiresNotesMap = $this->buildRequiresNotesMap();
@@ -263,7 +291,128 @@ class TodayController extends Controller
             'selectedDate',
             'mode',
             'today',
+            'pendingCount',
+            'boardMode',
         ));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // GET /relationship/today/pending — Pending Calls (Sprint A, 2026-08-24)
+    //
+    // The exception/backlog board: open call-debt whose due date has passed.
+    // Same engine, same cards, same drawer as Today's Actions — ONLY the due
+    // window differs (Today = due today · Pending = due earlier, still open).
+    // It should trend toward empty; a growing Pending board is the
+    // accountability signal that calls are being missed, not a second to-do
+    // list. Completing an item here goes through the exact same logAction /
+    // dismiss endpoints, so outcomes, automations and attribution are
+    // identical to Today.
+    // ─────────────────────────────────────────────────────────────────────
+
+    public function pending(Request $request): \Illuminate\View\View
+    {
+        $today = \Illuminate\Support\Carbon::today();
+
+        // Same source selection as index()'s today path.
+        if (Feature::enabled('today.projection')) {
+            $projected = $this->projector->grouped();
+            $raw = [];
+            foreach (array_keys(self::CATEGORY_LABELS) as $key) {
+                $raw[$key] = $projected[$key] ?? [];
+            }
+            foreach ($projected as $key => $items) {
+                if (! array_key_exists($key, $raw)) {
+                    $raw[$key] = $items;
+                }
+            }
+        } else {
+            $raw = $this->engine->generate(includeDone: false, dueWindow: 'overdue');
+        }
+
+        $responseOpts = $this->buildResponseOptions();
+        $this->annotateCallState($raw, $today, $responseOpts);
+
+        // Keep ONLY overdue open items — the mirror image of index().
+        $todayStr = $today->toDateString();
+        foreach ($raw as $key => $items) {
+            $raw[$key] = array_values(array_filter($items, function ($item) use ($todayStr) {
+                return empty($item['done'])
+                    && ! empty($item['due_date'])
+                    && $item['due_date'] < $todayStr;
+            }));
+        }
+
+        $groups = [];
+        foreach ($raw as $key => $items) {
+            if ($items === []) {
+                continue; // Pending shows only categories that actually have backlog
+            }
+            $groups[$key] = [
+                'key'        => $key,
+                'label'      => self::CATEGORY_LABELS[$key] ?? ucwords(str_replace('_', ' ', $key)),
+                'icon'       => self::CATEGORY_ICONS[$key] ?? 'ti-circle',
+                'items'      => $items,
+                'count'      => count($items),
+                'done_count' => 0,
+                'priority'   => self::CATEGORY_PRIORITY[$key] ?? 99,
+            ];
+        }
+        uasort($groups, fn ($a, $b) => $a['priority'] <=> $b['priority']);
+
+        $totalCount       = array_sum(array_column($groups, 'count'));
+        $checklists       = config('relationship_rules.call_checklists', []);
+        $nextActions      = $this->buildNextActions();
+        $requiresNotesMap = $this->buildRequiresNotesMap();
+        $dismissReasons   = ActionOptionList::query()->dismissReasons()->get()->values();
+        $selectedDate     = $today->copy();
+        $mode             = 'today';        // reuse the live-board rendering path
+        $pendingCount     = $totalCount;
+        $boardMode        = 'pending';
+
+        return view('relationship.today.index', compact(
+            'groups',
+            'totalCount',
+            'checklists',
+            'responseOpts',
+            'nextActions',
+            'requiresNotesMap',
+            'dismissReasons',
+            'selectedDate',
+            'mode',
+            'today',
+            'pendingCount',
+            'boardMode',
+        ));
+    }
+
+    /**
+     * Remove overdue open call-debt from the Today board, returning how many
+     * items moved (they render on /relationship/today/pending instead).
+     * Only items carrying a normalized due_date participate — categories
+     * without one (today's appointments, lab ready, new enquiries, …) are
+     * always today-work by construction. Done rows are never moved.
+     */
+    private function extractPendingItems(array &$raw, string $todayStr): int
+    {
+        $moved = 0;
+
+        foreach ($raw as $key => $items) {
+            $kept = [];
+            foreach ($items as $item) {
+                $isOverdue = empty($item['done'])
+                    && ! empty($item['due_date'])
+                    && $item['due_date'] < $todayStr;
+
+                if ($isOverdue) {
+                    $moved++;
+                } else {
+                    $kept[] = $item;
+                }
+            }
+            $raw[$key] = $kept;
+        }
+
+        return $moved;
     }
 
     /**
@@ -312,7 +461,9 @@ class TodayController extends Controller
                     $key    = $prefix . ':' . $act->subject_id . '|' . ($act->metadata['category'] ?? '');
 
                     $lastCalls[$key] = [
-                        'outcome' => $act->metadata['response'] ?? null,
+                        // 'response' = web drawer log; 'outcome' = the shared
+                        // OutcomeAutomationService (Sprint A) — accept both.
+                        'outcome' => $act->metadata['response'] ?? $act->metadata['outcome'] ?? null,
                         'notes'   => $act->metadata['notes'] ?? null,
                         'at'      => $act->occurred_at?->format('g:i A'),
                         'by'      => $act->actor?->name,
@@ -481,6 +632,73 @@ class TodayController extends Controller
             ], 422);
         }
 
+        // ── PRE Sprint A (2026-08-24) — ONE OUTCOME PATH ──────────────────
+        // Queue-backed rows route through OutcomeAutomationService, the same
+        // engine the mobile Activity Completion Bottom Sheet uses — so an
+        // outcome behaves identically on web and mobile: "will call back"
+        // reschedules follow_up_date (+2d) instead of closing forever,
+        // "wrong number" marks the contact invalid, "deceased" disables all
+        // automations, "not interested" books the 12-month preventive recall.
+        // The service logs the Activity entry itself (actor + timestamp), so
+        // this branch must NOT also log one (no double Timeline rows).
+        // Computed categories (leads, opportunities, memberships, …) keep the
+        // existing closes_task/dismissal path below — the service only speaks
+        // CommunicationQueue.
+        $serviceOutcome = self::WEB_OUTCOME_TO_SERVICE[$validated['response']] ?? $validated['response'];
+
+        if (in_array($validated['category'], self::QUEUE_BACKED_CATEGORIES, true)
+            && ! empty($validated['subject_id'])
+            && array_key_exists($serviceOutcome, CommunicationQueue::allCallOutcomes())) {
+
+            $comm = CommunicationQueue::find($validated['subject_id']);
+
+            if ($comm) {
+                // Idempotency guard: a double-submit (or a simultaneous mobile
+                // completion) must not re-run automations on a closed row.
+                if ($comm->status === 'closed') {
+                    return response()->json([
+                        'success'           => true,
+                        'closed'            => true,
+                        'next_action_label' => 'Already completed',
+                    ]);
+                }
+
+                try {
+                    $result = $this->outcomeAutomation->apply(
+                        comm:    $comm,
+                        outcome: $serviceOutcome,
+                        actor:   $request->user(),
+                        options: ['notes' => $validated['notes'] ?? null],
+                    );
+
+                    $freshStatus = $comm->fresh()->status;
+
+                    return response()->json([
+                        'success'           => true,
+                        // "closed" here means "leaves the pending board":
+                        // closed outright, or rescheduled/waiting (the
+                        // requeue-due pass brings it back when due).
+                        'closed'            => in_array($freshStatus, ['closed', 'waiting_for_patient'], true),
+                        'next_action_label' => config('relationship_rules.next_actions.' . $validated['response'])
+                            ?? $validated['next_action']
+                            ?? 'Logged',
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::error('TodayController::logAction outcome automation failed', [
+                        'comm_id' => $comm->id,
+                        'error'   => $e->getMessage(),
+                    ]);
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Could not log action. Please try again.',
+                    ], 500);
+                }
+            }
+            // Row not found (deleted between render and submit) — fall through
+            // to the generic path so the activity is still recorded.
+        }
+
         try {
             // Resolve the subject model — prefer Patient, fall back to Lead
             $subject = null;
@@ -586,6 +804,18 @@ class TodayController extends Controller
                     $validated['response'],
                     $validated['notes'] ?? 'Logged from Today\'s Actions'
                 );
+            }
+            return;
+        }
+
+        if ($category === 'tasks') {
+            // Sprint A / G-27 (2026-08-24): completing a system task from the
+            // board marks the Task itself done — same store TaskEngine dedups
+            // against, so the rule will not immediately recreate it.
+            if ($subjectId) {
+                \App\Models\Task::where('id', $subjectId)
+                    ->where('task_type', 'system')
+                    ->update(['status' => 'done', 'done_at' => now()]);
             }
             return;
         }
@@ -731,10 +961,28 @@ class TodayController extends Controller
         // the FollowUp row pending, so a still-due follow-up returns tomorrow.
         // Completing it remains the Log/Close path (closeUnderlyingRecord).
         'follow_up_calls'               => FollowUp::class,
+        // Sprint A / G-27 (2026-08-24): system tasks (automation output) are
+        // now on the board; Dismiss suppresses for today, Log/Close completes
+        // the task itself (closeUnderlyingRecord).
+        'tasks'                         => \App\Models\Task::class,
     ];
 
     /** category keys whose Today's Actions row is backed by a communication_queue record. */
     private const QUEUE_BACKED_CATEGORIES = ['recall_calls', 'missed_calls_yesterday', 'logged_communications'];
+
+    /**
+     * Sprint A (2026-08-24): the web drawer's outcome vocabulary
+     * (config/relationship_rules.php response_options + Settings) predates
+     * the mobile one (CommunicationQueue::allCallOutcomes()). Where both
+     * describe the same real-world outcome, translate web → service so ONE
+     * automation path runs. Keys with no equivalent (voicemail, custom
+     * clinic-added outcomes) keep the legacy closes_task path.
+     */
+    private const WEB_OUTCOME_TO_SERVICE = [
+        'connected_booked'         => 'appointment_booked',
+        'connected_callback'       => 'will_call_back',
+        'connected_not_interested' => 'not_interested',
+    ];
 
     public function dismiss(Request $request): JsonResponse
     {
