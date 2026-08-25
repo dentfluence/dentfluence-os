@@ -55,6 +55,7 @@ class SyncCallOutcomeClosesTask extends Command
         ],
         'appointment_reminders' => [
             'confirmed_attendance' => true,
+            'patient_called_back_confirmed' => true,
             'asked_reschedule'     => true,
             'no_answer'            => false,
             'wrong_number'         => true,

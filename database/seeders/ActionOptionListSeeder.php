@@ -122,6 +122,13 @@ class ActionOptionListSeeder extends Seeder
             // New category-specific sets — see spec section 4 for the reasoning.
             'appointment_reminders' => [
                 ['key' => 'confirmed_attendance', 'label' => 'Confirmed attendance',   'closes_task' => true],
+                // PRE bugfix (2026-08-25) — the callback loop. A confirmation
+                // call that went unanswered stays open; when the patient rings
+                // back, reception resolves THIS row rather than logging an
+                // unrelated new communication. closes_task = true routes it
+                // through the existing closeUnderlyingRecord() ->
+                // TodayActionDismissal path, so actor + reason are audited.
+                ['key' => 'patient_called_back_confirmed', 'label' => 'Patient called back — confirmed', 'closes_task' => true],
                 ['key' => 'asked_reschedule',       'label' => 'Asked to reschedule',  'closes_task' => true],
                 ['key' => 'no_answer',              'label' => 'No answer',            'closes_task' => false],
                 ['key' => 'wrong_number',           'label' => 'Wrong number',         'closes_task' => true],

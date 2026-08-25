@@ -8,6 +8,7 @@ use App\Models\CommActivityLog;
 use App\Models\Lead;
 use App\Models\Patient;
 use App\Models\User;
+use App\Services\Relationship\ActivityEngine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,10 @@ use Carbon\Carbon;
  */
 class CommunicationController extends Controller
 {
+    public function __construct(
+        private readonly ActivityEngine $activityEngine,
+    ) {}
+
     // ── Index ──────────────────────────────────────────────────────────────
 
     public function index(Request $request): View
@@ -225,6 +230,38 @@ class CommunicationController extends Controller
             'channel'   => $comm->channel,
             'move_to'   => $comm->move_to,
         ]);
+
+        // ── PRE bugfix (2026-08-25) — inbound calls on the domain event bus ──
+        // Until now logStore() wrote ONLY CommActivityLog, which is scoped to
+        // this one queue row and has no subscribers. ActivityEngine is the
+        // domain event bus (it is what dispatches RulesEngine after commit),
+        // so an inbound patient call was invisible to every other engine —
+        // including Today's Actions, which is why a patient calling back never
+        // touched their outstanding appointment-confirmation action.
+        //
+        // This is deliberately INERT for now: no rule in
+        // config('relationship_rules.rules') declares 'call.inbound' as a
+        // trigger, so nothing reacts to it yet. It records the fact.
+        // Outgoing calls are untouched — the guard is direction-specific.
+        if (($validated['direction'] ?? null) === 'incoming' && ! empty($validated['patient_id'])) {
+            $inboundPatient = Patient::find($validated['patient_id']);
+
+            if ($inboundPatient) {
+                $this->activityEngine->log(
+                    subject    : $inboundPatient,
+                    event      : 'call.inbound',
+                    actor      : $request->user(),
+                    metadata   : [
+                        'comm_queue_id' => $comm->id,
+                        'direction'     => 'incoming',
+                        'purpose'       => $validated['purpose'] ?? null,
+                        'channel'       => $comm->channel,
+                        'source'        => 'communication_log',
+                    ],
+                    description: 'Inbound call logged from Communication',
+                );
+            }
+        }
 
         $moveTo = $validated['move_to'];
 
