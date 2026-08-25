@@ -37,7 +37,7 @@ class RecallPipelineController extends Controller
     public function index(Request $request): View
     {
         $showIgnored = $request->boolean('show_ignored');
-        $filters     = $request->only(['search', 'status', 'priority', 'assigned_to']);
+        $filters     = $request->only(['search', 'status', 'priority', 'assigned_to', 'type']);
 
         $recalls = $this->filteredQuery($showIgnored, $filters)
             ->paginate(self::PER_PAGE)
@@ -53,6 +53,23 @@ class RecallPipelineController extends Controller
             })
             ->count();
 
+        // Visual redevelopment (2026-08-25) — read-only aggregates for the KPI
+        // strip and the recall-type chips. No new tables, no writes, and no
+        // change to how recalls are generated, dated, assigned or closed.
+        $closedThisMonth = (clone $base)
+            ->where('status', 'closed')
+            ->whereBetween('updated_at', [now()->startOfMonth(), now()->endOfMonth()])
+            ->count();
+
+        // Live per-type counts, honouring the same ignored-rows rule the list
+        // uses, so a chip's number always matches what clicking it shows.
+        $typeCounts = (clone $base)
+            ->when(! $showIgnored, fn ($q) => $q->notIgnored())
+            ->selectRaw('purpose, COUNT(*) as aggregate')
+            ->groupBy('purpose')
+            ->pluck('aggregate', 'purpose')
+            ->all();
+
         $staff = User::where('branch_id', auth()->user()->branch_id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -67,6 +84,8 @@ class RecallPipelineController extends Controller
             'filters'      => $filters,
             'staff'        => $staff,
             'statuses'     => CommunicationQueue::STATUSES,
+            'closedThisMonth' => $closedThisMonth,
+            'typeCounts'      => $typeCounts,
         ]);
     }
 
@@ -111,6 +130,12 @@ class RecallPipelineController extends Controller
 
         if (! empty($filters['assigned_to'])) {
             $query->where('assigned_to', $filters['assigned_to']);
+        }
+
+        // Recall-type chips filter on the queue row's own purpose — the same
+        // value RecallEngineService stamps when it queues the recall.
+        if (! empty($filters['type'])) {
+            $query->where('purpose', $filters['type']);
         }
 
         // Sort: open items before closed (closed calls were surfacing at the
@@ -180,7 +205,7 @@ class RecallPipelineController extends Controller
     {
         if ($request->boolean('select_all')) {
             $showIgnored = $request->boolean('show_ignored');
-            $filters     = $request->only(['search', 'status', 'priority', 'assigned_to']);
+            $filters     = $request->only(['search', 'status', 'priority', 'assigned_to', 'type']);
 
             $count = 0;
             $this->filteredQuery($showIgnored, $filters)
@@ -224,7 +249,7 @@ class RecallPipelineController extends Controller
 
         if ($request->boolean('select_all')) {
             $showIgnored = $request->boolean('show_ignored');
-            $filters     = $request->only(['search', 'status', 'priority', 'assigned_to']);
+            $filters     = $request->only(['search', 'status', 'priority', 'assigned_to', 'type']);
 
             $count = 0;
             $this->filteredQuery($showIgnored, $filters)

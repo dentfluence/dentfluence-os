@@ -25,71 +25,137 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 @endunless
 <style>
-    .rl-page-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:12px; }
-    .rl-page-title { font-family:'Cormorant Garamond', Georgia, serif; font-size:26px; font-weight:600; color:#1a0320; margin:0 0 4px; }
-    .rl-page-sub { font-size:13px; color:#9a7aaa; margin:0; }
+    /* ══════════════════════════════════════════════════════════════════
+       RECALLS — visual redevelopment 2026-08-25
+       Density target: KPI strip + filters + chips fit above the fold and
+       the table stays dense. Presentation only — every value on this page
+       comes from the existing RecallPipelineController payload.
+    ══════════════════════════════════════════════════════════════════ */
+    #df-content-inner { padding:10px 20px 14px !important; }
 
-    .rl-stats { display:flex; gap:22px; flex-wrap:wrap; margin-bottom:16px; color:#6b7280; font-size:13px; }
+    .rl { max-width:1560px; margin:0 auto; }
 
-    .rl-filter-bar { display:flex; align-items:flex-end; flex-wrap:wrap; gap:10px; background:#faf5fc; border:1px solid #e8dff0; border-radius:12px; padding:12px 14px; margin-bottom:14px; }
-    .rl-filter-group { display:flex; flex-direction:column; gap:3px; }
-    .rl-filter-label { font-size:10px; font-weight:700; color:#9a7aaa; text-transform:uppercase; letter-spacing:.05em; }
-    .rl-filter-input, .rl-filter-select { border:1px solid #dfc5e1; border-radius:7px; padding:6px 10px; font-size:12.5px; color:#1a0320; background:#fff; outline:none; min-width:140px; }
-    .rl-filter-input:focus, .rl-filter-select:focus { border-color:#6a0f70; }
-    .rl-filter-check { display:flex; align-items:center; gap:6px; font-size:12.5px; color:#4e0a53; padding-bottom:6px; }
+    /* ── Header + KPI strip ── */
+    .rl-head { display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:10px; }
+    .rl-head-txt { min-width:240px; flex:1 1 auto; }
+    .rl-page-title { font-family:'Cormorant Garamond', Georgia, serif; font-size:25px; font-weight:600; color:#1a0320; margin:0; line-height:1.15; }
+    .rl-page-sub { font-size:12px; color:#9a7aaa; margin:3px 0 0; }
 
-    .rl-btn { display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:600; padding:7px 14px; border-radius:7px; border:1px solid #dfc5e1; background:#fff; color:#6a0f70; cursor:pointer; text-decoration:none; }
-    .rl-btn:hover { background:#f3e8f4; }
-    .rl-btn--primary { background:#6a0f70; color:#fff; border-color:#6a0f70; }
+    .rl-kpis { display:grid; grid-template-columns:repeat(4, 158px); gap:10px; flex:0 0 auto; }
+    .rl-kpi { display:flex; align-items:center; gap:10px; background:#fff; border:1px solid #ece2f1; border-radius:10px; padding:9px 12px; box-shadow:0 1px 2px rgba(26,3,32,.04); }
+    .rl-kpi-ico { width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:16px; flex:0 0 auto; }
+    .rl-kpi-ico--total { background:#f3e8f4; color:#6a0f70; }
+    .rl-kpi-ico--open  { background:#fff4e0; color:#a05c00; }
+    .rl-kpi-ico--over  { background:#fdeaea; color:#b52020; }
+    .rl-kpi-ico--done  { background:#e8f7ef; color:#1a7a45; }
+    .rl-kpi-lbl { font-size:10.5px; font-weight:600; color:#9a8aa2; letter-spacing:.02em; white-space:nowrap; }
+    .rl-kpi-num { font-size:19px; font-weight:700; color:#1a0320; line-height:1.15; font-variant-numeric:tabular-nums; }
+
+    /* ── Filter panel ── */
+    .rl-filters { background:#fff; border:1px solid #ece2f1; border-radius:10px; padding:10px 12px; margin-bottom:8px; }
+    .rl-filter-row { display:flex; align-items:flex-end; gap:9px; flex-wrap:wrap; }
+    .rl-fg { display:flex; flex-direction:column; gap:3px; min-width:0; }
+    .rl-fg--grow { flex:1 1 190px; }
+    .rl-filter-label { font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#a892b0; }
+    .rl-filter-input, .rl-filter-select {
+        padding:5px 9px; border:1px solid #e2d4e8; border-radius:7px; font-size:12px; color:#3a1140;
+        background:#fff; font-family:inherit; height:30px; box-sizing:border-box; width:100%;
+    }
+    .rl-filter-input:focus, .rl-filter-select:focus { outline:none; border-color:#6a0f70; box-shadow:0 0 0 2px #f3e8f4; }
+    .rl-search-wrap { position:relative; }
+    .rl-search-wrap i { position:absolute; left:8px; top:50%; transform:translateY(-50%); font-size:13px; color:#b3a0b8; pointer-events:none; }
+    .rl-search-wrap .rl-filter-input { padding-left:26px; }
+
+    .rl-filter-foot { display:flex; align-items:center; gap:10px; margin-top:8px; padding-top:8px; border-top:1px solid #f4eef7; flex-wrap:wrap; }
+    .rl-filter-check { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#5a4a62; cursor:pointer; }
+    .rl-spacer { flex:1 1 auto; }
+
+    .rl-btn { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; border:1px solid #e2d4e8; border-radius:7px; background:#fff; color:#5a2a62; font-size:11.5px; font-weight:600; text-decoration:none; cursor:pointer; white-space:nowrap; font-family:inherit; line-height:1.4; }
+    .rl-btn:hover { background:#faf5fc; }
+    .rl-btn--primary { background:#6a0f70; border-color:#6a0f70; color:#fff; }
     .rl-btn--primary:hover { background:#4e0a53; }
 
-    .rl-table-wrap { background:#fff; border:1px solid #e8dff0; border-radius:14px; overflow:hidden; }
-    .rl-table { width:100%; border-collapse:collapse; font-size:13px; }
-    .rl-table thead th { padding:10px 12px; font-size:10.5px; font-weight:700; color:#9a7aaa; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #e8dff0; text-align:left; white-space:nowrap; background:#faf5fc; }
-    .rl-table tbody tr { border-bottom:1px solid #f8f4fc; }
-    .rl-table tbody tr:hover { background:#fdf9ff; }
-    .rl-table tbody tr.rl-row--ignored { opacity:.5; }
-    .rl-table tbody td { padding:10px 12px; vertical-align:middle; }
-    .rl-table input[type=checkbox] { cursor:pointer; width:14px; height:14px; accent-color:#6a0f70; }
+    /* ── Recall-type chips ── */
+    .rl-chips { display:flex; gap:6px; overflow-x:auto; padding-bottom:5px; margin-bottom:8px; }
+    .rl-chips::-webkit-scrollbar { height:5px; }
+    .rl-chips::-webkit-scrollbar-thumb { background:#e6dced; border-radius:3px; }
+    .rl-chip { display:inline-flex; align-items:center; gap:7px; padding:6px 11px; border:1px solid #ece2f1; border-radius:9px; background:#fff; text-decoration:none; white-space:nowrap; min-width:0; }
+    .rl-chip:hover { border-color:#cfb4d6; }
+    .rl-chip--on { border-color:#6a0f70; box-shadow:0 0 0 1px #6a0f70 inset; }
+    .rl-chip-ico { width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:13px; flex:0 0 auto; }
+    .rl-chip-txt { display:flex; flex-direction:column; line-height:1.25; }
+    .rl-chip-name { font-size:11.5px; font-weight:600; color:#3a1140; }
+    .rl-chip-n { font-size:11px; font-weight:700; color:#8a6f92; font-variant-numeric:tabular-nums; }
 
-    .rl-name { font-weight:600; color:#1a0320; font-size:13px; }
-    .rl-reason { font-size:12px; color:#6a5a76; margin-top:1px; }
-    .rl-phone-link { font-size:12px; color:#6a0f70; text-decoration:none; }
-    .rl-phone-link:hover { text-decoration:underline; }
+    /* ── Table ── */
+    .rl-table-wrap { background:#fff; border:1px solid #ece2f1; border-radius:10px; overflow:hidden; }
+    .rl-scroll { overflow:auto; }
+    table.rl-table { width:100%; border-collapse:separate; border-spacing:0; font-size:12px; }
+    .rl-table thead th { position:sticky; top:0; z-index:2; background:#faf7fc; border-bottom:1px solid #ece2f1; padding:7px 10px; text-align:left; font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#8a6f92; white-space:nowrap; }
+    .rl-table tbody td { border-bottom:1px solid #f4eef7; padding:7px 10px; vertical-align:middle; color:#3a1140; }
+    .rl-table tbody tr:last-child td { border-bottom:none; }
+    .rl-table tbody tr:hover td { background:#fdfaff; }
+    .rl-row--ignored { opacity:.5; }
 
-    .rl-status { font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }
-    .rl-status--pending { background:#eff6ff; color:#1e40af; }
-    .rl-status--waiting_for_patient { background:#e6f1fb; color:#185fa5; }
-    .rl-status--overdue { background:#fdecec; color:#8a1f1f; }
-    .rl-status--closed { background:#eaf3de; color:#3b6d11; }
+    .rl-name { font-weight:600; color:#1a0320; white-space:nowrap; max-width:190px; overflow:hidden; text-overflow:ellipsis; }
+    .rl-phone-link { font-size:11px; color:#8a7a92; text-decoration:none; }
+    .rl-phone-link:hover { color:#6a0f70; text-decoration:underline; }
+    .rl-type { display:inline-block; padding:2px 8px; border-radius:6px; font-size:10.5px; font-weight:600; white-space:nowrap; max-width:150px; overflow:hidden; text-overflow:ellipsis; }
+    .rl-reason { color:#2c1033; max-width:330px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rl-reason-sub { display:block; font-size:11px; color:#8a7a92; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:330px; }
+    .rl-due { white-space:nowrap; font-variant-numeric:tabular-nums; color:#3a1140; }
+    .rl-due-sub { display:block; font-size:10.5px; margin-top:1px; font-weight:700; }
+    .rl-due-sub--over { color:#b52020; }
+    .rl-due-sub--soon { color:#a05c00; }
+    .rl-due-sub--calm { color:#9a8aa2; font-weight:600; }
+    .rl-assigned { white-space:nowrap; color:#3a1140; }
+    .rl-muted { color:#b8a8c0; }
 
-    .rl-priority { font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; text-transform:uppercase; letter-spacing:.04em; }
-    .rl-priority--high { background:#fdeaea; color:#b52020; }
+    .rl-pill { display:inline-flex; align-items:center; padding:2px 8px; border-radius:99px; font-size:10.5px; font-weight:700; white-space:nowrap; letter-spacing:.03em; }
+    .rl-pill--caps { text-transform:uppercase; }
+    .rl-priority--high   { background:#fdeaea; color:#b52020; }
     .rl-priority--medium { background:#fff4e0; color:#a05c00; }
-    .rl-priority--low { background:#e8f7ef; color:#1a7a45; }
+    .rl-priority--low    { background:#e8f7ef; color:#1a7a45; }
+    .rl-status--pending  { background:#eef2ff; color:#4338ca; }
+    .rl-status--waiting_for_patient { background:#fff4e0; color:#a05c00; }
+    .rl-status--overdue  { background:#fdeaea; color:#b52020; }
+    .rl-status--closed   { background:#eef1ee; color:#5c6b60; }
 
-    .rl-assigned { font-size:11.5px; padding:2px 8px; border-radius:99px; background:#eeedfe; color:#534ab7; white-space:nowrap; }
-
-    .rl-actions { display:flex; align-items:center; gap:4px; }
-    .rl-action-btn { display:inline-flex; align-items:center; justify-content:center; width:27px; height:27px; border-radius:6px; border:1px solid #dfc5e1; background:#fff; color:#6a0f70; cursor:pointer; text-decoration:none; font-size:12px; }
+    .rl-actions { display:flex; align-items:center; gap:4px; justify-content:flex-end; }
+    .rl-action-btn { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:7px; border:1px solid #e2d4e8; background:#fff; color:#6a0f70; font-size:13px; cursor:pointer; text-decoration:none; flex:0 0 auto; padding:0; font-family:inherit; }
     .rl-action-btn:hover { background:#f3e8f4; }
-    .rl-action-btn--muted { color:#9a7aaa; }
+    .rl-action-btn--muted { color:#9a8aa2; }
+    .rl-action-btn--muted:hover { background:#f4f1f6; color:#6a5a76; }
 
-    .rl-bulk-bar { position:sticky; bottom:0; background:#2d0538; color:#fff; padding:10px 16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; border-radius:0 0 14px 14px; }
-    .rl-bulk-count { font-size:13px; font-weight:600; }
-    .rl-bulk-btn { padding:6px 14px; font-size:12.5px; font-weight:600; border-radius:6px; border:none; cursor:pointer; background:rgba(255,255,255,.14); color:#fff; }
-    .rl-bulk-btn:hover { background:rgba(255,255,255,.24); }
-    .rl-bulk-btn--danger { background:rgba(239,68,68,.28); }
-    .rl-bulk-btn--danger:hover { background:rgba(239,68,68,.42); }
-    .rl-bulk-select { border:none; border-radius:6px; padding:6px 8px; font-size:12.5px; color:#1a0320; }
+    /* ── Footer / pagination ── */
+    .rl-foot { display:flex; align-items:center; gap:10px; padding:7px 10px; border-top:1px solid #f0e8f5; background:#fdfbfe; font-size:11.5px; color:#8a7a92; flex-wrap:wrap; }
+    .rl-foot select { padding:3px 6px; border:1px solid #e2d4e8; border-radius:6px; font-size:11.5px; color:#3a1140; background:#fff; font-family:inherit; }
+    .rl-pg { display:flex; align-items:center; gap:4px; margin-left:auto; }
+    .rl-pgb { min-width:26px; height:26px; padding:0 8px; border:1px solid #e2d4e8; border-radius:7px; background:#fff; color:#5a2a62; font-size:11.5px; font-weight:600; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-variant-numeric:tabular-nums; }
+    .rl-pgb:hover { background:#f3e8f4; }
+    .rl-pgb--on { background:#6a0f70; border-color:#6a0f70; color:#fff; }
+    .rl-pgb--off { opacity:.4; cursor:not-allowed; }
+    .rl-pg-gap { color:#b3a0b8; padding:0 2px; }
 
-    .rl-empty { padding:48px 24px; text-align:center; color:#b3a0b8; font-size:13px; }
-    .rl-empty-icon { font-size:30px; color:#dfc5e1; margin-bottom:8px; }
+    .rl-empty { padding:34px 16px; text-align:center; color:#9a8aa2; font-size:12.5px; }
+    .rl-empty-icon { font-size:30px; color:#dfc5e1; margin-bottom:6px; }
 
-    .rl-flash { margin-bottom:12px; padding:9px 16px; border-radius:8px; font-size:13px; font-weight:500; background:#e8f7ef; border:1px solid #b8e0ca; color:#1a7a45; }
+    /* ── Bulk bar ── */
+    .rl-bulk-bar { display:flex; align-items:center; gap:9px; padding:8px 12px; background:#2c1033; color:#fff; flex-wrap:wrap; }
+    .rl-bulk-count { font-size:12px; font-weight:600; }
+    .rl-bulk-btn { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border:1px solid rgba(255,255,255,.28); border-radius:7px; background:rgba(255,255,255,.08); color:#fff; font-size:11.5px; font-weight:600; cursor:pointer; font-family:inherit; }
+    .rl-bulk-btn:hover { background:rgba(255,255,255,.18); }
+    .rl-bulk-btn--danger { border-color:#e59b9b; color:#ffd9d9; }
+    .rl-bulk-select { padding:4px 8px; border:1px solid rgba(255,255,255,.28); border-radius:7px; background:rgba(255,255,255,.08); color:#fff; font-size:11.5px; font-family:inherit; }
+    .rl-bulk-select option { color:#3a1140; }
+
+    .rl-flash { background:#e8f7ef; border:1px solid #b8e0ca; color:#1a7a45; border-radius:9px; padding:8px 12px; font-size:12.5px; margin-bottom:8px; }
     .rl-flash--error { background:#fdecec; border-color:#f5b5b5; color:#8a1f1f; }
 
-    #df-content-inner { padding:10px 24px 24px !important; }
+    @media (max-width: 1100px) {
+        .rl-head { flex-direction:column; }
+        .rl-kpis { grid-template-columns:repeat(2, 1fr); width:100%; }
+    }
 </style>
 @endsection
 
@@ -97,265 +163,447 @@
 
 <div x-data="recallsList()">
 
-    <div class="rl-page-header">
-        <div>
-            <h1 class="rl-page-title">Recalls</h1>
-            <p class="rl-page-sub">Patients due to return — work the queue: dismiss, assign, or convert to an opportunity.</p>
-        </div>
-        <button type="button" onclick="rlOpenAddRecall()" class="rl-btn rl-btn--primary">
-            <i class="ti ti-plus"></i> Add Recall
-        </button>
-    </div>
+    @php
+        // ── Presentation map for the REAL recall purposes RecallEngineService
+        // stamps (see its 6 triggers + createManual). Label/icon/colour only —
+        // the keys are the stored `purpose` values, nothing invented.
+        $typeMeta = [
+            'recall_no_visit'      => ['Dormant / No-Visit', 'ti-user-off',        '#f3e8f4', '#6a0f70', 'No visit in 6+ months'],
+            'recall_approved_plan' => ['Approved Plan',      'ti-clipboard-check', '#eef2ff', '#4338ca', 'Approved plan — no appointment booked'],
+            'recall_post_op'       => ['Post-Op Follow-up',  'ti-heart-plus',      '#fdeaea', '#b52020', 'Post-op follow-up due'],
+            'recall_lab_received'  => ['Lab Work Ready',     'ti-flask',           '#e8f7ef', '#1a7a45', 'Lab work ready — no appointment booked'],
+            'recall_7day_followup' => ['7-Day Follow-up',    'ti-calendar-repeat', '#e0f2fe', '#0369a1', '7-day post-treatment follow-up'],
+            'recall_birthday'      => ['Birthday Recall',    'ti-cake',            '#fff4e0', '#a05c00', 'Birthday re-engagement'],
+            'recall_manual'        => ['Manual Recall',      'ti-pencil',          '#f4eef7', '#684a72', 'Manually added recall'],
+            'recall_long_term'     => ['Long-term Recall',   'ti-hourglass',       '#ecfdf5', '#0f766e', 'Long-horizon preventive recall'],
+            'recall_due'           => ['Recall Due',         'ti-bell',            '#f3e8f4', '#6a0f70', 'Recall due'],
+            'recall'               => ['Recall',             'ti-bell',            '#f3e8f4', '#6a0f70', 'Recall due'],
+        ];
+        $typeOf = function (?string $purpose) use ($typeMeta) {
+            $key = $purpose ?: 'recall';
+            return $typeMeta[$key] ?? [
+                ucwords(str_replace('_', ' ', $key)), 'ti-bell', '#f4eef7', '#684a72', 'Recall due',
+            ];
+        };
 
-    @if(session('success'))
-        <div class="rl-flash">{{ session('success') }}</div>
-    @endif
-    @if ($errors->any() && !$errors->has('patient_id'))
-        <div class="rl-flash rl-flash--error">
-            @foreach ($errors->all() as $error)
-                <div>{{ $error }}</div>
-            @endforeach
-        </div>
-    @endif
+        $activeType = $filters['type'] ?? '';
+        $carry      = collect(request()->except(['type', 'page']))->filter(fn ($v) => $v !== null && $v !== '')->all();
+        $chipUrl    = fn (?string $key) => route('relationship.recalls', $key ? $carry + ['type' => $key] : $carry);
 
-    <div class="rl-stats">
-        <span>Total recalls: <strong style="color:#1f2937;">{{ number_format($total) }}</strong></span>
-        <span>Open: <strong style="color:#1f2937;">{{ number_format($openCount) }}</strong></span>
-        <span>Overdue: <strong style="color:{{ $overdueCount > 0 ? '#8A1F1F' : '#1f2937' }};">{{ number_format($overdueCount) }}</strong></span>
-    </div>
+        // Chips are built from the live counts, so only types that actually
+        // exist in the queue appear — busiest first.
+        arsort($typeCounts);
+    @endphp
 
-    {{-- ── Filters ─────────────────────────────────────────────────────── --}}
-    <form method="GET" action="{{ route('relationship.recalls') }}" class="rl-filter-bar">
-        <div class="rl-filter-group">
-            <label class="rl-filter-label">Search</label>
-            <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Name or phone" class="rl-filter-input">
-        </div>
+    <div class="rl">
 
-        <div class="rl-filter-group">
-            <label class="rl-filter-label">Status</label>
-            <select name="status" class="rl-filter-select">
-                <option value="">All</option>
-                @foreach($statuses as $key => $label)
-                    <option value="{{ $key }}" @selected(($filters['status'] ?? '') === $key)>{{ $label }}</option>
-                @endforeach
-            </select>
-        </div>
-
-        <div class="rl-filter-group">
-            <label class="rl-filter-label">Priority</label>
-            <select name="priority" class="rl-filter-select">
-                <option value="">All</option>
-                <option value="high" @selected(($filters['priority'] ?? '') === 'high')>High</option>
-                <option value="medium" @selected(($filters['priority'] ?? '') === 'medium')>Medium</option>
-                <option value="low" @selected(($filters['priority'] ?? '') === 'low')>Low</option>
-            </select>
-        </div>
-
-        <div class="rl-filter-group">
-            <label class="rl-filter-label">Assigned To</label>
-            <select name="assigned_to" class="rl-filter-select">
-                <option value="">Anyone</option>
-                @foreach($staff as $member)
-                    <option value="{{ $member->name }}" @selected(($filters['assigned_to'] ?? '') === $member->name)>{{ $member->name }}</option>
-                @endforeach
-            </select>
-        </div>
-
-        <label class="rl-filter-check">
-            <input type="checkbox" name="show_ignored" value="1" @checked($showIgnored) onchange="this.form.submit()">
-            Show ignored
-        </label>
-
-        <button type="submit" class="rl-btn rl-btn--primary"><i class="ti ti-filter"></i> Apply</button>
-        @if(!empty(array_filter($filters)) || $showIgnored)
-            <a href="{{ route('relationship.recalls') }}" class="rl-btn">Clear</a>
-        @endif
-    </form>
-
-    {{-- ── Table ───────────────────────────────────────────────────────── --}}
-    <div class="rl-table-wrap">
-        @if($recalls->isEmpty())
-            <div class="rl-empty">
-                <div class="rl-empty-icon"><i class="ti ti-circle-check"></i></div>
-                Nothing here — no recalls match this filter.
+        {{-- ── Header + KPI strip ─────────────────────────────────────── --}}
+        <div class="rl-head">
+            <div class="rl-head-txt">
+                <h1 class="rl-page-title">Recalls / Recall Engine</h1>
+                <p class="rl-page-sub">Patients due to return — work the queue: dismiss, assign, or convert to an opportunity.</p>
             </div>
-        @else
-            <table class="rl-table">
-                <thead>
-                    <tr>
-                        <th style="width:34px;"><input type="checkbox" @change="toggleAll($event)"></th>
-                        <th>Patient</th>
-                        <th>Reason</th>
-                        <th>Status</th>
-                        <th>Priority</th>
-                        <th>Due</th>
-                        <th>Assigned</th>
-                        <th style="width:190px;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($recalls as $recall)
-                    @php
-                        $patient   = $recall->patient;
-                        $phone     = $patient?->phone ?? $recall->phone;
-                        $due       = $recall->follow_up_date ?? $recall->due_at;
-                        $isOverdue = ($recall->is_overdue || $recall->status === 'overdue') && $recall->status !== 'closed';
-                    @endphp
-                    <tr class="{{ $recall->ignored_at ? 'rl-row--ignored' : '' }}">
-                        <td><input type="checkbox" class="rl-row-check" value="{{ $recall->id }}" @change="toggleRow({{ $recall->id }})"></td>
-                        <td>
-                            <div class="rl-name">{{ $patient?->name ?? $recall->person_name ?: 'Unnamed' }}</div>
-                            @if($phone)<a href="tel:{{ $phone }}" class="rl-phone-link">{{ $phone }}</a>@endif
-                        </td>
-                        <td><div class="rl-reason">{{ $recall->note ?: 'Recall due' }}</div></td>
-                        <td><span class="rl-status rl-status--{{ $recall->status }}">{{ $statuses[$recall->status] ?? $recall->status }}</span></td>
-                        <td><span class="rl-priority rl-priority--{{ $recall->priority ?? 'medium' }}">{{ ucfirst($recall->priority ?? 'medium') }}</span></td>
-                        <td style="white-space:nowrap;color:#6a5a76;font-size:12px;">
-                            {{ $due ? \Illuminate\Support\Carbon::parse($due)->format('d M Y') : '—' }}
-                            @if($isOverdue)<br><span style="color:#8A1F1F;font-size:10.5px;font-weight:700;">Overdue</span>@endif
-                        </td>
-                        <td>
-                            @if($recall->assigned_to)
-                                <span class="rl-assigned">{{ $recall->assigned_to }}</span>
-                            @else
-                                <span style="color:#c2c6cd;font-size:12px;">—</span>
-                            @endif
-                        </td>
-                        <td>
-                            <div class="rl-actions">
-                                @if($patient)
-                                <a href="{{ route('patients.show', $patient->id) }}" class="rl-action-btn" title="Open record">
-                                    <i class="ti ti-external-link"></i>
-                                </a>
-                                @endif
 
-                                @if($phone)
-                                <x-communication.whatsapp-button
-                                    context="recall"
-                                    :patient-id="$patient?->id"
-                                    :number="$phone"
-                                    class="rl-action-btn"
-                                    title="Send recall reminder on WhatsApp">
-                                    <i class="ti ti-brand-whatsapp"></i>
-                                </x-communication.whatsapp-button>
-                                @endif
+            <div class="rl-kpis">
+                <div class="rl-kpi">
+                    <div class="rl-kpi-ico rl-kpi-ico--total"><i class="ti ti-bell"></i></div>
+                    <div>
+                        <div class="rl-kpi-lbl">Total Recalls</div>
+                        <div class="rl-kpi-num">{{ number_format($total) }}</div>
+                    </div>
+                </div>
+                <div class="rl-kpi">
+                    <div class="rl-kpi-ico rl-kpi-ico--open"><i class="ti ti-clock"></i></div>
+                    <div>
+                        <div class="rl-kpi-lbl">Open</div>
+                        <div class="rl-kpi-num">{{ number_format($openCount) }}</div>
+                    </div>
+                </div>
+                <div class="rl-kpi">
+                    <div class="rl-kpi-ico rl-kpi-ico--over"><i class="ti ti-alert-circle"></i></div>
+                    <div>
+                        <div class="rl-kpi-lbl">Overdue</div>
+                        <div class="rl-kpi-num" @if($overdueCount > 0) style="color:#b52020;" @endif>{{ number_format($overdueCount) }}</div>
+                    </div>
+                </div>
+                <div class="rl-kpi">
+                    <div class="rl-kpi-ico rl-kpi-ico--done"><i class="ti ti-circle-check"></i></div>
+                    <div>
+                        <div class="rl-kpi-lbl">Closed (This Month)</div>
+                        <div class="rl-kpi-num">{{ number_format($closedThisMonth) }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                                @if($patient && $recall->status !== 'closed')
-                                <button type="button" class="rl-action-btn" title="Convert to Opportunity"
-                                        onclick="rlOpenConvert({{ $recall->id }}, '{{ addslashes($patient->name) }}')">
-                                    <i class="ti ti-star"></i>
-                                </button>
-                                @endif
+        @if(session('success'))
+            <div class="rl-flash">{{ session('success') }}</div>
+        @endif
+        @if ($errors->any() && !$errors->has('patient_id'))
+            <div class="rl-flash rl-flash--error">
+                @foreach ($errors->all() as $error)
+                    <div>{{ $error }}</div>
+                @endforeach
+            </div>
+        @endif
 
-                                @if(!$recall->ignored_at)
-                                <form method="POST" action="{{ route('relationship.recalls.ignore', $recall->id) }}" style="display:inline;">
-                                    @csrf
-                                    <button type="submit" class="rl-action-btn rl-action-btn--muted" title="Ignore — exclude this item from the queue"
-                                            onclick="return confirm('Ignore this recall? It will be hidden from this list until restored.')">
-                                        <i class="ti ti-eye-off"></i>
-                                    </button>
-                                </form>
-                                @else
-                                <form method="POST" action="{{ route('relationship.recalls.unignore', $recall->id) }}" style="display:inline;">
-                                    @csrf
-                                    <button type="submit" class="rl-action-btn" title="Restore to queue"><i class="ti ti-eye"></i></button>
-                                </form>
-                                @endif
-                            </div>
-                        </td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
+        {{-- ── Filter panel — existing filters only ───────────────────── --}}
+        <form method="GET" action="{{ route('relationship.recalls') }}" class="rl-filters">
+            <div class="rl-filter-row">
+                <div class="rl-fg rl-fg--grow">
+                    <label class="rl-filter-label">Search</label>
+                    <div class="rl-search-wrap">
+                        <i class="ti ti-search"></i>
+                        <input type="text" name="search" value="{{ $filters['search'] ?? '' }}"
+                               placeholder="Name or phone…" class="rl-filter-input">
+                    </div>
+                </div>
 
-            {{-- ── Bulk bar ────────────────────────────────────────────── --}}
-            <div class="rl-bulk-bar" x-show="selected.length > 0 || selectAllMatching" x-transition style="display:none;">
-                <span class="rl-bulk-count" x-show="!selectAllMatching" x-text="selected.length + ' selected'"></span>
-                <span class="rl-bulk-count" x-show="selectAllMatching">All {{ $recalls->total() }} matching this filter selected</span>
-
-                <template x-if="!selectAllMatching && selected.length === {{ $recalls->count() }} && {{ $recalls->total() }} > {{ $recalls->count() }}">
-                    <button type="button" class="rl-bulk-btn" @click="selectAllMatching = true">
-                        Select all {{ $recalls->total() }} matching this filter
-                    </button>
-                </template>
-                <template x-if="selectAllMatching">
-                    <button type="button" class="rl-bulk-btn" @click="selectAllMatching = false">Just these {{ $recalls->count() }}</button>
-                </template>
-
-                {{-- Bulk assign --}}
-                <form method="POST" action="{{ route('relationship.recalls.bulk-assign') }}" style="display:inline;display:flex;align-items:center;gap:6px;"
-                      onsubmit="return confirm('Assign the selected recall(s) to this staff member?')">
-                    @csrf
-                    <template x-if="selectAllMatching">
-                        <div style="display:inline;">
-                            <input type="hidden" name="select_all" value="1">
-                            <input type="hidden" name="search" value="{{ $filters['search'] ?? '' }}">
-                            <input type="hidden" name="status" value="{{ $filters['status'] ?? '' }}">
-                            <input type="hidden" name="priority" value="{{ $filters['priority'] ?? '' }}">
-                            <input type="hidden" name="assigned_to" value="{{ $filters['assigned_to'] ?? '' }}">
-                            <input type="hidden" name="show_ignored" value="{{ $showIgnored ? '1' : '' }}">
-                        </div>
-                    </template>
-                    <template x-for="id in selected" :key="'a'+id">
-                        <input type="hidden" name="recall_ids[]" :value="id" x-show="!selectAllMatching">
-                    </template>
-                    <select name="assigned_to" class="rl-bulk-select" required>
-                        <option value="">Assign to…</option>
-                        @foreach($staff as $member)
-                            <option value="{{ $member->id }}">{{ $member->name }}</option>
+                <div class="rl-fg" style="flex:0 0 175px;">
+                    <label class="rl-filter-label">Recall Type</label>
+                    <select name="type" class="rl-filter-select">
+                        <option value="">All Types</option>
+                        @foreach($typeCounts as $key => $count)
+                            @php $m = $typeOf($key); @endphp
+                            <option value="{{ $key }}" @selected($activeType === $key)>{{ $m[0] }} ({{ number_format($count) }})</option>
                         @endforeach
                     </select>
-                    <button type="submit" class="rl-bulk-btn"><i class="ti ti-user-check"></i> Assign</button>
-                </form>
+                </div>
 
-                {{-- Bulk dismiss --}}
-                <form method="POST" action="{{ route('relationship.recalls.bulk-dismiss') }}" style="display:inline;"
-                      onsubmit="return confirm('Dismiss the selected recall(s)? They will be marked closed.')">
-                    @csrf
-                    <template x-if="selectAllMatching">
-                        <div style="display:inline;">
-                            <input type="hidden" name="select_all" value="1">
-                            <input type="hidden" name="search" value="{{ $filters['search'] ?? '' }}">
-                            <input type="hidden" name="status" value="{{ $filters['status'] ?? '' }}">
-                            <input type="hidden" name="priority" value="{{ $filters['priority'] ?? '' }}">
-                            <input type="hidden" name="assigned_to" value="{{ $filters['assigned_to'] ?? '' }}">
-                            <input type="hidden" name="show_ignored" value="{{ $showIgnored ? '1' : '' }}">
-                        </div>
-                    </template>
-                    <template x-for="id in selected" :key="'d'+id">
-                        <input type="hidden" name="recall_ids[]" :value="id" x-show="!selectAllMatching">
-                    </template>
-                    <button type="submit" class="rl-bulk-btn rl-bulk-btn--danger">
-                        <i class="ti ti-check"></i>
-                        <span x-text="selectAllMatching ? 'Dismiss all {{ $recalls->total() }}' : 'Bulk Dismiss'"></span>
-                    </button>
-                </form>
+                <div class="rl-fg" style="flex:0 0 130px;">
+                    <label class="rl-filter-label">Priority</label>
+                    <select name="priority" class="rl-filter-select">
+                        <option value="">All</option>
+                        <option value="high"   @selected(($filters['priority'] ?? '') === 'high')>High</option>
+                        <option value="medium" @selected(($filters['priority'] ?? '') === 'medium')>Medium</option>
+                        <option value="low"    @selected(($filters['priority'] ?? '') === 'low')>Low</option>
+                    </select>
+                </div>
 
-                <button type="button" @click="clearSelection()" style="margin-left:auto;background:none;border:none;color:#c9a8d4;cursor:pointer;font-size:12px;">
-                    ✕ Clear
+                <div class="rl-fg" style="flex:0 0 150px;">
+                    <label class="rl-filter-label">Status</label>
+                    <select name="status" class="rl-filter-select">
+                        <option value="">All</option>
+                        @foreach($statuses as $key => $label)
+                            <option value="{{ $key }}" @selected(($filters['status'] ?? '') === $key)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="rl-fg" style="flex:0 0 170px;">
+                    <label class="rl-filter-label">Assigned To</label>
+                    <select name="assigned_to" class="rl-filter-select">
+                        <option value="">Anyone</option>
+                        @foreach($staff as $member)
+                            <option value="{{ $member->name }}" @selected(($filters['assigned_to'] ?? '') === $member->name)>{{ $member->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            <div class="rl-filter-foot">
+                <label class="rl-filter-check">
+                    <input type="checkbox" name="show_ignored" value="1" @checked($showIgnored) onchange="this.form.submit()">
+                    Show ignored
+                </label>
+
+                <div class="rl-spacer"></div>
+
+                <button type="button" onclick="rlOpenAddRecall()" class="rl-btn">
+                    <i class="ti ti-plus"></i> Add Recall
                 </button>
+                @if(!empty(array_filter($filters)) || $showIgnored)
+                    <a href="{{ route('relationship.recalls') }}" class="rl-btn"><i class="ti ti-refresh"></i> Clear Filters</a>
+                @endif
+                <button type="submit" class="rl-btn rl-btn--primary"><i class="ti ti-filter"></i> Apply Filters</button>
             </div>
-        @endif
-    </div>
+        </form>
 
-    {{-- ── Pagination ──────────────────────────────────────────────────── --}}
-    @if($recalls->hasPages())
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;font-size:12px;color:#9a7aaa;">
-            <span>Showing {{ $recalls->firstItem() }}–{{ $recalls->lastItem() }} of {{ $recalls->total() }}</span>
-            <div style="display:flex;gap:6px;">
-                @if($recalls->onFirstPage())
-                    <span class="rl-btn" style="opacity:.4;cursor:not-allowed;">&larr; Prev</span>
-                @else
-                    <a href="{{ $recalls->previousPageUrl() }}" class="rl-btn">&larr; Prev</a>
-                @endif
-                @if($recalls->hasMorePages())
-                    <a href="{{ $recalls->nextPageUrl() }}" class="rl-btn">Next &rarr;</a>
-                @else
-                    <span class="rl-btn" style="opacity:.4;cursor:not-allowed;">Next &rarr;</span>
-                @endif
-            </div>
+        {{-- ── Recall-type chips — live counts, existing filter path ──── --}}
+        @if(!empty($typeCounts))
+        <div class="rl-chips">
+            <a href="{{ $chipUrl(null) }}" class="rl-chip {{ $activeType === '' ? 'rl-chip--on' : '' }}">
+                <span class="rl-chip-ico" style="background:#f3e8f4;color:#6a0f70;"><i class="ti ti-layout-grid"></i></span>
+                <span class="rl-chip-txt">
+                    <span class="rl-chip-name">All Types</span>
+                    <span class="rl-chip-n">{{ number_format(array_sum($typeCounts)) }}</span>
+                </span>
+            </a>
+            @foreach($typeCounts as $key => $count)
+                @php $m = $typeOf($key); @endphp
+                <a href="{{ $chipUrl($key) }}" class="rl-chip {{ $activeType === $key ? 'rl-chip--on' : '' }}">
+                    <span class="rl-chip-ico" style="background:{{ $m[2] }};color:{{ $m[3] }};"><i class="ti {{ $m[1] }}"></i></span>
+                    <span class="rl-chip-txt">
+                        <span class="rl-chip-name">{{ $m[0] }}</span>
+                        <span class="rl-chip-n">{{ number_format($count) }}</span>
+                    </span>
+                </a>
+            @endforeach
         </div>
-    @endif
+        @endif
+
+        {{-- ── Table ──────────────────────────────────────────────────── --}}
+        <div class="rl-table-wrap">
+            @if($recalls->isEmpty())
+                <div class="rl-empty">
+                    <div class="rl-empty-icon"><i class="ti ti-circle-check"></i></div>
+                    Nothing here — no recalls match this filter.
+                </div>
+            @else
+                <div class="rl-scroll">
+                <table class="rl-table">
+                    <thead>
+                        <tr>
+                            <th style="width:32px;"><input type="checkbox" @change="toggleAll($event)"></th>
+                            <th style="width:190px;">Patient</th>
+                            <th style="width:160px;">Recall Type</th>
+                            <th>Reason</th>
+                            <th style="width:92px;">Priority</th>
+                            <th style="width:118px;">Due Date</th>
+                            <th style="width:104px;">Status</th>
+                            <th style="width:150px;">Assigned To</th>
+                            <th style="width:110px;">Last Contact</th>
+                            <th style="width:124px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($recalls as $recall)
+                        @php
+                            $patient   = $recall->patient;
+                            $phone     = $patient?->phone ?? $recall->phone;
+                            $due       = $recall->follow_up_date ?? $recall->due_at;
+                            $isOverdue = ($recall->is_overdue || $recall->status === 'overdue') && $recall->status !== 'closed';
+                            $meta      = $typeOf($recall->purpose);
+                            $dueC      = $due ? \Illuminate\Support\Carbon::parse($due) : null;
+                            $lastC     = $recall->last_attempt_at;
+                        @endphp
+                        <tr class="{{ $recall->ignored_at ? 'rl-row--ignored' : '' }}">
+                            <td><input type="checkbox" class="rl-row-check" value="{{ $recall->id }}" @change="toggleRow({{ $recall->id }})"></td>
+
+                            <td>
+                                <div class="rl-name" title="{{ $patient?->name ?? $recall->person_name }}">{{ $patient?->name ?? $recall->person_name ?: 'Unnamed' }}</div>
+                                @if($phone)<a href="tel:{{ $phone }}" class="rl-phone-link">{{ $phone }}</a>@endif
+                            </td>
+
+                            <td>
+                                <span class="rl-type" style="background:{{ $meta[2] }};color:{{ $meta[3] }};" title="{{ $meta[0] }}">{{ $meta[0] }}</span>
+                            </td>
+
+                            <td>
+                                <div class="rl-reason" title="{{ $recall->note ?: $meta[4] }}">{{ $recall->note ?: $meta[4] }}</div>
+                                @if($recall->note)
+                                    <span class="rl-reason-sub">{{ $meta[4] }}</span>
+                                @elseif($recall->created_at)
+                                    <span class="rl-reason-sub">Queued {{ $recall->created_at->diffForHumans() }}</span>
+                                @endif
+                            </td>
+
+                            <td><span class="rl-pill rl-priority--{{ $recall->priority ?? 'medium' }}">{{ ucfirst($recall->priority ?? 'medium') }}</span></td>
+
+                            <td>
+                                @if($dueC)
+                                    <span class="rl-due">{{ $dueC->format('d M Y') }}</span>
+                                    @if($isOverdue)
+                                        <span class="rl-due-sub rl-due-sub--over">Overdue</span>
+                                    @elseif($dueC->isToday())
+                                        <span class="rl-due-sub rl-due-sub--soon">Today</span>
+                                    @elseif($dueC->isTomorrow())
+                                        <span class="rl-due-sub rl-due-sub--soon">Tomorrow</span>
+                                    @else
+                                        <span class="rl-due-sub rl-due-sub--calm">{{ $dueC->diffForHumans() }}</span>
+                                    @endif
+                                @else
+                                    <span class="rl-muted">—</span>
+                                @endif
+                            </td>
+
+                            <td><span class="rl-pill rl-pill--caps rl-status--{{ $recall->status }}">{{ $statuses[$recall->status] ?? $recall->status }}</span></td>
+
+                            <td>
+                                @if($recall->assigned_to)
+                                    <span class="rl-assigned">{{ $recall->assigned_to }}</span>
+                                @else
+                                    <span class="rl-muted">Unassigned</span>
+                                @endif
+                            </td>
+
+                            <td>
+                                @if($lastC)
+                                    <span class="rl-due">{{ $lastC->format('d M Y') }}</span>
+                                @else
+                                    <span class="rl-muted">—</span>
+                                @endif
+                            </td>
+
+                            <td>
+                                <div class="rl-actions">
+                                    @if($patient)
+                                    <a href="{{ route('patients.show', $patient->id) }}" class="rl-action-btn" title="Open record">
+                                        <i class="ti ti-external-link"></i>
+                                    </a>
+                                    @endif
+
+                                    @if($phone)
+                                    <x-communication.whatsapp-button
+                                        context="recall"
+                                        :patient-id="$patient?->id"
+                                        :number="$phone"
+                                        class="rl-action-btn"
+                                        title="Send recall reminder on WhatsApp">
+                                        <i class="ti ti-brand-whatsapp"></i>
+                                    </x-communication.whatsapp-button>
+                                    @endif
+
+                                    @if($patient && $recall->status !== 'closed')
+                                    <button type="button" class="rl-action-btn" title="Convert to Opportunity"
+                                            onclick="rlOpenConvert({{ $recall->id }}, '{{ addslashes($patient->name) }}')">
+                                        <i class="ti ti-star"></i>
+                                    </button>
+                                    @endif
+
+                                    @if(!$recall->ignored_at)
+                                    <form method="POST" action="{{ route('relationship.recalls.ignore', $recall->id) }}" style="display:inline;">
+                                        @csrf
+                                        <button type="submit" class="rl-action-btn rl-action-btn--muted" title="Ignore — exclude this item from the queue"
+                                                onclick="return confirm('Ignore this recall? It will be hidden from this list until restored.')">
+                                            <i class="ti ti-eye-off"></i>
+                                        </button>
+                                    </form>
+                                    @else
+                                    <form method="POST" action="{{ route('relationship.recalls.unignore', $recall->id) }}" style="display:inline;">
+                                        @csrf
+                                        <button type="submit" class="rl-action-btn" title="Restore to queue"><i class="ti ti-eye"></i></button>
+                                    </form>
+                                    @endif
+                                </div>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+                </div>
+
+                {{-- ── Bulk bar — unchanged behaviour, restyled ───────── --}}
+                <div class="rl-bulk-bar" x-show="selected.length > 0 || selectAllMatching" x-transition style="display:none;">
+                    <span class="rl-bulk-count" x-show="!selectAllMatching" x-text="selected.length + ' selected'"></span>
+                    <span class="rl-bulk-count" x-show="selectAllMatching">All {{ $recalls->total() }} matching this filter selected</span>
+
+                    <template x-if="!selectAllMatching && selected.length === {{ $recalls->count() }} && {{ $recalls->total() }} > {{ $recalls->count() }}">
+                        <button type="button" class="rl-bulk-btn" @click="selectAllMatching = true">
+                            Select all {{ $recalls->total() }} matching this filter
+                        </button>
+                    </template>
+                    <template x-if="selectAllMatching">
+                        <button type="button" class="rl-bulk-btn" @click="selectAllMatching = false">Just these {{ $recalls->count() }}</button>
+                    </template>
+
+                    {{-- Bulk assign --}}
+                    <form method="POST" action="{{ route('relationship.recalls.bulk-assign') }}" style="display:flex;align-items:center;gap:6px;"
+                          onsubmit="return confirm('Assign the selected recall(s) to this staff member?')">
+                        @csrf
+                        <template x-if="selectAllMatching">
+                            <div style="display:inline;">
+                                <input type="hidden" name="select_all" value="1">
+                                <input type="hidden" name="search" value="{{ $filters['search'] ?? '' }}">
+                                <input type="hidden" name="status" value="{{ $filters['status'] ?? '' }}">
+                                <input type="hidden" name="priority" value="{{ $filters['priority'] ?? '' }}">
+                                <input type="hidden" name="assigned_to" value="{{ $filters['assigned_to'] ?? '' }}">
+                                <input type="hidden" name="type" value="{{ $filters['type'] ?? '' }}">
+                                <input type="hidden" name="show_ignored" value="{{ $showIgnored ? '1' : '' }}">
+                            </div>
+                        </template>
+                        <template x-for="id in selected" :key="'a'+id">
+                            <input type="hidden" name="recall_ids[]" :value="id" x-show="!selectAllMatching">
+                        </template>
+                        <select name="assigned_to" class="rl-bulk-select" required>
+                            <option value="">Assign to…</option>
+                            @foreach($staff as $member)
+                                <option value="{{ $member->id }}">{{ $member->name }}</option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="rl-bulk-btn"><i class="ti ti-user-check"></i> Assign</button>
+                    </form>
+
+                    {{-- Bulk dismiss --}}
+                    <form method="POST" action="{{ route('relationship.recalls.bulk-dismiss') }}" style="display:inline;"
+                          onsubmit="return confirm('Dismiss the selected recall(s)? They will be marked closed.')">
+                        @csrf
+                        <template x-if="selectAllMatching">
+                            <div style="display:inline;">
+                                <input type="hidden" name="select_all" value="1">
+                                <input type="hidden" name="search" value="{{ $filters['search'] ?? '' }}">
+                                <input type="hidden" name="status" value="{{ $filters['status'] ?? '' }}">
+                                <input type="hidden" name="priority" value="{{ $filters['priority'] ?? '' }}">
+                                <input type="hidden" name="assigned_to" value="{{ $filters['assigned_to'] ?? '' }}">
+                                <input type="hidden" name="type" value="{{ $filters['type'] ?? '' }}">
+                                <input type="hidden" name="show_ignored" value="{{ $showIgnored ? '1' : '' }}">
+                            </div>
+                        </template>
+                        <template x-for="id in selected" :key="'d'+id">
+                            <input type="hidden" name="recall_ids[]" :value="id" x-show="!selectAllMatching">
+                        </template>
+                        <button type="submit" class="rl-bulk-btn rl-bulk-btn--danger">
+                            <i class="ti ti-check"></i>
+                            <span x-text="selectAllMatching ? 'Dismiss all {{ $recalls->total() }}' : 'Bulk Dismiss'"></span>
+                        </button>
+                    </form>
+
+                    <button type="button" @click="clearSelection()" style="margin-left:auto;background:none;border:none;color:#c9a8d4;cursor:pointer;font-size:12px;">
+                        ✕ Clear
+                    </button>
+                </div>
+
+                {{-- ── Footer / pagination — existing paginator, restyled ── --}}
+                @php
+                    $cur  = $recalls->currentPage();
+                    $last = $recalls->lastPage();
+                    $from = max(1, $cur - 2);
+                    $to   = min($last, $cur + 2);
+                @endphp
+                <div class="rl-foot">
+                    <span>Showing <strong>{{ number_format($recalls->firstItem() ?? 0) }}</strong> to
+                          <strong>{{ number_format($recalls->lastItem() ?? 0) }}</strong> of
+                          <strong>{{ number_format($recalls->total()) }}</strong> recalls</span>
+                    <span class="rl-muted">· {{ $recalls->perPage() }} per page</span>
+
+                    @if($recalls->hasPages())
+                    <div class="rl-pg">
+                        @if($recalls->onFirstPage())
+                            <span class="rl-pgb rl-pgb--off">← Previous</span>
+                        @else
+                            <a href="{{ $recalls->previousPageUrl() }}" class="rl-pgb">← Previous</a>
+                        @endif
+
+                        @if($from > 1)
+                            <a href="{{ $recalls->url(1) }}" class="rl-pgb">1</a>
+                            @if($from > 2)<span class="rl-pg-gap">…</span>@endif
+                        @endif
+
+                        @for($i = $from; $i <= $to; $i++)
+                            @if($i === $cur)
+                                <span class="rl-pgb rl-pgb--on">{{ $i }}</span>
+                            @else
+                                <a href="{{ $recalls->url($i) }}" class="rl-pgb">{{ $i }}</a>
+                            @endif
+                        @endfor
+
+                        @if($to < $last)
+                            @if($to < $last - 1)<span class="rl-pg-gap">…</span>@endif
+                            <a href="{{ $recalls->url($last) }}" class="rl-pgb">{{ number_format($last) }}</a>
+                        @endif
+
+                        @if($recalls->hasMorePages())
+                            <a href="{{ $recalls->nextPageUrl() }}" class="rl-pgb">Next →</a>
+                        @else
+                            <span class="rl-pgb rl-pgb--off">Next →</span>
+                        @endif
+                    </div>
+                    @endif
+                </div>
+            @endif
+        </div>
+
+    </div>{{-- /.rl --}}
 
     {{-- ══════════════════════════════════════════════════════════════════
          Add Recall modal — unchanged from the original Recall Pipeline:

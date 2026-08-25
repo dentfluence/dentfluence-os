@@ -104,18 +104,23 @@
                 'label' => 'Relationships',
                 'icon'  => '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
             ])
-            {{-- WhatsApp (2026-07-09) — points at the PRE-native list
-                 (relationship.whatsapp), NOT the legacy /communication/whatsapp
-                 inbox. Given a sidebar slot as a deliberate exception: unlike
-                 Recalls/Pipeline/Opportunities (nested workflow tools reached
-                 via the PRE subnav only), checking messages is a
-                 "regardless of what else you're doing" action, closer to the
-                 topbar notification bell than a workflow page. --}}
-            @include('components.sidebar-item', [
-                'href'  => route('relationship.whatsapp'),
-                'label' => 'WhatsApp',
-                'icon'  => '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
-            ])
+            {{-- WhatsApp — sidebar slot REMOVED 2026-08-25 (Sumit).
+                 The 2026-07-09 exception (messaging as a
+                 "regardless-of-what-else-you're-doing" action, closer to the
+                 notification bell than a workflow page) is reversed: WhatsApp
+                 is a communication capability INSIDE PRE, not a primary
+                 navigation destination, and a sidebar entry duplicated the
+                 PRE subnav tab.
+
+                 Nothing was deleted — the module, routes
+                 (relationship.whatsapp + /communication/whatsapp/*),
+                 permissions, templates, conversations and logs are all
+                 untouched. It remains reachable from:
+                   · the PRE subnav tab (relationship.layouts.app $relTabs)
+                   · every contextual <x-communication.whatsapp-button>
+                     (Today's Actions, Recalls, patient/relationship profile,
+                     communication workflows)
+                 Do not re-add here without reversing that decision. --}}
             @if($user->canAccess('marketing'))
                 @include('components.sidebar-item', [
                     'href'  => route('marketing.overview'),
