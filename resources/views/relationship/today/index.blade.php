@@ -446,116 +446,107 @@
         margin-bottom: 6px;
     }
 
-    /* ── Category card grid (quick glimpse — each card scrolls internally) ── */
-    #df-content-inner { padding: 10px 24px 8px !important; }
+    /* ══════════════════════════════════════════════════════════════════
+       WORKLIST — dense operational table (visual redevelopment 2026-08-25)
+       One row = one action. Column order follows how the day is worked:
+       urgency → who → what to do → when → who owns it → context.
+       Purely presentational: no new data, no new endpoints.
+    ══════════════════════════════════════════════════════════════════ */
+    #df-content-inner { padding: 10px 20px 8px !important; }
 
-    .ta-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-        gap: 12px;
-        margin-bottom: 12px;
-    }
+    .taw { max-width: 1560px; margin: 0 auto; }
 
-    .ta-card {
-        background: #fff;
-        border: 1px solid #e8dff0;
-        border-radius: 12px;
-        display: flex;
-        flex-direction: column;
-        height: 250px;
-        overflow: hidden;
-    }
+    /* ── Header ── */
+    .taw-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:9px; }
+    .taw-title { font-family:'Cormorant Garamond', Georgia, serif; font-size:24px; font-weight:600; color:#1a0320; margin:0; line-height:1.15; }
+    .taw-sub { font-size:11.5px; color:#9a7aaa; margin:2px 0 0; }
+    .taw-count { font-size:11px; font-weight:700; color:#6a0f70; background:#f3e8f4; border:1px solid #e2cfe6; border-radius:99px; padding:2px 9px; white-space:nowrap; }
+    .taw-spacer { flex:1 1 auto; }
+    .taw-search { position:relative; }
+    .taw-search i { position:absolute; left:8px; top:50%; transform:translateY(-50%); font-size:13px; color:#b3a0b8; }
+    .taw-search input { width:236px; padding:5px 8px 5px 26px; border:1px solid #e2d4e8; border-radius:7px; font-size:12px; color:#3a1140; background:#fff; }
+    .taw-search input:focus { outline:none; border-color:#6a0f70; box-shadow:0 0 0 2px #f3e8f4; }
 
-    .ta-card-head {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 9px 14px;
-        border-bottom: 1px solid #f0e8f5;
-        background: #faf5fc;
-        flex-shrink: 0;
-    }
+    /* ── Toolbar ── */
+    .taw-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:7px 9px; background:#fff; border:1px solid #ece2f1; border-radius:9px; margin-bottom:8px; }
+    .taw-lbl { font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#a892b0; margin-right:2px; }
+    .taw-btn { display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border:1px solid #e2d4e8; border-radius:7px; background:#fff; color:#5a2a62; font-size:11.5px; font-weight:600; text-decoration:none; cursor:pointer; white-space:nowrap; line-height:1.3; }
+    .taw-btn:hover { background:#faf5fc; }
+    .taw-btn--on { border-color:#6a0f70; background:#f3e8f4; color:#6a0f70; }
+    .taw-btn--primary { background:#6a0f70; border-color:#6a0f70; color:#fff; }
+    .taw-btn--primary:hover { background:#4e0a53; }
+    .taw-btn--alert { border-color:#e3b3b3; background:#fff6f6; color:#c92a2a; }
+    .taw-pill { min-width:16px; text-align:center; border-radius:9px; padding:0 5px; font-size:10px; font-weight:700; background:#ede4f7; color:#6a0f70; }
+    .taw-btn--alert .taw-pill { background:#c92a2a; color:#fff; }
+    .taw-date { padding:5px 8px; border:1px solid #e2d4e8; border-radius:7px; font-size:11.5px; color:#3a1140; background:#fff; }
+    .taw-sep { width:1px; height:18px; background:#ece2f1; margin:0 2px; }
 
-    .ta-card-icon {
-        width: 26px; height: 26px; border-radius: 7px; background: #ede4f7;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 13px; color: #6a0f70; flex-shrink: 0;
-    }
+    /* ── Category strip ── */
+    .taw-cats { display:flex; gap:5px; overflow-x:auto; padding-bottom:5px; margin-bottom:8px; }
+    .taw-cats::-webkit-scrollbar { height:5px; }
+    .taw-cats::-webkit-scrollbar-thumb { background:#e6dced; border-radius:3px; }
+    .taw-cat { display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border:1px solid #e6dced; border-radius:99px; background:#fff; font-size:11px; font-weight:600; color:#6b5573; cursor:pointer; white-space:nowrap; line-height:1.4; }
+    .taw-cat:hover { border-color:#cfb4d6; }
+    .taw-cat--on { background:#6a0f70; border-color:#6a0f70; color:#fff; }
+    .taw-cat-n { font-size:10px; font-weight:700; color:#9a84a2; }
+    .taw-cat--on .taw-cat-n { color:#e9d3ee; }
 
-    .ta-card-label {
-        font-weight: 600; font-size: 12.5px; color: #1a0320; flex: 1; min-width: 0;
-        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
+    /* ── Table ── */
+    .taw-wrap { background:#fff; border:1px solid #ece2f1; border-radius:10px; overflow:hidden; }
+    .taw-scroll { overflow:auto; max-height:clamp(220px, calc(100vh - 296px), 900px); }
+    table.taw-t { width:100%; border-collapse:separate; border-spacing:0; font-size:12px; }
+    .taw-t thead th { position:sticky; top:0; z-index:2; background:#faf7fc; border-bottom:1px solid #ece2f1; padding:7px 10px; text-align:left; font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#8a6f92; white-space:nowrap; }
+    .taw-t tbody td { border-bottom:1px solid #f4eef7; padding:6px 10px; vertical-align:middle; color:#3a1140; }
+    .taw-t tbody tr:last-child td { border-bottom:none; }
+    .taw-t tbody tr:hover td { background:#fdfaff; }
+    .taw-t tbody tr.is-done td { background:#fbfdfb; }
+    .taw-t tbody tr.is-done .taw-name { color:#7d8a82; }
+    .taw-t tbody tr.is-done .taw-do { color:#6f7d75; font-weight:500; }
 
-    .ta-card-count {
-        font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 99px;
-        background: #ede4f7; color: #6a0f70; flex-shrink: 0;
-    }
+    /* ── Cells ── */
+    .taw-pr { display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; white-space:nowrap; }
+    .taw-dot { width:7px; height:7px; border-radius:50%; flex:0 0 auto; }
+    .taw-pr--high   { color:#b52020; } .taw-pr--high .taw-dot   { background:#b52020; }
+    .taw-pr--medium { color:#a05c00; } .taw-pr--medium .taw-dot { background:#d98d1a; }
+    .taw-pr--low    { color:#1a7a45; } .taw-pr--low .taw-dot    { background:#35a06a; }
 
-    .ta-card-list { flex: 1; overflow-y: auto; }
+    .taw-name { font-weight:600; color:#1a0320; white-space:nowrap; max-width:180px; overflow:hidden; text-overflow:ellipsis; }
+    .taw-name a { color:inherit; text-decoration:none; }
+    .taw-name a:hover { color:#6a0f70; text-decoration:underline; }
+    .taw-do { font-weight:600; color:#2c1033; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:400px; }
+    .taw-why { display:block; font-size:11px; color:#8a7a92; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:400px; }
+    .taw-why--ok { color:#1a7a45; }
+    .taw-why--try { color:#a05c00; }
+    .taw-due { white-space:nowrap; font-variant-numeric:tabular-nums; color:#4a3350; }
+    .taw-due--over { color:#c92a2a; font-weight:700; }
+    .taw-due--none { color:#b3a0b8; }
+    .taw-owner { white-space:nowrap; color:#5a4a62; max-width:120px; overflow:hidden; text-overflow:ellipsis; }
+    .taw-owner--none { color:#b8a8c0; }
+    .taw-tag { display:inline-block; padding:2px 7px; border-radius:5px; background:#f4eef7; color:#684a72; font-size:10.5px; font-weight:600; white-space:nowrap; max-width:150px; overflow:hidden; text-overflow:ellipsis; }
+    .taw-ch { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:#6b5573; white-space:nowrap; }
+    .taw-st { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:99px; font-size:10.5px; font-weight:700; white-space:nowrap; }
+    .taw-st--open  { background:#f3e8f4; color:#6a0f70; }
+    .taw-st--tried { background:#fff4e0; color:#a05c00; }
+    .taw-st--over  { background:#fdeaea; color:#b52020; }
+    .taw-st--done  { background:#e8f7ef; color:#1a7a45; }
+    .taw-acts { display:flex; align-items:center; gap:4px; justify-content:flex-end; }
+    .taw-ib { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; border:1px solid #e2d4e8; background:#fff; color:#6a0f70; font-size:13px; cursor:pointer; text-decoration:none; flex:0 0 auto; }
+    .taw-ib:hover { background:#f3e8f4; }
+    .taw-ib--go { background:#6a0f70; border-color:#6a0f70; color:#fff; }
+    .taw-ib--go:hover { background:#4e0a53; }
+    .taw-ib--ok { border-color:#cfe9db; background:#f2fbf6; color:#1a7a45; cursor:default; }
+    .taw-ib:disabled { opacity:.55; cursor:not-allowed; }
 
-    .ta-row {
-        display: flex; align-items: center; gap: 8px;
-        padding: 7px 12px; border-bottom: 1px solid #f8f4fc;
-        transition: background 100ms;
-    }
-
-    .ta-row:last-child { border-bottom: none; }
-    .ta-row:hover { background: #fdf9ff; }
-    .ta-row.ta-row--actioned { opacity: 0.4; }
-
-    /* Done rows (call handled today) — faded but still readable on hover,
-       with the logged outcome shown in place of the reason line. */
-    .ta-row.ta-row--done { opacity: 0.5; }
-    .ta-row.ta-row--done:hover { opacity: 0.85; }
-
-    .ta-row-outcome {
-        font-size: 11px; color: #1a7a45; font-weight: 600;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-
-    /* Last attempt on a still-open row (e.g. "No answer · 11:20 AM") */
-    .ta-row-attempt {
-        font-size: 11px; color: #a05c00; font-weight: 600;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-
-    [x-cloak] { display: none !important; }
-
-    .ta-row-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-    .ta-row-dot--high   { background: #b52020; }
-    .ta-row-dot--medium { background: #a05c00; }
-    .ta-row-dot--low    { background: #1a7a45; }
-
-    .ta-row-body { flex: 1; min-width: 0; }
-    .ta-row-name {
-        font-weight: 600; font-size: 12.5px; color: #1a0320;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .ta-row-reason {
-        font-size: 11px; color: #6a5a76;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-
-    .ta-row-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-
-    .ta-row-btn-call {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: 23px; height: 23px; border-radius: 6px; background: #6a0f70;
-        color: #fff; border: none; cursor: pointer; font-size: 11px;
-    }
-    .ta-row-btn-call:hover { background: #4e0a53; }
-
-    .ta-row-btn-open {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: 23px; height: 23px; border-radius: 6px; color: #6a0f70;
-        border: 1px solid #dfc5e1; text-decoration: none; font-size: 11px;
-    }
-
-    .ta-row-btn-done {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: 23px; height: 23px; color: #1a7a45; font-size: 13px;
-    }
+    /* ── Footer / pagination ── */
+    .taw-foot { display:flex; align-items:center; gap:10px; padding:6px 10px; border-top:1px solid #f0e8f5; background:#fdfbfe; font-size:11px; color:#8a7a92; flex-wrap:wrap; }
+    .taw-foot a { color:#6a0f70; text-decoration:none; font-weight:600; }
+    .taw-foot a:hover { text-decoration:underline; }
+    .taw-pg { display:flex; align-items:center; gap:4px; margin-left:auto; }
+    .taw-pgb { min-width:24px; height:24px; padding:0 7px; border:1px solid #e2d4e8; border-radius:6px; background:#fff; color:#5a2a62; font-size:11px; font-weight:600; cursor:pointer; }
+    .taw-pgb:hover:not(:disabled) { background:#f3e8f4; }
+    .taw-pgb:disabled { opacity:.4; cursor:not-allowed; }
+    .taw-pgn { font-variant-numeric:tabular-nums; }
+    .taw-none { padding:26px 16px; text-align:center; color:#9a8aa2; font-size:12px; }
 
     .ta-empty-footnote { font-size: 11.5px; color: #b3a0b8; text-align: center; padding: 6px 0 2px; }
 
@@ -593,251 +584,433 @@
     @keydown.escape.window="closeDrawer()"
 >
 
-    {{-- ── Page Header ─────────────────────────────────────────────────── --}}
-    <div class="ta-page-header">
-        <div class="ta-page-header-title-col">
-            <h1 class="ta-page-title">
-                @if($boardMode === 'pending') Pending Calls
-                @elseif($mode === 'today') Today's Actions
-                @elseif($mode === 'future') Upcoming — {{ $selectedDate->format('d M Y') }}
-                @else Completed — {{ $selectedDate->format('d M Y') }}
-                @endif
-            </h1>
-            <p class="ta-page-sub">
-                @if($boardMode === 'pending')
-                    Calls that were due earlier and are still open. Work these down to zero — completing or logging an outcome removes them.
-                @elseif($mode === 'today')
-                    {{ now()->format('l, d F Y') }} &nbsp;·&nbsp; Generated from live patient data
-                @elseif($mode === 'future')
-                    Preview based on today's data — call, follow-up, and recall dates already on file. A patient could still visit before then and drop off this list.
-                @else
-                    Calls logged as completed on this date, with their outcome. Read-only.
-                @endif
-            </p>
-        </div>
-        <div class="ta-page-header-controls-col" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <span class="ta-total-badge">
-                <i class="ti ti-list-check"></i>
-                {{ $totalCount }} {{ Str::plural(($mode === 'today' ? 'action' : 'call'), $totalCount) }}
+    {{-- ══════════════════════════════════════════════════════════════════
+         WORKLIST DATA PREP (view layer only)
+         Flattens the category groups into one operational list and cleans
+         internal wording for display. No queries, no engine calls.
+    ══════════════════════════════════════════════════════════════════ --}}
+    @php
+        // Internal automation-rule names must never surface to reception.
+        // Display-only translation — the stored text itself is untouched.
+        $ruleLabels = [
+            'implant_followup'                => 'Implant follow-up',
+            'post_treatment_followup'         => 'Post-treatment follow-up',
+            'recall_6months'                  => 'Six-month recall due',
+            'membership_renewal_30d'          => 'Membership renewal due',
+            'birthday_3d'                     => 'Birthday in 3 days',
+            'opportunity_nudge_7d'            => 'Treatment decision follow-up',
+            'estimate_followup_3d'            => 'Estimate follow-up',
+            'missed_appointment_followup'     => 'Missed appointment follow-up',
+            'lab_ready_call'                  => 'Lab work ready',
+            'payment_overdue_3d'              => 'Payment follow-up',
+            'presentation_callback_requested' => 'Call-back requested by patient',
+            'case_opened_followup_2d'         => 'Case follow-up',
+            'case_more_time_requested'        => 'Patient asked for more time',
+        ];
+
+        $humanise = function (?string $text) use ($ruleLabels) {
+            $text = trim((string) $text);
+            if ($text === '') { return ''; }
+            $text = preg_replace('/\[\s*auto\s*\]\s*/i', '', $text);
+            $text = preg_replace_callback('/rule\s*:\s*([a-z0-9_]+)/i', function ($m) use ($ruleLabels) {
+                $key = strtolower($m[1]);
+                return $ruleLabels[$key] ?? ucfirst(str_replace('_', ' ', $key));
+            }, $text);
+            return trim($text);
+        };
+
+        $channelMeta = [
+            'call'     => ['ti-phone',          'Call'],
+            'phone'    => ['ti-phone',          'Call'],
+            'whatsapp' => ['ti-brand-whatsapp', 'WhatsApp'],
+            'sms'      => ['ti-message-2',      'SMS'],
+            'email'    => ['ti-mail',           'Email'],
+            'visit'    => ['ti-building-store', 'In clinic'],
+        ];
+
+        $todayStr    = $today->toDateString();
+        $tomorrowStr = $today->copy()->addDay()->toDateString();
+        $prRank      = ['high' => 0, 'medium' => 1, 'low' => 2];
+
+        $rows = [];
+        foreach ($groups as $catKey => $group) {
+            foreach ($group['items'] as $idx => $item) {
+                $done     = $item['done'] ?? null;
+                $lastCall = $item['last_call'] ?? null;
+
+                // ── WHEN ── the item's own due date, else the most
+                // meaningful date its meta already carries. Never invented.
+                $parse = function ($v) {
+                    try { return $v ? \Illuminate\Support\Carbon::parse($v) : null; }
+                    catch (\Throwable $e) { return null; }
+                };
+                $dueTxt = '—'; $dueCls = 'taw-due--none'; $dueTip = 'No date on record';
+                $d = $parse($item['due_date'] ?? null);
+                $kind = 'due';
+                if (! $d) {
+                    foreach ([['due_date','due'], ['follow_up_date','due'], ['appointment_date','appt'],
+                              ['end_date','expires'], ['ready_since','ready'], ['visit_date','visit']] as $probe) {
+                        if (! empty($item['meta'][$probe[0]])) {
+                            $d = $parse($item['meta'][$probe[0]]);
+                            if ($d) { $kind = $probe[1]; break; }
+                        }
+                    }
+                }
+                if ($d) {
+                    $ds = $d->toDateString();
+                    $long = $d->format('D, d M Y');
+                    if ($kind === 'due') {
+                        if ($ds === $todayStr)          { $dueTxt = 'Today';    $dueCls = ''; $dueTip = 'Due today'; }
+                        elseif ($ds === $tomorrowStr)   { $dueTxt = 'Tomorrow'; $dueCls = ''; $dueTip = 'Due ' . $long; }
+                        elseif ($ds < $todayStr)        { $dueTxt = $d->format('d M'); $dueCls = 'taw-due--over'; $dueTip = 'Overdue since ' . $long; }
+                        else                            { $dueTxt = $d->format('d M'); $dueCls = ''; $dueTip = 'Due ' . $long; }
+                    } else {
+                        $prefix = ['appt' => 'Appt', 'expires' => 'Expires', 'ready' => 'Ready', 'visit' => 'Visit'][$kind] ?? '';
+                        $when   = $ds === $todayStr ? 'today' : ($ds === $tomorrowStr ? 'tomorrow' : $d->format('d M'));
+                        $dueTxt = trim($prefix . ' ' . $when);
+                        $dueCls = ($kind === 'expires' && $ds < $todayStr) ? 'taw-due--over' : '';
+                        $dueTip = $prefix . ': ' . $long;
+                        if ($kind === 'appt' && ! empty($item['meta']['appointment_time'])) {
+                            $dueTip .= ' at ' . $item['meta']['appointment_time'];
+                        }
+                    }
+                }
+                $isOverdue = $dueCls === 'taw-due--over';
+
+                // ── CHANNEL ── real values only: the queue's own channel, the
+                // WhatsApp-first birthday path, otherwise this board's call action.
+                $chKey = strtolower((string) ($item['meta']['channel'] ?? ''));
+                if (($item['primary_action'] ?? null) === 'whatsapp') { $chKey = 'whatsapp'; }
+                if ($chKey === '' || ! isset($channelMeta[$chKey]))   { $chKey = 'call'; }
+
+                // ── OWNER ── whoever actually handled/attempted it. PRE has no
+                // assignment field, so unworked rows read "Unassigned" rather
+                // than inventing a name.
+                $owner = $done['by'] ?? $lastCall['by'] ?? null;
+
+                // ── STATUS ──
+                if ($done)          { $stCls = 'taw-st--done';  $stTxt = 'Done'; }
+                elseif ($lastCall)  { $stCls = 'taw-st--tried'; $stTxt = 'Attempted'; }
+                elseif ($isOverdue) { $stCls = 'taw-st--over';  $stTxt = 'Overdue'; }
+                else                { $stCls = 'taw-st--open';  $stTxt = 'Open'; }
+
+                $doText  = $humanise($item['suggested_action'] ?? '') ?: 'Call the patient';
+                $whyText = $humanise($item['reason'] ?? '');
+
+                $rows[] = [
+                    'id' => $catKey . '_' . $idx, 'cat' => $catKey, 'catLabel' => $group['label'],
+                    'item' => $item, 'done' => $done, 'lastCall' => $lastCall,
+                    'dueTxt' => $dueTxt, 'dueCls' => $dueCls, 'dueTip' => $dueTip,
+                    'dueSort' => $d ? $d->toDateString() : '9999-12-31',
+                    'chIcon' => $channelMeta[$chKey][0], 'chLabel' => $channelMeta[$chKey][1],
+                    'owner' => $owner, 'stCls' => $stCls, 'stTxt' => $stTxt,
+                    'doText' => $doText, 'whyText' => $whyText,
+                    'sortDone' => $done ? 1 : 0,
+                    'sortPr' => $prRank[$item['priority'] ?? 'low'] ?? 3,
+                    'sortCat' => $group['priority'] ?? 99,
+                ];
+            }
+        }
+
+        // Worked order: open work first, then urgency, then the clinic's own
+        // category order, then oldest due date.
+        usort($rows, fn ($a, $b) =>
+            [$a['sortDone'], $a['sortPr'], $a['sortCat'], $a['dueSort']]
+            <=> [$b['sortDone'], $b['sortPr'], $b['sortCat'], $b['dueSort']]);
+
+        $rowMeta = array_map(fn ($r) => [
+            'id'  => $r['id'],
+            'cat' => $r['cat'],
+            's'   => mb_strtolower(($r['item']['patient_name'] ?? '') . ' ' . $r['doText'] . ' ' . $r['whyText'] . ' ' . $r['catLabel']),
+        ], $rows);
+
+        $activeGroups = collect($groups)->filter(fn ($g) => $g['count'] > 0 || ($g['done_count'] ?? 0) > 0);
+        $emptyCount   = collect($groups)->filter(fn ($g) => $g['count'] === 0 && ($g['done_count'] ?? 0) === 0)->count();
+    @endphp
+
+    <script>window.__TA_ROWS = @json($rowMeta);</script>
+
+    <div class="taw" x-data="taWorklist(window.__TA_ROWS || [])">
+
+        {{-- ── Header: what this is, how much of it, and find-a-patient ── --}}
+        <div class="taw-head">
+            <div style="min-width:0;">
+                <h1 class="taw-title">
+                    @if($boardMode === 'pending') Pending Calls
+                    @elseif($mode === 'today') Today's Actions
+                    @elseif($mode === 'future') Upcoming — {{ $selectedDate->format('d M Y') }}
+                    @else Completed — {{ $selectedDate->format('d M Y') }}
+                    @endif
+                </h1>
+                <p class="taw-sub">
+                    @if($boardMode === 'pending')
+                        Calls due before today that are still open — work these down to zero.
+                    @elseif($mode === 'today')
+                        {{ now()->format('l, d F Y') }} &nbsp;·&nbsp; Generated from live patient data
+                    @elseif($mode === 'future')
+                        Preview from today's data — a patient could still visit before this date and drop off.
+                    @else
+                        Calls logged as completed on this date, with their outcome. Read-only.
+                    @endif
+                </p>
+            </div>
+
+            <span class="taw-count">
+                {{ $totalCount }} open {{ Str::plural(($mode === 'today' ? 'action' : 'call'), $totalCount) }}
             </span>
 
-            @if($boardMode === 'today' && $mode === 'today')
-            {{-- Pending Calls — the missed-work backlog (Sprint A 2026-08-24).
-                 Red when non-empty: it is the accountability signal. --}}
-            <a href="{{ route('relationship.today.pending') }}"
-               style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;border:1px solid {{ $pendingCount > 0 ? '#c92a2a' : '#dfc5e1' }};background:{{ $pendingCount > 0 ? '#fff5f5' : '#fff' }};color:{{ $pendingCount > 0 ? '#c92a2a' : '#6a0f70' }};">
-                <i class="ti ti-phone-pause"></i> Pending Calls
-                <span style="min-width:18px;text-align:center;border-radius:9px;padding:1px 6px;background:{{ $pendingCount > 0 ? '#c92a2a' : '#e9dfea' }};color:{{ $pendingCount > 0 ? '#fff' : '#6a0f70' }};">{{ $pendingCount }}</span>
-            </a>
-            @elseif($boardMode === 'pending')
-            <a href="{{ route('relationship.today') }}"
-               style="display:flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid #dfc5e1;border-radius:8px;background:#fff;color:#6a0f70;font-size:12px;font-weight:600;text-decoration:none;">
-                <i class="ti ti-arrow-left"></i> Back to Today's Actions
-            </a>
-            @endif
+            <div class="taw-spacer"></div>
 
-            @if($boardMode === 'today')
-            {{-- Date picker — quick chips + a native date input for any day --}}
-            <div style="display:flex;align-items:center;gap:6px;">
-                <a href="{{ route('relationship.today') }}"
-                   style="padding:6px 10px;border:1px solid {{ $mode === 'today' ? '#6a0f70' : '#dfc5e1' }};border-radius:8px;background:{{ $mode === 'today' ? '#f3e8f4' : '#fff' }};color:#6a0f70;font-size:12px;font-weight:600;text-decoration:none;">
-                    Today
-                </a>
-                <a href="{{ route('relationship.today') }}?date={{ $today->copy()->addDay()->toDateString() }}"
-                   style="padding:6px 10px;border:1px solid #dfc5e1;border-radius:8px;background:#fff;color:#6a0f70;font-size:12px;font-weight:600;text-decoration:none;">
-                    Tomorrow
-                </a>
-                <input type="date" value="{{ $selectedDate->toDateString() }}"
-                       onchange="window.location.href = '{{ route('relationship.today') }}?date=' + this.value"
-                       style="padding:6px 10px;border:1px solid #dfc5e1;border-radius:8px;font-size:12px;color:#4e0a53;background:#fff;">
+            <div class="taw-search">
+                <i class="ti ti-search"></i>
+                <input type="search" x-model="q" placeholder="Search patient or reason…" aria-label="Search actions">
             </div>
+        </div>
+
+        {{-- ── Toolbar: date scope, board switch, add, refresh ──────────── --}}
+        <div class="taw-bar">
+            @if($boardMode === 'today')
+                <span class="taw-lbl">Date</span>
+                <a href="{{ route('relationship.today') }}" class="taw-btn {{ $mode === 'today' ? 'taw-btn--on' : '' }}">Today</a>
+                <a href="{{ route('relationship.today') }}?date={{ $today->copy()->addDay()->toDateString() }}" class="taw-btn">Tomorrow</a>
+                <input type="date" class="taw-date" value="{{ $selectedDate->toDateString() }}"
+                       onchange="window.location.href = '{{ route('relationship.today') }}?date=' + this.value"
+                       aria-label="Pick a date">
+                @if($mode === 'today')<span class="taw-sep"></span>@endif
             @endif
 
-            {{-- + Add Call (2026-07-08) — opens the same global Create Task
-                 modal used by Huddle, pre-set to the Call category, so a
-                 manually-added treatment follow-up or vendor/lab/doctor call
-                 lands on this same board. See
-                 docs/feature-specs/feature-spec-manual-add-call.md. --}}
-            <button
-                type="button"
-                onclick="window.dispatchEvent(new CustomEvent('open-create-task', { detail: { category: 'call' } }))"
-                style="padding:6px 12px;border:1px solid #6a0f70;border-radius:8px;background:#6a0f70;color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;"
-            >
+            @if($boardMode === 'today' && $mode === 'today')
+                <a href="{{ route('relationship.today.pending') }}"
+                   class="taw-btn {{ $pendingCount > 0 ? 'taw-btn--alert' : '' }}">
+                    <i class="ti ti-phone-pause"></i> Pending Calls
+                    <span class="taw-pill">{{ $pendingCount }}</span>
+                </a>
+            @elseif($boardMode === 'pending')
+                <a href="{{ route('relationship.today') }}" class="taw-btn">
+                    <i class="ti ti-arrow-left"></i> Back to Today's Actions
+                </a>
+            @endif
+
+            <div class="taw-spacer"></div>
+
+            <button type="button" class="taw-btn taw-btn--primary"
+                    onclick="window.dispatchEvent(new CustomEvent('open-create-task', { detail: { category: 'call' } }))">
                 <i class="ti ti-plus"></i> Add Call
             </button>
-
-            <button
-                onclick="window.location.reload()"
-                style="padding:6px 12px;border:1px solid #dfc5e1;border-radius:8px;background:#fff;color:#6a0f70;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;"
-            >
+            <button type="button" class="taw-btn" onclick="window.location.reload()">
                 <i class="ti ti-refresh"></i> Refresh
             </button>
         </div>
-    </div>
 
-    {{-- ── All Done / Nothing Found Banner ─────────────────────────────── --}}
-    @if($totalCount === 0)
-    <div class="ta-all-done">
-        <div class="ta-all-done-icon"><i class="ti ti-circle-check"></i></div>
-        @if($boardMode === 'pending')
-            <div class="ta-all-done-title">No pending calls — nothing was missed</div>
-            <div class="ta-all-done-sub">Every call due before today has been completed or resolved. This is where missed calls collect, so empty is exactly right.</div>
-        @elseif($mode === 'today')
-            <div class="ta-all-done-title">All done — you're caught up!</div>
-            <div class="ta-all-done-sub">No outstanding actions right now. Check back tomorrow morning.</div>
-        @elseif($mode === 'future')
-            <div class="ta-all-done-title">Nothing scheduled yet for this date</div>
-            <div class="ta-all-done-sub">No recall, follow-up, birthday, or renewal dates fall on {{ $selectedDate->format('d M Y') }}.</div>
-        @else
-            <div class="ta-all-done-title">No completed calls logged</div>
-            <div class="ta-all-done-sub">Nothing was marked completed on {{ $selectedDate->format('d M Y') }}.</div>
+        {{-- ── Category strip — real categories, real counts ─────────────── --}}
+        @if($activeGroups->isNotEmpty())
+        <div class="taw-cats">
+            <button type="button" class="taw-cat" :class="cat === 'all' ? 'taw-cat--on' : ''" @click="setCat('all')">
+                All <span class="taw-cat-n">{{ count($rows) }}</span>
+            </button>
+            @foreach($activeGroups as $catKey => $group)
+            <button type="button" class="taw-cat"
+                    :class="cat === '{{ $catKey }}' ? 'taw-cat--on' : ''"
+                    @click="setCat('{{ $catKey }}')">
+                <i class="ti {{ $group['icon'] }}"></i>
+                {{ $group['label'] }}
+                <span class="taw-cat-n">{{ $group['count'] + ($group['done_count'] ?? 0) }}</span>
+            </button>
+            @endforeach
+        </div>
         @endif
-    </div>
-    @endif
 
-    {{-- ── Category Cards — grid, one card per active category ──────────── --}}
-    {{-- Each card is a fixed height; its item list scrolls internally. This
-         means the page height depends on the NUMBER of active categories,
-         never on how many items are inside one of them (a category with
-         1,000+ items still fits in one card). Empty categories are skipped
-         entirely rather than shown as dimmed collapsed sections. --}}
-    @php $nonEmptyGroups = collect($groups)->filter(fn($g) => $g['count'] > 0 || ($g['done_count'] ?? 0) > 0); @endphp
+        {{-- ── All done / nothing found ─────────────────────────────────── --}}
+        @if(empty($rows))
+        <div class="ta-all-done">
+            <div class="ta-all-done-icon"><i class="ti ti-circle-check"></i></div>
+            @if($boardMode === 'pending')
+                <div class="ta-all-done-title">No pending calls — nothing was missed</div>
+                <div class="ta-all-done-sub">Every call due before today has been completed or resolved.</div>
+            @elseif($mode === 'today')
+                <div class="ta-all-done-title">All done — you're caught up!</div>
+                <div class="ta-all-done-sub">No outstanding actions right now. Check back tomorrow morning.</div>
+            @elseif($mode === 'future')
+                <div class="ta-all-done-title">Nothing scheduled yet for this date</div>
+                <div class="ta-all-done-sub">No recall, follow-up, birthday, or renewal dates fall on {{ $selectedDate->format('d M Y') }}.</div>
+            @else
+                <div class="ta-all-done-title">No completed calls logged</div>
+                <div class="ta-all-done-sub">Nothing was marked completed on {{ $selectedDate->format('d M Y') }}.</div>
+            @endif
+        </div>
+        @endif
 
-    @if($nonEmptyGroups->isNotEmpty())
-    <div class="ta-grid">
-        @foreach($nonEmptyGroups as $catKey => $group)
-        <div class="ta-card">
-            <div class="ta-card-head">
-                <div class="ta-card-icon"><i class="ti {{ $group['icon'] }}"></i></div>
-                <span class="ta-card-label">{{ $group['label'] }}</span>
-                <span class="ta-card-count">{{ $group['count'] }}</span>
-                @if(($group['done_count'] ?? 0) > 0)
-                    <span class="ta-card-count" style="background:#e8f7ef;color:#1a7a45;"
-                          title="{{ $group['done_count'] }} already handled today">
-                        {{ $group['done_count'] }} <i class="ti ti-check"></i>
-                    </span>
-                @endif
-                @if($catKey === 'missed_calls_yesterday' && $mode === 'today')
-                    {{-- This card only samples up to max_per_category rows — the full backlog lives here. --}}
-                    <a href="{{ route('relationship.today.missed-calls') }}" title="View full missed-calls list"
-                       style="font-size:11px;color:#6a0f70;text-decoration:none;flex-shrink:0;margin-left:2px;">
-                        <i class="ti ti-arrows-maximize"></i>
-                    </a>
-                @endif
-            </div>
-            <div class="ta-card-list">
-                @foreach($group['items'] as $idx => $item)
-                @php
-                    $itemId   = $catKey . '_' . $idx;
-                    // 'done' — handled today (logged closing outcome / Close /
-                    // WhatsApp sent): row fades, outcome replaces the reason.
-                    // 'last_call' — an attempt was logged today but the row is
-                    // still open (No answer, still deciding...): show it so
-                    // staff know it was tried and what the response was.
-                    $done     = $item['done'] ?? null;
-                    $lastCall = $item['last_call'] ?? null;
-                @endphp
-                <div
-                    class="ta-row {{ $done ? 'ta-row--done' : '' }}"
-                    :class="actioned['{{ $itemId }}'] ? 'ta-row--done' : ''"
-                    id="item-{{ $itemId }}"
-                >
-                    <span class="ta-row-dot ta-row-dot--{{ $item['priority'] }}" title="{{ ucfirst($item['priority']) }} priority"></span>
+        {{-- ── The worklist ─────────────────────────────────────────────── --}}
+        @if(! empty($rows))
+        <div class="taw-wrap">
+            <div class="taw-scroll">
+                <table class="taw-t">
+                    <thead>
+                        <tr>
+                            <th style="width:78px;">Priority</th>
+                            <th style="width:190px;">Patient</th>
+                            <th>Action &amp; Reason</th>
+                            <th style="width:112px;">Due</th>
+                            <th style="width:118px;">Owner</th>
+                            <th style="width:172px;">Category</th>
+                            <th style="width:96px;">Channel</th>
+                            <th style="width:104px;">Status</th>
+                            <th style="width:68px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach($rows as $row)
+                        @php
+                            $item     = $row['item'];
+                            $itemId   = $row['id'];
+                            $done     = $row['done'];
+                            $lastCall = $row['lastCall'];
+                            $pr       = $item['priority'] ?? 'low';
+                            // Drawer payload: the same item with only the two
+                            // display strings cleaned. 'reason' and
+                            // 'suggested_action' are shown, never submitted —
+                            // logAction/dismiss read category + ids only.
+                            $drawerItem = array_merge($item, [
+                                'reason'           => $row['whyText'] ?: ($item['reason'] ?? ''),
+                                'suggested_action' => $row['doText'],
+                            ]);
+                        @endphp
+                        <tr id="item-{{ $itemId }}"
+                            class="{{ $done ? 'is-done' : '' }}"
+                            :class="actioned['{{ $itemId }}'] ? 'is-done' : ''"
+                            x-show="show('{{ $itemId }}')">
 
-                    <div class="ta-row-body">
-                        <div class="ta-row-name">{{ $item['patient_name'] }}</div>
-                        @if($done)
-                            <div class="ta-row-outcome"
-                                 title="{{ $done['label'] }}{{ !empty($done['at']) ? ' at ' . $done['at'] : '' }}{{ !empty($done['by']) ? ' by ' . $done['by'] : '' }}{{ !empty($done['notes']) ? ' — ' . $done['notes'] : '' }}">
-                                <i class="ti ti-check"></i>
-                                {{ $done['label'] }}{{ !empty($done['at']) ? ' · ' . $done['at'] : '' }}
-                            </div>
-                        @elseif($lastCall)
-                            <div class="ta-row-attempt" x-show="!lastResponse['{{ $itemId }}']"
-                                 title="{{ $item['reason'] }} — last attempt: {{ $lastCall['label'] }}{{ !empty($lastCall['at']) ? ' at ' . $lastCall['at'] : '' }}{{ !empty($lastCall['by']) ? ' by ' . $lastCall['by'] : '' }}{{ !empty($lastCall['notes']) ? ' — ' . $lastCall['notes'] : '' }}">
-                                <i class="ti ti-phone"></i>
-                                {{ $lastCall['label'] }}{{ !empty($lastCall['at']) ? ' · ' . $lastCall['at'] : '' }}
-                            </div>
-                            <div class="ta-row-outcome" x-show="lastResponse['{{ $itemId }}']" x-cloak>
-                                <i class="ti ti-check"></i>
-                                <span x-text="lastResponse['{{ $itemId }}']"></span>
-                            </div>
-                        @else
-                            <div class="ta-row-reason" x-show="!lastResponse['{{ $itemId }}']"
-                                 title="{{ $item['reason'] }}">{{ $item['reason'] }}</div>
-                            {{-- Live outcome line — appears the moment a call is
-                                 logged in this page load, no refresh needed --}}
-                            <div class="ta-row-outcome" x-show="lastResponse['{{ $itemId }}']" x-cloak>
-                                <i class="ti ti-check"></i>
-                                <span x-text="lastResponse['{{ $itemId }}']"></span>
-                            </div>
-                        @endif
-                    </div>
+                            {{-- 1 · PRIORITY --}}
+                            <td>
+                                <span class="taw-pr taw-pr--{{ $pr }}" title="{{ ucfirst($pr) }} priority">
+                                    <span class="taw-dot"></span>{{ ucfirst($pr) }}
+                                </span>
+                            </td>
 
-                    <div class="ta-row-actions">
-                        @if($done)
-                            <span class="ta-row-btn-done"
-                                  title="Done — {{ $done['label'] }}{{ !empty($done['at']) ? ' at ' . $done['at'] : '' }}">
-                                <i class="ti ti-check"></i>
-                            </span>
-                        @elseif($mode === 'past')
-                            {{-- Read-only history: show the logged outcome instead of a Call button --}}
-                            @php $outcome = $item['meta']['outcome'] ?? null; @endphp
-                            <span
-                                title="{{ $outcome ? ucwords(str_replace('_', ' ', $outcome)) : 'Completed' }}"
-                                style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:#ede4f7;color:#6a0f70;white-space:nowrap;"
-                            >{{ $outcome ? ucwords(str_replace('_', ' ', $outcome)) : 'Completed' }}</span>
-                        @elseif(($item['primary_action'] ?? null) === 'whatsapp')
-                            {{-- Birthday Wishes only: one-click WhatsApp send, no call drawer --}}
-                            <template x-if="!actioned['{{ $itemId }}']">
-                                <button
-                                    class="ta-row-btn-call"
-                                    title="Send WhatsApp birthday greeting"
-                                    :disabled="sendingWhatsapp['{{ $itemId }}']"
-                                    @click="sendBirthdayWhatsapp({{ json_encode($item) }}, '{{ $itemId }}')"
-                                >
-                                    <i class="ti" :class="sendingWhatsapp['{{ $itemId }}'] ? 'ti-loader-2' : 'ti-brand-whatsapp'" :style="sendingWhatsapp['{{ $itemId }}'] ? 'animation:spin 1s linear infinite;' : ''"></i>
-                                </button>
-                            </template>
+                            {{-- 2 · PATIENT --}}
+                            <td>
+                                <div class="taw-name" title="{{ $item['patient_name'] }}">
+                                    <a href="{{ $item['link'] }}">{{ $item['patient_name'] }}</a>
+                                </div>
+                            </td>
 
-                            <template x-if="actioned['{{ $itemId }}']">
-                                <span class="ta-row-btn-done" title="Sent"><i class="ti ti-check"></i></span>
-                            </template>
-                        @else
-                            <template x-if="!actioned['{{ $itemId }}']">
-                                <button
-                                    class="ta-row-btn-call"
-                                    title="Log call"
-                                    @click="openDrawer({{ json_encode($item) }}, '{{ $itemId }}')"
-                                >
-                                    <i class="ti ti-phone"></i>
-                                </button>
-                            </template>
+                            {{-- 3 · ACTION & REASON --}}
+                            <td>
+                                @if($done)
+                                    <div class="taw-do" title="{{ $done['label'] }}{{ !empty($done['notes']) ? ' — ' . $done['notes'] : '' }}">{{ $done['label'] }}</div>
+                                    <span class="taw-why taw-why--ok">{{ $row['whyText'] }}{{ !empty($done['at']) ? ' · ' . $done['at'] : '' }}</span>
+                                @else
+                                    <div class="taw-do" title="{{ $row['doText'] }}">{{ $row['doText'] }}</div>
+                                    @if($lastCall)
+                                        <span class="taw-why taw-why--try" x-show="!lastResponse['{{ $itemId }}']"
+                                              title="{{ $row['whyText'] }} — last attempt: {{ $lastCall['label'] }}{{ !empty($lastCall['at']) ? ' at ' . $lastCall['at'] : '' }}{{ !empty($lastCall['notes']) ? ' — ' . $lastCall['notes'] : '' }}">
+                                            {{ $row['whyText'] }} · last attempt: {{ $lastCall['label'] }}{{ !empty($lastCall['at']) ? ' ' . $lastCall['at'] : '' }}
+                                        </span>
+                                    @else
+                                        <span class="taw-why" x-show="!lastResponse['{{ $itemId }}']" title="{{ $row['whyText'] }}">{{ $row['whyText'] }}</span>
+                                    @endif
+                                    <span class="taw-why taw-why--ok" x-show="lastResponse['{{ $itemId }}']" x-cloak>
+                                        <span x-text="lastResponse['{{ $itemId }}']"></span>
+                                    </span>
+                                @endif
+                            </td>
 
-                            <template x-if="actioned['{{ $itemId }}']">
-                                <span class="ta-row-btn-done" title="Done"><i class="ti ti-check"></i></span>
-                            </template>
-                        @endif
+                            {{-- 4 · DUE --}}
+                            <td><span class="taw-due {{ $row['dueCls'] }}" title="{{ $row['dueTip'] }}">{{ $row['dueTxt'] }}</span></td>
 
-                        <a href="{{ $item['link'] }}" class="ta-row-btn-open" title="Open record">
-                            <i class="ti ti-external-link"></i>
-                        </a>
-                    </div>
+                            {{-- 5 · OWNER --}}
+                            <td>
+                                @if($row['owner'])
+                                    <span class="taw-owner" title="Handled by {{ $row['owner'] }}">{{ $row['owner'] }}</span>
+                                @else
+                                    <span class="taw-owner taw-owner--none" title="Not yet picked up by anyone">Unassigned</span>
+                                @endif
+                            </td>
+
+                            {{-- 6 · CATEGORY --}}
+                            <td><span class="taw-tag" title="{{ $row['catLabel'] }}">{{ $row['catLabel'] }}</span></td>
+
+                            {{-- 7 · CHANNEL --}}
+                            <td><span class="taw-ch"><i class="ti {{ $row['chIcon'] }}"></i>{{ $row['chLabel'] }}</span></td>
+
+                            {{-- 8 · STATUS --}}
+                            <td>
+                                <span class="taw-st {{ $row['stCls'] }}">
+                                    <span x-show="!actioned['{{ $itemId }}']">{{ $row['stTxt'] }}</span>
+                                    <span x-show="actioned['{{ $itemId }}']" x-cloak>Done</span>
+                                </span>
+                            </td>
+
+                            {{-- 9 · ACTIONS --}}
+                            <td>
+                                <div class="taw-acts">
+                                    @if($done)
+                                        <span class="taw-ib taw-ib--ok" title="Done — {{ $done['label'] }}{{ !empty($done['at']) ? ' at ' . $done['at'] : '' }}"><i class="ti ti-check"></i></span>
+                                    @elseif($mode === 'past')
+                                        @php $outcome = $item['meta']['outcome'] ?? null; @endphp
+                                        <span class="taw-ib taw-ib--ok" title="{{ $outcome ? ucwords(str_replace('_', ' ', $outcome)) : 'Completed' }}"><i class="ti ti-check"></i></span>
+                                    @elseif(($item['primary_action'] ?? null) === 'whatsapp')
+                                        <template x-if="!actioned['{{ $itemId }}']">
+                                            <button type="button" class="taw-ib taw-ib--go" title="Send WhatsApp birthday greeting"
+                                                    :disabled="sendingWhatsapp['{{ $itemId }}']"
+                                                    @click="sendBirthdayWhatsapp({{ json_encode($drawerItem) }}, '{{ $itemId }}')">
+                                                <i class="ti" :class="sendingWhatsapp['{{ $itemId }}'] ? 'ti-loader-2' : 'ti-brand-whatsapp'"
+                                                   :style="sendingWhatsapp['{{ $itemId }}'] ? 'animation:spin 1s linear infinite;' : ''"></i>
+                                            </button>
+                                        </template>
+                                        <template x-if="actioned['{{ $itemId }}']">
+                                            <span class="taw-ib taw-ib--ok" title="Sent"><i class="ti ti-check"></i></span>
+                                        </template>
+                                    @else
+                                        <template x-if="!actioned['{{ $itemId }}']">
+                                            <button type="button" class="taw-ib taw-ib--go" title="Log call"
+                                                    @click="openDrawer({{ json_encode($drawerItem) }}, '{{ $itemId }}')">
+                                                <i class="ti ti-phone"></i>
+                                            </button>
+                                        </template>
+                                        <template x-if="actioned['{{ $itemId }}']">
+                                            <span class="taw-ib taw-ib--ok" title="Done"><i class="ti ti-check"></i></span>
+                                        </template>
+                                    @endif
+
+                                    <a href="{{ $item['link'] }}" class="taw-ib" title="Open record"><i class="ti ti-external-link"></i></a>
+                                </div>
+                            </td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+
+                <div class="taw-none" x-show="total === 0" x-cloak>
+                    No actions match this filter. <a href="#" @click.prevent="reset()">Clear filters</a>
                 </div>
-                @endforeach
+            </div>
+
+            {{-- ── Footer ── --}}
+            <div class="taw-foot">
+                <span>
+                    Showing <strong class="taw-pgn" x-text="from()"></strong>–<strong class="taw-pgn" x-text="to()"></strong>
+                    of <strong class="taw-pgn" x-text="total"></strong>
+                </span>
+                @if($emptyCount > 0)
+                    <span>· {{ $emptyCount }} other {{ Str::plural('category', $emptyCount) }} with nothing to show</span>
+                @endif
+                @if(isset($groups['missed_calls_yesterday']) && $groups['missed_calls_yesterday']['count'] > 0 && $mode === 'today')
+                    <span>· <a href="{{ route('relationship.today.missed-calls') }}">View full missed-calls list</a></span>
+                @endif
+
+                <div class="taw-pg">
+                    <button type="button" class="taw-pgb" @click="page = 1"        :disabled="page === 1">&laquo;</button>
+                    <button type="button" class="taw-pgb" @click="page = page - 1" :disabled="page === 1">&lsaquo;</button>
+                    <span class="taw-pgn">Page <strong x-text="page"></strong> / <span x-text="pages"></span></span>
+                    <button type="button" class="taw-pgb" @click="page = page + 1" :disabled="page >= pages">&rsaquo;</button>
+                    <button type="button" class="taw-pgb" @click="page = pages"    :disabled="page >= pages">&raquo;</button>
+                </div>
             </div>
         </div>
-        @endforeach
-    </div>
-    @endif
+        @endif
 
-    @php $emptyCount = collect($groups)->filter(fn($g) => $g['count'] === 0 && ($g['done_count'] ?? 0) === 0)->count(); @endphp
-    @if($emptyCount > 0)
-    <p class="ta-empty-footnote">
-        {{ $emptyCount }} other {{ Str::plural('category', $emptyCount) }} with nothing to
-        {{ $mode === 'today' ? 'action today' : ($mode === 'future' ? 'show for this date' : 'show') }}.
-    </p>
-    @endif
+    </div>{{-- /.taw --}}
 
     {{-- ══════════════════════════════════════════════════════════════════
          CALL WORKFLOW DRAWER (Alpine-driven)
@@ -1205,6 +1378,55 @@ const CATEGORY_LABELS = {
     payment_reminders:             'Payment Reminders',
     logged_communications:         'Other Calls',
 };
+
+// ── Worklist (search · category filter · client-side paging) ──────────
+// Presentation only: it filters and pages the rows already rendered by
+// Blade. No fetch, no endpoint, no change to what the server returned.
+function taWorklist(rows) {
+    return {
+        rows:  rows || [],
+        q:     '',
+        cat:   'all',
+        per:   50,
+        page:  1,
+        total: 0,
+        pages: 1,
+        vis:   {},
+
+        init() {
+            this.recompute();
+            this.$watch('q',    () => { this.page = 1; this.recompute(); });
+            this.$watch('cat',  () => { this.page = 1; this.recompute(); });
+            this.$watch('page', () => { this.recompute(); });
+        },
+
+        matches() {
+            const needle = this.q.trim().toLowerCase();
+            return this.rows.filter(r =>
+                (this.cat === 'all' || r.cat === this.cat) &&
+                (needle === '' || (r.s || '').indexOf(needle) !== -1)
+            );
+        },
+
+        recompute() {
+            const list = this.matches();
+            this.total = list.length;
+            this.pages = Math.max(1, Math.ceil(this.total / this.per));
+            if (this.page > this.pages) { this.page = this.pages; return; }
+            if (this.page < 1)          { this.page = 1;          return; }
+            const start = (this.page - 1) * this.per;
+            const vis = {};
+            list.slice(start, start + this.per).forEach(r => { vis[r.id] = true; });
+            this.vis = vis;
+        },
+
+        show(id)  { return this.vis[id] === true; },
+        setCat(c) { this.cat = c; },
+        reset()   { this.q = ''; this.cat = 'all'; this.page = 1; this.recompute(); },
+        from()    { return this.total === 0 ? 0 : ((this.page - 1) * this.per) + 1; },
+        to()      { return Math.min(this.page * this.per, this.total); },
+    };
+}
 
 function todayActions() {
     return {
