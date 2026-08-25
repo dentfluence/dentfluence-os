@@ -54,7 +54,13 @@ class DashboardController extends Controller
         // the Daily Huddle uses, no new query) + one quick action (Add Recall)
         // that is genuinely different from the "add a lead" buttons on the left,
         // rather than a second way to do the same thing.
-        $highPriorityToday = $this->projector->summary()['by_priority']['high'] ?? 0;
+        // VISUAL PHASE 1 (2026-08-25): this summary() call already ran — it was
+        // just discarded except for one key. The Dashboard redesign renders the
+        // per-category breakdown it already contains, so the whole array is now
+        // passed to the view. NO additional query, no new metric, no changed
+        // count. summary() returns: total | by_category | by_priority | generated_at.
+        $actionSummary     = $this->projector->summary();
+        $highPriorityToday = $actionSummary['by_priority']['high'] ?? 0;
         $openRecalls = CommunicationQueue::where(function ($q) {
                 $q->where('purpose', 'like', '%recall%')->orWhere('source_engine', 'recall');
             })
@@ -66,7 +72,7 @@ class DashboardController extends Controller
             ->get(['id', 'name', 'phone', 'status', 'score', 'relationship_since']);
 
         return view('relationship.dashboard.index', compact(
-            'stats', 'journeys', 'recent', 'highPriorityToday', 'openRecalls'
+            'stats', 'journeys', 'recent', 'highPriorityToday', 'openRecalls', 'actionSummary'
         ));
     }
 }
