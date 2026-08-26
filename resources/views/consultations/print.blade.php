@@ -485,13 +485,12 @@
                         // Matches prescriptions/print.blade.php — the case paper
                         // previously showed the bare name and buried the form in
                         // the sub-line, with no fallback to the linked drug.
-                        $rxName = $item->drug_name ?: ($item->drug?->brand_name ?? '—');
-                        $rxForm = $item->dosage_form ?: ($item->drug?->dosage_form ?? '');
-                        $rxAbbr = \App\Support\DosageForm::abbreviate($rxForm);
-                        // Strength is often already inside the name ("Flexon 400+325mg").
-                        // Only repeat it underneath when it is not.
-                        $rxStrength = ($item->strength && stripos($rxName, (string) $item->strength) === false)
-                                        ? $item->strength : null;
+                        // displayName() guarantees the brand carries no strength,
+                        // so the strength below can always be printed once.
+                        $rxName     = $item->displayName();
+                        $rxForm     = $item->dosage_form ?: ($item->drug?->dosage_form ?? '');
+                        $rxAbbr     = \App\Support\DosageForm::abbreviate($rxForm);
+                        $rxStrength = $item->strength ?: null;
                     @endphp
                     <span class="rx-drug">{{ $rxAbbr ? $rxAbbr.' ' : '' }}{{ $rxName }}</span>
                     @if($rxStrength)<div class="rx-sub">{{ $rxStrength }}</div>@endif

@@ -257,8 +257,9 @@
                                 }, 220);
                             },
                             pick(drug) {
-                                const label = drug.brand_name + (drug.strength ? ' ' + drug.strength : '');
-                                row.drug    = label;
+                                // Brand only — the strength is snapshotted server-side
+                                // from the drug master and printed in its own line.
+                                row.drug    = drug.brand_name;
                                 row.drug_id = drug.id;
                                 if (drug.default_duration) {
                                     row.duration = String(drug.default_duration);
@@ -356,8 +357,12 @@
                                      style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #fef2f2;font-size:12px;"
                                      @mouseover="$el.style.background='#fff5f5'"
                                      @mouseout="$el.style.background=''">
-                                    <span x-text="drug.brand_name + (drug.strength ? ' ' + drug.strength : '')"
+                                    <span x-text="drug.brand_name"
                                           style="font-weight:600;color:#111827;"></span>
+                                    <template x-if="drug.strength">
+                                        <span x-text="' ' + drug.strength"
+                                              style="color:#6b7280;font-size:11px;"></span>
+                                    </template>
                                     <template x-if="drug.generic_name">
                                         <span x-text="' (' + drug.generic_name + ')'"
                                               style="color:#9ca3af;font-size:11px;"></span>

@@ -479,7 +479,7 @@ class PatientProfileController extends ApiController
             'follow_up_date'       => $rx->follow_up_date,
             'doctor'               => $rx->prescribedBy?->name,
             'items'                => $rx->items->map(fn ($it) => [
-                'drug_name'     => $it->drug_name,
+                'drug_name'     => $it->displayName(),
                 'generic_name'  => $it->generic_name,
                 'strength'      => $it->strength,
                 'dosage_form'   => $it->dosage_form,

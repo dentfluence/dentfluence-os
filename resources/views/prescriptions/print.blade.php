@@ -294,7 +294,7 @@
                 <td>
                     @php
                         $form = $item->dosage_form ?: ($item->drug?->dosage_form ?? '');
-                        $name = $item->drug_name ?: ($item->drug?->brand_name ?? '—');
+                        $name = $item->displayName();
                     @endphp
                     <span class="drug-name">
                         {{ $form ? $form.' ' : '' }}{{ $name }}

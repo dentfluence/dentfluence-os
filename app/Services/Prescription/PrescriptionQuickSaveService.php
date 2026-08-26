@@ -145,7 +145,9 @@ class PrescriptionQuickSaveService
             $item = new PrescriptionItem([
                 'prescription_id' => $prescription->id,
                 'drug_id'         => $drug?->id,
-                'drug_name'       => $row['drug'],
+                // Brand only — strength is stored in its own column and rendered
+                // separately, so it must never be baked into the name.
+                'drug_name'       => $drug?->brand_name ?: $row['drug'],
                 'generic_name'    => $drug?->generic?->name,
                 'strength'        => $drug?->strength,
                 'dosage_form'     => $drug?->dosage_form ?? ($row['form_type'] ?? null),

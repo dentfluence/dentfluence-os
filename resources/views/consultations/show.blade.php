@@ -645,7 +645,7 @@
                         @foreach($linkedPrescription->items as $item)
                         <li class="flex items-start gap-2 text-gray-800">
                             <span class="text-green-500 mt-0.5">•</span>
-                            <span>{{ $item->drug_name }}{{ $item->strength ? ' '.$item->strength : '' }}
+                            <span>{{ $item->nameWithStrength() }}
                                 @if($item->duration)<span class="text-gray-400"> — {{ $item->duration }} {{ $item->duration_unit ?? 'days' }}</span>@endif
                             </span>
                         </li>

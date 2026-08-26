@@ -254,7 +254,7 @@
                 ? $rx->items->map(function ($item) {
                     $liquid = in_array(strtolower((string) $item->dosage_form), ['syrup', 'suspension', 'drops'], true);
                     return [
-                        'drug'      => trim($item->drug_name . ($item->strength ? ' ' . $item->strength : '')),
+                        'drug'      => $item->displayName(),
                         'drug_id'   => $item->drug_id,
                         'form_type' => strtolower($item->dosage_form ?: 'tablet'),
                         'food'      => $item->food_advice ?? '',

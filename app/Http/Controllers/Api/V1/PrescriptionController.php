@@ -677,7 +677,7 @@ class PrescriptionController extends ApiController
             'items'                => $rx->items->map(fn ($it) => [
                 'id'              => $it->id,
                 'drug_id'         => $it->drug_id,
-                'drug_name'       => $it->drug_name,
+                'drug_name'       => $it->displayName(),
                 'generic_name'    => $it->generic_name,
                 'strength'        => $it->strength,
                 'dosage_form'     => $it->dosage_form,

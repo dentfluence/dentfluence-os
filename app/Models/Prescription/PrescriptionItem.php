@@ -36,6 +36,46 @@ class PrescriptionItem extends Model
     public function prescription() { return $this->belongsTo(Prescription::class); }
 
     /**
+     * Brand name only — never carries the strength.
+     *
+     * `drug_name` is a prescribe-time snapshot of the brand ("Zerodol P").
+     * Older rows were saved as "brand + strength" and, because the edit form
+     * re-appended the strength on every reload, some accumulated it more than
+     * once ("Zerodol P 100+500mg 100+500mg"). Strength lives in `strength`
+     * and is rendered separately, so any copy of it inside the name is
+     * stripped here — which also cleans legacy rows at read time, without a
+     * data migration.
+     */
+    public function displayName(): string
+    {
+        $name = trim((string) ($this->drug_name ?: ''));
+
+        if ($name === '') {
+            return $this->drug?->brand_name ?: '—';
+        }
+
+        foreach (array_filter([$this->strength, $this->drug?->strength]) as $strength) {
+            $name = preg_replace('/\s*' . preg_quote(trim((string) $strength), '/') . '(?![\w])/i', '', $name);
+        }
+
+        $name = trim(preg_replace('/\s{2,}/', ' ', (string) $name));
+
+        return $name !== '' ? $name : ($this->drug?->brand_name ?: '—');
+    }
+
+    /**
+     * "Zerodol P 100+500mg" — brand plus strength exactly once. For single-line
+     * contexts (WhatsApp text, ABDM payloads) that have no second line to put
+     * the strength on. Screens and print use displayName() + strength column.
+     */
+    public function nameWithStrength(): string
+    {
+        $strength = trim((string) ($this->strength ?: ''));
+
+        return trim($this->displayName() . ($strength !== '' ? ' ' . $strength : ''));
+    }
+
+    /**
      * Calculate dispensed quantity based on dispensing type.
      *
      * unit   (Tablet / Capsule)  → frequency × duration in days

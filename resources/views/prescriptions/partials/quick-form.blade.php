@@ -27,7 +27,7 @@
             // match) so compound labels like "Oral Suspension" still count.
             $liquid = $item->isLiquidDose();
             return [
-                'drug'      => trim($item->drug_name . ($item->strength ? ' ' . $item->strength : '')),
+                'drug'      => $item->displayName(),
                 'drug_id'   => $item->drug_id,
                 'form_type' => strtolower($item->dosage_form ?: 'tablet'),
                 'food'      => $item->food_advice ?? '',

@@ -31,8 +31,8 @@ class MedicationRequestBuilder
         $items = $rx->relationLoaded('items') ? $rx->items : $rx->items()->get();
 
         foreach ($items as $item) {
-            $label = trim(($item->drug_name ?? '') . ' ' . ($item->strength ?? ''));
-            $code  = $this->terminology->codeableConcept('drug', $item->generic_name ?: $item->drug_name, $label ?: 'Medication');
+            $label = $item->nameWithStrength();
+            $code  = $this->terminology->codeableConcept('drug', $item->generic_name ?: $item->displayName(), $label ?: 'Medication');
 
             $out[] = array_filter([
                 'resourceType'            => 'MedicationRequest',

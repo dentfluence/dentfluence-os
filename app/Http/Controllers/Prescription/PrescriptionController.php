@@ -460,7 +460,7 @@ class PrescriptionController extends Controller
             $qty = $item->quantity ? " (Total: {$item->quantity})" : '';
             $sos = $item->is_sos ? ' ⚠️ _SOS only_' : '';
 
-            $name = $item->drug_name . ($item->strength ? " {$item->strength}" : '');
+            $name = $item->nameWithStrength();
             $lines[] = ($i + 1) . ". {$name} — {$doseStr}{$dur}{$qty}{$sos}";
 
             if ($item->food_advice) {

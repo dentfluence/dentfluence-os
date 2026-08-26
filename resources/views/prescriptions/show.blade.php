@@ -179,7 +179,7 @@
                                         border border-red-100 rounded-lg px-3 py-2.5 bg-red-50/30 text-sm">
                                 {{-- Drug name + sub --}}
                                 <div>
-                                    <p class="font-semibold text-gray-800">{{ $item->drug_name }}</p>
+                                    <p class="font-semibold text-gray-800">{{ $item->displayName() }}</p>
                                     <p class="text-xs text-gray-400 flex gap-1.5 flex-wrap mt-0.5">
                                         @if($item->generic_name) <span>{{ $item->generic_name }}</span> @endif
                                         @if($item->strength)     <span>· {{ $item->strength }}</span> @endif
