@@ -1,6 +1,20 @@
 {{-- resources/views/appointments/index.blade.php --}}
 @extends('layouts.app')
 
+@php
+    // Doctor scope (2026-08-26). Normalised HERE rather than inline in the
+    // json directive below: Blade's compileJson() runs a naive explode(',')
+    // over its argument and keeps only the first three parts, so an array
+    // literal handed to it is silently truncated and emits unparseable PHP.
+    // Rule: never put a top-level comma in a json directive argument.
+    $viewerScope = ($viewerScope ?? []) + [
+        'mode'        => 'all',
+        'doctor_id'   => null,
+        'showing_all' => true,
+        'can_toggle'  => false,
+    ];
+@endphp
+
 @push('styles')
 <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css' rel='stylesheet' />
 <link href='https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css' rel='stylesheet' />
@@ -478,6 +492,31 @@
 }
 
 /* ─── Quick Hover Card ──────────────────────────────────────── */
+/* Doctor scope control in the top bar (2026-08-26) */
+.scope-pill {
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    background: #fff;
+    color: #475569;
+    font-size: 11.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+}
+.scope-pill:hover { background: #f1f5f9; color: #1e293b; text-decoration: none; }
+.scope-pill-on {
+    background: #1e293b;
+    border-color: #1e293b;
+    color: #fff;
+    cursor: default;
+}
+.scope-pill-on:hover { background: #1e293b; color: #fff; }
+
 #quick-view-card {
     position: fixed;
     z-index: 1050;
@@ -891,8 +930,12 @@ window.__APPT_DATA = {
     operatories: @json(\App\Models\Operatory::forBranch(auth()->user()->branch_id)->active()->ordered()->get(['id','name'])),
     calendarPrefs: {
         cardStyle:   "{{ $calendarPrefs['calendar_card_style']   ?? 'strip' }}",
-        colorSource: "{{ $calendarPrefs['calendar_color_source'] ?? 'treatment' }}",
+        colorSource: "{{ $calendarPrefs['calendar_color_source'] ?? 'auto' }}",
     },
+    // Doctor scope (2026-08-26). The server has ALREADY filtered the payload;
+    // this only tells the UI which state it is in so background refreshes ask
+    // for the same slice instead of silently narrowing back.
+    viewerScope: @json($viewerScope),
 };
 </script>
 
@@ -923,15 +966,29 @@ window.__APPT_DATA = {
                    @input.debounce.200ms="applyFilters()">
         </div>
 
-        {{-- Doctor filter --}}
-        <select class="form-control-sm" style="width:150px;padding:5px 8px;font-size:12px;"
-                x-model="filterDoctorId"
-                @change="applyFilters(); refreshQueue()">
-            <option value="">All Doctors</option>
-            @foreach($doctors as $doc)
-            <option value="{{ $doc->id }}">{{ $doc->name }}</option>
-            @endforeach
-        </select>
+        {{-- Doctor filter / scope control --}}
+        @if($viewerScope['showing_all'])
+            <select class="form-control-sm" style="width:150px;padding:5px 8px;font-size:12px;"
+                    x-model="filterDoctorId"
+                    @change="applyFilters(); refreshQueue()">
+                <option value="">All Doctors</option>
+                @foreach($doctors as $doc)
+                <option value="{{ $doc->id }}">{{ $doc->name }}</option>
+                @endforeach
+            </select>
+            @if($viewerScope['can_toggle'])
+                <a href="{{ route('appointments.index') }}" class="scope-pill"
+                   title="Show only my own appointments">My Schedule</a>
+            @endif
+        @else
+            <span class="scope-pill scope-pill-on" title="You are seeing only your own appointments">
+                My Schedule
+            </span>
+            @if($viewerScope['can_toggle'])
+                <a href="{{ route('appointments.index', ['all_doctors' => 1]) }}" class="scope-pill"
+                   title="Show every doctor's appointments">Whole Clinic</a>
+            @endif
+        @endif
 
         <div class="topbar-divider"></div>
 
@@ -995,6 +1052,7 @@ window.__APPT_DATA = {
             </div>
 
             {{-- Doctor Chips --}}
+            @if($viewerScope['showing_all'])
             <div class="sb-doctor-filter">
                 <div class="sb-doctor-chips">
                     <button class="doc-chip"
@@ -1013,6 +1071,7 @@ window.__APPT_DATA = {
                     @endforeach
                 </div>
             </div>
+            @endif
 
             {{-- Queue label row --}}
             <div class="sb-queue-header">
@@ -1398,6 +1457,24 @@ function getDoctorColor(docId) {
     return doctorColorMap[docId] || '#94a3b8';
 }
 
+/**
+ * Which dimension the card colour encodes.
+ *
+ *   auto (default) - "doctor" for anyone looking at the whole clinic (front
+ *                    desk, owner, manager: their question is WHO is with whom,
+ *                    in which chair), "treatment" for a doctor scoped to his
+ *                    own list (every card is his, so doctor colour says
+ *                    nothing and treatment is the useful signal).
+ *   doctor / treatment - an explicit clinic choice in Settings, always honoured.
+ */
+function resolveColorSource() {
+    const pref = window.__APPT_DATA.calendarPrefs.colorSource;
+
+    if (pref === 'doctor' || pref === 'treatment') return pref;
+
+    return window.__APPT_DATA.viewerScope.showing_all ? 'doctor' : 'treatment';
+}
+
 function getTreatmentFill(catName) {
     if (!catName) return TREAT_FILLS.default;
     const k = Object.keys(TREAT_FILLS).find(k => catName.toLowerCase().includes(k));
@@ -1500,6 +1577,13 @@ function initCalendar(appointments) {
         nowIndicator:   true,
         height:         '100%',
         slotEventOverlap: false, // side-by-side columns for concurrent appointments instead of cascaded overlap
+        // Four concurrent bookings used to render as four ~30px slivers with
+        // nothing legible in any of them. Show three and a "+N" link instead;
+        // Day view has the width for more.
+        eventMaxStack: 3,
+        views: {
+            timeGridDay: { eventMaxStack: 6 },
+        },
         events:         buildCalendarEvents(appointments),
         eventContent:   renderEvent,
         eventClick:     onEventClick,
@@ -1544,16 +1628,18 @@ function renderEvent(info) {
     const apt  = info.event.extendedProps;
     if (apt._isBlock) { return; }
 
-    const prefs       = window.__APPT_DATA.calendarPrefs;
-    const cardStyle   = prefs.cardStyle   || 'strip';
-    const colorSource = prefs.colorSource || 'treatment';
+    const cardStyle   = window.__APPT_DATA.calendarPrefs.cardStyle || 'strip';
+    const colorSource = resolveColorSource();
 
     const treatColor  = apt.treatment_color || '#6a0f70';
     const doctorColor = apt.doctor_color    || '#94a3b8';
 
-    // Primary color drives the background tint; accent drives the left border
-    const primaryColor = colorSource === 'doctor' ? doctorColor : treatColor;
-    const accentColor  = colorSource === 'doctor' ? treatColor  : doctorColor;
+    // ONE hue per card (2026-08-26). Until now the background tint carried one
+    // dimension and the left border carried the OTHER, so a busy morning showed
+    // five competing hues and none of them meant a single thing. The border is
+    // now the same hue as the fill; the dimension the colour does NOT encode
+    // drops to neutral text.
+    const hue = colorSource === 'doctor' ? doctorColor : treatColor;
 
     const status      = apt.status;
     const isCancelled = status === 'cancelled';
@@ -1569,18 +1655,23 @@ function renderEvent(info) {
     } else if (isDone) {
         bg = '#f0fdf4'; borderColor = '#86efac';
     } else if (cardStyle === 'filled') {
-        // Filled: solid tinted background + accent left border
-        bg = primaryColor + '66'; // ~40% opacity — richer, less washed-out
-        borderColor = accentColor;
+        // Filled: light wash of the hue, bold border in the SAME hue.
+        bg = hue + '2e';   // ~18% — lighter than before so the text stays readable
+        borderColor = hue;
     } else {
-        // Strip: white background + bold accent left border
+        // Strip: white card, bold left border in the hue.
         bg = '#ffffff';
-        borderColor = accentColor;
+        borderColor = hue;
     }
 
     // ── Treatment label color ───────────────────────────────────
-    // Darken the primary color for text by mixing toward black (use filter via inline style below)
-    const treatLabelColor = isCancelled ? '#b91c1c' : isDone ? '#15803d' : primaryColor;
+    // Only tinted when the hue IS the treatment. When colour means "doctor",
+    // the treatment name is neutral text - it must not become a second palette.
+    const treatLabelColor = isCancelled ? '#b91c1c'
+        : isDone          ? '#15803d'
+        : colorSource === 'treatment' ? hue
+        : '#64748b';
+    const tintTreatLabel = !isCancelled && !isDone && colorSource === 'treatment';
 
     // ── Badges ─────────────────────────────────────────────────
     const walkinBadge = isWalkin
@@ -1591,6 +1682,19 @@ function renderEvent(info) {
         ? `<span style="font-size:8.5px;font-weight:700;background:#ef4444;color:#fff;border-radius:3px;padding:1px 4px;letter-spacing:.04em;line-height:1;flex-shrink:0;">✕</span>` : '';
 
     const badge = walkinBadge || cancelledBadge || doneBadge;
+
+    // ── Density ────────────────────────────────────────────────
+    // Width is already handled by the container queries in CSS. HEIGHT is not,
+    // and height is a function of duration: a 15-min card is ~18px tall and was
+    // still being handed three lines of text. Drop lines the row cannot show.
+    const showTreatment = mins >= 20;
+    const showMeta      = mins >= 45;
+
+    const treatmentLine = showTreatment ? `
+                <div class="ev-treatment" style="font-size:10px;font-weight:600;color:${treatLabelColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;filter:${tintTreatLabel ? 'brightness(.7)' : 'none'};">${apt.treatment_category || apt.type}</div>` : '';
+
+    const metaLine = showMeta ? `
+                <div class="ev-meta" style="font-size:9.5px;color:#78716c;">${mins}min · ${docLast}</div>` : '';
 
     return { html: `
         <div class="ev-container">
@@ -1609,8 +1713,7 @@ function renderEvent(info) {
                     <span class="ev-name" style="font-size:11px;font-weight:700;color:#1a0320;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">${apt.patient_name}</span>
                     ${badge}
                 </div>
-                <div class="ev-treatment" style="font-size:10px;font-weight:600;color:${treatLabelColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;filter:${(!isCancelled && !isDone) ? 'brightness(.7)' : 'none'};">${apt.treatment_category || apt.type}</div>
-                <div class="ev-meta" style="font-size:9.5px;color:#78716c;">${mins}min · ${docLast}</div>
+                ${treatmentLine}${metaLine}
             </div>
         </div>
     `};
@@ -2128,6 +2231,10 @@ function appointmentApp() {
         async refreshQueue() {
             try {
                 const params = new URLSearchParams({ date: window.__APPT_DATA.today });
+                // Keep the 60s refresh on the same slice the page was rendered
+                // with, otherwise a doctor viewing the whole clinic snaps back
+                // to his own list after a minute.
+                if (window.__APPT_DATA.viewerScope.showing_all) params.append('all_doctors', '1');
                 if (this.queueDoctorId) params.append('doctor_id', this.queueDoctorId);
                 if (this.activeStatusFilter && this.activeStatusFilter !== 'total') {
                     params.append('status', this.activeStatusFilter);
@@ -2143,7 +2250,9 @@ function appointmentApp() {
 
         async refreshCounts() {
             try {
-                const r = await fetch(window.__APPT_DATA.routes.statusCounts, {
+                const countsUrl = window.__APPT_DATA.routes.statusCounts
+                    + (window.__APPT_DATA.viewerScope.showing_all ? '?all_doctors=1' : '');
+                const r = await fetch(countsUrl, {
                     headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken }
                 });
                 if (!r.ok) return;

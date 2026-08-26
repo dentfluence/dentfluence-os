@@ -40,7 +40,7 @@
                 Doctors
             </div>
             @foreach($rolesByCategory['doctor'] as $role)
-            <div @click="selectRole({{ $role->id }}, '{{ $role->name }}', '{{ $role->slug }}', {{ $role->is_system ? 'true' : 'false' }})"
+            <div @click="selectRole({{ $role->id }}, '{{ $role->name }}', '{{ $role->slug }}', {{ $role->is_system ? 'true' : 'false' }}, '{{ $role->category }}')"
                  :class="selectedRoleId === {{ $role->id }} ? 'role-item active' : 'role-item'"
                  style="cursor:pointer;">
                 <div style="display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:1px solid #f5f0f8; transition:background 120ms;">
@@ -68,7 +68,7 @@
                 Staff
             </div>
             @foreach($rolesByCategory['staff'] as $role)
-            <div @click="selectRole({{ $role->id }}, '{{ $role->name }}', '{{ $role->slug }}', {{ $role->is_system ? 'true' : 'false' }})"
+            <div @click="selectRole({{ $role->id }}, '{{ $role->name }}', '{{ $role->slug }}', {{ $role->is_system ? 'true' : 'false' }}, '{{ $role->category }}')"
                  :class="selectedRoleId === {{ $role->id }} ? 'role-item active' : 'role-item'"
                  style="cursor:pointer;">
                 <div style="display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:1px solid #f5f0f8; transition:background 120ms;">
@@ -186,6 +186,41 @@
                 </div>
             </div>
 
+            {{-- ── Appointment visibility (data scope) ─────────────────────
+                 Deliberately NOT a fourth column in the matrix above: only the
+                 appointments module implements a data scope today, and adding a
+                 dropdown to all 30 module rows would bury the three toggles
+                 that matter. Doctor-category roles only — the scope filters on
+                 "appointments where I am the assigned doctor", so applying it
+                 to Front Desk or Accounts would show them an empty calendar
+                 (User::resolveAppointmentScope() refuses it there anyway). --}}
+            <div x-show="selectedRoleId && selectedRoleCategory === 'doctor'" x-cloak
+                 style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:20px;margin-top:18px;">
+                <p style="font-size:13.5px;font-weight:700;color:#1a0320;margin:0 0 4px;">Appointment Visibility</p>
+                <p style="font-size:12.5px;color:#7a6080;margin:0 0 14px;">
+                    How much of the schedule a <span x-text="selectedRoleName"></span> sees. This is separate from
+                    the View permission above, which only decides whether they can open the calendar at all.
+                </p>
+
+                <select class="form-control-sm"
+                        style="width:100%;max-width:340px;padding:8px 10px;font-size:13px;border:1.5px solid #e0d4ea;border-radius:8px;"
+                        :value="permissions['appointments']?.scope ?? ''"
+                        @change="setScope($event.target.value)">
+                    <option value="">Use clinic default</option>
+                    <option value="own_default">Own appointments first — can switch to the whole clinic</option>
+                    <option value="all">The whole clinic</option>
+                    <option value="own_only">Own appointments only — locked</option>
+                </select>
+
+                <p style="font-size:11.5px;color:#a090b0;margin:10px 0 0;line-height:1.6;">
+                    <strong>Own first</strong> is a view default: the calendar opens on their own list with a
+                    &ldquo;Whole Clinic&rdquo; button. <strong>Locked</strong> is a real boundary — the button
+                    disappears and the server refuses another doctor&rsquo;s appointment, so use it only when
+                    the clinic genuinely needs that separation.
+                    The Clinic Owner always sees every appointment regardless of this setting.
+                </p>
+            </div>
+
             {{-- Save feedback --}}
             <div x-show="savedMsg" x-transition
                  style="padding:12px 20px; background:#e8f7ef; color:#1a7a45; font-size:13px; border-top:1px solid #c8ebd8; display:flex; align-items:center; gap:7px;">
@@ -271,6 +306,7 @@ function rolesManager() {
         selectedRoleName:     '',
         selectedRoleSlug:     '',
         selectedRoleIsSystem: false,
+        selectedRoleCategory: 'staff',
         permissions:      {},
         saving:           false,
         deleting:         false,
@@ -282,15 +318,16 @@ function rolesManager() {
 
         init() {
             @if($roles->isNotEmpty())
-            this.selectRole({{ $roles->first()->id }}, '{{ $roles->first()->name }}', '{{ $roles->first()->slug }}', {{ $roles->first()->is_system ? 'true' : 'false' }});
+            this.selectRole({{ $roles->first()->id }}, '{{ $roles->first()->name }}', '{{ $roles->first()->slug }}', {{ $roles->first()->is_system ? 'true' : 'false' }}, '{{ $roles->first()->category }}');
             @endif
         },
 
-        selectRole(id, name, slug, isSystem) {
+        selectRole(id, name, slug, isSystem, category) {
             this.selectedRoleId       = id;
             this.selectedRoleName     = name;
             this.selectedRoleSlug     = slug;
             this.selectedRoleIsSystem = !!isSystem;
+            this.selectedRoleCategory = category || 'staff';
             this.savedMsg         = false;
             this.permissions      = this.allPermissions[id] ?? {};
         },
@@ -304,6 +341,14 @@ function rolesManager() {
             if (action === 'edit' && !value)  { this.permissions[slug].delete = false; }
             if (action === 'edit' && value)   { this.permissions[slug].view = true; }
             if (action === 'delete' && value) { this.permissions[slug].view = true; this.permissions[slug].edit = true; }
+            this.permissions = { ...this.permissions };
+        },
+
+        setScope(value) {
+            if (!this.permissions['appointments']) {
+                this.permissions['appointments'] = { view: false, edit: false, delete: false };
+            }
+            this.permissions['appointments'].scope = value;
             this.permissions = { ...this.permissions };
         },
 

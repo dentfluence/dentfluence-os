@@ -35,11 +35,11 @@ class DashboardController extends ApiController
             ->count();
 
         $todayList = $this->appointments
-            ->filteredQuery($branchId, ['scope' => 'today'])
+            ->filteredQuery($branchId, ['scope' => 'today'], $request->user())
             ->get();
 
         $upcomingCount = $this->appointments
-            ->filteredQuery($branchId, ['scope' => 'upcoming'])
+            ->filteredQuery($branchId, ['scope' => 'upcoming'], $request->user())
             ->count();
 
         // ── KPIs the web dashboard shows — same queries as web
@@ -102,7 +102,7 @@ class DashboardController extends ApiController
                 'new_this_month' => $newPatientsThisMonth,
             ],
             'appointments' => [
-                'today'          => $this->appointments->todayCounts($branchId),
+                'today'          => $this->appointments->todayCounts($branchId, $request->user()),
                 'upcoming_count' => $upcomingCount,
             ],
             'finance' => [

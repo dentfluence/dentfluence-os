@@ -26,12 +26,19 @@ class AppointmentController extends Controller
     // ── Index / Calendar view ────────────────────────────────────
     public function index(Request $request)
     {
-        $branchId = Auth::user()->branch_id;
+        $viewer   = Auth::user();
+        $branchId = $viewer->branch_id;
+
+        // Doctor scope (2026-08-26): a doctor's calendar opens on his own list.
+        // `all_doctors=1` is the toggle back to the whole clinic - honoured only
+        // for the own_default scope, ignored for own_only (see visibleTo()).
+        $showAllDoctors = $request->boolean('all_doctors');
 
         // Canonical calendar read (Slice 9): branch-scoped + calendar-visible via
         // model scopes. Same records, same ordering as before.
         $query = Appointment::with(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'])
             ->forBranch($branchId)
+            ->visibleTo($viewer, $showAllDoctors)
             ->visibleOnCalendar()
             ->orderBy('appointment_date')
             ->orderBy('appointment_time');
@@ -88,20 +95,30 @@ class AppointmentController extends Controller
         // Today's queue for sidebar
         $todayAppointments = Appointment::with(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'])
             ->forBranch($branchId)
+            ->visibleTo($viewer, $showAllDoctors)
             ->today()
             ->orderBy('appointment_time')
             ->get()
             ->map(fn($a) => $this->formatAppointment($a))
             ->values();
 
-        // Live status counters
-        $statusCounts = $this->getTodayStatusCounts($branchId);
+        // Live status counters - scoped the same way, otherwise the sidebar
+        // would say "24 patients" over a grid showing six.
+        $statusCounts = $this->getTodayStatusCounts($branchId, $viewer, $showAllDoctors);
 
         if ($request->boolean('json')) {
             return response()->json($appointments);
         }
 
         $calendarPrefs = AppSetting::group('calendar');
+
+        // What the calendar UI needs to know about this viewer's scope.
+        $viewerScope = [
+            'mode'       => $viewer->appointmentScope(),
+            'doctor_id'  => $viewer->holdsDoctorRole() ? $viewer->id : null,
+            'showing_all'=> $viewer->seesAllAppointments() || $showAllDoctors,
+            'can_toggle' => $viewer->mayToggleToAllAppointments(),
+        ];
 
         return view('appointments.index', compact(
             'appointments',
@@ -110,7 +127,8 @@ class AppointmentController extends Controller
             'treatmentCategories',
             'todayAppointments',
             'statusCounts',
-            'calendarPrefs'
+            'calendarPrefs',
+            'viewerScope'
         ));
     }
 
@@ -306,6 +324,8 @@ class AppointmentController extends Controller
     // ── Update Status (PATCH /appointments/{id}/status) ──────────
     public function updateStatus(Request $request, Appointment $appointment)
     {
+        $this->authorize('update', $appointment);
+
         $request->validate([
             'status' => 'required|' . AppointmentStatus::validationRule(),
         ]);
@@ -324,6 +344,8 @@ class AppointmentController extends Controller
     // ── Cancel with reason (PATCH /appointments/{id}/cancel) ────────────────
     public function cancelWithReason(Request $request, Appointment $appointment)
     {
+        $this->authorize('update', $appointment);
+
         $request->validate([
             'cancel_reason'   => 'required|string|max:500',
             'cancelled_party' => 'required|in:patient,clinic',
@@ -346,6 +368,8 @@ class AppointmentController extends Controller
     // ── Revert to previous status (PATCH /appointments/{id}/revert) ──────────
     public function revertStatus(Appointment $appointment)
     {
+        $this->authorize('update', $appointment);
+
         if (! $appointment->previous_status) {
             return response()->json(['ok' => false, 'message' => 'No previous status to revert to.'], 422);
         }
@@ -364,6 +388,8 @@ class AppointmentController extends Controller
     // without going through the full edit form.
     public function assignOperatory(Request $request, Appointment $appointment)
     {
+        $this->authorize('update', $appointment);
+
         $request->validate([
             'operatory_id' => 'nullable|exists:operatories,id',
         ]);
@@ -382,10 +408,13 @@ class AppointmentController extends Controller
     // ── Today Queue (GET /appointments/queue/today) ──────────────
     public function todayQueue(Request $request)
     {
-        $branchId = Auth::user()->branch_id;
+        $viewer   = Auth::user();
+        $branchId = $viewer->branch_id;
+        $showAll  = $request->boolean('all_doctors');
 
         $query = Appointment::with(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'])
             ->forBranch($branchId)
+            ->visibleTo($viewer, $showAll)
             ->today()
             ->orderBy('appointment_time');
 
@@ -401,20 +430,24 @@ class AppointmentController extends Controller
 
         return response()->json([
             'appointments' => $appointments,
-            'counts'       => $this->getTodayStatusCounts($branchId),
+            'counts'       => $this->getTodayStatusCounts($branchId, $viewer, $showAll),
         ]);
     }
 
     // ── Live Status Counts (GET /appointments/status-counts) ─────
     public function statusCounts(Request $request)
     {
-        $branchId = Auth::user()->branch_id;
-        return response()->json($this->getTodayStatusCounts($branchId));
+        $viewer = Auth::user();
+        return response()->json($this->getTodayStatusCounts(
+            $viewer->branch_id, $viewer, $request->boolean('all_doctors')
+        ));
     }
 
     // ── Quick View (GET /appointments/{id}/quick) ────────────────
     public function quickView(Appointment $appointment)
     {
+        $this->authorize('view', $appointment);
+
         $appointment->load(['patient', 'doctor', 'treatmentCategory', 'treatment']);
         return response()->json($this->formatAppointment($appointment));
     }
@@ -422,6 +455,8 @@ class AppointmentController extends Controller
     // ── Show ─────────────────────────────────────────────────────
     public function show(Appointment $appointment)
     {
+        $this->authorize('view', $appointment);
+
         $appointment->load(['patient.notes.createdBy', 'patient.alerts', 'doctor', 'createdBy']);
         return view('appointments.show', compact('appointment'));
     }
@@ -470,6 +505,8 @@ class AppointmentController extends Controller
     // ── Edit ─────────────────────────────────────────────────────
     public function edit(Appointment $appointment)
     {
+        $this->authorize('view', $appointment);
+
         $branchId = Auth::user()->branch_id;
 
         // Slice 10: the patient field is a typeahead (reusing /patients/search),
@@ -495,6 +532,8 @@ class AppointmentController extends Controller
     // ── Update ──────────────────────────────────────────────────
     public function update(Request $request, Appointment $appointment)
     {
+        $this->authorize('update', $appointment);
+
         $data = $request->validate([
             'patient_id'           => 'required|exists:patients,id',
             'doctor_id'            => 'required|exists:users,id',
@@ -556,6 +595,8 @@ class AppointmentController extends Controller
     // ── Reschedule (drag-drop: date + time, optional duration) ───
     public function reschedule(Request $request, Appointment $appointment)
     {
+        $this->authorize('update', $appointment);
+
         $data = $request->validate([
             'appointment_date' => 'required|date',
             'appointment_time' => 'required|date_format:H:i',
@@ -596,6 +637,8 @@ class AppointmentController extends Controller
     // ── Destroy ──────────────────────────────────────────────────
     public function destroy(Request $request, Appointment $appointment)
     {
+        $this->authorize('delete', $appointment);
+
         $this->appointments->delete($appointment, Auth::user());
 
         if ($request->boolean('json') || $request->wantsJson()) {
@@ -608,6 +651,8 @@ class AppointmentController extends Controller
     // ── Hide from calendar (PATCH /appointments/{id}/hide) ───────
     public function hideFromCalendar(Appointment $appointment)
     {
+        $this->authorize('update', $appointment);
+
         return response()->json([
             'ok'          => true,
             'appointment' => $this->formatAppointment($this->appointments->hide($appointment)),
@@ -782,15 +827,20 @@ class AppointmentController extends Controller
         ];
     }
 
-    private function getTodayStatusCounts(int $branchId): array
+    private function getTodayStatusCounts(int $branchId, ?User $viewer = null, bool $showAll = false): array
     {
         // The 8 status/walk-in counters are the canonical AppointmentService::
-        // todayCounts(); chair utilization is a web-only KPI merged on top
-        // (unchanged). Same keys, same values as before.
+        // todayCounts(), now scoped to the viewer so the sidebar always agrees
+        // with the grid. Same keys as before.
+        //
+        // Chair utilization is deliberately NOT scoped: it is clinic occupancy
+        // (booked chair-minutes / available chair-minutes). Scoping it would
+        // divide one doctor's minutes by every chair in the clinic and report
+        // a meaningless number.
         $base = Appointment::forBranch($branchId)->today();
 
         return array_merge(
-            $this->appointments->todayCounts($branchId),
+            $this->appointments->todayCounts($branchId, $viewer, $showAll),
             $this->getChairUtilization($branchId, $base)
         );
     }

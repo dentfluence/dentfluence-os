@@ -69,6 +69,9 @@ class RolePermissionController extends Controller
                     'edit'     => (bool) $p->can_edit,
                     'delete'   => (bool) $p->can_delete,
                     'settings' => (bool) $p->can_settings,
+                    // How much of the module's data the role sees (Slice 3).
+                    // Empty string = unconfigured, i.e. use the clinic default.
+                    'scope'    => $p->data_scope ?? '',
                 ];
             }
         }
@@ -101,6 +104,7 @@ class RolePermissionController extends Controller
             'permissions.*.edit'       => 'boolean',
             'permissions.*.delete'     => 'boolean',
             'permissions.*.settings'   => 'boolean',
+            'permissions.*.scope'      => ['nullable', 'string', 'in:all,own_default,own_only'],
         ]);
 
         $modules = Module::all()->keyBy('slug');
@@ -115,6 +119,9 @@ class RolePermissionController extends Controller
                     'can_edit'     => $perms['edit']     ?? false,
                     'can_delete'   => $perms['delete']   ?? false,
                     'can_settings' => $perms['settings'] ?? false,
+                    // Blank means "not configured" -> null, so the row falls
+                    // back to the clinic default rather than pinning a value.
+                    'data_scope'   => ($perms['scope'] ?? '') !== '' ? $perms['scope'] : null,
                 ]
             );
         }

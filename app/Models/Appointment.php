@@ -110,6 +110,32 @@ class Appointment extends Model
     }
 
     /**
+     * Appointments the given user is allowed to be shown.
+     *
+     * THE single definition of the doctor-scoping rule (2026-08-26). Every
+     * read surface calls this; no controller re-implements it. The rule
+     * itself lives on User::appointmentScope() so it can later be driven by
+     * a per-role column instead of a setting, without touching this scope.
+     *
+     * $includeAll is the "All Doctors" toggle: honoured for a doctor on the
+     * own_default scope (a view preference), IGNORED for own_only (a real
+     * boundary) - so a hand-crafted query string can never widen the view of
+     * someone the clinic locked down.
+     */
+    public function scopeVisibleTo($query, ?\App\Models\User $user, bool $includeAll = false)
+    {
+        if (! $user || $user->seesAllAppointments()) {
+            return $query;
+        }
+
+        if ($includeAll && $user->mayToggleToAllAppointments()) {
+            return $query;
+        }
+
+        return $query->where('doctor_id', $user->id);
+    }
+
+    /**
      * Appointments the calendar shows — a cancelled appointment hidden via the
      * calendar's 3-dot "hide" action is excluded. Canonical replacement for the
      * copy-pasted `where('hidden_from_calendar', false)`.

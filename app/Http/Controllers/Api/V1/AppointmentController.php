@@ -40,8 +40,14 @@ class AppointmentController extends ApiController
     /** Paginated, filtered list. */
     public function index(Request $request): JsonResponse
     {
-        $query = $this->appointments
-            ->filteredQuery($request->user()->branch_id, $request->all());
+        // Doctor scope (2026-08-26) — kept identical to the web calendar so
+        // Android and web never disagree about who sees what (Phase 5 parity).
+        $query = $this->appointments->filteredQuery(
+            $request->user()->branch_id,
+            $request->all(),
+            $request->user(),
+            $request->boolean('all_doctors'),
+        );
 
         $limit = max(1, min((int) $request->query('limit', 30), 100));
         $page  = $query->paginate($limit)->appends($request->query());
@@ -62,15 +68,18 @@ class AppointmentController extends ApiController
     /** Today's schedule — handy single call for the day view. */
     public function today(Request $request): JsonResponse
     {
-        $list = $this->appointments
-            ->filteredQuery($request->user()->branch_id, ['scope' => 'today'])
-            ->get();
+        $list = $this->appointments->filteredQuery(
+            $request->user()->branch_id,
+            ['scope' => 'today'],
+            $request->user(),
+            $request->boolean('all_doctors'),
+        )->get();
 
         return $this->success(
             AppointmentResource::collection($list),
             '',
             200,
-            ['counts' => $this->appointments->todayCounts($request->user()->branch_id)]
+            ['counts' => $this->appointments->todayCounts($request->user()->branch_id, $request->user())]
         );
     }
 
@@ -118,7 +127,7 @@ class AppointmentController extends ApiController
             new AppointmentResource($updated),
             'Status updated.',
             200,
-            ['counts' => $this->appointments->todayCounts($request->user()->branch_id)]
+            ['counts' => $this->appointments->todayCounts($request->user()->branch_id, $request->user())]
         );
     }
 
@@ -295,6 +304,7 @@ class AppointmentController extends ApiController
     {
         $appointment = Appointment::with(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'])
             ->where('branch_id', $request->user()->branch_id)
+            ->visibleTo($request->user(), true)
             ->whereKey($id)
             ->first();
 

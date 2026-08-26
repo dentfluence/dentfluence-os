@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class RoleModulePermission extends Model
 {
     protected $fillable = [
-        'role_id', 'module_id', 'can_view', 'can_edit', 'can_delete', 'can_settings',
+        'role_id', 'module_id', 'can_view', 'can_edit', 'can_delete', 'can_settings', 'data_scope',
     ];
 
     protected function casts(): array

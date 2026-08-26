@@ -242,12 +242,18 @@ class AppointmentService
      *   date_from / date_to      (explicit range)
      *   doctor_id, patient_id, status
      */
-    public function filteredQuery(int $branchId, array $filters = []): Builder
+    public function filteredQuery(int $branchId, array $filters = [], ?User $viewer = null, bool $showAll = false): Builder
     {
         // Canonical read: branch + date via the same model scopes the web
-        // calendar uses (Slice 9). Behaviour unchanged.
+        // calendar uses (Slice 9).
+        //
+        // $viewer (2026-08-26) applies the doctor scope. It is OPTIONAL and
+        // defaults to null = no scoping, so every existing caller and the
+        // read-contract characterization tests keep their exact behaviour;
+        // callers that serve a logged-in user pass the user in.
         $query = Appointment::with(self::WITH)
-            ->forBranch($branchId);
+            ->forBranch($branchId)
+            ->visibleTo($viewer, $showAll);
 
         $scope = $filters['scope'] ?? null;
 
@@ -283,10 +289,15 @@ class AppointmentService
         return $query->orderBy('appointment_date')->orderBy('appointment_time');
     }
 
-    /** Today's live status counters for a branch (used by the dashboard). */
-    public function todayCounts(int $branchId): array
+    /**
+     * Today's live status counters for a branch (used by the dashboard).
+     *
+     * $viewer is optional and defaults to null = whole branch, so the existing
+     * signature and every current caller behave exactly as before.
+     */
+    public function todayCounts(int $branchId, ?User $viewer = null, bool $showAll = false): array
     {
-        $base = Appointment::forBranch($branchId)->today();
+        $base = Appointment::forBranch($branchId)->visibleTo($viewer, $showAll)->today();
 
         return [
             'total'     => (clone $base)->count(),

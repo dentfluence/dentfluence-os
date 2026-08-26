@@ -182,7 +182,7 @@ class SettingsController extends Controller
     {
         $request->validate([
             'card_style'   => 'required|in:strip,filled',
-            'color_source' => 'required|in:doctor,treatment',
+            'color_source' => 'required|in:auto,doctor,treatment',
         ]);
 
         AppSetting::setMany([

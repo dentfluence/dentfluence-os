@@ -17,8 +17,10 @@ class DashboardController extends Controller
         $branchId = Auth::user()->branch_id;
 
         // ── Today's appointments ─────────────────────────────────────────────
+        // Doctor scope (2026-08-26): a doctor's dashboard shows a doctor's day.
         $todayAppointments = Appointment::with(['patient', 'treatment', 'treatmentCategory', 'operatory'])
             ->where('branch_id', $branchId)
+            ->visibleTo(Auth::user())
             ->whereDate('appointment_date', $today)
             ->orderBy('appointment_time')
             ->get();

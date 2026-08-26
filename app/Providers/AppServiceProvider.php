@@ -32,6 +32,11 @@ use App\Observers\ConsultationActivityObserver;
 use App\Models\User;
 use App\Observers\UserVendorSyncObserver;
 
+// Record-level authorization (2026-08-26) - first policy in the app
+use App\Models\Appointment;
+use App\Policies\AppointmentPolicy;
+use Illuminate\Support\Facades\Gate;
+
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -57,6 +62,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Record-level authorization (2026-08-26). Laravel would auto-discover
+        // App\Policies\AppointmentPolicy by naming convention; registering it
+        // explicitly keeps the mapping greppable now that policies exist.
+        Gate::policy(Appointment::class, AppointmentPolicy::class);
+
         // Phase 4: LabCase observer — auto-sync comm status with lab case status
         LabCase::observe(LabCaseObserver::class);
 

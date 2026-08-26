@@ -68,6 +68,31 @@ class Role extends Model
     }
 
     /**
+     * The DATA scope this role holds on a module — how much of the module's
+     * data it sees, as opposed to whether it may open the module at all
+     * (that is `can()`).
+     *
+     * Returns null when the clinic has not set one, which means "fall back to
+     * the clinic-wide default". Callers must treat null as unconfigured, never
+     * as a value.
+     *
+     * @return 'all'|'own_default'|'own_only'|null
+     */
+    public function dataScope(string $module): ?string
+    {
+        $perm = $this->permissions()
+                     ->whereHas('module', fn($q) => $q->where('slug', $module))
+                     ->first();
+
+        $scope = $perm?->data_scope;
+
+        return in_array($scope, self::DATA_SCOPES, true) ? $scope : null;
+    }
+
+    /** Valid values for role_module_permissions.data_scope. */
+    const DATA_SCOPES = ['all', 'own_default', 'own_only'];
+
+    /**
      * Whether this role may perform a fine-grained billing action.
      * Admin is always allowed. Everyone else is checked against
      * role_billing_permissions (default: not allowed).

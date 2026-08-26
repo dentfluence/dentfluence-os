@@ -306,6 +306,121 @@ class User extends Authenticatable
             || str_starts_with(trim($this->name), 'Dr.');
     }
 
+    /* =========================================================
+       APPOINTMENT DATA SCOPE  (2026-08-26)
+       Which appointments this user is shown on the calendar.
+       ONE method decides it; every read surface asks this and
+       nothing re-implements the rule (see Appointment::visibleTo).
+
+       Values:
+         all         - whole branch. Owner/Admin, Manager, Front Desk,
+                       Assistant, Accounts.
+         own_default - doctor roles: the calendar OPENS on their own
+                       list, but they may switch to All Doctors. A view
+                       default, not a permission boundary.
+         own_only    - hard boundary, enforced server-side, no toggle.
+                       Nobody is on this by default; a clinic opts in via
+                       Settings -> Calendar.
+
+       Resolved in this order (Slice 3, 2026-08-26):
+         1. role_module_permissions.data_scope for the 'appointments'
+            module - set per role in Settings -> Roles & Permissions.
+         2. AppSetting `calendar_doctor_scope` - the clinic-wide
+            default, for clinics that never touch the per-role control.
+         3. own_default.
+       Only ever asked via appointmentScope(); nothing else in the app
+       reads either source.
+    ========================================================= */
+
+    const APPT_SCOPE_ALL         = 'all';
+    const APPT_SCOPE_OWN_DEFAULT = 'own_default';
+    const APPT_SCOPE_OWN_ONLY    = 'own_only';
+
+    /** Per-instance memo — this is asked once per query scope and once per policy check. */
+    private ?string $appointmentScopeMemo = null;
+
+    public function appointmentScope(): string
+    {
+        if ($this->appointmentScopeMemo !== null) {
+            return $this->appointmentScopeMemo;
+        }
+
+        return $this->appointmentScopeMemo = $this->resolveAppointmentScope();
+    }
+
+    private function resolveAppointmentScope(): string
+    {
+        // Owner / Admin first, and by ROLE not by name. The owner at Tulip is
+        // "Dr. Firke", and isDoctor() pattern-matches a "Dr." name prefix -
+        // asking that question first would scope the clinic owner down to his
+        // own chair.
+        if ($this->isAdminRole()) {
+            return self::APPT_SCOPE_ALL;
+        }
+
+        // Non-doctor roles are never scoped down. This is a deliberate guard,
+        // not an omission: the scope filters on `doctor_id = me`, so applying
+        // it to Front Desk or Accounts would show them an EMPTY calendar. The
+        // Settings UI therefore offers the control on doctor roles only, and
+        // this line makes that safe even if a row is edited directly in the DB.
+        if (! $this->holdsDoctorRole()) {
+            return self::APPT_SCOPE_ALL;
+        }
+
+        // 1. Per-role setting (Settings -> Roles & Permissions), if configured.
+        $role = $this->relationLoaded('roleModel')
+            ? $this->roleModel
+            : $this->roleModel()->first();
+
+        if ($role && $scope = $role->dataScope('appointments')) {
+            return $scope;
+        }
+
+        // 2. Clinic-wide default, for clinics that never touch the per-role
+        //    control. Kept as the fallback rather than removed, so upgrading
+        //    changes nobody's behaviour until a role is explicitly configured.
+        $configured = AppSetting::get('calendar_doctor_scope', self::APPT_SCOPE_OWN_DEFAULT);
+
+        return in_array($configured, [self::APPT_SCOPE_ALL, self::APPT_SCOPE_OWN_DEFAULT, self::APPT_SCOPE_OWN_ONLY], true)
+            ? $configured
+            : self::APPT_SCOPE_OWN_DEFAULT;
+    }
+
+    /**
+     * Doctor by ROLE (legacy string or assigned role slug) - deliberately not
+     * isDoctor(), which also returns true for any user named "Dr. …".
+     */
+    public function holdsDoctorRole(): bool
+    {
+        if (in_array($this->role, self::DOCTOR_ROLES, true)) {
+            return true;
+        }
+
+        $roleModel = $this->relationLoaded('roleModel')
+            ? $this->roleModel
+            : $this->roleModel()->first();
+
+        return $roleModel?->slug === Role::DOCTOR;
+    }
+
+    /** True when this user is shown the whole branch with no filtering. */
+    public function seesAllAppointments(): bool
+    {
+        return $this->appointmentScope() === self::APPT_SCOPE_ALL;
+    }
+
+    /** True when the own-appointments boundary is hard (no toggle back). */
+    public function lockedToOwnAppointments(): bool
+    {
+        return $this->appointmentScope() === self::APPT_SCOPE_OWN_ONLY;
+    }
+
+    /** True when the calendar merely OPENS scoped and a toggle is offered. */
+    public function mayToggleToAllAppointments(): bool
+    {
+        return $this->appointmentScope() === self::APPT_SCOPE_OWN_DEFAULT;
+    }
+
     /**
      * Check if user is front desk staff.
      */

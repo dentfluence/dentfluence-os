@@ -2820,9 +2820,20 @@
                 {{-- ── Color Source ── --}}
                 <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:24px;margin-bottom:18px;">
                     <p class="settings-section-title">Color Source</p>
-                    <p style="font-size:12.5px;color:#7a6080;margin:0 0 18px;">The card background tint comes from the treatment category. The left border accent comes from the assigned doctor. Choose which drives the <em>primary</em> color identity of each card.</p>
+                    <p style="font-size:12.5px;color:#7a6080;margin:0 0 18px;">Each card carries <strong>one</strong> colour, and that colour means one thing. Whichever dimension the colour does not carry stays as plain text, so a busy morning does not turn into five competing palettes.</p>
 
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:6px;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:6px;">
+                        {{-- Auto --}}
+                        <label :class="colorSource==='auto' ? 'cal-style-card cal-style-card--active' : 'cal-style-card'" style="cursor:pointer;">
+                            <input type="radio" name="color_source" value="auto" x-model="colorSource" style="display:none;">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                                <div :class="colorSource==='auto' ? 'cal-radio-dot cal-radio-dot--active' : 'cal-radio-dot'"></div>
+                                <span style="font-size:13px;font-weight:600;color:#2d1845;">Auto</span>
+                                <span style="font-size:11px;color:#a090b0;margin-left:auto;">Recommended</span>
+                            </div>
+                            <p style="font-size:12px;color:#7a6080;margin:0;">Front desk, owner and manager see <strong>doctor</strong> colours. A doctor viewing only his own list sees <strong>treatment</strong> colours, since every card is already his.</p>
+                        </label>
+
                         {{-- Treatment color --}}
                         <label :class="colorSource==='treatment' ? 'cal-style-card cal-style-card--active' : 'cal-style-card'" style="cursor:pointer;">
                             <input type="radio" name="color_source" value="treatment" x-model="colorSource" style="display:none;">
@@ -2830,7 +2841,7 @@
                                 <div :class="colorSource==='treatment' ? 'cal-radio-dot cal-radio-dot--active' : 'cal-radio-dot'"></div>
                                 <span style="font-size:13px;font-weight:600;color:#2d1845;">Treatment Category</span>
                             </div>
-                            <p style="font-size:12px;color:#7a6080;margin:0;">Background tint = Treatment color<br>Border accent = Doctor color</p>
+                            <p style="font-size:12px;color:#7a6080;margin:0;">Colour always means treatment. Doctor shown as text.</p>
                         </label>
 
                         {{-- Doctor color --}}
@@ -2840,7 +2851,7 @@
                                 <div :class="colorSource==='doctor' ? 'cal-radio-dot cal-radio-dot--active' : 'cal-radio-dot'"></div>
                                 <span style="font-size:13px;font-weight:600;color:#2d1845;">Doctor</span>
                             </div>
-                            <p style="font-size:12px;color:#7a6080;margin:0;">Background tint = Doctor color<br>Border accent = Treatment color</p>
+                            <p style="font-size:12px;color:#7a6080;margin:0;">Colour always means doctor. Treatment shown as text.</p>
                         </label>
                     </div>
                 </div>
@@ -2931,14 +2942,22 @@
 
             return {
                 cardStyle:   '{{ $calendarPrefs["calendar_card_style"]   ?? "strip" }}',
-                colorSource: '{{ $calendarPrefs["calendar_color_source"] ?? "treatment" }}',
+                colorSource: '{{ $calendarPrefs["calendar_color_source"] ?? "auto" }}',
                 demoCards: demos,
 
+                // Auto resolves per viewer at render time; the person editing
+                // Settings is staff, so preview it the way staff will see it.
+                get effectiveSource() {
+                    return this.colorSource === 'auto' ? 'doctor' : this.colorSource;
+                },
+
                 buildCardStyle(demo) {
-                    const primaryColor  = this.colorSource === 'treatment' ? demo.treatColor  : demo.doctorColor;
-                    const accentColor   = this.colorSource === 'treatment' ? demo.doctorColor : demo.treatColor;
-                    const isCancelled   = demo.status === 'cancelled';
-                    const isDone        = demo.status === 'done';
+                    // ONE hue — border is the SAME colour as the fill. Mirrors
+                    // renderEvent() in appointments/index.blade.php; if you
+                    // change one, change both or this preview starts lying.
+                    const hue         = this.effectiveSource === 'treatment' ? demo.treatColor : demo.doctorColor;
+                    const isCancelled = demo.status === 'cancelled';
+                    const isDone      = demo.status === 'done';
 
                     let bg, border;
                     if (isCancelled) {
@@ -2946,12 +2965,12 @@
                     } else if (isDone) {
                         bg = '#f0fdf4'; border = '#86efac';
                     } else if (this.cardStyle === 'filled') {
-                        bg = primaryColor + '66';
-                        border = accentColor;
+                        bg = hue + '2e';
+                        border = hue;
                     } else {
-                        // strip — white bg, accent left border
+                        // strip — white bg, left border in the hue
                         bg = '#ffffff';
-                        border = accentColor;
+                        border = hue;
                     }
 
                     return `background:${bg};border-left:3px solid ${border};box-shadow:0 1px 3px rgba(0,0,0,.07);position:relative;`;
@@ -2960,9 +2979,10 @@
                 buildSubStyle(demo) {
                     if (demo.status === 'cancelled') return 'color:#ef4444;opacity:.4;';
                     if (demo.status === 'done')      return 'color:#15803d;';
-                    const primaryColor = this.colorSource === 'treatment' ? demo.treatColor : demo.doctorColor;
-                    // darken for text: just reduce opacity on the raw color via CSS
-                    return `color:${primaryColor};filter:brightness(.75);`;
+                    // Neutral whenever the hue means "doctor" — the treatment
+                    // name must not become a second palette.
+                    if (this.effectiveSource !== 'treatment') return 'color:#64748b;';
+                    return `color:${demo.treatColor};filter:brightness(.75);`;
                 },
             };
         }
