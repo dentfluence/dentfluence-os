@@ -5,6 +5,7 @@ namespace App\Services\Huddle;
 use App\Models\Appointment;
 use App\Models\Patient;
 use App\Models\TreatmentPlan;
+use App\Services\Analytics\ReportMetricsService;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -233,15 +234,18 @@ class HuddleService
         $visitMoney = (float) $visits->sum('amount_paid');
         $lines[] = "Visits completed: {$visitCount}" . ($visitCount ? " (collected " . $this->money($visitMoney) . " on visits)" : '');
 
-        // Total collections in range from the finance ledger (all sources).
-        $collected = $visitMoney;
-        if (class_exists(\App\Models\Finance\FinanceTransaction::class)) {
-            $collected = (float) \App\Models\Finance\FinanceTransaction::where('type', 'income')
-                ->where('status', 'active')
-                ->whereBetween('transaction_date', [$start->toDateString(), $end->copy()->endOfDay()])
-                ->sum('amount');
-            $lines[] = "Total collections (all sources): " . $this->money($collected);
-        }
+        // Total collections in range.
+        //
+        // G-03: this used to sum finance_transactions, which also carries
+        // advances and wallet top-ups (liabilities, not collections), so the
+        // Huddle and the Reports page disagreed on the same day's money.
+        // ReportMetricsService is the single definition — invoice_payments.
+        $collected = app(ReportMetricsService::class)->collected(
+            $start->copy()->startOfDay(),
+            $end->copy()->endOfDay(),
+            $branchId
+        );
+        $lines[] = "Total collections: " . $this->money($collected);
 
         // Appointments that completed in range.
         $done = Appointment::whereBetween('appointment_date', [$start->toDateString(), $end->copy()->endOfDay()])

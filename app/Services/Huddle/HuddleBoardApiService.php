@@ -6,6 +6,7 @@ namespace App\Services\Huddle;
 
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Analytics\ReportMetricsService;
 use App\Services\Relationship\TodayActionsEngine;
 use App\Services\Relationship\TodayActionsProjector;
 use App\Support\Features\Feature;
@@ -166,17 +167,22 @@ class HuddleBoardApiService
 
         $comms ??= collect();
 
-        // Money collected today (guarded — finance tables may differ by build)
+        // Money collected today — canonical definition, same figure the web
+        // Reports page shows.
+        //
+        // G-03: this used to sum finance_transactions (clinic-wide, and
+        // including advances and wallet top-ups). ReportMetricsService reads
+        // invoice_payments and scopes to this branch, so the mobile board,
+        // the briefing and Reports now agree.
         $collectedToday = 0.0;
         try {
-            if (class_exists(\App\Models\Finance\FinanceTransaction::class)) {
-                $collectedToday = (float) \App\Models\Finance\FinanceTransaction::query()
-                    ->where('type', 'income')
-                    ->where('status', 'active')
-                    ->whereDate('transaction_date', $today->toDateString())
-                    ->sum('amount');
-            }
+            $collectedToday = app(ReportMetricsService::class)->collected(
+                $today->copy()->startOfDay(),
+                $today->copy()->endOfDay(),
+                $branchId
+            );
         } catch (\Throwable $e) {
+            Log::warning('[HuddleBoard] collected_today failed: ' . $e->getMessage());
             $collectedToday = 0.0;
         }
 

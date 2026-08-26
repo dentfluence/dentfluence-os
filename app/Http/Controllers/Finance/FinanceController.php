@@ -423,7 +423,7 @@ class FinanceController extends Controller
         $sortBy      = $request->input('sort', 'newest');
         $format      = $request->input('format', 'excel');
 
-        $query = InvoicePayment::with(['invoice' => fn($q) => $q->with(['patient', 'items'])])
+        $query = InvoicePayment::with(['invoice' => fn($q) => $q->with(['patient', 'items.treatment'])])
             ->join('invoices', 'invoice_payments.invoice_id', '=', 'invoices.id')
             ->join('patients', 'invoices.patient_id', '=', 'patients.id')
             ->select('invoice_payments.*')
@@ -473,7 +473,7 @@ class FinanceController extends Controller
 
         $row = 2;
         foreach ($payments as $p) {
-            $treatments = $p->invoice?->items?->pluck('treatment_name')->filter()->implode(', ') ?? '';
+            $treatments = $this->invoiceTreatmentLabels($p->invoice);
             $sheet->setCellValue("A{$row}", $p->payment_date?->format('d-m-Y'));
             $sheet->setCellValue("B{$row}", $p->invoice?->patient?->name ?? '');
             $sheet->setCellValue("C{$row}", $p->invoice?->patient?->phone ?? '');
@@ -1411,9 +1411,31 @@ class FinanceController extends Controller
         return view('finance.ca-export', compact('from', 'to', 'incomeTotal', 'expenseTotal', 'gstCollected', 'preset'));
     }
 
+    /**
+     * The "Treatments" column shown on every finance export.
+     *
+     * G-03/G-12: this used to pluck `invoice_items.treatment_name` — a column
+     * that has never existed — so the column exported blank, silently, in
+     * every format. The linked Treatment master is the source of truth; the
+     * line's own `description` (stamped when it was billed) is the fallback
+     * for lines with no master link: retail products and legacy rows.
+     */
+    private function invoiceTreatmentLabels(?Invoice $invoice): string
+    {
+        if (! $invoice) {
+            return '';
+        }
+
+        return $invoice->items
+            ->map(fn ($item) => $item->treatment?->name ?: $item->description)
+            ->filter()
+            ->unique()
+            ->implode(', ');
+    }
+
     private function downloadCaExport(Carbon $from, Carbon $to, string $format = 'excel')
     {
-        $income   = InvoicePayment::with(['invoice' => fn($q) => $q->with(['patient', 'items'])])
+        $income   = InvoicePayment::with(['invoice' => fn($q) => $q->with(['patient', 'items.treatment'])])
             ->whereBetween('payment_date', [$from, $to])->orderBy('payment_date')->get();
         $expenses = FinanceExpense::with(['category', 'vendor'])
             ->whereBetween('expense_date', [$from, $to])->orderBy('expense_date')->get();
@@ -1446,7 +1468,7 @@ class FinanceController extends Controller
         }
         $row = 2;
         foreach ($income as $p) {
-            $tx = $p->invoice?->items?->pluck('treatment_name')->filter()->implode(', ') ?? '';
+            $tx = $this->invoiceTreatmentLabels($p->invoice);
             $sh->setCellValue("A{$row}", $p->payment_date?->format('d-m-Y'));
             $sh->setCellValue("B{$row}", $p->invoice?->invoice_number ?? '');
             $sh->setCellValue("C{$row}", $p->invoice?->patient?->name ?? '');
@@ -1531,17 +1553,18 @@ class FinanceController extends Controller
             $out = fopen('php://output', 'w');
 
             fputcsv($out, ['=== INCOME (Receipts) ===']);
-            fputcsv($out, ['Date', 'Invoice No', 'Patient', 'Mode', 'Amount']);
+            fputcsv($out, ['Date', 'Invoice No', 'Patient', 'Treatments', 'Mode', 'Amount']);
             foreach ($income as $p) {
                 fputcsv($out, [
                     $p->payment_date?->format('d-m-Y'),
                     $p->invoice?->invoice_number ?? '',
                     $p->invoice?->patient?->name ?? '',
+                    $this->invoiceTreatmentLabels($p->invoice),
                     ucfirst($p->payment_mode ?? ''),
                     $p->amount,
                 ]);
             }
-            fputcsv($out, ['', '', '', 'TOTAL', $income->sum('amount')]);
+            fputcsv($out, ['', '', '', '', 'TOTAL', $income->sum('amount')]);
             fputcsv($out, []);
 
             fputcsv($out, ['=== EXPENSES ===']);

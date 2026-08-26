@@ -124,6 +124,8 @@ Format per gap: **Gap → Evidence → Current state → Business impact → Sev
 
 #### **G-03 · Two different "collected today" — the Huddle was never migrated to the shared brain**
 
+- **Status** — ✅ **FIXED 2026-08-24.** `HuddleService::yesterdaySection()` and `HuddleBoardApiService::kpis()` now call `app(ReportMetricsService::class)->collected($from, $to, $branchId)`; both `class_exists(FinanceTransaction::class)` guards are gone and no `FinanceTransaction` reference remains anywhere in `app/Services/Huddle/`. Two behaviour changes worth knowing: the briefing line is now **"Total collections"**, not "Total collections (all sources)" — advances and wallet top-ups are liabilities, not collections, and were inflating it; and the mobile board's `collected_today` is now **branch-scoped**, matching the rest of that payload (it was clinic-wide). Covered by `tests/Feature/Finance/HuddleCollectionsParityTest.php`, whose fixture asserts the seeded day is one where the two definitions genuinely disagreed. **Not in scope of this row, appended as G-32:** the *web* Huddle KPI panel and the assistant KPI tool still read `finance_transactions`.
+
 - **Evidence** — `app/Services/Huddle/HuddleService.php:238-239` and `app/Services/Huddle/HuddleBoardApiService.php:172-173` both compute collections from `Finance\FinanceTransaction`. Every other surface uses `invoice_payments` via `ReportMetricsService`. That service's own docblock names this exact defect as the reason it was created on 2026-07-14: *"three surfaces computed 'collections' from three different tables (web reports: InvoicePayment; **huddle report: FinanceTransaction**; mobile API: Receipt)"*. Two of the three were migrated. The Huddle was not.
 - **Current state** — The morning Huddle board — the screen staff look at first, every day — can show a different "collected today" from Finance and Reports for the same day. `finance_transactions` remains effectively write-only (13 writers, 1 reader per the Billing Master Audit); that 1 reader is the Huddle.
 - **Business impact** — Staff and owner argue about which number is right on day one of go-live. This is precisely the class of contradiction that destroys trust in a new system, and it is the *first* screen of the day.
@@ -271,6 +273,8 @@ Format per gap: **Gap → Evidence → Current state → Business impact → Sev
 ---
 
 #### **G-12 · CA Export "Treatments" column is always blank**
+
+- **Status** — ✅ **FIXED 2026-08-24.** Both call sites now go through one private helper, `FinanceController::invoiceTreatmentLabels()`, which resolves `treatment_id → treatments.name` and falls back to the line's own `description` (retail products, legacy rows) — never blank. `items.treatment` is eager-loaded on both export queries, so no N+1. The CSV income section had **no Treatments column at all**, so one was added to satisfy acceptance criterion 1. Covered by `tests/Feature/Finance/CaExportTreatmentsColumnTest.php` (xlsx + csv + the income export), which asserts a linked line and an unlinked line both render.
 
 - **Evidence** — `FinanceController.php:476` (CSV) and `:1449` (Excel): `$p->invoice?->items?->pluck('treatment_name')->filter()->implode(', ')`. `invoice_items` has **no `treatment_name` column** — the create migration defines `description`, and `App\Models\InvoiceItem::$fillable` confirms `description`, `treatment_id`, `treatment_plan_item_id`, `inventory_item_id`. `pluck()` on a missing attribute yields nulls, `filter()` drops them, `implode()` returns `''`.
 - **Current state** — Both export formats emit an empty Treatments column, silently, with no error.
@@ -429,13 +433,13 @@ The Flutter application is not present in the connected folder (`E:\Dentfluence\
 |---|---|---|---|---|
 | G-07 | Four Audit #4 P0s (backup, assistant, photo disk, logging) | P0 | 3–4 d | **YES — absolutely** |
 | G-08 | Old void/delete path (verdict E) | P0 | 2 d | **YES** |
-| G-03 | Huddle collections ≠ Reports collections | P0 | 2 h | **YES** |
+| G-03 ✅ | Huddle collections ≠ Reports collections — **FIXED 24-Aug** | P0 | 2 h | **YES** |
 | G-06 | Two profit definitions | P0 | 4 h | **YES** |
 | G-04 | Cash in hand all-time / clamped | P0 | 1 d | **YES** |
 | G-05 | Cash drawer: opening, count, reconciliation, day-close | P0 | 2 d | **YES** |
 | G-01 | Revenue by category reads a dead table | P0 | 1.5 d | **YES** |
 | G-02 | Doctor-wise collection structurally dead | P0 | 1.5 d | **YES** |
-| G-12 | CA Export Treatments blank | P1 | 15 m | Yes — trivial |
+| G-12 ✅ | CA Export Treatments blank — **FIXED 24-Aug** | P1 | 15 m | Yes — trivial |
 | G-11 | `last_visit_date` not advanced by visits | P1 | 3 h | **YES** — patient-facing |
 | G-16 | Appointment → Consultation glue | P1 | 4 h | Yes |
 | G-15 | Pending Treatment report | P1 | 1 d | Yes |
@@ -521,6 +525,25 @@ Sequenced so each slice ships independently and the shared pieces get built once
 17. **G-10** chair-time and **G-14** acceptance reporting **only if** weeks 1–3 finished early. Otherwise they are the first V1.1 items.
 
 **Deferred to V1.1, already decided:** G-17 (clinic data export — unless a sale demands it sooner), G-18 (dead-schema documentation, after G-01 and G-05 land), G-21 (`clinic_id`), G-23 (Android).
+
+---
+
+## 7A. APPENDED FINDINGS
+
+*Per standing rule 2: new findings get the next ID and a dated note. They do not trigger a new audit.*
+
+#### **G-32 · Two more surfaces still carry their own "collections" definition** *(appended 2026-08-24, during G-03)*
+
+- **Evidence** — `app/Modules/Huddle/Controllers/HuddleController.php:867-897` (the **web** Huddle KPI panel — collections, refunds, by-mode breakdown and both previous-window trend figures) and `app/Services/Assistant/Tools/KpiReportTool.php:86-91` (the AI assistant's `collections` metric) both still sum `finance_transactions`. Found while fixing G-03; the register's G-03 row names only the two files under `app/Services/Huddle/`.
+- **Current state** — G-03 made the briefing and the mobile board agree with Reports. These two did not move, so the web Huddle KPI panel is now the sole surface that disagrees — a cleaner statement of the same defect, but still live on a screen the owner reads daily.
+- **Why it was not folded into G-03** — it is not a like-for-like swap. These surfaces need **net** collections (income − refunds), a **by-payment-mode** breakdown and a **previous-window** comparison; `ReportMetricsService` exposes none of the three. Doing it properly means extending the service — the same shape of work as G-06 — not a two-line edit, and it would have blown the 2 h estimate this row was approved against.
+- **Severity** — **P1** (trust, same class as G-03). Not a blocker on its own.
+- **Proposed V1 fix** — Extend `ReportMetricsService` with `refunds()`, `collectedNet()` and `collectionsByMode()`, then repoint both surfaces. Natural bundle with **G-06**, which is already scheduled to extend the same service.
+- **Acceptance criteria**
+  1. Web Huddle KPI panel, mobile board, briefing and Reports show the same collections figure for the same range.
+  2. The assistant's `collections` metric matches Reports for the same range.
+  3. No collections arithmetic remains outside `ReportMetricsService`.
+- **Status** — ⛔ **AWAITING CEO APPROVAL.** Not started. Do not begin without a decision on whether it rides with G-06.
 
 ---
 
