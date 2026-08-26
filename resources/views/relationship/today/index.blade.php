@@ -246,9 +246,9 @@
     }
 
     .ta-drawer {
-        width: 460px;
+        width: 490px;
         max-width: 100%;
-        max-height: 88vh;
+        max-height: 90vh;
         background: #fff;
         display: flex;
         flex-direction: column;
@@ -258,7 +258,7 @@
     }
 
     .ta-drawer-header {
-        padding: 18px 20px 14px;
+        padding: 13px 18px 12px;
         background: linear-gradient(135deg, #4e0a53, #6a0f70);
         color: #fff;
         flex-shrink: 0;
@@ -266,7 +266,7 @@
 
     .ta-drawer-title {
         font-family: 'Cormorant Garamond', Georgia, serif;
-        font-size: 20px;
+        font-size: 19px;
         font-weight: 600;
         margin: 0 0 2px;
     }
@@ -280,12 +280,14 @@
     .ta-drawer-body {
         flex: 1;
         overflow-y: auto;
-        padding: 20px;
+        padding: 14px 18px 16px;
     }
 
     .ta-drawer-section {
-        margin-bottom: 20px;
+        margin-bottom: 14px;
     }
+
+    .ta-drawer-section:last-child { margin-bottom: 0; }
 
     .ta-drawer-section-label {
         font-size: 11px;
@@ -296,105 +298,161 @@
         margin-bottom: 8px;
     }
 
-    .ta-summary-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
+    /* ══ DRAWER — compact call workflow (redesign 2026-08-26, Sumit) ══════
+       The old drawer stacked a 2-column summary grid, a full note log with
+       its own editor, a decorative checklist, a Log/Close tab strip, an
+       outcome dropdown, a notes textarea and a suggestion box — every one of
+       them always on screen, so the normal "ring patient, tick the result"
+       job needed scrolling. Everything below is sized so that job fits in
+       the viewport with nothing hidden: context is one wrapped line, the
+       result is two rows of chips, and the note + history only take space
+       once they are actually wanted.
+    ═══════════════════════════════════════════════════════════════════════ */
+
+    /* Context strip — one dense line, not cards */
+    .ta-ctx {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        font-size: 12.5px;
+        color: #4a3350;
+        background: #faf7fc;
+        border: 1px solid #f0e8f5;
+        border-radius: 9px;
+        padding: 8px 11px;
+    }
+
+    .ta-ctx-item { display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; }
+    .ta-ctx-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: #a58bb0; }
+    .ta-ctx-value { font-weight: 600; color: #1a0320; }
+    .ta-ctx-value a { color: #6a0f70; text-decoration: none; font-weight: 700; }
+
+    /* Call guidance — what to say. Never mixed with what happened. */
+    .ta-guide {
+        display: flex;
         gap: 8px;
+        align-items: flex-start;
+        background: #f5eef9;
+        border-radius: 9px;
+        padding: 8px 11px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: #5a2a63;
+        margin-top: 8px;
     }
 
-    .ta-summary-item {
-        background: #f8f4fc;
-        border-radius: 8px;
-        padding: 8px 10px;
+    .ta-guide i { color: #9a4aa2; margin-top: 2px; flex-shrink: 0; }
+    .ta-guide ul { margin: 3px 0 0; padding-left: 15px; }
+    .ta-guide li { margin: 1px 0; }
+
+    /* Direction toggle — "we called" vs "patient called us" */
+    .ta-seg { display: inline-flex; background: #f3e8f4; border-radius: 8px; padding: 2px; gap: 2px; }
+
+    .ta-seg button {
+        border: none;
+        background: transparent;
+        font-family: 'DM Sans', system-ui, sans-serif;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #8a6d94;
+        padding: 4px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        white-space: nowrap;
     }
 
-    .ta-summary-item-label {
-        font-size: 10px;
-        color: #9a7aaa;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-    }
+    .ta-seg button.on { background: #fff; color: #4e0a53; box-shadow: 0 1px 3px rgba(78,10,83,.14); }
 
-    .ta-summary-item-value {
+    /* Result / response chips */
+    .ta-opt-row { display: flex; flex-wrap: wrap; gap: 7px; }
+
+    .ta-opt {
+        border: 1.5px solid #e2d4e8;
+        background: #fff;
+        border-radius: 9px;
+        padding: 8px 13px;
+        font-family: 'DM Sans', system-ui, sans-serif;
         font-size: 13px;
         font-weight: 600;
-        color: #1a0320;
-        margin-top: 2px;
-    }
-
-    /* Checklist */
-    .ta-checklist { list-style: none; padding: 0; margin: 0; }
-
-    .ta-checklist li {
-        display: flex;
-        align-items: flex-start;
-        gap: 10px;
-        padding: 8px 0;
-        border-bottom: 1px solid #f5f0fa;
-        font-size: 13px;
-        color: #2d0538;
-    }
-
-    .ta-checklist li:last-child { border-bottom: none; }
-
-    .ta-checklist-check {
-        width: 16px;
-        height: 16px;
-        border: 1.5px solid #b95cb7;
-        border-radius: 4px;
-        flex-shrink: 0;
-        margin-top: 1px;
+        color: #4a3350;
         cursor: pointer;
-        accent-color: #6a0f70;
+        transition: border-color 120ms, background 120ms, color 120ms;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
     }
 
-    /* Log response form */
-    .ta-form-group { margin-bottom: 14px; }
+    .ta-opt:hover { border-color: #b95cb7; }
 
-    .ta-form-label {
-        display: block;
+    .ta-opt.on {
+        border-color: #6a0f70;
+        background: #6a0f70;
+        color: #fff;
+        box-shadow: 0 2px 8px rgba(106,15,112,.22);
+    }
+
+    .ta-opt.on.ta-opt-warn { border-color: #8a5a2a; background: #8a5a2a; box-shadow: 0 2px 8px rgba(138,90,42,.22); }
+
+    /* Plain-language consequence line — replaces "Suggested Next Action" */
+    .ta-outcome-hint {
+        display: flex;
+        gap: 7px;
+        align-items: flex-start;
+        border-radius: 9px;
+        padding: 8px 11px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        margin-top: 10px;
+    }
+
+    .ta-outcome-hint.done  { background: #f0f9f4; border: 1px solid #b8e0ca; color: #1a7a45; }
+    .ta-outcome-hint.retry { background: #fdf6ec; border: 1px solid #ecd9b8; color: #8a5a2a; }
+
+    /* Secondary toggles — note + history stay collapsed by default */
+    .ta-more { display: flex; gap: 16px; margin-top: 12px; }
+
+    .ta-more button {
+        background: none;
+        border: none;
+        padding: 0;
+        font-family: 'DM Sans', system-ui, sans-serif;
         font-size: 12px;
         font-weight: 600;
-        color: #4e0a53;
-        margin-bottom: 5px;
+        color: #8a6d94;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
     }
 
-    .ta-form-select, .ta-form-textarea {
-        width: 100%;
-        border: 1.5px solid #dfc5e1;
-        border-radius: 8px;
-        padding: 8px 10px;
-        font-size: 13px;
-        color: #1a0320;
-        font-family: 'DM Sans', system-ui, sans-serif;
-        background: #fff;
-        outline: none;
-        transition: border-color 150ms;
+    .ta-more button:hover { color: #6a0f70; }
+
+    /* Interaction history — the owner audit trail */
+    .ta-hist { margin-top: 10px; border-top: 1px solid #f0e8f5; padding-top: 10px; max-height: 168px; overflow-y: auto; }
+    .ta-hist-row { display: flex; gap: 8px; padding: 5px 0; font-size: 12.5px; line-height: 1.4; }
+    .ta-hist-time { color: #a58bb0; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 11.5px; padding-top: 1px; }
+    .ta-hist-body { flex: 1; min-width: 0; color: #3a1140; }
+    .ta-hist-who { color: #9a7aaa; font-size: 11.5px; }
+    .ta-hist-note { color: #6b7280; font-size: 11.5px; margin-top: 1px; }
+
+    .ta-hist-dir {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        border-radius: 20px;
+        padding: 1px 7px;
+        white-space: nowrap;
+        height: fit-content;
+        margin-top: 1px;
     }
 
-    .ta-form-select:focus, .ta-form-textarea:focus {
-        border-color: #6a0f70;
-        box-shadow: 0 0 0 3px rgba(106, 15, 112, 0.10);
-    }
-
-    .ta-form-textarea { resize: vertical; min-height: 72px; }
-
-    /* Next action suggestion box */
-    .ta-next-action-box {
-        background: #f0f9f4;
-        border: 1px solid #b8e0ca;
-        border-radius: 8px;
-        padding: 10px 14px;
-        font-size: 13px;
-        color: #1a7a45;
-        display: flex;
-        align-items: flex-start;
-        gap: 8px;
-        margin-top: 12px;
-    }
+    .ta-hist-dir.out  { background: #f0eefc; color: #534AB7; }
+    .ta-hist-dir.in   { background: #eef6ee; color: #2f7a3d; }
+    .ta-hist-dir.note { background: #f5f2f6; color: #7a6d80; }
 
     .ta-drawer-footer {
-        padding: 14px 20px;
+        padding: 11px 18px;
         border-top: 1px solid #f0e8f5;
         display: flex;
         gap: 10px;
@@ -547,7 +605,10 @@
     .taw-ib:hover { background:#f3e8f4; }
     .taw-ib--go { background:#6a0f70; border-color:#6a0f70; color:#fff; }
     .taw-ib--go:hover { background:#4e0a53; }
-    .taw-ib--ok { border-color:#cfe9db; background:#f2fbf6; color:#1a7a45; cursor:default; }
+    /* The tick is clickable now — it opens that action's history — so it
+       keeps a pointer and a hover state instead of reading as inert. */
+    .taw-ib--ok { border-color:#cfe9db; background:#f2fbf6; color:#1a7a45; cursor:pointer; font-family:inherit; padding:0; }
+    .taw-ib--ok:hover { background:#e2f5ea; border-color:#a9d9c0; }
     .taw-ib:disabled { opacity:.55; cursor:not-allowed; }
 
     /* ── Footer / pagination ── */
@@ -993,15 +1054,13 @@
         <div class="ta-drawer-backdrop" @click.self="closeDrawer()">
             <div class="ta-drawer" @click.stop>
 
-                {{-- Drawer Header --}}
+                {{-- ── 1. HEADER — category · patient · action ───────────── --}}
                 <div class="ta-drawer-header">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;opacity:0.75;"
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                        <span style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;opacity:0.75;"
                               x-text="categoryLabel(drawer.item?.category)"></span>
-                        <button
-                            @click="closeDrawer()"
-                            style="background:rgba(255,255,255,0.15);border:none;border-radius:6px;padding:4px 8px;color:#fff;cursor:pointer;font-size:13px;"
-                        >
+                        <button @click="closeDrawer()"
+                                style="background:rgba(255,255,255,0.15);border:none;border-radius:6px;padding:3px 7px;color:#fff;cursor:pointer;font-size:13px;line-height:1;">
                             <i class="ti ti-x"></i>
                         </button>
                     </div>
@@ -1009,246 +1068,203 @@
                     <p class="ta-drawer-sub" x-text="drawer.item?.suggested_action"></p>
                 </div>
 
-                {{-- Drawer Body --}}
                 <div class="ta-drawer-body">
 
-                    {{-- 1. Relationship Summary --}}
-                    <div class="ta-drawer-section">
-                        <div class="ta-drawer-section-label">Summary</div>
-                        <div class="ta-summary-grid">
-                            <div class="ta-summary-item">
-                                <div class="ta-summary-item-label">Reason for call</div>
-                                <div class="ta-summary-item-value" x-text="drawer.item?.reason"></div>
-                            </div>
-                            <div class="ta-summary-item">
-                                <div class="ta-summary-item-label">Priority</div>
-                                <div class="ta-summary-item-value" style="text-transform:capitalize;" x-text="drawer.item?.priority"></div>
-                            </div>
-                            <template x-if="drawer.item?.meta?.phone">
-                                <div class="ta-summary-item">
-                                    <div class="ta-summary-item-label">Phone</div>
-                                    <div class="ta-summary-item-value">
-                                        <a :href="'tel:' + drawer.item.meta.phone"
-                                           x-text="drawer.item.meta.phone"
-                                           style="color:#6a0f70;text-decoration:none;"></a>
-                                    </div>
-                                </div>
-                            </template>
-                            <template x-if="drawer.item?.meta?.treatment">
-                                <div class="ta-summary-item">
-                                    <div class="ta-summary-item-label">Treatment</div>
-                                    <div class="ta-summary-item-value" x-text="drawer.item.meta.treatment"></div>
-                                </div>
-                            </template>
-                            <template x-if="drawer.item?.meta?.appointment_date">
-                                <div class="ta-summary-item">
-                                    <div class="ta-summary-item-label">Appointment</div>
-                                    <div class="ta-summary-item-value" x-text="drawer.item.meta.appointment_date"></div>
-                                </div>
-                            </template>
-                            <template x-if="drawer.item?.meta?.end_date">
-                                <div class="ta-summary-item">
-                                    <div class="ta-summary-item-label">Expiry</div>
-                                    <div class="ta-summary-item-value" x-text="drawer.item.meta.end_date"></div>
-                                </div>
-                            </template>
-                            <template x-if="drawer.item?.meta?.balance_due">
-                                <div class="ta-summary-item">
-                                    <div class="ta-summary-item-label">Balance Due</div>
-                                    <div class="ta-summary-item-value" x-text="'₹' + Number(drawer.item.meta.balance_due).toLocaleString('en-IN')"></div>
-                                </div>
-                            </template>
-                            <template x-if="drawer.item?.meta?.due_date">
-                                <div class="ta-summary-item">
-                                    <div class="ta-summary-item-label">Due Date</div>
-                                    <div class="ta-summary-item-value" x-text="drawer.item.meta.due_date"></div>
-                                </div>
-                            </template>
+                    {{-- ── 2. CONTEXT — one dense line, no cards ─────────── --}}
+                    <div class="ta-ctx">
+                        <div class="ta-ctx-item" x-show="drawer.item?.reason">
+                            <span class="ta-ctx-label">Reason</span>
+                            <span class="ta-ctx-value" x-text="drawer.item?.reason"></span>
                         </div>
-                        {{-- AI summary if present --}}
-                        <template x-if="drawer.item?.meta?.ai_summary">
-                            <div style="margin-top:8px;padding:8px 10px;background:#f5eef9;border-radius:8px;font-size:12px;color:#6a0f70;">
-                                <i class="ti ti-sparkles" style="margin-right:4px;"></i>
-                                <span x-text="drawer.item.meta.ai_summary"></span>
+                        <div class="ta-ctx-item">
+                            <span class="ta-ctx-label">Priority</span>
+                            <span class="ta-ctx-value" style="text-transform:capitalize;" x-text="drawer.item?.priority"></span>
+                        </div>
+                        <template x-if="drawer.item?.meta?.phone">
+                            <div class="ta-ctx-item">
+                                <span class="ta-ctx-label">Phone</span>
+                                <span class="ta-ctx-value">
+                                    <a :href="'tel:' + drawer.item.meta.phone" x-text="drawer.item.meta.phone"></a>
+                                </span>
+                            </div>
+                        </template>
+                        <template x-if="drawer.item?.meta?.appointment_date">
+                            <div class="ta-ctx-item">
+                                <span class="ta-ctx-label">Appointment</span>
+                                <span class="ta-ctx-value" x-text="drawer.item.meta.appointment_date"></span>
+                            </div>
+                        </template>
+                        <template x-if="drawer.item?.meta?.treatment">
+                            <div class="ta-ctx-item">
+                                <span class="ta-ctx-label">Treatment</span>
+                                <span class="ta-ctx-value" x-text="drawer.item.meta.treatment"></span>
+                            </div>
+                        </template>
+                        <template x-if="drawer.item?.meta?.balance_due">
+                            <div class="ta-ctx-item">
+                                <span class="ta-ctx-label">Balance</span>
+                                <span class="ta-ctx-value" x-text="'₹' + Number(drawer.item.meta.balance_due).toLocaleString('en-IN')"></span>
+                            </div>
+                        </template>
+                        <template x-if="drawer.item?.meta?.due_date">
+                            <div class="ta-ctx-item">
+                                <span class="ta-ctx-label">Due</span>
+                                <span class="ta-ctx-value" x-text="drawer.item.meta.due_date"></span>
+                            </div>
+                        </template>
+                        <template x-if="drawer.item?.meta?.end_date">
+                            <div class="ta-ctx-item">
+                                <span class="ta-ctx-label">Expires</span>
+                                <span class="ta-ctx-value" x-text="drawer.item.meta.end_date"></span>
                             </div>
                         </template>
                     </div>
 
-                    {{-- 2. Notes — same Suggestion / Patient-Response log already live on
-                         Lead & Opportunity Pipeline, ported here as-is. Reuses
-                         ActivityEngine (event: today_action.note_added), no new table.
-                         See docs/feature-specs/feature-spec-action-board-instruction-log.md. --}}
-                    <div class="ta-drawer-section">
-                        <div class="ta-drawer-section-label">Notes</div>
-
-                        <template x-if="notesLoading">
-                            <p style="font-size:13px;color:#9ca3af;margin:0 0 12px;">Loading notes…</p>
-                        </template>
-
-                        <template x-if="!notesLoading && notes.length === 0">
-                            <p style="font-size:13px;color:#9ca3af;margin:0 0 12px;">No notes logged yet.</p>
-                        </template>
-
-                        <template x-for="(note, i) in notes" :key="i">
-                            <div style="display:flex;gap:10px;margin-bottom:12px;">
-                                <span :style="(note.note_type === 'response'
-                                        ? 'background:#eef6ee;color:#2f7a3d;'
-                                        : 'background:#f0eefc;color:#534AB7;') +
-                                        'font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;height:fit-content;'"
-                                      x-text="note.note_type === 'response' ? 'Patient Response' : 'Suggestion'"></span>
-                                <div style="flex:1;min-width:0;">
-                                    <p style="font-size:13.5px;color:#374151;line-height:1.5;margin:0;" x-text="note.text"></p>
-                                    <div style="font-size:11px;color:#9ca3af;margin-top:3px;">
-                                        <span x-text="note.author"></span> · <span x-text="note.occurred_at"></span>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
-
-                        <div style="display:flex;gap:8px;align-items:flex-start;margin-top:8px;">
-                            <select class="ta-form-select" x-model="noteType" style="flex-shrink:0;width:auto;">
-                                <option value="suggestion">Suggestion</option>
-                                <option value="response">Patient Response</option>
-                            </select>
-                            <textarea class="ta-form-textarea" x-model="noteText" rows="2"
-                                      placeholder="Add a note…" style="flex:1;margin:0;"></textarea>
+                    {{-- ── 3. CALL GUIDANCE — what to say. Guidance ONLY;
+                         never mixed with what happened or with task status. --}}
+                    <div class="ta-guide" x-show="guidance || checklist.length > 0" x-cloak>
+                        <i class="ti ti-bulb"></i>
+                        <div style="min-width:0;">
+                            <span x-text="guidance"></span>
+                            <ul x-show="checklist.length > 0">
+                                <template x-for="(point, i) in checklist" :key="i">
+                                    <li x-text="point"></li>
+                                </template>
+                            </ul>
                         </div>
-                        <template x-if="notesError">
-                            <div style="font-size:12px;color:#b52020;margin-top:6px;" x-text="notesError"></div>
-                        </template>
-                        <div style="display:flex;justify-content:flex-end;margin-top:8px;">
-                            <button type="button" @click="addNote()" :disabled="!noteText.trim() || notesSaving"
-                                    style="padding:7px 16px;border:none;border-radius:8px;background:#534AB7;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;">
-                                <span x-show="!notesSaving">Add Note</span>
-                                <span x-show="notesSaving">Saving…</span>
+                    </div>
+
+                    {{-- ── 4. CALL RESULT ────────────────────────────────────
+                         One question first: did the call connect? PATIENT
+                         RESPONSE only appears once it did. The direction
+                         toggle is what makes the callback scenario work —
+                         "Patient called us" records a NEW interaction against
+                         the same open action; the earlier attempt is a
+                         separate activity row and is never overwritten. --}}
+                    <div class="ta-drawer-section" style="margin-top:12px;" x-show="!dismissMode && !closeMode && !historyOnly">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">
+                            <div class="ta-drawer-section-label" style="margin:0;">Call result</div>
+                            <div class="ta-seg">
+                                <button type="button" :class="direction === 'outbound' ? 'on' : ''"
+                                        @click="setDirection('outbound')">We called</button>
+                                <button type="button" :class="direction === 'inbound' ? 'on' : ''"
+                                        @click="setDirection('inbound')">Patient called us</button>
+                            </div>
+                        </div>
+
+                        <div class="ta-opt-row" x-show="direction === 'outbound'">
+                            <template x-for="r in contactResults" :key="r.key">
+                                <button type="button" class="ta-opt"
+                                        :class="contactResult === r.key ? 'on' : ''"
+                                        @click="pickContactResult(r.key)"
+                                        x-text="r.label"></button>
+                            </template>
+                        </div>
+
+                        {{-- Which not-connected outcome, when the clinic has
+                             configured more than one behind the same button. --}}
+                        <div x-show="detailOptions.length > 1" x-cloak style="margin-top:9px;">
+                            <div class="ta-drawer-section-label">Detail</div>
+                            <div class="ta-opt-row">
+                                <template x-for="o in detailOptions" :key="o.key">
+                                    <button type="button" class="ta-opt"
+                                            style="padding:5px 10px;font-size:12px;"
+                                            :class="form.response === o.key ? 'on' : ''"
+                                            @click="pickOutcome(o.key)"
+                                            x-text="o.label"></button>
+                                </template>
+                            </div>
+                        </div>
+
+                        {{-- ── 5. PATIENT RESPONSE — contact happened only ── --}}
+                        <div x-show="showPatientResponse" x-cloak style="margin-top:13px;">
+                            <div class="ta-drawer-section-label">Patient response</div>
+                            <div class="ta-opt-row">
+                                <template x-for="o in answeredOptions" :key="o.key">
+                                    <button type="button" class="ta-opt"
+                                            :class="(form.response === o.key ? 'on ' : '') + (o.closes ? '' : 'ta-opt-warn')"
+                                            @click="pickOutcome(o.key)"
+                                            x-text="o.label"></button>
+                                </template>
+                            </div>
+                        </div>
+
+                        {{-- Plain-language consequence. Staff read what will
+                             happen; they never pick a status themselves. --}}
+                        <div class="ta-outcome-hint" :class="outcomeClosesTask ? 'done' : 'retry'"
+                             x-show="form.response" x-cloak>
+                            <i :class="outcomeClosesTask ? 'ti ti-circle-check' : 'ti ti-refresh'" style="margin-top:1px;flex-shrink:0;"></i>
+                            <span x-text="outcomeHint"></span>
+                        </div>
+
+                        {{-- Note — secondary. Only on screen when the outcome
+                             demands one, or staff ask for it. --}}
+                        <div x-show="requiresNotes || showNote" x-cloak style="margin-top:11px;">
+                            <label class="ta-form-label" x-text="requiresNotes ? 'Note (required for this response)' : 'Note (optional)'"></label>
+                            <textarea class="ta-form-textarea" rows="2" style="min-height:54px;"
+                                      placeholder="Anything worth recording from this call…"
+                                      x-model="form.notes"
+                                      :style="requiresNotes && !form.notes ? 'border-color:#e0a0a0;min-height:54px;' : 'min-height:54px;'"></textarea>
+                        </div>
+
+                    </div>
+
+                    {{-- History lives OUTSIDE the call-result block on purpose:
+                         a completed row opens straight into it with no form
+                         attached (the green tick in the worklist), and an open
+                         row can still glance at it mid-call. --}}
+                    <div x-show="!dismissMode && !closeMode">
+                        <div class="ta-more" x-show="!historyOnly">
+                            <button type="button" x-show="!requiresNotes" @click="showNote = !showNote">
+                                <i class="ti ti-note"></i>
+                                <span x-text="showNote ? 'Hide note' : 'Add note'"></span>
+                            </button>
+                            <button type="button" @click="showHistory = !showHistory">
+                                <i class="ti ti-history"></i>
+                                <span x-text="(showHistory ? 'Hide history' : 'History') + (interactions.length ? ' (' + interactions.length + ')' : '')"></span>
                             </button>
                         </div>
-                    </div>
 
-                    {{-- 3. Dynamic Checklist --}}
-                    <div class="ta-drawer-section" x-show="checklist.length > 0">
-                        <div class="ta-drawer-section-label">Call Checklist</div>
-                        <ul class="ta-checklist">
-                            <template x-for="(item, i) in checklist" :key="i">
-                                <li>
-                                    <input
-                                        type="checkbox"
-                                        class="ta-checklist-check"
-                                        :id="'chk_' + i"
-                                        x-model="checks[i]"
-                                    >
-                                    <label :for="'chk_' + i" x-text="item" style="cursor:pointer;"></label>
-                                </li>
+                        {{-- ── 6. INTERACTION HISTORY — the owner audit trail.
+                             Oldest first, so the original attempt stays at the
+                             top: "10:14 Outbound — No answer — Neha" is still
+                             there after "11:02 Inbound — Confirmed — Reception"
+                             lands. Nothing here is ever overwritten. --}}
+                        <div class="ta-hist" x-show="showHistory" x-cloak>
+                            <template x-if="historyLoading">
+                                <p style="font-size:12.5px;color:#9ca3af;margin:0;">Loading…</p>
                             </template>
-                        </ul>
-                    </div>
-
-                    {{-- Log / Close tabs (2026-07-08) — previously one combined
-                         "Log & Close" button, which force-closed the row for
-                         every outcome (including "No answer"/"Not connected"),
-                         so a failed attempt vanished instead of staying open
-                         for a retry. Log now only records an outcome; Close is
-                         a separate, explicit action. --}}
-                    <div style="display:flex;gap:22px;padding:0 24px;border-bottom:1px solid #f0ebf5;">
-                        <button type="button" @click="activeTab = 'log'"
-                                :style="activeTab === 'log'
-                                    ? 'color:#534AB7;font-weight:700;border-bottom-color:#534AB7;'
-                                    : 'color:#b3a6bf;font-weight:600;border-bottom-color:transparent;'"
-                                style="background:none;border:none;border-bottom:2.5px solid transparent;margin-bottom:-1px;padding:9px 2px;font-size:13px;letter-spacing:.01em;cursor:pointer;transition:color .15s ease;">
-                            Log
-                        </button>
-                        <button type="button" @click="activeTab = 'close'"
-                                :style="activeTab === 'close'
-                                    ? 'color:#534AB7;font-weight:700;border-bottom-color:#534AB7;'
-                                    : 'color:#b3a6bf;font-weight:600;border-bottom-color:transparent;'"
-                                style="background:none;border:none;border-bottom:2.5px solid transparent;margin-bottom:-1px;padding:9px 2px;font-size:13px;letter-spacing:.01em;cursor:pointer;transition:color .15s ease;">
-                            Close
-                        </button>
-                    </div>
-
-                    {{-- 4. Log tab — records a call outcome, never closes the row --}}
-                    <div x-show="activeTab === 'log'" style="padding-top:16px;">
-                        <div class="ta-drawer-section">
-                            <div class="ta-drawer-section-label">Log Response</div>
-
-                            <div class="ta-form-group">
-                                <label class="ta-form-label">Call outcome</label>
-                                <select
-                                    class="ta-form-select"
-                                    x-model="form.response"
-                                    @change="updateNextAction()"
-                                >
-                                    <option value="">— Select outcome —</option>
-                                    <template x-for="(label, key) in responseOptions" :key="key">
-                                        <option :value="key" x-text="label"></option>
-                                    </template>
-                                </select>
-                            </div>
-
-                            <div class="ta-form-group">
-                                <label class="ta-form-label">
-                                    <span x-text="requiresNotes ? 'Notes (required for this outcome)' : 'Notes (optional)'"></span>
-                                </label>
-                                <textarea
-                                    class="ta-form-textarea"
-                                    placeholder="Any notes from this call..."
-                                    x-model="form.notes"
-                                    :style="requiresNotes && !form.notes ? 'border-color:#e0a0a0;' : ''"
-                                ></textarea>
+                            <template x-if="!historyLoading && interactions.length === 0">
+                                <p style="font-size:12.5px;color:#9ca3af;margin:0;">No interactions recorded yet.</p>
+                            </template>
+                            <template x-for="(h, i) in interactions" :key="i">
+                                <div class="ta-hist-row">
+                                    <span class="ta-hist-time" x-text="h.at"></span>
+                                    <span class="ta-hist-dir"
+                                          :class="h.kind === 'note' ? 'note' : (h.direction === 'inbound' ? 'in' : 'out')"
+                                          x-text="h.kind === 'note' ? 'Note' : (h.direction === 'inbound' ? 'In' : 'Out')"></span>
+                                    <span class="ta-hist-body">
+                                        <span x-text="h.label"></span>
+                                        <span class="ta-hist-who" x-text="' · ' + h.actor"></span>
+                                        <span class="ta-hist-note" x-show="h.notes" x-text="h.notes"></span>
+                                    </span>
+                                </div>
+                            </template>
+                            <div style="font-size:11.5px;color:#9a7aaa;border-top:1px dashed #efe6f3;margin-top:6px;padding-top:6px;">
+                                Current status:
+                                <strong x-text="drawer.item?.done ? 'Completed' : 'Due'"></strong>
                             </div>
                         </div>
-
-                        {{-- Next Action (auto-suggested) --}}
-                        <div class="ta-drawer-section" x-show="nextActionLabel">
-                            <div class="ta-drawer-section-label">Suggested Next Action</div>
-                            <div class="ta-next-action-box">
-                                <i class="ti ti-arrow-right" style="margin-top:1px;flex-shrink:0;"></i>
-                                <span x-text="nextActionLabel"></span>
-                            </div>
-                        </div>
-
-                        <template x-if="submitError">
-                            <div style="background:#fdeaea;border:1px solid #f5a0a0;border-radius:8px;padding:10px 14px;font-size:13px;color:#b52020;margin:0 24px 8px;">
-                                <i class="ti ti-alert-circle"></i>
-                                <span x-text="submitError"></span>
-                            </div>
-                        </template>
-                    </div>
-
-                    {{-- Close tab — explicit "done with this one," no outcome required --}}
-                    <div x-show="activeTab === 'close'" x-cloak style="padding-top:16px;">
-                        <div class="ta-drawer-section">
-                            <div class="ta-drawer-section-label">Close this item</div>
-                            <p style="font-size:13px;color:#6b7280;margin:0 0 10px;">
-                                Removes it from today's list. Use this once you're done — after a call went
-                                through, or after enough retry attempts. It does not require a call outcome.
-                            </p>
-                            <div class="ta-form-group">
-                                <label class="ta-form-label">Notes (optional)</label>
-                                <textarea
-                                    class="ta-form-textarea"
-                                    placeholder="Why is this being closed?"
-                                    x-model="closeNotes"
-                                ></textarea>
-                            </div>
-                        </div>
-
-                        <template x-if="closeError">
-                            <div style="background:#fdeaea;border:1px solid #f5a0a0;border-radius:8px;padding:10px 14px;font-size:13px;color:#b52020;margin:0 24px 8px;">
-                                <i class="ti ti-alert-circle"></i>
-                                <span x-text="closeError"></span>
-                            </div>
-                        </template>
                     </div>
 
                 </div>{{-- /drawer-body --}}
 
-                {{-- Dismiss panel — replaces the footer while active. Requires a
-                     reason so a row can't be cleared with a fake call outcome.
-                     See docs/feature-specs/feature-spec-action-board-dismiss.md. --}}
-                <div x-show="dismissMode" x-cloak style="padding:14px 24px;border-top:1px solid #f3f4f6;background:#fafafa;">
+                {{-- Dismiss panel — this row should not have been here at all.
+                     Requires a reason so a queue can't be cleared with a fake
+                     call outcome. Unchanged behaviour, same endpoint. --}}
+                <div x-show="dismissMode" x-cloak style="padding:12px 18px;border-top:1px solid #f3f4f6;background:#fafafa;">
                     <div class="ta-form-group">
-                        <label class="ta-form-label">Dismiss reason</label>
+                        <label class="ta-form-label">Why is this not needed?</label>
                         <select class="ta-form-select" x-model="dismissReason">
                             <option value="">— Select a reason —</option>
                             <template x-for="r in dismissReasons" :key="r.key">
@@ -1257,10 +1273,8 @@
                         </select>
                     </div>
                     <div class="ta-form-group" x-show="dismissReason">
-                        <label class="ta-form-label">
-                            <span x-text="dismissRequiresNotes ? 'Notes (required for this reason)' : 'Notes (optional)'"></span>
-                        </label>
-                        <textarea class="ta-form-textarea" placeholder="Why is this being dismissed?" x-model="dismissNotes"></textarea>
+                        <label class="ta-form-label" x-text="dismissRequiresNotes ? 'Note (required)' : 'Note (optional)'"></label>
+                        <textarea class="ta-form-textarea" rows="2" style="min-height:54px;" x-model="dismissNotes"></textarea>
                     </div>
                     <template x-if="dismissError">
                         <div style="background:#fdeaea;border:1px solid #f5a0a0;border-radius:8px;padding:8px 12px;font-size:12.5px;color:#b52020;margin-bottom:8px;">
@@ -1269,50 +1283,77 @@
                     </template>
                     <div style="display:flex;gap:10px;justify-content:flex-end;">
                         <button class="ta-btn-cancel" @click="dismissMode = false" :disabled="dismissing">Back</button>
-                        <button
-                            class="ta-btn-submit"
-                            style="background:#8a5a5a;"
-                            @click="confirmDismiss()"
-                            :disabled="!dismissReason || dismissing || (dismissRequiresNotes && !dismissNotes)"
-                        >
+                        <button class="ta-btn-submit" style="flex:0 0 auto;padding:10px 18px;background:#8a5a5a;"
+                                @click="confirmDismiss()"
+                                :disabled="!dismissReason || dismissing || (dismissRequiresNotes && !dismissNotes)">
                             <span x-show="!dismissing">Dismiss</span>
                             <span x-show="dismissing">Dismissing…</span>
                         </button>
                     </div>
                 </div>
 
-                {{-- Drawer Footer — Log/Close button swaps with the active tab
-                     (2026-07-08). "Dismiss instead" stays available from either
-                     tab: for rows that shouldn't have been on the list at all,
-                     not ones where a real attempt (logged or closed) happened. --}}
-                <div class="ta-drawer-footer" x-show="!dismissMode">
-                    <button class="ta-btn-cancel" @click="closeDrawer()">Cancel</button>
-                    <button
-                        type="button"
-                        @click="dismissMode = true"
-                        style="background:none;border:none;color:#9a7aaa;font-size:12.5px;cursor:pointer;text-decoration:underline;margin-right:auto;margin-left:10px;"
-                    >
-                        Dismiss instead
-                    </button>
-                    <button
-                        x-show="activeTab === 'log'"
-                        class="ta-btn-submit"
-                        @click="submitLog()"
-                        :disabled="!form.response || submitting || (requiresNotes && !form.notes)"
-                    >
-                        <span x-show="!submitting"><i class="ti ti-check"></i> Log</span>
-                        <span x-show="submitting"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite;"></i> Saving...</span>
-                    </button>
-                    <button
-                        x-show="activeTab === 'close'"
-                        class="ta-btn-submit"
-                        style="background:#4a7a5a;"
-                        @click="confirmClose()"
-                        :disabled="closing"
-                    >
-                        <span x-show="!closing"><i class="ti ti-check"></i> Close</span>
-                        <span x-show="closing"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite;"></i> Closing...</span>
-                    </button>
+                {{-- Stop chasing — the manual give-up after enough attempts.
+                     Was the "Close" tab; demoted to a footer link because it is
+                     the exception, not part of the normal call workflow. Same
+                     endpoint, same server behaviour. --}}
+                <div x-show="closeMode" x-cloak style="padding:12px 18px;border-top:1px solid #f3f4f6;background:#fafafa;">
+                    <p style="font-size:12.5px;color:#6b7280;margin:0 0 9px;">
+                        Marks this action finished without a call outcome — use it once you have
+                        tried enough times, or the action has been handled some other way.
+                    </p>
+                    <div class="ta-form-group">
+                        <label class="ta-form-label">Note (optional)</label>
+                        <textarea class="ta-form-textarea" rows="2" style="min-height:54px;" x-model="closeNotes"></textarea>
+                    </div>
+                    <template x-if="closeError">
+                        <div style="background:#fdeaea;border:1px solid #f5a0a0;border-radius:8px;padding:8px 12px;font-size:12.5px;color:#b52020;margin-bottom:8px;">
+                            <span x-text="closeError"></span>
+                        </div>
+                    </template>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;">
+                        <button class="ta-btn-cancel" @click="closeMode = false" :disabled="closing">Back</button>
+                        <button class="ta-btn-submit" style="flex:0 0 auto;padding:10px 18px;background:#4a7a5a;"
+                                @click="confirmClose()" :disabled="closing">
+                            <span x-show="!closing">Stop chasing</span>
+                            <span x-show="closing">Saving…</span>
+                        </button>
+                    </div>
+                </div>
+
+                {{-- Footer — one primary action. Save records what happened;
+                     the SERVER decides whether that completes the action. --}}
+                <div class="ta-drawer-footer" x-show="!dismissMode && !closeMode" style="flex-direction:column;align-items:stretch;gap:8px;">
+                    <template x-if="submitError">
+                        <div style="background:#fdeaea;border:1px solid #f5a0a0;border-radius:8px;padding:8px 12px;font-size:12.5px;color:#b52020;">
+                            <i class="ti ti-alert-circle"></i>
+                            <span x-text="submitError"></span>
+                        </div>
+                    </template>
+                    <div style="display:flex;gap:10px;align-items:center;">
+                        <template x-if="!historyOnly">
+                            <button type="button" @click="dismissMode = true"
+                                    style="background:none;border:none;color:#9a7aaa;font-size:12px;cursor:pointer;text-decoration:underline;padding:0;">
+                                Not needed
+                            </button>
+                        </template>
+                        <template x-if="!historyOnly">
+                            <button type="button" @click="closeMode = true"
+                                    style="background:none;border:none;color:#9a7aaa;font-size:12px;cursor:pointer;text-decoration:underline;padding:0;">
+                                Stop chasing
+                            </button>
+                        </template>
+                        <span style="flex:1 1 auto;"></span>
+                        <button class="ta-btn-cancel" @click="closeDrawer()"
+                                x-text="historyOnly ? 'Close' : 'Cancel'"></button>
+                        <template x-if="!historyOnly">
+                            <button class="ta-btn-submit" style="flex:0 0 auto;padding:10px 22px;"
+                                    @click="submitLog()"
+                                    :disabled="!canSave || submitting">
+                                <span x-show="!submitting"><i class="ti ti-check"></i> Save</span>
+                                <span x-show="submitting"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite;"></i> Saving…</span>
+                            </button>
+                        </template>
+                    </div>
                 </div>
 
             </div>{{-- /drawer --}}
@@ -1334,6 +1375,17 @@ const CHECKLISTS    = @json($checklists);
 const RESPONSE_OPTS = @json($responseOpts);
 const NEXT_ACTIONS  = @json($nextActions);
 const REQUIRES_NOTES = @json($requiresNotesMap ?? []);
+
+// CALL RESULT vocabulary (2026-08-26). category => bucket => {key: label}.
+// Built server-side from the SAME ActionOptionList rows Settings > Call
+// Outcomes manages — the drawer only decides which of the four buttons each
+// existing outcome sits under. See TodayController::buildCallResults().
+const CALL_RESULTS  = @json($callResults ?? []);
+// category => {key: bool} — does logging this outcome complete the action?
+// Straight off action_option_lists.closes_task, so the drawer can say in
+// plain words what will happen before staff press Save.
+const CLOSES_TASK   = @json($closesTaskMap ?? []);
+const CONTACT_RESULTS = @json(\App\Http\Controllers\Relationship\TodayController::CONTACT_RESULTS);
 
 // Category labels (mirroring controller constant)
 const CATEGORY_LABELS = {
@@ -1423,19 +1475,39 @@ function todayActions() {
             itemId: null,
         },
 
-        // ── Active tab: 'log' (record an outcome, never closes) or 'close'
-        // (explicit "done with this one", no outcome required) — split
-        // 2026-07-08, see closeAction() in TodayController. ─────────────
-        activeTab: 'log',
+        // ── CALL RESULT (redesign 2026-08-26) ───────────────────────────
+        // Two steps, not three overlapping concepts. `direction` is who
+        // placed the call; `contactResult` is whether it connected;
+        // `form.response` is the outcome key actually submitted — always an
+        // existing ActionOptionList key, never anything new.
+        //
+        // The Log/Close tab strip that used to live here is gone: Log was the
+        // normal path and Close the rare give-up, so Close moved to a footer
+        // link (closeMode) and stopped competing for attention with the work
+        // reception actually does all day.
+        direction:     'outbound',
+        contactResult: '',
 
-        // ── Close tab state ──────────────────────────────────────────────
+        // ── "Stop chasing" panel (was the Close tab) ────────────────────
+        closeMode:  false,
         closeNotes: '',
         closing:    false,
         closeError: '',
 
-        // ── Checklist ───────────────────────────────────────────────────
+        // ── Call guidance (staff-facing only — never an outcome) ────────
+        guidance:  '',
         checklist: [],
-        checks: [],
+
+        // Read-only mode: opened from the green tick on a completed row.
+        // Same drawer, same history read — just no form, because there is
+        // nothing left to record.
+        historyOnly: false,
+
+        // ── Secondary, collapsed by default ─────────────────────────────
+        showNote:       false,
+        showHistory:    false,
+        interactions:   [],
+        historyLoading: false,
 
         // ── Response options (for current category) ─────────────────────
         responseOptions: {},
@@ -1461,15 +1533,12 @@ function todayActions() {
         dismissError:  '',
         dismissReasons: @json($dismissReasons ?? []),
 
-        // ── Notes sub-state (Suggestion / Patient Response log) ─────────
-        // Same log already live on Lead & Opportunity Pipeline, ported here.
-        // See docs/feature-specs/feature-spec-action-board-instruction-log.md.
-        notes:        [],
-        notesLoading: false,
-        notesSaving:  false,
-        notesError:   '',
-        noteType:     'suggestion',
-        noteText:     '',
+        // The standalone Suggestion / Patient Response note editor was removed
+        // from this drawer on 2026-08-26 — it duplicated the outcome note and
+        // was the single biggest source of drawer height. The endpoint
+        // (today.notes.add) and the Lead & Opportunity Pipeline log that uses
+        // it are untouched; the notes themselves still appear here, inside
+        // the interaction history.
 
         // ── Per-item actioned tracker (itemId → bool) ───────────────────
         actioned: {},
@@ -1497,24 +1566,33 @@ function todayActions() {
             this.drawer.itemId = itemId;
             this.drawer.open   = true;
 
-            // Reset Log/Close tab state
-            this.activeTab  = 'log';
+            // Reset the two secondary panels
+            this.closeMode  = false;
             this.closeNotes = '';
             this.closing    = false;
             this.closeError = '';
 
-            // Load checklist for this category (fall back to empty)
-            this.checklist = CHECKLISTS[cat] || [];
-            this.checks    = new Array(this.checklist.length).fill(false);
+            // Call guidance — staff-facing only. `ai_summary` is real
+            // engine-supplied context when present; the bullet list is the
+            // clinic's own config('relationship_rules.call_checklists').
+            // The singular fallback is deliberate: the config ships an
+            // 'appointment_reminder' key while the engine emits
+            // 'appointment_reminders', so that guidance never reached the
+            // drawer before.
+            this.guidance  = item?.meta?.ai_summary || '';
+            this.checklist = CHECKLISTS[cat] || CHECKLISTS[(cat || '').replace(/s$/, '')] || [];
 
-            // Load response options: category-specific or default
+            // Outcome vocabulary for this category (labels for the row badge)
             this.responseOptions = RESPONSE_OPTS[cat] || RESPONSE_OPTS['default'] || {};
 
-            // Reset form
-            this.form = { response: '', next_action: '', notes: '' };
+            // Reset the call-result form
+            this.direction       = 'outbound';
+            this.contactResult   = '';
+            this.form            = { response: '', next_action: '', notes: '' };
             this.nextActionLabel = '';
             this.requiresNotes   = false;
             this.submitError     = '';
+            this.showNote        = false;
 
             // Reset dismiss sub-state
             this.dismissMode   = false;
@@ -1522,79 +1600,163 @@ function todayActions() {
             this.dismissNotes  = '';
             this.dismissError  = '';
 
-            // Reset Notes sub-state and load this item's note log
-            this.notes        = [];
-            this.notesError   = '';
-            this.noteType     = 'suggestion';
-            this.noteText     = '';
-            this.fetchNotes();
+            // History stays collapsed, but load it now so the count is honest
+            // the moment the drawer opens.
+            this.historyOnly  = false;
+            this.showHistory  = false;
+            this.interactions = [];
+            this.fetchHistory();
         },
 
         // ─────────────────────────────────────────────────────────────────
-        // Load the Suggestion / Patient Response note log for this item.
+        // Green tick on a completed row -> the story of that action.
+        // Deliberately the SAME drawer rather than a second component: one
+        // header, one history read, one place to look. No form is rendered,
+        // so a finished action can't be silently re-logged from here.
         // ─────────────────────────────────────────────────────────────────
-        async fetchNotes() {
+        openHistory(item, itemId) {
+            this.openDrawer(item, itemId);
+
+            this.historyOnly = true;
+            this.showHistory = true;
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // The four CALL RESULT buttons, minus any the clinic has no outcome
+        // configured for. We never render a button with nothing behind it:
+        // submitting an outcome key with no ActionOptionList row means no
+        // closes_task rule, and therefore no defined task status.
+        // ─────────────────────────────────────────────────────────────────
+        get resultBuckets() {
+            const cat = this.drawer.item?.category;
+            return CALL_RESULTS[cat] || CALL_RESULTS['default'] || {};
+        },
+
+        get contactResults() {
+            const buckets = this.resultBuckets;
+            return Object.entries(CONTACT_RESULTS)
+                .filter(([key]) => Object.keys(buckets[key] || {}).length > 0)
+                .map(([key, label]) => ({ key, label }));
+        },
+
+        /** PATIENT RESPONSE choices — the category's connected outcomes. */
+        get answeredOptions() {
+            const cat  = this.drawer.item?.category;
+            const opts = this.resultBuckets['answered'] || {};
+
+            return Object.entries(opts)
+                // Reached via the "Patient called us" toggle instead, so it is
+                // not offered as an outbound response.
+                .filter(([key]) => key !== 'patient_called_back_confirmed')
+                .map(([key, label]) => ({
+                    key,
+                    label,
+                    closes: (CLOSES_TASK[cat] || {})[key] !== false,
+                }));
+        },
+
+        /** Secondary chips when one button covers more than one outcome. */
+        get detailOptions() {
+            if (!this.contactResult || this.contactResult === 'answered') return [];
+
+            const opts = this.resultBuckets[this.contactResult] || {};
+            return Object.entries(opts).map(([key, label]) => ({ key, label }));
+        },
+
+        get showPatientResponse() {
+            return this.direction === 'inbound' || this.contactResult === 'answered';
+        },
+
+        /** Does the chosen outcome complete the action? The server decides;
+         *  this mirrors the same column so staff are told in advance. */
+        get outcomeClosesTask() {
+            const cat = this.drawer.item?.category;
+            return (CLOSES_TASK[cat] || {})[this.form.response] !== false;
+        },
+
+        /** Plain language. No CRM terms, no database states. */
+        get outcomeHint() {
+            if (!this.form.response) return '';
+
+            const next = NEXT_ACTIONS[this.form.response] || '';
+
+            if (!this.outcomeClosesTask) {
+                return 'Attempt recorded. This stays due so someone can try again.'
+                    + (next ? ' Next: ' + next.toLowerCase() + '.' : '');
+            }
+
+            return 'Marks this action complete.'
+                + (next ? ' Next: ' + next.toLowerCase() + '.' : '');
+        },
+
+        get canSave() {
+            if (!this.form.response) return false;
+            if (this.requiresNotes && !this.form.notes) return false;
+            return true;
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        setDirection(dir) {
+            this.direction = dir;
+
+            if (dir === 'inbound') {
+                // The patient rang us — contact happened by definition, so
+                // skip straight to what they said. This is the callback path:
+                // it records a NEW interaction against the SAME open action.
+                // The earlier outbound attempt is its own activity row and is
+                // never edited or overwritten.
+                this.contactResult = 'answered';
+            } else {
+                this.contactResult = '';
+            }
+
+            this.pickOutcome('');
+        },
+
+        pickContactResult(key) {
+            this.contactResult = key;
+
+            const opts = Object.keys(this.resultBuckets[key] || {});
+
+            // A bucket with exactly one outcome behind it needs no second
+            // step — the button IS the answer.
+            this.pickOutcome(key === 'answered' ? '' : (opts.length ? opts[0] : ''));
+        },
+
+        pickOutcome(key) {
+            this.form.response = key;
+            this.updateNextAction();
+        },
+
+        // ─────────────────────────────────────────────────────────────────
+        // Interaction history — the owner/admin audit trail for this action.
+        // Same endpoint the note log already used; it now returns the call
+        // events alongside the notes. Read-only.
+        // ─────────────────────────────────────────────────────────────────
+        async fetchHistory() {
             const item = this.drawer.item;
             if (!item?.patient_id && !item?.lead_id) {
-                this.notes = [];
+                this.interactions = [];
                 return;
             }
 
-            this.notesLoading = true;
+            this.historyLoading = true;
             try {
                 const params = new URLSearchParams({
                     patient_id: item.patient_id ?? '',
                     lead_id:    item.lead_id ?? '',
+                    category:   item.category ?? '',
                 });
-                const res = await fetch('{{ route('relationship.today.notes.index') }}?' + params.toString(), {
+                const res  = await fetch('{{ route('relationship.today.notes.index') }}?' + params.toString(), {
                     headers: { 'Accept': 'application/json' },
                 });
                 const data = await res.json();
-                this.notes = data.notes || [];
+                this.interactions = data.interactions || [];
             } catch (err) {
-                // Silent — the note list just stays empty; not worth blocking the drawer for.
+                // Silent — the history panel just stays empty. Never block the
+                // call workflow on an audit read.
             } finally {
-                this.notesLoading = false;
-            }
-        },
-
-        // ─────────────────────────────────────────────────────────────────
-        // Add a Suggestion / Patient Response note to the currently open item.
-        // ─────────────────────────────────────────────────────────────────
-        async addNote() {
-            if (!this.noteText.trim() || this.notesSaving) return;
-
-            const item = this.drawer.item;
-            this.notesSaving = true;
-            this.notesError  = '';
-
-            try {
-                const res = await fetch('{{ route('relationship.today.notes.add') }}', {
-                    method:  'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body:    JSON.stringify({
-                        _token:          document.querySelector('meta[name="csrf-token"]').content,
-                        note_type:       this.noteType,
-                        text:            this.noteText.trim(),
-                        category:        item.category,
-                        patient_id:      item.patient_id,
-                        lead_id:         item.lead_id,
-                        relationship_id: item.relationship_id,
-                    }),
-                });
-
-                const data = await res.json();
-
-                if (data.success) {
-                    this.noteText = '';
-                    await this.fetchNotes();
-                } else {
-                    this.notesError = data.message || 'Could not save this note.';
-                }
-            } catch (err) {
-                this.notesError = 'Network error. Please try again.';
-            } finally {
-                this.notesSaving = false;
+                this.historyLoading = false;
             }
         },
 
@@ -1692,8 +1854,13 @@ function todayActions() {
 
         // ─────────────────────────────────────────────────────────────────
         closeDrawer() {
-            this.drawer.open = false;
-            this.drawer.item = null;
+            this.drawer.open  = false;
+            this.drawer.item  = null;
+            this.closeMode    = false;
+            this.dismissMode  = false;
+            this.historyOnly  = false;
+            this.showHistory  = false;
+            this.showNote     = false;
         },
 
         // ─────────────────────────────────────────────────────────────────
@@ -1741,11 +1908,14 @@ function todayActions() {
         // Update next action label when response changes
         // ─────────────────────────────────────────────────────────────────
         updateNextAction() {
-            this.nextActionLabel = NEXT_ACTIONS[this.form.response] || '';
+            this.nextActionLabel  = this.form.response ? (NEXT_ACTIONS[this.form.response] || '') : '';
             this.form.next_action = this.nextActionLabel;
 
             const cat = this.drawer.item?.category;
             this.requiresNotes = !!((REQUIRES_NOTES[cat] || {})[this.form.response]);
+
+            // A required note must be visible the moment it becomes required.
+            if (this.requiresNotes) { this.showNote = true; }
         },
 
         // ─────────────────────────────────────────────────────────────────
@@ -1759,7 +1929,7 @@ function todayActions() {
         // Submit the logged call to the server
         // ─────────────────────────────────────────────────────────────────
         async submitLog() {
-            if (!this.form.response || this.submitting) return;
+            if (!this.canSave || this.submitting) return;
 
             this.submitting  = true;
             this.submitError = '';
@@ -1786,6 +1956,10 @@ function todayActions() {
                 response:        this.form.response,
                 next_action:     this.form.next_action,
                 notes:           this.form.notes,
+                // Who placed the call. 'inbound' is the callback case: the
+                // server records it as a distinct interaction and resolves
+                // THIS open action, leaving the earlier attempt intact.
+                direction:       this.direction,
             };
 
             try {
@@ -1808,7 +1982,8 @@ function todayActions() {
                     // immediately (2026-07-14) so staff can see the call
                     // happened and what the patient said.
                     this.lastResponse[itemId] =
-                        (this.responseOptions[this.form.response] || this.form.response)
+                        (this.direction === 'inbound' ? 'Patient called back — ' : '')
+                        + (this.responseOptions[this.form.response] || this.form.response)
                         + ' · ' + new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
                     if (data.closed) {
                         this.actioned[itemId] = true;

@@ -33,7 +33,7 @@ class ActionOptionListSeeder extends Seeder
     {
         $count = 0;
 
-        foreach ($this->callOutcomes() as $category => $options) {
+        foreach (self::callOutcomes() as $category => $options) {
             foreach ($options as $i => $opt) {
                 ActionOptionList::updateOrCreate(
                     [
@@ -78,7 +78,13 @@ class ActionOptionListSeeder extends Seeder
     /**
      * @return array<string, array<int, array{key:string,label:string,requires_notes?:bool,closes_task?:bool,next_action_key?:string}>>
      */
-    private function callOutcomes(): array
+    /**
+     * Public + static (2026-08-26) so EnsureCallResultOptions can read the
+     * SAME definition list instead of keeping a second copy of the
+     * vocabulary. The seeder overwrites; that command only ever inserts
+     * missing rows, which is what a live database needs.
+     */
+    public static function callOutcomes(): array
     {
         // closes_task rule (2026-07-10, Sumit): a resolved outcome — the call
         // connected and got a definitive answer, positive OR negative —
@@ -117,6 +123,8 @@ class ActionOptionListSeeder extends Seeder
                 ['key' => 'payment_made',      'label' => 'Payment made on call',                                   'closes_task' => true],
                 ['key' => 'dispute_raised',    'label' => 'Patient raised a dispute', 'requires_notes' => true,     'closes_task' => true],
                 ['key' => 'no_answer',         'label' => 'No answer',                                              'closes_task' => false],
+                ['key' => 'busy',              'label' => 'Could not connect',                                      'closes_task' => false],
+                ['key' => 'wrong_number',      'label' => 'Wrong number',                                           'closes_task' => true],
             ],
 
             // New category-specific sets — see spec section 4 for the reasoning.
@@ -130,7 +138,19 @@ class ActionOptionListSeeder extends Seeder
                 // TodayActionDismissal path, so actor + reason are audited.
                 ['key' => 'patient_called_back_confirmed', 'label' => 'Patient called back — confirmed', 'closes_task' => true],
                 ['key' => 'asked_reschedule',       'label' => 'Asked to reschedule',  'closes_task' => true],
+                // 2026-08-26 — the drawer's PATIENT RESPONSE step needs a way
+                // to record "patient is not coming". This closes the REMINDER
+                // TASK only; it deliberately does NOT touch appointment status
+                // (out of scope, and a silent status write from a phone call is
+                // exactly the kind of hidden side effect we do not want). The
+                // next-action line tells reception the diary step is theirs.
+                ['key' => 'cancelled_by_patient', 'label' => 'Cancelled by patient', 'requires_notes' => true, 'closes_task' => true, 'next_action_key' => 'Cancel the appointment in the diary'],
+                // "Something else happened" — note required, task stays DUE,
+                // because by the clinic's own definition the objective
+                // (confirm attendance) was not achieved.
+                ['key' => 'other',                'label' => 'Other',                'requires_notes' => true, 'closes_task' => false],
                 ['key' => 'no_answer',              'label' => 'No answer',            'closes_task' => false],
+                ['key' => 'busy',                   'label' => 'Could not connect',    'closes_task' => false],
                 ['key' => 'wrong_number',           'label' => 'Wrong number',         'closes_task' => true],
             ],
             'follow_up_calls' => [
@@ -138,12 +158,15 @@ class ActionOptionListSeeder extends Seeder
                 ['key' => 'has_concern',  'label' => 'Has a concern — noted', 'requires_notes' => true, 'closes_task' => true],
                 ['key' => 'no_answer',    'label' => 'No answer',                                       'closes_task' => false],
                 ['key' => 'voicemail',    'label' => 'Left voicemail',                                  'closes_task' => false],
+                ['key' => 'busy',         'label' => 'Could not connect',                               'closes_task' => false],
+                ['key' => 'wrong_number', 'label' => 'Wrong number',                                    'closes_task' => true],
             ],
             'recall_calls' => [
                 ['key' => 'booked_recall',        'label' => 'Booked recall appointment',       'closes_task' => true],
                 ['key' => 'connected_callback',   'label' => 'Will call back',                  'closes_task' => true],
                 ['key' => 'not_interested_now',   'label' => 'Not interested right now',        'closes_task' => true],
                 ['key' => 'no_answer',            'label' => 'No answer',                       'closes_task' => false],
+                ['key' => 'busy',                 'label' => 'Could not connect',               'closes_task' => false],
                 ['key' => 'wrong_number',         'label' => 'Wrong number',                    'closes_task' => true],
             ],
             'opportunities' => [
@@ -151,23 +174,31 @@ class ActionOptionListSeeder extends Seeder
                 ['key' => 'booked_consultation','label' => 'Booked consultation',                       'closes_task' => true],
                 ['key' => 'declined',           'label' => 'Declined', 'requires_notes' => true,         'closes_task' => true],
                 ['key' => 'no_answer',          'label' => 'No answer',                                  'closes_task' => false],
+                ['key' => 'busy',               'label' => 'Could not connect',                          'closes_task' => false],
+                ['key' => 'wrong_number',       'label' => 'Wrong number',                               'closes_task' => true],
             ],
             'pending_estimates' => [
                 ['key' => 'still_deciding',      'label' => 'Still deciding',                            'closes_task' => false],
                 ['key' => 'ready_to_proceed',    'label' => 'Ready to proceed — booked',                 'closes_task' => true],
                 ['key' => 'declined',            'label' => 'Declined', 'requires_notes' => true,        'closes_task' => true],
                 ['key' => 'no_answer',           'label' => 'No answer',                                 'closes_task' => false],
+                ['key' => 'busy',                'label' => 'Could not connect',                         'closes_task' => false],
+                ['key' => 'wrong_number',        'label' => 'Wrong number',                              'closes_task' => true],
             ],
             'membership_renewals' => [
                 ['key' => 'renewed_on_call',   'label' => 'Renewed on call',                                       'closes_task' => true],
                 ['key' => 'will_decide_by',    'label' => 'Will decide by [date]', 'requires_notes' => true,       'closes_task' => false],
                 ['key' => 'not_renewing',      'label' => 'Not renewing', 'requires_notes' => true,                'closes_task' => true],
                 ['key' => 'no_answer',         'label' => 'No answer',                                             'closes_task' => false],
+                ['key' => 'busy',              'label' => 'Could not connect',                                     'closes_task' => false],
+                ['key' => 'wrong_number',      'label' => 'Wrong number',                                          'closes_task' => true],
             ],
             'lab_ready' => [
                 ['key' => 'booked_pickup',   'label' => 'Booked pickup appointment',   'closes_task' => true],
                 ['key' => 'will_collect_later', 'label' => 'Will collect later',       'closes_task' => false],
                 ['key' => 'no_answer',       'label' => 'No answer',                   'closes_task' => false],
+                ['key' => 'busy',            'label' => 'Could not connect',           'closes_task' => false],
+                ['key' => 'wrong_number',    'label' => 'Wrong number',                'closes_task' => true],
             ],
         ];
     }

@@ -341,6 +341,8 @@ class TodayController extends Controller
         $checklists    = config('relationship_rules.call_checklists', []);
         $nextActions   = $this->buildNextActions();
         $requiresNotesMap = $this->buildRequiresNotesMap();
+        $closesTaskMap  = $this->buildClosesTaskMap();
+        $callResults    = $this->buildCallResults($responseOpts);
         $dismissReasons = ActionOptionList::query()->dismissReasons()->get()->values();
 
         return view('relationship.today.index', compact(
@@ -350,6 +352,8 @@ class TodayController extends Controller
             'responseOpts',
             'nextActions',
             'requiresNotesMap',
+            'closesTaskMap',
+            'callResults',
             'dismissReasons',
             'selectedDate',
             'mode',
@@ -431,6 +435,8 @@ class TodayController extends Controller
         $checklists       = config('relationship_rules.call_checklists', []);
         $nextActions      = $this->buildNextActions();
         $requiresNotesMap = $this->buildRequiresNotesMap();
+        $closesTaskMap    = $this->buildClosesTaskMap();
+        $callResults      = $this->buildCallResults($responseOpts);
         $dismissReasons   = ActionOptionList::query()->dismissReasons()->get()->values();
         $selectedDate     = $today->copy();
         $mode             = 'today';        // reuse the live-board rendering path
@@ -444,6 +450,8 @@ class TodayController extends Controller
             'responseOpts',
             'nextActions',
             'requiresNotesMap',
+            'closesTaskMap',
+            'callResults',
             'dismissReasons',
             'selectedDate',
             'mode',
@@ -720,6 +728,100 @@ class TodayController extends Controller
         }
     }
 
+    /**
+     * CALL RESULT — the two-step drawer vocabulary (2026-08-26, Sumit).
+     *
+     * Reception should record ONE thing first: did the call connect? Only
+     * then does "what did the patient say?" make sense. That split is not a
+     * new concept — CommunicationQueue has drawn exactly this line since the
+     * mobile picker shipped (CALL_OUTCOMES_CONNECTED vs
+     * CALL_OUTCOMES_NOT_CONNECTED, see callOutcomeGroups()). The web drawer
+     * was the odd one out, flattening both into a single confusing dropdown
+     * next to a separate "Suggestion" and "Patient Response" note type.
+     *
+     * NOTHING new is stored. Every option below is an existing
+     * ActionOptionList row (Settings > Call Outcomes remains the single
+     * source of truth for labels, requires_notes and closes_task); this only
+     * decides which of the four buckets each key is presented under. A key
+     * not named here is a CONNECTED outcome by definition, so it lands in
+     * "answered" and becomes a PATIENT RESPONSE choice.
+     *
+     * Keys are matched against the category's own configured outcomes only —
+     * we never inject an option a clinic has switched off.
+     */
+    private const CONTACT_RESULT_KEYS = [
+        'no_answer'         => ['no_answer', 'voicemail', 'not_reachable'],
+        'unable_to_connect' => ['busy', 'switched_off', 'out_of_coverage', 'rejected'],
+        'wrong_number'      => ['wrong_number', 'invalid_number'],
+    ];
+
+    /** Display order + labels for the four result buttons. */
+    public const CONTACT_RESULTS = [
+        'answered'          => 'Answered',
+        'no_answer'         => 'No Answer',
+        'unable_to_connect' => 'Unable to Connect',
+        'wrong_number'      => 'Wrong Number',
+    ];
+
+    /**
+     * category => result bucket => [outcome key => label].
+     *
+     * "answered" holds the PATIENT RESPONSE choices. A bucket with exactly one
+     * key needs no second step — picking the button IS the outcome. A bucket
+     * with none is not offered at all for that category (e.g. a clinic that
+     * has removed "Wrong number" from payment reminders simply does not see
+     * that button), because inventing an option the clinic has not configured
+     * would submit an outcome with no closes_task rule behind it.
+     */
+    private function buildCallResults(array $responseOpts): array
+    {
+        $out = [];
+
+        foreach ($responseOpts as $category => $options) {
+            $buckets = ['answered' => [], 'no_answer' => [], 'unable_to_connect' => [], 'wrong_number' => []];
+
+            foreach ($options as $key => $label) {
+                $bucket = 'answered';
+
+                foreach (self::CONTACT_RESULT_KEYS as $name => $keys) {
+                    if (in_array($key, $keys, true)) {
+                        $bucket = $name;
+                        break;
+                    }
+                }
+
+                $buckets[$bucket][$key] = $label;
+            }
+
+            $out[$category] = $buckets;
+        }
+
+        return $out;
+    }
+
+    /**
+     * category => [key => bool] — whether logging this outcome completes the
+     * action. Read straight off ActionOptionList (the same column logAction()
+     * enforces), so the drawer can tell staff in plain words what will happen
+     * BEFORE they save: "Marks this action complete" vs "Attempt recorded —
+     * stays due for another try." Presentation only; the server remains the
+     * authority.
+     */
+    private function buildClosesTaskMap(): array
+    {
+        $rows = ActionOptionList::query()
+            ->where('option_type', 'call_outcome')
+            ->active()
+            ->get(['action_category', 'key', 'closes_task']);
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row->action_category][$row->key] = (bool) $row->closes_task;
+        }
+
+        return $map;
+    }
+
     private function buildRequiresNotesMap(): array
     {
         $rows = ActionOptionList::query()
@@ -762,7 +864,34 @@ class TodayController extends Controller
             'response'        => ['required', 'string'],
             'next_action'     => ['nullable', 'string'],
             'notes'           => ['nullable', 'string', 'max:500'],
+            // Who placed the call. 'inbound' = the patient rang US — the
+            // callback case. Optional and defaulted, so every existing caller
+            // (mobile, API, older cached JS) keeps working unchanged.
+            'direction'       => ['nullable', 'in:outbound,inbound'],
         ]);
+
+        $direction = $validated['direction'] ?? 'outbound';
+
+        // ── Callback resolution (2026-08-26) ─────────────────────────────
+        // An inbound confirmation is not an ordinary outbound confirmation:
+        // the audit trail has to read "Patient called back - confirmed" so an
+        // owner can see the difference between staff reaching the patient and
+        // the patient rescuing a missed attempt. That outcome key already
+        // exists (added 2026-08-25 for exactly this workflow); the drawer now
+        // reaches it via direction + response instead of asking reception to
+        // find it in a flat list of outcomes. The ORIGINAL attempt is a
+        // separate Activity row and is never touched.
+        if ($direction === 'inbound'
+            && $validated['category'] === 'appointment_reminders'
+            && $validated['response'] === 'confirmed_attendance'
+            && ActionOptionList::query()
+                ->where('option_type', 'call_outcome')
+                ->where('action_category', 'appointment_reminders')
+                ->where('key', 'patient_called_back_confirmed')
+                ->active()
+                ->exists()) {
+            $validated['response'] = 'patient_called_back_confirmed';
+        }
 
         // If this outcome is configured (Settings > Call Outcomes) to require a
         // note, enforce it server-side too — the drawer disables submit client-
@@ -821,7 +950,7 @@ class TodayController extends Controller
                         comm:    $comm,
                         outcome: $serviceOutcome,
                         actor:   $request->user(),
-                        options: ['notes' => $validated['notes'] ?? null],
+                        options: ['notes' => $validated['notes'] ?? null, 'direction' => $direction],
                     );
 
                     $freshStatus = $comm->fresh()->status;
@@ -871,10 +1000,12 @@ class TodayController extends Controller
                         'response'    => $validated['response'],
                         'next_action' => $validated['next_action'] ?? null,
                         'notes'       => $validated['notes'] ?? null,
+                        'direction'   => $direction,
                         'source'      => 'today_actions',
                     ],
                     relationshipId: $validated['relationship_id'] ?? null,
-                    description   : 'Call logged from Today\'s Actions: ' . $validated['response'],
+                    description   : ($direction === 'inbound' ? 'Inbound call' : 'Outbound call')
+                        . ' logged from Today\'s Actions: ' . $validated['response'],
                 );
             }
 
@@ -1268,12 +1399,13 @@ class TodayController extends Controller
         $validated = $request->validate([
             'patient_id' => ['nullable', 'integer'],
             'lead_id'    => ['nullable', 'integer'],
+            'category'   => ['nullable', 'string'],
         ]);
 
         $subject = $this->resolveNoteSubject($validated['patient_id'] ?? null, $validated['lead_id'] ?? null);
 
         if (! $subject) {
-            return response()->json(['success' => true, 'notes' => []]);
+            return response()->json(['success' => true, 'notes' => [], 'interactions' => []]);
         }
 
         $notes = Activity::query()
@@ -1290,7 +1422,90 @@ class TodayController extends Controller
                 'occurred_at' => $note->occurred_at?->format('d M Y, g:i A'),
             ]);
 
-        return response()->json(['success' => true, 'notes' => $notes]);
+        return response()->json([
+            'success'      => true,
+            'notes'        => $notes,
+            'interactions' => $this->interactionHistory($subject, $validated['category'] ?? null),
+        ]);
+    }
+
+    /**
+     * INTERACTION HISTORY — owner/admin audit for one action (2026-08-26).
+     *
+     * The question this answers, in one read: who called, when, what came of
+     * it, who took the callback, what the patient said. Every row already
+     * exists in `activities`; nothing new is written and no new table, column
+     * or route is introduced — this simply reads the three events that make up
+     * a call's story instead of only the note events.
+     *
+     *   call.logged            staff recorded a result (outbound or inbound)
+     *   call.inbound           the patient rang in via Communication
+     *   today_action.note_added  a free-text note
+     *
+     * Chronological ASCENDING on purpose: the first attempt must stay at the
+     * top and stay visible. A later interaction NEVER replaces an earlier one
+     * — that is the whole point of the callback scenario.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function interactionHistory(Model $subject, ?string $category): array
+    {
+        $responseOpts = $this->buildResponseOptions();
+
+        $rows = Activity::query()
+            ->with('actor:id,name')
+            ->where('subject_type', get_class($subject))
+            ->where('subject_id', $subject->getKey())
+            ->whereIn('event', ['call.logged', 'call.inbound', 'today_action.note_added'])
+            ->where('occurred_at', '>=', now()->subDays(60))
+            ->orderBy('occurred_at')
+            ->limit(40)
+            ->get();
+
+        $out = [];
+
+        foreach ($rows as $act) {
+            $meta = $act->metadata ?? [];
+
+            // Scope call results to the action being viewed; notes and inbound
+            // calls are not category-tagged, so they always show.
+            if ($act->event === 'call.logged'
+                && $category
+                && ! empty($meta['category'])
+                && $meta['category'] !== $category) {
+                continue;
+            }
+
+            $outcomeKey = $meta['response'] ?? $meta['outcome'] ?? null;
+
+            if ($act->event === 'today_action.note_added') {
+                $kind      = 'note';
+                $direction = null;
+                $label     = ($meta['note_type'] ?? 'suggestion') === 'response'
+                    ? 'Patient response noted'
+                    : 'Note added';
+            } elseif ($act->event === 'call.inbound') {
+                $kind      = 'call';
+                $direction = 'inbound';
+                $label     = 'Inbound call received';
+            } else {
+                $kind      = 'call';
+                $direction = $meta['direction'] ?? 'outbound';
+                $label     = $this->outcomeLabel($meta['category'] ?? ($category ?? 'default'), $outcomeKey, $responseOpts);
+            }
+
+            $out[] = [
+                'kind'      => $kind,
+                'direction' => $direction,
+                'label'     => $label,
+                'notes'     => $meta['notes'] ?? $meta['text'] ?? null,
+                'actor'     => $act->actor?->name ?? 'System',
+                'at'        => $act->occurred_at?->format('d M, g:i A'),
+                'time'      => $act->occurred_at?->format('g:i A'),
+            ];
+        }
+
+        return $out;
     }
 
     public function addNote(Request $request): JsonResponse

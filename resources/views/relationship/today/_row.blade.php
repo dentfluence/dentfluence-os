@@ -94,11 +94,19 @@
         {{-- 9 · ACTIONS --}}
         <td>
             <div class="taw-acts">
+                {{-- The tick on a finished row is not decoration: it opens the
+                     drawer read-only on that action's interaction history —
+                     who called, when, what came of it, who took the callback.
+                     Same drawer, no form, nothing re-loggable. --}}
                 @if($done)
-                    <span class="taw-ib taw-ib--ok" title="Done — {{ $done['label'] }}{{ !empty($done['at']) ? ' at ' . $done['at'] : '' }}"><i class="ti ti-check"></i></span>
+                    <button type="button" class="taw-ib taw-ib--ok"
+                            title="Done — {{ $done['label'] }}{{ !empty($done['at']) ? ' at ' . $done['at'] : '' }} · click for full history"
+                            @click="openHistory({{ json_encode($drawerItem) }}, '{{ $itemId }}')"><i class="ti ti-check"></i></button>
                 @elseif($mode === 'past')
                     @php $outcome = $item['meta']['outcome'] ?? null; @endphp
-                    <span class="taw-ib taw-ib--ok" title="{{ $outcome ? ucwords(str_replace('_', ' ', $outcome)) : 'Completed' }}"><i class="ti ti-check"></i></span>
+                    <button type="button" class="taw-ib taw-ib--ok"
+                            title="{{ $outcome ? ucwords(str_replace('_', ' ', $outcome)) : 'Completed' }} · click for full history"
+                            @click="openHistory({{ json_encode($drawerItem) }}, '{{ $itemId }}')"><i class="ti ti-check"></i></button>
                 @elseif(($item['primary_action'] ?? null) === 'whatsapp')
                     <template x-if="!actioned['{{ $itemId }}']">
                         <button type="button" class="taw-ib taw-ib--go" title="Send WhatsApp birthday greeting"
@@ -109,7 +117,8 @@
                         </button>
                     </template>
                     <template x-if="actioned['{{ $itemId }}']">
-                        <span class="taw-ib taw-ib--ok" title="Sent"><i class="ti ti-check"></i></span>
+                        <button type="button" class="taw-ib taw-ib--ok" title="Sent · click for full history"
+                                @click="openHistory({{ json_encode($drawerItem) }}, '{{ $itemId }}')"><i class="ti ti-check"></i></button>
                     </template>
                 @else
                     <template x-if="!actioned['{{ $itemId }}']">
@@ -119,7 +128,8 @@
                         </button>
                     </template>
                     <template x-if="actioned['{{ $itemId }}']">
-                        <span class="taw-ib taw-ib--ok" title="Done"><i class="ti ti-check"></i></span>
+                        <button type="button" class="taw-ib taw-ib--ok" title="Done · click for full history"
+                                @click="openHistory({{ json_encode($drawerItem) }}, '{{ $itemId }}')"><i class="ti ti-check"></i></button>
                     </template>
                 @endif
 

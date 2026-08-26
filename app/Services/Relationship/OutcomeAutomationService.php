@@ -66,7 +66,17 @@ class OutcomeAutomationService
             subject:        $subject,
             event:          'call.logged',
             actor:          $actor,
-            metadata:       ['outcome' => $outcome, 'outcome_label' => $label, 'notes' => $notes, 'comm_id' => $comm->id],
+            // 'direction' (2026-08-26): outbound = staff called the patient,
+            // inbound = the patient rang us back. Purely descriptive — no
+            // automation branches on it — but the owner audit trail needs to
+            // distinguish a staff attempt from a patient rescuing one.
+            metadata:       [
+                'outcome'       => $outcome,
+                'outcome_label' => $label,
+                'notes'         => $notes,
+                'comm_id'       => $comm->id,
+                'direction'     => $options['direction'] ?? 'outbound',
+            ],
             relationshipId: $relationshipId,
             description:    "Call outcome: {$label}" . ($notes ? " — {$notes}" : ''),
         );
