@@ -530,7 +530,12 @@ class TodayActionsEngine
             ->whereDate('appointment_date', '>=', Carbon::today()->toDateString())
             ->whereNotIn('status', \App\Enums\AppointmentStatus::terminalValues())
             ->whereNotIn('id', $this->dismissedIds('appointment_reminders', Appointment::class))
+            // Reception works the day in the order the day happens (2026-08-26,
+            // Sumit). Ordering by date alone left same-day appointments in
+            // whatever order the database handed them back, so the confirm
+            // list read as random against the appointment book.
             ->orderBy('appointment_date')
+            ->orderBy('appointment_time')
             ->limit($this->limit())
             ->get()
             ->map(fn (Appointment $appt) => [
@@ -551,7 +556,12 @@ class TodayActionsEngine
                     'id'               => $appt->id,
                     'phone'            => $appt->patient?->phone,
                     'appointment_date' => $appt->appointment_date->format('d M Y'),
+                    // Both keys on purpose: 'time' is what existing consumers
+                    // read, 'appointment_time' is what the worklist row and the
+                    // drawer look for (they always did — the key simply was
+                    // never emitted, so the time never showed anywhere).
                     'time'             => $appt->appointment_time ?? null,
+                    'appointment_time' => $appt->appointment_time ?? null,
                     'doctor'           => $appt->doctor_name ?? null,
                     'treatment'        => $appt->treatment_type ?? $appt->notes ?? null,
                 ],
@@ -1065,6 +1075,10 @@ class TodayActionsEngine
         return Appointment::with('patient:id,name,phone,relationship_id')
             ->whereDate('appointment_date', $date)
             ->whereNotIn('status', \App\Enums\AppointmentStatus::terminalValues())
+            // Chronological, same as appointmentReminders(). This query had no
+            // ordering at all, so the date-picker view listed the day's
+            // appointments in arbitrary order.
+            ->orderBy('appointment_time')
             ->limit($this->limit())
             ->get()
             ->map(fn (Appointment $appt) => [
@@ -1081,6 +1095,7 @@ class TodayActionsEngine
                     'phone'            => $appt->patient?->phone,
                     'appointment_date' => $appt->appointment_date->format('d M Y'),
                     'time'             => $appt->appointment_time ?? null,
+                    'appointment_time' => $appt->appointment_time ?? null,
                 ],
             ])
             ->toArray();

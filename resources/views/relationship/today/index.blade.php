@@ -744,8 +744,19 @@
                         $dueTxt = trim($prefix . ' ' . $when);
                         $dueCls = ($kind === 'expires' && $ds < $todayStr) ? 'taw-due--over' : '';
                         $dueTip = $prefix . ': ' . $long;
+
+                        // An appointment's TIME is the thing reception works to
+                        // (2026-08-26, Sumit) — the day alone tells them nothing
+                        // about which call is next. Shown on the row for today's
+                        // and tomorrow's sessions, always in the tooltip.
                         if ($kind === 'appt' && ! empty($item['meta']['appointment_time'])) {
-                            $dueTip .= ' at ' . $item['meta']['appointment_time'];
+                            $apptTime = $parse($item['meta']['appointment_time']);
+                            $timeTxt  = $apptTime ? $apptTime->format('g:i A') : $item['meta']['appointment_time'];
+                            $dueTip  .= ' at ' . $timeTxt;
+
+                            if ($ds === $todayStr || $ds === $tomorrowStr) {
+                                $dueTxt = trim($prefix . ' ' . ($ds === $todayStr ? '' : 'tmrw') . ' ' . $timeTxt);
+                            }
                         }
                     }
                 }
@@ -784,6 +795,10 @@
                     'bandRank'  => $group['group_rank'] ?? 3,
                     'bandOrder' => $group['group_order'] ?? 99,
                     'sortPr'    => $prRank[$item['priority'] ?? 'low'] ?? 3,
+                    // Chronological tiebreaker. Only appointment rows carry a
+                    // time; every other category gets the same sentinel, so
+                    // their existing order is untouched.
+                    'timeSort'  => (string) ($item['meta']['appointment_time'] ?? '99:99:99'),
                 ];
             }
         }
@@ -791,8 +806,8 @@
         // Worked order: open work first, then urgency, then the clinic's own
         // category order, then oldest due date.
         usort($rows, fn ($a, $b) =>
-            [$a['bandRank'], $a['bandOrder'], $a['sortPr'], $a['dueSort']]
-            <=> [$b['bandRank'], $b['bandOrder'], $b['sortPr'], $b['dueSort']]);
+            [$a['bandRank'], $a['bandOrder'], $a['sortPr'], $a['dueSort'], $a['timeSort']]
+            <=> [$b['bandRank'], $b['bandOrder'], $b['sortPr'], $b['dueSort'], $b['timeSort']]);
 
         // ── ACTIVE vs COMPLETED ──────────────────────────────────────────
         // The queue answers "what does the team need to do now?", so handled
@@ -1091,7 +1106,7 @@
                         <template x-if="drawer.item?.meta?.appointment_date">
                             <div class="ta-ctx-item">
                                 <span class="ta-ctx-label">Appointment</span>
-                                <span class="ta-ctx-value" x-text="drawer.item.meta.appointment_date"></span>
+                                <span class="ta-ctx-value" x-text="apptWhen"></span>
                             </div>
                         </template>
                         <template x-if="drawer.item?.meta?.treatment">
@@ -1661,6 +1676,24 @@ function todayActions() {
 
             const opts = this.resultBuckets[this.contactResult] || {};
             return Object.entries(opts).map(([key, label]) => ({ key, label }));
+        },
+
+        /** "26 Aug 2026 · 5:30 PM" — the time matters as much as the date. */
+        get apptWhen() {
+            const m = this.drawer.item?.meta;
+            if (!m?.appointment_date) return '';
+
+            const raw = m.appointment_time || m.time;
+            if (!raw) return m.appointment_date;
+
+            const [h, min] = String(raw).split(':');
+            const hh = parseInt(h, 10);
+            if (isNaN(hh)) return m.appointment_date;
+
+            const suffix = hh >= 12 ? 'PM' : 'AM';
+            const h12    = hh % 12 === 0 ? 12 : hh % 12;
+
+            return m.appointment_date + ' · ' + h12 + ':' + (min ?? '00') + ' ' + suffix;
         },
 
         get showPatientResponse() {

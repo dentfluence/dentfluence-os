@@ -43,7 +43,12 @@ class TodayController extends Controller
      */
     private const CATEGORY_LABELS = [
         'appointment_reminders_today'  => "Today's Appointments — Confirm",
-        'wellness_check_yesterday'     => "Yesterday's Treated Patients — Wellness Call",
+        // 2026-08-26 (Sumit): this and 'follow_up_calls' are the same job —
+        // ring a patient about their treatment. They were split across two
+        // bands with unrelated names, so the board read as two separate kinds
+        // of work. Same key, same producer (TreatmentVisit), same dismissal
+        // and Settings toggle — only the name and its position change.
+        'wellness_check_yesterday'     => 'Follow-up Calls — Treated Yesterday',
         'new_enquiries'                => 'New Enquiries',
         'lead_followups'               => 'Lead Follow-ups',
         'opportunities'                => 'Treatment Opportunities',
@@ -108,8 +113,12 @@ class TodayController extends Controller
         'appointment_reminders_tomorrow' => ['essential', 2],
         'appointment_reminders'          => ['essential', 3],
         'follow_up_calls'                => ['essential', 4],
-        'lab_ready'                      => ['essential', 5],
-        'missed_appointments_yesterday'  => ['essential', 6],
+        // Directly under follow_up_calls, not adrift in Other Reminders:
+        // a patient treated yesterday is the most time-critical follow-up
+        // call the clinic makes.
+        'wellness_check_yesterday'       => ['essential', 5],
+        'lab_ready'                      => ['essential', 6],
+        'missed_appointments_yesterday'  => ['essential', 7],
 
         'new_enquiries'                  => ['growth', 1],
         'lead_followups'                 => ['growth', 2],
@@ -122,8 +131,7 @@ class TodayController extends Controller
         'pending_estimates'              => ['other', 3],
         'logged_communications'          => ['other', 4],
         'tasks'                          => ['other', 5],
-        'wellness_check_yesterday'       => ['other', 6],
-        'completed_calls'                => ['other', 7],
+        'completed_calls'                => ['other', 6],
     ];
 
     /** Band render order + human label. */
