@@ -131,20 +131,10 @@ Route::middleware(['web', 'auth', 'module:relationship'])->prefix('relationship'
             ->name('read');
     });
 
-    // ── Interactive Guide (staff training demo) ────────────────────────────
-    // Serves the self-contained clickable walkthrough (trilingual EN/HI/MR)
-    // from resources/guides/relationship-engine-demo.html. Opened in an in-app
-    // modal from the PRE sub-nav "Guide" button. Static 2-segment path — no
-    // collision with the /{id} numeric wildcard at the bottom of this file.
-    //
-    // NOTE: this file MUST live under a path copied into the production Docker
-    // image. `docs/` is excluded via .dockerignore, so the demo is kept in
-    // resources/ (which ships) — otherwise the route 404s in production.
-    Route::get('/guide/demo', function () {
-        $path = resource_path('guides/relationship-engine-demo.html');
-        abort_unless(is_file($path), 404);
-        return response()->file($path, ['Content-Type' => 'text/html; charset=UTF-8']);
-    })->name('guide.demo');  // relationship.guide.demo
+    // Interactive Guide route REMOVED 2026-08-25 (Sumit) — the PRE subnav
+    // Guide button and its modal are gone, so this had no caller left.
+    // resources/guides/relationship-engine-demo.html is intentionally kept
+    // on disk; restore this route if the walkthrough is ever reinstated.
 
     // ── PRE Dashboard (Phase 1 · Workstream D) ─────────────────────────────
     // Static segment — declared before the /{id} wildcard below.
@@ -335,6 +325,12 @@ Route::middleware(['web', 'auth', 'module:relationship'])->prefix('relationship'
     Route::post('/settings/toggle', [RelationshipSettingsController::class, 'toggleFlag'])
         ->name('settings.toggle')
         ->middleware('module:relationship,delete');  // relationship.settings.toggle
+
+    // Settings -> Today's Actions — category visibility + birthday surfacing.
+    // Presentation only; no action-generation behaviour lives here.
+    Route::post('/settings/today-actions', [RelationshipSettingsController::class, 'saveTodayActions'])
+        ->name('settings.today-actions')
+        ->middleware('module:relationship,delete');  // relationship.settings.today-actions
 
     Route::post('/settings/referral', [RelationshipSettingsController::class, 'saveReferralConfig'])
         ->name('settings.referral')

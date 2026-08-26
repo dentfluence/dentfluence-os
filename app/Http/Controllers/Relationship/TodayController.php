@@ -92,6 +92,48 @@ class TodayController extends Controller
     ];
 
     /**
+     * Information architecture (2026-08-25, Sumit) — the three bands the
+     * board reads in. Presentation only: the engine still generates every
+     * category, the controller only decides ORDER and INCLUSION.
+     *
+     *   essential — immediate clinic operations, must be worked today
+     *   growth    — leads / revenue opportunities (new enquiries stay HERE,
+     *               and stay visible: a fresh enquiry has a 30-minute
+     *               response window, CEO decision 2026-08-25)
+     *   other     — secondary reminders and relationship maintenance
+     */
+    private const CATEGORY_GROUPS = [
+        // category => [band, rank within that band]  (Sumit's exact order)
+        'appointment_reminders_today'    => ['essential', 1],
+        'appointment_reminders_tomorrow' => ['essential', 2],
+        'appointment_reminders'          => ['essential', 3],
+        'follow_up_calls'                => ['essential', 4],
+        'lab_ready'                      => ['essential', 5],
+        'missed_appointments_yesterday'  => ['essential', 6],
+
+        'new_enquiries'                  => ['growth', 1],
+        'lead_followups'                 => ['growth', 2],
+        'opportunities'                  => ['growth', 3],
+        'membership_renewals'            => ['growth', 4],
+        'missed_calls_yesterday'         => ['growth', 5],
+
+        'recall_calls'                   => ['other', 1],
+        'payment_reminders'              => ['other', 2],
+        'pending_estimates'              => ['other', 3],
+        'logged_communications'          => ['other', 4],
+        'tasks'                          => ['other', 5],
+        'wellness_check_yesterday'       => ['other', 6],
+        'completed_calls'                => ['other', 7],
+    ];
+
+    /** Band render order + human label. */
+    public const GROUP_ORDER = [
+        'essential' => ['rank' => 1, 'label' => 'Most Important',       'sub' => 'Immediate clinic actions'],
+        'growth'    => ['rank' => 2, 'label' => 'Leads & Opportunities', 'sub' => 'Growth and revenue opportunities'],
+        'other'     => ['rank' => 3, 'label' => 'Other Reminders',       'sub' => 'Secondary follow-ups and reminders'],
+    ];
+
+    /**
      * Priority sort order — lower number = shown first.
      */
     // Re-ranked 2026-07-03 at Sumit's request: the day should open with
@@ -242,9 +284,22 @@ class TodayController extends Controller
             $pendingCount = $this->engine->pendingCallsCount();
         }
 
+        // ── Settings -> Today's Actions (2026-08-25) ────────────────────
+        // PRESENTATION/INCLUSION ONLY. The engine has already generated
+        // everything; these settings decide only what reaches the board.
+        // Nothing here changes generation, dedup, dismissal or the drawer.
+        $hidden = $this->hiddenCategories();
+
+        if (AppSetting::get('today.hide_birthdays', '1') === '1') {
+            $this->stripBirthdayRows($raw);
+        }
+
         // Build enriched groups array for the view
         $groups = [];
         foreach ($raw as $key => $items) {
+            if (in_array($key, $hidden, true)) {
+                continue; // hidden in Settings -> Today's Actions
+            }
             $doneCount = count(array_filter($items, fn ($i) => ! empty($i['done'])));
 
             $groups[$key] = [
@@ -255,6 +310,11 @@ class TodayController extends Controller
                 'count'      => count($items) - $doneCount, // open items only
                 'done_count' => $doneCount,
                 'priority'   => self::CATEGORY_PRIORITY[$key] ?? 99,
+                'group'       => self::bandOf($key),
+                'group_rank'  => self::GROUP_ORDER[self::bandOf($key)]['rank'],
+                'group_label' => self::GROUP_ORDER[self::bandOf($key)]['label'],
+                'group_sub'   => self::GROUP_ORDER[self::bandOf($key)]['sub'],
+                'group_order' => self::CATEGORY_GROUPS[$key][1] ?? 99,
             ];
         }
 
@@ -269,7 +329,10 @@ class TodayController extends Controller
                 return $aEmpty ? 1 : -1; // empty groups go to bottom
             }
 
-            return $a['priority'] <=> $b['priority'];
+            // Band first (Most Important -> Leads & Opportunities -> Other
+            // Reminders), then the clinic's existing within-band priority.
+            return [$a['group_rank'], $a['group_order']]
+               <=> [$b['group_rank'], $b['group_order']];
         });
 
         $totalCount    = array_sum(array_column($groups, 'count')); // open items only
@@ -355,6 +418,11 @@ class TodayController extends Controller
                 'count'      => count($items),
                 'done_count' => 0,
                 'priority'   => self::CATEGORY_PRIORITY[$key] ?? 99,
+                'group'       => self::bandOf($key),
+                'group_rank'  => self::GROUP_ORDER[self::bandOf($key)]['rank'],
+                'group_label' => self::GROUP_ORDER[self::bandOf($key)]['label'],
+                'group_sub'   => self::GROUP_ORDER[self::bandOf($key)]['sub'],
+                'group_order' => self::CATEGORY_GROUPS[$key][1] ?? 99,
             ];
         }
         uasort($groups, fn ($a, $b) => $a['priority'] <=> $b['priority']);
@@ -567,6 +635,91 @@ class TodayController extends Controller
      * logAction() — this is UX only (disables the submit button early), the
      * real gate is server-side.
      */
+    /**
+     * Categories switched off in Settings -> Today's Actions.
+     * Default: everything visible. Read-only presentation gate — the engine
+     * still generates these rows, they simply do not reach this board.
+     */
+    /**
+     * The board's category vocabulary + its band, for Settings.
+     * Single source: CATEGORY_LABELS / CATEGORY_GROUPS on this controller —
+     * Settings must never keep its own copy of this list.
+     */
+    /** Which band a category belongs to. */
+    private static function bandOf(string $key): string
+    {
+        return self::CATEGORY_GROUPS[$key][0] ?? 'other';
+    }
+
+    public static function boardCategories(): array
+    {
+        $out = [];
+
+        foreach (self::CATEGORY_LABELS as $key => $label) {
+            $group = self::bandOf($key);
+
+            $out[$key] = [
+                'label'       => $label,
+                'group'       => $group,
+                'group_rank'  => self::GROUP_ORDER[$group]['rank'],
+                'group_label' => self::GROUP_ORDER[$group]['label'],
+                'order'       => self::CATEGORY_GROUPS[$key][1] ?? 99,
+            ];
+        }
+
+        uasort($out, fn ($a, $b) => [$a['group_rank'], $a['order']] <=> [$b['group_rank'], $b['order']]);
+
+        return $out;
+    }
+
+    private function hiddenCategories(): array
+    {
+        $hidden = [];
+
+        foreach (array_keys(self::CATEGORY_LABELS) as $key) {
+            if (AppSetting::get("today.show.{$key}", '1') !== '1') {
+                $hidden[] = $key;
+            }
+        }
+
+        return $hidden;
+    }
+
+    /**
+     * Birthday suppression (2026-08-25, Sumit).
+     *
+     * Birthdays are NOT a board category — they arrive through two separate
+     * producers and were duplicating each other in the queue:
+     *   1. RecallEngineService::recallBirthday() queues a CommunicationQueue
+     *      row with purpose = 'recall_birthday'  -> surfaces in recall_calls
+     *   2. RulesEngine rule 'birthday_3d' creates a system Task
+     *      (description "[Auto] Rule: birthday_3d") -> surfaces in tasks
+     *
+     * This strips both at the VIEW layer only. Neither producer is touched,
+     * nothing is disabled, and no third producer is introduced — turning the
+     * setting off brings the same rows straight back.
+     */
+    private function stripBirthdayRows(array &$raw): void
+    {
+        foreach (['recall_calls', 'tasks'] as $key) {
+            if (empty($raw[$key])) {
+                continue;
+            }
+
+            $raw[$key] = array_values(array_filter($raw[$key], function (array $item) {
+                if (($item['meta']['purpose'] ?? null) === 'recall_birthday') {
+                    return false;
+                }
+
+                $haystack = strtolower(
+                    ($item['suggested_action'] ?? '') . ' ' . ($item['meta']['category'] ?? '')
+                );
+
+                return ! str_contains($haystack, 'birthday');
+            }));
+        }
+    }
+
     private function buildRequiresNotesMap(): array
     {
         $rows = ActionOptionList::query()

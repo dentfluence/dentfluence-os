@@ -77,6 +77,65 @@
         }
     </style>
 
+    {{-- ══════════════════════════════════════════════════════════════════
+         Today's Actions — category visibility (2026-08-25)
+         Presentation/inclusion only. The engine still generates every
+         category; these switches decide which ones reach the board.
+         See TodayController::hiddenCategories() / stripBirthdayRows().
+    ══════════════════════════════════════════════════════════════════ --}}
+    <div style="font-size:11px;font-weight:700;color:#9a7aaa;letter-spacing:0.08em;text-transform:uppercase;margin:4px 0 10px;">Today's Actions</div>
+
+    <div style="background:#fff;border:1px solid #eceef2;border-radius:10px;padding:18px 20px;margin-bottom:24px;">
+        <div style="font-size:14px;font-weight:700;color:#1f2937;margin-bottom:4px;">
+            What appears on the board
+            <div class="help-hint" tabindex="0">
+                <span class="help-icon">?</span>
+                <div class="help-card">
+                    <strong>What this does</strong>
+                    <p style="margin:6px 0 0;">Chooses which kinds of work reach Today's Actions. Turning something off here only hides it from that board — the action is still created, still counted elsewhere, and comes straight back if you switch it on again.</p>
+                    <p class="help-example">Example: switch off "Membership Renewals" and reception stops seeing renewal calls in the daily queue, but the renewals themselves keep being tracked.</p>
+                </div>
+            </div>
+        </div>
+        <p style="color:#6b7280;font-size:13px;margin:0 0 16px;">
+            Grouped the way the board reads: most important first, then leads and opportunities, then secondary reminders.
+        </p>
+
+        <form method="POST" action="{{ route('relationship.settings.today-actions') }}">
+            @csrf
+
+            @php $lastGroup = null; @endphp
+            @foreach($todayCategories as $key => $cat)
+                @if($cat['group'] !== $lastGroup)
+                    @php $lastGroup = $cat['group']; @endphp
+                    <div style="font-size:10.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#a892b0;margin:14px 0 6px;">{{ $cat['group'] }}</div>
+                @endif
+                <label style="display:flex;align-items:center;gap:9px;padding:5px 0;font-size:13px;color:#374151;cursor:pointer;">
+                    <input type="checkbox" name="visible[]" value="{{ $key }}" @checked($cat['visible'])>
+                    {{ $cat['label'] }}
+                </label>
+            @endforeach
+
+            <div style="margin:18px 0 0;padding-top:14px;border-top:1px dashed #e8d5f0;">
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#a892b0;margin-bottom:6px;">Birthdays</div>
+                <label style="display:flex;align-items:flex-start;gap:9px;font-size:13px;color:#374151;cursor:pointer;">
+                    <input type="checkbox" name="hide_birthdays" value="1" style="margin-top:3px;" @checked($todayHideBirthdays)>
+                    <span>
+                        Keep birthday reminders off Today's Actions
+                        <span style="display:block;color:#6b7280;font-size:12px;margin-top:2px;">
+                            Birthdays are queued by two separate automations, so they can appear twice and crowd out real work.
+                            This hides them from the board only — both automations keep running and nothing is deleted.
+                        </span>
+                    </span>
+                </label>
+            </div>
+
+            <button type="submit" style="margin-top:18px;padding:8px 18px;background:#6a0f70;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+                Save
+            </button>
+        </form>
+    </div>
+
     {{-- ── Business Settings — plain, no jargon ── --}}
     <div style="font-size:11px;font-weight:700;color:#9a7aaa;letter-spacing:0.08em;text-transform:uppercase;margin:4px 0 10px;">Business Settings</div>
 

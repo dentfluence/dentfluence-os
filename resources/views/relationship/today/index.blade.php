@@ -491,6 +491,19 @@
     .taw-cat-n { font-size:10px; font-weight:700; color:#9a84a2; }
     .taw-cat--on .taw-cat-n { color:#e9d3ee; }
 
+    /* ── Bands: the three sections that make the hierarchy legible ── */
+    .taw-band { margin-bottom:14px; }
+    .taw-band-head { display:flex; align-items:flex-end; gap:12px; padding:0 2px 6px; border-bottom:2px solid #ece2f1; margin-bottom:8px; }
+    .taw-band-title { font-size:12px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:#4e0a53; margin:0; line-height:1.2; }
+    .taw-band-sub { font-size:11.5px; color:#9a8aa2; margin:2px 0 0; }
+    .taw-band-n { margin-left:auto; min-width:26px; text-align:center; font-size:12.5px; font-weight:800; color:#6a0f70; background:#f3e8f4; border:1px solid #e2cfe6; border-radius:99px; padding:1px 9px; font-variant-numeric:tabular-nums; }
+
+    /* Completed — deliberately quiet and outside the queue */
+    .taw-done-toggle { display:inline-flex; align-items:center; gap:7px; padding:5px 10px; border:1px dashed #dcd0e4; border-radius:8px; background:#fbf9fc; color:#7a6a82; font-size:11.5px; font-weight:600; cursor:pointer; font-family:inherit; }
+    .taw-done-toggle:hover { background:#f5eff8; }
+    .taw-done-n { font-weight:800; color:#1a7a45; background:#e8f7ef; border-radius:99px; padding:0 7px; }
+    .taw-done-hint { font-weight:500; color:#a99bb0; }
+
     /* ── Table ── */
     .taw-wrap { background:#fff; border:1px solid #ece2f1; border-radius:10px; overflow:hidden; }
     .taw-scroll { overflow:auto; max-height:clamp(220px, calc(100vh - 296px), 900px); }
@@ -705,9 +718,11 @@
                     'chIcon' => $channelMeta[$chKey][0], 'chLabel' => $channelMeta[$chKey][1],
                     'owner' => $owner, 'stCls' => $stCls, 'stTxt' => $stTxt,
                     'doText' => $doText, 'whyText' => $whyText,
-                    'sortDone' => $done ? 1 : 0,
-                    'sortPr' => $prRank[$item['priority'] ?? 'low'] ?? 3,
-                    'sortCat' => $group['priority'] ?? 99,
+                    'isDone'    => (bool) $done,
+                    'band'      => $group['group'] ?? 'other',
+                    'bandRank'  => $group['group_rank'] ?? 3,
+                    'bandOrder' => $group['group_order'] ?? 99,
+                    'sortPr'    => $prRank[$item['priority'] ?? 'low'] ?? 3,
                 ];
             }
         }
@@ -715,16 +730,35 @@
         // Worked order: open work first, then urgency, then the clinic's own
         // category order, then oldest due date.
         usort($rows, fn ($a, $b) =>
-            [$a['sortDone'], $a['sortPr'], $a['sortCat'], $a['dueSort']]
-            <=> [$b['sortDone'], $b['sortPr'], $b['sortCat'], $b['dueSort']]);
+            [$a['bandRank'], $a['bandOrder'], $a['sortPr'], $a['dueSort']]
+            <=> [$b['bandRank'], $b['bandOrder'], $b['sortPr'], $b['dueSort']]);
+
+        // ── ACTIVE vs COMPLETED ──────────────────────────────────────────
+        // The queue answers "what does the team need to do now?", so handled
+        // rows leave it entirely and live in their own section below. The
+        // header count and every band count are ACTIVE rows only.
+        $doneRows   = array_values(array_filter($rows, fn ($r) => $r['isDone']));
+        $rows       = array_values(array_filter($rows, fn ($r) => ! $r['isDone']));
+
+        // Rows split into the three bands, each keeping the order above.
+        $bands = [];
+        foreach (\App\Http\Controllers\Relationship\TodayController::GROUP_ORDER as $bandKey => $meta) {
+            $bandRows = array_values(array_filter($rows, fn ($r) => $r['band'] === $bandKey));
+            if ($bandRows) {
+                $bands[$bandKey] = $meta + ['rows' => $bandRows];
+            }
+        }
 
         $rowMeta = array_map(fn ($r) => [
             'id'  => $r['id'],
             'cat' => $r['cat'],
+            'band' => $r['band'],
             's'   => mb_strtolower(($r['item']['patient_name'] ?? '') . ' ' . $r['doText'] . ' ' . $r['whyText'] . ' ' . $r['catLabel']),
         ], $rows);
 
-        $activeGroups = collect($groups)->filter(fn ($g) => $g['count'] > 0 || ($g['done_count'] ?? 0) > 0);
+        // Chips filter the ACTIVE queue only — completed rows live in their own
+        // section and must never inflate a chip count.
+        $activeGroups = collect($groups)->filter(fn ($g) => $g['count'] > 0);
         $emptyCount   = collect($groups)->filter(fn ($g) => $g['count'] === 0 && ($g['done_count'] ?? 0) === 0)->count();
     @endphp
 
@@ -814,7 +848,7 @@
                     @click="setCat('{{ $catKey }}')">
                 <i class="ti {{ $group['icon'] }}"></i>
                 {{ $group['label'] }}
-                <span class="taw-cat-n">{{ $group['count'] + ($group['done_count'] ?? 0) }}</span>
+                <span class="taw-cat-n">{{ $group['count'] }}</span>
             </button>
             @endforeach
         </div>
@@ -840,10 +874,23 @@
         </div>
         @endif
 
-        {{-- ── The worklist ─────────────────────────────────────────────── --}}
-        @if(! empty($rows))
-        <div class="taw-wrap">
-            <div class="taw-scroll">
+        {{-- ══════════════════════════════════════════════════════════════
+             THE QUEUE — three bands, each its own titled section.
+             Order inside a band is the clinic's category order
+             (TodayController::CATEGORY_GROUPS), not counts or DB order.
+             Completed rows are NOT here — they have their own section below.
+        ══════════════════════════════════════════════════════════════ --}}
+        @forelse($bands as $bandKey => $band)
+        <section class="taw-band" x-show="bandVisible('{{ $bandKey }}')">
+            <div class="taw-band-head">
+                <div>
+                    <h2 class="taw-band-title">{{ $band['label'] }}</h2>
+                    <p class="taw-band-sub">{{ $band['sub'] }}</p>
+                </div>
+                <span class="taw-band-n" x-text="bandCount('{{ $bandKey }}')">{{ count($band['rows']) }}</span>
+            </div>
+
+            <div class="taw-wrap">
                 <table class="taw-t">
                     <thead>
                         <tr>
@@ -859,156 +906,83 @@
                         </tr>
                     </thead>
                     <tbody>
-                    @foreach($rows as $row)
-                        @php
-                            $item     = $row['item'];
-                            $itemId   = $row['id'];
-                            $done     = $row['done'];
-                            $lastCall = $row['lastCall'];
-                            $pr       = $item['priority'] ?? 'low';
-                            // Drawer payload: the same item with only the two
-                            // display strings cleaned. 'reason' and
-                            // 'suggested_action' are shown, never submitted —
-                            // logAction/dismiss read category + ids only.
-                            $drawerItem = array_merge($item, [
-                                'reason'           => $row['whyText'] ?: ($item['reason'] ?? ''),
-                                'suggested_action' => $row['doText'],
-                            ]);
-                        @endphp
-                        <tr id="item-{{ $itemId }}"
-                            class="{{ $done ? 'is-done' : '' }}"
-                            :class="actioned['{{ $itemId }}'] ? 'is-done' : ''"
-                            x-show="show('{{ $itemId }}')">
-
-                            {{-- 1 · PRIORITY --}}
-                            <td>
-                                <span class="taw-pr taw-pr--{{ $pr }}" title="{{ ucfirst($pr) }} priority">
-                                    <span class="taw-dot"></span>{{ ucfirst($pr) }}
-                                </span>
-                            </td>
-
-                            {{-- 2 · PATIENT --}}
-                            <td>
-                                <div class="taw-name" title="{{ $item['patient_name'] }}">
-                                    <a href="{{ $item['link'] }}">{{ $item['patient_name'] }}</a>
-                                </div>
-                            </td>
-
-                            {{-- 3 · ACTION & REASON --}}
-                            <td>
-                                @if($done)
-                                    <div class="taw-do" title="{{ $done['label'] }}{{ !empty($done['notes']) ? ' — ' . $done['notes'] : '' }}">{{ $done['label'] }}</div>
-                                    <span class="taw-why taw-why--ok">{{ $row['whyText'] }}{{ !empty($done['at']) ? ' · ' . $done['at'] : '' }}</span>
-                                @else
-                                    <div class="taw-do" title="{{ $row['doText'] }}">{{ $row['doText'] }}</div>
-                                    @if($lastCall)
-                                        <span class="taw-why taw-why--try" x-show="!lastResponse['{{ $itemId }}']"
-                                              title="{{ $row['whyText'] }} — last attempt: {{ $lastCall['label'] }}{{ !empty($lastCall['at']) ? ' at ' . $lastCall['at'] : '' }}{{ !empty($lastCall['notes']) ? ' — ' . $lastCall['notes'] : '' }}">
-                                            {{ $row['whyText'] }} · last attempt: {{ $lastCall['label'] }}{{ !empty($lastCall['at']) ? ' ' . $lastCall['at'] : '' }}
-                                        </span>
-                                    @else
-                                        <span class="taw-why" x-show="!lastResponse['{{ $itemId }}']" title="{{ $row['whyText'] }}">{{ $row['whyText'] }}</span>
-                                    @endif
-                                    <span class="taw-why taw-why--ok" x-show="lastResponse['{{ $itemId }}']" x-cloak>
-                                        <span x-text="lastResponse['{{ $itemId }}']"></span>
-                                    </span>
-                                @endif
-                            </td>
-
-                            {{-- 4 · DUE --}}
-                            <td><span class="taw-due {{ $row['dueCls'] }}" title="{{ $row['dueTip'] }}">{{ $row['dueTxt'] }}</span></td>
-
-                            {{-- 5 · OWNER --}}
-                            <td>
-                                @if($row['owner'])
-                                    <span class="taw-owner" title="Handled by {{ $row['owner'] }}">{{ $row['owner'] }}</span>
-                                @else
-                                    <span class="taw-owner taw-owner--none" title="Not yet picked up by anyone">Unassigned</span>
-                                @endif
-                            </td>
-
-                            {{-- 6 · CATEGORY --}}
-                            <td><span class="taw-tag" title="{{ $row['catLabel'] }}">{{ $row['catLabel'] }}</span></td>
-
-                            {{-- 7 · CHANNEL --}}
-                            <td><span class="taw-ch"><i class="ti {{ $row['chIcon'] }}"></i>{{ $row['chLabel'] }}</span></td>
-
-                            {{-- 8 · STATUS --}}
-                            <td>
-                                <span class="taw-st {{ $row['stCls'] }}">
-                                    <span x-show="!actioned['{{ $itemId }}']">{{ $row['stTxt'] }}</span>
-                                    <span x-show="actioned['{{ $itemId }}']" x-cloak>Done</span>
-                                </span>
-                            </td>
-
-                            {{-- 9 · ACTIONS --}}
-                            <td>
-                                <div class="taw-acts">
-                                    @if($done)
-                                        <span class="taw-ib taw-ib--ok" title="Done — {{ $done['label'] }}{{ !empty($done['at']) ? ' at ' . $done['at'] : '' }}"><i class="ti ti-check"></i></span>
-                                    @elseif($mode === 'past')
-                                        @php $outcome = $item['meta']['outcome'] ?? null; @endphp
-                                        <span class="taw-ib taw-ib--ok" title="{{ $outcome ? ucwords(str_replace('_', ' ', $outcome)) : 'Completed' }}"><i class="ti ti-check"></i></span>
-                                    @elseif(($item['primary_action'] ?? null) === 'whatsapp')
-                                        <template x-if="!actioned['{{ $itemId }}']">
-                                            <button type="button" class="taw-ib taw-ib--go" title="Send WhatsApp birthday greeting"
-                                                    :disabled="sendingWhatsapp['{{ $itemId }}']"
-                                                    @click="sendBirthdayWhatsapp({{ json_encode($drawerItem) }}, '{{ $itemId }}')">
-                                                <i class="ti" :class="sendingWhatsapp['{{ $itemId }}'] ? 'ti-loader-2' : 'ti-brand-whatsapp'"
-                                                   :style="sendingWhatsapp['{{ $itemId }}'] ? 'animation:spin 1s linear infinite;' : ''"></i>
-                                            </button>
-                                        </template>
-                                        <template x-if="actioned['{{ $itemId }}']">
-                                            <span class="taw-ib taw-ib--ok" title="Sent"><i class="ti ti-check"></i></span>
-                                        </template>
-                                    @else
-                                        <template x-if="!actioned['{{ $itemId }}']">
-                                            <button type="button" class="taw-ib taw-ib--go" title="Log call"
-                                                    @click="openDrawer({{ json_encode($drawerItem) }}, '{{ $itemId }}')">
-                                                <i class="ti ti-phone"></i>
-                                            </button>
-                                        </template>
-                                        <template x-if="actioned['{{ $itemId }}']">
-                                            <span class="taw-ib taw-ib--ok" title="Done"><i class="ti ti-check"></i></span>
-                                        </template>
-                                    @endif
-
-                                    <a href="{{ $item['link'] }}" class="taw-ib" title="Open record"><i class="ti ti-external-link"></i></a>
-                                </div>
-                            </td>
-                        </tr>
-                    @endforeach
+                        @foreach($band['rows'] as $row)
+                            @include('relationship.today._row', ['row' => $row])
+                        @endforeach
                     </tbody>
                 </table>
-
-                <div class="taw-none" x-show="total === 0" x-cloak>
-                    No actions match this filter. <a href="#" @click.prevent="reset()">Clear filters</a>
-                </div>
             </div>
-
-            {{-- ── Footer ── --}}
-            <div class="taw-foot">
-                <span>
-                    Showing <strong class="taw-pgn" x-text="from()"></strong>–<strong class="taw-pgn" x-text="to()"></strong>
-                    of <strong class="taw-pgn" x-text="total"></strong>
-                </span>
-                @if($emptyCount > 0)
-                    <span>· {{ $emptyCount }} other {{ Str::plural('category', $emptyCount) }} with nothing to show</span>
-                @endif
-                @if(isset($groups['missed_calls_yesterday']) && $groups['missed_calls_yesterday']['count'] > 0 && $mode === 'today')
-                    <span>· <a href="{{ route('relationship.today.missed-calls') }}">View full missed-calls list</a></span>
-                @endif
-
-                <div class="taw-pg">
-                    <button type="button" class="taw-pgb" @click="page = 1"        :disabled="page === 1">&laquo;</button>
-                    <button type="button" class="taw-pgb" @click="page = page - 1" :disabled="page === 1">&lsaquo;</button>
-                    <span class="taw-pgn">Page <strong x-text="page"></strong> / <span x-text="pages"></span></span>
-                    <button type="button" class="taw-pgb" @click="page = page + 1" :disabled="page >= pages">&rsaquo;</button>
-                    <button type="button" class="taw-pgb" @click="page = pages"    :disabled="page >= pages">&raquo;</button>
-                </div>
+        </section>
+        @empty
+        <div class="taw-wrap">
+            <div class="taw-none" style="display:block;">
+                Nothing outstanding right now — the queue is clear.
             </div>
         </div>
+        @endforelse
+
+        {{-- Nothing left after filtering (all bands hidden) --}}
+        <div class="taw-wrap" x-show="total === 0" x-cloak style="margin-top:8px;">
+            <div class="taw-none" style="display:block;">
+                No actions match this filter. <a href="#" @click.prevent="reset()">Clear filters</a>
+            </div>
+        </div>
+
+        {{-- ══════════════════════════════════════════════════════════════
+             COMPLETED TODAY — deliberately outside the queue so it can
+             never inflate or confuse the active count. Collapsed by
+             default; the engine still returns these rows unchanged.
+        ══════════════════════════════════════════════════════════════ --}}
+        @if(! empty($doneRows))
+        <section class="taw-band" x-data="{ open: false }">
+            <button type="button" class="taw-done-toggle" @click="open = !open">
+                <i class="ti" :class="open ? 'ti-chevron-down' : 'ti-chevron-right'"></i>
+                Completed today
+                <span class="taw-done-n">{{ count($doneRows) }}</span>
+                <span class="taw-done-hint" x-show="!open">handled — not part of the queue</span>
+            </button>
+
+            <div class="taw-wrap" x-show="open" x-cloak style="margin-top:6px;">
+                <table class="taw-t">
+                    <thead>
+                        <tr>
+                            <th style="width:78px;">Priority</th>
+                            <th style="width:190px;">Patient</th>
+                            <th>Outcome</th>
+                            <th style="width:112px;">Due</th>
+                            <th style="width:118px;">Owner</th>
+                            <th style="width:172px;">Category</th>
+                            <th style="width:96px;">Channel</th>
+                            <th style="width:104px;">Status</th>
+                            <th style="width:68px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($doneRows as $row)
+                            @include('relationship.today._row', ['row' => $row])
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </section>
         @endif
+
+        {{-- ── Footer ── --}}
+        <div class="taw-foot" style="border:1px solid #ece2f1;border-radius:10px;margin-top:8px;">
+            <span>
+                <strong class="taw-pgn" x-text="total">{{ count($rows) }}</strong>
+                active {{ Str::plural('action', count($rows)) }} in the queue
+            </span>
+            @if(! empty($doneRows))
+                <span class="taw-muted">· {{ count($doneRows) }} completed today</span>
+            @endif
+            @if($emptyCount > 0)
+                <span class="taw-muted">· {{ $emptyCount }} {{ Str::plural('category', $emptyCount) }} with nothing to show</span>
+            @endif
+            @if(isset($groups['missed_calls_yesterday']) && $groups['missed_calls_yesterday']['count'] > 0 && $mode === 'today')
+                <span>· <a href="{{ route('relationship.today.missed-calls') }}">View full missed-calls list</a></span>
+            @endif
+        </div>
 
     </div>{{-- /.taw --}}
 
@@ -1392,6 +1366,7 @@ function taWorklist(rows) {
         total: 0,
         pages: 1,
         vis:   {},
+        bands: {},
 
         init() {
             this.recompute();
@@ -1409,16 +1384,26 @@ function taWorklist(rows) {
         },
 
         recompute() {
+            // Every matching row is shown — the queue is banded, not paged,
+            // so a section never hides work behind a page number.
             const list = this.matches();
             this.total = list.length;
-            this.pages = Math.max(1, Math.ceil(this.total / this.per));
-            if (this.page > this.pages) { this.page = this.pages; return; }
-            if (this.page < 1)          { this.page = 1;          return; }
-            const start = (this.page - 1) * this.per;
+
             const vis = {};
-            list.slice(start, start + this.per).forEach(r => { vis[r.id] = true; });
-            this.vis = vis;
+            const bands = {};
+            list.forEach(r => {
+                vis[r.id] = true;
+                bands[r.band] = (bands[r.band] || 0) + 1;
+            });
+            this.vis   = vis;
+            this.bands = bands;
         },
+
+        /** Live count for a band header, honouring search + chip filters. */
+        bandCount(band) { return this.bands[band] || 0; },
+
+        /** A band with nothing left after filtering hides its whole section. */
+        bandVisible(band) { return (this.bands[band] || 0) > 0; },
 
         show(id)  { return this.vis[id] === true; },
         setCat(c) { this.cat = c; },

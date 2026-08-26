@@ -65,6 +65,20 @@ class SettingsController extends Controller
         // for what this actually gates. Null/blank = legacy behaviour (unrestricted).
         $recallEffectiveFrom = AppSetting::get('recall.effective_from');
 
+        // ── Settings -> Today's Actions (2026-08-25) ────────────────────
+        // Which generated categories reach the board, and whether birthday
+        // rows are surfaced. Presentation/inclusion only — see
+        // TodayController::hiddenCategories() / stripBirthdayRows().
+        $todayCategories = [];
+        foreach (\App\Http\Controllers\Relationship\TodayController::boardCategories() as $key => $meta) {
+            $todayCategories[$key] = [
+                'label'   => $meta['label'],
+                'group'   => $meta['group_label'],
+                'visible' => AppSetting::get("today.show.{$key}", '1') === '1',
+            ];
+        }
+        $todayHideBirthdays = AppSetting::get('today.hide_birthdays', '1') === '1';
+
         // ── Recall / Birthday settings (moved from Communication
         // OS 2026-07-06 — was Communication\RecallSettingsController@index,
         // archived at under_review/pre_consolidation_2026_07_06/). Same
@@ -128,6 +142,8 @@ class SettingsController extends Controller
             'flagHelp',
             'callOutcomeCategories',
             'dismissReasonOptions',
+            'todayCategories',
+            'todayHideBirthdays',
         ));
     }
 
@@ -216,6 +232,26 @@ class SettingsController extends Controller
     }
 
     /** Save the Referral Rewards business config (on/off + amount). */
+    /**
+     * Settings -> Today's Actions. Stores only visibility flags; the engine
+     * remains the single source of truth for generating actions.
+     */
+    public function saveTodayActions(Request $request): RedirectResponse
+    {
+        $keys    = array_keys(\App\Http\Controllers\Relationship\TodayController::boardCategories());
+        $visible = (array) $request->input('visible', []);
+
+        $payload = [];
+        foreach ($keys as $key) {
+            $payload["today.show.{$key}"] = in_array($key, $visible, true) ? '1' : '0';
+        }
+        $payload['today.hide_birthdays'] = $request->boolean('hide_birthdays') ? '1' : '0';
+
+        AppSetting::setMany($payload, 'relationship');
+
+        return back()->with('success', "Today's Actions settings saved.");
+    }
+
     public function saveReferralConfig(Request $request): RedirectResponse
     {
         $data = $request->validate([
