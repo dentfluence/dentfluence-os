@@ -57,15 +57,15 @@ class HuddleBoardApiService
         $today     = $date ? Carbon::parse($date)->startOfDay() : Carbon::today();
         $yesterday = $today->copy()->subDay();
 
-        $schedule  = $this->safe(fn () => $this->todaySchedule($branchId, $today), collect());
-        $yesterFlow = $this->safe(fn () => $this->yesterdayFlow($branchId, $yesterday), collect());
-        $tasks     = $this->safe(fn () => $this->tasks($branchId, $today), collect());
-        $alerts    = $this->safe(fn () => $this->alerts($branchId, $today), collect());
-        $notes     = $this->safe(fn () => $this->notes($branchId, $today), collect());
-        $labs      = $this->safe(fn () => $this->labs($branchId, $today), $this->emptyLabs());
-        $comms     = $this->safe(fn () => $this->comms($branchId, $today, $yesterday), collect());
-        $snapshot  = $this->safe(fn () => $this->todaySnapshot(), $this->emptySnapshot());
-        $relItems  = $this->safe(fn () => $this->relationshipItems(), collect());
+        $schedule  = $this->safe("Today's Schedule", fn () => $this->todaySchedule($branchId, $today), collect());
+        $yesterFlow = $this->safe("Yesterday's Flow", fn () => $this->yesterdayFlow($branchId, $yesterday), collect());
+        $tasks     = $this->safe('Tasks', fn () => $this->tasks($branchId, $today), collect());
+        $alerts    = $this->safe('Alerts', fn () => $this->alerts($branchId, $today), collect());
+        $notes     = $this->safe('Notes', fn () => $this->notes($branchId, $today), collect());
+        $labs      = $this->safe('Labs', fn () => $this->labs($branchId, $today), $this->emptyLabs());
+        $comms     = $this->safe('Communications', fn () => $this->comms($branchId, $today, $yesterday), collect());
+        $snapshot  = $this->safe('Today Snapshot', fn () => $this->todaySnapshot(), $this->emptySnapshot());
+        $relItems  = $this->safe('Relationship Items', fn () => $this->relationshipItems(), collect());
 
         return [
             'date'       => $today->toDateString(),
@@ -759,11 +759,23 @@ class HuddleBoardApiService
     /*  Helper: run a section, swallow failures into a safe default          */
     /* ===================================================================== */
 
-    private function safe(callable $fn, $default = null)
+    private function safe(string $section, callable $fn, $default = null)
     {
         try {
             return $fn();
         } catch (\Throwable $e) {
+            // G-33: this catch used to be silent, exactly like its twin in
+            // HuddleService. A section that throws on every run still
+            // degrades to its default — behaviour is unchanged - but it no
+            // longer does so without leaving a trace.
+            Log::warning('Huddle board section failed and fell back to its default', [
+                'section'   => $section,
+                'exception' => get_class($e),
+                'message'   => $e->getMessage(),
+                'file'      => $e->getFile(),
+                'line'      => $e->getLine(),
+            ]);
+
             return $default;
         }
     }

@@ -57,6 +57,21 @@ class ReportMetricsService
             ->sum('amount');
     }
 
+    /**
+     * Number of collection events (payment transactions) in the range.
+     *
+     * KPI 28 wants a transaction COUNT, not a second money figure. It is
+     * deliberately the same query as collected() — same table, same filters,
+     * counted instead of summed - so "collections" can never come to mean two
+     * different sets of rows depending on which screen you are looking at.
+     */
+    public function collectionEvents(Carbon $from, Carbon $to, ?int $branchId = null): int
+    {
+        return $this->paymentsQuery($branchId)
+            ->whereBetween('payment_date', [$from, $to])
+            ->count();
+    }
+
     /** Total receivables right now — canonical filter: draft + partial. */
     public function outstanding(?int $branchId = null): float
     {

@@ -14,6 +14,7 @@ use App\Services\Huddle\HuddleService;
 use App\Services\WalletService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -157,11 +158,24 @@ class HuddleCollectionsParityTest extends TestCase
             ->whereBetween('transaction_date', [$from, $to])
             ->sum('amount');
 
-        // If this ever becomes equal, the fixture stopped exercising the bug.
-        $this->assertGreaterThan(
+        // The DIRECTION of the disagreement changed on 26-Aug, so this guard
+        // was retargeted rather than deleted.
+        //
+        // It used to be an OVER-count: receiveAdvance() wrote a
+        // finance_transactions income row for money that is a liability. U8/A1
+        // fixed that at source — an advance is now a wallet credit plus an
+        // 'advance' receipt, and no income row at all — so the original
+        // assertion started failing for a good reason.
+        //
+        // What remains is an UNDER-count: ordinary invoice payments never
+        // reach finance_transactions at all, so the ledger sees a fraction of
+        // the day. Either way the point the fixture exists to make is intact:
+        // finance_transactions is not, and must never become, a definition of
+        // collections.
+        $this->assertNotEquals(
             self::EXPECTED_COLLECTED,
             $ledgerSum,
-            'finance_transactions must still over-count this day, or the regression guard is meaningless.'
+            'finance_transactions must still disagree with the canonical figure, or this regression guard is meaningless.'
         );
     }
 
@@ -179,7 +193,50 @@ class HuddleCollectionsParityTest extends TestCase
 
         $this->assertNotNull($flow, "Yesterday's Flow section is missing from the briefing.");
         $this->assertStringContainsString('Rs. 10,000', $flow['headline']);
-        $this->assertContains('Total collections: Rs. 10,000', $flow['lines']);
+        $this->assertContains('Total collections: Rs. 10,000 (3 transactions)', $flow['lines']);
+    }
+
+    public function test_yesterdays_flow_reports_visit_activity_as_a_count_only(): void
+    {
+        $this->seedTheDay();
+
+        $briefing = app(HuddleService::class)->build(null, self::HUDDLE_DAY);
+        $flow     = collect($briefing['sections'])->firstWhere('title', "Yesterday's Flow");
+
+        $this->assertNotNull($flow, "Yesterday's Flow section is missing from the briefing.");
+
+        $visitLine = collect($flow['lines'])
+            ->first(fn ($l) => str_starts_with($l, 'Visits completed:'));
+
+        $this->assertNotNull($visitLine, 'The visits line must be present.');
+
+        // G-33 (CEO directive, 26-Aug): visit-level money has no canonical
+        // source, so the Huddle reports the count and nothing else. If someone
+        // ever re-attaches a rupee figure to this line, they have invented a
+        // second definition of collections and this test must stop them.
+        $this->assertSame('Visits completed: 0', $visitLine);
+        $this->assertStringNotContainsString('collected', $visitLine);
+    }
+
+    public function test_the_visit_model_does_not_advertise_columns_the_database_lacks(): void
+    {
+        // The root cause of G-33: TreatmentVisit listed four money columns in
+        // $fillable that no migration has ever created, which is precisely why
+        // reading them looked reasonable to every reviewer. Billing belongs to
+        // the invoice — see TreatmentVisitService::rules().
+        $fillable = (new \App\Models\TreatmentVisit)->getFillable();
+
+        foreach (['cost', 'amount_paid', 'payment_mode', 'payment_reference'] as $phantom) {
+            $this->assertNotContains(
+                $phantom,
+                $fillable,
+                "TreatmentVisit must not declare '{$phantom}' as fillable - no migration creates it."
+            );
+            $this->assertFalse(
+                Schema::hasColumn('treatment_visits', $phantom),
+                "treatment_visits.{$phantom} now exists — if that is deliberate, G-33 needs revisiting."
+            );
+        }
     }
 
     public function test_mobile_huddle_board_collected_today_equals_the_canonical_figure(): void

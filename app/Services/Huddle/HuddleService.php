@@ -8,6 +8,7 @@ use App\Models\TreatmentPlan;
 use App\Services\Analytics\ReportMetricsService;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * HuddleService — assembles the daily morning-huddle briefing.
@@ -38,18 +39,18 @@ class HuddleService
 
         $sections = array_values(array_filter([
             // ── Today ──────────────────────────────────────────────────────
-            $this->safe(fn () => $this->scheduleSection($appts, $day)),
-            $this->safe(fn () => $this->safetySection($appts)),
-            $this->safe(fn () => $this->moneySection($appts)),
-            $this->safe(fn () => $this->opportunitiesSection($appts, $branchId, $day)),
+            $this->safe("Today's Schedule", fn () => $this->scheduleSection($appts, $day)),
+            $this->safe('Patient Safety', fn () => $this->safetySection($appts)),
+            $this->safe('Money to Collect', fn () => $this->moneySection($appts)),
+            $this->safe('Treatment Opportunities', fn () => $this->opportunitiesSection($appts, $branchId, $day)),
             // ── Yesterday (H2) ───────────────────────────────────────────────
-            $this->safe(fn () => $this->yesterdaySection($branchId, $flowStart, $flowEnd)),
-            $this->safe(fn () => $this->failuresSection($branchId, $flowStart, $flowEnd)),
+            $this->safe("Yesterday's Flow", fn () => $this->yesterdaySection($branchId, $flowStart, $flowEnd)),
+            $this->safe("Yesterday's Failures", fn () => $this->failuresSection($branchId, $flowStart, $flowEnd)),
             // ── Operations (H2) ──────────────────────────────────────────────
-            $this->safe(fn () => $this->tasksSection($day)),
-            $this->safe(fn () => $this->labSection($day)),
-            $this->safe(fn () => $this->stockSection()),
-            $this->safe(fn () => $this->newPatientsSection($branchId, $day)),
+            $this->safe('Tasks', fn () => $this->tasksSection($day)),
+            $this->safe('Lab', fn () => $this->labSection($day)),
+            $this->safe('Stock', fn () => $this->stockSection()),
+            $this->safe('New Patients', fn () => $this->newPatientsSection($branchId, $day)),
         ]));
 
         return ['date' => $day->toDateString(), 'sections' => $sections];
@@ -227,12 +228,21 @@ class HuddleService
         $lines    = [];
         $combined = ! $start->isSameDay($end);
 
-        // Visits completed in range + money collected on them.
-        $visits    = \App\Models\TreatmentVisit::whereBetween('visit_date', [$start->toDateString(), $end->copy()->endOfDay()])
-            ->where('status', 'completed')->get(['amount_paid', 'cost']);
-        $visitCount = $visits->count();
-        $visitMoney = (float) $visits->sum('amount_paid');
-        $lines[] = "Visits completed: {$visitCount}" . ($visitCount ? " (collected " . $this->money($visitMoney) . " on visits)" : '');
+        // Visits completed in range — COUNT ONLY (CEO directive, 26-Aug: G-33).
+        //
+        // This used to read treatment_visits.amount_paid and .cost — two
+        // columns no migration has ever created, and which
+        // TreatmentVisitService::rules() deliberately excludes from the visit
+        // contract because billing is the front desk's job, not the chair's.
+        // The query threw Unknown column, safe() swallowed it without a
+        // trace, and this entire section was therefore absent from every
+        // morning briefing. Visit-level money has no canonical source and the
+        // Huddle does not invent one: it consumes financial truth, it does
+        // not create it.
+        $visitCount = \App\Models\TreatmentVisit::whereBetween('visit_date', [$start->toDateString(), $end->copy()->endOfDay()])
+            ->where('status', 'completed')
+            ->count();
+        $lines[] = "Visits completed: {$visitCount}";
 
         // Total collections in range.
         //
@@ -245,7 +255,15 @@ class HuddleService
             $end->copy()->endOfDay(),
             $branchId
         );
-        $lines[] = "Total collections: " . $this->money($collected);
+        // KPI 28 — the number of collection events, from the same canonical
+        // query that produced the amount above. Counted, never re-summed.
+        $events = app(ReportMetricsService::class)->collectionEvents(
+            $start->copy()->startOfDay(),
+            $end->copy()->endOfDay(),
+            $branchId
+        );
+        $lines[] = "Total collections: " . $this->money($collected)
+            . " ({$events} " . ($events === 1 ? 'transaction' : 'transactions') . ")";
 
         // Appointments that completed in range.
         $done = Appointment::whereBetween('appointment_date', [$start->toDateString(), $end->copy()->endOfDay()])
@@ -413,11 +431,29 @@ class HuddleService
     }
 
     /** Run a section builder, returning null if it throws (graceful degrade). */
-    protected function safe(callable $fn): ?array
+    /**
+     * Build one section, and never let its failure break the whole briefing.
+     *
+     * The catch used to be silent. That is how G-33 survived: a section read
+     * two columns that did not exist, threw on every single run, and simply
+     * vanished from the briefing with nothing written anywhere. The briefing
+     * still degrades gracefully — behaviour is unchanged - but a structural
+     * failure now leaves a trace, which turns the next one into a five-minute
+     * find instead of a five-month one.
+     */
+    protected function safe(string $section, callable $fn): ?array
     {
         try {
             return $fn();
         } catch (\Throwable $e) {
+            Log::warning('Huddle section failed and was omitted from the briefing', [
+                'section'   => $section,
+                'exception' => get_class($e),
+                'message'   => $e->getMessage(),
+                'file'      => $e->getFile(),
+                'line'      => $e->getLine(),
+            ]);
+
             return null;
         }
     }

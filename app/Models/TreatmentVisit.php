@@ -30,10 +30,10 @@ class TreatmentVisit extends Model
         'tooth_number',
         'notes',
         'chief_complaint',
-        'cost',
-        'amount_paid',
-        'payment_mode',
-        'payment_reference',
+        // G-33: 'cost', 'amount_paid', 'payment_mode' and 'payment_reference'
+        // were listed here but NO migration has ever created them. Billing is
+        // owned by the invoice, not the visit — see TreatmentVisitService::rules().
+        // Do not re-add them; add a real read path through ReportMetricsService.
         'next_visit_date',
         'next_visit_type',
         'recall_queued_at',   // recall-engine cooldown stamp
