@@ -1087,7 +1087,6 @@ document.addEventListener('alpine:init', () => {
         <div>
             <div class="hd-stat-val">{{ $todaysAppointments->count() }}</div>
             <div class="hd-stat-label">Today's Appointments</div>
-            <div class="hd-stat-sub">+3 vs yesterday</div>
         </div>
     </a>
 
@@ -1555,7 +1554,9 @@ document.addEventListener('alpine:init', () => {
         @endforeach
         @endif
 
-        <a href="{{ route('huddle.accountability') }}" class="hd-view-all">View All Yesterday</a>
+        {{-- H2 (W-1, 2026-09-04): "View All Yesterday" hidden. HuddleController::accountability()
+             and ::storeNote() are "Not yet implemented" stubs; the link led to a dead screen.
+             View kept at huddle/accountability.blade.php for V1.1. --}}
 
         </div>{{-- /hd-col-body --}}
     </div>
@@ -1954,53 +1955,11 @@ document.addEventListener('alpine:init', () => {
         </div>{{-- /hd-col-body --}}
     </div>
 
-    {{-- ── COL: MARKETING — WHAT TO POST ──
-         2026-07-06 (3rd pass, back to this per Sumit): a regular board column
-         beside Inventory rather than a separate bottom strip — scroll right
-         on the board to reach it, same as any other column. --}}
-    <div class="hd-col">
-        <div class="hd-col-hdr">
-            <div class="hd-col-title">
-                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
-                Marketing
-            </div>
-            <span class="hd-col-count">4</span>
-        </div>
-        <div class="hd-col-body">
-        <div class="hd-card">
-            <div class="hd-mc">
-                <div class="hd-mc-ico hd-mc-ig"></div>
-                <div class="hd-mc-body">
-                    <div class="hd-mc-title">Instagram – Before/After Smile Makeover</div>
-                    <div class="hd-mc-time">Today 11:00 AM</div>
-                </div>
-                <svg class="hd-mc-check" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-            </div>
-            <div class="hd-mc">
-                <div class="hd-mc-ico hd-mc-fb">f</div>
-                <div class="hd-mc-body">
-                    <div class="hd-mc-title">Facebook Post – Dental Implant Awareness</div>
-                    <div class="hd-mc-time">Tomorrow 10:00 AM</div>
-                </div>
-            </div>
-            <div class="hd-mc">
-                <div class="hd-mc-ico hd-mc-gg">G</div>
-                <div class="hd-mc-body">
-                    <div class="hd-mc-title">Google Post – Mon Offer (Teeth Whitening)</div>
-                    <div class="hd-mc-time">22 May, 09:00 AM</div>
-                </div>
-            </div>
-            <div class="hd-mc">
-                <div class="hd-mc-ico hd-mc-wa">W</div>
-                <div class="hd-mc-body">
-                    <div class="hd-mc-title">WhatsApp Broadcast – Scaling Offer</div>
-                    <div class="hd-mc-time">23 May, 10:00 AM</div>
-                </div>
-            </div>
-            <a href="#" class="hd-view-all">+ 2 more content ideas</a>
-        </div>
-        </div>{{-- /hd-col-body --}}
-    </div>
+    {{-- ── COL: MARKETING — REMOVED IN V1 (W-1, 2026-09-04) ──
+         This column rendered four hardcoded, invented posts with May-2026 dates
+         and a hardcoded count of 4. Nothing here ever read mkt_scheduled_posts.
+         CEO ruling 28 Aug (H1): remove now, reserve the slot for V1.1 reading
+         real scheduled posts. The .hd-mc* CSS is intentionally kept for that. --}}
 
     {{-- ── COL: FAILURES / MAINTENANCE ── --}}
     <div class="hd-col">
@@ -2024,7 +1983,6 @@ document.addEventListener('alpine:init', () => {
                     <div class="hd-fc-desc">{{ $alert['detail'] }}</div>
                     @endif
                     <div class="hd-fc-footer">
-                        <span class="hd-fc-reported">Reported {{ now()->subHours(rand(1,24))->diffForHumans() }}</span>
                         <span class="hd-badge hd-b-{{ $alert['level'] === 'error' ? 'high' : 'medium' }}">{{ $alert['level'] === 'error' ? 'High' : 'Medium' }}</span>
                     </div>
                 </div>

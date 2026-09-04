@@ -9,7 +9,7 @@
             <p class="text-xs text-gray-400 uppercase tracking-widest">
                 <a href="{{ route('finance.dashboard') }}" class="hover:text-[#6a0f70]">Finance</a>
                 &nbsp;/&nbsp;
-                <a href="{{ route('finance.analytics.index') }}" class="hover:text-[#6a0f70]">Analytics</a>
+                <a href="{{ route('analytics.index') }}" class="hover:text-[#6a0f70]">Analytics</a>
                 &nbsp;/&nbsp; Lab
             </p>
             <h1 class="text-2xl font-semibold text-[#6a0f70] mt-0.5" style="font-family:'Cormorant Garamond',serif;">
@@ -18,7 +18,7 @@
         </div>
         <div class="flex gap-2">
             @foreach([3=>'3M',6=>'6M',12=>'12M'] as $m => $label)
-            <a href="{{ route('finance.analytics.lab', ['months'=>$m]) }}"
+            <a href="{{ route('analytics.lab', ['months'=>$m]) }}"
                class="text-xs px-3 py-1 border transition-colors
                    {{ $months == $m ? 'bg-[#6a0f70] text-white border-[#6a0f70]' : 'border-gray-300 text-gray-600 hover:border-[#6a0f70] hover:text-[#6a0f70]' }}">
                 {{ $label }}

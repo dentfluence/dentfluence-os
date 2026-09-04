@@ -9,7 +9,7 @@
             <p class="text-xs text-gray-400 uppercase tracking-widest">
                 <a href="{{ route('finance.dashboard') }}" class="hover:text-[#6a0f70]">Finance</a>
                 &nbsp;/&nbsp;
-                <a href="{{ route('finance.analytics.index') }}" class="hover:text-[#6a0f70]">Analytics</a>
+                <a href="{{ route('analytics.index') }}" class="hover:text-[#6a0f70]">Analytics</a>
                 &nbsp;/&nbsp; Audit Log
             </p>
             <h1 class="text-2xl font-semibold text-[#6a0f70] mt-0.5" style="font-family:'Cormorant Garamond',serif;">
@@ -19,7 +19,7 @@
     </div>
 
     {{-- Date filter --}}
-    <form method="GET" action="{{ route('finance.analytics.audit') }}" class="bg-white border border-[#e8d5f0] p-4">
+    <form method="GET" action="{{ route('analytics.audit') }}" class="bg-white border border-[#e8d5f0] p-4">
         <div class="flex flex-wrap gap-3 items-end">
             <div>
                 <label class="text-xs text-gray-500 uppercase tracking-wider block mb-1">From</label>
@@ -32,7 +32,7 @@
                        class="border border-gray-300 text-sm px-3 py-1.5 focus:outline-none focus:border-[#6a0f70]">
             </div>
             <button type="submit" class="bg-[#6a0f70] text-white text-sm px-4 py-1.5 hover:bg-[#380740]">Filter</button>
-            <a href="{{ route('finance.analytics.audit') }}" class="text-sm text-gray-500 hover:text-[#6a0f70] py-1.5">Reset</a>
+            <a href="{{ route('analytics.audit') }}" class="text-sm text-gray-500 hover:text-[#6a0f70] py-1.5">Reset</a>
         </div>
     </form>
 

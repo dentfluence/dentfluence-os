@@ -82,7 +82,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     /* ── DPDP Consent ── */
-    Route::prefix('consent')->name('consent.')->group(function () {
+    /* C4 (W-1, 2026-09-04): all four DPDP surfaces below are now admin.only.
+       They previously sat under bare 'auth' with no module gate, so ANY logged-in
+       staff role — accounts-only, inventory-only — could reach them, including
+       POST /data-rights/{dataRequest}/erase. The sidebar hid them; nothing
+       protected them. CEO ruling 28 Aug. */
+    Route::middleware('admin.only')->prefix('consent')->name('consent.')->group(function () {
         // Admin: the catalogue of consent purposes
         Route::get('/purposes',                      [ConsentController::class, 'index'])->name('purposes');
         Route::post('/purposes',                     [ConsentController::class, 'storePurpose'])->name('purposes.store');
@@ -96,7 +101,7 @@ Route::middleware('auth')->group(function () {
     });
 
     /* ── DPDP Patient Rights (DSAR) ── */
-    Route::prefix('data-rights')->name('data-rights.')->group(function () {
+    Route::middleware('admin.only')->prefix('data-rights')->name('data-rights.')->group(function () {
         Route::get('/',                      [DataRequestController::class, 'index'])->name('index');
         Route::get('/create',                [DataRequestController::class, 'create'])->name('create');
         Route::post('/',                     [DataRequestController::class, 'store'])->name('store');
@@ -109,7 +114,7 @@ Route::middleware('auth')->group(function () {
     });
 
     /* ── DPDP Breach Register ── */
-    Route::prefix('breaches')->name('breaches.')->group(function () {
+    Route::middleware('admin.only')->prefix('breaches')->name('breaches.')->group(function () {
         Route::get('/',                       [DataBreachController::class, 'index'])->name('index');
         Route::get('/create',                 [DataBreachController::class, 'create'])->name('create');
         Route::post('/',                      [DataBreachController::class, 'store'])->name('store');
@@ -120,7 +125,7 @@ Route::middleware('auth')->group(function () {
     });
 
     /* ── DPDP Data Retention (dry-run) ── */
-    Route::get('/retention', [RetentionController::class, 'index'])->name('retention.index');
+    Route::get('/retention', [RetentionController::class, 'index'])->name('retention.index')->middleware('admin.only');
 
     /* ── Patients ── */
     Route::middleware('module:patients')->prefix('patients')->name('patients.')->group(function () {
@@ -1060,18 +1065,13 @@ Route::middleware('auth')->group(function () {
             Route::delete('/{coupon}',         [\App\Http\Controllers\Finance\CouponController::class, 'destroy'])->name('destroy');
         });
 
-        // Analytics
-        Route::prefix('analytics')->name('analytics.')->group(function () {
-            Route::get('/',             [AnalyticsController::class, 'index'])->name('index');
-            Route::get('/vendors',      [AnalyticsController::class, 'vendorAnalytics'])->name('vendors');
-            Route::get('/expenses',     [AnalyticsController::class, 'expenseAnalytics'])->name('expenses');
-            Route::get('/lab',          [AnalyticsController::class, 'labAnalytics'])->name('lab');
-            Route::get('/procurement',  [AnalyticsController::class, 'procurementAnalytics'])->name('procurement');
-            Route::get('/cashflow',     [AnalyticsController::class, 'cashflow'])->name('cashflow');
-            Route::get('/outstanding',  [AnalyticsController::class, 'outstanding'])->name('outstanding');
-            Route::get('/bi',           [AnalyticsController::class, 'businessIntelligence'])->name('bi');
-            Route::get('/audit',        [AnalyticsController::class, 'auditLog'])->name('audit');
-        });
+        // C5 (W-1, 2026-09-04): the duplicate Finance → Analytics door was removed.
+        // It pointed at the SAME Finance\AnalyticsController as the standalone
+        // analytics.* group above (line ~594), which is the one the sidebar links
+        // and the one gated by module:analytics. This group had NO link anywhere in
+        // the UI — reachable only by typing the URL — and it let a finance-only role
+        // walk into analytics screens past that gate. Breadcrumbs that pointed at
+        // finance.analytics.index now point at analytics.index. (INV-03)
 
     }); // end finance group
 

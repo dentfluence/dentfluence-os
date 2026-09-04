@@ -9,7 +9,7 @@
             <p class="text-xs text-gray-400 uppercase tracking-widest">
                 <a href="{{ route('finance.dashboard') }}" class="hover:text-[#6a0f70]">Finance</a>
                 &nbsp;/&nbsp;
-                <a href="{{ route('finance.analytics.index') }}" class="hover:text-[#6a0f70]">Analytics</a>
+                <a href="{{ route('analytics.index') }}" class="hover:text-[#6a0f70]">Analytics</a>
                 &nbsp;/&nbsp; Business Intelligence
             </p>
             <h1 class="text-2xl font-semibold text-[#6a0f70] mt-0.5" style="font-family:'Cormorant Garamond',serif;">

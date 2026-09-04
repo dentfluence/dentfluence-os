@@ -215,6 +215,10 @@ class HuddleAggregationService
             'appointments' => [
                 'total'     => (int) ($appointmentStats->total     ?? 0),
                 'confirmed' => (int) ($appointmentStats->confirmed ?? 0),
+                // NOT COMPUTED (flagged W-1, 2026-09-04): there is no 'pending'
+                // appointment status in the aggregate query; this constant 0 is a
+                // placeholder, not a measurement. Left in place because no surface
+                // renders it today. Do not report it as a KPI until it is derived.
                 'pending'   => 0,
                 'arrived'   => (int) ($appointmentStats->arrived   ?? 0),
                 'in_chair'  => (int) ($appointmentStats->in_chair  ?? 0),

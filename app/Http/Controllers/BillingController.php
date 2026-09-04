@@ -797,6 +797,14 @@ class BillingController extends Controller
 
     public function cancel(Invoice $invoice)
     {
+        // G-08 (W-1, 2026-09-04): this method had NO guard at all — no role check,
+        // no reason, no audit entry, no paid-invoice block — while being wired to a
+        // live button. Any role that passed the module:finance VIEW gate could
+        // cancel any invoice silently. Same admin gate as every other cancel path.
+        if (! auth()->user()->isAdminRole()) {
+            abort(403, 'Only admins can cancel invoices.');
+        }
+
         $this->reverseRetailStockMovements($invoice);
         // S1 — same plan-teeth release as every other cancel path.
         app(PlanBillingRollbackService::class)->rollbackInvoice($invoice);
@@ -2023,6 +2031,13 @@ class BillingController extends Controller
 
     public function destroyWithAuth(Request $request, Invoice $invoice)
     {
+        // G-08 (W-1, 2026-09-04): reason + password + audit log were enforced, but
+        // never ROLE. A receptionist who knows her own password could soft-delete
+        // any unpaid invoice. The password proves identity, not authority.
+        if (! auth()->user()->isAdminRole()) {
+            abort(403, 'Only admins can delete invoices.');
+        }
+
         $request->validate([
             'reason'   => 'required|string|min:5|max:500',
             'password' => 'required|string',
@@ -2061,6 +2076,12 @@ class BillingController extends Controller
 
     public function editWithAuth(Request $request, Invoice $invoice)
     {
+        // G-08 (W-1, 2026-09-04): same gap as destroyWithAuth() — identity was
+        // proven, authority was not. This is the door onto the invoice edit form.
+        if (! auth()->user()->isAdminRole()) {
+            abort(403, 'Only admins can edit a recorded invoice.');
+        }
+
         $request->validate([
             'reason'   => 'required|string|min:5|max:500',
             'password' => 'required|string',

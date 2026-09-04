@@ -8,7 +8,7 @@
 | Minimum 2 chars for patient search, 3 chars for relationship search.
 |==========================================================================
 --}}
-<div class="relative" x-data="dfGlobalSearch()" @click.outside="close()">
+<div class="relative w-full" x-data="dfGlobalSearch()" @click.outside="close()">
 
     {{-- Input --}}
     <div class="relative">
@@ -55,7 +55,8 @@
          x-transition:leave="transition ease-in duration-75"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
-         class="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-purple-200 shadow-lg overflow-hidden"
+         id="df-global-search-panel"
+         class="absolute z-50 left-0 top-full mt-1 bg-white border border-purple-200 shadow-lg overflow-hidden"
          style="max-height:460px;overflow-y:auto;">
 
         {{-- No results --}}
@@ -95,9 +96,9 @@
                 </template>
 
                 <a :href="'/patients?q=' + encodeURIComponent(query)"
-                   class="flex items-center justify-center gap-2 px-4 py-2.5 text-xs hover:bg-purple-50 transition-colors border-t border-purple-50"
+                   class="flex items-center justify-center gap-1 px-4 py-2.5 text-xs whitespace-nowrap hover:bg-purple-50 transition-colors border-t border-purple-50"
                    style="font-family:'DM Sans',sans-serif;color:#6a0f70;">
-                    All patients matching "<span x-text="query"></span>"
+                    All patients matching “<span x-text="query"></span>”
                     <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                 </a>
             </div>
@@ -141,6 +142,15 @@
 
     </div>
 </div>
+
+<style>
+    /* Results panel matches the input by default, and widens past it on
+       desktop so patient names / meta are not truncated. */
+    #df-global-search-panel { width: 100%; }
+    @media (min-width: 1024px) {
+        #df-global-search-panel { width: 620px; min-width: 100%; }
+    }
+</style>
 
 <script>
 function dfGlobalSearch() {

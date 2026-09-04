@@ -8,7 +8,7 @@
 <header id="df-topbar" role="banner" aria-label="Application topbar">
 
     {{-- ── LEFT: Hamburger + Breadcrumb ── --}}
-    <div style="display:flex;align-items:center;gap:14px;flex-shrink:0;">
+    <div style="display:flex;align-items:center;gap:14px;flex-shrink:1;min-width:0;">
 
         <button
             onclick="DFLayout.toggleSidebar()"
@@ -25,7 +25,7 @@
             </svg>
         </button>
 
-        <nav aria-label="Breadcrumb" style="display:flex;align-items:center;gap:6px;">
+        <nav aria-label="Breadcrumb" style="display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;">
             @isset($breadcrumbs)
                 @foreach($breadcrumbs as $crumb)
                     @if(!$loop->last)
@@ -35,11 +35,11 @@
                            onmouseout="this.style.color='#b0a4bc';">{{ $crumb['label'] }}</a>
                         <span style="color:#d4c8dc;font-size:11px;" aria-hidden="true">/</span>
                     @else
-                        <span style="font-size:12px;font-weight:500;color:#2a1440;">{{ $crumb['label'] }}</span>
+                        <span style="font-size:12px;font-weight:500;color:#2a1440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ $crumb['label'] }}</span>
                     @endif
                 @endforeach
             @else
-                <span style="font-size:13px;font-weight:500;color:#2a1440;">
+                <span style="font-size:13px;font-weight:500;color:#2a1440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                     @hasSection('page-title')
                         @yield('page-title')
                     @else
@@ -52,7 +52,7 @@
     </div>
 
     {{-- ── CENTER: Global Search ── --}}
-    <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:0 20px;max-width:520px;margin:0 auto;">
+    <div style="flex:1 1 460px;display:flex;align-items:center;justify-content:center;padding:0 16px;min-width:200px;max-width:760px;margin:0 auto;">
         @include('patients._search')
     </div>
 

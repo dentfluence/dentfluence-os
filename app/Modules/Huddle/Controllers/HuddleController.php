@@ -110,8 +110,11 @@ class HuddleController extends Controller
         $yesterdaySummary = [
             'patients_treated' => $yesterdayAppts->count(),
             'treatments_done'  => $yesterdayAppts->groupBy('treatment_id')->map->count(),
-            'lab_sent'         => 0,
-            'lab_received'     => 0,
+            // W-1 (2026-09-04): 'lab_sent' and 'lab_received' were hardcoded 0 here.
+            // Lab movement is never counted for this summary, so the keys stated a
+            // number that was always false. Removed rather than left lying; no view
+            // rendered them ($yesterdaySummary is passed to the board but unread).
+            // Restoring them is a real query against lab_cases, not a constant.
         ];
 
         // ── Yesterday appointments + visit log status ─────────────────────────
