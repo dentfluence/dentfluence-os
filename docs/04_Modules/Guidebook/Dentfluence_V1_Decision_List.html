@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V1 Decision Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+:root{
+  --paper:#F8F7FA; --card:#FFFFFF; --band:#EFECF3;
+  --ink:#1A1620; --ink-2:#4A4353; --ink-3:#7C7488;
+  --line:#DDD8E4; --hair:#EDE9F1;
+  --brand:#6A0F70; --brand-soft:#F9EFFA; --brand-line:#C99BCC;
+  --shut:#1A7A45; --shut-soft:#E8F5EE; --shut-line:#8FCBAA;
+  --open:#B52020; --open-soft:#FBEAEA; --open-line:#E8A0A0;
+  --hold:#8A5A00; --hold-soft:#FBF1E1; --hold-line:#DEBE80;
+  --new:#1A5EA8; --new-soft:#E8F0FA; --new-line:#9EC2E8;
+  --lift:0 1px 2px rgba(26,22,32,.05), 0 8px 22px -18px rgba(26,22,32,.5);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#131118; --card:#1C1922; --band:#262230;
+  --ink:#EEEAF2; --ink-2:#C1BACB; --ink-3:#918A9D;
+  --line:#37313F; --hair:#282332;
+  --brand:#D394D7; --brand-soft:#2B1731; --brand-line:#6B3D71;
+  --shut:#5FC58C; --shut-soft:#14301F; --shut-line:#2E6444;
+  --open:#F0736F; --open-soft:#38161A; --open-line:#7A3230;
+  --hold:#DDB061; --hold-soft:#332810; --hold-line:#6A5220;
+  --new:#79AEE8; --new-soft:#152539; --new-line:#37567A;
+  --lift:0 1px 2px rgba(0,0,0,.5), 0 8px 22px -18px rgba(0,0,0,1);
+}}
+:root[data-theme="dark"]{
+  --paper:#131118; --card:#1C1922; --band:#262230;
+  --ink:#EEEAF2; --ink-2:#C1BACB; --ink-3:#918A9D;
+  --line:#37313F; --hair:#282332;
+  --brand:#D394D7; --brand-soft:#2B1731; --brand-line:#6B3D71;
+  --shut:#5FC58C; --shut-soft:#14301F; --shut-line:#2E6444;
+  --open:#F0736F; --open-soft:#38161A; --open-line:#7A3230;
+  --hold:#DDB061; --hold-soft:#332810; --hold-line:#6A5220;
+  --new:#79AEE8; --new-soft:#152539; --new-line:#37567A;
+  --lift:0 1px 2px rgba(0,0,0,.5), 0 8px 22px -18px rgba(0,0,0,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:15.5px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.sheet{max-width:1080px;margin:0 auto;padding:0 26px 100px}
+header.top{padding:46px 0 26px;border-bottom:1px solid var(--line)}
+.kick{font-size:10.5px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--brand);margin:0 0 12px}
+h1{font-size:clamp(30px,5vw,46px);font-weight:700;line-height:1.06;margin:0;letter-spacing:-.02em;text-wrap:balance}
+.dek{margin:14px 0 0;max-width:64ch;color:var(--ink-2);font-size:16.5px}
+.tally{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--line);
+  border:1px solid var(--line);margin:26px 0 0;box-shadow:var(--lift)}
+.tally div{background:var(--card);padding:13px 16px}
+.tally .v{font-size:26px;font-weight:700;line-height:1;color:var(--brand)}
+.tally .v.red{color:var(--open)}
+.tally .k{font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-top:6px}
+h2.part{font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);
+  margin:56px 0 6px;padding-bottom:9px;border-bottom:2px solid var(--ink)}
+h2.part + p{max-width:70ch;color:var(--ink-2);margin:0 0 22px;font-size:15px}
+.c{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--shut);margin:0 0 12px;box-shadow:var(--lift)}
+.c.hold{border-left-color:var(--hold)}
+.c.newq{border-left-color:var(--new)}
+.c.stop{border-left-color:var(--open)}
+.c-head{display:flex;align-items:flex-start;gap:13px;padding:14px 19px 12px;flex-wrap:wrap;border-bottom:1px solid var(--hair)}
+.c-id{font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:500;color:var(--brand);
+  background:var(--brand-soft);border:1px solid var(--brand-line);padding:3px 8px;border-radius:2px;flex:none}
+.c-q{flex:1;min-width:230px;font-size:17.5px;font-weight:700;line-height:1.34;letter-spacing:-.005em}
+.st{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:4px 9px;border-radius:2px;flex:none;align-self:center;white-space:nowrap}
+.s-shut{background:var(--shut-soft);color:var(--shut)}
+.s-hold{background:var(--hold-soft);color:var(--hold)}
+.s-new{background:var(--new-soft);color:var(--new)}
+.s-stop{background:var(--open-soft);color:var(--open)}
+.c-body{padding:15px 19px}
+.said{background:var(--band);border-left:3px solid var(--brand-line);padding:11px 15px;margin:0 0 14px;font-size:15px;font-style:italic;color:var(--ink-2)}
+.said b{font-style:normal;display:block;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
+.c-body h4{margin:18px 0 7px;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.c-body h4:first-child{margin-top:0}
+.c-body p{margin:0 0 13px;max-width:82ch;font-size:15px}
+.c-body p:last-child{margin:0}
+.c-body ul{margin:0 0 13px;padding-left:0;list-style:none;max-width:82ch}
+.c-body li{position:relative;padding:0 0 0 21px;margin:0 0 8px;font-size:15px;line-height:1.55}
+.c-body li::before{content:'';position:absolute;left:4px;top:10px;width:5px;height:5px;border-radius:50%;background:var(--brand-line)}
+.c-body li:last-child{margin:0}
+.flagbox{border:1px solid var(--hold-line);background:var(--hold-soft);padding:13px 17px;margin:14px 0 0;max-width:82ch}
+.flagbox h5{margin:0 0 7px;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--hold)}
+.goodbox{border:1px solid var(--shut-line);background:var(--shut-soft);padding:13px 17px;margin:14px 0 0;max-width:82ch}
+.goodbox h5{margin:0 0 7px;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--shut)}
+.stopbox{border:1px solid var(--open-line);background:var(--open-soft);padding:13px 17px;margin:14px 0 0;max-width:82ch}
+.stopbox h5{margin:0 0 7px;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--open)}
+.flagbox p,.goodbox p,.stopbox p{margin:0 0 9px;font-size:14.5px}
+.flagbox p:last-child,.goodbox p:last-child,.stopbox p:last-child{margin:0}
+.answer{border:1.5px dashed var(--line);border-radius:3px;padding:11px 16px;margin:14px 0 0;max-width:82ch;
+  font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);text-align:center}
+.quote{border-left:4px solid var(--open);background:var(--card);padding:15px 20px;margin:0 0 18px;max-width:78ch;
+  font-size:16px;font-style:italic;color:var(--ink-2);box-shadow:var(--lift)}
+.quote b{font-style:normal;color:var(--ink)}
+.tw{overflow-x:auto;border:1px solid var(--line);background:var(--card);box-shadow:var(--lift);margin:0 0 20px}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th{text-align:left;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+   padding:11px 15px;border-bottom:1px solid var(--line);background:var(--band);white-space:nowrap}
+td{padding:11px 15px;border-bottom:1px solid var(--hair);vertical-align:top;line-height:1.55}
+tbody tr:last-child td{border-bottom:0}
+tr.tot td{background:var(--band);font-weight:700}
+code{font-family:'JetBrains Mono',monospace;font-size:.85em;background:var(--band);padding:1px 5px;border-radius:2px}
+.ui{font-weight:700;background:var(--band);border-bottom:1.5px solid var(--brand-line);padding:1px 5px;border-radius:2px;white-space:nowrap}
+/* budget bar */
+.bar{margin:0 0 8px;height:34px;display:flex;border:1px solid var(--line);background:var(--card);overflow:hidden;box-shadow:var(--lift)}
+.bar span{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--paper);white-space:nowrap;overflow:hidden}
+.bar .p0{background:var(--brand)}
+.bar .add{background:var(--open)}
+.tw tr.drop td{color:var(--ink-3)}
+.tw tr.drop s{text-decoration-thickness:1px}
+.bar .over{background:repeating-linear-gradient(45deg,var(--open),var(--open) 5px,#8c1717 5px,#8c1717 10px)}
+.barkey{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:12.5px;color:var(--ink-2);margin:0 0 20px}
+.barkey i{width:11px;height:11px;display:inline-block;margin-right:7px;vertical-align:-1px}
+footer{margin:70px 0 0;border-top:1px solid var(--line);padding-top:20px;font-size:13px;color:var(--ink-3);max-width:74ch}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+@media print{
+  body{background:#fff;font-size:10.5pt}
+  .sheet{max-width:none;padding:0 12mm 12mm}
+  .c{page-break-inside:avoid}
+  h2.part{page-break-after:avoid}
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<header class="top">
+  <p class="kick">Dentfluence · V1 · Version 4 — 28 August</p>
+  <h1>Decision Log</h1>
+  <p class="dek">Every decision on this round is now closed. Eleven answers go into work as written; N2 is dropped from V1 at your word and moves to V1.1. Nothing in this document is waiting on you any more — the one live item left is C1, and that is paperwork with Meta rather than a choice. What follows is the record of what was decided, what it costs, and the three things that stay in scope regardless.</p>
+  <div class="tally">
+    <div><div class="v">11</div><div class="k">Settled</div></div>
+    <div><div class="v">1</div><div class="k">Dropped to V1.1</div></div>
+    <div><div class="v">1</div><div class="k">Launch-critical risk</div></div>
+    <div><div class="v red">~10</div><div class="k">Working days left</div></div>
+    <div><div class="v red">0</div><div class="k">Days of slack</div></div>
+  </div>
+</header>
+
+<h2 class="part">Part 1 · Closed — going into work as written</h2>
+<p>Nothing below needs another word. C2, C3, C4, C5, H1, H2, H3 and H4 were closed on 28 August; N3 and N1 close here; N2 closes in Part 2.</p>
+
+<div class="c">
+  <div class="c-head">
+    <span class="c-id">N3</span>
+    <span class="c-q">Park Smart Presentation too?</span>
+    <span class="st s-shut">Closed — and it costs nothing</span>
+  </div>
+  <div class="c-body">
+    <div class="said"><b>You said</b>"Yes, don't touch treatment plan presentation now."</div>
+    <p>Taken together with C3, that gives one clean position: <b>the Treatment Plan tab's present-and-print workflow is untouched, and neither presentation engine gets developed further.</b></p>
+    <h4>What I recommend now, having thought about it against the freeze</h4>
+    <p>When I first suggested parking Smart Presentation I hadn't weighed it against your own zero-slack directive. Doing so changes my answer: <b>the cheapest safe action is no action.</b> Smart Presentation has no menu item and nothing in the Treatment Plan tab links to it — no member of staff can reach it. Removing it is itself a code change under a freeze, for a screen nobody can open.</p>
+    <p>So: leave it alone, record it as V1.1 cleanup. The same logic applies to C3 — before anyone edits anything, <b>check what <code>case_acceptance.enabled</code> is set to in production.</b> It is true in the local copy but production was never verified. If it is already false there, C3 is closed with <b>zero work</b> and the Case Journey button is already absent from your live plan cards.</p>
+    <div class="goodbox">
+      <h5>Net effect on the plan</h5>
+      <p>C3 and N3 together: <b>somewhere between zero and fifteen minutes of work</b>, depending on one production setting. Down from the half-day I had them at.</p>
+    </div>
+  </div>
+</div>
+
+<div class="c">
+  <div class="c-head">
+    <span class="c-id">N1</span>
+    <span class="c-q">"V1 should show all important KPIs needed for dental business"</span>
+    <span class="st s-shut">Closed — you already answered this</span>
+  </div>
+  <div class="c-body">
+    <div class="said"><b>You said</b>"V1 should show all important KPI needed for dental business."</div>
+    <p>You settled this on <b>26 August</b>, and more precisely than a new list would. Your directive froze <b>28 KPIs, "no additions"</b>, and put the important ones in Tier 1:</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Tier 1 — owner / financial (8)</th><th>Already in your P0 queue as</th></tr></thead>
+        <tbody>
+          <tr><td>Collections · Outstanding · Expenses · GST / taxable sales</td><td>Served by the money engine + <code>ReportMetricsService</code></td></tr>
+          <tr><td><b>Revenue by category</b></td><td><b>G-01</b> — next after G-33</td></tr>
+          <tr><td><b>Doctor-wise revenue</b></td><td><b>G-02</b></td></tr>
+          <tr><td><b>Cash / bank</b></td><td><b>G-04</b></td></tr>
+          <tr><td><b>Profit</b></td><td><b>G-06</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>So "all important KPIs" is not new work — <b>it is your existing P0 queue.</b> Four of the eight Tier-1 KPIs are literally the next four money items you already scheduled. Designing a fresh KPI set now would breach your own rule against "new KPI concepts", and would fork the definitions your principle 4 exists to prevent.</p>
+    <h4>What I'll do instead of a new build</h4>
+    <p>When G-01, G-02, G-04 and G-06 land, the Analytics overview surfaces the <b>eight Tier-1 KPIs</b>, every one of them read through <code>ReportMetricsService</code> — your principle 2, one source of truth, no competing calculation. That is a display job sitting on top of work already in the queue, not a parallel project.</p>
+    <div class="goodbox">
+      <h5>Revised cost</h5>
+      <p><b>About a day</b> of display work after G-06 lands — not the 3–5 days I quoted when I thought you wanted a new KPI set. And it removes the duplicate Analytics door at the same time (C5).</p>
+    </div>
+  </div>
+</div>
+
+<h2 class="part">Part 2 · N2 — dropped, and what that does not remove</h2>
+<p>You read the arithmetic and made the call. That closes the last open decision on this round: <b>nothing in Part 1 or Part 2 is waiting on you any more.</b> The only live item left in this document is C1, and that one is paperwork with Meta, not a decision.</p>
+
+<div class="c">
+  <div class="c-head">
+    <span class="c-id">N2</span>
+    <span class="c-q">Projected vs actual — dropped from V1</span>
+    <span class="st s-shut">Closed — you skipped it</span>
+  </div>
+  <div class="c-body">
+    <div class="said"><b>You said</b>"If N2 is too much issue, skip it."</div>
+    <p>Skipped. Projected-versus-actual — yesterday, week and month — is <b>out of V1 entirely</b> and moves to the V1.1 list. No lever gets pulled, no P0 gets dropped, the date does not move, and the queue goes back to exactly what your 26 August directive said it was.</p>
+    <p>This is the right instinct and I want to name why, because you will be tempted by the same shape of request again before 14 September: N2 was a <em>reporting</em> improvement bought with days that belong to <em>verifying money</em>. Your own principle — a wrong KPI is worse than a missing one — makes that trade a bad one at this point in the calendar. The tracking loop is worth having. It is not worth having at the cost of shipping G-04 or G-06 unverified.</p>
+
+    <div class="goodbox">
+      <h5>What this does NOT remove — three things stay exactly where they were</h5>
+      <p><b>1 · H4 stays.</b> The manager still fills <em>amount to collect</em> in the morning huddle. That field is already built and already saves; dropping N2 removes the scoreboard, not the habit. Start the habit on day one anyway — see the Rollout Plan — because the day you do build the comparison, it can only read history that was actually entered.</p>
+      <p><b>2 · H3 stays, and it was never part of this dispute.</b> The Huddle report reading the wrong money source is a <em>defect</em>, not a feature request. It is already on your register as <b>G-32</b>, sized 1–2 days, and it is unaffected by skipping N2. Weekly and monthly still need to show the same figures as daily.</p>
+      <p><b>3 · The numbers are not lost.</b> Every projection the manager enters is stored on the appointment row from the first morning you start. Whenever you build the comparison — V1.1, October, whenever — it reads that history. Nothing is being thrown away by waiting; you are only deferring the display.</p>
+    </div>
+
+    <div class="flagbox">
+      <h5>Standing offer, no decision needed today</h5>
+      <p>The half-day version is still on the shelf: one line on the Huddle board reading <em>"Yesterday — projected ₹18,400 · collected ₹16,900 · from 9 of 11 appointments."</em> If the P0 queue lands ahead of schedule — or if you find after two weeks of huddles that the manager's estimates are drifting and you want them scored in front of the team — say the word and it goes in. Until then it sits in V1.1 with the rest of N2, and I will not raise it again.</p>
+    </div>
+  </div>
+</div>
+
+<h4 style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:26px 0 10px">The budget after this decision</h4>
+<div class="bar">
+  <span class="p0" style="flex:11.5">P0 work committed · 11.5–13 days</span>
+</div>
+<div class="barkey">
+  <span><i style="background:var(--brand)"></i>Committed P0 queue (G-33 → G-01 → G-02 → G-07 → G-04 → G-05 → G-06 → G-08)</span>
+</div>
+<p style="max-width:74ch">Back to the plan as written on 26 August — which is still <b>~11.5–13 days of work against roughly 10 working days</b>. Skipping N2 stopped the overrun growing; it did not create slack. The queue is still at or past capacity, the code-freeze gate has not lifted, and G-01 has not started. If something has to give later, your directive already names the order: <b>G-09 first, then G-13</b> — and that decision is better made in the first week of September than in the last.</p>
+<h2 class="part">Part 3 · C1 — the WhatsApp channel</h2>
+<p>You've moved this from "a dependency" to "must be bulletproof before launch, and it's our differentiator". That changes its status: it is now the <b>single most likely thing to break 14 September</b>, and not for a reason any amount of coding fixes. Three things you need to know before you plan around it.</p>
+
+<div class="c hold">
+  <div class="c-head">
+    <span class="c-id">C1a</span>
+    <span class="c-q">Meta's clock is not your clock — and it hasn't started</span>
+    <span class="st s-hold">Start today</span>
+  </div>
+  <div class="c-body">
+    <div class="said"><b>You said</b>"Need this channel full proof before launch, but expecting to rise by 14th September. This is going to be a differentiating feature."</div>
+    <p>Getting a WhatsApp Business number live is a paperwork chain with external waiting built into every link, and today the clinic holds none of it — no phone number ID, no business account ID, no token. Each step below can bounce back for a document mismatch or a template wording rejection, and each bounce restarts that step's clock.</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Step</th><th>Who controls the clock</th><th>Typical wait</th></tr></thead>
+        <tbody>
+          <tr><td>Meta Business verification (documents, business name match)</td><td><b>Meta</b></td><td>Days to a few weeks — the long pole, and the one that bounces</td></tr>
+          <tr><td>WhatsApp Business Account + sending number verification</td><td>Meta</td><td>Hours to days</td></tr>
+          <tr><td><b>7 message templates</b> submitted and approved</td><td>Meta</td><td>24–48h each, rejections common on wording</td></tr>
+          <tr><td>Credentials into production config</td><td>You</td><td>Under an hour</td></tr>
+          <tr><td>Controlled first send</td><td>You</td><td>One supervised day</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><b>There are 17 calendar days to 14 September.</b> If verification runs long — and it is the step most likely to — no amount of development recovers it.</p>
+    <div class="stopbox">
+      <h5>The one thing to do today</h5>
+      <p>Start Meta Business verification <b>now</b>, before any of the code decisions in this document. It is not development work — it is documents, and it is the only item on the whole V1 plan where waiting is someone else's decision. Everything else in this log can be done in the time the verification is sitting in a queue.</p>
+    </div>
+  </div>
+</div>
+
+<div class="c">
+  <div class="c-head">
+    <span class="c-id">C1b</span>
+    <span class="c-q">"Full proof" can be achieved before Meta answers — that's the good news</span>
+    <span class="st s-shut">Do this in parallel</span>
+  </div>
+  <div class="c-body">
+    <p>Practice mode is not a limitation here, it is the test rig. Every message is composed in full, run through the consent gate, and written to the patient's record — it is only the final handover to Meta that is skipped. <b>So you can prove correctness completely without credentials.</b></p>
+    <p>The proving tools already exist as commands: <code>whatsapp:test</code> for a plain message and <code>whatsapp:template</code> for a template, both described in the code as dry-run safe.</p>
+    <h4>What "full proof" should mean — proposed, so it's a bar you can actually clear</h4>
+    <ul>
+      <li><b>Right person.</b> Every send resolves to the intended patient and the correctly formatted number, including numbers stored without a country code.</li>
+      <li><b>Right words.</b> All seven templates render with real patient data — name, date, time, amount — with no blank or wrong variable.</li>
+      <li><b>Right permission.</b> A patient who has not granted WhatsApp consent is refused. A patient who granted service consent but not marketing is refused the promotional template and allowed the reminder.</li>
+      <li><b>No duplicates.</b> Running the same job twice does not queue the same message twice.</li>
+      <li><b>Right record.</b> Every attempt appears on the patient's timeline whether it sent, was refused by consent, or failed.</li>
+      <li><b>Fails safely.</b> With bad credentials the app logs and moves on — it does not crash a scheduled job or block reception.</li>
+    </ul>
+    <p>Six checks, no Meta account required. Do them next week and the day the credentials arrive is a configuration change, not a gamble.</p>
+  </div>
+</div>
+
+<div class="c stop">
+  <div class="c-head">
+    <span class="c-id">C1c</span>
+    <span class="c-q">The automation behind the differentiator is thinner than it looks</span>
+    <span class="st s-stop">Read before you position it</span>
+  </div>
+  <div class="c-body">
+    <p>I checked what actually sends on its own, because "differentiating feature" is a promise to patients and to yourself. Seven templates are configured. <b>Two of them are wired to send automatically.</b></p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Template</th><th>Sends automatically?</th><th>What actually happens today</th></tr></thead>
+        <tbody>
+          <tr><td><b>Appointment reminder</b></td><td><b>Yes</b></td><td>Scheduled job at 10:00 daily</td></tr>
+          <tr><td><b>Review request</b></td><td><b>Yes</b></td><td>Scheduled job at 11:00 daily, after completed visits</td></tr>
+          <tr><td>Recall due</td><td><b>No</b></td><td>The recall engine builds a <em>call list</em> for reception. It stores the patient's WhatsApp number but sends nothing — a person presses the button, one patient at a time</td></tr>
+          <tr><td>Payment reminder</td><td>No</td><td>Template exists; nothing sends it</td></tr>
+          <tr><td>Lab ready</td><td>No</td><td>Template exists; nothing sends it</td></tr>
+          <tr><td>Appointment confirmation</td><td>No</td><td>Template exists; nothing sends it</td></tr>
+          <tr><td>Festive offer</td><td>No</td><td>Manual, and marketing-consent gated</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="stopbox">
+      <h5>Why this matters to how you sell it</h5>
+      <p><b>Recall is the one that brings patients back</b> — and it is manual. On 14 September, switching WhatsApp on gives you automatic appointment reminders and automatic review requests. Everything else is a button a human presses.</p>
+      <p>That is still a real differentiator against a clinic doing none of it, and manual-with-one-click is a perfectly good V1. But if the pitch is "the system chases your patients for you", the honest version today is "the system tells your reception exactly who to chase, and gives them one button to do it".</p>
+      <p>Automating recall sends is a V1.1 conversation, not a V1 one — and it should not be started inside this freeze.</p>
+    </div>
+    <div class="answer">Confirm you're happy launching with reminders + reviews automated</div>
+  </div>
+</div>
+
+<h2 class="part">Where the work stands after this round</h2>
+<div class="tw">
+  <table>
+    <thead><tr><th>Job</th><th>From</th><th>Size</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><b>Start Meta Business verification</b></td><td>C1</td><td>Paperwork, not dev</td><td><b>Today — the only true blocker</b></td></tr>
+      <tr><td>Remove the fake Marketing column</td><td>H1</td><td>½ day</td><td>Ready</td></tr>
+      <tr><td>Hide "View All Yesterday"</td><td>H2</td><td>1 hour</td><td>Ready</td></tr>
+      <tr><td>Lock clinical files + DPDP screens</td><td>C2, C4</td><td>½ day together</td><td>Ready</td></tr>
+      <tr><td>Check <code>case_acceptance.enabled</code> in production</td><td>C3, N3</td><td>Minutes</td><td>Ready — may be zero work</td></tr>
+      <tr><td>Remove duplicate Finance → Analytics door</td><td>C5</td><td>½ day</td><td>Ready</td></tr>
+      <tr><td>Fix the Huddle report's money source</td><td>H3</td><td>1–2 days</td><td>Ready (already G-32)</td></tr>
+      <tr><td>Prove the WhatsApp channel in practice mode</td><td>C1b</td><td>1 day</td><td>Ready — no Meta needed</td></tr>
+      <tr class="drop"><td><s>Yesterday projected vs actual on the board</s></td><td>N2</td><td>—</td><td><b>Dropped — moved to V1.1</b></td></tr>
+      <tr><td>Tier-1 KPIs on the Analytics overview</td><td>N1</td><td>~1 day</td><td>After G-06 — inside existing queue</td></tr>
+      <tr class="tot"><td colspan="2">Unblocked and ready now</td><td><b>~3.5 days</b></td><td>Fits before the P0 queue resumes</td></tr>
+    </tbody>
+  </table>
+</div>
+<p style="max-width:74ch">None of it has been started. The code-freeze gate from 26 August is still down — it lifts when you confirm production is green, and that verification is still step one of everything.</p>
+
+<footer>
+  <p><b>V1 Decision Log</b> · version 4, 28 August 2026. Every claim checked against the running code or against your own 26 August directive before it was written here — including the place where I pushed back on your answer rather than recording it — a push-back you then settled by dropping the item.</p>
+  <p>Companion documents: the Owner's Handbook, the Marathi Staff Guide, and the Daily Huddle Rollout Plan. Appointments is the next chapter.</p>
+</footer>
+
+</div>
+</body>
+</html>

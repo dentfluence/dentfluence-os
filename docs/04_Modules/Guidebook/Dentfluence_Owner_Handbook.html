@@ -1,0 +1,2238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dentfluence Owner's Handbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+:root{
+  --paper:#FCFAF6; --card:#FFFFFF; --tint:#F5EFF2;
+  --ink:#211524; --ink-2:#4E3D52; --ink-3:#847089;
+  --rule:#E4D8E6; --hair:#F0E8F1;
+  --plum:#6A0F70; --plum-soft:#FBF2FC; --plum-line:#D6A8D9;
+  --gold:#8A6A1F; --gold-soft:#FAF3E2;
+  --good:#1A7A45; --good-soft:#E9F5EE;
+  --stop:#B52020; --stop-soft:#FBEBEB;
+  --shade:0 1px 2px rgba(33,21,36,.05), 0 10px 30px -20px rgba(33,21,36,.35);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#171019; --card:#1F1623; --tint:#2A1E2F;
+  --ink:#F2E9F4; --ink-2:#C9B7CE; --ink-3:#9A87A0;
+  --rule:#3C2C42; --hair:#2C2031;
+  --plum:#D394D7; --plum-soft:#2B1731; --plum-line:#6B3D71;
+  --gold:#D9B463; --gold-soft:#332911;
+  --good:#63C68F; --good-soft:#15301F;
+  --stop:#F0736F; --stop-soft:#38161A;
+  --shade:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -20px rgba(0,0,0,.9);
+}}
+:root[data-theme="dark"]{
+  --paper:#171019; --card:#1F1623; --tint:#2A1E2F;
+  --ink:#F2E9F4; --ink-2:#C9B7CE; --ink-3:#9A87A0;
+  --rule:#3C2C42; --hair:#2C2031;
+  --plum:#D394D7; --plum-soft:#2B1731; --plum-line:#6B3D71;
+  --gold:#D9B463; --gold-soft:#332911;
+  --good:#63C68F; --good-soft:#15301F;
+  --stop:#F0736F; --stop-soft:#38161A;
+  --shade:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -20px rgba(0,0,0,.9);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:16px;line-height:1.66;-webkit-font-smoothing:antialiased}
+.page{max-width:1180px;margin:0 auto;padding:0 28px 110px}
+/* ── title page ─────────────────────────────────── */
+.titlepage{padding:76px 0 46px;border-bottom:3px double var(--rule);text-align:left}
+.imprint{font-size:10.5px;font-weight:700;letter-spacing:.26em;text-transform:uppercase;color:var(--plum);margin:0 0 20px}
+.titlepage h1{font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;
+  font-size:clamp(44px,8vw,80px);line-height:.98;letter-spacing:-.02em;margin:0;text-wrap:balance}
+.titlepage .subtitle{font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;font-weight:600;
+  font-size:clamp(19px,2.6vw,26px);color:var(--ink-2);margin:14px 0 0;max-width:34ch;line-height:1.3}
+.titlepage .blurb{margin:26px 0 0;max-width:62ch;color:var(--ink-2);font-size:16.5px}
+/* ── progress ledger ────────────────────────────── */
+.ledger{margin:38px 0 0;border:1px solid var(--rule);background:var(--card);box-shadow:var(--shade)}
+.ledger h2{margin:0;padding:13px 20px;font-size:10.5px;font-weight:700;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--ink-3);border-bottom:1px solid var(--hair);background:var(--tint)}
+.ledger ol{list-style:none;margin:0;padding:8px 0;display:grid;grid-template-columns:1fr;gap:0}
+@media(min-width:760px){.ledger ol{grid-template-columns:1fr 1fr}}
+.ledger li{display:flex;align-items:baseline;gap:11px;padding:6px 20px;font-size:14px}
+.ledger .no{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-3);width:20px;flex:none}
+.ledger .nm{flex:1}
+.ledger li.done .nm{font-weight:700}
+.ledger li.todo{color:var(--ink-3)}
+.tag{font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:2px 7px;border-radius:2px;white-space:nowrap}
+.t-done{background:var(--good-soft);color:var(--good)}
+.t-next{background:var(--plum-soft);color:var(--plum);border:1px solid var(--plum-line)}
+.t-wait{background:var(--tint);color:var(--ink-3)}
+/* ── chapter ────────────────────────────────────── */
+.chapter{margin:88px 0 0}
+.ch-open{display:flex;align-items:flex-start;gap:26px;border-top:1px solid var(--ink);padding-top:22px}
+.ch-no{font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;font-size:clamp(58px,10vw,104px);
+  line-height:.8;color:var(--plum-line);flex:none;letter-spacing:-.03em}
+.ch-open h2{font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;
+  font-size:clamp(30px,4.4vw,46px);line-height:1.05;margin:6px 0 0;letter-spacing:-.015em;text-wrap:balance}
+.ch-open .standfirst{margin:14px 0 0;max-width:64ch;font-size:17px;color:var(--ink-2)}
+.ch-meta{display:flex;flex-wrap:wrap;gap:7px;margin:16px 0 0}
+h3{font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;font-size:26px;line-height:1.2;
+  margin:52px 0 4px;letter-spacing:-.01em}
+h3 + .rubric{margin:0 0 16px;font-size:13px;color:var(--ink-3);font-style:italic;max-width:60ch}
+h4{font-size:12.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin:32px 0 10px}
+p{max-width:68ch;margin:0 0 15px}
+p.lede{font-size:17.5px;color:var(--ink-2)}
+strong{font-weight:700}
+em{font-style:italic}
+a{color:var(--plum)}
+.ui{font-family:'DM Sans',sans-serif;font-weight:700;font-size:.92em;
+  background:var(--tint);border-bottom:1.5px solid var(--plum-line);padding:1px 5px;border-radius:2px;white-space:nowrap}
+code{font-family:'JetBrains Mono',monospace;font-size:.84em;background:var(--tint);padding:1px 5px;border-radius:2px}
+/* ── panel walkthrough ──────────────────────────── */
+.panels{display:grid;grid-template-columns:1fr;gap:1px;background:var(--rule);border:1px solid var(--rule);margin:0 0 22px;box-shadow:var(--shade)}
+@media(min-width:820px){.panels{grid-template-columns:1fr 1fr}}
+.panel{background:var(--card);padding:17px 20px}
+.panel .pn{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--plum);letter-spacing:.1em}
+.panel h5{margin:5px 0 7px;font-size:16px;font-weight:700;line-height:1.25}
+.panel p{font-size:14px;margin:0 0 9px;max-width:none;color:var(--ink-2)}
+.panel p:last-child{margin:0}
+.panel .src{font-size:12.5px;color:var(--ink-3);border-top:1px dashed var(--rule);padding-top:8px;margin-top:10px}
+.panel .src b{color:var(--ink-2)}
+/* ── callouts ───────────────────────────────────── */
+.call{border-left:3px solid var(--plum-line);background:var(--card);padding:16px 20px;margin:0 0 20px;box-shadow:var(--shade);max-width:74ch}
+.call.gold{border-left-color:var(--gold);background:var(--gold-soft)}
+.call.stop{border-left-color:var(--stop);background:var(--stop-soft)}
+.call.good{border-left-color:var(--good);background:var(--good-soft)}
+.call h5{margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
+.call.gold h5{color:var(--gold)} .call.stop h5{color:var(--stop)} .call.good h5{color:var(--good)}
+.call p{margin:0 0 10px;font-size:15px;max-width:none}
+.call p:last-child{margin:0}
+/* ── decisions ──────────────────────────────────── */
+.dec{border:1px solid var(--rule);background:var(--card);margin:0 0 14px;box-shadow:var(--shade)}
+.dec-q{padding:15px 20px;font-size:17px;font-weight:700;line-height:1.35;border-bottom:1px solid var(--hair)}
+.dec-q span{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--plum);margin-right:10px}
+.dec-b{padding:14px 20px;display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:720px){.dec-b{grid-template-columns:1fr 1fr auto}}
+.dec-b div h6{margin:0 0 4px;font-size:10px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3)}
+.dec-b div p{margin:0;font-size:14px;max-width:none;color:var(--ink-2)}
+.rec{align-self:center;text-align:right;font-size:13px}
+.rec b{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-bottom:3px}
+/* ── lists ──────────────────────────────────────── */
+ul.plain,ol.steps{max-width:68ch;padding-left:0;list-style:none;margin:0 0 18px}
+ul.plain li{position:relative;padding:0 0 0 22px;margin:0 0 9px}
+ul.plain li::before{content:'';position:absolute;left:4px;top:11px;width:5px;height:5px;background:var(--plum-line);border-radius:50%}
+ol.steps{counter-reset:s}
+ol.steps li{counter-increment:s;position:relative;padding:0 0 0 34px;margin:0 0 13px}
+ol.steps li::before{content:counter(s);position:absolute;left:0;top:1px;width:23px;height:23px;
+  background:var(--plum);color:var(--paper);border-radius:50%;font-size:12px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif}
+/* ── table ──────────────────────────────────────── */
+.tw{overflow-x:auto;border:1px solid var(--rule);background:var(--card);box-shadow:var(--shade);margin:0 0 20px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+   padding:11px 14px;border-bottom:1px solid var(--rule);background:var(--tint);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid var(--hair);vertical-align:top;line-height:1.5}
+tbody tr:last-child td{border-bottom:0}
+/* ── footer ─────────────────────────────────────── */
+footer{margin:80px 0 0;border-top:1px solid var(--rule);padding-top:22px;font-size:13px;color:var(--ink-3);max-width:70ch}
+:focus-visible{outline:2px solid var(--plum);outline-offset:2px}
+@media print{
+  body{background:#fff;font-size:10.5pt}
+  .page{max-width:none;padding:0 14mm 14mm}
+  .chapter{page-break-before:always}
+  .ch-open,h3{page-break-after:avoid}
+  .panel,.call,.dec{page-break-inside:avoid}
+  .tw{overflow:visible}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="titlepage">
+  <p class="imprint">Dentfluence OS · Owner's Edition · Volume I</p>
+  <h1>The Owner's Handbook</h1>
+  <p class="subtitle">What every module in your clinic OS is for, where its numbers come from, and what only you can decide about it.</p>
+  <p class="blurb">Sixteen chapters and two appendices, covering every module Tulip Dental runs. This is not a training manual — your team has a separate one, in Marathi. This book is written for you: it explains each module as a product, tells you honestly what it does and does not do today, and ends every chapter with the handful of decisions that cannot be made by anyone else.</p>
+
+  <div class="ledger">
+    <h2>Chapters</h2>
+    <ol>
+      <li class="done"><span class="no">01</span><span class="nm">Daily Huddle</span><span class="tag t-done">revised</span></li>
+      <li class="done"><span class="no">02</span><span class="nm">Appointments</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">03</span><span class="nm">Patients</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">04</span><span class="nm">Consultations &amp; Treatment Plans</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">05</span><span class="nm">Treatment Visits</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">06</span><span class="nm">Accounts &amp; Finance</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">07</span><span class="nm">Revenue by Treatment Category</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">08</span><span class="nm">Relationships (PRE)</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">09</span><span class="nm">Lab</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">10</span><span class="nm">Inventory</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">11</span><span class="nm">Prescriptions &amp; Clinical Library</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">12</span><span class="nm">Tasks &amp; Practice Protocols</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">13</span><span class="nm">HR</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">14</span><span class="nm">Reports &amp; Analytics</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">15</span><span class="nm">Roles, Permissions &amp; Activity Log</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">16</span><span class="nm">Settings &amp; Compliance (DPDP)</span><span class="tag t-done">written</span></li>
+      <li class="done"><span class="no">A</span><span class="nm">Where Every Number Comes From</span><span class="tag t-next">reference</span></li>
+      <li class="done"><span class="no">B</span><span class="nm">Built, and Switched Off</span><span class="tag t-next">reference</span></li>
+    </ol>
+  </div>
+</header>
+
+<!-- ═══════════ CHAPTER 1 ═══════════ -->
+<section class="chapter" id="ch1">
+  <div class="ch-open">
+    <div class="ch-no">1</div>
+    <div>
+      <h2>Daily Huddle</h2>
+      <p class="standfirst">The ten minutes before the first patient. One screen that tells the whole team what today looks like, what yesterday left unfinished, and who owes what to whom.</p>
+      <div class="ch-meta">
+        <span class="tag t-done">In V1</span>
+        <span class="tag t-wait">Sidebar → Overview → Daily Huddle</span>
+        <span class="tag t-wait">19 screens &amp; actions</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">The Daily Huddle is a single, non-scrolling board that the whole clinic looks at together in the morning. Everything on it already exists somewhere else in Dentfluence — appointments, calls, tasks, lab cases, stock. The Huddle's job is not to store anything new. Its job is to <em>put the day in front of everyone at the same time</em>, so nothing depends on one person remembering.</p>
+  <p>It is the only screen in the product designed to be read by a group standing up, not by one person sitting down. That single design constraint explains most of its choices: seven columns side by side rather than pages you click through; counts rather than lists; every card a link into the module that owns it.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>Small clinics lose money in the gaps between people, not inside them. The dentist finishes a case and knows a crown needs collecting next week — but that knowledge stays in their head until someone asks. The receptionist takes a payment but no one told her the plan was ₹18,000, not ₹8,000. A lab case comes back and sits in a drawer because the person who sent it was off that day.</p>
+  <p>Every one of those is a handover failure, and every one of them has a cost you can name: a patient who doesn't come back, a payment that isn't collected today, a remake you pay for twice. The Huddle exists to make handovers visible <strong>before</strong> the day starts rather than after it goes wrong.</p>
+
+  <h3>Who uses it, and when</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Person</th><th>When</th><th>What they are looking for</th></tr></thead>
+    <tbody>
+      <tr><td><b>Front desk</b></td><td>First thing, before opening</td><td>Today's list, who is arriving when, what to collect, which calls are due, what yesterday left open.</td></tr>
+      <tr><td><b>Doctors</b></td><td>Same ten minutes</td><td>Yesterday's cases and what each one needs next; today's prep items; medical alerts on today's patients.</td></tr>
+      <tr><td><b>Assistant</b></td><td>Same ten minutes</td><td>Prep items per chair, lab work arriving, sterilisation and stock warnings.</td></tr>
+      <tr><td><b>You</b></td><td>Weekly, not daily</td><td>The report tabs — collections, appointments, new patients, lab, protocol compliance — with each number compared to the previous period.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Access is controlled by one switch: the <span class="ui">Daily Huddle</span> module permission in Settings → Staff &amp; Roles. Everyone who attends the huddle needs <em>View</em>. Only people who tick tasks off need <em>Edit</em>.</p>
+
+  <h3>What is on the screen</h3>
+  <p class="rubric">Seven columns, left to right. Scroll sideways to reach the last two.</p>
+
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">COLUMN 01</div>
+      <h5>Today's Patient Flow</h5>
+      <p>Every appointment booked for today, in time order — patient, doctor, assistant, treatment, and a red flag if the patient has a medical alert. Under each: the staff instruction, the prep item, and the amount to collect.</p>
+      <p>Below the appointments, two smaller lists: treatment visits and consultations already recorded today.</p>
+      <div class="src"><b>Comes from:</b> the Appointments module. Nothing is typed here — this is a mirror. Fix a wrong entry in Appointments and it corrects itself.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">COLUMN 02</div>
+      <h5>Yesterday's Flow</h5>
+      <p>The most valuable column, and the one most clinics skip. For every patient seen yesterday: what was done, the chief complaint and diagnosis, whether a next appointment exists, and what the doctor wrote as the next step.</p>
+      <p>Where there is no next appointment you get two buttons — <span class="ui">+ Book</span> and <span class="ui">+ Task</span>. If the doctor already recorded a next action at the chair, the <span class="ui">+ Task</span> button disappears and a blue line says what is already booked, so nobody enters it twice.</p>
+      <div class="src"><b>Comes from:</b> Appointments, Consultations and Treatment Visits, joined for you. "Yesterday" is clinic-aware — on a Monday it looks back at Saturday, and at Sunday too if the clinic was open.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">COLUMN 03</div>
+      <h5>Comms List</h5>
+      <p>A glimpse of today's calls, drawn straight from Today's Actions in the Relationships module — recalls, follow-ups, reminders, enquiries. Below it, <b>Upcoming</b>: things the doctor scheduled at the chair for a future date.</p>
+      <p>Items can be ticked and pushed into the follow-up queue in one action.</p>
+      <div class="src"><b>Comes from:</b> the Relationship engine. The Huddle deliberately shows the same summary Today's Actions shows, so the two can never disagree.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">COLUMN 04</div>
+      <h5>Tasks</h5>
+      <p>Up to seven open tasks for the team, with priority and an <span class="ui">Overdue</span> badge on anything past its date. Tick the circle to complete a task without leaving the board. <span class="ui">View all →</span> opens the full Tasks module.</p>
+      <div class="src"><b>Comes from:</b> the Tasks module. Nine different parts of Dentfluence create tasks automatically — lab overdue, purchase orders, recalls, practice protocols, rules. They all land here.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">COLUMN 05</div>
+      <h5>Lab Updates</h5>
+      <p>Open remakes with their cost, trials waiting on a doctor's decision, and cases due back today — each with priority, trial round, and an overdue flag.</p>
+      <div class="src"><b>Comes from:</b> the Lab module. Remake cost is real money already spent twice, which is why it sits on the morning board rather than in a monthly report.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">COLUMN 06</div>
+      <h5>Inventory Alerts</h5>
+      <p>Items out of stock, critically low, or expiring. Capped to the first few with a "view all" beneath.</p>
+      <div class="src"><b>Comes from:</b> the Inventory module's stock status, calculated fresh each time the board loads.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">COLUMN 07</div>
+      <h5>Failures / Maintenance</h5>
+      <p>Critical alerts across the system, each with a severity badge — the things that will bite you today if nobody looks.</p>
+      <div class="src"><b>Comes from:</b> a system-wide alert builder, the same source as the bell in the top bar.</div>
+    </div>
+  </div>
+
+  <h4>Above the columns</h4>
+  <p>A greeting with today's date and a live clock, then a strip of five figures that link straight into the module behind them:</p>
+  <ul class="plain">
+    <li><span class="ui">Today's Actions</span> — total calls due and how many are high priority. Opens the Relationships board.</li>
+    <li><span class="ui">Today's Appointments</span> — the count for today.</li>
+    <li><span class="ui">Today's Calls</span> — reminders, follow-ups and relationship items combined, with a pending count.</li>
+    <li><span class="ui">Collections (Today)</span> — the total your front desk should collect today, and how many of today's appointments actually have that figure filled in.</li>
+    <li><span class="ui">Pending Tasks</span> — open tasks across the team.</li>
+  </ul>
+
+  <h3>Where the Collections number comes from</h3>
+  <p class="rubric">Worth understanding, because it is the one figure on the board that changes behaviour.</p>
+  <p><span class="ui">Collections (Today)</span> is <strong>not</strong> what you have collected. It is what you have <em>planned</em> to collect: the sum of the "amount to collect" that someone typed against each of today's scheduled appointments. Walk-ins are excluded on purpose — nobody could have planned for them the night before.</p>
+  <p>The line underneath — <em>"7 of 12 appointments logged"</em> — is the honest part. It tells you how much of today's target is actually a target and how much is a blank. If that line reads 2 of 14, the ₹ figure above it means almost nothing, and the fix is a front-desk habit, not a software change.</p>
+  <div class="call gold">
+    <h5>The habit this number is designed to create</h5>
+    <p><strong>Your rule: the manager fills it in during the huddle itself,</strong> going down today's list one patient at a time. It is a judgement figure, entered by hand — not pulled from the treatment plan.</p>
+    <p>The board supports this directly. Click any patient card in Today's Patient Flow and a small edit card opens with four fields — <span class="ui">Notes</span>, <span class="ui">Amount to Collect</span>, <span class="ui">Essential Item / Task</span>, <span class="ui">Chairside Assistant</span> — then Save. One click and one number per patient, without leaving the huddle screen. Walk-ins correctly refuse an amount, because nobody planned them the night before.</p>
+    <p>Do that consistently for three weeks and the huddle stops being a briefing and becomes a target. The "x of y logged" line is your compliance measure while the habit is forming.</p>
+  </div>
+
+  <h4>The one thing you can edit from the board</h4>
+  <p>That edit card is worth knowing about in its own right, because it is the only place on the huddle where four different people's needs are settled in one action. The manager sets the money figure; the front desk reads the note; the assistant reads the essential item and knows which chair they are on; the doctor sees the prep item before the patient sits down. It is the handover, in one small box, done once.</p>
+  <p>Two smaller controls sit on the same cards: the status pill advances the patient through <em>scheduled → checked in → in chair → done</em> when clicked, and the tick circle in the Tasks column completes a task outright.</p>
+
+  <h3>The report tabs</h3>
+  <p class="rubric">Your weekly read, not the team's daily one.</p>
+  <p>Across the top of the Huddle sit <span class="ui">Weekly Report</span>, <span class="ui">Monthly Report</span>, <span class="ui">Quarterly Report</span> and <span class="ui">Annual Report</span>. They are the same page with a different window — last 7, 30, 90 or 365 days — and each one compares itself to the equally long period immediately before it, so every figure carries an up or down chip.</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Section</th><th>What it shows</th></tr></thead>
+    <tbody>
+      <tr><td><b>Collections &amp; Revenue</b></td><td>Total collected, net of refunds, average per day, outstanding balance right now, and a breakdown by payment mode.</td></tr>
+      <tr><td><b>Appointments</b></td><td>Booked, completed with a completion rate, cancelled, and no-shows with a no-show rate. Cancellations and no-shows are scored so that a <em>fall</em> shows green.</td></tr>
+      <tr><td><b>New patients &amp; sources</b></td><td>How many new patients, how many came from an existing patient's referral, and how many distinct channels brought them.</td></tr>
+      <tr><td><b>Lab &amp; tasks</b></td><td>Cases sent, cases received, currently overdue, remakes, and tasks done / pending / overdue.</td></tr>
+      <tr><td><b>Protocol compliance</b></td><td>Person by person: how many of their assigned practice protocols were done, how many were missed, and their percentage. This is the closest thing in the product to an accountability sheet.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="call good">
+    <h5>The report's money row was corrected for V1</h5>
+    <p>Until this release the report's <span class="ui">Total Collected</span> read from a separate transactions ledger that ordinary invoice payments no longer wrote into, so it <strong>under-counted</strong> real collection and disagreed with the Finance dashboard. It now reads the same payment records as every other money screen in the product.</p>
+    <p>The consequence worth stating out loud: <strong>the daily, weekly, monthly and annual views now agree with each other and with Accounts.</strong> Appointments, new patients, lab and protocol compliance on the same page were always sound.</p>
+  </div>
+
+  <h3>What it triggers elsewhere</h3>
+  <p>Very little — and that is deliberate. The Huddle is a reading surface. Only four actions on it write anything:</p>
+  <ul class="plain">
+    <li>Ticking a task marks it complete in the Tasks module.</li>
+    <li>The edit card writes four fields back onto that appointment — note, amount to collect, essential item, chairside assistant.</li>
+    <li>Clicking the status pill advances the appointment's status.</li>
+    <li><span class="ui">+ Book</span> opens the normal appointment booking window.</li>
+    <li>Pushing selected communication items adds them to the follow-up queue.</li>
+  </ul>
+  <p>Everything else on the board is a link to the module that owns the data. This is the right architecture: it means the Huddle can never become a second, disagreeing copy of the truth.</p>
+
+  <h3>What it gives you</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Test</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td>Does it save time?</td><td><b>Yes.</b> It replaces the morning conversation where four people each recall a different version of yesterday.</td></tr>
+      <tr><td>Does it reduce mistakes?</td><td><b>Yes, in one specific place.</b> Yesterday's Flow catches the patient who left without a next appointment — historically the largest silent leak in a dental practice.</td></tr>
+      <tr><td>Does it improve patient experience?</td><td><b>Indirectly.</b> Prep items and medical alerts surface before the patient sits down.</td></tr>
+      <tr><td>Does it increase revenue?</td><td><b>Yes, if the collections habit sticks.</b> A stated daily target that the team sees together is collected more often than one nobody stated.</td></tr>
+      <tr><td>Does it improve decisions?</td><td><b>Partly.</b> The protocol-compliance table is genuinely decision-grade. The money row is not, yet.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>What it can't do yet</h3>
+  <p class="rubric">Five things, stated honestly. Items 1, 2 and 5 were settled on 28 August and have been <b>removed from the board for V1</b> — they are recorded here so you know what changed and why. Items 3 and 4 stand.</p>
+  <div class="call stop">
+    <h5>1 · The Marketing column was a mock-up — removed</h5>
+    <p>"Instagram – Before/After Smile Makeover · Today 11:00 AM", "Google Post – Mon Offer (Teeth Whitening) · 22 May" — these four posts are typed into the page. They are not read from your Marketing module, the dates never change, and the "+ 2 more content ideas" link goes nowhere.</p>
+    <p>This matters more than it looks. Your staff will read that column as instruction. Within a month someone will say "we posted that already" about something that was never scheduled. This is the same class of problem that got the old Communication Timeline switched off last month for showing invented patients — except this one was on the main morning screen. It has been taken off the board for V1; the slot is reserved for V1.1, reading genuinely scheduled posts from Marketing.</p>
+  </div>
+  <div class="call stop">
+    <h5>2 · "View All Yesterday" was broken — hidden</h5>
+    <p>At the bottom of Yesterday's Flow there is a <span class="ui">View All Yesterday</span> link. Clicking it does not open a page — it returns a raw technical message, <code>Not yet implemented</code>. The screen it was meant to open exists and is fully designed; the code behind it was never connected. The link has been taken off the board for V1 and the screen stays in the codebase for V1.1.</p>
+  </div>
+  <div class="call stop">
+    <h5>3 · Huddle notes cannot be added</h5>
+    <p>There is a notes feature underneath: a table, a save route, and a query that runs on every page load. But there is no box on the board to write a note in, nothing displays the notes that are fetched, and the save action returns <code>Not yet implemented</code>. As a feature it is entirely absent from the screen while quietly costing a database query every load.</p>
+  </div>
+  <div class="call">
+    <h5>4 · Comments exist in the engine, not on the board</h5>
+    <p>Team comments on huddle items — add, resolve, delete — are fully built in the backend with their own table. Nothing on the board shows them. It is finished work waiting for a place to live.</p>
+  </div>
+  <div class="call">
+    <h5>5 · One made-up figure on the stats strip — removed</h5>
+    <p>Under <span class="ui">Today's Appointments</span> the board always said <em>"+3 vs yesterday"</em>. It was a fixed piece of text, not a calculation. It said +3 on a day you had four appointments and on a day you had forty. It has been removed for V1 along with the Marketing column.</p>
+  </div>
+  <div class="call good">
+    <h5>And two things that are quietly very good</h5>
+    <p>The Monday-morning problem is properly solved: "yesterday" resolves to Saturday, and to Sunday as well if the clinic actually opened, rather than showing an empty board. Very few systems get this right.</p>
+    <p>The double-entry problem is properly solved too: when a doctor records a next action at the chair, the <span class="ui">+ Task</span> button on that patient's card disappears and is replaced by a note saying what is already booked. The front desk is never asked to re-enter what the doctor already decided.</p>
+  </div>
+
+  <h3>Your decisions — settled 28 August</h3>
+  <p class="rubric">All four answered. Recorded here so the chapter stays true to what the module will actually be. Full detail, including what changes in the code, is in the Decision Log.</p>
+
+  <div class="dec">
+    <div class="dec-q"><span>H1</span>The fake Marketing column — remove or connect?</div>
+    <div class="dec-b">
+      <div><h6>Your answer</h6><p><b>Remove it now.</b> "It has to be there but not in V1."</p></div>
+      <div><h6>What happens</h6><p>The board drops to seven columns, all real. The slot is reserved for V1.1, reading genuinely scheduled posts from Marketing.</p></div>
+      <div class="rec"><b>Status</b>Settled<br>Half a day</div>
+    </div>
+  </div>
+
+  <div class="dec">
+    <div class="dec-q"><span>H2</span>"View All Yesterday" — fix or hide?</div>
+    <div class="dec-b">
+      <div><h6>Your answer</h6><p><b>Hide it for now.</b></p></div>
+      <div><h6>What happens</h6><p>The link comes off. The accountability screen stays in the codebase, fully designed, for V1.1.</p></div>
+      <div class="rec"><b>Status</b>Settled<br>One hour</div>
+    </div>
+  </div>
+
+  <div class="dec">
+    <div class="dec-q"><span>H3</span>The report's money row — fix before go-live?</div>
+    <div class="dec-b">
+      <div><h6>Your answer</h6><p><b>Fix it.</b> You also asked for projected versus actual on top — that part became N2 and you have since dropped it.</p></div>
+      <div><h6>What happens</h6><p>The fix is already on the register as G-32, one to two days, and stays in V1 — weekly and monthly must agree with daily. The projected-vs-actual view is deferred to V1.1 (N2, below).</p></div>
+      <div class="rec"><b>Status</b>Settled<br>Fix in V1 · view in V1.1</div>
+    </div>
+  </div>
+
+  <div class="dec">
+    <div class="dec-q"><span>H4</span>Who fills "amount to collect", and when?</div>
+    <div class="dec-b">
+      <div><h6>Your answer</h6><p><b>The manager, during the huddle.</b> Entered by hand, not taken from the treatment plan.</p></div>
+      <div><h6>What happens</h6><p>Nothing to build — the edit card already does exactly this. It becomes a step in the staff guide and the rollout plan instead.</p></div>
+      <div class="rec"><b>Status</b>Settled<br>No work needed</div>
+    </div>
+  </div>
+
+  <div class="dec">
+    <div class="dec-q"><span>N2</span>Should the board show projected against actual?</div>
+    <div class="dec-b">
+      <div><h6>Your answer</h6><p><b>Skipped.</b> You asked for it, saw what it cost against a queue with no slack, and dropped it.</p></div>
+      <div><h6>What happens</h6><p>Out of V1 entirely; it moves to the V1.1 list. The manager still enters the figure every morning — the habit stays, only the scoreboard waits.</p></div>
+      <div class="rec"><b>Status</b>Settled<br>Deferred to V1.1</div>
+    </div>
+  </div>
+
+  <div class="call">
+    <h5>Why the manager still fills the figure, even with no scoreboard</h5>
+    <p>The reason you gave for wanting projected-against-actual was the right one: it turns the morning figure from an instruction into a measurement, and answers the question every owner actually asks — <em>did we collect what we said we would?</em> Dropping N2 removes the display, not the question, and not the data. <strong>Every projection the manager enters is stored on the appointment from the first morning you start.</strong> Whenever the comparison gets built, it reads that history. A clinic that skips the habit now has nothing to compare later, so the field gets filled from day one regardless.</p>
+    <p>One thing this decision does <em>not</em> touch: the huddle report currently reads its "Total Collected" from the wrong source, which is why the weekly and monthly tabs disagree with the daily one. That is a defect, not a feature — it is <b>G-32</b> on your register, one to two days, and it stays in V1. Correct numbers were never the part in dispute.</p>
+    <p>If you want the half-day version later — one line on the board reading <em>"Yesterday: projected ₹18,400 · collected ₹16,900 · from 9 of 11 appointments"</em> — it is on the shelf and costs nothing to leave there. The full picture is <b>N2</b> in the Decision Log.</p>
+  </div>
+
+  <h3>The locked web surface</h3>
+  <p class="rubric">The freeze contract for this module — and the specification the mobile app is measured against.</p>
+  <p>V1 is not the first version of the Daily Huddle. Tulip has been running its mornings on this screen for months. What 14 September delivers is a <strong>locked</strong> version: a surface that has stopped moving, that has had its defects corrected and its fabrications removed, and that behaves <em>identically</em> on the web and on the phone. That last part is the whole point of locking web first — mobile cannot be brought into line with a target that is still being edited.</p>
+  <p>So this is the line. Everything in the left column is what the Daily Huddle <em>is</em> in V1. Everything in the right column is deliberately not, and needs no further discussion until V1.1.</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:22%">Part of the module</th><th style="width:45%">Locked as V1</th><th style="width:33%">Deliberately not in V1</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>The board</b></td>
+          <td>Seven columns: Today's Patient Flow · Yesterday's Flow (Weekend Flow on Mondays) · Today's Actions · Tasks · Lab Updates · Inventory Alerts · Failures&nbsp;/&nbsp;Maintenance.</td>
+          <td>The Marketing column — fabricated, removed. The slot is reserved for V1.1 reading real scheduled posts.</td>
+        </tr>
+        <tr>
+          <td><b>The stat strip</b></td>
+          <td>Today's Appointments · Today's Calls · Collections (Today), with its <em>"x of y appointments logged"</em> fill-rate line · Pending Tasks · Today's Actions.</td>
+          <td>The <em>"+3 vs yesterday"</em> line under Today's Appointments — a hardcoded string that has never been calculated. It goes with the Marketing removal.</td>
+        </tr>
+        <tr>
+          <td><b>What you can edit</b></td>
+          <td>The patient edit card: <span class="ui">Notes</span>, <span class="ui">Amount to Collect</span>, <span class="ui">Essential Item</span>, <span class="ui">Chairside Assistant</span>. The status pill. The task tick. Quick-add task. Push to call list. Log yesterday's visit.</td>
+          <td>Huddle notes — the save button does nothing on either surface. Hidden, not fixed, in V1.</td>
+        </tr>
+        <tr>
+          <td><b>The money figure</b></td>
+          <td><b>One definition, both surfaces:</b> "Collections (Today)" is the <em>projected</em> figure the manager enters in the huddle, always shown with its fill rate. Actual collections read only through <code>ReportMetricsService</code>.</td>
+          <td>Projected against actual as a comparison view — dropped to V1.1 (N2). The <em>habit</em> of entering the figure starts on day one regardless.</td>
+        </tr>
+        <tr>
+          <td><b>The report</b></td>
+          <td>Day / week / month / custom tabs, all four agreeing, all reading the same corrected money source (G-32).</td>
+          <td>"View All Yesterday" — a live link to an unbuilt page. Hidden.</td>
+        </tr>
+        <tr>
+          <td><b>Permission</b></td>
+          <td>One module permission, <code>huddle</code>. <em>View</em> for everyone who attends; <em>Edit</em> for whoever ticks tasks and enters the collections figure.</td>
+          <td>No per-column permissions. Not needed, not coming.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Where the phone disagrees with the screen on the wall</h3>
+  <p class="rubric">Measured on 28 August by reading both codebases. Kept in this book as the specification for V1.1 — not as V1 scope.</p>
+  <div class="call stop">
+    <h5>Read this section as V1.1 input</h5>
+    <p><strong>V1 is web only.</strong> Mobile was measured again on 3 September and taken out of this release: every file in the app was last changed on 15 July, the app has no role restrictions of any kind, and the web system has moved on beneath it. The July build goes to nobody.</p>
+    <p>The four differences below are still real and still worth having written down — they are the first four items of the mobile work, dated to V1.1. One of them, the Saturday gap, matters on its own merits and is described below.</p>
+  </div>
+  <p>This is the first time the two have been compared properly, and the headline is better than the last measurement suggested: <strong>structurally, the mobile huddle is nearly complete.</strong> Every column on the wall exists on the phone. Tasks, labs, alerts, the patient edit card with all four fields, even the Failures/Maintenance section — all there. Mobile never had the fake Marketing column at all, so removing it from web makes the two <em>more</em> alike, not less.</p>
+  <p>But four things behave differently, and they are the kind you would never catch by clicking through both. They are only visible in the source, because the web board and the phone board were built as two separate programs that happen to draw the same picture.</p>
+
+  <div class="call stop">
+    <h5>1 · Every Monday, the phone forgets Saturday</h5>
+    <p>The web board is weekend-aware. On a Monday it widens its "yesterday" window, retitles the column <span class="ui">Weekend Flow (Sat–Sun)</span>, and shows you everyone treated across both days.</p>
+    <p><strong>The phone does not.</strong> It asks a simpler question — "what happened one day ago?" — which on a Monday means Sunday. <em>Every patient treated on Saturday is missing from the mobile huddle, from its follow-up list, and from its treated/missing counts.</em></p>
+    <p>For a dental clinic, Saturday is not a quiet day. This is a live follow-up gap, not a display quirk, and it has been happening every Monday. It is the single most important thing found in this comparison, and the fix belongs on mobile — web is the one behaving correctly.</p>
+  </div>
+
+  <div class="call gold">
+    <h5>2 · "Collections (Today)" means two different things</h5>
+    <p>On the wall, that number is what you <em>plan</em> to collect — the manager's morning figure. On the phone, the same-looking number is what you <em>actually</em> collected. Same label, opposite meaning, same morning.</p>
+    <p>Here is the awkward part, and it is worth sitting with: <strong>the phone is the one that is right.</strong> It reads actual collections through the corrected, canonical money service. The web report still reads the old finance table — that is G-32 on your register, and it under-counts, because ordinary invoice payments never reach that table.</p>
+    <p>This changes G-32 from a reporting tidy-up into something sharper: <em>your two screens currently disagree about money, today, in a live clinic.</em> I would move it up the queue on that basis alone.</p>
+    <p>One footnote, and it does not reopen anything: projected and actual <strong>both already exist</strong> — just one on each surface. That is why the comparison you asked for felt bigger than it was. It stays dropped for V1; I mention it only so the picture is honest.</p>
+  </div>
+
+  <div class="call stop">
+    <h5>3 · The phone tells staff a note was saved when it was thrown away</h5>
+    <p>The mobile huddle has a <span class="ui">Quick Note</span> box with a <span class="ui">Save Note</span> button. Pressing it stores nothing — not on the server, not on the phone — and then shows the message <em>"Note saved locally. Full note sync coming soon."</em></p>
+    <p>The web equivalent is also unbuilt, but web fails honestly: nothing pretends to have worked. Mobile makes a false confirmation to a member of staff in a clinic. Whatever anyone has typed into that box has been discarded, silently, and they were told otherwise.</p>
+    <p>You already decided to hide the dead "View All Yesterday" link on web for exactly this reason. The same decision is owed here: <strong>hide the Quick Note box on mobile in V1.</strong> Minutes of work, and it removes the only outright untruth on either surface.</p>
+  </div>
+
+  <div class="call good">
+    <h5>4 · The removals make the two surfaces closer, not further apart</h5>
+    <p>Worth saying plainly, because "remove things before launch" can sound like retreat. Mobile has no Marketing column and no "+3 vs yesterday" line. Deleting both from web is not shrinking the product — it is web catching up to the honest version that was already shipping on the phone.</p>
+  </div>
+
+  <div class="call">
+    <h5>What this tells us about the other seventeen modules</h5>
+    <p>Two of these four would have survived a screen-by-screen walkthrough. The Saturday gap looks like an empty column — indistinguishable from a genuinely quiet Sunday. The money definition looks like two correct numbers that happen to differ, which anyone would put down to timing.</p>
+    <p>So parity cannot be signed off by looking. It has to be read out of both codebases, module by module, checking three things before anything else: <strong>the date windows, the money sources, and the labels.</strong> That is the method for the remaining chapters, and it is why connecting the mobile repository mattered more than any single document.</p>
+  </div>
+
+  <h3>Status</h3>
+  <p><strong>In V1, curated and corrected.</strong> <em>In daily use at Tulip and sound — three fabrications removed on web; four parity breaks logged against mobile for V1.1.</em> The board, the tasks, the lab and inventory panels and the report tabs are wired end to end and your team has been running mornings on them for months. What V1 does to this module is not build it; it is <em>curate</em> it — the Marketing column, the "+3 vs yesterday" line and the dead link are gone — <em>correct</em> it, so the report money row agrees with Accounts, and <em>lock</em> it.</p>
+  <p>Of the four mobile gaps, one is urgent on its own merits: <strong>the phone has been dropping Saturday from every Monday huddle.</strong> That is the first item of the V1.1 mobile work, and it is worth knowing today: patients treated on Saturday have not been appearing on anyone's follow-up list on a phone. The other three are a money definition, a button that lies, and two removals that close themselves.</p>
+  <p>This was the right first chapter precisely because it asked so little of you: no configuration, no data migration, one permission to grant, and a ten-minute habit that your manager already owns. It is also, now, the proof that parity has to be read out of the code rather than clicked through — which is the more valuable finding.</p>
+</section>
+
+
+
+<section class="chapter" id="ch2">
+  <div class="ch-open">
+    <div class="ch-no">2</div>
+    <div>
+      <h2>Appointments</h2>
+      <p class="standfirst">The book. Everything else in Dentfluence — the huddle, the recall list, the money — is downstream of what is written here, which is why an error in this module is never contained to this module.</p>
+      <div class="ch-meta">
+        <span class="tag t-done">In V1</span>
+        <span class="tag t-wait">Sidebar → Clinical → Appointments</span>
+        <span class="tag t-wait">Module permission: Appointments</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">A day calendar with a live queue beside it. The calendar is the booking surface; the right-hand rail is the working surface — it holds today's counts by status and the patient queue, and it is where the front desk actually spends the day.</p>
+  <p>The important thing to understand about Appointments is that it is not a diary. It is the <em>system of record for whether a patient turned up</em>. Every status you click writes a timestamp, and those timestamps are what the recall engine, the huddle's Yesterday column, and the missed-appointment follow-up all read. A no-show that nobody marks is a patient nobody chases.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>A paper book tells you who is coming. It does not tell you who came, who did not, who was moved, or who left without a next date. Those four facts are where the revenue is. The module exists to capture them as a by-product of the front desk doing its normal job — moving a patient from <span class="ui">Scheduled</span> to <span class="ui">Checked In</span> to <span class="ui">In Chair</span> to <span class="ui">Done</span> — rather than as a separate reporting chore that nobody would do.</p>
+
+  <h3>Who uses it, and when</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Person</th><th>When</th><th>What they do</th></tr></thead>
+    <tbody>
+      <tr><td><b>Front desk</b></td><td>All day</td><td>Book, reschedule, cancel with a reason, and advance every patient's status as they move through the clinic.</td></tr>
+      <tr><td><b>Doctors</b></td><td>Between patients</td><td>Read their own column. The scope switch flips between <span class="ui">My Schedule</span> and <span class="ui">Whole Clinic</span>.</td></tr>
+      <tr><td><b>Assistant</b></td><td>Morning and on the hour</td><td>Reads the queue to know which chair is next.</td></tr>
+      <tr><td><b>You</b></td><td>Never, directly</td><td>You read the consequences on the Huddle and in Reports.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>What is on the screen</h3>
+  <p class="rubric">One page. Calendar left, working rail right.</p>
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">TOP BAR</div>
+      <h5>Search, scope, clock, two buttons</h5>
+      <p>A patient search box; then either a doctor filter or the <span class="ui">My Schedule</span> / <span class="ui">Whole Clinic</span> pills depending on who is logged in; a live clock and today's date; and the two write actions — <span class="ui">Walk-In</span> and <span class="ui">Add Appointment</span>.</p>
+      <div class="src"><b>Note:</b> a walk-in is a different kind of record, not just a late booking. It is excluded from the huddle's collections target on purpose, because nobody could have planned for it the night before.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">CENTRE</div>
+      <h5>The calendar</h5>
+      <p>The day grid, drawn in the browser. Drag to move, click to open. Booking into an operatory opens a picker; cancelling opens a box that requires a reason.</p>
+      <div class="src"><b>Comes from:</b> the appointments table for the selected day and doctor scope. Nothing else feeds it.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">RAIL · TOP</div>
+      <h5>Eight status counters</h5>
+      <p>Total · Scheduled · Checked In · In Chair · Done · Cancelled · No Show · Walk-In. Each is today's count for that status.</p>
+      <div class="src"><b>Read this carefully:</b> the chips do <em>not</em> add up to Total. There is a ninth status, <span class="ui">Checked Out</span>, which has no chip — a checked-out patient is inside Total and inside none of the eight. Do not use the chips as an arithmetic breakdown.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">RAIL · BOTTOM</div>
+      <h5>Patient Queue</h5>
+      <p>Today's patients as cards, with an <span class="ui">N in queue</span> count above. This is the list the assistant works from.</p>
+      <div class="src"><b>Comes from:</b> the same day list as the calendar, filtered in the browser. It refreshes itself every thirty seconds.</div>
+    </div>
+  </div>
+
+  <h3>Where the numbers come from</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it actually counts</th><th>Scope</th></tr></thead>
+    <tbody>
+      <tr><td><b>"N patients"</b> (total pill)</td><td>Appointment <em>rows</em> for today — not distinct people. A patient booked twice in one day counts twice.</td><td>Today, current doctor scope</td></tr>
+      <tr><td><b>Scheduled / Checked In / In Chair / Done / Cancelled / No Show</b></td><td>A straight count of today's rows carrying that status.</td><td>Today, current doctor scope</td></tr>
+      <tr><td><b>Walk-In</b></td><td>Today's rows flagged as walk-in, whatever their status. This chip overlaps every other chip.</td><td>Today</td></tr>
+      <tr><td><b>N in queue</b></td><td>Counted in the browser from the visible list, not on the server.</td><td>Today, as filtered</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="call stop">
+    <h5>One counter behaviour to know before you train anyone on it</h5>
+    <p>When a doctor viewing <span class="ui">My Schedule</span> changes a patient's status, the counters that come back are <strong>whole-clinic</strong> counts, not that doctor's. The numbers above their own grid briefly describe someone else's day, until the thirty-second refresh corrects them.</p>
+    <p>This is a real defect, it is not on the V1 fix list, and it is harmless as long as nobody makes a decision from a counter in the second after clicking a status pill. Say that plainly in training rather than pretending the number is always right.</p>
+  </div>
+
+  <h3>What it triggers elsewhere</h3>
+  <p>Appointments is one of the most connected modules in the product. Every status change writes an entry to the patient's activity timeline, and one of them starts real work:</p>
+  <ul class="plain">
+    <li><b>Marked No Show</b> → the rules engine creates an <em>urgent call task</em> for the front desk, with a three-day cooldown so the same patient cannot generate a task every day.</li>
+    <li><b>Booked, cancelled, checked in, completed, rescheduled, reverted, deleted</b> → each writes a timeline entry against the patient. Nothing else fires from these.</li>
+    <li><b>A consultation recorded against the appointment</b> → the appointment is closed to <span class="ui">Done</span> automatically. The doctor's work is what closes the booking, not a second click by reception.</li>
+  </ul>
+
+  <h3>What it can't do yet</h3>
+  <div class="call">
+    <h5>1 · Chair utilisation is calculated and never shown</h5>
+    <p>The system works out how much of your chair capacity today's bookings consume — booked minutes, capacity minutes, a percentage — on every single page load, and then does not display it. The only page that shows it, <span class="ui">/appointments/today</span>, has no link anywhere in the product; you can only reach it by typing the address.</p>
+    <p>It is also working from a default it has never been told: fourteen hours of capacity a day, and a chair count guessed from whatever chair numbers appear in the data. Before that percentage means anything, those two numbers need to be your real ones.</p>
+  </div>
+  <div class="call">
+    <h5>2 · The sidebar badge can never light up</h5>
+    <p>The Appointments entry in the sidebar has a badge, and it is fixed at zero. Zero badges are hidden, so nobody will ever see it. Harmless, but do not wait for it.</p>
+  </div>
+  <div class="call">
+    <h5>3 · There is no confirmation message when a booking is made</h5>
+    <p>Booking an appointment sends the patient nothing. Reminders are a separate morning sweep, not a per-booking event. This is covered properly in <b>Chapter 8</b>, and it is the single most common thing people assume the system does and it does not.</p>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>In V1, unchanged.</b> No W-row touches Appointments. What you see on 14 September is what is running now, with the three limitations above intact.</p>
+</section>
+
+<section class="chapter" id="ch3">
+  <div class="ch-open">
+    <div class="ch-no">3</div>
+    <div>
+      <h2>Patients</h2>
+      <p class="standfirst">The register, and the profile behind it. This is the only module every other module points at, which makes duplicate and merged records the most expensive kind of mess in the system.</p>
+      <div class="ch-meta">
+        <span class="tag t-done">In V1</span>
+        <span class="tag t-wait">Sidebar → Clinical → Patients</span>
+        <span class="tag t-wait">Module permission: Patients</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">A searchable, filterable list of everyone the clinic has ever registered, and behind each row a profile with tabs for consultations, treatment plans, visits, documents, billing and the relationship timeline.</p>
+  <p>The list itself is deliberately plain — no dashboard, no stat cards, no aggregates. That is a design decision, not an omission: the moment you put clinic-wide figures on a data-entry screen, people start reading them instead of the row in front of them.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>Every clinic accumulates two of the same patient. Two records means half a history, a recall that goes to the wrong number, and a balance that looks settled because the money is on the other record. Patients exists to be the one place a person is created, found, and — when it has already gone wrong — merged.</p>
+
+  <h3>Who uses it, and when</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Person</th><th>When</th><th>What they do</th></tr></thead>
+    <tbody>
+      <tr><td><b>Front desk</b></td><td>Every new patient</td><td>Register, search, correct details, link family members.</td></tr>
+      <tr><td><b>Doctors</b></td><td>Before and during every consultation</td><td>Read the profile — alerts, allergies, history, plans.</td></tr>
+      <tr><td><b>Assistant / Accounts</b></td><td>As needed</td><td>Read only. Neither can edit a patient record.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>What is on the screen</h3>
+  <p class="rubric">The list, then the profile.</p>
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">LIST</div>
+      <h5>Ten columns and a filter drawer</h5>
+      <p>Patient ID · Name · Age · Gender · Phone · Area · Source · Membership · Follow-up · Registered. Sort by newest, oldest, name, patient ID or last visit.</p>
+      <p>The <span class="ui">Filters</span> drawer holds nine filters — gender, area, age range, membership, follow-up, source, birthday month and family — and the button carries a badge counting how many are active.</p>
+      <div class="src"><b>The only number on this page</b> is "N patients registered", which is the count of rows matching whatever filters are on. With no filters, it is your register size.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">PROFILE HEADER</div>
+      <h5>Four money figures</h5>
+      <p><span class="ui">Total Billed</span> · <span class="ui">Total Collected</span> with a percentage · <span class="ui">Outstanding</span> · and <span class="ui">Advance</span>, which appears only when the patient has credit on file.</p>
+      <div class="src"><b>All four are lifetime, per patient</b>, summed across every invoice that patient has ever had. They are not affected by any date filter anywhere in the product.</div>
+    </div>
+  </div>
+
+  <h3>Where the key numbers come from</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>Definition</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td><b>Total Billed</b></td><td>Sum of every invoice total for this patient.</td><td>Billed · lifetime</td></tr>
+      <tr><td><b>Total Collected</b></td><td>Sum of the paid amount on every invoice for this patient.</td><td>Collected · lifetime</td></tr>
+      <tr><td><b>Outstanding</b></td><td>Sum of the balance still due across their invoices.</td><td>Billed minus collected · lifetime</td></tr>
+      <tr><td><b>Advance</b></td><td>Money the patient has paid that is not yet applied to an invoice. It is a liability, not revenue.</td><td>Wallet balance</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>What it triggers elsewhere</h3>
+  <ul class="plain">
+    <li><b>Registering a patient</b> links them into the relationship spine, so the recall engine and the timeline can see them from day one.</li>
+    <li><b>A duplicate phone number</b> raises a soft warning that the front desk must acknowledge before saving. This is your first line of defence against the double-record problem, and it can be clicked through — so it is also a training point.</li>
+    <li><b>Opening a profile</b> writes an audit entry recording who viewed it. That is a DPDP requirement and it works.</li>
+    <li><b>Merging two patients</b> redirects the losing record to the survivor permanently.</li>
+  </ul>
+
+  <h3>What it can't do yet</h3>
+  <div class="call stop">
+    <h5>1 · The Recall Status card on every patient profile is decorative</h5>
+    <p>Every patient shows <span class="ui">Recall Status: Up to Date</span> with a blank date, and a green <span class="ui">Active</span> pill beside their name. These are not calculated. The two fields behind them are never written by anything in the system — they hold the value they were created with, for every patient, forever.</p>
+    <p>The real recall engine ignores both of them and works off the last visit date instead, so <strong>recall itself works</strong> — see Chapter 8. It is only the display on this screen that is meaningless. Tell your team to ignore that card. It is the single most misleading thing on the patient profile.</p>
+  </div>
+  <div class="call">
+    <h5>2 · The consultation tab gives a different recall answer</h5>
+    <p>The Consultations tab on the same profile calculates its own recall status from days since the last visit, and its own due date as last visit plus six months. It agrees with nothing else. A patient can read <span class="ui">Overdue</span> on one tab and <span class="ui">Up to Date</span> in the header at the same time, on the same screen.</p>
+  </div>
+  <div class="call">
+    <h5>3 · No aggregate view of your register</h5>
+    <p>There is no screen that tells you how many active patients you have, how many came from each source this quarter, or how your register is growing. The Reports module has a Patients tab that partly covers this. The Patients module itself has none, by design.</p>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>In V1, unchanged.</b> No W-row touches Patients. Points 1 and 2 above are V1.1 items and should be named in staff training so nobody trusts the card.</p>
+</section>
+
+<section class="chapter" id="ch4">
+  <div class="ch-open">
+    <div class="ch-no">4</div>
+    <div>
+      <h2>Consultations &amp; Treatment Plans</h2>
+      <p class="standfirst">What the doctor found, and what the doctor proposed. These are two records and one conversation, which is why they share a chapter and share a tab.</p>
+      <div class="ch-meta">
+        <span class="tag t-done">In V1</span>
+        <span class="tag t-wait">Patient profile → Consultation tab · Treatment Plan tab</span>
+        <span class="tag t-wait">Module permission: Patients</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">A consultation is the clinical encounter — complaint, findings, diagnosis, advice. A treatment plan is the priced proposal that follows it. Both live on the patient's profile; neither has a clinic-wide list screen, and that is deliberate.</p>
+  <p>There are seven kinds of consultation, five of which have their own button: <span class="ui">New Consultation</span>, <span class="ui">Same Issue</span>, <span class="ui">Minor Visit</span>, <span class="ui">Emergency</span> and <span class="ui">COHA</span>. Each opens a form shaped for that encounter rather than one long form that fits none of them.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>Case acceptance is the difference between a busy clinic and a profitable one, and it is decided in the ten minutes between the finding and the price. This pair of records exists so that the finding, the option, the price and the patient's answer are all written down in the same place at the same time — so that six weeks later you can answer "what did we actually offer them, and what did they say?"</p>
+
+  <h3>What is on the screen</h3>
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">CONSULTATION TAB · LEFT</div>
+      <h5>The record list</h5>
+      <p>Five create buttons, then every consultation as a card — type, date, doctor, and per-card View / Print / Edit / Delete. Any linked prescription shows underneath with its drug count.</p>
+      <div class="src"><b>Comes from:</b> this patient's consultations only. There is no clinic-wide consultations list anywhere in the product — it was removed on purpose because nothing linked to it.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">CONSULTATION TAB · RIGHT</div>
+      <h5>Four support cards</h5>
+      <p><span class="ui">Recall &amp; Follow-up</span> · <span class="ui">Patient Snapshot</span> (complaint, medical alerts, allergies, habits) · <span class="ui">Active Opportunities</span> · <span class="ui">Quick Actions</span>.</p>
+      <div class="src"><b>Do not trust the Recall card here</b> — see Chapter 3. It calculates its own answer and disagrees with the profile header.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">PLAN TAB · FORM</div>
+      <h5>Building an option</h5>
+      <p>Plan name, consultation, doctor, date, expected duration and visit count; then item rows — treatment, tooth, units, fee, discount, notes — with a dental chart picker and a running total at the foot.</p>
+      <div class="src"><b>Comes from:</b> your treatment master list and its default prices.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">PLAN TAB · CARDS</div>
+      <h5>The options, grouped by consultation</h5>
+      <p>Each option shows its number, name, an <span class="ui">Accepted</span> or <span class="ui">Presented</span> badge, a progress chip, the estimated investment, the treatment count, and the item list. Then the four decision buttons: Mark as Accepted · Present Plan / Give Estimate · Defer · Reject.</p>
+      <div class="src"><b>Progress is derived, never stored.</b> It is worked out from the clinical work actually recorded against the plan's items — which means it cannot be gamed by ticking a box.</div>
+    </div>
+  </div>
+
+  <h3>Where the key number comes from</h3>
+  <p><span class="ui">Estimated Investment</span> on a plan card is the sum of its item totals, and each item total is calculated as: fee × units, less the item discount percentage, plus GST on the discounted figure.</p>
+  <div class="call stop">
+    <h5>The running total while you are typing does not include discounts or GST</h5>
+    <p>The grand total that updates live at the foot of the plan form multiplies fee by units and stops there. The figure that gets <em>saved</em>, and the one that appears on the plan card afterwards, applies the discount and adds GST.</p>
+    <p>Consequence: <strong>if you use per-item discounts or GST, the number you quote from the screen while building the plan is not the number the patient will be shown.</strong> Build the plan, save it, then quote from the card. This is a genuine defect, it is not on the V1 fix list, and it is a one-line habit to work around.</p>
+  </div>
+
+  <h3>What it triggers elsewhere</h3>
+  <ul class="plain">
+    <li><b>Recording a consultation</b> advances the patient's last-visit date and <em>closes the linked appointment to Done</em>. The doctor's work closes the booking.</li>
+    <li><b>Marking a plan Presented</b> moves the opportunity to <span class="ui">Quoted</span> in the relationship pipeline.</li>
+    <li><b>Marking a plan Accepted</b> moves it to <span class="ui">Committed</span>, stamps the acceptance, writes a decision record, and writes the timeline entry.</li>
+    <li><b>Reverting an acceptance</b> requires a reason, is refused outright if the plan already has invoices, and is logged against the staff member who did it.</li>
+  </ul>
+
+  <h3>What it can't do yet</h3>
+  <div class="call">
+    <h5>1 · The plan lifecycle stops at "all work recorded", never "completed"</h5>
+    <p>This is deliberate and correct. The system will tell you every item on a plan has been carried out; it will not declare the case finished, because only a clinician can say that. Do not wait for a "Completed" state that is not coming.</p>
+  </div>
+  <div class="call">
+    <h5>2 · There is a "suggest a plan" feature and it is not connected to anything</h5>
+    <p>An automatic plan-suggestion endpoint exists in the code and no button anywhere calls it. It is worth knowing it exists only so that nobody switches it on believing it is intelligent: it is a short list of keyword matches to fixed treatment pairs, and it looks prices up by exact treatment name — anything that does not match exactly gets a price of zero. It should stay unreachable.</p>
+  </div>
+  <div class="call">
+    <h5>3 · No cross-patient view of plans</h5>
+    <p>You cannot ask "show me every plan presented last month and whether it was accepted" from this module. The nearest thing is the opportunity pipeline in Chapter 8, which answers it approximately.</p>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>In V1, unchanged.</b> Case Acceptance — the separate patient-facing microsite that presents a plan to the patient on their own phone — was switched <strong>off in production on 4 September</strong> and is not part of V1. It is covered in Appendix B.</p>
+</section>
+
+<section class="chapter" id="ch5">
+  <div class="ch-open">
+    <div class="ch-no">5</div>
+    <div>
+      <h2>Treatment Visits</h2>
+      <p class="standfirst">The clinical log. What was actually done, on which tooth, on which day — the record everything downstream counts as work.</p>
+      <div class="ch-meta">
+        <span class="tag t-done">In V1</span>
+        <span class="tag t-wait">Patient profile → Visits tab</span>
+        <span class="tag t-wait">Module permission: Patients (edit to record)</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">A dated log of chairside work, one card per visit, each carrying the treatment, the tooth, the doctor, vitals, notes, any prescription, and the items of work recorded against a treatment plan.</p>
+  <p>The visit is the most consequential record in the clinical stack. A treatment plan is a proposal; a visit is a fact. Plan progress, the six-month recall, the implant follow-up, the lab case and the front desk's billing prompt are all created from what is written here.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>Work that is done and not recorded is work you cannot bill, cannot follow up, and cannot prove. The visit log exists so that recording the work — which the doctor has to do anyway — is what sets the rest of the clinic in motion, rather than the doctor also having to remember to tell reception to raise an invoice, and remember to book a recall, and remember to send the lab case.</p>
+
+  <h3>What is on the screen</h3>
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">TAB</div>
+      <h5>Visit Log</h5>
+      <p>A search box and a list of visit cards, newest first. Each card: the date block, visit type, status, treatment, tooth, doctor, complaint, notes, the vitals row, the prescription count, the next-visit date and the item count.</p>
+      <div class="src"><b>There is no summary bar</b> on this tab, and there used to be. It was removed on purpose: aggregate figures do not belong on a data-entry screen.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">FORM</div>
+      <h5>Recording a visit</h5>
+      <p>A full page rather than a modal, because a visit has too many fields for a box. Vitals, work items against plan lines, work outcome per item, lab section, implant placement, next action.</p>
+      <div class="src"><b>What is not on this form:</b> money. Cost and payment are deliberately excluded — see below.</div>
+    </div>
+  </div>
+
+  <h3>Where the key numbers come from</h3>
+  <p>The vitals — BP, pulse, SpO₂, temperature, blood sugar, weight — are typed and stored as typed. The counts are lengths of lists. The one number that needs explanation is the money line, and the explanation is that it should not be there.</p>
+  <div class="call stop">
+    <h5>The money line on a visit card is a legacy artefact — ignore it</h5>
+    <p>Some older visit cards show <span class="ui">Rs. N</span>, <span class="ui">Paid Rs. N</span> and <span class="ui">Due Rs. N</span>. Those fields <strong>cannot be filled in from the visit form at all</strong> — billing was deliberately moved out of the clinical record and given to the front desk through billing prompts. Any figure you see there came from an older import.</p>
+    <p>The line also disappears from a card as soon as anyone edits and saves that visit, and reappears on a page reload. That is a display defect, not data loss. It is not on the V1 fix list. <strong>The billing truth is in Accounts, Chapter 6 — never read money off a visit card.</strong></p>
+  </div>
+
+  <h3>What it triggers elsewhere</h3>
+  <p>More than any other single action in the product. Saving one visit can set five things in motion, all inside one transaction, so either all of it happens or none of it does:</p>
+  <ul class="plain">
+    <li><b>A billing prompt</b> is created for the front desk for every visit with work items. This is the handover that replaces the doctor telling reception what to charge.</li>
+    <li><b>A lab case</b> is created if the lab section was filled in.</li>
+    <li><b>A six-month recall task</b> is created if the visit marks the treatment complete — unless a matching recall task is already pending, so it cannot pile up.</li>
+    <li><b>Implant placement and stock deduction</b> are recorded together, once, if an implant was placed.</li>
+    <li><b>The treatment plan re-derives its own progress.</b> The visit never writes plan status directly, which is why progress cannot drift out of line with the clinical record.</li>
+  </ul>
+
+  <h3>What it can't do yet</h3>
+  <div class="call">
+    <h5>1 · The implant follow-up only fires on the exact word "Implant"</h5>
+    <p>The automatic implant follow-up task is created by matching the treatment name against the single word <span class="ui">Implant</span>. A treatment named "Implant Placement", "Dental Implant" or "implant" in lower case is classified as ordinary work and generates no implant follow-up.</p>
+    <p>This is a naming discipline problem with a real clinical cost. If you want the implant follow-up to work, the treatment in your master list must be named exactly <span class="ui">Implant</span>, or the follow-up must be booked by hand every time.</p>
+  </div>
+  <div class="call">
+    <h5>2 · Three old status values can be read but not saved</h5>
+    <p>Imported visits may carry <span class="ui">started</span>, <span class="ui">ongoing</span> or <span class="ui">abandoned</span>. The form will not accept those values, so editing such a visit forces a status change. Rare, and worth knowing when it happens.</p>
+  </div>
+  <div class="call">
+    <h5>3 · Ad-hoc work is invisible to plan progress</h5>
+    <p>Work recorded without linking it to a treatment plan line, and without a work outcome, writes no clinical activity entry. It is in the visit record, but plan progress and the timeline will not see it. If a plan looks stuck at "not started" while work is clearly being done, this is why.</p>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>In V1, unchanged.</b> No W-row touches Treatment Visits. The naming rule in point 1 is a clinic decision you can act on today at no development cost.</p>
+</section>
+
+<section class="chapter" id="ch6">
+  <div class="ch-open">
+    <div class="ch-no">6</div>
+    <div>
+      <h2>Accounts &amp; Finance</h2>
+      <p class="standfirst">The money screens. The longest chapter in this book, because this is where a wrong number costs you a decision rather than a click — and because more of this module changed in the run-up to 14 September than any other.</p>
+      <div class="ch-meta">
+        <span class="tag t-done">In V1 · corrected</span>
+        <span class="tag t-wait">Sidebar → Operations → Accounts &amp; Finance</span>
+        <span class="tag t-wait">Module permission: Finance</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">One dashboard and six working pages behind it — Income, Expenses, Vendors, Membership, Wallets, Coupons and the CA Export. The dashboard is the read; the pages are the work.</p>
+  <p>Before anything else, one distinction that explains nine tenths of the confusion in this module: <strong>billed</strong> is what you invoiced, <strong>collected</strong> is what you actually received. Dentfluence keeps them in two different places — invoices and payments — and every figure on every money screen is one or the other, never both. When two screens disagree, this is almost always why.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>A dental practice does not fail from a lack of patients. It fails from money that was earned and not collected, and from an owner who could not tell the difference in time to do anything about it. This module exists so that at any moment you can answer three questions without opening a spreadsheet: what came in, what went out, and what is still owed.</p>
+
+  <h3>Who uses it, and when</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Person</th><th>When</th><th>What they do</th></tr></thead>
+    <tbody>
+      <tr><td><b>Front desk</b></td><td>All day</td><td>Raise invoices, take payments, work the billing prompts left by the doctors.</td></tr>
+      <tr><td><b>Accounts</b></td><td>Daily and at month end</td><td>Expenses, vendors, the CA export.</td></tr>
+      <tr><td><b>You</b></td><td>Daily, sixty seconds</td><td>The dashboard's top row. Nothing else.</td></tr>
+      <tr><td><b>Doctors</b></td><td>Never</td><td>Doctors have no Finance permission at all, by default. They cannot see any of this.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>What is on the screen</h3>
+  <p class="rubric">The dashboard, top to bottom, as it will be on 14 September.</p>
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">ROW 1</div>
+      <h5>The four figures that matter</h5>
+      <p><span class="ui">Collection</span> · <span class="ui">Expenses</span> · <span class="ui">Net Profit</span> with a margin percentage · <span class="ui">Outstanding</span> with an invoice count.</p>
+      <div class="src"><b>These are your daily read.</b> Three of the four follow the date filter at the top of the page. Outstanding does not — see below.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">ROW 2</div>
+      <h5>Three secondary figures</h5>
+      <p><span class="ui">Today's Collection</span> · <span class="ui">Avg Daily Collection</span> · <span class="ui">Projected Period Total</span>.</p>
+      <div class="src"><b>Reduced from five.</b> <span class="ui">Cash In Hand</span> and <span class="ui">Bank Balance</span> have been removed for V1 — see the callout below.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">ROW 3</div>
+      <h5>Three charts</h5>
+      <p>Revenue against expenses over the last six months; collection split by payment mode; your five biggest expense categories.</p>
+      <div class="src"><b>The six-month chart ignores the date filter</b> — it is always the trailing six calendar months, by design.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">ROW 4</div>
+      <h5>Recent transactions and quick actions</h5>
+      <p>The last ten payments received, whenever they were, and a set of shortcuts into the working pages.</p>
+      <div class="src"><b>Always the latest ten</b>, regardless of the filter. It is a live feed, not a report.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">FOOT</div>
+      <h5>Income Tax Estimator</h5>
+      <p>An indicative 44ADA presumptive calculation: projected annual revenue, taxable income at 50%, the slab, an annual liability and a per-quarter figure.</p>
+      <div class="src"><b>Labelled indicative on the screen, and it means it</b> — see the honest limits below.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">FILTER</div>
+      <h5>The date control</h5>
+      <p>Today · Yesterday · This Week · This Month · Quarter · Financial Year · custom. Defaults to month-to-date. The financial year is the Indian one, 1 April to 31 March.</p>
+      <div class="src"><b>Not everything obeys it.</b> The table below says exactly what does and what does not.</div>
+    </div>
+  </div>
+
+  <h3>Where every number comes from</h3>
+  <p class="rubric">The most useful table in this book. Read the last two columns before you read any figure.</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it is</th><th>Billed or collected</th><th>Follows the date filter?</th></tr></thead>
+    <tbody>
+      <tr><td><b>Collection</b></td><td>Every payment received in the selected period.</td><td>Collected</td><td><b>Yes</b></td></tr>
+      <tr><td><b>Expenses</b></td><td>Every expense dated in the period — <em>including bills you have not paid yet</em>.</td><td>Recorded, not paid</td><td><b>Yes</b></td></tr>
+      <tr><td><b>Net Profit</b></td><td>Collection minus Expenses, exactly as above.</td><td>Mixed</td><td><b>Yes</b></td></tr>
+      <tr><td><b>Outstanding</b></td><td>Everything unpaid across every invoice ever raised, as of right now.</td><td>Billed</td><td><b>No — lifetime</b></td></tr>
+      <tr><td><b>Today's Collection</b></td><td>Payments received today.</td><td>Collected</td><td>No — always today</td></tr>
+      <tr><td><b>Avg Daily Collection</b></td><td>Period collection divided by the days elapsed in the period.</td><td>Collected</td><td>Yes</td></tr>
+      <tr><td><b>Projected Period Total</b></td><td>The daily average multiplied out to the full period. A straight-line guess.</td><td>Collected</td><td>Yes</td></tr>
+      <tr><td><b>Collection by mode</b></td><td>The period's payments split by cash / card / UPI / transfer.</td><td>Collected</td><td>Yes</td></tr>
+      <tr><td><b>Top expenses</b></td><td>The period's five largest expense categories.</td><td>Recorded</td><td>Yes</td></tr>
+      <tr><td><b>Revenue vs expenses chart</b></td><td>Trailing six calendar months.</td><td>Collected vs recorded</td><td>No — fixed six months</td></tr>
+      <tr><td><b>Recent transactions</b></td><td>The last ten payments.</td><td>Collected</td><td>No — always latest ten</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="call gold">
+    <h5>Your profit definition — settled 4 September</h5>
+    <p><strong>Profit is income minus expenses. Nothing else.</strong> One definition, everywhere in the product, no adjustments, no accruals, no allocations.</p>
+    <p>What that means in practice, and you should know it: income is <em>collected</em> money, while expenses are <em>recorded</em> — a bill you have entered but not yet paid is already sitting in the expense figure. So the profit number is conservative in a month where you have entered supplier bills you have not settled. That is a reasonable place to be conservative, and it is a single, stable rule you can explain to your CA in one sentence.</p>
+  </div>
+
+  <div class="call good">
+    <h5>Removed for V1 — two figures that were doing harm</h5>
+    <p><strong>Cash In Hand is gone.</strong> It was never the money in your drawer. It was every cash payment ever received, minus every cash expense ever recorded, since the day the system started — floored at zero, ignoring the date filter, and never reset at day close. It only ever grew. A real cash-in-hand figure needs a cash drawer with an opening balance, a close and a count; that is V1.1 work and it was not going to be invented in a week.</p>
+    <p><strong>Bank Balance is gone.</strong> It was the number zero, printed on your main money screen, with a note in the code saying "wire this up when balances are tracked".</p>
+    <p>Removing both was your call on 4 September and it was the right one. A missing figure prompts a question. A confidently wrong figure prompts a decision.</p>
+  </div>
+
+  <h3>The working pages behind the dashboard</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Page</th><th>What it is for</th><th>Worth knowing</th></tr></thead>
+    <tbody>
+      <tr><td><b>Income</b></td><td>Invoices · Receipts · Final Bills · Trash</td><td>The four figures above the tabs — Today, This Week, This Month, Outstanding — are <em>fixed windows</em>. They ignore the date range you set for the tables underneath.</td></tr>
+      <tr><td><b>Expenses</b></td><td>All · Unpaid · Recurring · Voucher register</td><td>The Unpaid tab deliberately ignores the date range and shows everything outstanding. That is correct behaviour for a payables list.</td></tr>
+      <tr><td><b>Vendors</b></td><td>Supplier records and their bills</td><td>Feeds the payables side of Expenses.</td></tr>
+      <tr><td><b>Membership · Wallets · Coupons</b></td><td>Patient credit and schemes</td><td>Wallet money is a <em>liability</em> — a patient's advance is not your revenue until it is applied to an invoice.</td></tr>
+      <tr><td><b>CA Export</b></td><td>The pack you hand your accountant</td><td>Income in it is <em>collected</em>; GST in it is <em>billed</em>. Tell your CA that, once, and it will save an argument.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>How a payment actually lands</h3>
+  <p>Two routes, and the difference matters when a patient hands over one amount against three invoices:</p>
+  <ul class="plain">
+    <li><b>Against one invoice</b> — the settled amount is capped at that invoice's balance. This is the only route that handles card convenience fees and EMI.</li>
+    <li><b>Against the patient</b> — the money is allocated <em>oldest invoice first</em>, one receipt covering the whole tender, with a permanent record of how it was split. Anything left over after every invoice is settled goes to the patient's wallet as credit, not as revenue. Card and EMI are refused on this route.</li>
+  </ul>
+  <p>An invoice's status is derived, not chosen: nothing paid is <span class="ui">draft</span>, part paid is <span class="ui">partial</span>, fully paid is <span class="ui">paid</span>. <strong>There is no "send" step</strong> — <span class="ui">draft</span> in this system means <em>unpaid</em>, not "not yet issued". Reception must not read it as "not finished".</p>
+
+  <h3>What it can't do yet</h3>
+  <div class="call stop">
+    <h5>1 · Five Finance pages exist with no way to reach them</h5>
+    <p><span class="ui">Finance Reports</span>, <span class="ui">GST</span>, <span class="ui">Cashbook</span>, <span class="ui">Payroll</span> and the <span class="ui">Voucher register</span> are built and working, and nothing in the navigation links to any of them. You can only open them by typing the address.</p>
+    <p>This is worth a decision after 14 September: either link them, or accept that they are not part of how the clinic works. Leaving built pages unreachable is how a product accumulates the belief that it does less than it does.</p>
+  </div>
+  <div class="call stop">
+    <h5>2 · Two "Outstanding" figures can legitimately disagree</h5>
+    <p>The dashboard's Outstanding excludes cancelled invoices. The Billing list's own summary does not, and it is unfiltered and lifetime. If a cancelled invoice was cancelled by the older route, it keeps its balance and shows up in one place and not the other.</p>
+    <p><strong>The dashboard figure is the one to trust.</strong></p>
+  </div>
+  <div class="call">
+    <h5>3 · The tax estimator annualises the current month, not your filter</h5>
+    <p>Whatever date range you set, the estimator takes what has been collected <em>this calendar month so far</em> and multiplies by twelve. On the 2nd of the month that is a projection built from two days. Its quarterly figure is simply the annual liability divided by four, which is not the schedule printed directly beneath it.</p>
+    <p>It is labelled indicative and it should be treated as a prompt to call your CA, not as a number.</p>
+  </div>
+  <div class="call">
+    <h5>4 · The expense basis differs between Finance and Analytics</h5>
+    <p>The Finance dashboard counts expenses whether or not you have paid them. The Analytics screens count only expenses you have paid. The same month will show a different expense total, and a different profit, depending on which screen is open.</p>
+    <p><strong>Finance is the canonical screen.</strong> Analytics is covered in Chapter 14 and carries its own health warning.</p>
+  </div>
+  <div class="call">
+    <h5>5 · The cashbook has no opening balance</h5>
+    <p>Its running balance starts at zero every time the page loads. It is a period movement list, not a bank book. Related to the removal of Cash In Hand, and it resolves in the same V1.1 piece of work.</p>
+  </div>
+
+  <h3>Your decisions</h3>
+  <div class="dec">
+    <div class="dec-q"><span>F1</span>The five unreachable Finance pages — link them or leave them?</div>
+    <div class="dec-b">
+      <div><h6>What is really happening</h6><p>Five working pages have no navigation entry. Nobody uses them, so nobody has found their defects either.</p></div>
+      <div><h6>My recommendation</h6><p><b>Leave them out of V1</b> and decide in October, one page at a time, whether each earns a place in the sub-navigation. Adding five untested doors a week before training adds five ways to be surprised on the day.</p></div>
+      <div class="rec"><b>Status</b>Open<br>V1.1</div>
+    </div>
+  </div>
+  <div class="dec">
+    <div class="dec-q"><span>F2</span>Who is allowed to cancel an invoice?</div>
+    <div class="dec-b">
+      <div><h6>What is really happening</h6><p>Invoice cancellation was hardened to admin-only on 4 September. Before that it had no guard at all behind a live button.</p></div>
+      <div><h6>My recommendation</h6><p><b>Keep it admin-only</b>, meaning you. A cancelled invoice is the one action in the money stack that silently changes a total, and the clinic runs perfectly well with it going through you.</p></div>
+      <div class="rec"><b>Status</b>Settled 4 Sep<br>Admin only</div>
+    </div>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>In V1, corrected.</b> Cash In Hand and Bank Balance removed; one profit definition applied; invoice cancellation locked to admin. Everything under "what it can't do yet" is accurate as at 14 September and none of it is being fixed before then.</p>
+</section>
+
+<section class="chapter" id="ch7">
+  <div class="ch-open">
+    <div class="ch-no">7</div>
+    <div>
+      <h2>Revenue by Treatment Category</h2>
+      <p class="standfirst">The one new number in V1. It answers the question every owner asks and almost none can answer: which treatments are actually carrying this clinic?</p>
+      <div class="ch-meta">
+        <span class="tag t-next">New in V1</span>
+        <span class="tag t-wait">Finance → Reports</span>
+        <span class="tag t-wait">Module permission: Finance</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">A table with one row per treatment category and three money columns: <span class="ui">Billed</span>, <span class="ui">Collected</span> and <span class="ui">Outstanding</span>. It is the only report in V1 that tells you where your revenue comes from rather than how much of it there is.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>You already know your monthly collection. What you cannot currently see is that — for example — implants are twenty per cent of your billing and sixty per cent of your outstanding, or that scaling is a third of your appointments and a twentieth of your revenue. Those are the facts that change what you buy, what you train for, what you market, and which chair hours you protect. Without this table, every one of those decisions is made on impression.</p>
+
+  <h3>Where the number comes from</h3>
+  <p class="rubric">Read this before you use the report for anything.</p>
+  <p>Revenue is attributed <strong>by invoice line</strong>. Each line on an invoice carries the treatment it was raised for, and that treatment's category is what the line is counted under. This is the right basis: it follows what was actually charged, item by item, rather than guessing a category from the appointment or from the plan.</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Column</th><th>Definition</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td><b>Billed</b></td><td>The value of invoice lines in that category, raised within the period.</td><td>Billed · invoice date</td></tr>
+      <tr><td><b>Collected</b></td><td>Payment received and allocated against those lines.</td><td>Collected · payment date</td></tr>
+      <tr><td><b>Outstanding</b></td><td>Billed less collected — what that category is still owed.</td><td>Derived</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="call gold">
+    <h5>The two things to understand about this table before you act on it</h5>
+    <p><strong>Billed and Collected are on different clocks.</strong> A crown billed in August and paid in September appears in August's Billed and September's Collected. Over a quarter the two converge; over a single week they will not, and that is correct, not an error.</p>
+    <p><strong>Outstanding here is period outstanding, not the patient's whole balance.</strong> It answers "what has this category not been paid for out of what it billed in this period". The clinic-wide Outstanding on the Finance dashboard is a different, lifetime figure. The two are not meant to reconcile.</p>
+  </div>
+
+  <div class="call stop">
+    <h5>What this replaces — and why the old version was worse than nothing</h5>
+    <p>A "revenue by treatment category" panel already existed on the Reports page. It read from a table that no part of the application ever writes to — the only things that ever put rows in it were the demo seeders. On a clean production database that panel is empty; on a database that still carries demo data it shows invented figures.</p>
+    <p>This is exactly the class of defect that the whole V1 exercise exists to remove: a screen that looks like a report and is not connected to your clinic.</p>
+  </div>
+
+  <h3>How to actually use it</h3>
+  <ol class="steps">
+    <li><b>Monthly, not weekly.</b> A month is long enough for billing and collection to be roughly on the same clock.</li>
+    <li><b>Read Outstanding first, not Billed.</b> The category with the worst collection ratio is a front-desk or a consent problem, and it is fixable this week. The category with the highest billing is not a problem at all.</li>
+    <li><b>Compare against chair time, in your head.</b> The table does not know how long a treatment takes. A category that is 10% of revenue and 40% of your chairs is the finding, and it will not be on the screen — you have to bring it.</li>
+    <li><b>Do not compare doctors with it.</b> It cannot do that. Doctor-wise revenue was deliberately cut from V1 — see below.</li>
+  </ol>
+
+  <h3>What it can't do yet</h3>
+  <div class="call">
+    <h5>Doctor-wise revenue is not in V1</h5>
+    <p>You asked for it. It was costed and cut on 4 September, and the reason is worth recording because it will come up again: invoice lines do not currently record <em>who performed the work</em>. Adding that means a schema change plus a backfill of historical invoices, and it was the single most expensive item on the list. It is a V1.1 item and it is genuinely wanted — it is deferred on cost, not on merit.</p>
+    <p>Until then, the honest answer to "which doctor earns what" is that the system cannot tell you, and you should not approximate it from this table.</p>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>New in V1.</b> This is the one addition rather than a correction. If the schedule tightens, this is the row most at risk — and if it slips, the honest position is that the old panel is removed and nothing replaces it until V1.1, which is still better than a report fed by demo data.</p>
+</section>
+
+<section class="chapter" id="ch8">
+  <div class="ch-open">
+    <div class="ch-no">8</div>
+    <div>
+      <h2>Relationships (PRE)</h2>
+      <p class="standfirst">The chase list. The module most likely to be described as something it is not — so this chapter starts with what it does not do.</p>
+      <div class="ch-meta">
+        <span class="tag t-done">In V1</span>
+        <span class="tag t-wait">Sidebar → Communication → Relationships</span>
+        <span class="tag t-wait">Module permission: Relationship</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="call stop">
+    <h5>Start here. The system does not contact anybody by itself.</h5>
+    <p>There is no automated WhatsApp in your production system. There are no messaging credentials on the server, business verification with Meta has not been started, and until it is completed no template message can leave the system at all.</p>
+    <p><strong>What PRE actually is: the system tells reception exactly who to chase, and gives them one button per patient.</strong> The button opens WhatsApp on the staff member's own phone with the message pre-written. A human still presses send.</p>
+    <p>Say it that way to your team, to your website, and to anyone who asks. Every other description of this module is a promise you cannot keep on 14 September.</p>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">A daily worklist of every patient who needs contacting, grouped by why, built fresh each morning from what actually happened in the clinic — plus the pipeline of leads and treatment opportunities behind it.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>The revenue you have already earned is cheaper to collect than the revenue you have not. A patient who came six months ago, a plan that was approved and never booked, a lab case sitting back from the lab with nobody told, a post-operative check that nobody made — every one is money already half-earned and quietly abandoned. PRE exists to make sure that on any given morning, reception has a finite, ranked list of those people rather than a vague intention to "follow up".</p>
+
+  <h3>What is on the screen</h3>
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">TAB 01</div>
+      <h5>Today's Actions</h5>
+      <p>The working screen. Eighteen categories in three bands: <em>Most Important</em> — today's confirmations, tomorrow morning's list, reminders, follow-up calls, patients treated yesterday, lab work ready, yesterday's missed appointments. <em>Leads &amp; Opportunities</em> — new enquiries, lead follow-ups, treatment opportunities, membership renewals, yesterday's missed calls. <em>Other Reminders</em> — recalls, payment reminders, pending estimates, other calls, follow-up tasks, completed calls.</p>
+      <div class="src"><b>Comes from:</b> about twelve different parts of the system, read live each time the page opens.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">TABS 02–09</div>
+      <h5>The rest</h5>
+      <p>Dashboard · Pipeline (leads) · Opportunities · Recalls · WhatsApp · All Relationships · Analytics · Settings.</p>
+      <div class="src"><b>Today's Actions is the one that gets used.</b> Everything else supports it.</div>
+    </div>
+  </div>
+
+  <h3>What actually creates the work</h3>
+  <p>The recall engine runs every morning at 07:00 and creates queue items on six triggers:</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Trigger</th><th>Rule</th></tr></thead>
+    <tbody>
+      <tr><td><b>No visit for six months</b></td><td>Last visit six months ago or more. One open item per patient, with a thirty-day cooldown.</td></tr>
+      <tr><td><b>Approved plan, no appointment</b></td><td>A plan the patient accepted and never booked. The most valuable row on the list.</td></tr>
+      <tr><td><b>Post-operative follow-up</b></td><td>Fourteen days after a surgical visit.</td></tr>
+      <tr><td><b>Lab work back, no appointment</b></td><td>The case is in the clinic and the patient does not have a date.</td></tr>
+      <tr><td><b>Recent treatment follow-up</b></td><td>Seven days after any treatment visit.</td></tr>
+      <tr><td><b>Birthday</b></td><td>Three days ahead.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Separately, a rescheduled call that was parked as "waiting for the patient" is returned to the pending list on its due date, at 06:45. That fix matters: before it existed, a call that reception postponed disappeared from the board permanently.</p>
+
+  <h3>What can and cannot be sent</h3>
+  <p class="rubric">Seven message templates are configured. This is what each one actually does today.</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Template</th><th>Reality in production</th></tr></thead>
+    <tbody>
+      <tr><td><b>Appointment reminder</b></td><td>Has an automatic send path, scheduled daily at 10:00. <em>Blocked by the missing credentials.</em></td></tr>
+      <tr><td><b>Review request</b></td><td>Has an automatic send path, scheduled daily at 11:00. <em>Blocked by the missing credentials.</em></td></tr>
+      <tr><td><b>Lab ready</b></td><td>Has a send path that fires when a lab case moves. <em>Blocked by the missing credentials.</em></td></tr>
+      <tr><td><b>Appointment confirmation</b></td><td>Configured. Nothing in the system calls it.</td></tr>
+      <tr><td><b>Recall due</b></td><td>Configured. Nothing calls it. Recall is a call list.</td></tr>
+      <tr><td><b>Payment reminder</b></td><td>Configured. Nothing calls it. Overdue payments create a <em>task</em>, not a message.</td></tr>
+      <tr><td><b>Festive offer</b></td><td>Configured. Nothing calls it.</td></tr>
+      <tr><td><b>Birthday</b></td><td><b>Works today.</b> It is a button that opens WhatsApp on the staff phone with the message written. A human sends it.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="call stop">
+    <h5>One behaviour to correct in training</h5>
+    <p>Pressing the birthday button marks the row done on the board <em>whether or not the staff member actually sends the message</em>. The system cannot tell. If the board says done and the patient got nothing, this is how.</p>
+  </div>
+
+  <h3>What it can't do yet</h3>
+  <div class="call stop">
+    <h5>1 · The relationship score is always zero</h5>
+    <p>Every relationship carries a score out of 100, shown as a column on the list, a badge on the profile, and a distribution chart in PRE Analytics. <strong>It is never calculated.</strong> Two independent faults stop it: one of its six factors looks for an appointment status that does not exist in this system, and another looks for a database table that was never created. The second throws an error which is caught and logged silently, so the score keeps its starting value of zero for every patient, forever.</p>
+    <p>Consequence: every patient is in the "Low" band on the analytics chart, and the Score column is a column of zeroes. <strong>Tell your team to ignore it entirely.</strong> It is not on the V1 fix list and it should be either fixed or hidden in V1.1 — a visible number that is always wrong is worse than no number.</p>
+  </div>
+  <div class="call">
+    <h5>2 · The recall periodicity setting does nothing</h5>
+    <p>PRE Settings has a "General Recall periodicity" field, defaulted to 180 days. Changing it does not change the six-month cutoff, which is fixed in the code. The field is display only.</p>
+  </div>
+  <div class="call">
+    <h5>3 · The sidebar shows Relationships to everyone</h5>
+    <p>The link is visible regardless of permission, but the page behind it is gated. A staff member without the Relationship permission sees the link and gets a refusal. Cosmetic, and worth mentioning in training so it does not get reported as a fault.</p>
+  </div>
+
+  <h3>Your decisions</h3>
+  <div class="dec">
+    <div class="dec-q"><span>R1</span>Start Meta business verification now, or after launch?</div>
+    <div class="dec-b">
+      <div><h6>What is really happening</h6><p>Automated WhatsApp needs Meta business verification, then template approval at 24–48 hours per template, seven templates. None of it has started. It is the only item on the whole V1 list where the waiting is someone else's clock, not ours.</p></div>
+      <div><h6>My recommendation</h6><p><b>Start it this week, before launch.</b> It costs no development days, it blocks nothing, and every day it is not started is a day added to the front of V1.1. It is the highest-return hour you can spend before 14 September.</p></div>
+      <div class="rec"><b>Status</b>Open<br>Zero dev days</div>
+    </div>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>In V1 as a worklist.</b> The lists are correct and complete and reception has one button per patient. Nothing sends itself. Do not describe it otherwise on the website, on Instagram, or in the training room.</p>
+</section>
+
+<section class="chapter" id="ch9">
+  <div class="ch-open">
+    <div class="ch-no">9</div>
+    <div>
+      <h2>Lab</h2>
+      <p class="standfirst">Nine states, one vendor relationship, and the only module in the product where a remake has a visible price tag.</p>
+      <div class="ch-meta">
+        <span class="tag t-done">In V1</span>
+        <span class="tag t-wait">Sidebar → Operations → Lab</span>
+        <span class="tag t-wait">Module permission: Lab</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">A case tracker. Every impression or scan that leaves the clinic becomes a case that moves through nine states — draft, order placed, impression sent, scan sent, trial received, trial returned, final received, complete, rejected — with an expected date, a vendor, an estimated cost and an actual cost.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>Lab work is the one thing in a dental practice that leaves the building and has to come back. Every day it is late is a chair hour you cannot sell and a patient losing confidence. And a remake is the purest form of loss in the practice — you pay twice, you occupy the chair twice, and you charge once. This module exists so that both of those are visible while you can still do something about them, rather than at the end of the month.</p>
+
+  <h3>What is on the screen</h3>
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">TOP</div>
+      <h5>Four money cards</h5>
+      <p><span class="ui">This Month — Estimated</span> and <span class="ui">Actual</span>, with the variance between them · <span class="ui">Unbilled Cases</span> with a count · <span class="ui">Billed, pending payment</span>.</p>
+      <div class="src"><b>The variance line is the point of this strip.</b> Estimated against actual, this month, is the number that tells you whether your lab pricing is understood.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">MIDDLE</div>
+      <h5>Nine filter tabs and a search</h5>
+      <p>All · Active · Draft · Order Placed · Impression/Scan · Trial Loop · Final Received · Complete · Rejected, each with a live count.</p>
+      <div class="src"><b>Active</b> means everything that is not complete or rejected. It is the tab to live on.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">TABLE</div>
+      <h5>Eight columns</h5>
+      <p>Patient · Work Type · Tooth/Shade · Lab Vendor · Expected · Status &amp; Next Step · Est. Cost · Actions.</p>
+      <div class="src"><b>"Status &amp; Next Step"</b> is the useful one — it names what has to happen next rather than only where the case is.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">ALSO</div>
+      <h5>Dashboard, reconciliation, vendors</h5>
+      <p>A lab dashboard, a monthly reconciliation against what the vendor invoiced, and the vendor records themselves.</p>
+      <div class="src"><b>Reconciliation is where the remake argument gets settled</b> — with a record rather than a memory.</div>
+    </div>
+  </div>
+
+  <h3>Where the numbers come from</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>Definition</th></tr></thead>
+    <tbody>
+      <tr><td><b>This Month — Estimated</b></td><td>Sum of the estimated cost of cases <em>created</em> this calendar month.</td></tr>
+      <tr><td><b>This Month — Actual</b></td><td>Sum of the actual lab cost on those same cases.</td></tr>
+      <tr><td><b>Unbilled</b></td><td>Cases that have an actual cost recorded and have not yet been billed to the clinic by the lab.</td></tr>
+      <tr><td><b>Billed</b></td><td>Cases the lab has invoiced and you have not yet paid.</td></tr>
+      <tr><td><b>Tab counts</b></td><td>A straight count of cases in each state.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><strong>Note on the month:</strong> "this month" is by the date the case was <em>created</em>, not the date it came back or the date it was billed. For a case that spans a month end, the estimate and the actual sit in the month it started.</p>
+
+  <h3>What it triggers elsewhere</h3>
+  <ul class="plain">
+    <li><b>Every morning at 09:00</b>, every overdue case that does not already have an open task gets one. Trial cases that have sat two days waiting on a doctor's decision get a review task.</li>
+    <li><b>Changing a case's status</b> writes to the lab's communication thread and opens a queue item if none exists, then closes it automatically when the case reaches final received, complete or rejected.</li>
+    <li><b>A case arriving back</b> puts the patient on the recall engine's list if they have no appointment — see Chapter 8.</li>
+    <li><b>Recording lab work on a treatment visit</b> creates the case. Reception does not create most cases; the chair does.</li>
+  </ul>
+
+  <h3>What it can't do yet</h3>
+  <div class="call stop">
+    <h5>1 · Creating a lab case notifies nobody</h5>
+    <p>A case created and left in <span class="ui">draft</span> produces no signal to anyone until either someone changes its status or it becomes overdue at the next 09:00 run. There is no "new case" alert.</p>
+    <p>The practical consequence: a case created on Friday afternoon and forgotten is invisible until it is already late. The mitigation is a habit, not a feature — the Lab column on the huddle board is read every morning.</p>
+  </div>
+  <div class="call">
+    <h5>2 · An overdue count is calculated and has no tab</h5>
+    <p>The system counts overdue cases and there is nowhere to click to see them. Use the Expected column with Active selected instead.</p>
+  </div>
+  <div class="call stop">
+    <h5>3 · Lab has no separate edit permission</h5>
+    <p>Anyone with Lab <em>view</em> can also change a case's status and archive a case. Unlike Inventory and Prescriptions, this module has no per-action permission. Under your default roles that is Admin, Manager and Doctor — which is acceptable — but it is worth knowing that "view only" is not available for Lab.</p>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>In V1, unchanged.</b> The permission point above is a real gap and it is a V1.1 item.</p>
+</section>
+
+<section class="chapter" id="ch10">
+  <div class="ch-open">
+    <div class="ch-no">10</div>
+    <div>
+      <h2>Inventory</h2>
+      <p class="standfirst">The most instrumented module in the product, and the one with the largest gap between what it calculates and what it tells anyone.</p>
+      <div class="ch-meta">
+        <span class="tag t-done">In V1</span>
+        <span class="tag t-wait">Sidebar → Operations → Inventory</span>
+        <span class="tag t-wait">Module permission: Inventory</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">Stock, purchase orders, goods receipt, implants, reusable assets and a stock count, with a dashboard on top that scores the whole thing out of a hundred.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>Two failures, opposite in shape, identical in cost. You run out of a material mid-procedure and lose the patient's confidence and the chair hour. Or you hold three lakh of stock, a third of it expiring, because nobody could see what was already on the shelf. Inventory exists to keep both numbers visible at once — what is about to run out, and what is quietly dying in the cupboard.</p>
+
+  <h3>What is on the screen</h3>
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">HERO</div>
+      <h5>Inventory Health Score</h5>
+      <p>A single score out of 100 with a letter grade, built by starting at 100 and deducting for out-of-stock, low-stock, expiring and dead stock, each capped.</p>
+      <div class="src"><b>Structurally optimistic</b> — items with no minimum quantity set are counted in the denominator but can never trigger a deduction. Read it as a trend, never as a measurement.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">KPI ROW</div>
+      <h5>Six cards</h5>
+      <p><span class="ui">Inventory Value</span> · <span class="ui">Total Items</span> · <span class="ui">Low Stock</span> · <span class="ui">Out of Stock</span> · <span class="ui">Expiring Soon</span> (90 days) · <span class="ui">Assets Due</span>.</p>
+      <div class="src"><b>Inventory Value</b> is available quantity × average purchase price, across active items.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">SECOND ROW</div>
+      <h5>Five more</h5>
+      <p><span class="ui">Days Until Stock-out</span> · <span class="ui">Dead Stock Value</span> (no movement in 90 days) · <span class="ui">Monthly Wastage</span> (expired plus damaged) · <span class="ui">Today's Deliveries</span> · implant catalogue count.</p>
+      <div class="src"><b>Days Until Stock-out</b> is derived from the last thirty days' consumption. It is the most decision-useful figure on the page.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">BELOW</div>
+      <h5>Charts, lists, movements</h5>
+      <p>Stock status donut, category values, a value trend, critical items, expiring soon, and the last twelve stock movements.</p>
+      <div class="src"><b>The "value trend" is not inventory value</b> — it plots purchases per week for eight weeks. Read it as spending, not as holding.</div>
+    </div>
+  </div>
+
+  <h3>How an item is classified</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>State</th><th>Rule</th></tr></thead>
+    <tbody>
+      <tr><td><b>Minimum not set</b></td><td>No minimum quantity on the item. <em>Excluded from low, critical and out counts entirely.</em></td></tr>
+      <tr><td><b>Out of stock</b></td><td>Nothing on hand.</td></tr>
+      <tr><td><b>Critical</b></td><td>On hand is at or below half the minimum.</td></tr>
+      <tr><td><b>Low</b></td><td>On hand is at or below the minimum.</td></tr>
+      <tr><td><b>In stock</b></td><td>Everything else.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="call gold">
+    <h5>The single most valuable hour you can spend in this module</h5>
+    <p>An item with no minimum quantity is invisible to every alert, every count and the health score. It cannot be low, cannot be critical, cannot be out — it simply is not counted.</p>
+    <p><strong>Set a minimum quantity on every item you actually use.</strong> Until that is done, Inventory is reporting on a subset of your stock and the health score is flattering you. This is a data job for your assistant, not a development job, and it is worth doing before 14 September.</p>
+  </div>
+
+  <h3>What it triggers elsewhere</h3>
+  <ul class="plain">
+    <li><b>Creating a purchase order</b> creates two tasks automatically — confirm the order with the vendor, and a delivery follow-up the day before it is expected.</li>
+    <li><b>Receiving goods</b> creates an unpaid expense in Finance and closes the delivery follow-up task by itself.</li>
+    <li><b>An implant placed at the chair</b> deducts from stock as part of the visit record, once, without a separate step.</li>
+  </ul>
+
+  <h3>What it can't do yet</h3>
+  <div class="call stop">
+    <h5>1 · Stock crossing its reorder level triggers nothing at all</h5>
+    <p>This is the most important sentence in the chapter. There is no alert, no notification, no task, no email, no scheduled check. The low-stock and out-of-stock numbers are calculated <em>only at the moment someone opens a page that shows them</em>.</p>
+    <p><strong>Inventory is a pull system, not a push system.</strong> If nobody opens the Inventory Alerts page — or reads the Inventory column on the huddle board — nobody finds out. That column on the morning board is not a convenience; on current behaviour it is the entire alerting mechanism.</p>
+  </div>
+  <div class="call">
+    <h5>2 · Two different definitions of "low"</h5>
+    <p>The Alerts page classifies by <em>minimum quantity</em>. The create-purchase-order screen classifies by <em>reorder level</em>, falling back to minimum quantity. The two screens can disagree about which items are low. Set both fields to the same value per item and the problem disappears.</p>
+  </div>
+  <div class="call">
+    <h5>3 · Two stock list pages, one of them unpaginated</h5>
+    <p>There is a stock listing that has no navigation entry and returns every item at every location in one page. The sub-navigation's <span class="ui">Items</span> points at a different, proper page. Use the sub-navigation and ignore the other one.</p>
+  </div>
+  <div class="call">
+    <h5>4 · "Add Item" on the dashboard does not add an item</h5>
+    <p>The quick action links to the read-only stock list. Add items from the sub-navigation instead.</p>
+  </div>
+
+  <h3>Your decisions</h3>
+  <div class="dec">
+    <div class="dec-q"><span>I1</span>Who owns the daily look at Inventory Alerts?</div>
+    <div class="dec-b">
+      <div><h6>What is really happening</h6><p>Nothing pushes a stock alert to anyone. If no named person opens the page, running out of something is discovered at the chair.</p></div>
+      <div><h6>My recommendation</h6><p><b>Name the assistant, and make it a huddle step.</b> The Inventory column is already on the morning board — the decision is only that one person is accountable for reading it and saying the word out loud. Zero development cost, and it closes the gap completely.</p></div>
+      <div class="rec"><b>Status</b>Open<br>Training item</div>
+    </div>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>In V1, unchanged.</b> Points 1 and 2 are behaviour to train around, not defects being fixed before 14 September.</p>
+</section>
+
+<section class="chapter" id="ch11">
+  <div class="ch-open">
+    <div class="ch-no">11</div>
+    <div>
+      <h2>Prescriptions &amp; Clinical Library</h2>
+      <p class="standfirst">What you gave the patient, and what you hold about them. Two modules, one chapter, because they share a single question: who is allowed to see a patient's clinical material?</p>
+      <div class="ch-meta">
+        <span class="tag t-done">In V1</span>
+        <span class="tag t-wait">Sidebar → Clinical → Prescriptions · Clinical Library</span>
+        <span class="tag t-wait">Module permissions: Prescriptions · Clinical Library</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">Prescriptions is a proper prescribing module — a drug master, a form, an Rx number, a printable output and a WhatsApp send button. The Clinical Library is two different things sharing a name: the clinic's own content library, and the per-patient document store on the profile's <span class="ui">Documents</span> tab.</p>
+  <p>The one your team uses daily is the Documents tab: photographs, X-rays, OPGs, CBCTs, scans, PDFs, consent forms, lab slips.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>Two reasons, and only one of them is clinical. The clinical reason is obvious. The other is that a dental practice is now a data fiduciary under the DPDP Act, and photographs of a patient's mouth are personal data. Where those files live, who can open them, and whether that opening is recorded, is a legal question as much as a clinical one.</p>
+
+  <h3>What is on the screen</h3>
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">PRESCRIPTIONS</div>
+      <h5>Four cards, then the list</h5>
+      <p><span class="ui">Total</span> · <span class="ui">Today</span> · <span class="ui">Issued</span> · <span class="ui">Draft</span>, then a filterable table: Rx Number, Patient, Date, Prescribed By, Drugs, Status.</p>
+      <div class="src"><b>The Draft card will read zero, permanently.</b> There is no draft step — a prescription is live the moment it is saved. Ignore that card.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">DOCUMENTS TAB</div>
+      <h5>Sub-tabs with counts, then gallery or timeline</h5>
+      <p><span class="ui">All</span> · <span class="ui">Photos/Video</span> · <span class="ui">X-ray group</span> (X-ray, OPG, CBCT, STL, intraoral scan) · <span class="ui">Documents</span> · <span class="ui">Consent</span>, each with a count, plus a filter bar and two views.</p>
+      <div class="src"><b>Every count is of this patient's files only.</b> There is no clinic-wide file count anywhere.</div>
+    </div>
+  </div>
+
+  <h3>Where the numbers come from</h3>
+  <p>All of them are simple counts, with one inconsistency worth knowing: on the Prescriptions page, <span class="ui">Total</span> includes deleted prescriptions while <span class="ui">Today</span>, <span class="ui">Issued</span> and <span class="ui">Draft</span> do not. The four cards therefore describe two slightly different populations. None of the four is branch-scoped.</p>
+
+  <h3>What it triggers elsewhere</h3>
+  <ul class="plain">
+    <li><b>A prescription written at the chair</b> is linked to the visit and appears on the visit card with its drug count.</li>
+    <li><b>Downloading a clinical file</b> writes an audit entry. <em>Viewing one inline does not.</em></li>
+    <li><b>Nothing else.</b> Neither module fires a task, a message or a rule.</li>
+  </ul>
+
+  <h3>What it can't do yet</h3>
+  <div class="call stop">
+    <h5>1 · Clinical file permissions are the one open security question in this book</h5>
+    <p>The routes that list, upload, edit and delete a patient's clinical files are registered twice in the system, in two different files. One registration requires the Patients permission; the other requires only that you are logged in. The second one is loaded later and wins.</p>
+    <p><strong>As things stand, any logged-in staff member can reach a patient's clinical file records regardless of their Patients permission.</strong> The image files themselves are protected by a separate branch check, so this is not an open door to the outside world — it is a door between roles inside your own clinic. With six staff in one branch, the practical exposure today is small. As a permission model it is wrong.</p>
+    <p>This is <b>C2</b> on your decision list and I need to know whether it is being closed before 14 September — see the decision card below.</p>
+  </div>
+  <div class="call">
+    <h5>2 · Document filtering happens in the browser</h5>
+    <p>Every one of a patient's files is loaded into the page and then hidden by the filter. For a patient with a long history and large scans, that page will be slow. It is correct, just not fast.</p>
+  </div>
+  <div class="call">
+    <h5>3 · The "revised" prescription status is never used</h5>
+    <p>It exists and nothing writes it. A corrected prescription is a new one.</p>
+  </div>
+
+  <h3>Your decisions</h3>
+  <div class="dec">
+    <div class="dec-q"><span>C2</span>Clinical file permissions — close before launch, or accept and date it?</div>
+    <div class="dec-b">
+      <div><h6>What is really happening</h6><p>A duplicate route registration strips the Patients permission from clinical file actions. It is a small, well-understood change — delete one duplicate registration — but it is a code change, and this document phase carries zero development days.</p></div>
+      <div><h6>My recommendation</h6><p><b>Close it before 14 September if it fits in the W-1 batch; otherwise date it to the week after launch and say so here.</b> What I will not do is write a handbook that describes a permission the system does not enforce. Tell me which, and this chapter states it plainly either way.</p></div>
+      <div class="rec"><b>Status</b>Open<br>Needs your answer</div>
+    </div>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>In V1.</b> Prescriptions is unchanged and sound. The clinical file permission question above is the one unresolved item in this chapter.</p>
+</section>
+
+<section class="chapter" id="ch12">
+  <div class="ch-open">
+    <div class="ch-no">12</div>
+    <div>
+      <h2>Tasks &amp; Practice Protocols</h2>
+      <p class="standfirst">Where the clinic's loose ends collect, and where its routines are enforced. One is a to-do list nine other modules write into; the other is the closest thing the product has to an accountability sheet.</p>
+      <div class="ch-meta">
+        <span class="tag t-done">In V1</span>
+        <span class="tag t-wait">Sidebar → Operations → Tasks · Practice Protocols</span>
+        <span class="tag t-wait">Module permissions: Tasks · Practice Protocols</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">Tasks is a single list of everything owed by anyone, with four counters above it. Most of its contents are not typed by a human — nine parts of Dentfluence create tasks automatically, and that is the module's real value.</p>
+  <p>Practice Protocols is the recurring side: the standing routines each role owes, defined once and generated as real tasks every night at ten past midnight.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>Two different failures. The first is the thing that fell between two people and neither picked up — that is Tasks. The second is the thing everybody knows should happen every Tuesday and nobody can prove happened — autoclave logs, stock checks, end-of-day cash reconciliation. That is Protocols, and it is the only place in the product that will tell you, person by person, what was assigned and what was actually done.</p>
+
+  <h3>What is on the screen</h3>
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">TASKS · TOP</div>
+      <h5>Four counters</h5>
+      <p><span class="ui">Overdue</span> · <span class="ui">Due Today</span> · <span class="ui">Upcoming</span> · <span class="ui">Completed</span>.</p>
+      <div class="src"><b>The Completed card is captioned "this period" and has no period.</b> It is every completed task ever, for the branch. Read it as a lifetime total or ignore it.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">TASKS · BODY</div>
+      <h5>Three tabs</h5>
+      <p><span class="ui">Dashboard</span> — Backlog, Due Today, Upcoming, Completed sections · <span class="ui">My Tasks</span> · <span class="ui">Assign Task</span>.</p>
+      <div class="src"><b>Assistants, front desk and accounts see only their own tasks.</b> Managers and doctors see the team's.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">PROTOCOLS</div>
+      <h5>The catalogue, grouped by role</h5>
+      <p>Per protocol: title, frequency (once, daily, weekly, monthly), whether evidence is required, materials, and active state.</p>
+      <div class="src"><b>This screen is the definition, not the record.</b> What actually got done appears in Tasks, and the scoreboard is on the Huddle's report tabs.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">THE SCOREBOARD</div>
+      <h5>Protocol compliance</h5>
+      <p>Person by person: assigned, done, missed, percentage. It lives on the Huddle report tabs, not here.</p>
+      <div class="src"><b>The most decision-grade number in the product.</b> It is about behaviour, and it is measured rather than reported.</div>
+    </div>
+  </div>
+
+  <h3>What creates tasks automatically</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Source</th><th>When</th></tr></thead>
+    <tbody>
+      <tr><td><b>Practice protocols</b></td><td>Every night at 00:10, for the next day, to each assigned person.</td></tr>
+      <tr><td><b>Lab</b></td><td>09:00 daily — overdue cases, and trials waiting two days on a doctor.</td></tr>
+      <tr><td><b>Purchase orders</b></td><td>Two per order: confirm with vendor, and delivery follow-up.</td></tr>
+      <tr><td><b>Missed appointments</b></td><td>An urgent call task, with a three-day cooldown per patient.</td></tr>
+      <tr><td><b>Treatment completion</b></td><td>A six-month recall task, unless one is already pending.</td></tr>
+      <tr><td><b>Overdue payments</b></td><td>A follow-up task. <em>Not a message.</em></td></tr>
+      <tr><td><b>Shift reminders</b></td><td>Every five minutes.</td></tr>
+      <tr><td><b>Escalation</b></td><td>Every thirty minutes, tasks past their service level are escalated.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>What it can't do yet</h3>
+  <div class="call stop">
+    <h5>1 · Four controls on the Tasks page do nothing</h5>
+    <p>The search box, the staff filter, the Daily/Weekly/Monthly buttons, and clicking a counter card to filter the list — none of them have any effect. They are drawn and connected to nothing. The buttons highlight, the list does not change.</p>
+    <p>This is the most visible cosmetic defect in the product, your team <em>will</em> find it in the first week, and it is not on the V1 fix list. <strong>Say so in training rather than letting them report it four times.</strong> Use the section headings — Backlog, Due Today, Upcoming — which do work.</p>
+  </div>
+  <div class="call">
+    <h5>2 · The Tasks list is not paginated</h5>
+    <p>Every open and completed task for the branch loads in one page. As the completed pile grows, this page gets slower. It will be fine on 14 September and it will need attention by January.</p>
+  </div>
+  <div class="call">
+    <h5>3 · The Overdue page is an empty shell</h5>
+    <p><span class="ui">/tasks/overdue</span> renders a heading and nothing else. Nothing in the navigation points at it. Use the Overdue counter's section on the dashboard tab.</p>
+  </div>
+  <div class="call">
+    <h5>4 · A once-only protocol is re-evaluated every night forever</h5>
+    <p>It only ever generates one task, because of a duplicate guard — but it is checked every night indefinitely. Harmless; worth knowing before someone asks why a one-off protocol never disappears from the catalogue.</p>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>In V1, unchanged.</b> Point 1 is the single most important thing to name in staff training from this chapter.</p>
+</section>
+
+<section class="chapter" id="ch13">
+  <div class="ch-open">
+    <div class="ch-no">13</div>
+    <div>
+      <h2>HR</h2>
+      <p class="standfirst">Staff records, attendance and roles. The smallest module in daily use, and the one carrying the sharpest open question in this book.</p>
+      <div class="ch-meta">
+        <span class="tag t-done">In V1</span>
+        <span class="tag t-wait">Sidebar → Operations → HR</span>
+        <span class="tag t-wait">Module permission: HR</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">Staff profiles, a daily attendance register, training records, memos, a calendar, and — behind a separate admin-only door — the roles and permissions screen.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>Attendance in a small clinic is usually a register on the desk or nothing at all, and it becomes a problem exactly once — at an argument about a salary, months later, when neither side has a record. HR exists so that the record is made daily, as a thirty-second act, and is there when it is needed.</p>
+
+  <h3>What is on the screen</h3>
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">ATTENDANCE</div>
+      <h5>A day at a time</h5>
+      <p>A date picker, a department filter, a <span class="ui">Mark All Present</span> button, then a row per staff member: shift, status, check-in, check-out, method.</p>
+      <div class="src"><b>Six statuses:</b> present, absent, late, half day, on leave, holiday. Bulk marking allows only present, absent and holiday.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">ABOVE IT</div>
+      <h5>Four counts</h5>
+      <p><span class="ui">Present</span> (present, late and half day together) · <span class="ui">Absent</span> · <span class="ui">On Leave</span> · <span class="ui">Not Marked</span>.</p>
+      <div class="src"><b>Not Marked</b> is total staff minus rows recorded, and it can go negative if a record exists for someone without an HR profile.</div>
+    </div>
+  </div>
+
+  <h3>What it triggers elsewhere</h3>
+  <ul class="plain">
+    <li><b>Weekdays at 10:30</b>, anyone with no attendance row for the day is marked absent automatically, with a note saying the system did it.</li>
+    <li><b>Nothing else.</b> No leave accrual, no payroll run, no hours calculation, no notification when a professional licence is about to expire — the expiring-licence list on the HR dashboard is a display only.</li>
+  </ul>
+  <div class="call">
+    <h5>Two things about the auto-absent job</h5>
+    <p>It runs <strong>weekdays only</strong>. If your clinic works Saturdays, Saturday is never auto-marked and must be marked by hand or it stays blank.</p>
+    <p>Rows it creates are labelled method <span class="ui">manual</span>, so the Method column reads "manual" for rows no human touched. Do not read that column as proof anyone was present.</p>
+  </div>
+
+  <h3>What it can't do yet</h3>
+  <div class="call stop">
+    <h5>1 · The QR attendance page is open to anyone, and it lists your staff and their codes</h5>
+    <p>There is a staff QR check-in screen that sits <em>outside</em> the login. Opening it does not require an account, and the page it returns contains every active staff member's name, role, and the personal code that the check-in and check-out actions accept.</p>
+    <p><strong>In plain terms: anyone who can reach that address can see your staff list and mark any of them in or out.</strong> The only guard on the action is that the same person cannot be marked twice within five minutes.</p>
+    <p>This is not on any V1 row and I did not know about it before writing this chapter. It needs a decision from you this week — see the card below.</p>
+  </div>
+  <div class="call">
+    <h5>2 · Hours are stored and never calculated</h5>
+    <p>Check-in and check-out times are recorded. Nothing anywhere works out hours worked or overtime. Attendance answers "were they here", not "how long".</p>
+  </div>
+  <div class="call">
+    <h5>3 · Every non-admin role can edit HR by default</h5>
+    <p>Under the seeded permissions, Manager, Doctor, Assistant, Front Desk and Accounts all have HR view <em>and</em> edit. An assistant can mark anyone's attendance. Roles and permissions themselves are separately locked to admin, so nobody can promote themselves — but the attendance register is open to the whole team as shipped.</p>
+  </div>
+  <div class="call">
+    <h5>4 · Attendance has no separate edit permission</h5>
+    <p>HR view is enough to mark attendance. There is no view-only HR role.</p>
+  </div>
+
+  <h3>Your decisions</h3>
+  <div class="dec">
+    <div class="dec-q"><span>H5</span>The unauthenticated QR attendance page — disable, restrict, or accept?</div>
+    <div class="dec-b">
+      <div><h6>What is really happening</h6><p>A pre-login page exposes the staff roster and the codes that mark attendance. Whether anyone outside the clinic could find the address is a separate question from whether they should be able to use it.</p></div>
+      <div><h6>My recommendation</h6><p><b>Disable it before 14 September and mark attendance from inside the app.</b> You are not using QR check-in today, the manual register works, and removing a public page is a smaller change than securing one. If you do want QR check-in later, it should be built properly in V1.1.</p></div>
+      <div class="rec"><b>Status</b>Open<br>Needs your answer</div>
+    </div>
+  </div>
+  <div class="dec">
+    <div class="dec-q"><span>H6</span>Should the whole team be able to edit HR attendance?</div>
+    <div class="dec-b">
+      <div><h6>What is really happening</h6><p>The seeded permissions give every role HR edit. That is a settings change, not a code change — you can fix it yourself in Settings → Staff &amp; Roles.</p></div>
+      <div><h6>My recommendation</h6><p><b>Reduce Doctor, Assistant and Accounts to HR view.</b> Leave Manager and Front Desk with edit, because one of them marks the register each morning. Five minutes in Settings, zero development cost, and it makes the register mean something.</p></div>
+      <div class="rec"><b>Status</b>Open<br>Settings change</div>
+    </div>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>In V1 as a manual register.</b> HR is also the module with no mobile support at all — there is no interface behind it for a phone, which is why HR attendance is web work before it can ever be a V1.1 phone feature.</p>
+</section>
+
+<section class="chapter" id="ch14">
+  <div class="ch-open">
+    <div class="ch-no">14</div>
+    <div>
+      <h2>Reports &amp; Analytics</h2>
+      <p class="standfirst">Three reporting surfaces, three different default date windows, and one rule for using them safely.</p>
+      <div class="ch-meta">
+        <span class="tag t-done">In V1</span>
+        <span class="tag t-wait">Sidebar → Insights → Reports · Analytics</span>
+        <span class="tag t-wait">Module permissions: Reports · Analytics</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">Three separate things that all look like reporting. <span class="ui">Reports</span> is the clinic-wide one with six tabs. <span class="ui">Analytics</span> is a set of eight deeper finance-oriented screens. And <span class="ui">Finance Reports</span> is a twelve-tab accounting pack that has no link anywhere in the navigation.</p>
+
+  <h3>Why it exists</h3>
+  <p class="rubric">The business problem, stated plainly.</p>
+  <p>Because the daily screens answer "what is happening" and none of them answer "is this better or worse than last month". That second question is the only one that changes what you do.</p>
+
+  <h3>The rule for using any of them</h3>
+  <div class="call gold">
+    <h5>Check the date window before you read a single number</h5>
+    <p>Reports defaults to <strong>the last 30 days</strong>. The Finance dashboard defaults to <strong>month to date</strong>. Analytics defaults to <strong>the last 6 or 12 months</strong> depending on the screen. Finance Reports defaults to <strong>the financial year</strong>.</p>
+    <p>Four surfaces, four defaults. Two of them will disagree about "this month" purely because one of them is not showing this month. Almost every "the numbers don't match" question in this product resolves to this.</p>
+  </div>
+
+  <h3>What is on the screen</h3>
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">REPORTS</div>
+      <h5>Six tabs</h5>
+      <p>Appointments · Revenue · Patients · Treatments · Lab · Inventory. Windows of 7, 30, 90 or 365 days, or custom.</p>
+      <div class="src"><b>This is the surface to teach.</b> One door, six subjects, a date control that works.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">ANALYTICS</div>
+      <h5>Eight cards</h5>
+      <p>Vendor · Expense · Lab · Procurement · Cash Flow · Outstanding · Business Intelligence · Audit &amp; History.</p>
+      <div class="src"><b>Admin only</b> under the default permissions. Nobody else can open it.</div>
+    </div>
+  </div>
+
+  <h3>Where the Revenue tab's numbers come from</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>Definition</th><th>Basis</th><th>Period</th></tr></thead>
+    <tbody>
+      <tr><td><b>Collected</b></td><td>Payments received in the window.</td><td>Collected</td><td>Follows the window</td></tr>
+      <tr><td><b>Outstanding</b></td><td>Everything unpaid across all invoices.</td><td>Billed</td><td><b>Lifetime</b></td></tr>
+      <tr><td><b>Invoice count / average</b></td><td>Invoices raised in the window, cancelled excluded.</td><td>Billed</td><td>Follows the window</td></tr>
+      <tr><td><b>Collection rate</b></td><td>Collected divided by collected plus outstanding.</td><td colspan="2"><b>Mixes a period figure with a lifetime one — see below.</b></td></tr>
+      <tr><td><b>Top day, by mode, top patients</b></td><td>Payments in the window.</td><td>Collected</td><td>Follows the window</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>What it can't do yet</h3>
+  <div class="call stop">
+    <h5>1 · "Collection rate" is not a rate</h5>
+    <p>It divides what you collected in the selected window by that plus everything ever outstanding. Over seven days it will look catastrophic and mean nothing. <strong>Ignore this figure.</strong> Read Collected and Outstanding separately.</p>
+  </div>
+  <div class="call stop">
+    <h5>2 · Analytics → Audit &amp; History totals are not totals</h5>
+    <p>The summary figures on that screen add up only the rows fetched for display — the fifty most recent payments, fifty vouchers, twenty reconciliations — not everything in the period. They are labelled as summaries and they are samples. Do not quote them.</p>
+  </div>
+  <div class="call">
+    <h5>3 · Two Analytics tabs ignore the date filter they display</h5>
+    <p>Receivables and Payables in the Finance Reports pack accept a date range and do not apply it. They always show everything. That is defensible for a payables list and confusing next to a date control.</p>
+  </div>
+  <div class="call">
+    <h5>4 · The Reports page is still titled for appointments</h5>
+    <p>A leftover from when it only did one thing. Cosmetic.</p>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>In V1, unchanged</b>, with one correction: the duplicate Analytics door was removed on 4 September. Analytics previously had two addresses, one of which let a finance-only role past the Analytics permission. There is now one door.</p>
+</section>
+
+<section class="chapter" id="ch15">
+  <div class="ch-open">
+    <div class="ch-no">15</div>
+    <div>
+      <h2>Roles, Permissions and the Activity Log</h2>
+      <p class="standfirst">Who can do what, and what gets written down when they do it. You asked for this in V1 and it is the only structural change in the release.</p>
+      <div class="ch-meta">
+        <span class="tag t-next">Corrected in V1</span>
+        <span class="tag t-wait">Settings → Staff &amp; Roles · Settings → Audit Logs</span>
+        <span class="tag t-wait">Admin only</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">Six roles, twenty modules, and three permission levels — view, edit, delete — set for each combination. Plus an audit log recording who did what.</p>
+  <p>Your eight job titles map onto the six roles the system has. There is no separate consultant-dentist scope and no communications role; both are V1.1.</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Your job title</th><th>Role in the system</th></tr></thead>
+    <tbody>
+      <tr><td>Owner</td><td><b>Admin</b></td></tr>
+      <tr><td>Clinic manager</td><td><b>Manager</b></td></tr>
+      <tr><td>Front desk</td><td><b>Front Desk</b></td></tr>
+      <tr><td>Associate dentist</td><td><b>Doctor</b></td></tr>
+      <tr><td>Consultant dentist</td><td><b>Doctor</b> — no separate scope exists</td></tr>
+      <tr><td>Assistant</td><td><b>Assistant</b></td></tr>
+      <tr><td>Finance manager</td><td><b>Accounts</b></td></tr>
+      <tr><td>Comms team</td><td><b>No role exists.</b> Use Front Desk.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>The permission matrix as shipped</h3>
+  <p class="rubric">V = view, E = edit, D = delete. A dash means no access at all. This is the seeded default — Settings can change any of it.</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Module</th><th>Admin</th><th>Manager</th><th>Doctor</th><th>Assistant</th><th>Front Desk</th><th>Accounts</th></tr></thead>
+    <tbody>
+      <tr><td><b>Dashboard</b></td><td>VED</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td><b>Daily Huddle</b></td><td>VED</td><td>VE</td><td>VE</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td><b>Patients</b></td><td>VED</td><td>VE</td><td>VE</td><td>V</td><td>VE</td><td>V</td></tr>
+      <tr><td><b>Appointments</b></td><td>VED</td><td>VE</td><td>VE</td><td>V</td><td>VE</td><td>—</td></tr>
+      <tr><td><b>Treatments</b></td><td>VED</td><td>VE</td><td>VED</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td><b>Clinical Library</b></td><td>VED</td><td>VE</td><td>V</td><td>V</td><td>VE</td><td>V</td></tr>
+      <tr><td><b>Prescriptions</b></td><td>VED</td><td>VE</td><td>VE</td><td>V</td><td>VE</td><td>V</td></tr>
+      <tr><td><b>Relationships (PRE)</b></td><td>VED</td><td>VE</td><td>VE</td><td>VE</td><td>VE</td><td>VE</td></tr>
+      <tr><td><b>Accounts &amp; Finance</b></td><td>VED</td><td>VE</td><td>—</td><td>—</td><td>VE</td><td>VE</td></tr>
+      <tr><td><b>Inventory</b></td><td>VED</td><td>VE</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td><b>Lab</b></td><td>VED</td><td>VE</td><td>VE</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td><b>Tasks</b></td><td>VED</td><td>VE</td><td>VE</td><td>V</td><td>V</td><td>—</td></tr>
+      <tr><td><b>Practice Protocols</b></td><td>VED</td><td>VED</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td><b>HR</b></td><td>VED</td><td>VE</td><td>VE</td><td>VE</td><td>VE</td><td>VE</td></tr>
+      <tr><td><b>Reports</b></td><td>VED</td><td>V</td><td>—</td><td>—</td><td>—</td><td>V</td></tr>
+      <tr><td><b>Analytics</b></td><td>VED</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td><b>Settings</b></td><td>VED</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td><b>Marketing</b></td><td>VED</td><td>VE</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Three things worth noticing in that table. <strong>Doctors cannot see money at all</strong> — no Finance row. <strong>Everyone can edit HR</strong> — see Chapter 13, and change it. And <strong>only you have Settings, Analytics and the Dashboard.</strong></p>
+
+  <h3>The change you asked for</h3>
+  <p class="rubric">Why this was worth a V1 row rather than a V1.1 one.</p>
+  <p>Until this release, the permission check on most screens proved only that you were allowed to <em>look</em> at a module. The same check was then reused on the buttons that <em>change</em> things. Setting a role to "view only" on a module therefore did not reliably stop that role writing to it.</p>
+  <p>Under the default six roles this was mostly masked, because view and edit are granted together almost everywhere. It became real the moment you did the sensible thing — gave someone view and withheld edit. That is the situation this row fixes, and it is why it was worth spending a day and a half on before letting six people loose on the system.</p>
+  <p>The second half of the row is the log: <strong>every change to a role or a permission, and every money-write, is recorded</strong> — who, what, when. That is the part that makes the permissions worth having, because a permission you cannot audit is a policy, not a control.</p>
+
+  <h3>Where to read the log</h3>
+  <p><span class="ui">Settings → Audit Logs</span>. Admin only. It reads the audit and staff-activity records — logins, views, edits, deletes, and the role and money events added in this release.</p>
+
+  <h3>What it can't do yet</h3>
+  <div class="call">
+    <h5>1 · There is no clinic-wide activity feed</h5>
+    <p>Separately from the audit log there is a patient timeline — every appointment, every plan decision, every recall — but it can only be read <em>one patient at a time</em> from their profile. There is no screen that answers "what happened across the clinic yesterday" from that timeline. The audit log answers the compliance version of that question; the clinical version has no screen.</p>
+  </div>
+  <div class="call">
+    <h5>2 · A failed log entry is silent</h5>
+    <p>The timeline is deliberately built so that it can never break the action it is recording. If a timeline write fails, the action still succeeds and a warning goes to the server log. That is the right trade — but it means the timeline is a very good record and not a guaranteed one. The audit log is the stronger of the two.</p>
+  </div>
+  <div class="call">
+    <h5>3 · The "Dashboard" permission does nothing</h5>
+    <p>It appears in Settings and no screen checks it. Turning it off changes nothing.</p>
+  </div>
+  <div class="call">
+    <h5>4 · Help is hidden from almost everyone</h5>
+    <p>The Help page is open to every logged-in user, and its only link sits inside the admin-only Settings section. Five of your six roles cannot find it. Worth a link on the sidebar in V1.1.</p>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>Corrected in V1.</b> This is the one thing in the release that is new capability rather than removal of something false — and it is the reason a six-person team can be given six different logins on 14 September rather than sharing yours.</p>
+</section>
+
+<section class="chapter" id="ch16">
+  <div class="ch-open">
+    <div class="ch-no">16</div>
+    <div>
+      <h2>Settings &amp; Compliance (DPDP)</h2>
+      <p class="standfirst">The room only you go into. Everything here is admin-only, and after 14 September that is enforced rather than assumed.</p>
+      <div class="ch-meta">
+        <span class="tag t-next">Corrected in V1</span>
+        <span class="tag t-wait">Sidebar → System</span>
+        <span class="tag t-wait">Admin only</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>What it is</h3>
+  <p class="lede">Twenty-one settings panels in seven groups, and four compliance screens that exist because of the Digital Personal Data Protection Act.</p>
+
+  <h3>Settings, by group</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Group</th><th>What is in it</th></tr></thead>
+    <tbody>
+      <tr><td><b>Organization</b></td><td>Clinic profile · Operatories · Health Facility registration</td></tr>
+      <tr><td><b>People &amp; Access</b></td><td>Staff &amp; Roles — the matrix in Chapter 15</td></tr>
+      <tr><td><b>Connections</b></td><td>Banking</td></tr>
+      <tr><td><b>Platform</b></td><td>Audit Logs</td></tr>
+      <tr><td><b>Advanced</b></td><td>Feature flags — see Appendix B</td></tr>
+      <tr><td><b>Data</b></td><td>Import / Export</td></tr>
+      <tr><td><b>Legacy</b></td><td>Thirteen panels being moved into their own modules over time: masters, knowledge bank, clinical, patient defaults, clinical library, billing &amp; invoice, printing, notifications, growth &amp; comms, inventory, huddle, personalisation, calendar</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Two things the settings search offers and the product does not have: <span class="ui">Working Hours</span> and <span class="ui">Appointment Slot Duration</span>. Both are marked "coming soon" and are not clickable. They are the only two advertised-but-absent settings; everything else in the search resolves to a real panel.</p>
+
+  <h3>Compliance — the four DPDP screens</h3>
+  <div class="panels">
+    <div class="panel">
+      <div class="pn">01</div>
+      <h5>Consent</h5>
+      <p>The purposes you collect patient data for, whether each is active, and per-patient consent with a full trail of changes.</p>
+      <div class="src"><b>The trail is the point.</b> Consent without a dated record of when it was given is not consent you can demonstrate.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">02</div>
+      <h5>Patient Rights</h5>
+      <p>Requests from patients to see, correct, export or erase their data — logged, tracked, completed or rejected with a reason.</p>
+      <div class="src"><b>Erasure is here.</b> It is irreversible and it is now admin-only.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">03</div>
+      <h5>Breach Register</h5>
+      <p>Recording a data breach, reporting it to the board, and notifying affected patients.</p>
+      <div class="src"><b>Hopefully never used.</b> Its existence is part of what compliance looks like.</div>
+    </div>
+    <div class="panel">
+      <div class="pn">04</div>
+      <h5>Data Retention</h5>
+      <p>What is held, and for how long.</p>
+      <div class="src"><b>Read-only.</b> There is no execute or purge action — it reports, it does not delete.</div>
+    </div>
+  </div>
+
+  <div class="call good">
+    <h5>The correction made on 4 September, and why it mattered</h5>
+    <p>All four of those screens previously sat behind nothing more than being logged in. There was no permission check on any of them — including the action that <strong>permanently erases a patient's data</strong>. The sidebar hid the links from most roles; nothing actually protected them.</p>
+    <p>They are now admin-only, enforced. This was the single most serious finding of the whole V1 exercise and it is closed.</p>
+  </div>
+
+  <h3>Do not teach these screens to reception</h3>
+  <p>The four compliance screens are yours. They are not part of the 14 September staff training, they are not in the Marathi guide, and no member of your team needs to open one. If a patient makes a data request, the correct front-desk action is to bring it to you — not to open Patient Rights.</p>
+
+  <h3>What it can't do yet</h3>
+  <div class="call">
+    <h5>1 · Two consent safety switches are off</h5>
+    <p>There is a setting that would make consent an absolute requirement — never overridable — and another that would make the consent guard refuse rather than allow when it cannot reach an answer. Both are currently off, meaning the guard <em>fails open</em>. That is the pragmatic setting for a system going live, and it is a deliberate V1.1 conversation, not an oversight.</p>
+  </div>
+  <div class="call">
+    <h5>2 · The four compliance links show for anyone with Settings view</h5>
+    <p>The routes are admin-only so the direction is safe — a non-admin sees a link and is refused. If you ever grant a manager Settings view, four links will appear that they cannot use.</p>
+  </div>
+
+  <h3>Status</h3>
+  <p><b>Corrected in V1.</b> Compliance routes locked to admin on 4 September. Settings itself is unchanged.</p>
+</section>
+
+<section class="chapter" id="appA">
+  <div class="ch-open">
+    <div class="ch-no">A</div>
+    <div>
+      <h2>Appendix A · Where Every Number Comes From</h2>
+      <p class="standfirst">One table per screen. If a figure in Dentfluence ever surprises you, the answer is on this page — and in almost every case the answer is that two screens are using different periods or different sides of the invoice.</p>
+      <div class="ch-meta">
+        <span class="tag t-done">Reference</span>
+        <span class="tag t-wait">Accurate as at 14 September 2026</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="call gold">
+    <h5>Three words that resolve most disagreements</h5>
+    <p><strong>Billed</strong> — raised on an invoice. <strong>Collected</strong> — money actually received. <strong>Lifetime</strong> — ignores whatever date filter is on the screen.</p>
+    <p>A figure marked <em>Billed · lifetime</em> and a figure marked <em>Collected · this month</em> are not supposed to agree, and the fact that they sit next to each other on the same screen does not make it a fault.</p>
+  </div>
+
+  <h3>Daily Huddle — the board</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it counts</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td><b>Collections (Today)</b></td><td>The sum of the <em>amount to collect</em> that a human typed against each of today's scheduled appointments. Walk-ins excluded.</td><td>Projected · typed by hand</td></tr>
+      <tr><td><b>"x of y appointments logged"</b></td><td>How many of today's appointments actually have that figure filled in. If this is low, the figure above it is meaningless.</td><td>Fill rate</td></tr>
+      <tr><td><b>Today's Appointments</b></td><td>Appointment rows for today.</td><td>Count · today</td></tr>
+      <tr><td><b>Today's Actions / Today's Calls</b></td><td>Items on the relationship worklist, with a high-priority and a pending count.</td><td>Count · today</td></tr>
+      <tr><td><b>Pending Tasks</b></td><td>Open tasks across the team.</td><td>Count · open</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Daily Huddle — the report tabs</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it counts</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td><b>Total Collected · Net · Average per day</b></td><td>Corrected in V1 to read the same payment records as the Finance dashboard. Before this release it read a separate ledger that ordinary invoice payments no longer wrote into, and therefore under-counted.</td><td>Collected · window</td></tr>
+      <tr><td><b>Outstanding balance</b></td><td>Everything unpaid, right now.</td><td>Billed · lifetime</td></tr>
+      <tr><td><b>Appointments booked / completed / cancelled / no-show</b></td><td>Counts for the window, with rates. Sound — these were never in question.</td><td>Count · window</td></tr>
+      <tr><td><b>New patients &amp; sources</b></td><td>Registrations in the window, referrals among them, distinct channels.</td><td>Count · window</td></tr>
+      <tr><td><b>Lab &amp; tasks</b></td><td>Cases sent, received, overdue now, remakes; tasks done, pending, overdue.</td><td>Count · window</td></tr>
+      <tr><td><b>Protocol compliance</b></td><td>Per person: assigned, done, missed, percentage.</td><td>Count · window</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Appointments</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it counts</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td><b>"N patients"</b></td><td>Appointment rows today — not distinct people.</td><td>Count · today</td></tr>
+      <tr><td><b>The six status chips</b></td><td>Today's rows in that status. <em>They do not sum to the total</em> — Checked Out has no chip.</td><td>Count · today</td></tr>
+      <tr><td><b>Walk-In chip</b></td><td>Today's walk-ins in any status. Overlaps every other chip.</td><td>Count · today</td></tr>
+      <tr><td><b>N in queue</b></td><td>Counted in the browser from the visible list.</td><td>Count · today</td></tr>
+      <tr><td><b>Chair utilisation</b></td><td>Calculated on every page load and shown on no linked page. Assumes 14 hours of capacity a day unless told otherwise.</td><td>Not displayed</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Patient profile</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it counts</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td><b>Total Billed</b></td><td>Every invoice total for this patient.</td><td>Billed · lifetime</td></tr>
+      <tr><td><b>Total Collected · % collected</b></td><td>Paid amount across those invoices.</td><td>Collected · lifetime</td></tr>
+      <tr><td><b>Outstanding</b></td><td>Balance still due across those invoices.</td><td>Billed · lifetime</td></tr>
+      <tr><td><b>Advance</b></td><td>Money paid and not yet applied. A liability, not revenue.</td><td>Wallet</td></tr>
+      <tr><td><b>Recall Status</b></td><td><b>Nothing.</b> Never calculated, identical for every patient. Ignore it.</td><td>Not calculated</td></tr>
+      <tr><td><b>Recall on the Consultation tab</b></td><td>A separate calculation from days since last visit, plus six months. Disagrees with the header on the same screen.</td><td>Derived in the page</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Treatment plans</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it counts</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td><b>Estimated Investment</b> (saved plan)</td><td>Sum of item totals. Each item is fee × units, less item discount, plus GST.</td><td>Quoted</td></tr>
+      <tr><td><b>Running total while typing</b></td><td>Fee × units only — <em>no discount, no GST</em>. Does not match what will be saved.</td><td>Incomplete</td></tr>
+      <tr><td><b>Progress chip</b></td><td>Derived from clinical work actually recorded against the plan's items. Ceiling is "all work recorded", never "completed".</td><td>Derived</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Accounts &amp; Finance — dashboard</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it counts</th><th>Basis</th><th>Follows the filter?</th></tr></thead>
+    <tbody>
+      <tr><td><b>Collection</b></td><td>Payments received in the period.</td><td>Collected</td><td>Yes</td></tr>
+      <tr><td><b>Expenses</b></td><td>Expenses dated in the period, <em>including unpaid bills</em>.</td><td>Recorded</td><td>Yes</td></tr>
+      <tr><td><b>Net Profit</b></td><td>Collection minus Expenses. This is the one profit definition.</td><td>Mixed</td><td>Yes</td></tr>
+      <tr><td><b>Outstanding</b></td><td>Unpaid across every invoice ever.</td><td>Billed</td><td><b>No · lifetime</b></td></tr>
+      <tr><td><b>Today's Collection</b></td><td>Payments received today.</td><td>Collected</td><td>No · today</td></tr>
+      <tr><td><b>Avg Daily Collection</b></td><td>Period collection ÷ days elapsed.</td><td>Collected</td><td>Yes</td></tr>
+      <tr><td><b>Projected Period Total</b></td><td>Daily average × full period. A straight line.</td><td>Collected</td><td>Yes</td></tr>
+      <tr><td><b>Collection by mode</b></td><td>Period payments by cash / card / UPI / transfer.</td><td>Collected</td><td>Yes</td></tr>
+      <tr><td><b>Top expenses</b></td><td>Five largest expense categories in the period.</td><td>Recorded</td><td>Yes</td></tr>
+      <tr><td><b>Revenue vs expenses chart</b></td><td>Trailing six calendar months.</td><td>Mixed</td><td>No · fixed 6 months</td></tr>
+      <tr><td><b>Recent transactions</b></td><td>The last ten payments, whenever.</td><td>Collected</td><td>No · latest 10</td></tr>
+      <tr><td><b>Tax estimator</b></td><td>This calendar month's collection × 12, halved for 44ADA, run through the slabs. Quarterly figure is annual ÷ 4.</td><td>Indicative</td><td>No · this month</td></tr>
+      <tr><td><s>Cash In Hand</s></td><td><b>Removed in V1.</b> Was every cash payment ever, minus every cash expense ever. Never reset.</td><td>—</td><td>—</td></tr>
+      <tr><td><s>Bank Balance</s></td><td><b>Removed in V1.</b> Was the number zero.</td><td>—</td><td>—</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Accounts &amp; Finance — Income page</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it counts</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td><b>Today · This Week · This Month</b></td><td>Payments in those fixed windows. <em>They ignore the date range you set for the tables below.</em></td><td>Collected · fixed</td></tr>
+      <tr><td><b>Outstanding</b></td><td>Unpaid across all invoices.</td><td>Billed · lifetime</td></tr>
+      <tr><td><b>Invoices tab</b></td><td>Filtered by invoice date.</td><td>Billed · range</td></tr>
+      <tr><td><b>Receipts tab</b></td><td>Filtered by payment date.</td><td>Collected · range</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Revenue by treatment category</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it counts</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td><b>Billed</b></td><td>Invoice lines in that category, raised in the period.</td><td>Billed · invoice date</td></tr>
+      <tr><td><b>Collected</b></td><td>Payment allocated against those lines.</td><td>Collected · payment date</td></tr>
+      <tr><td><b>Outstanding</b></td><td>Billed less collected, <em>for that period only</em> — not the patient's whole balance.</td><td>Derived · period</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Lab</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it counts</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td><b>This Month — Estimated / Actual</b></td><td>Cases <em>created</em> this calendar month. A case spanning a month end sits in the month it started.</td><td>Cost · created month</td></tr>
+      <tr><td><b>Unbilled</b></td><td>Cases with an actual cost, not yet billed by the lab.</td><td>Cost · lifetime</td></tr>
+      <tr><td><b>Billed</b></td><td>Lab invoices you have not yet paid.</td><td>Cost · lifetime</td></tr>
+      <tr><td><b>Tab counts</b></td><td>Cases in each state. Clinic-wide, not branch-scoped.</td><td>Count · lifetime</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Inventory</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it counts</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td><b>Inventory Value</b></td><td>Available quantity × average purchase price, across active items.</td><td>Value · now</td></tr>
+      <tr><td><b>Low / Critical / Out of Stock</b></td><td>Against each item's minimum quantity. <em>Items with no minimum set are excluded entirely.</em></td><td>Count · now</td></tr>
+      <tr><td><b>Expiring Soon</b></td><td>Distinct items with stock expiring within 90 days.</td><td>Count · 90 days</td></tr>
+      <tr><td><b>Days Until Stock-out</b></td><td>Derived from the last 30 days' consumption.</td><td>Derived</td></tr>
+      <tr><td><b>Dead Stock Value</b></td><td>Value of items with no movement in 90 days.</td><td>Value · 90 days</td></tr>
+      <tr><td><b>Monthly Wastage</b></td><td>Expired plus damaged, this calendar month.</td><td>Value · month</td></tr>
+      <tr><td><b>Health Score</b></td><td>100 minus capped deductions for out, low, expiring and dead stock. Optimistic — items with no minimum count in the denominator and never deduct.</td><td>Index</td></tr>
+      <tr><td><b>Value Trend chart</b></td><td><em>Not inventory value</em> — purchases per week for eight weeks.</td><td>Spend · weekly</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Tasks · HR · Prescriptions</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it counts</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td><b>Tasks: Overdue / Due Today / Upcoming</b></td><td>Open tasks by due date, for the branch.</td><td>Count · now</td></tr>
+      <tr><td><b>Tasks: Completed</b></td><td>Captioned "this period" and has no period. Every completed task ever.</td><td>Count · lifetime</td></tr>
+      <tr><td><b>HR: Present</b></td><td>Present, late and half-day together.</td><td>Count · that day</td></tr>
+      <tr><td><b>HR: Not Marked</b></td><td>Total staff minus rows recorded. Can go negative.</td><td>Count · that day</td></tr>
+      <tr><td><b>Prescriptions: Total</b></td><td>Includes deleted prescriptions — the other three cards do not.</td><td>Count · lifetime</td></tr>
+      <tr><td><b>Prescriptions: Draft</b></td><td>Permanently zero. There is no draft step.</td><td>Always 0</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Reports &amp; Analytics</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Figure</th><th>What it counts</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr><td><b>Reports → Collected</b></td><td>Payments in the selected window. Same definition as the Finance dashboard.</td><td>Collected · window</td></tr>
+      <tr><td><b>Reports → Outstanding</b></td><td>Unpaid across all invoices.</td><td>Billed · lifetime</td></tr>
+      <tr><td><b>Reports → Collection rate</b></td><td>A period figure divided by a lifetime one. <b>Do not use it.</b></td><td>Invalid</td></tr>
+      <tr><td><b>Analytics → expenses</b></td><td>Only expenses you have <em>paid</em> — unlike the Finance dashboard, which includes unpaid bills. The two will differ.</td><td>Paid only</td></tr>
+      <tr><td><b>Analytics → Audit &amp; History summary</b></td><td>Sums only the rows shown — the latest 50 payments, 50 vouchers, 20 reconciliations. <b>Not period totals.</b></td><td>Sample</td></tr>
+      <tr><td><b>PRE → relationship score</b></td><td><b>Zero, for everyone, always.</b> Never calculated.</td><td>Not calculated</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="call stop">
+    <h5>The seven figures in this product that should not be read at all</h5>
+    <p>Collected in one place so you can say them out loud in the training room:</p>
+    <p><b>1.</b> Patient profile → <span class="ui">Recall Status</span> · <b>2.</b> PRE → <span class="ui">Relationship Score</span> and the score distribution chart · <b>3.</b> Prescriptions → <span class="ui">Draft</span> · <b>4.</b> Reports → <span class="ui">Collection rate</span> · <b>5.</b> Analytics → <span class="ui">Audit &amp; History</span> summary totals · <b>6.</b> Tasks → <span class="ui">Completed "this period"</span> · <b>7.</b> Any money figure on a treatment visit card.</p>
+    <p>None of them is being fixed before 14 September. All seven are V1.1 candidates, and the right V1.1 decision for most of them is to hide the figure rather than to compute it.</p>
+  </div>
+</section>
+
+<section class="chapter" id="appB">
+  <div class="ch-open">
+    <div class="ch-no">B</div>
+    <div>
+      <h2>Appendix B · Built, and Switched Off</h2>
+      <p class="standfirst">What exists in the system and is deliberately not part of V1. Written down so that nobody switches one on by accident, and so that V1.1 starts from a list rather than from memory.</p>
+      <div class="ch-meta">
+        <span class="tag t-wait">Not in V1</span>
+        <span class="tag t-wait">Reference</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>The mobile app</h3>
+  <div class="call stop">
+    <h5>Not in V1. Not to be distributed. Not to be mentioned.</h5>
+    <p>An Android app exists. Every file in it was last changed on <strong>15 July 2026</strong> and the last build is from the same day. In the seven weeks since, the web system has moved on and the interfaces the app talks to have changed. It has fifty-three screens and <em>no role restrictions of any kind</em> — every screen is visible to every user who logs in.</p>
+    <p><strong>The July build goes to nobody.</strong> Mobile is V1.1, dated 30 September, and it has been redefined as a data-entry layer for seven specific jobs rather than a copy of the web system. The website and the Instagram page must not promise an app.</p>
+  </div>
+
+  <h3>Case Acceptance — the patient microsite</h3>
+  <div class="call stop">
+    <h5>Switched off in production on 4 September. It had been on since July.</h5>
+    <p>This feature presents a treatment plan to the patient on their own phone, through a link, so they can accept or decline it themselves. The pages it serves sit <em>outside the login</em> — anyone holding a valid link could open them, by design, because the patient is not a user of your system.</p>
+    <p>You parked this feature on 28 August, and every document since assumed it was off. Nobody had checked. It was on, and had been since July. It was switched off and verified off on the evening of 4 September. One patient record was affected.</p>
+    <p><strong>It is a genuinely good feature and it should come back in V1.1</strong> — deliberately, with a decision about link expiry, rather than because a setting was left on.</p>
+  </div>
+
+  <h3>Automated WhatsApp</h3>
+  <p>Covered in Chapter 8. In short: no credentials exist on the production server, Meta business verification has not started, and until it completes no template message can leave the system. Three templates have a working send path waiting behind that wall; four have no send path at all. The one thing that works today is the click-to-chat button that opens WhatsApp on a staff member's own phone.</p>
+
+  <h3>The Communication module</h3>
+  <p>A full communication system exists in the codebase — threads, a timeline, an inbox. It is unregistered and unreachable, and it was switched off in July because the timeline was displaying fabricated patient conversations. It stays off. This is the precedent behind the Marketing column removal in Chapter 1: a screen that invents content is worse than a screen that is missing.</p>
+
+  <h3>The Marketing module</h3>
+  <p>Marketing exists as a module with its own permission, and the Blog Marketing Hub within it went live in August and is deliberately switched on. What is <em>not</em> in V1 is any connection between Marketing and the rest of the product — in particular, the Huddle's Marketing column, which showed four invented posts and has been removed. The slot on the board is reserved for V1.1, reading genuinely scheduled content.</p>
+
+  <h3>Feature switches</h3>
+  <p>The system has twenty-eight switches for capability that is built and not turned on — a rules engine, an automation engine, a workflow engine, a unified notification store, search indexing, and integrations with Google, Meta, payments and ABDM. <strong>Exactly one is on by default</strong>, the one that links a new patient into the relationship spine. Two more are on deliberately in production: the Blog Hub, and — until 4 September — Case Acceptance.</p>
+  <div class="call">
+    <h5>The rule that follows from this</h5>
+    <p>Twenty-seven switched-off capabilities is not technical debt; it is a product that was built ahead of its clinic. But it does mean the honest answer to "can Dentfluence do X?" is often "the code exists, it has never run against your data, and switching it on is a decision with consequences".</p>
+    <p><strong>Nothing gets switched on without a row in the launch tracker.</strong> The 4 September finding — a feature everyone believed was off having been live for six weeks — is the whole argument for that rule.</p>
+  </div>
+
+  <h3>Built and never wired</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>What</th><th>State</th></tr></thead>
+    <tbody>
+      <tr><td><b>Team Accountability screen</b></td><td>Fully designed, never connected. The link to it is being removed in V1.</td></tr>
+      <tr><td><b>Huddle notes and comments</b></td><td>Database tables and save routes exist; there is no box on the board to write in.</td></tr>
+      <tr><td><b>Chair utilisation</b></td><td>Calculated on every page load, displayed only on a page with no link.</td></tr>
+      <tr><td><b>Five Finance pages</b></td><td>Reports, GST, Cashbook, Payroll and the Voucher register — working, unlinked.</td></tr>
+      <tr><td><b>Four analytics projections</b></td><td>Rebuilt every fifteen minutes and read by nothing.</td></tr>
+      <tr><td><b>Automatic plan suggestion</b></td><td>Exists, unreachable, and should stay that way — it is keyword matching, not intelligence.</td></tr>
+      <tr><td><b>Smart Presentation module</b></td><td>Permissioned, routed, and removed from the sidebar in July.</td></tr>
+      <tr><td><b>The AI copilot</b></td><td>Off in production, as intended.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>What V1 actually is</h3>
+  <div class="call good">
+    <h5>State it this way to anyone who asks</h5>
+    <p>Dentfluence V1 is the web system Tulip already runs every day, with every number on the money and huddle screens verified true, every fake and dead surface removed, admin routes locked down, role permissions enforced on writes with an activity log, and a written Owner's handbook and Marathi staff guide.</p>
+    <p><strong>One clinic. Web only. No new modules.</strong></p>
+    <p>And three things it is explicitly not: not the Android app, not automated WhatsApp, and not a full KPI dashboard.</p>
+  </div>
+</section>
+
+<footer>
+  <p><b>Dentfluence Owner's Handbook</b> · Complete edition · 16 chapters and 2 appendices · Chapter 1 written 27 August 2026 and revised 4 September; chapters 2–16 and the appendices written 4 September 2026, against the <b>post-correction</b> state of the system as it will stand on 14 September — not against the screens as they were on the day of writing.</p>
+  <p>Every claim in this book was read out of the running Laravel codebase, not from a specification. Where a figure is wrong, this book says it is wrong. Where a feature does not exist, this book says it does not exist. Nothing here promises anything that has not been verified.</p>
+  <p>Companion volumes: the <b>Staff Guide</b> (Marathi, for the floor), the <b>V1 Decision Log</b>, and the <b>Go-Live Rollout Plan</b> for 14 September.</p>
+</footer>
+
+</div>
+</body>
+</html>

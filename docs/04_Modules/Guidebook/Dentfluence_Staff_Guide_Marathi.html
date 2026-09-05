@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="mr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dentfluence स्टाफ गाइड</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700&family=DM+Sans:wght@500;700&display=swap">
+<style>
+:root{
+  --bg:#F7F4F8; --card:#FFFFFF; --band:#EFE6F1;
+  --ink:#1C1220; --ink-2:#4B3A50; --ink-3:#7E6C83;
+  --line:#DFD2E2; --hair:#EFE7F0;
+  --brand:#6A0F70; --brand-soft:#F9EFFA; --brand-line:#C99BCC;
+  --go:#12703F; --go-soft:#E4F3EA; --go-line:#8FD1AC;
+  --no:#A61B1B; --no-soft:#FBE9E9; --no-line:#EBA5A5;
+  --warn:#8A5A00; --warn-soft:#FBF0DD;
+  --lift:0 1px 2px rgba(28,18,32,.06), 0 10px 26px -20px rgba(28,18,32,.5);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#150E19; --card:#1E1523; --band:#2A1E30;
+  --ink:#F3EAF5; --ink-2:#CBB9D0; --ink-3:#9C89A2;
+  --line:#3B2B41; --hair:#2B1F31;
+  --brand:#D394D7; --brand-soft:#2C1832; --brand-line:#6E4074;
+  --go:#5FC58C; --go-soft:#14301F; --go-line:#2E6444;
+  --no:#F0736F; --no-soft:#38161A; --no-line:#7A3230;
+  --warn:#DDB061; --warn-soft:#33280F;
+  --lift:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -20px rgba(0,0,0,1);
+}}
+:root[data-theme="dark"]{
+  --bg:#150E19; --card:#1E1523; --band:#2A1E30;
+  --ink:#F3EAF5; --ink-2:#CBB9D0; --ink-3:#9C89A2;
+  --line:#3B2B41; --hair:#2B1F31;
+  --brand:#D394D7; --brand-soft:#2C1832; --brand-line:#6E4074;
+  --go:#5FC58C; --go-soft:#14301F; --go-line:#2E6444;
+  --no:#F0736F; --no-soft:#38161A; --no-line:#7A3230;
+  --warn:#DDB061; --warn-soft:#33280F;
+  --lift:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -20px rgba(0,0,0,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:'Noto Sans Devanagari','Nirmala UI',sans-serif;
+  font-size:18px;line-height:1.8;-webkit-font-smoothing:antialiased}
+.sheet{max-width:1020px;margin:0 auto;padding:0 24px 96px}
+/* ── masthead ─────────────────────────────── */
+.top{padding:40px 0 26px;border-bottom:4px solid var(--brand)}
+.eyebrow{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--brand);margin:0 0 12px}
+h1{font-size:clamp(32px,5.6vw,50px);font-weight:700;line-height:1.18;margin:0;letter-spacing:-.01em}
+.top .say{margin:14px 0 0;font-size:19px;color:var(--ink-2);max-width:44ch}
+.rule-note{margin:22px 0 0;background:var(--brand-soft);border:1px solid var(--brand-line);
+  padding:14px 18px;font-size:16px;max-width:60ch}
+.rule-note b{color:var(--brand)}
+/* ── chapter index ────────────────────────── */
+.idx{margin:28px 0 0;border:1px solid var(--line);background:var(--card);box-shadow:var(--lift)}
+.idx h2{margin:0;padding:12px 18px;font-size:13px;font-weight:700;letter-spacing:.05em;
+  color:var(--ink-3);border-bottom:1px solid var(--hair);background:var(--band)}
+.idx ul{list-style:none;margin:0;padding:10px 0;display:flex;flex-wrap:wrap;gap:4px 0}
+.idx li{padding:4px 18px;font-size:15.5px;width:100%}
+@media(min-width:700px){.idx li{width:50%}}
+.idx li b{color:var(--brand)}
+.idx li.wait{color:var(--ink-3)}
+/* ── section ──────────────────────────────── */
+section{margin:56px 0 0}
+h2.sec{font-size:clamp(24px,3.4vw,32px);font-weight:700;line-height:1.25;margin:0 0 6px;
+  padding-bottom:10px;border-bottom:2px solid var(--line);letter-spacing:-.005em}
+h2.sec .num{font-family:'DM Sans',sans-serif;color:var(--brand);margin-right:12px}
+p{max-width:60ch;margin:0 0 16px}
+p.big{font-size:20px;color:var(--ink-2)}
+/* ── english UI label ─────────────────────── */
+.en{font-family:'DM Sans',sans-serif;font-weight:700;font-size:.9em;letter-spacing:.005em;
+  background:var(--band);border-bottom:2px solid var(--brand-line);padding:2px 7px;border-radius:3px;
+  white-space:nowrap;color:var(--ink)}
+/* ── steps ────────────────────────────────── */
+ol.steps{list-style:none;counter-reset:st;margin:0 0 24px;padding:0;display:flex;flex-direction:column;gap:10px}
+ol.steps li{counter-increment:st;background:var(--card);border:1px solid var(--line);
+  box-shadow:var(--lift);padding:16px 20px 16px 66px;position:relative;font-size:18px;line-height:1.7}
+ol.steps li::before{content:counter(st);position:absolute;left:16px;top:14px;
+  width:34px;height:34px;border-radius:50%;background:var(--brand);color:var(--bg);
+  font-family:'DM Sans',sans-serif;font-size:16px;font-weight:700;
+  display:flex;align-items:center;justify-content:center}
+ol.steps li .sub{display:block;margin-top:6px;font-size:15.5px;color:var(--ink-3)}
+/* ── column cards ─────────────────────────── */
+.cols{display:grid;grid-template-columns:1fr;gap:12px;margin:0 0 24px}
+@media(min-width:760px){.cols{grid-template-columns:1fr 1fr}}
+.col{background:var(--card);border:1px solid var(--line);box-shadow:var(--lift);padding:16px 18px}
+.col .tagno{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--brand)}
+.col h3{margin:6px 0 8px;font-size:19px;font-weight:700;line-height:1.3}
+.col h3 .en{font-size:.95em}
+.col p{font-size:16px;margin:0 0 8px;max-width:none;color:var(--ink-2);line-height:1.7}
+.col p:last-child{margin:0}
+.col.flag{border-color:var(--no-line);background:var(--no-soft)}
+.col.flag .tagno{color:var(--no)}
+/* ── do / don't ───────────────────────────── */
+.pair{display:grid;grid-template-columns:1fr;gap:12px;margin:0 0 24px}
+@media(min-width:760px){.pair{grid-template-columns:1fr 1fr}}
+.box{border:2px solid;padding:16px 20px;box-shadow:var(--lift)}
+.box.do{border-color:var(--go-line);background:var(--go-soft)}
+.box.dont{border-color:var(--no-line);background:var(--no-soft)}
+.box h3{margin:0 0 12px;font-size:19px;font-weight:700;display:flex;align-items:center;gap:9px}
+.box.do h3{color:var(--go)} .box.dont h3{color:var(--no)}
+.box ul{list-style:none;margin:0;padding:0}
+.box li{position:relative;padding:0 0 0 26px;margin:0 0 11px;font-size:16.5px;line-height:1.65}
+.box li:last-child{margin:0}
+.box.do li::before{content:'✓';position:absolute;left:0;top:0;color:var(--go);font-weight:700}
+.box.dont li::before{content:'✕';position:absolute;left:0;top:0;color:var(--no);font-weight:700}
+/* ── warn strip ───────────────────────────── */
+.warnstrip{border-left:5px solid var(--warn);background:var(--warn-soft);padding:16px 20px;margin:0 0 22px;max-width:64ch}
+.warnstrip h3{margin:0 0 8px;font-size:18px;font-weight:700;color:var(--warn)}
+.warnstrip p{margin:0 0 10px;font-size:16.5px;max-width:none}
+.warnstrip p:last-child{margin:0}
+/* ── trouble table ────────────────────────── */
+.tw{overflow-x:auto;border:1px solid var(--line);background:var(--card);box-shadow:var(--lift);margin:0 0 22px}
+table{border-collapse:collapse;width:100%;font-size:16px}
+th{text-align:left;font-size:13px;font-weight:700;color:var(--ink-3);padding:12px 16px;
+  border-bottom:1px solid var(--line);background:var(--band);white-space:nowrap}
+td{padding:13px 16px;border-bottom:1px solid var(--hair);vertical-align:top;line-height:1.65}
+tbody tr:last-child td{border-bottom:0}
+footer{margin:64px 0 0;border-top:2px solid var(--line);padding-top:20px;font-size:15px;color:var(--ink-3);max-width:60ch}
+:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+@media print{
+  body{background:#fff;font-size:12pt}
+  .sheet{max-width:none;padding:0 12mm 12mm}
+  section{page-break-inside:auto}
+  h2.sec{page-break-after:avoid}
+  ol.steps li,.col,.box,.warnstrip{page-break-inside:avoid}
+  .idx{display:none}
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<header class="top">
+  <p class="eyebrow">Dentfluence · स्टाफ गाइड</p>
+  <h1>रोजचं काम — सोप्या भाषेत</h1>
+  <p class="say">क्लिनिकमधल्या प्रत्येक स्क्रीनसाठी एक छोटं प्रकरण. काय दिसतं, काय करायचं, काय करायचं नाही.</p>
+  <div class="rule-note">
+    <b>वाचायची पद्धत:</b> मराठीत लिहिलेलं वाचा. मधे-मधे <span class="en">इंग्रजी अक्षरं</span> अशी दिसतील — ती स्क्रीनवर जशीच्या तशी दिसणारी नावं आहेत. ती शोधा आणि तिथेच क्लिक करा.
+  </div>
+
+  <div class="idx">
+    <h2>प्रकरणं</h2>
+    <ul>
+      <li><b>१.</b> Daily Huddle — रोजची सकाळची मीटिंग</li>
+      <li class="wait">२. Appointments — अपॉइंटमेंट</li>
+      <li class="wait">३. Patients — पेशंट</li>
+      <li class="wait">४. Consultation — तपासणी</li>
+      <li class="wait">५. Treatment Plan — उपचार योजना</li>
+      <li class="wait">६. Treatment Visit — उपचाराची नोंद</li>
+      <li class="wait">७. Billing — बिल आणि पेमेंट</li>
+      <li class="wait">८. Today's Actions — आजचे कॉल</li>
+      <li class="wait">९. Lab — लॅब केस</li>
+      <li class="wait">१०. Inventory — स्टॉक</li>
+      <li class="wait">११. Prescription — औषधं</li>
+      <li class="wait">१२. Tasks — कामांची यादी</li>
+    </ul>
+  </div>
+</header>
+
+<!-- ════════ प्रकरण १ ════════ -->
+<section>
+  <h2 class="sec"><span class="num">१</span>Daily Huddle — रोजची सकाळची मीटिंग</h2>
+  <p class="big">दररोज सकाळी, पहिला पेशंट येण्याआधी, संपूर्ण टीमने एकत्र उभं राहून बघायची एकच स्क्रीन. यावर आजचा दिवस कसा असणार, कालचं काय राहिलं, आणि कोणाला काय करायचं आहे — सगळं एकाच जागी दिसतं.</p>
+  <p>ही स्क्रीन <b>वाचण्यासाठी</b> आहे. इथे नवीन माहिती भरायची नाही. जी माहिती दिसते ती दुसऱ्या स्क्रीनमधून आपोआप येते.</p>
+</section>
+
+<section>
+  <h2 class="sec">स्क्रीन कशी उघडायची</h2>
+  <ol class="steps">
+    <li>Dentfluence मध्ये लॉगिन करा.
+      <span class="sub">रोज सकाळी क्लिनिक उघडल्यावर सर्वात आधी हेच करा.</span></li>
+    <li>डाव्या बाजूच्या मेनूमध्ये <span class="en">Overview</span> या भागाखाली <span class="en">Daily Huddle</span> वर क्लिक करा.
+      <span class="sub">जर हे नाव मेनूमध्ये दिसत नसेल, तर तुम्हाला परवानगी दिलेली नाही — मालकांना सांगा.</span></li>
+    <li>स्क्रीन मोठ्या मॉनिटरवर किंवा टीव्हीवर दाखवा म्हणजे सगळ्यांना एकत्र दिसेल.
+      <span class="sub">ही स्क्रीन एका माणसाने वाचण्यासाठी नाही — टीमने एकत्र बघण्यासाठी आहे.</span></li>
+  </ol>
+</section>
+
+<section>
+  <h2 class="sec">वर काय दिसतं</h2>
+  <p>सर्वात वर तुमचं नाव, आजची तारीख आणि वेळ दिसते. त्याखाली पाच आकडे असतात. हे आकडे मोठ्याने वाचा — हडलची सुरुवात इथून होते.</p>
+  <div class="cols">
+    <div class="col">
+      <div class="tagno">आकडा १</div>
+      <h3><span class="en">Today's Actions</span></h3>
+      <p>आज करायचे एकूण कॉल, आणि त्यातले किती अर्जंट आहेत. क्लिक केल्यावर कॉलची पूर्ण यादी उघडते.</p>
+    </div>
+    <div class="col">
+      <div class="tagno">आकडा २</div>
+      <h3><span class="en">Today's Appointments</span></h3>
+      <p>आज किती अपॉइंटमेंट बुक आहेत.</p>
+    </div>
+    <div class="col">
+      <div class="tagno">आकडा ३</div>
+      <h3><span class="en">Today's Calls</span></h3>
+      <p>आज करायचे सर्व कॉल, आणि त्यातले किती अजून बाकी आहेत.</p>
+    </div>
+    <div class="col">
+      <div class="tagno">आकडा ४</div>
+      <h3><span class="en">Collections (Today)</span></h3>
+      <p>आज किती रुपये जमा व्हायला हवेत. खाली छोट्या अक्षरात लिहिलेलं असतं — <span class="en">7 of 12 appointments logged</span> — म्हणजे १२ पैकी फक्त ७ अपॉइंटमेंटमध्ये रक्कम भरलेली आहे.</p>
+      <p><b>हा आकडा तेव्हाच बरोबर येतो जेव्हा अपॉइंटमेंट बुक करताना रक्कम भरली जाते.</b></p>
+    </div>
+    <div class="col">
+      <div class="tagno">आकडा ५</div>
+      <h3><span class="en">Pending Tasks</span></h3>
+      <p>संपूर्ण टीमची किती कामं बाकी आहेत.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">बोर्डवरचे कॉलम</h2>
+  <p>आकड्यांच्या खाली मोठा बोर्ड असतो. त्यात आठ कॉलम असतात. उजवीकडे सरकवून (scroll) शेवटचे कॉलम बघता येतात.</p>
+  <div class="cols">
+    <div class="col">
+      <div class="tagno">कॉलम १</div>
+      <h3><span class="en">Today's Patient Flow</span></h3>
+      <p>आजच्या सर्व अपॉइंटमेंट — वेळेप्रमाणे. पेशंटचं नाव, डॉक्टर, असिस्टंट आणि उपचार.</p>
+      <p><b>लाल खूण</b> दिसली तर त्या पेशंटला <span class="en">medical alert</span> आहे — थांबा आणि डॉक्टरांना मोठ्याने सांगा.</p>
+      <p>प्रत्येक नावाखाली सूचना, तयारी करायची वस्तू, आणि किती रक्कम घ्यायची ते दिसतं.</p>
+      <p><b>कार्डवर क्लिक केलं की एक छोटी विंडो उघडते</b> — त्यातच सूचना आणि रक्कम भरता येते. (खाली "मॅनेजरसाठी" हा भाग बघा.)</p>
+      <p>नावाच्या शेजारी असलेल्या स्टेटसवर क्लिक केलं की पेशंट पुढच्या टप्प्यात जातो — <span class="en">scheduled</span> → <span class="en">checkin</span> → <span class="en">in chair</span> → <span class="en">done</span>.</p>
+    </div>
+    <div class="col">
+      <div class="tagno">कॉलम २ — सर्वात महत्त्वाचा</div>
+      <h3><span class="en">Yesterday's Flow</span></h3>
+      <p>काल आलेला प्रत्येक पेशंट, त्याचं काय काम झालं, आणि <b>पुढची अपॉइंटमेंट आहे की नाही.</b></p>
+      <p><span class="en">No next appointment</span> असं लिहिलेलं दिसलं तर दोन बटणं दिसतात — <span class="en">+ Book</span> (लगेच अपॉइंटमेंट बुक करा) आणि <span class="en">+ Task</span> (नंतर फोन करायचं काम तयार करा).</p>
+      <p>डॉक्टरांनी खुर्चीवरच पुढचं काम ठरवलं असेल तर निळ्या रंगात ते दिसतं आणि <span class="en">+ Task</span> बटण येत नाही. <b>तेव्हा काहीही करू नका — ते आधीच झालेलं आहे.</b></p>
+    </div>
+    <div class="col">
+      <div class="tagno">कॉलम ३</div>
+      <h3><span class="en">Comms List</span></h3>
+      <p>आज करायचे कॉल — रिकॉल, फॉलो-अप, रिमाइंडर, नवीन चौकशी. खाली <span class="en">Upcoming</span> मध्ये डॉक्टरांनी पुढच्या तारखेसाठी ठरवलेली कामं दिसतात.</p>
+    </div>
+    <div class="col">
+      <div class="tagno">कॉलम ४</div>
+      <h3><span class="en">Tasks</span></h3>
+      <p>टीमची बाकी कामं. काम पूर्ण झालं की डावीकडचं गोल बटण दाबा — ते लगेच पूर्ण होतं.</p>
+      <p>लाल <span class="en">Overdue</span> बॅज म्हणजे तारीख निघून गेली आहे. ती कामं आधी करा.</p>
+    </div>
+    <div class="col">
+      <div class="tagno">कॉलम ५</div>
+      <h3><span class="en">Lab Updates</span></h3>
+      <p>आज परत यायच्या लॅब केस, डॉक्टरांच्या निर्णयाची वाट बघणारे trial, आणि पुन्हा करायला दिलेल्या (remake) केस.</p>
+    </div>
+    <div class="col">
+      <div class="tagno">कॉलम ६</div>
+      <h3><span class="en">Inventory Alerts</span></h3>
+      <p>संपलेलं सामान, संपत आलेलं सामान, आणि एक्सपायरी जवळ आलेलं सामान.</p>
+    </div>
+    <div class="col flag">
+      <div class="tagno">कॉलम ७ — हा वाचू नका</div>
+      <h3><span class="en">Marketing</span></h3>
+      <p>इथे चार पोस्ट दिसतात. <b>त्या खऱ्या नाहीत.</b> हा भाग अजून तयार झालेला नाही — त्यातली नावं आणि तारखा नमुन्यासाठी टाकलेल्या आहेत.</p>
+      <p>हडलमध्ये या कॉलमबद्दल काहीही बोलू नका. तो लवकरच काढून टाकला जाईल.</p>
+    </div>
+    <div class="col">
+      <div class="tagno">कॉलम ८</div>
+      <h3><span class="en">Failures / Maintenance</span></h3>
+      <p>सिस्टीममधल्या महत्त्वाच्या सूचना. लाल <span class="en">High</span> बॅज असेल तर त्याच दिवशी बघा.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">रोज सकाळी काय करायचं</h2>
+  <p>हा क्रम बदलू नका. दहा मिनिटांत संपला पाहिजे.</p>
+  <ol class="steps">
+    <li><b>स्क्रीन उघडा आणि सगळ्यांना दिसेल अशी लावा.</b>
+      <span class="sub">टीम उभी राहते — बसून हडल होत नाही.</span></li>
+    <li><b>वरचे पाच आकडे मोठ्याने वाचा.</b>
+      <span class="sub">आज किती अपॉइंटमेंट, किती कॉल, किती रक्कम जमा व्हायची, किती कामं बाकी.</span></li>
+    <li><b><span class="en">Today's Patient Flow</span> वाचा.</b>
+      <span class="sub">प्रत्येक पेशंटचं नाव आणि वेळ. लाल medical alert असेल तर तिथेच थांबा आणि मोठ्याने सांगा. तयारीची वस्तू असेल तर असिस्टंटला सांगा.</span></li>
+    <li><b>मॅनेजर प्रत्येक पेशंटची <span class="en">Amount to Collect</span> इथेच भरतात.</b>
+      <span class="sub">कार्डवर क्लिक करा → रक्कम भरा → <span class="en">Save</span>. एका पेशंटला १० सेकंद. खालचा "मॅनेजरसाठी" हा भाग बघा. <b>हे हडलमध्येच करायचं आहे — नंतर नाही.</b></span></li>
+    <li><b><span class="en">Yesterday's Flow</span> मधला प्रत्येक पेशंट बघा.</b>
+      <span class="sub">पुढची अपॉइंटमेंट नसेल तर आत्ताच <span class="en">+ Book</span> दाबा, किंवा फोन करायचा असेल तर <span class="en">+ Task</span> दाबा. <b>ही पायरी सोडू नका — इथेच पेशंट हरवतात.</b></span></li>
+    <li><b><span class="en">Comms List</span> बघा आणि कॉल कोण करणार ते ठरवा.</b>
+      <span class="sub">नाव घेऊन सांगा — "हे दहा कॉल आज मी करेन" — नाहीतर कोणीच करत नाही.</span></li>
+    <li><b><span class="en">Tasks</span> वाचा. लाल <span class="en">Overdue</span> असलेली आधी.</b>
+      <span class="sub">काल पूर्ण झालेली कामं आत्ताच टिक करा.</span></li>
+    <li><b><span class="en">Lab Updates</span> बघा.</b>
+      <span class="sub">आज कोणती केस परत येणार, आणि कोणत्या trial साठी डॉक्टरांचा निर्णय बाकी आहे.</span></li>
+    <li><b><span class="en">Inventory Alerts</span> बघा.</b>
+      <span class="sub">आजच्या उपचारांसाठी लागणारं सामान संपलं आहे का ते तपासा.</span></li>
+    <li><b><span class="en">Failures / Maintenance</span> मधल्या लाल सूचना वाचा.</b></li>
+    <li><b>शेवटी: कोण काय करणार ते नक्की करा आणि हडल संपवा.</b>
+      <span class="sub">प्रत्येक कामाला एक नाव लागतं. "कोणीतरी करेल" म्हणजे कोणीच करत नाही.</span></li>
+  </ol>
+</section>
+
+<section>
+  <h2 class="sec">मॅनेजरसाठी — <span class="en">Amount to Collect</span> कसं भरायचं</h2>
+  <p class="big">आजच्या प्रत्येक पेशंटकडून साधारण किती रक्कम घ्यायची आहे — हा आकडा <b>मॅनेजर हडलमध्येच</b> भरतात. हा आकडा ट्रीटमेंट प्लॅनमधून आपोआप येत नाही; तो अंदाजाने हाताने भरायचा असतो.</p>
+  <ol class="steps">
+    <li><b><span class="en">Today's Patient Flow</span> मधल्या पेशंटच्या कार्डवर क्लिक करा.</b>
+      <span class="sub">एक छोटी विंडो उघडेल.</span></li>
+    <li><b>त्या विंडोत चार गोष्टी भरता येतात:</b>
+      <span class="sub"><span class="en">Notes</span> — टीमला सांगायची सूचना · <span class="en">Amount to Collect</span> — किती रक्कम घ्यायची · <span class="en">Essential Item / Task</span> — लागणारी वस्तू (उदा. surgical kit, OPG) · <span class="en">Chairside Assistant</span> — कोणता असिस्टंट.</span></li>
+    <li><b>रक्कम भरा आणि <span class="en">Save</span> दाबा.</b>
+      <span class="sub">विंडो बंद होते आणि वरचा <span class="en">Collections (Today)</span> चा आकडा लगेच वाढतो.</span></li>
+    <li><b>आजच्या यादीतल्या प्रत्येक पेशंटसाठी हेच करा.</b>
+      <span class="sub">एका पेशंटला १० सेकंद. पूर्ण यादी २–३ मिनिटांत होते.</span></li>
+  </ol>
+  <div class="warnstrip">
+    <h3>लक्षात ठेवा</h3>
+    <p><b>वॉक-इन पेशंटसाठी रक्कम भरता येत नाही</b> — ते आधी ठरलेले नसतात. हे बरोबरच आहे, चूक नाही.</p>
+    <p>रक्कम भरली नाही तर वरचा <span class="en">Collections (Today)</span> चा आकडा खोटा राहतो. खालची ओळ — <span class="en">x of y logged</span> — किती भरलं ते सांगते. <b>ती दररोज पूर्ण असावी.</b></p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">काय करावं आणि काय करू नये</h2>
+  <div class="pair">
+    <div class="box do">
+      <h3>हे करा</h3>
+      <ul>
+        <li>दररोज, एकाच वेळी हडल घ्या — वेळ ठरलेली असू द्या.</li>
+        <li>मॅनेजरनी हडलमध्येच प्रत्येक पेशंटची <span class="en">Amount to Collect</span> भरावी. तेव्हाच <span class="en">Collections</span> चा आकडा खरा येतो.</li>
+        <li>काम पूर्ण झालं की टास्क लगेच टिक करा.</li>
+        <li><span class="en">Yesterday's Flow</span> मधला प्रत्येक पेशंट बघा — एकही सोडू नका.</li>
+        <li>माहिती चुकीची असेल तर ती <b>ज्या स्क्रीनची आहे तिथे</b> दुरुस्त करा (अपॉइंटमेंट → Appointments मध्ये).</li>
+      </ul>
+    </div>
+    <div class="box dont">
+      <h3>हे करू नका</h3>
+      <ul>
+        <li><span class="en">Marketing</span> कॉलम वाचू नका किंवा त्याप्रमाणे काही करू नका — तो अजून खरा नाही.</li>
+        <li><span class="en">View All Yesterday</span> या लिंकवर क्लिक करू नका — ती अजून चालू नाही, इंग्रजीत एरर मेसेज येतो.</li>
+        <li>दुसऱ्याच्या नावाची टास्क टिक करू नका. ती व्यक्ती करत आहे असं समजून राहते.</li>
+        <li>हडलमध्येच माहिती दुरुस्त करण्याचा प्रयत्न करू नका — ही फक्त वाचायची स्क्रीन आहे.</li>
+        <li>पेशंटसमोर ही स्क्रीन उघडी ठेवू नका — यावर सगळ्या पेशंटची नावं दिसतात.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">आत्ता चालू नसलेल्या गोष्टी</h2>
+  <p>या तीन गोष्टी अजून तयार नाहीत. त्या तुमची चूक नाही — त्यांच्याकडे दुर्लक्ष करा.</p>
+  <div class="warnstrip">
+    <h3>१ · <span class="en">Marketing</span> कॉलम खोटा आहे</h3>
+    <p>त्यातल्या चारही पोस्ट आणि तारखा नमुन्यासाठी टाकलेल्या आहेत. त्या कधीच बदलत नाहीत.</p>
+  </div>
+  <div class="warnstrip">
+    <h3>२ · <span class="en">View All Yesterday</span> चालत नाही</h3>
+    <p>क्लिक केल्यावर पान उघडत नाही, फक्त इंग्रजी मेसेज येतो. मागे जा आणि पुढे काम चालू ठेवा.</p>
+  </div>
+  <div class="warnstrip">
+    <h3>३ · हडलमध्ये नोंद (note) लिहिता येत नाही</h3>
+    <p>सध्या हडलच्या नोंदी लिहायची सोय नाही. महत्त्वाची गोष्ट लक्षात ठेवायची असेल तर <span class="en">Tasks</span> मध्ये टास्क तयार करा.</p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">अडचण आली तर</h2>
+  <div class="tw">
+    <table>
+      <thead><tr><th>काय होतंय</th><th>कारण</th><th>काय करायचं</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>मेनूमध्ये <span class="en">Daily Huddle</span> दिसतच नाही</td>
+          <td>तुमच्या रोलला परवानगी दिलेली नाही</td>
+          <td>मालकांना सांगा — <span class="en">Settings → Staff &amp; Roles</span> मध्ये परवानगी द्यावी लागेल</td>
+        </tr>
+        <tr>
+          <td><span class="en">Collections (Today)</span> मध्ये — दिसतं किंवा खूप कमी दिसतं</td>
+          <td>हडलमध्ये मॅनेजरनी रक्कम भरली नाही</td>
+          <td>खालची ओळ वाचा (<span class="en">x of y logged</span>). पेशंटच्या कार्डवर क्लिक करून आत्ताच भरा</td>
+        </tr>
+        <tr>
+          <td><span class="en">Yesterday's Flow</span> रिकामा आहे</td>
+          <td>काल क्लिनिक बंद होतं, किंवा कालच्या पेशंटची नोंद झाली नाही</td>
+          <td>सोमवारी शनिवारचं दिसतं — तेच बरोबर आहे. नोंद राहिली असेल तर ती आधी पूर्ण करा</td>
+        </tr>
+        <tr>
+          <td>टास्क टिक केली पण परत बाकी दिसते</td>
+          <td>त्या क्षणी इंटरनेट गेलं होतं</td>
+          <td>पान <b>रिफ्रेश</b> करा आणि पुन्हा टिक करा</td>
+        </tr>
+        <tr>
+          <td>पेशंटची चुकीची वेळ किंवा डॉक्टर दिसतो</td>
+          <td>अपॉइंटमेंटमध्येच चूक आहे</td>
+          <td><span class="en">Appointments</span> मध्ये जाऊन दुरुस्त करा — हडल आपोआप बरोबर होतो</td>
+        </tr>
+        <tr>
+          <td>बोर्डचे शेवटचे कॉलम दिसत नाहीत</td>
+          <td>स्क्रीन लहान आहे</td>
+          <td>बोर्ड उजवीकडे सरकवा (scroll), किंवा डावीकडचा मेनू लहान करा</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <p><b>Dentfluence स्टाफ गाइड</b> · प्रकरण १ पैकी १२ · २७ ऑगस्ट २०२६.<br>
+  पुढचं प्रकरण: <b>Appointments</b>.</p>
+  <p>ही स्क्रीन बदलली तर हे प्रकरणही बदलेल. जुनी प्रिंट काढून नवीन लावा.</p>
+</footer>
+
+</div>
+</body>
+</html>

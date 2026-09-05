@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Go-Live Rollout Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+:root{
+  --paper:#F8F7FA; --card:#FFFFFF; --band:#EFECF3;
+  --ink:#1A1620; --ink-2:#4A4353; --ink-3:#7C7488;
+  --line:#DDD8E4; --hair:#EDE9F1;
+  --brand:#6A0F70; --brand-soft:#F9EFFA; --brand-line:#C99BCC;
+  --you:#1A5EA8; --you-soft:#E9F1FA; --you-line:#9EC2E8;
+  --team:#1A7A45; --team-soft:#E8F5EE; --team-line:#8FCBAA;
+  --stop:#B52020; --stop-soft:#FBEAEA;
+  --lift:0 1px 2px rgba(26,22,32,.05), 0 8px 22px -18px rgba(26,22,32,.5);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#131118; --card:#1C1922; --band:#262230;
+  --ink:#EEEAF2; --ink-2:#C1BACB; --ink-3:#918A9D;
+  --line:#37313F; --hair:#282332;
+  --brand:#D394D7; --brand-soft:#2B1731; --brand-line:#6B3D71;
+  --you:#79AEE8; --you-soft:#152539; --you-line:#37567A;
+  --team:#5FC58C; --team-soft:#14301F; --team-line:#2E6444;
+  --stop:#F0736F; --stop-soft:#38161A;
+  --lift:0 1px 2px rgba(0,0,0,.5), 0 8px 22px -18px rgba(0,0,0,1);
+}}
+:root[data-theme="dark"]{
+  --paper:#131118; --card:#1C1922; --band:#262230;
+  --ink:#EEEAF2; --ink-2:#C1BACB; --ink-3:#918A9D;
+  --line:#37313F; --hair:#282332;
+  --brand:#D394D7; --brand-soft:#2B1731; --brand-line:#6B3D71;
+  --you:#79AEE8; --you-soft:#152539; --you-line:#37567A;
+  --team:#5FC58C; --team-soft:#14301F; --team-line:#2E6444;
+  --stop:#F0736F; --stop-soft:#38161A;
+  --lift:0 1px 2px rgba(0,0,0,.5), 0 8px 22px -18px rgba(0,0,0,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:15.5px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.sheet{max-width:1060px;margin:0 auto;padding:0 26px 100px}
+header.top{padding:46px 0 26px;border-bottom:1px solid var(--line)}
+.kick{font-size:10.5px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--brand);margin:0 0 12px}
+h1{font-size:clamp(30px,5vw,46px);font-weight:700;line-height:1.06;margin:0;letter-spacing:-.02em;text-wrap:balance}
+.dek{margin:14px 0 0;max-width:62ch;color:var(--ink-2);font-size:16.5px}
+.legend{display:flex;flex-wrap:wrap;gap:10px 20px;margin:22px 0 0;font-size:13px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.dot{width:11px;height:11px;border-radius:2px;flex:none}
+.dot.you{background:var(--you)} .dot.team{background:var(--team)}
+/* ── gate ─────────────────────────────── */
+.gate{margin:30px 0 0;border:2px solid var(--stop);background:var(--stop-soft);padding:18px 22px;box-shadow:var(--lift)}
+.gate h2{margin:0 0 10px;font-size:16px;font-weight:700;color:var(--stop);letter-spacing:-.005em}
+.gate p{margin:0 0 10px;max-width:74ch;font-size:15px}
+.gate p:last-child{margin:0}
+/* ── phase ────────────────────────────── */
+.phase{margin:54px 0 0}
+.ph-head{display:flex;align-items:baseline;gap:16px;border-bottom:2px solid var(--ink);padding-bottom:11px;flex-wrap:wrap}
+.ph-when{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:var(--paper);background:var(--brand);
+  padding:5px 11px;border-radius:2px;flex:none;letter-spacing:.02em}
+.ph-head h2{margin:0;font-size:clamp(21px,3vw,27px);font-weight:700;line-height:1.2;letter-spacing:-.015em;flex:1;min-width:220px}
+.ph-goal{width:100%;margin:9px 0 0;font-size:14.5px;color:var(--ink-3);font-style:italic}
+.lanes{display:grid;grid-template-columns:1fr;gap:14px;margin:20px 0 0}
+@media(min-width:800px){.lanes{grid-template-columns:1fr 1fr}}
+.lane{border:1px solid var(--line);background:var(--card);box-shadow:var(--lift)}
+.lane h3{margin:0;padding:11px 17px;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  border-bottom:1px solid var(--hair)}
+.lane.you h3{background:var(--you-soft);color:var(--you);border-bottom-color:var(--you-line)}
+.lane.team h3{background:var(--team-soft);color:var(--team);border-bottom-color:var(--team-line)}
+.lane ul{list-style:none;margin:0;padding:12px 17px 15px}
+.lane li{position:relative;padding:0 0 0 30px;margin:0 0 12px;font-size:15px;line-height:1.55}
+.lane li:last-child{margin:0}
+.lane li::before{content:'';position:absolute;left:0;top:3px;width:17px;height:17px;
+  border:1.5px solid var(--line);border-radius:2px;background:var(--paper)}
+.lane li b{font-weight:700}
+.lane li .why{display:block;margin-top:3px;font-size:13px;color:var(--ink-3);line-height:1.5}
+/* ── measure ──────────────────────────── */
+.tw{overflow-x:auto;border:1px solid var(--line);background:var(--card);box-shadow:var(--lift);margin:20px 0 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th{text-align:left;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+   padding:11px 15px;border-bottom:1px solid var(--line);background:var(--band);white-space:nowrap}
+td{padding:12px 15px;border-bottom:1px solid var(--hair);vertical-align:top;line-height:1.55}
+tbody tr:last-child td{border-bottom:0}
+td b{font-weight:700}
+h2.plain{font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);
+  margin:54px 0 6px;padding-bottom:9px;border-bottom:2px solid var(--ink)}
+h2.plain + p{max-width:70ch;color:var(--ink-2);margin:0 0 4px;font-size:15px}
+.note{border-left:3px solid var(--brand-line);background:var(--card);padding:15px 19px;margin:20px 0 0;
+  max-width:74ch;box-shadow:var(--lift);font-size:15px}
+.note b{color:var(--brand)}
+footer{margin:70px 0 0;border-top:1px solid var(--line);padding-top:20px;font-size:13px;color:var(--ink-3);max-width:72ch}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+@media print{
+  body{background:#fff;font-size:10.5pt}
+  .sheet{max-width:none;padding:0 12mm 12mm}
+  .phase{page-break-inside:avoid}
+  .ph-head{page-break-after:avoid}
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<header class="top">
+  <p class="kick">Dentfluence · Go-live · Module 1 of 18</p>
+  <h1>Rollout Plan — Daily Huddle</h1>
+  <p class="dek">How to actually get this screen into your clinic's morning, in four steps over three weeks. Two lanes: what you do, and what the team does. Nothing here needs a developer except the two fixes at the top.</p>
+  <div class="legend">
+    <span><span class="dot you"></span>Your lane — decisions, setup, watching</span>
+    <span><span class="dot team"></span>Team lane — the daily habit</span>
+  </div>
+</header>
+
+<div class="gate">
+  <h2>Two things must be true before you start</h2>
+  <p><b>1 · The background service is running.</b> Tasks from lab overdues, purchase orders, recalls and practice protocols only appear on the huddle board if the scheduled job service is alive on the server. If it is down, the Tasks and Lab columns will look deceptively quiet and nobody will know why. Ask for a confirmation that the <em>scheduler</em> and <em>queue</em> services are up before the first huddle — not after.</p>
+  <p><b>2 · The fake Marketing column is gone and the broken link is hidden.</b> <em>Both decided 28 August — remove the column now, hide the link now.</em> Train people on a board that shows one invented column and one error message and they will quietly distrust the seven real columns too. Roughly a day of work between them; it must land before anyone is trained, not after.</p>
+</div>
+
+<div class="note" style="margin-top:22px">
+  <b>What your answers changed.</b> The habit this rollout is built around has moved. It is no longer the front desk filling "amount to collect" at booking — it is <b>the manager filling it during the huddle itself</b>, one click per patient on the board. That is a better fit for a ten-minute standing meeting, and it needs no development: the edit card already exists. Every step below has been rewritten around it.
+</div>
+
+<!-- ══ PHASE 1 ══ -->
+<div class="phase">
+  <div class="ph-head">
+    <span class="ph-when">Week −3</span>
+    <h2>Decide and prepare</h2>
+    <p class="ph-goal">Nothing changes in the clinic this week. You are removing every reason the habit could fail later.</p>
+  </div>
+  <div class="lanes">
+    <div class="lane you">
+      <h3>You</h3>
+      <ul>
+        <li><b>Get the two fixes done.</b><span class="why">Remove the Marketing column, hide "View All Yesterday". One day of work. Decided 28 Aug.</span></li>
+        <li><b>Nothing left to decide on this module.</b><span class="why">N2 — projected vs actual collections — was dropped to V1.1 on 28 Aug. Every other question on the Daily Huddle is closed. The manager still fills the collections figure every morning: that habit is what makes the comparison possible whenever it does get built.</span></li>
+        <li><b>Set the huddle time and protect it.</b><span class="why">Pick a time 15 minutes before your first regular appointment. Put it in everyone's shift. A moving huddle becomes no huddle. Allow 12 minutes, not 10 — the manager now fills collections inside it.</span></li>
+        <li><b>Decide who leads it, and confirm the manager attends every day.</b><span class="why">The lead can be your front desk lead. But the collections step is the manager's, so the huddle now has two named roles, not one. Agree who covers the manager's part when they are away.</span></li>
+        <li><b>Turn on the Daily Huddle permission for everyone who attends.</b><span class="why">Settings → Staff &amp; Roles. Everyone needs <em>View</em>; whoever ticks tasks off needs <em>Edit</em>.</span></li>
+        <li><b>Sort out the screen.</b><span class="why">A wall-mounted monitor or TV near reception. On a laptop only one person reads it — and then it is a report, not a huddle.</span></li>
+      </ul>
+    </div>
+    <div class="lane team">
+      <h3>Team</h3>
+      <ul>
+        <li><b>Nothing yet.</b><span class="why">Do not announce it this week. Announce a thing that works, once.</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PHASE 2 ══ -->
+<div class="phase">
+  <div class="ph-head">
+    <span class="ph-when">Week −2</span>
+    <h2>Fill the board with real data</h2>
+    <p class="ph-goal">The huddle only looks useful if the data behind it is being entered. This week is about the habit that feeds it.</p>
+  </div>
+  <div class="lanes">
+    <div class="lane you">
+      <h3>You</h3>
+      <ul>
+        <li><b>Open the huddle alone, every morning, for five days.</b><span class="why">Read all eight columns yourself. You are looking for empty columns — each empty column is a data-entry habit that does not exist yet.</span></li>
+        <li><b>Try the edit card yourself on three patients.</b><span class="why">Click a card in Today's Patient Flow, fill Amount to Collect, Save. Time it. If it takes you more than fifteen seconds a patient, the manager will not sustain it and we need to know that now, not in week three.</span></li>
+        <li><b>Watch one number: "x of 12 appointments logged" under Collections.</b><span class="why">If it reads 2 of 12, that is your week's problem — and from now on it is a manager habit inside the huddle, not a booking habit at the desk.</span></li>
+        <li><b>Check that yesterday's patients actually appear.</b><span class="why">If Yesterday's Flow is empty on a day you saw patients, visits or consultations are not being recorded — fix that first. It is the most valuable column on the board.</span></li>
+        <li><b>Print the Marathi staff guide, chapter 1.</b><span class="why">One copy at reception, one in the doctor's room.</span></li>
+      </ul>
+    </div>
+    <div class="lane team">
+      <h3>Team</h3>
+      <ul>
+        <li><b>Manager: practise the collections pass once a day.</b><span class="why">Open the huddle alone, go down today's list, click each card, fill Amount to Collect, Save. No meeting yet — just build the muscle so it is fast when the team is standing there.</span></li>
+        <li><b>Record every visit and consultation the same day.</b><span class="why">Not the next morning. Yesterday's Flow reads what was recorded, not what happened.</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PHASE 3 ══ -->
+<div class="phase">
+  <div class="ph-head">
+    <span class="ph-when">Week −1</span>
+    <h2>Run it as a rehearsal</h2>
+    <p class="ph-goal">Five real huddles with the training wheels on. By Friday your front desk lead runs it and you say nothing.</p>
+  </div>
+  <div class="lanes">
+    <div class="lane you">
+      <h3>You</h3>
+      <ul>
+        <li><b>Mon–Tue: you lead it.</b><span class="why">Follow the ten steps in the Marathi guide exactly, out loud, in order. You are demonstrating a sequence, not showing software.</span></li>
+        <li><b>Wed–Thu: front desk leads, you prompt.</b><span class="why">Let them get it wrong. Correct only the order, not the wording.</span></li>
+        <li><b>Fri: front desk leads, you stay silent.</b><span class="why">If it works with you saying nothing, it will work when you are not there.</span></li>
+        <li><b>Friday afternoon: open the Weekly Report together.</b><span class="why">Ignore the collections cards until H3 is fixed. Read appointments, new patients, lab and protocol compliance.</span></li>
+      </ul>
+    </div>
+    <div class="lane team">
+      <h3>Team</h3>
+      <ul>
+        <li><b>Everyone stands. Twelve minutes, hard stop.</b><span class="why">A huddle that runs twenty minutes gets cancelled by week three.</span></li>
+        <li><b>Manager fills Amount to Collect for every scheduled patient, in the meeting.</b><span class="why">Not before, not after. Doing it in front of the team is what makes the number a shared commitment rather than an admin task.</span></li>
+        <li><b>Every task gets a name before the huddle ends.</b><span class="why">"Someone will call them" is how the list grows.</span></li>
+        <li><b>Every patient in Yesterday's Flow with no next appointment gets <em>+ Book</em> or <em>+ Task</em> — during the huddle.</b><span class="why">Not afterwards. This is the single habit the whole screen exists for.</span></li>
+        <li><b>Say when something on screen is wrong.</b><span class="why">Wrong data is a gift in week one and a disaster in month three.</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PHASE 4 ══ -->
+<div class="phase">
+  <div class="ph-head">
+    <span class="ph-when">Go-live week +</span>
+    <h2>Make it boring</h2>
+    <p class="ph-goal">Success is when nobody mentions the huddle any more because it simply happens.</p>
+  </div>
+  <div class="lanes">
+    <div class="lane you">
+      <h3>You</h3>
+      <ul>
+        <li><b>Do not attend every day.</b><span class="why">Attend twice a week, unannounced. Your job now is to notice whether it happened, not to run it.</span></li>
+        <li><b>Every Friday, open the Weekly Report.</b><span class="why">Five minutes. Look at the four numbers below, not at everything.</span></li>
+        <li><b>At four weeks, decide whether to keep the 10-minute format.</b><span class="why">If it has crept to twenty, something else belongs in a different meeting.</span></li>
+      </ul>
+    </div>
+    <div class="lane team">
+      <h3>Team</h3>
+      <ul>
+        <li><b>Huddle happens whether or not the owner is in.</b></li>
+        <li><b>Tasks are ticked the moment they are done, not at day end.</b></li>
+        <li><b>Anything wrong on screen is fixed in its own module, that day.</b></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<h2 class="plain">How you will know it is working</h2>
+<p>Four numbers. Write them down each Friday for the first month — the trend matters far more than the value.</p>
+<div class="tw">
+  <table>
+    <thead><tr><th>Number</th><th>Where you read it</th><th>Week 1 is fine at</th><th>By week 4 you want</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>Huddles actually held</b></td>
+        <td>Your own count</td>
+        <td>4 of 6 days</td>
+        <td><b>6 of 6</b>, including days you are away</td>
+      </tr>
+      <tr>
+        <td><b>Appointments with an amount to collect</b><br><span style="font-weight:400;color:var(--ink-3);font-size:13px;">the manager's number</span></td>
+        <td>The small line under <b>Collections (Today)</b> — "x of y logged"</td>
+        <td>Anything above 3 of 10</td>
+        <td><b>Every scheduled patient, every day.</b> The manager does this inside the huddle, so a gap means the step was skipped — not that someone forgot at the desk. This is the number that turns the huddle from a briefing into a target</td>
+      </tr>
+      <tr>
+        <td><b>Yesterday's patients left with no next step</b></td>
+        <td>Count the cards in <b>Yesterday's Flow</b> still saying "No next appointment" at the end of the huddle</td>
+        <td>Under half</td>
+        <td><b>Zero at the end of every huddle.</b> Not zero on the board — zero left unresolved when the huddle ends</td>
+      </tr>
+      <tr>
+        <td><b>Overdue tasks</b></td>
+        <td>The red <b>Overdue</b> badges in the Tasks column</td>
+        <td>Going up is normal — you are finally seeing them</td>
+        <td><b>Trending down</b> for three weeks straight</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<h2 class="plain">If it starts slipping</h2>
+<p>Three failure patterns, and what each one actually means.</p>
+<div class="tw">
+  <table>
+    <thead><tr><th>What you see</th><th>What it really means</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>The huddle is skipped on busy days</td>
+        <td>It is scheduled too close to the first patient</td>
+        <td>Move it five minutes earlier. Do not shorten it</td>
+      </tr>
+      <tr>
+        <td>It has grown to twenty minutes</td>
+        <td>Case discussion has leaked into it</td>
+        <td>Split them. The huddle is <em>what</em> is happening today; case discussion is <em>how</em>, and belongs elsewhere</td>
+      </tr>
+      <tr>
+        <td>Columns are empty and nobody mentions it</td>
+        <td>The team has stopped believing the board</td>
+        <td>Find which upstream habit stopped — usually same-day visit recording. Fix that, not the huddle</td>
+      </tr>
+      <tr>
+        <td>Only the front desk attends</td>
+        <td>Doctors do not see anything for themselves in it</td>
+        <td>Make Yesterday's Flow the first thing read, and read the doctor's own next-action notes aloud</td>
+      </tr>
+      <tr>
+        <td>The manager stops filling Amount to Collect</td>
+        <td>Either the huddle is running late by the time it reaches that step, or the manager is not in the room</td>
+        <td>Move the collections pass earlier — right after the patient list is read, before Yesterday's Flow. It is two minutes and it is the step with the clearest money attached</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="note">
+  <b>One line to remember.</b> The huddle does not make the clinic better by being looked at. It makes the clinic better because of one action taken during it — booking or tasking every patient who left yesterday without a next step. If that single habit sticks and nothing else does, the module has paid for itself.
+</div>
+
+<footer>
+  <p><b>Go-Live Rollout Plan</b> · Daily Huddle · 27 August 2026. One section per module, added as each guide-book chapter is written. Appointments is next.</p>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,1549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dentfluence V1 Module Inventory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#FBF9FC; --surface:#FFFFFF; --surface-2:#F5F0F8;
+  --ink:#1E0A2C; --ink-2:#4A3654; --ink-3:#7A6685;
+  --rule:#E8D5F0; --rule-soft:#F0E6F5;
+  --accent:#6A0F70; --accent-soft:#FDF4FF; --accent-line:#D9AEDC;
+  --ok:#1A7A45; --ok-bg:#E8F5EE;
+  --warn:#A05C00; --warn-bg:#FBF1E2;
+  --bad:#B52020; --bad-bg:#FBEAEA;
+  --off:#6B7280; --off-bg:#F1F1F3;
+  --shadow:0 1px 2px rgba(30,10,44,.05), 0 8px 24px -16px rgba(30,10,44,.25);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#140A1B; --surface:#1D1026; --surface-2:#261632;
+    --ink:#EFE4F4; --ink-2:#C3B0CC; --ink-3:#94809E;
+    --rule:#3A2647; --rule-soft:#2B1B36;
+    --accent:#D08FD4; --accent-soft:#2A1531; --accent-line:#6A3A72;
+    --ok:#5FC58C; --ok-bg:#14301F;
+    --warn:#E0A94D; --warn-bg:#33240D;
+    --bad:#F0736F; --bad-bg:#38161A;
+    --off:#8C8397; --off-bg:#241C2B;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#140A1B; --surface:#1D1026; --surface-2:#261632;
+  --ink:#EFE4F4; --ink-2:#C3B0CC; --ink-3:#94809E;
+  --rule:#3A2647; --rule-soft:#2B1B36;
+  --accent:#D08FD4; --accent-soft:#2A1531; --accent-line:#6A3A72;
+  --ok:#5FC58C; --ok-bg:#14301F;
+  --warn:#E0A94D; --warn-bg:#33240D;
+  --bad:#F0736F; --bad-bg:#38161A;
+  --off:#8C8397; --off-bg:#241C2B;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1500px;margin:0 auto;padding:0 24px 96px;display:grid;grid-template-columns:1fr;gap:0}
+@media(min-width:1180px){
+  .wrap{grid-template-columns:236px minmax(0,1fr);gap:56px;padding-right:40px}
+}
+/* ── masthead ─────────────────────────────────────── */
+.masthead{grid-column:1/-1;padding:56px 0 34px;border-bottom:1px solid var(--rule)}
+.kicker{font-size:10.5px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin:0 0 14px}
+h1{font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;font-size:clamp(38px,6vw,62px);line-height:1.02;letter-spacing:-.015em;margin:0;text-wrap:balance}
+.dek{margin:16px 0 0;max-width:66ch;color:var(--ink-2);font-size:16.5px}
+.meta-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:32px}
+@media(min-width:700px){.meta-grid{grid-template-columns:repeat(4,1fr)}}
+.meta-cell{background:var(--surface);padding:13px 16px}
+.meta-cell dt{font-size:9.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin:0 0 4px}
+.meta-cell dd{margin:0;font-size:13.5px;font-weight:500}
+.meta-cell dd code{font-family:'JetBrains Mono',monospace;font-size:12px}
+/* ── toc ──────────────────────────────────────────── */
+.toc{display:none}
+@media(min-width:1180px){
+  .toc{display:block;position:sticky;top:0;align-self:start;max-height:100vh;overflow-y:auto;padding:40px 0 40px;font-size:13px}
+}
+.toc h2{font-size:9.5px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);margin:0 0 12px}
+.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.toc a{display:flex;gap:9px;padding:5px 8px;border-radius:3px;color:var(--ink-2);text-decoration:none;line-height:1.35}
+.toc a:hover{background:var(--accent-soft);color:var(--accent)}
+.toc a b{color:var(--accent);font-weight:700;font-family:'JetBrains Mono',monospace;font-size:11px;padding-top:1px}
+.toc .sub a{padding-left:29px;font-size:12.5px;color:var(--ink-3)}
+/* ── sections ─────────────────────────────────────── */
+main{min-width:0;padding-top:44px}
+section{margin:0 0 76px;scroll-margin-top:20px}
+.sec-head{border-top:2px solid var(--ink);padding-top:16px;margin-bottom:26px}
+.sec-letter{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.18em;color:var(--accent);text-transform:uppercase}
+h2.sec-title{font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;font-size:clamp(27px,3.4vw,38px);line-height:1.1;margin:6px 0 0;letter-spacing:-.01em;text-wrap:balance}
+.sec-note{margin:12px 0 0;max-width:74ch;color:var(--ink-2);font-size:14.5px}
+h3{font-family:'DM Sans',sans-serif;font-size:17px;font-weight:700;margin:44px 0 12px;letter-spacing:-.005em}
+h3:first-of-type{margin-top:30px}
+h4{font-size:13px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);margin:30px 0 10px}
+p{max-width:76ch;margin:0 0 14px}
+a{color:var(--accent)}
+code,.mono{font-family:'JetBrains Mono',monospace;font-size:.86em}
+code{background:var(--surface-2);padding:1px 5px;border-radius:3px;color:var(--ink)}
+/* ── tables ───────────────────────────────────────── */
+.tbl-scroll{overflow-x:auto;border:1px solid var(--rule);background:var(--surface);box-shadow:var(--shadow);margin:0 0 18px}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-size:9.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
+   padding:11px 13px;border-bottom:1px solid var(--rule);white-space:nowrap;background:var(--surface-2)}
+td{padding:10px 13px;border-bottom:1px solid var(--rule-soft);vertical-align:top;line-height:1.45}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--accent-soft)}
+td.mono,th.mono{font-family:'JetBrains Mono',monospace;font-size:11.5px}
+td.num{text-align:right}
+.nowrap{white-space:nowrap}
+caption{caption-side:top;text-align:left;font-size:12px;color:var(--ink-3);padding:0 0 8px}
+/* ── pills ────────────────────────────────────────── */
+.pill{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+      padding:3px 8px;border-radius:2px;white-space:nowrap;line-height:1.5}
+.p-ok{background:var(--ok-bg);color:var(--ok)}
+.p-warn{background:var(--warn-bg);color:var(--warn)}
+.p-bad{background:var(--bad-bg);color:var(--bad)}
+.p-off{background:var(--off-bg);color:var(--off)}
+.p-acc{background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent-line)}
+/* ── callouts ─────────────────────────────────────── */
+.note{border-left:3px solid var(--accent-line);background:var(--surface);padding:14px 18px;margin:0 0 20px;box-shadow:var(--shadow)}
+.note.warn{border-left-color:var(--warn)}
+.note.bad{border-left-color:var(--bad)}
+.note p{margin:0 0 8px;font-size:14px}
+.note p:last-child{margin:0}
+.note strong{font-weight:700}
+/* ── hierarchy trees ──────────────────────────────── */
+.mod{border:1px solid var(--rule);background:var(--surface);margin:0 0 14px;box-shadow:var(--shadow)}
+.mod>summary{cursor:pointer;list-style:none;padding:13px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.mod>summary::-webkit-details-marker{display:none}
+.mod>summary::before{content:'+';font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--accent);width:12px;flex:none}
+.mod[open]>summary::before{content:'–'}
+.mod>summary:hover{background:var(--accent-soft)}
+.mod-name{font-weight:700;font-size:15px}
+.mod-path{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink-3)}
+.mod-body{padding:4px 18px 20px 42px;border-top:1px solid var(--rule-soft)}
+.tree{list-style:none;margin:14px 0 0;padding:0}
+.tree ul{list-style:none;margin:4px 0 4px;padding:0 0 0 20px;border-left:1px solid var(--rule)}
+.tree li{padding:2px 0;font-size:13.5px;line-height:1.5}
+.tree>li{padding-top:8px}
+.tree .n1{font-weight:700;font-size:14px}
+.tree .n2{font-weight:500}
+.tree .lead{color:var(--ink-3);font-size:12.5px}
+.tree .mono{color:var(--ink-3)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 22px;font-size:12.5px;color:var(--ink-2);align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+/* ── stat strip ───────────────────────────────────── */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin:0 0 26px;box-shadow:var(--shadow)}
+.stat{background:var(--surface);padding:15px 16px}
+.stat .v{font-family:'Cormorant Garamond',Georgia,serif;font-size:32px;font-weight:700;line-height:1;color:var(--accent)}
+.stat .k{font-size:9.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin-top:7px}
+footer{grid-column:1/-1;border-top:1px solid var(--rule);padding-top:22px;margin-top:20px;font-size:12.5px;color:var(--ink-3);max-width:78ch}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media print{
+  .toc{display:none}
+  .wrap{grid-template-columns:1fr;max-width:none;padding:0 12mm 12mm}
+  body{font-size:10.5px;background:#fff}
+  section{page-break-inside:auto;margin-bottom:36px}
+  .sec-head{page-break-after:avoid}
+  .mod{page-break-inside:avoid}
+  .mod-body{display:block !important}
+  table{font-size:9px}
+  th,td{padding:5px 7px}
+  .tbl-scroll{overflow:visible;box-shadow:none}
+  h1{font-size:34px}
+  h2.sec-title{font-size:24px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker">Discovery &amp; Inventory · Source of truth for V1 completion</p>
+  <h1>Dentfluence V1 Module Inventory</h1>
+  <p class="dek">Every sidebar entry, module hierarchy, automation and data flow in Dentfluence OS, derived line-by-line from the current codebase — not from memory, documentation or the gap register. This is the map the module manuals and smoke tests will be written against.</p>
+  <dl class="meta-grid">
+    <div class="meta-cell"><dt>Codebase read</dt><dd><code>E:\Dentfluence\…\Dentfluence Web</code></dd></div>
+    <div class="meta-cell"><dt>Date of read</dt><dd>27 August 2026</dd></div>
+    <div class="meta-cell"><dt>Sidebar entries</dt><dd>23 across 6 sections</dd></div>
+    <div class="meta-cell"><dt>Named web routes</dt><dd>895 statements</dd></div>
+    <div class="meta-cell"><dt>API v1 routes</dt><dd>243 statements</dd></div>
+    <div class="meta-cell"><dt>Controllers / Models</dt><dd>163 / 178</dd></div>
+    <div class="meta-cell"><dt>Migrations / tables</dt><dd>436 / ~290</dd></div>
+    <div class="meta-cell"><dt>Code changed</dt><dd>None — read only</dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#method"><b>00</b><span>Method &amp; confidence</span></a></li>
+    <li><a href="#a"><b>A</b><span>Sidebar inventory</span></a></li>
+    <li class="sub"><a href="#a-anomalies">Gating anomalies</a></li>
+    <li class="sub"><a href="#a-hidden">Modules with no sidebar</a></li>
+    <li><a href="#b"><b>B</b><span>Module hierarchy</span></a></li>
+    <li><a href="#c"><b>C</b><span>Bells &amp; automations</span></a></li>
+    <li class="sub"><a href="#c-spines">The four spines</a></li>
+    <li class="sub"><a href="#c-events">Event register</a></li>
+    <li class="sub"><a href="#c-sched">Scheduled jobs</a></li>
+    <li class="sub"><a href="#c-rules">Rule registry</a></li>
+    <li class="sub"><a href="#c-absent">Bells that do NOT exist</a></li>
+    <li><a href="#d"><b>D</b><span>Data-flow map</span></a></li>
+    <li><a href="#e"><b>E</b><span>V1 completeness</span></a></li>
+    <li class="sub"><a href="#e-obs">Observation register</a></li>
+    <li><a href="#f"><b>F</b><span>Manual template</span></a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ══════════ METHOD ══════════ -->
+<section id="method">
+  <div class="sec-head">
+    <div class="sec-letter">00 · Preface</div>
+    <h2 class="sec-title">How this was built, and how much to trust each line</h2>
+  </div>
+  <p>Everything below was read out of the working tree: <code>routes/*.php</code> and the two module route files required from them, <code>app/Http/Controllers</code>, <code>app/Services</code>, <code>app/Modules</code>, <code>app/Observers</code>, <code>app/Console/Commands</code>, <code>config/*.php</code>, <code>database/migrations</code> and <code>resources/views</code>. Route names, URIs, middleware chains and group prefixes were extracted with a parser over the route files rather than typed by hand.</p>
+  <p>Three limits are worth stating plainly, because they change how you should read a status:</p>
+  <div class="note">
+    <p><strong>No commands were executed.</strong> Per project rule, nothing was run — no <code>artisan route:list</code>, no migrations, no tests. Where a claim depends on runtime resolution (route collision order, DB state, feature-flag rows), it is marked <span class="pill p-acc">verify at runtime</span> rather than asserted.</p>
+    <p><strong>The local <code>.env</code> is not production.</strong> <code>APP_ENV=local</code>, <code>WHATSAPP_DRY_RUN=true</code>, <code>MAIL_MAILER=log</code>, <code>FEATURE_CASE_ACCEPTANCE=true</code>, <code>FEATURE_BLOG_HUB=true</code>. Flag state and send behaviour on the VPS must be read from the VPS.</p>
+    <p><strong>Feature flags resolve from the database first.</strong> <code>config/features.php</code> gives the defaults recorded here; a <code>feature_flags</code> row for a clinic or a global override beats them. Every flag state below is “config default”, not “live value”.</p>
+  </div>
+  <p>Status pills carry a fixed meaning throughout:</p>
+  <div class="legend">
+    <span><span class="pill p-ok">complete</span> wired end to end: UI → route → controller → persistence → read-back</span>
+    <span><span class="pill p-warn">partial</span> works, but a documented gap, mismatch or unwired branch exists</span>
+    <span><span class="pill p-bad">broken</span> a path that cannot succeed as written</span>
+    <span><span class="pill p-off">not in V1</span> dormant, retired, or flag-off by design</span>
+  </div>
+</section>
+
+<!-- ══════════ A ══════════ -->
+<section id="a">
+  <div class="sec-head">
+    <div class="sec-letter">A</div>
+    <h2 class="sec-title">Actual sidebar inventory</h2>
+    <p class="sec-note">The production sidebar is <code>resources/views/components/sidebar.blade.php</code>, included by <code>layouts/app.blade.php</code> line 684. <code>resources/views/partials/sidebar.blade.php</code> also exists but is included by nothing — it is a dead file. Order below is the literal render order.</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="v">6</div><div class="k">Sections</div></div>
+    <div class="stat"><div class="v">23</div><div class="k">Nav items</div></div>
+    <div class="stat"><div class="v">20</div><div class="k">Module rows</div></div>
+    <div class="stat"><div class="v">2</div><div class="k">Modules with no nav</div></div>
+    <div class="stat"><div class="v">6</div><div class="k">Gating anomalies</div></div>
+  </div>
+
+  <div class="tbl-scroll">
+  <table>
+    <caption>Sidebar order · sidebar gate = the <code>@if</code> in the blade · route gate = the middleware actually enforced</caption>
+    <thead><tr>
+      <th>#</th><th>Section</th><th>Label</th><th class="mono">Route name</th><th class="mono">URL</th>
+      <th>Sidebar gate</th><th>Route gate</th><th>Module slug</th><th>V1</th><th>Status</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Overview</td><td><b>Dashboard</b></td><td class="mono">dashboard</td><td class="mono">/dashboard</td><td>always shown</td><td class="mono">auth</td><td class="mono">dashboard</td><td>Yes</td><td><span class="pill p-ok">complete</span></td></tr>
+      <tr><td>2</td><td>Overview</td><td><b>Daily Huddle</b></td><td class="mono">huddle.index</td><td class="mono">/huddle</td><td class="mono">daily_huddle</td><td class="mono">auth · web · module:daily_huddle</td><td class="mono">daily_huddle</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+
+      <tr><td>3</td><td>Clinical</td><td><b>Patients</b></td><td class="mono">patients.index</td><td class="mono">/patients</td><td class="mono">patients</td><td class="mono">auth · module:patients</td><td class="mono">patients</td><td>Yes</td><td><span class="pill p-ok">complete</span></td></tr>
+      <tr><td>4</td><td>Clinical</td><td><b>Appointments</b></td><td class="mono">appointments.index</td><td class="mono">/appointments</td><td class="mono">appointments</td><td class="mono">auth · module:appointments</td><td class="mono">appointments</td><td>Yes</td><td><span class="pill p-ok">complete</span></td></tr>
+      <tr><td>5</td><td>Clinical</td><td><b>Treatments</b></td><td class="mono">treatments.index</td><td class="mono">/treatments</td><td class="mono">treatments</td><td class="mono">auth · module:treatments</td><td class="mono">treatments</td><td>Yes</td><td><span class="pill p-ok">complete</span></td></tr>
+      <tr><td>6</td><td>Clinical</td><td><b>Prescriptions</b></td><td class="mono">prescriptions.index</td><td class="mono">/prescriptions</td><td class="mono">patients <b>OR</b> treatments</td><td class="mono">auth · module:prescriptions</td><td class="mono">prescriptions</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+      <tr><td>7</td><td>Clinical</td><td><b>Clinical Library</b></td><td class="mono">cms.dashboard</td><td class="mono">/clinical-library</td><td class="mono">cms</td><td class="mono">auth · module:cms</td><td class="mono">cms</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+
+      <tr><td>8</td><td>Communication</td><td><b>Relationships</b></td><td class="mono">relationship.dashboard</td><td class="mono">/relationship/dashboard</td><td>none — always shown</td><td class="mono">web · auth · module:relationship</td><td class="mono">relationship</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+      <tr><td>9</td><td>Communication</td><td><b>Marketing</b></td><td class="mono">marketing.overview</td><td class="mono">/marketing</td><td class="mono">marketing</td><td class="mono">marketing.active · module:marketing</td><td class="mono">marketing</td><td>Partly</td><td><span class="pill p-warn">partial</span></td></tr>
+
+      <tr><td>10</td><td>Operations</td><td><b>Accounts &amp; Finance</b></td><td class="mono">finance.dashboard</td><td class="mono">/finance</td><td class="mono">finance</td><td class="mono">auth · module:finance</td><td class="mono">finance</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+      <tr><td>11</td><td>Operations</td><td><b>Inventory</b></td><td class="mono">inventory.index</td><td class="mono">/inventory</td><td class="mono">inventory</td><td class="mono">auth · module:inventory</td><td class="mono">inventory</td><td>Yes</td><td><span class="pill p-ok">complete</span></td></tr>
+      <tr><td>12</td><td>Operations</td><td><b>Lab</b></td><td class="mono">lab.index</td><td class="mono">/lab</td><td class="mono">lab</td><td class="mono">auth · module:lab</td><td class="mono">lab</td><td>Yes</td><td><span class="pill p-ok">complete</span></td></tr>
+      <tr><td>13</td><td>Operations</td><td><b>Tasks</b></td><td class="mono">tasks.index</td><td class="mono">/tasks</td><td class="mono">tasks</td><td class="mono">auth · module:tasks</td><td class="mono">tasks</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+      <tr><td>14</td><td>Operations</td><td><b>Practice Protocols</b></td><td class="mono">practice-protocols.index</td><td class="mono">/practice-protocols</td><td class="mono">practice_protocols</td><td class="mono">auth · web · module:practice_protocols</td><td class="mono">practice_protocols</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+      <tr><td>15</td><td>Operations</td><td><b>HR</b></td><td class="mono">hr.dashboard</td><td class="mono">/hr</td><td class="mono">hr</td><td class="mono">auth · module:hr</td><td class="mono">hr</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+
+      <tr><td>16</td><td>Insights</td><td><b>Reports</b></td><td class="mono">reports.index</td><td class="mono">/reports</td><td class="mono">reports</td><td class="mono">auth · module:reports</td><td class="mono">reports</td><td>Yes</td><td><span class="pill p-ok">complete</span></td></tr>
+      <tr><td>17</td><td>Insights</td><td><b>Analytics</b></td><td class="mono">analytics.index</td><td class="mono">/analytics</td><td class="mono">analytics</td><td class="mono">auth · module:analytics</td><td class="mono">analytics</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+
+      <tr><td>18</td><td>System</td><td><b>Settings</b></td><td class="mono">settings.index</td><td class="mono">/settings</td><td class="mono">settings</td><td class="mono">auth · module:settings</td><td class="mono">settings</td><td>Yes</td><td><span class="pill p-ok">complete</span></td></tr>
+      <tr><td>19</td><td>System</td><td><b>Consent (DPDP)</b></td><td class="mono">consent.purposes</td><td class="mono">/consent/purposes</td><td class="mono">settings</td><td class="mono">auth <b>only</b></td><td>—</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+      <tr><td>20</td><td>System</td><td><b>Patient Rights</b></td><td class="mono">data-rights.index</td><td class="mono">/data-rights</td><td class="mono">settings</td><td class="mono">auth <b>only</b></td><td>—</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+      <tr><td>21</td><td>System</td><td><b>Breach Register</b></td><td class="mono">breaches.index</td><td class="mono">/breaches</td><td class="mono">settings</td><td class="mono">auth <b>only</b></td><td>—</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+      <tr><td>22</td><td>System</td><td><b>Data Retention</b></td><td class="mono">retention.index</td><td class="mono">/retention</td><td class="mono">settings</td><td class="mono">auth <b>only</b></td><td>—</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+      <tr><td>23</td><td>System</td><td><b>Help &amp; Guide</b></td><td class="mono">help.index</td><td class="mono">/help</td><td class="mono">settings</td><td class="mono">auth <b>only</b></td><td>—</td><td>Yes</td><td><span class="pill p-warn">partial</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 id="a-anomalies">Gating anomalies visible in the sidebar itself</h3>
+  <p>Six places where the sidebar's <code>@if</code> and the route's middleware disagree. None of these is a guess — each is a direct read of the two files side by side.</p>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>ID</th><th>Item</th><th>Sidebar says</th><th>Route says</th><th>Consequence</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">SB-1</td><td>Prescriptions</td><td><code>patients OR treatments</code></td><td><code>module:prescriptions</code></td><td>A role with Patients-view but no Prescriptions grant <b>sees</b> the item and gets Access Denied on click. The two gates were never reconciled after the <code>prescriptions</code> module row was added (migration 2026-07-25).</td></tr>
+      <tr><td class="mono">SB-2</td><td>Relationships</td><td>ungated — always shown</td><td><code>module:relationship</code></td><td>Same failure, opposite direction. The blade comment still describes PRE as “an ungated core feature”; it stopped being one on 2026-07-25 when the <code>relationship</code> module row landed.</td></tr>
+      <tr><td class="mono">SB-3</td><td>Practice Protocols, HR</td><td>inside the Operations wrapper <code>@if(finance ‖ inventory ‖ lab ‖ tasks)</code></td><td>their own module gates</td><td>A role granted <em>only</em> HR (or only Practice Protocols) sees no Operations section at all — the whole block is skipped before their own <code>@if</code> is reached.</td></tr>
+      <tr><td class="mono">SB-4</td><td>Consent · Patient Rights · Breach · Retention</td><td>inside the System wrapper <code>@if(settings)</code></td><td><code>auth</code> only</td><td>Compliance surfaces are hidden from non-admins but not <em>protected</em> from them: any logged-in user reaching the URL directly gets in. DPDP registers are the wrong place for a nav-only gate.</td></tr>
+      <tr><td class="mono">SB-5</td><td>Help &amp; Guide</td><td>inside <code>@if(settings)</code></td><td><code>auth</code> only</td><td>The staff help page is invisible to exactly the staff who need it — anyone without the Settings module.</td></tr>
+      <tr><td class="mono">SB-6</td><td>Analytics</td><td><code>analytics</code></td><td><code>module:analytics</code></td><td>Gate is consistent, but the <em>destination</em> is not: <code>analytics.*</code> and <code>finance.analytics.*</code> are the same <code>Finance\AnalyticsController</code> methods rendering the same <code>finance.analytics.*</code> views behind two different permissions. Nine pages, two doors, no divergence guard.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 id="a-hidden">Permission-catalogue modules with no sidebar entry</h3>
+  <p>The <code>modules</code> table carries 20 rows (18 from <code>RolePermissionSeeder</code>, plus <code>relationship</code> and <code>prescriptions</code> added by migration <code>2026_07_25_120000</code>). Two of them are configurable in Settings → Roles but have nowhere to go.</p>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>Module slug</th><th>Catalogue name</th><th>Why there is no nav item</th><th>Still reachable?</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">presentations</td><td>Smart Presentation</td><td>Retired from the sidebar 2026-07-15 in favour of the Case Acceptance Journey, opened per-plan from the Treatment Plan tab. Blade comment at <code>sidebar.blade.php</code> documents the decision.</td><td>Yes — <code>/presentations</code>, <code>/presentations/{id}</code>, <code>/presentations/links</code>, <code>/presentations/settings</code> all still route. Also the permission that gates <code>case-journeys.*</code>.</td><td><span class="pill p-off">not in V1 nav</span></td></tr>
+      <tr><td class="mono">communication</td><td>Communication (PRE)</td><td>Communication OS was superseded by PRE across 2026-07-03 → 07-06. No nav item was ever added back.</td><td>Yes — the whole <code>/communication/*</code> tree is live behind <code>communication.access + module:communication</code>, reachable only by direct URL or contextual links.</td><td><span class="pill p-off">not in V1 nav</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>A third surface sits outside the module system entirely: <b>Dentfluence HQ</b> (<code>app/Modules/Hq</code>, <code>/hq/*</code>, 15 routes) — the internal command centre for clinics, subscriptions, plans and tickets, gated by the <code>superadmin</code> middleware on the <code>is_superadmin</code> flag. It is not a clinic-facing module and should not appear in any clinic manual.</p>
+</section>
+<!-- ══════════ B ══════════ -->
+<section id="b">
+  <div class="sec-head">
+    <div class="sec-letter">B</div>
+    <h2 class="sec-title">Module → sub-module → workflow hierarchy</h2>
+    <p class="sec-note">Derived from route groups, controller methods and the blade tree — not from an assumed shape. Every leaf below corresponds to a real route, a real tab in a real view, or a real controller action. Sub-modules that exist only as retired code are marked as such rather than omitted.</p>
+  </div>
+
+  <p><em>Click a module to expand.</em> In print, all modules are expanded.</p>
+
+  <details class="mod" open>
+    <summary><span class="mod-name">1 · Dashboard</span><span class="mod-path">DashboardController · views/dashboard/index</span><span class="pill p-ok">complete</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Today strip</span> <span class="lead">— appointment counts by status: total / check-in / in-chair / done, branch-scoped</span></li>
+        <li><span class="n1">Alert cards</span> <span class="lead">— three computed nudges, each with a deep link</span>
+          <ul>
+            <li>Overdue lab cases → <span class="mono">lab.index</span></li>
+            <li>No-shows today → <span class="mono">appointments.index</span></li>
+            <li>Outstanding balance across invoices → <span class="mono">finance.income</span></li>
+          </ul>
+        </li>
+        <li><span class="n1">Global chrome hosted here</span> <span class="lead">— rendered by <span class="mono">layouts/app</span> on every page, not owned by Dashboard</span>
+          <ul>
+            <li>Topbar + notification bell (<span class="mono">notifications.*</span>), universal search</li>
+            <li>Global appointment modal, create-task modal, dental notation, access-denied modal</li>
+            <li>Yesterday follow-up card, Today's flow card, clinical-library file viewer</li>
+            <li>Tulip Assistant drawer (<span class="mono">assistant.*</span>)</li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">2 · Daily Huddle</span><span class="mod-path">app/Modules/Huddle · 19 routes</span><span class="pill p-warn">partial</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Board</span> <span class="mono">GET /huddle</span>
+          <ul>
+            <li>Today's appointments — patient, doctor, assistant, treatment, staff instruction, prep item, medical alert</li>
+            <li>Collections target — scheduled appointments only; walk-ins excluded by design</li>
+            <li>Yesterday's flow — resolved through <span class="mono">ClinicFlowRange</span> so Monday looks back to Saturday (and Sunday if the clinic opened)</li>
+            <li>Yesterday's appointments + whether a visit/consultation was logged against each</li>
+            <li>Staff instruction editing <span class="mono">PATCH /huddle/appointments/{id}/instruction</span></li>
+            <li>Huddle notes <span class="mono">POST /huddle/notes</span></li>
+            <li>Yesterday's-Flow quick action <span class="mono">POST /huddle/yesterday-flow/log</span> — logs a task and/or follow-up call</li>
+            <li>Push selected comms to the follow-up queue <span class="mono">POST /huddle/comms/push</span></li>
+          </ul>
+        </li>
+        <li><span class="n1">Tasks</span> <span class="mono">/huddle/tasks</span> <span class="lead">— index, store, status, assign, proof upload, carry-forward</span></li>
+        <li><span class="n1">Comments</span> <span class="mono">/huddle/comments</span> <span class="lead">— index, store, resolve, destroy</span></li>
+        <li><span class="n1">Accountability</span> <span class="mono">GET /huddle/accountability</span> <span class="lead">— JSON</span></li>
+        <li><span class="n1">Report</span> <span class="mono">GET /huddle/report</span> <span class="lead">— weekly / monthly / quarterly / annual performance tabs</span></li>
+        <li><span class="n1">Settings</span> <span class="lead">— GET redirects to <span class="mono">settings.index?tab=huddle</span>; PATCH kept for API</span></li>
+        <li><span class="n1">Mobile / Tulip surface</span> <span class="lead">— <span class="mono">/api/v1/huddle</span>, <span class="mono">/huddle/tasks</span>, <span class="mono">/huddle/staff</span>, <span class="mono">/huddle/comms/push</span>, yesterday-flow log</span></li>
+        <li><span class="n1">Legacy widget endpoints</span> <span class="lead">— <span class="mono">communication.huddle.widgets / overdue / alerts</span> live in the Communication OS tree, separate controller</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">3 · Patients</span><span class="mod-path">PatientController + 8 satellites · 64 named routes</span><span class="pill p-ok">complete</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Patient list</span> <span class="mono">/patients</span> <span class="lead">— index, AJAX search, quick-store, scan-form (OCR intake), import preview</span></li>
+        <li><span class="n1">Patient profile</span> <span class="mono">/patients/{id}</span> <span class="lead">— one eager tab + 10 lazy tabs loaded via <span class="mono">/patients/{id}/tab/{tab}</span></span>
+          <ul>
+            <li><span class="n2">Profile (eager)</span> — demographics, contact, sticky financial header, rapport notes, opportunities, quick-pay modal, Journey Timeline</li>
+            <li><span class="n2">Consultation</span> — consultation history for this patient</li>
+            <li><span class="n2">Treatment Plan</span> — plans, items, per-tooth mapping, decisions</li>
+            <li><span class="n2">Visits</span> — treatment visits + visit items</li>
+            <li><span class="n2">Lab</span> — this patient's lab cases</li>
+            <li><span class="n2">Prescriptions</span></li>
+            <li><span class="n2">Billing</span> — <span class="lead">extra gate: requires <span class="mono">finance,view</span> or 403</span></li>
+            <li><span class="n2">Wallet</span> — <span class="lead">same finance gate</span></li>
+            <li><span class="n2">Membership</span></li>
+            <li><span class="n2">Documents</span> — clinical files, upload modal</li>
+            <li><span class="n2">Notes</span></li>
+          </ul>
+        </li>
+        <li><span class="n1">Journey Timeline</span> <span class="mono">GET /patients/{id}/timeline</span> <span class="lead">— cursor-paged JSON from <span class="mono">PatientJourneyService</span>, grouped all / clinical / financial / comms / consent / reviews, permission-filtered per event</span></li>
+        <li><span class="n1">Consultations</span> <span class="lead">— four typed workflows, each with its own create/edit pair</span>
+          <ul>
+            <li><span class="n2">Standard</span> — Visit Type → Chief Complaint → Examination Findings → Diagnosis → Investigations → Prescription → Follow-up; plus HOPI, Findings Summary, Risk Assessment, Treatment Done sections</li>
+            <li><span class="n2">Same Issue</span> <span class="mono">consultations.same-issue.*</span> — update notes + additional findings</li>
+            <li><span class="n2">Minor Visit</span> <span class="mono">consultations.minor-visit.*</span></li>
+            <li><span class="n2">Emergency</span> <span class="mono">consultations.emergency.*</span></li>
+            <li><span class="n2">COHA</span> <span class="mono">coha.create / store / edit / update / report</span> — comprehensive oral health assessment + printable report</li>
+            <li><span class="n2">Consult Assist</span> <span class="mono">consult-assist.suggest / section-guidance / tooth-timeline</span> — AI assist endpoints</li>
+            <li><span class="n2">Standalone edit</span> <span class="mono">consultations.show / edit / update / destroy / print</span></li>
+            <li><span class="lead">Retired: the <span class="mono">consultations.index</span> listing was removed 2026-08-03 — the profile tab is the listing.</span></li>
+          </ul>
+        </li>
+        <li><span class="n1">Treatment Plans</span> <span class="mono">treatment-plans.*</span>
+          <ul>
+            <li>Create from consultation · AI-suggest · items editor · per-tooth items</li>
+            <li>Lifecycle: <span class="mono">mark-presented → accept | partial-accept | reject | defer → revert</span></li>
+            <li>Consent document print · plan print · plan → invoice (<span class="mono">billing.fromPlan</span>) · plan → Case Journey</li>
+            <li>States: draft, decision_pending, accepted, treatment_started, treatment_complete, deferred, declined, closed</li>
+          </ul>
+        </li>
+        <li><span class="n1">Treatment Visits</span> <span class="mono">visits.*</span> <span class="lead">— create, edit, update, delete (cascades items + prompts), print case sheet, "none today"</span></li>
+        <li><span class="n1">Clinical Files</span> <span class="mono">clinical-files.*</span> <span class="lead">— upload, list, show, update, soft-delete; served through <span class="mono">secure.media.file</span></span></li>
+        <li><span class="n1">Family &amp; identity</span>
+          <ul>
+            <li>Family links + guardians <span class="mono">patients.family.*</span></li>
+            <li>Merge (admin only) <span class="mono">patients.merge.create / preview / store / undo</span></li>
+            <li>ABHA / ABDM identifiers <span class="mono">patients.abha.edit / update</span></li>
+            <li>Deactivate / reactivate · soft delete</li>
+          </ul>
+        </li>
+        <li><span class="n1">Relationship surface on the patient</span> <span class="lead">— rapport notes, opportunities, logged communications, tags</span></li>
+        <li><span class="n1">Print</span> <span class="mono">patients.print</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">4 · Appointments</span><span class="mod-path">AppointmentController + AppointmentService · 20 routes</span><span class="pill p-ok">complete</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Calendar</span> <span class="mono">/appointments</span> <span class="lead">— the module home; doctors open on their own list via the per-role <code>data_scope</code> column</span></li>
+        <li><span class="n1">Today view</span> <span class="mono">/appointments/today</span> · <span class="n1">Today queue</span> <span class="mono">/appointments/queue/today</span></li>
+        <li><span class="n1">Booking</span> <span class="lead">— create, store, conflict check (<span class="mono">appointments.check.conflict</span>), quick view, edit, update</span></li>
+        <li><span class="n1">Status lifecycle</span> <span class="lead">— scheduled → checkin → in_chair → checkout → done; plus cancelled, no_show</span>
+          <ul>
+            <li><span class="mono">updateStatus</span>, <span class="mono">cancel</span> (with reason), <span class="mono">revert</span>, <span class="mono">reschedule</span></li>
+            <li>Status counts endpoint for the board header</li>
+          </ul>
+        </li>
+        <li><span class="n1">Chair / operatory</span> <span class="lead">— <span class="mono">assignOperatory</span>; operatory master lives in Settings</span></li>
+        <li><span class="n1">Blocked slots</span> <span class="lead">— <span class="mono">block-slot</span>, <span class="mono">blocked-slots</span>, <span class="mono">DoctorBlockedSlot</span> model</span></li>
+        <li><span class="n1">Hide from calendar</span> <span class="mono">PATCH /appointments/{id}/hide</span></li>
+        <li><span class="n1">Record-level authorization</span> <span class="lead">— <span class="mono">AppointmentPolicy</span>, the app's first policy; <code>all</code> and <code>own_default</code> both allow whole-branch access</span></li>
+        <li><span class="n1">Mobile</span> <span class="lead">— <span class="mono">/api/v1</span> appointment endpoints share <span class="mono">AppointmentService</span></span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">5 · Treatments (clinic knowledge base)</span><span class="mod-path">TreatmentController · 18 routes · 10 tabs</span><span class="pill p-ok">complete</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Catalogue</span> <span class="lead">— index, create, store, price list, patient search, delete</span></li>
+        <li><span class="n1">Treatment record — 10 tabs</span> <span class="mono">/treatments/{id}?tab=</span>
+          <ul>
+            <li><span class="n2">Overview</span> · <span class="n2">Intelligence</span> <span class="lead">(saved via <span class="mono">intelligence.save</span>)</span></li>
+            <li><span class="n2">SOP</span> — doctor steps, pre-instructions <span class="lead">(<span class="mono">sop.save</span>)</span></li>
+            <li><span class="n2">Consent</span> — split out of SOP 2026-07-13, own save route so it never touches SOP fields</li>
+            <li><span class="n2">Stages</span> · <span class="n2">Rules</span> <span class="lead">(e.g. <code>consent_required</code>)</span></li>
+            <li><span class="n2">Media</span> — upload / delete</li>
+            <li><span class="n2">Patient Materials</span> · <span class="n2">Review</span> <span class="lead">(<span class="mono">review.mark</span>)</span> · <span class="n2">Usage</span></li>
+          </ul>
+        </li>
+        <li><span class="n1">Categories</span> <span class="mono">treatment-categories.store / update / destroy</span></li>
+        <li><span class="n1">Print</span> <span class="mono">/treatments/{id}/print/{type}</span> <span class="lead">— pre_op, post_op, consent</span></li>
+        <li><span class="n1">API detail</span> <span class="mono">/treatments/{id}/api</span> <span class="lead">— feeds the plan builder and billing auto-fill</span></li>
+        <li><span class="n1">Supporting tables</span> <span class="lead">— <span class="mono">treatment_sops, treatment_rules, treatment_media, treatment_knowledge, treatment_options, treatment_consents, diagnosis_treatment_options</span></span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">6 · Prescriptions</span><span class="mod-path">Prescription/* · 39 rx.* + 12 patient-scoped routes</span><span class="pill p-warn">partial</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Global index</span> <span class="mono">GET /prescriptions</span></li>
+        <li><span class="n1">Patient-scoped Rx</span> <span class="mono">/patients/{p}/prescriptions/*</span>
+          <ul>
+            <li>index · create · store · show · edit · update · destroy</li>
+            <li>Repeat prescription <span class="mono">POST .../repeat</span></li>
+            <li>Print · PDF download · WhatsApp send</li>
+            <li>Quick form + pedo dose helper partials</li>
+          </ul>
+        </li>
+        <li><span class="n1">Rx masters</span> <span class="mono">/settings/prescription/*</span> <span class="lead">— reached from Settings, named <span class="mono">rx.settings.*</span></span>
+          <ul>
+            <li>Drug categories · Generics · Routes of administration</li>
+            <li>Food instructions · Dose templates · Duration templates</li>
+            <li>Warning rules · Prescription templates (+ items)</li>
+            <li>Drug register <span class="mono">rx.drugs.*</span> — CRUD, soft-delete + restore, search API</li>
+          </ul>
+        </li>
+        <li><span class="n1">Safety layer</span> <span class="lead">— <span class="mono">rx_allergy_rules</span>, <span class="mono">rx_drug_interaction_rules</span>, <span class="mono">prescription_overrides</span>, <span class="mono">prescription_audit_logs</span></span></li>
+        <li><span class="n1">ABDM</span> <span class="lead">— <span class="mono">AbdmPrescriptionObserver</span> mirrors prescriptions into FHIR documents</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">7 · Clinical Library (CMS)</span><span class="mod-path">ContentManagement/* · 25 routes · two front doors</span><span class="pill p-warn">partial</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Clinical Library dashboard</span> <span class="mono">/clinical-library</span> <span class="lead">— the sidebar destination</span>
+          <ul>
+            <li>Upload <span class="mono">POST /clinical-library/upload</span></li>
+            <li>File approval queue — <span class="mono">files.approve</span> / <span class="mono">files.reject</span></li>
+            <li>Protocol steps AJAX for the upload modal</li>
+          </ul>
+        </li>
+        <li><span class="n1">Content Management</span> <span class="mono">/content-management</span> <span class="lead">— five tabs</span>
+          <ul>
+            <li><span class="n2">Case Library</span> — search, filters, results table, case viewer, media gallery, case notes, case timeline, visit history</li>
+            <li><span class="n2">Education</span> — categories, treatments, media upload; manage screen</li>
+            <li><span class="n2">Marketing</span> — tag/untag a case for marketing use</li>
+            <li><span class="n2">Teaching</span> · <span class="n2">Research</span></li>
+          </ul>
+        </li>
+        <li><span class="n1">Watermark settings</span> <span class="mono">POST /content-management/watermark-settings</span> <span class="lead">— consumed by the <span class="mono">GenerateWatermark</span> job</span></li>
+        <li><span class="n1">Patient-facing view</span> <span class="mono">/content-management/patient/{id}</span></li>
+        <li><span class="n1">Tables</span> <span class="lead">— <span class="mono">cms_media, cms_treatment_cases, cms_tags, cms_edu_categories, cms_edu_items, education_*, clinical_media, media_assets</span></span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">8 · Relationships (PRE)</span><span class="mod-path">Relationship/* · 71 routes · 9 tabs</span><span class="pill p-warn">partial</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Tab bar</span> <span class="lead">(<span class="mono">relationship/layouts/app.blade.php</span>) — Dashboard · Today's Actions · Pipeline · Opportunities · Recalls · WhatsApp · All Relationships · Analytics · Settings</span></li>
+        <li><span class="n1">Today's Actions</span> <span class="mono">/relationship/today</span> <span class="lead">— the reception work board</span>
+          <ul>
+            <li>15 live categories: new_enquiries · lead_followups · opportunities · recall_calls · follow_up_calls · appointment_reminders · pending_estimates · membership_renewals · lab_ready · payment_reminders · wellness_check_yesterday · logged_communications · tasks (system) · missed_calls_yesterday · missed_appointments_yesterday</li>
+            <li><span class="lead">Retired category: <b>birthdays</b> (2026-07-26) — the reader is kept for future automation; birthday <em>recalls</em> still surface under recall_calls</li>
+            <li>Pending Calls board <span class="mono">/today/pending</span> — same cards, overdue-only window</li>
+            <li>Call workflow drawer with per-category checklists (<span class="mono">config/relationship_rules.php</span>)</li>
+            <li>Actions: log outcome · dismiss · close · add note · summary · birthday WhatsApp</li>
+            <li>Missed calls board — ignore / unignore / bulk dismiss</li>
+            <li>Per-category fault tolerance: a failing category logs a warning and returns <code>[]</code> rather than breaking the board</li>
+          </ul>
+        </li>
+        <li><span class="n1">Reception</span> <span class="mono">/relationship/reception</span> <span class="lead">— front-desk view (not in the tab bar)</span></li>
+        <li><span class="n1">Lead Pipeline</span> <span class="mono">/relationship/pipeline</span>
+          <ul>
+            <li>Stage board with drag-to-move · activity log · detail modal</li>
+            <li>Quick-add lead · full add lead · edit lead</li>
+            <li>Convert to patient <span class="lead">(additionally requires <span class="mono">module:patients,edit</span> — it mints a Patient)</span></li>
+            <li>AI: re-enrich · draft reply · log reply</li>
+          </ul>
+        </li>
+        <li><span class="n1">Opportunity Pipeline</span> <span class="lead">— board, store, patient search, detail modal, stage update, convert to lead, notes</span></li>
+        <li><span class="n1">Recall Pipeline</span> <span class="lead">— board, manual recall, ignore / unignore, bulk dismiss, bulk assign, convert to opportunity</span></li>
+        <li><span class="n1">WhatsApp overview</span> <span class="mono">/relationship/whatsapp</span> <span class="lead">— sidebar slot removed 2026-08-25; reachable from the PRE tab and every contextual WhatsApp button</span></li>
+        <li><span class="n1">All Relationships</span> · <span class="n1">Relationship profile</span> <span class="mono">/relationship/{id}</span> · <span class="n1">Universal search</span></li>
+        <li><span class="n1">Notifications</span> <span class="mono">/relationship/notifications</span> <span class="lead">— index, read, read-all</span></li>
+        <li><span class="n1">Templates</span> <span class="lead">— index, create, edit, update, destroy, for-type deep link</span></li>
+        <li><span class="n1">Referral rewards</span> <span class="mono">POST /relationship/{id}/referral-reward</span></li>
+        <li><span class="n1">Settings</span> <span class="lead">— flag toggles, Today's-Actions config, referral config, recall effective-from, recall general, per-treatment recall, birthday recall, call-outcome options, dismiss reasons</span></li>
+        <li><span class="n1">Engine layer</span> <span class="lead">— 25 services under <span class="mono">app/Services/Relationship</span>: ActivityEngine, RulesEngine, TaskEngine, ReminderEngine, NotificationEngine, CommunicationEngine, CommunicationGuard, TodayActionsEngine + Projector, YesterdayReviewService, OutcomeAutomationService, IdentityResolver, RelationshipEngine, MergeService, JourneyService, RelationshipScoreEngine, UnifiedTimelineService, TimelineParityService …</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">9 · Marketing</span><span class="mod-path">Marketing/* · 71 routes · 6 subnav tabs (+ Blog)</span><span class="pill p-warn">partial</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Dashboard</span> <span class="mono">/marketing</span></li>
+        <li><span class="n1">Content / Publish</span> <span class="lead">— composer, save draft, per-platform variants, scheduling</span></li>
+        <li><span class="n1">Calendar</span> <span class="lead">— month view, export, drag-reschedule</span></li>
+        <li><span class="n1">Reviews</span> <span class="mono">/marketing/reviews</span> <span class="lead">— native page (replaced the old link into Communication OS)</span></li>
+        <li><span class="n1">Analytics</span> · <span class="n1">Settings</span> <span class="lead">(+ integrated-mode toggle)</span></li>
+        <li><span class="n1">Blog Marketing Hub</span> <span class="lead">— 22 routes, gated by feature flag <code>blog.hub</code> inside <span class="mono">BlogController</span> (404 when off)</span>
+          <ul>
+            <li>CRUD · draft · autosave · duplicate · archive / unarchive</li>
+            <li>Versioning — index, restore, destroy</li>
+            <li>Publishing ledger — publications index, publish, retry, destroy; <span class="mono">ProcessBlogPublication</span> job</li>
+            <li>Taxonomy — categories, tags; media assets</li>
+            <li>Route key is the post <b>uuid</b>, never the slug or id</li>
+          </ul>
+        </li>
+        <li><span class="n1">Brainstorm &amp; Ideas</span> <span class="lead">— idea CRUD, convert to post, convert to campaign, create from review</span></li>
+        <li><span class="n1">Campaigns</span> <span class="lead">— CRUD, goals, team add/remove</span></li>
+        <li><span class="n1">Library &amp; Assets</span> <span class="lead">— folders, upload, storage usage, tags</span></li>
+        <li><span class="n1">Brand Kit</span> <span class="lead">— settings + logo upload</span></li>
+        <li><span class="n1">Integrations</span> <span class="lead">— WhatsApp setup, WordPress setup, generic OAuth connect / callback / disconnect / health-check per platform</span></li>
+        <li><span class="n1">Provider abstraction</span> <span class="lead">— flag <code>marketing.integrated_providers</code> switches Revenue / Patient / Treatment / Media / Review / Appointment interfaces between Standalone (manual) and Integrated (real Dentfluence records)</span></li>
+        <li><span class="n1">Access</span> <span class="lead">— <span class="mono">EnsureMarketingActive</span> only checks that a <code>marketing</code> row exists in <code>modules</code>; the real permission is <span class="mono">module:marketing</span></span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">10 · Accounts &amp; Finance (incl. Billing)</span><span class="mod-path">Finance/* + BillingController · 81 + 25 routes</span><span class="pill p-warn">partial</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Finance dashboard</span> <span class="mono">/finance</span> <span class="lead">— KPIs, recent transactions, quick actions, income-tax estimator</span></li>
+        <li><span class="n1">Income</span> <span class="lead">— register, export, and a restore-from-trash trio (invoice / receipt / final bill)</span></li>
+        <li><span class="n1">Expenses</span> <span class="lead">— list, create, receipt scan, store, edit, update, mark-paid, export, delete; expense categories</span></li>
+        <li><span class="n1">Vendors</span> <span class="lead">— CRUD + quick-store; staff are mirrored in automatically by <span class="mono">UserVendorSyncObserver</span></span></li>
+        <li><span class="n1">Payroll</span> · <span class="n1">Cashbook</span> · <span class="n1">Banking</span> <span class="lead">(accounts CRUD + toggle)</span></li>
+        <li><span class="n1">GST</span> · <span class="n1">CA Export</span> · <span class="n1">Finance Reports</span></li>
+        <li><span class="n1">Vouchers</span> <span class="lead">— index, show, print, export, destroy</span></li>
+        <li><span class="n1">Wallet</span>
+          <ul>
+            <li>Wallet index · register · register export</li>
+            <li>Per-patient: show, credit form, credit, credit note, receive advance, refund, adjust</li>
+            <li>Wallet campaigns — create, preview, apply, cancel</li>
+            <li>Nightly <span class="mono">wallet:recalculate</span> at 00:30</li>
+          </ul>
+        </li>
+        <li><span class="n1">Membership</span> <span class="lead">— plans CRUD, toggle, members list, enrolment delete; enrol from billing</span></li>
+        <li><span class="n1">Coupons</span> <span class="lead">— CRUD, toggle; validated at billing time</span></li>
+        <li><span class="n1">Finance Analytics</span> <span class="lead">— 9 pages: overview, vendors, expenses, lab, procurement, cashflow, outstanding, business intelligence, audit log</span></li>
+        <li><span class="n1">Billing (invoice engine)</span> <span class="mono">billing.*</span>
+          <ul>
+            <li>Bill from treatment plan — <span class="mono">fromPlan</span> / <span class="mono">storeFromPlan</span></li>
+            <li>Bill from billing prompt — <span class="mono">createFromPrompt</span>, <span class="mono">dismissPrompt</span></li>
+            <li>Payments — record on invoice, record patient-level payment (allocation), update, mark provider paid</li>
+            <li>Receipts — show, void; patient allocation receipt, void</li>
+            <li>Discounts — coupon validate, membership benefits, manual discount apply / remove</li>
+            <li>Documents — invoice print, panel, final bill (+ delete)</li>
+            <li>Cancellation &amp; authorised destructive ops — <span class="mono">cancel</span>, <span class="mono">cancelWithReason</span>, <span class="mono">deleteAuth</span>, <span class="mono">editAuth</span></li>
+            <li>EMI — providers, schemes, cost pass-through, schedules (masters in Settings)</li>
+            <li>Audit — <span class="mono">billing_audit_logs</span>, <span class="mono">finance_audit_log</span>, chain verified daily by <span class="mono">audit:verify</span></li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">11 · Inventory</span><span class="mod-path">InventoryController + InventoryService · 74 routes · 11 tabs</span><span class="pill p-ok">complete</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Dashboard</span> · <span class="n1">Items</span> <span class="lead">— stock list, adjust (admin-only reversal), per-item history</span></li>
+        <li><span class="n1">Products</span> <span class="lead">— catalogue cards, show, store, update, destroy (admin), CSV import (template → preview → store)</span></li>
+        <li><span class="n1">Purchase Orders</span> <span class="lead">— create, mark ordered, receive (GRN), print, update, destroy, reverse last GRN</span></li>
+        <li><span class="n1">Stock Movement</span> <span class="lead">— stock-in, stock-out, movement register, reverse adjustment</span></li>
+        <li><span class="n1">Stock Count</span> <span class="lead">— start session, count sheet, save, complete; live snapshot</span></li>
+        <li><span class="n1">Implants</span> <span class="lead">— catalogue CRUD + placement CRUD; placements are written automatically from treatment visits</span></li>
+        <li><span class="n1">Alerts</span> <span class="lead">— out of stock, critical, low, expiring within 90 days, expired, dead stock (90 days no movement)</span></li>
+        <li><span class="n1">Received Stock</span> <span class="lead">— GRN register + print</span></li>
+        <li><span class="n1">Reports</span> · <span class="n1">Stock check</span> · <span class="n1">Assets</span> <span class="lead">(reusable assets + status)</span></li>
+        <li><span class="n1">Vendor invoices</span> <span class="lead">— index, create, store, show, destroy</span></li>
+        <li><span class="n1">Inventory Settings</span> <span class="lead">— categories, locations, sub-types, variants (+ AJAX variant creation), vendors, general settings</span></li>
+        <li><span class="n1">Interactive guide</span> <span class="mono">/inventory/guide/demo</span> <span class="lead">— trilingual walkthrough embedded in the subnav</span></li>
+        <li><span class="n1">Canonical status</span> <span class="lead">— <span class="mono">StockStatusService</span> + <span class="mono">StockStatus</span> enum (in_stock / low / critical / out / min_not_set) is the single source for every screen</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">12 · Lab</span><span class="mod-path">LabController + Reconciliation + Vendors · 42 routes</span><span class="pill p-ok">complete</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Case list</span> <span class="mono">/lab</span> · <span class="n1">Dashboard</span> <span class="mono">/lab/dashboard</span></li>
+        <li><span class="n1">Lab case</span>
+          <ul>
+            <li>Create / store (also from a patient: <span class="mono">patients.lab.store</span>) · subtypes AJAX</li>
+            <li>Show · edit · update · duplicate · destroy · restore</li>
+            <li>Status transitions <span class="mono">POST /lab/{case}/status/{to}</span> via <span class="mono">LabCaseTransitionService</span></li>
+            <li>Attachments — store / destroy · Print work order</li>
+            <li>Lab prescription — store / update, built from <span class="mono">lab_prescription_templates</span></li>
+            <li>Vendor rating <span class="mono">POST /lab/{case}/rate</span></li>
+            <li>Event trail — <span class="mono">lab_case_events</span></li>
+          </ul>
+        </li>
+        <li><span class="n1">Templates</span> <span class="lead">— index, store, destroy</span></li>
+        <li><span class="n1">Monthly reconciliation</span> <span class="lead">— create, eligible cases, store, show, item update, submit, approve, dispute, destroy</span></li>
+        <li><span class="n1">Lab vendors</span> <span class="mono">lab-vendors.*</span> <span class="lead">— vendor CRUD, contacts, services (incl. bulk), price lists</span></li>
+        <li><span class="n1">Automation services</span> <span class="lead">— <span class="mono">LabAlertService</span>, <span class="mono">LabNotificationService</span>, <span class="mono">LabExpenseService</span>, <span class="mono">LabCaseObserver</span></span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">13 · Tasks</span><span class="mod-path">Communication\TaskController · 7 routes</span><span class="pill p-warn">partial</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">All tasks</span> <span class="mono">/tasks</span> · <span class="n1">My tasks</span> <span class="mono">/tasks/my</span> · <span class="n1">Overdue</span> <span class="mono">/tasks/overdue</span></li>
+        <li><span class="n1">Create</span> <span class="lead">— from the global create-task modal or from a patient context</span></li>
+        <li><span class="n1">Complete</span> <span class="mono">POST /tasks/{task}/done</span> · <span class="n1">Evidence upload</span> · <span class="n1">Escalate</span></li>
+        <li><span class="n1">Task types</span> <span class="lead">— <code>human</code> (reception-facing) vs <code>system</code> (automation output). The split is behind flag <code>tasks.human_system_split</code>; the <code>task_type</code> column exists and <span class="mono">TodayActionsEngine::systemTasks()</span> already reads system tasks into Today's Actions (Sprint A / G-27).</span></li>
+        <li><span class="n1">Task producers</span> <span class="lead">— 9 distinct call sites: RulesEngine→TaskEngine, LabAlertService (×2), InventoryService + InventoryController (PO tasks), ReminderAutomationRunner, ProtocolGenerationService, HuddleController, Assistant CreateTaskTool, API RelationshipController</span></li>
+        <li><span class="n1">Escalation</span> <span class="lead">— <span class="mono">escalations</span> table; <span class="mono">comm:auto-escalate</span> every 30 min</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">14 · Practice Protocols</span><span class="mod-path">app/Modules/PracticeProtocols · 8 routes</span><span class="pill p-warn">partial</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Protocol catalogue</span> <span class="lead">— index, create, store, edit, update, destroy. Standard recurring duties defined per role.</span></li>
+        <li><span class="n1">Materials</span> <span class="lead">— attach SOP step / file / link to a protocol; destroy</span></li>
+        <li><span class="n1">Generation</span> <span class="lead">— <span class="mono">protocols:generate</span> runs at 00:10 daily; <span class="mono">ProtocolGenerationService</span> turns due protocols into Tasks</span></li>
+        <li><span class="n1">Reminders</span> <span class="lead">— <span class="mono">tasks:shift-reminder</span> every 5 min, <span class="mono">tasks:periodic-reminder</span> every 2 h</span></li>
+        <li><span class="n1">Tables</span> <span class="lead">— <span class="mono">practice_protocols</span>, <span class="mono">practice_protocol_materials</span>, <span class="mono">documentation_protocols</span>, <span class="mono">documentation_protocol_steps</span></span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">15 · HR</span><span class="mod-path">HR/* · 47 routes · 8 subnav tabs</span><span class="pill p-warn">partial</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Overview</span> <span class="mono">/hr</span></li>
+        <li><span class="n1">Doctors / Staff</span> <span class="lead">— one resource (<span class="mono">hr.staff.*</span>) split by <code>?view=doctors|staff</code></span>
+          <ul>
+            <li>Staff profile — documents (store / destroy), HPR identifiers for doctors</li>
+            <li>Finance per staff member — salary, incentive rule, advances (store / close), bonuses (store / destroy)</li>
+          </ul>
+        </li>
+        <li><span class="n1">Attendance</span> <span class="lead">— register, mark, bulk mark; QR check-in <span class="mono">/hr/checkin/{token}</span>; scan page + scan log; <span class="mono">hr:mark-absent</span> daily at 10:30</span></li>
+        <li><span class="n1">Training</span> <span class="lead">— sessions CRUD, enrol / unenrol, mark attendance, mark complete</span>
+          <ul><li><span class="n2">Periodic training</span> — requirements + records (<span class="mono">hr.periodic.*</span>, not in the subnav)</li></ul>
+        </li>
+        <li><span class="n1">Calendar</span> <span class="lead">— index + events feed</span></li>
+        <li><span class="n1">Memos</span> <span class="lead">— performance memos: create, show, acknowledge, destroy</span></li>
+        <li><span class="n1">Roles &amp; Permissions</span> <span class="lead">— <span class="mono">admin.only</span>; the same screen as Settings → Staff &amp; Roles, served by <span class="mono">RolePermissionController</span>, plus the per-role <code>data_scope</code> control</span></li>
+        <li><span class="n1">Tables</span> <span class="lead">— 18 <span class="mono">hr_*</span> tables covering profiles, shifts, attendance, entry/exit, salary components, advances, bonuses, incentive rules, documents, training, memos</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">16 · Reports</span><span class="mod-path">ReportsController · 1 route · 6 tabs</span><span class="pill p-ok">complete</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">One page, six tabs, one date range</span> <span class="mono">GET /reports?period=&amp;from=&amp;to=</span>
+          <ul>
+            <li><span class="n2">Appointments</span> — totals, completed, cancelled, no-show, walk-ins, completion rate, daily series, status breakdown, by category / doctor / day-of-week, recent list</li>
+            <li><span class="n2">Revenue</span> — KPIs, daily series, by payment mode, top patients, outstanding</li>
+            <li><span class="n2">Patients</span> — new by month, gender, source, city, total, return rate</li>
+            <li><span class="n2">Treatments</span> — visits by status / doctor / procedure, plans by status, monthly visits, completion rate</li>
+            <li><span class="n2">Lab</span> — by status / vendor / category, turnaround, open + overdue counts</li>
+            <li><span class="n2">Inventory</span> — low stock, movements, by category, expiring</li>
+          </ul>
+        </li>
+        <li><span class="lead">Charts lazy-init per tab; the page heading still reads “Appointment Reports” from before the tabs existed.</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">17 · Analytics</span><span class="mod-path">Finance\AnalyticsController · 9 routes · duplicate door</span><span class="pill p-warn">partial</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Overview</span> · <span class="n1">Vendor</span> · <span class="n1">Expense</span> · <span class="n1">Lab</span> · <span class="n1">Procurement</span> · <span class="n1">Cashflow</span> · <span class="n1">Outstanding</span> · <span class="n1">Business Intelligence</span> · <span class="n1">Audit Log</span></li>
+        <li><span class="lead">There is no <code>resources/views/analytics/</code> directory. All nine render <span class="mono">finance.analytics.*</span> views — the identical pages served at <span class="mono">/finance/analytics/*</span> behind <span class="mono">module:finance</span>.</span></li>
+        <li><span class="n1">Shadow projection</span> <span class="lead">— <span class="mono">analytics:rebuild-snapshots</span> refills <span class="mono">analytics_snapshots</span> every 15 min; nothing reads it yet (shadow only, by design).</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">18 · Settings</span><span class="mod-path">SettingsController + 5 satellites · ~65 routes · 21 nav entries</span><span class="pill p-ok">complete</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">In-page panels (18)</span>
+          <ul>
+            <li>Clinic Profile <span class="lead">(incl. patient-ID numbering, logo / letterhead)</span> · Operatories · Staff &amp; Roles <span class="lead">(staff sub-tab + roles sub-tab)</span></li>
+            <li>Feature Flags · Import / Export · Masters · Knowledge Bank · Clinical · Patient Defaults</li>
+            <li>Billing &amp; Invoice <span class="lead">(GST, invoice numbering, EMI providers &amp; schemes)</span> · Printing · Notifications</li>
+            <li>Growth &amp; Comms · Inventory · Huddle · Personalisation · Calendar</li>
+          </ul>
+        </li>
+        <li><span class="n1">Link-out entries (3)</span> <span class="lead">— Health Facility (HFR/ABDM), Banking, Audit Logs, Clinical Library</span></li>
+        <li><span class="n1">Masters</span> <span class="lead">— treatments, complaints, diagnoses, investigations, materials, brands, medicines, medical conditions, dental conditions, patient sources, message templates</span></li>
+        <li><span class="n1">Knowledge Bank</span> <span class="lead">— per-diagnosis treatment options: manage, store, update, destroy</span></li>
+        <li><span class="n1">Tags</span> <span class="lead">— CRUD (see observation INV-02: registered twice)</span></li>
+        <li><span class="n1">Data</span> <span class="lead">— patient import preview / store / template per source; export is <span class="mono">admin.only</span></span></li>
+        <li><span class="n1">Activity log</span> <span class="lead">— <span class="mono">staff_activity_logs</span> + <span class="mono">audit_logs</span></span></li>
+        <li><span class="n1">Settings search index</span> <span class="lead">— 16 keyword→tab mappings; two entries (<b>Working Hours</b>, <b>Slot Duration</b>) are flagged <code>available =&gt; false</code>: searched for, not built.</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">19 · DPDP cluster — Consent · Patient Rights · Breach · Retention</span><span class="mod-path">4 controllers · 24 routes</span><span class="pill p-warn">partial</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Consent (DPDP)</span> <span class="lead">— purposes register (index, store, update, toggle); per-patient consent (view, update, audit trail)</span></li>
+        <li><span class="n1">Patient Rights</span> <span class="lead">— data requests: index, create, store, show, update, complete, reject, download, erase</span></li>
+        <li><span class="n1">Breach Register</span> <span class="lead">— index, create, store, show, update, report-to-board, notify affected</span></li>
+        <li><span class="n1">Data Retention</span> <span class="lead">— single page over <span class="mono">retention_policies</span>; <span class="mono">retention:report</span> command; <span class="mono">logs:prune --apply</span> weekly Sunday 03:30</span></li>
+        <li><span class="n1">Consent enforcement</span> <span class="lead">— <span class="mono">CommunicationGuard</span> + WhatsApp <span class="mono">consentGate()</span>; flags <code>guard.consent_required</code> and <code>guard.fail_closed</code> both default OFF</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">20 · Help &amp; Guide</span><span class="mod-path">HelpController · 1 route</span><span class="pill p-warn">partial</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Help index</span> <span class="mono">/help</span> <span class="lead">— plus the in-app <span class="mono">components/help-guide</span> overlay included by <span class="mono">layouts/app</span></span></li>
+        <li><span class="lead">This is the natural home for the module manuals this inventory precedes.</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <h3>Live surfaces outside the sidebar</h3>
+
+  <details class="mod">
+    <summary><span class="mod-name">21 · Communication OS</span><span class="mod-path">routes/communication.php · 65 routes · no nav entry</span><span class="pill p-off">superseded</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Module home</span> <span class="mono">/communication</span></li>
+        <li><span class="n1">Live sub-modules</span>
+          <ul>
+            <li><span class="n2">Manager</span> — log a communication, patient search, bulk action, show, update, assign, move, log attempt, close with outcome. <span class="lead">The tabbed inbox at <span class="mono">/manager</span> now <b>redirects</b> to PRE Today's Actions.</span></li>
+            <li><span class="n2">Follow-up Engine</span> — index, queue, overdue, calendar, recalls, schedule, complete, reschedule, note, change status, convert to patient, create case</li>
+            <li><span class="n2">Recall Engine</span> — index + run-now</li>
+            <li><span class="n2">B2B</span> — vendor/lab communications: index, create, store, show, log attempt, close, lab-cases-for-vendor AJAX</li>
+            <li><span class="n2">KPI dashboard</span></li>
+            <li><span class="n2">Reviews / Reputation</span> — index, send request, reply</li>
+            <li><span class="n2">WhatsApp two-way inbox</span> — link builder, thread list, thread, reply, send template</li>
+            <li><span class="n2">Huddle widgets</span> — widgets, overdue summary, alerts</li>
+          </ul>
+        </li>
+        <li><span class="n1">Retired to redirects</span> <span class="lead">— Recall Settings (→ PRE Settings), Templates (→ PRE Templates), Opportunity Engine (→ PRE Opportunities). Controllers and views left in place, unreachable.</span></li>
+        <li><span class="n1">Unregistered</span> <span class="lead">— Communication Timeline: routes commented out 2026-07-14 because <span class="mono">TimelineController</span> still renders hardcoded sample patients; the controller aborts 404 as a backstop.</span></li>
+        <li><span class="n1">Dead shell</span> <span class="lead">— <span class="mono">layouts/partials/communication.blade.php</span> (its own 10-item sidebar + topbar) is included by nothing. Live Communication views extend <span class="mono">layouts/communication</span>, which extends the main app layout.</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">22 · Case presentation — Smart Presentation &amp; Case Acceptance</span><span class="mod-path">PresentationController + CaseJourneyController · 20 + 11 routes</span><span class="pill p-warn">two engines</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Smart Presentation</span> <span class="lead">(older engine, nav item retired 2026-07-15)</span>
+          <ul>
+            <li>Index · builder · create from plan · update · generate summary · finalize · destroy</li>
+            <li>Send · resend · mark declined · mark follow-up</li>
+            <li>Access links — list, revoke, regenerate · Settings</li>
+            <li>Public microsite <span class="mono">/present/{token}</span> — show, accept, decline, request callback <span class="lead">(no login)</span></li>
+          </ul>
+        </li>
+        <li><span class="n1">Case Acceptance Journey</span> <span class="lead">(newer engine, flag <code>case_acceptance.enabled</code>, opened per-plan from the Treatment Plan tab)</span>
+          <ul>
+            <li>Create from plan · builder · preview · curation · custom options · send</li>
+            <li>Public microsite <span class="mono">/p/{token}</span> — show, select material, accept, decline, request callback</li>
+            <li>Odontogram + content blocks in the patient view</li>
+            <li>Tables — <span class="mono">journey_curations, journey_custom_options, journey_sent_snapshots, case_selections, case_consent_snapshots, plan_decisions, plan_decision_items</span></li>
+          </ul>
+        </li>
+        <li><span class="lead">Both are gated by the same <code>presentations</code> permission and both are live simultaneously when the flag is on.</span></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="mod">
+    <summary><span class="mod-name">23 · Platform surfaces</span><span class="mod-path">assistant · notifications · profile · media · API · HQ</span><span class="pill p-acc">supporting</span></summary>
+    <div class="mod-body">
+      <ul class="tree">
+        <li><span class="n1">Tulip AI Assistant</span> <span class="mono">assistant.*</span> <span class="lead">— chat, conversation, confirm / reject a proposed action, voice transcription. Tables: <span class="mono">ai_conversations, ai_messages, ai_action_logs, voice_notes</span>. Tools include <span class="mono">CreateTaskTool</span>.</span></li>
+        <li><span class="n1">Notifications</span> <span class="lead">— index, unread, mark read, mark all read, and <span class="mono">nav-badges</span> which feeds the 30-second sidebar poller for pending billing prompts and draft lab cases</span></li>
+        <li><span class="n1">Profile &amp; auth</span> <span class="lead">— profile, password, avatar; 2FA setup / enable / disable / challenge; mobile OTP; forgot-PIN</span></li>
+        <li><span class="n1">Secure media</span> <span class="mono">secure.media.file / legacy</span> <span class="lead">— the only route that serves clinical images</span></li>
+        <li><span class="n1">Mobile / Tulip API</span> <span class="lead">— <span class="mono">/api/v1/*</span>, 243 route statements, <span class="mono">auth:sanctum</span> + <span class="mono">api.role</span>, throttled 120/min (login 5/min). Thin controllers over the same services the web uses.</span></li>
+        <li><span class="n1">Inbound webhooks</span> <span class="lead">— website leads, Meta lead ads, WhatsApp Cloud, chatbot. Signature-verified, outside auth by necessity.</span></li>
+        <li><span class="n1">Dentfluence HQ</span> <span class="lead">— clinics, subscriptions, plans, tickets; <span class="mono">superadmin</span> gate; internal, not a clinic module</span></li>
+      </ul>
+    </div>
+  </details>
+</section>
+<!-- ══════════ C ══════════ -->
+<section id="c">
+  <div class="sec-head">
+    <div class="sec-letter">C</div>
+    <h2 class="sec-title">Bells &amp; automations — what actually fires</h2>
+    <p class="sec-note">Only automations found in code are listed. Where an automation is the obvious thing to expect and does <em>not</em> exist, it is recorded as absent rather than quietly omitted — that list is at the end of this section and is the most useful part of it.</p>
+  </div>
+
+  <h3 id="c-spines">The four spines</h3>
+  <p>Dentfluence has no single event bus. Work reaches other modules through four distinct mechanisms, and knowing which one carries a given bell tells you where to look when it doesn't ring.</p>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>#</th><th>Spine</th><th>Entry point</th><th>What it does</th><th>Reach</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">S1</td><td><b>Activity ledger → Rules Engine</b></td>
+        <td class="mono">ActivityEngine::log($subject, $event, …)</td>
+        <td>Writes an <code>activities</code> row — <b>Activity IS the Timeline</b>. Then, on <code>DB::afterCommit</code>: (a) <code>RulesEngine::evaluate($event, …)</code>, (b) <code>RecalculateRelationshipScoreJob</code> if the event is score-relevant, (c) publishes a domain event on <code>DomainEventBus</code>. Never throws — every step is wrapped.</td>
+        <td>~40 event names; 13 rules subscribe to 12 of them</td>
+      </tr>
+      <tr>
+        <td class="mono">S2</td><td><b>Model observers</b></td>
+        <td class="mono">Model::observe(...)</td>
+        <td>Synchronous side-effects on create/update. Nine registered; eight in <code>AppServiceProvider</code>/<code>AbdmServiceProvider</code>/<code>SearchServiceProvider</code>, one (<code>LeadObserver</code>) via the <code>#[ObservedBy]</code> attribute on the model.</td>
+        <td>Consultation ×3, TreatmentVisit, LabCase, Lead, User, Relationship</td>
+      </tr>
+      <tr>
+        <td class="mono">S3</td><td><b>The scheduler</b></td>
+        <td class="mono">routes/console.php</td>
+        <td>24 scheduled commands. This is where every time-based bell lives — recalls, reminders, briefings, absence marking, projections, integrity checks, pruning.</td>
+        <td>Requires <code>schedule:run</code> to be wired on the host — <span class="pill p-acc">verify at runtime</span></td>
+      </tr>
+      <tr>
+        <td class="mono">S4</td><td><b>In-service side-effects</b></td>
+        <td class="mono">TreatmentVisitService, BillingController, …</td>
+        <td>Direct calls inside a service or controller — no event, no listener. The largest cluster of cross-module behaviour in the app sits here, which is why grepping for events under-reports what the system does.</td>
+        <td>Visit → billing / lab / stock / plan / recall; PO → tasks; outcome → appointment</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 id="c-events">Event register — event → trigger → automation → destination</h3>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>Business event</th><th>Fires?</th><th>Producer (code)</th><th>Spine</th><th>Automation</th><th>Lands in</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>Patient created</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">PatientService:274 → PatientRelationshipLinker::link()</td><td>S4</td>
+        <td>Creates or links the master <code>Relationship</code> row. Gated by flag <code>identity.link_patient</code> (<b>default ON</b> — the only flag that is).</td>
+        <td>PRE relationship list, relationship profile, Today's Actions. <span class="lead">Patients created before the flag was turned on need a one-time <code>relationship:backfill</code>.</span></td>
+      </tr>
+      <tr>
+        <td><b>Lead captured</b> <span class="lead">(webhook or manual)</span></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">LeadObserver::created</td><td>S2</td>
+        <td>Four side-effects: link to the relationship spine · auto-assign owner · create a follow-up · dispatch <code>EnrichLeadJob</code>. Then logs <code>lead.created</code>. Each is individually try/caught and logs a warning on failure.</td>
+        <td>PRE Lead Pipeline, Today's Actions <code>new_enquiries</code></td>
+      </tr>
+      <tr>
+        <td><b>Appointment booked / rescheduled / cancelled / checked-in / completed / reverted / deleted</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">AppointmentService → AppointmentActivityLogger</td><td>S1</td>
+        <td>Activity ledger entry only — <b>no rule subscribes</b> to any of these seven.</td>
+        <td>Patient Journey Timeline, Insights, Huddle board</td>
+      </tr>
+      <tr>
+        <td><b>Appointment missed (no-show)</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">AppointmentActivityLogger:75 → 'appointment.missed'</td><td>S1</td>
+        <td>Rule <code>missed_appointment_followup</code> → <code>create_task</code>.</td>
+        <td>Tasks, Today's Actions (<code>tasks</code> + <code>missed_appointments_yesterday</code>), Dashboard alert card</td>
+      </tr>
+      <tr>
+        <td><b>Consultation saved</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">ConsultationClinicalWiringObserver · ConsultationActivityObserver · AbdmConsultationObserver</td><td>S2</td>
+        <td>Three parallel effects: (1) advances <code>patients.last_visit_date</code> — the recall engine's key column, which had no writer before 2026-08-03; (2) closes the linked appointment (status → <code>done</code>); (3) logs <code>consultation.completed</code> (no rule matches — Insights only); (4) mirrors to a FHIR document for ABDM.</td>
+        <td>Recall engine, Appointments, Journey Timeline, Insights, ABDM</td>
+      </tr>
+      <tr>
+        <td><b>Consultation billing handoff</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">ConsultationController:710 → BillingPrompt::create</td><td>S4</td>
+        <td>Creates a pending billing prompt.</td>
+        <td>Finance sidebar badge (30-s poller), patient Billing tab, <code>billing.createFromPrompt</code></td>
+      </tr>
+      <tr>
+        <td><b>Treatment plan accepted</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">TreatmentPlanAcceptanceService::accept()</td><td>S1 + S4</td>
+        <td>Logs <code>treatment_plan.accepted</code> (no rule) and syncs the linked Opportunity to <code>COMMITTED</code>. Partial-accept and reject follow the same shape (<code>COMMITTED</code> / <code>DECLINED</code>); defer clears the opportunity.</td>
+        <td>Opportunity Pipeline, Journey Timeline, billing (<code>billing.fromPlan</code>), recall generator <code>recall_approved_plan</code></td>
+      </tr>
+      <tr>
+        <td><b>Treatment visit saved</b> <span class="lead">— the busiest hub in the app</span></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">TreatmentVisitService::create() / update()</td><td>S4 + S1 + S2</td>
+        <td>Seven side-effects in one call: visit items → <b>BillingPrompt</b>; lab section → <b>draft LabCase</b>; implant fields → <b>ImplantPlacement + stock deduction</b> (idempotent per component per visit); clinical fact reported to the <b>Treatment Plan</b> so it re-derives progress; "mark plan complete" → plan completed + <b>auto 6-month recall task</b> (skipped if one exists); <code>treatment.completed</code> → rules <code>implant_followup</code> and <code>post_treatment_followup</code> → <b>Tasks</b>; observer advances <code>patients.last_visit_date</code>. A Workflow-Engine shadow run also observes <code>current_stage</code> (flag <code>workflow.engine</code>, OFF — log only).</td>
+        <td>Finance, Lab, Inventory, Treatment Plan, Recalls, Tasks, Journey Timeline</td>
+      </tr>
+      <tr>
+        <td><b>Invoice created</b></td><td><span class="pill p-warn">log only</span></td>
+        <td class="mono">BillingController:397 → 'invoice.created'</td><td>S1</td>
+        <td>Activity entry only. The code comment states plainly: <em>no rule currently matches</em>. Feeds Insights.</td>
+        <td>Journey Timeline, Insights</td>
+      </tr>
+      <tr>
+        <td><b>Payment received</b></td><td><span class="pill p-warn">log only</span></td>
+        <td class="mono">BillingController:1210 · InvoicePaymentService:366</td><td>S1</td>
+        <td>Activity entry only; same comment. Money movement itself is handled synchronously by <code>InvoicePaymentService</code> / <code>PatientPaymentAllocationService</code> / <code>WalletService</code>.</td>
+        <td>Journey Timeline, receipts, wallet, Insights</td>
+      </tr>
+      <tr>
+        <td><b>Payment overdue</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">payments:scan-overdue (07:15) → 'payment.overdue'</td><td>S3 → S1</td>
+        <td>The scanner exists <em>because</em> nothing emitted this event, so the enabled rule had never fired. Rule <code>payment_overdue_3d</code> → task, with a 7-day cooldown.</td>
+        <td>Tasks, Today's Actions <code>payment_reminders</code> (₹500 threshold)</td>
+      </tr>
+      <tr>
+        <td><b>Recall becomes due</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">recall:run (07:00) → RecallEngineService::runAll()</td><td>S3</td>
+        <td>Six generators, each writing a <code>CommunicationQueue</code> row with a purpose: <code>recall_no_visit</code> (6+ months) · <code>recall_approved_plan</code> · <code>recall_post_op</code> · <code>recall_lab_received</code> · <code>recall_7day_followup</code> · <code>recall_birthday</code>. Plus <code>recall_manual</code> from the UI. Every one is dedup-guarded on (patient, purpose) with a per-source <code>*_queued_at</code> cooldown. Logs <code>recall.queued</code>.</td>
+        <td>PRE Recalls board, Today's Actions <code>recall_calls</code>, Journey Timeline</td>
+      </tr>
+      <tr>
+        <td><b>Follow-up becomes due</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">relationship:requeue-due (06:45)</td><td>S3</td>
+        <td>Re-surfaces open call-debt whose due date has passed, through <code>OutcomeAutomationService</code>.</td>
+        <td>Today's Actions <code>follow_up_calls</code>, Pending Calls board</td>
+      </tr>
+      <tr>
+        <td><b>Lab case created</b></td><td><span class="pill p-warn">silent</span></td>
+        <td class="mono">TreatmentVisitService:512 · LabController:263</td><td>S4</td>
+        <td>A draft case is created from the visit. <b>No event, no task, no notification</b> — the only signal is the draft-lab-case count on the sidebar badge poller.</td>
+        <td>Lab list, sidebar badge</td>
+      </tr>
+      <tr>
+        <td><b>Lab case status changes</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">LabCaseObserver::updated</td><td>S2 → S1</td>
+        <td>Writes <code>CommActivityLog</code> entries; on receipt fires <code>lab.received</code> → rule <code>lab_ready_call</code> → task (dedup-guarded).</td>
+        <td>Tasks, Today's Actions <code>lab_ready</code>, recall generator <code>recall_lab_received</code>, B2B comms</td>
+      </tr>
+      <tr>
+        <td><b>Lab case overdue / trial stale</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">lab:create-overdue-tasks (09:00) → LabAlertService</td><td>S3</td>
+        <td>Creates an urgent task per overdue case (priority escalates past 7 days) and per trial-received case idle 2+ days. Dedup via <code>lab_cases.active_task_id</code>; writes a <code>task_created</code> case event.</td>
+        <td>Tasks, Dashboard alert card, Lab case timeline</td>
+      </tr>
+      <tr>
+        <td><b>Stock reaches reorder level</b></td><td><span class="pill p-bad">no automation</span></td>
+        <td class="mono">StockStatusService (read-time classification)</td><td>—</td>
+        <td>Status is computed when a screen asks for it. Crossing the threshold creates <b>no task, no notification, no message</b>. The Inventory Alerts page and the dashboard action list are pull-only.</td>
+        <td>Inventory → Alerts (only if someone opens it)</td>
+      </tr>
+      <tr>
+        <td><b>Purchase order marked "ordered"</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">InventoryController::storePurchaseOrder · InventoryService::createPurchaseOrder</td><td>S4</td>
+        <td>Creates a "Confirm PO with {vendor}" task on the order date, and a "Delivery follow-up" task one day before the expected date. <span class="lead">Implemented <b>twice</b> — see INV-05.</span></td>
+        <td>Tasks</td>
+      </tr>
+      <tr>
+        <td><b>Communication outcome recorded</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">OutcomeAutomationService::apply()</td><td>S4</td>
+        <td>One engine shared by web, mobile and the requeue command. Always writes a Timeline entry first, then runs the outcome's action — create appointment, close recall, schedule follow-up, mark invalid contact, disable automations. Outcomes with no defined action (<code>shifted</code>, <code>other</code>, <code>under_treatment_elsewhere</code>, <code>rejected</code>) log and stay open rather than inventing behaviour. Side-effects are best-effort: a failed appointment creation never blocks the outcome being recorded.</td>
+        <td>Appointments, Recalls, Follow-ups, Journey Timeline</td>
+      </tr>
+      <tr>
+        <td><b>Membership expiring</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">membership:scan-expiring (07:10) → 'membership.expiring'</td><td>S3 → S1</td>
+        <td>Rule <code>membership_renewal_30d</code> → task, 25-day cooldown.</td>
+        <td>Tasks, Today's Actions <code>membership_renewals</code></td>
+      </tr>
+      <tr>
+        <td><b>Birthday approaching</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">birthdays:scan (07:20) → 'birthday.approaching'</td><td>S3 → S1</td>
+        <td>Rule <code>birthday_3d</code> → task, category <code>whatsapp</code>, 360-day cooldown. <span class="lead">The Today's-Actions <b>birthdays</b> category was retired 2026-07-26 — greetings are automation's job, not reception's. The one-click send endpoint and templates remain.</span></td>
+        <td>Tasks; birthday <em>recalls</em> separately via <code>recall_birthday</code></td>
+      </tr>
+      <tr>
+        <td><b>Estimate / presentation sent</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">PresentationController:280,323 → 'presentation.sent'</td><td>S1</td>
+        <td>Rule <code>estimate_followup_3d</code> → task.</td>
+        <td>Tasks, Today's Actions <code>pending_estimates</code></td>
+      </tr>
+      <tr>
+        <td><b>Case journey opened by patient</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">PublicCaseController:58 → 'case.opened'</td><td>S1</td>
+        <td>Rule <code>case_opened_followup_2d</code> → task.</td>
+        <td>Tasks</td>
+      </tr>
+      <tr>
+        <td><b>Patient asks for more time on a case</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">PublicCaseController:244 → 'case.more_time_requested'</td><td>S1</td>
+        <td>Rule <code>case_more_time_requested</code> → task.</td>
+        <td>Tasks</td>
+      </tr>
+      <tr>
+        <td><b>Patient requests a callback</b></td><td><span class="pill p-bad">chain broken</span></td>
+        <td class="mono">PublicPresentationController → 'presentation.follow_up_requested'</td><td>S1</td>
+        <td>The enabled rule <code>presentation_callback_requested</code> listens for <code>opportunity.callback_requested</code> — <b>an event no code in the repository emits</b>. The event that <em>is</em> emitted has no rule. Net effect: a callback request writes a timeline entry and produces no task for anyone. See INV-04.</td>
+        <td>Journey Timeline only</td>
+      </tr>
+      <tr>
+        <td><b>Case accepted / declined / material selected</b></td><td><span class="pill p-warn">log only</span></td>
+        <td class="mono">PublicCaseController</td><td>S1</td>
+        <td>Activity entries; no rule subscribes. Plan-side state is written directly by the controller.</td>
+        <td>Journey Timeline, plan decisions</td>
+      </tr>
+      <tr>
+        <td><b>Opportunity created</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">TreatmentPlanOpportunitySync:96</td><td>S1</td>
+        <td>Rule <code>opportunity_nudge_7d</code> → task, only when stage is <code>prospect</code>. Stage changes emit <code>opportunity.stage_changed</code> (no rule).</td>
+        <td>Tasks, Today's Actions <code>opportunities</code></td>
+      </tr>
+      <tr>
+        <td><b>Patient merged / merge undone</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">PatientMergeService</td><td>S1 + domain events</td>
+        <td>Activity entries plus <code>PatientMerged</code> / <code>PatientMergeUndone</code> published on the <code>DomainEventBus</code>.</td>
+        <td>Journey Timeline, merge audit, Insights</td>
+      </tr>
+      <tr>
+        <td><b>Family link / guardian changed</b></td><td><span class="pill p-warn">log only</span></td>
+        <td class="mono">FamilyLinkService</td><td>S1</td>
+        <td>Four Activity events; no rule subscribes.</td>
+        <td>Journey Timeline</td>
+      </tr>
+      <tr>
+        <td><b>Task generated (any source)</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">9 producers</td><td>S1/S3/S4</td>
+        <td>RulesEngine→TaskEngine · LabAlertService (×2) · InventoryService + InventoryController · ReminderAutomationRunner · ProtocolGenerationService · Huddle · Assistant <code>CreateTaskTool</code> · API RelationshipController.</td>
+        <td>Tasks module; system tasks additionally surface in Today's Actions (<code>tasks</code> category, added Sprint A)</td>
+      </tr>
+      <tr>
+        <td><b>Staff member created</b></td><td><span class="pill p-ok">yes</span></td>
+        <td class="mono">UserVendorSyncObserver</td><td>S2</td>
+        <td>Mirrors every staff member into <code>finance_vendors</code> as <code>vendor_type = staff</code>.</td>
+        <td>Finance → Expense form vendor dropdown</td>
+      </tr>
+      <tr>
+        <td><b>Relationship changed</b></td><td><span class="pill p-warn">flag-gated</span></td>
+        <td class="mono">RelationshipSearchIndexObserver → RebuildSearchIndexEntryJob</td><td>S2</td>
+        <td>Keeps <code>search_index</code> current. Reads only switch to the index when flag <code>search.index</code> is ON (default OFF), so the projection is built but unread.</td>
+        <td>Universal search (when enabled)</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 id="c-sched">Scheduled jobs — the time-based bells</h3>
+  <p>24 commands in <code>routes/console.php</code>. All use <code>withoutOverlapping()</code>; most run in the background and append to their own log. Two run in the <em>foreground</em> deliberately so a non-zero exit reaches <code>onFailure</code>: <code>audit:verify</code> and <code>relationship:appointment-reminders</code> — the latter because it had been failing silently.</p>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>Time</th><th>Command</th><th>What it does</th><th>Feeds</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">00:10</td><td class="mono">protocols:generate</td><td>Turns due practice protocols into tasks</td><td>Tasks</td></tr>
+      <tr><td class="mono">00:30</td><td class="mono">wallet:recalculate</td><td>Recomputes wallet balances</td><td>Finance → Wallet</td></tr>
+      <tr><td class="mono">02:00</td><td class="mono">app:crawl-routes</td><td>Logs in and crawls every route, reporting broken pages</td><td>Ops report</td></tr>
+      <tr><td class="mono">06:30</td><td class="mono">audit:verify</td><td>Verifies the tamper-evident audit chain; logs <code>critical</code> on failure</td><td>Audit log integrity</td></tr>
+      <tr><td class="mono">06:45</td><td class="mono">relationship:requeue-due</td><td>Re-surfaces due follow-up call-debt</td><td>Today's Actions, Pending Calls</td></tr>
+      <tr><td class="mono">07:00</td><td class="mono">recall:run</td><td>Runs all six recall generators</td><td>Recalls, Today's Actions</td></tr>
+      <tr><td class="mono">07:05</td><td class="mono">comm:morning-briefing</td><td>Morning briefing</td><td>Communication OS</td></tr>
+      <tr><td class="mono">07:10</td><td class="mono">membership:scan-expiring</td><td>Emits <code>membership.expiring</code></td><td>Rules → Tasks</td></tr>
+      <tr><td class="mono">07:15</td><td class="mono">payments:scan-overdue</td><td>Emits <code>payment.overdue</code></td><td>Rules → Tasks</td></tr>
+      <tr><td class="mono">07:20</td><td class="mono">birthdays:scan</td><td>Emits <code>birthday.approaching</code></td><td>Rules → Tasks</td></tr>
+      <tr><td class="mono">08:00</td><td class="mono">relationship:appointment-reminders</td><td>Tomorrow's appointment reminders (foreground, alerts on failure)</td><td>Reminders</td></tr>
+      <tr><td class="mono">08:00</td><td class="mono">tulip:huddle</td><td>Pushes the daily huddle</td><td>Huddle / Tulip</td></tr>
+      <tr><td class="mono">09:00</td><td class="mono">lab:create-overdue-tasks</td><td>Overdue + stale-trial lab tasks</td><td>Tasks</td></tr>
+      <tr><td class="mono">10:00</td><td class="mono">whatsapp:send-reminders</td><td>Sends WhatsApp reminders</td><td>WhatsApp — <b>subject to the send gate below</b></td></tr>
+      <tr><td class="mono">10:30</td><td class="mono">hr:mark-absent</td><td>Marks unmarked staff absent</td><td>HR → Attendance</td></tr>
+      <tr><td class="mono">11:00</td><td class="mono">reviews:request</td><td>Sends review requests</td><td>Reviews — same send gate</td></tr>
+      <tr><td class="mono">14:00</td><td class="mono">comm:sla-alert</td><td>SLA breach alerts</td><td>Communication OS</td></tr>
+      <tr><td class="mono">18:00</td><td class="mono">comm:evening-summary</td><td>Evening summary</td><td>Communication OS</td></tr>
+      <tr><td class="mono">every 5 min</td><td class="mono">tasks:shift-reminder</td><td>Shift-based task reminders</td><td>Tasks</td></tr>
+      <tr><td class="mono">every 15 min</td><td class="mono">today:rebuild-projection</td><td>Rebuilds <code>today_actions</code>; reads only switch to it when <code>today.projection</code> is ON</td><td>Reception dashboard, Huddle snapshot</td></tr>
+      <tr><td class="mono">every 15 min</td><td class="mono">analytics:rebuild-snapshots</td><td>Rebuilds <code>analytics_snapshots</code> — <b>shadow only, nothing reads it</b></td><td>—</td></tr>
+      <tr><td class="mono">every 30 min</td><td class="mono">comm:auto-escalate</td><td>Escalates high-value leads</td><td>Escalations</td></tr>
+      <tr><td class="mono">every 2 h</td><td class="mono">tasks:periodic-reminder</td><td>Periodic task reminders</td><td>Tasks</td></tr>
+      <tr><td class="mono">Sun 03:30</td><td class="mono">logs:prune --apply</td><td>Prunes log tables per retention policy</td><td>Data Retention</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <p><strong>The send gate sits above every outbound bell.</strong> Nothing reaches a patient unless <code>whatsapp.enabled</code> is true <em>and</em> <code>whatsapp.dry_run</code> is false. In dry-run the payload is built, logged and stored with status <code>dry_run</code> — the message record exists, the message does not. In this working copy: <code>WHATSAPP_ENABLED=true</code>, <code>WHATSAPP_DRY_RUN=true</code>, <code>MAIL_MAILER=log</code>. <b>Read the production values before writing any manual that tells staff a message "goes out".</b></p>
+    <p>All six <code>integration.*</code> flags default OFF, so sends bypass the Integration Engine boundary and call <code>WhatsAppCloudService</code> directly; <code>comm.single_gateway</code> is also OFF, so there is not yet one gateway for all sends.</p>
+  </div>
+
+  <h3>Observers — the nine registered</h3>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>Observer</th><th>Model</th><th>Registered in</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">ConsultationClinicalWiringObserver</td><td>Consultation</td><td class="mono">AppServiceProvider:80</td><td>Advances <code>patients.last_visit_date</code>; closes the linked appointment</td></tr>
+      <tr><td class="mono">ConsultationActivityObserver</td><td>Consultation</td><td class="mono">AppServiceProvider:75</td><td>Logs <code>consultation.completed</code> (Insights only — no rule matches)</td></tr>
+      <tr><td class="mono">AbdmConsultationObserver</td><td>Consultation</td><td class="mono">AbdmServiceProvider:67</td><td>Mirrors to a FHIR document</td></tr>
+      <tr><td class="mono">AbdmPrescriptionObserver</td><td>Prescription</td><td class="mono">AbdmServiceProvider:68</td><td>Mirrors to a FHIR document</td></tr>
+      <tr><td class="mono">TreatmentVisitClinicalWiringObserver</td><td>TreatmentVisit</td><td class="mono">AppServiceProvider:86</td><td>Advances <code>patients.last_visit_date</code> — added Sprint A because patients under active treatment were being recalled as "not seen in 6 months"</td></tr>
+      <tr><td class="mono">LabCaseObserver</td><td>LabCase</td><td class="mono">AppServiceProvider:71</td><td>Syncs comm status with case status; fires <code>lab.received</code></td></tr>
+      <tr><td class="mono">LeadObserver</td><td>Lead</td><td class="mono">#[ObservedBy] on the model</td><td>Link · auto-assign · follow-up · enrich job · <code>lead.created</code></td></tr>
+      <tr><td class="mono">UserVendorSyncObserver</td><td>User</td><td class="mono">AppServiceProvider:91</td><td>Mirrors staff into <code>finance_vendors</code></td></tr>
+      <tr><td class="mono">RelationshipSearchIndexObserver</td><td>Relationship</td><td class="mono">SearchServiceProvider:21</td><td>Queues <code>RebuildSearchIndexEntryJob</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 id="c-rules">Rule registry — <code>config/relationship_rules.php</code></h3>
+  <p>Thirteen rules, twelve enabled. Each has its own cooldown; failures dispatch <code>RelationshipAutomationFailedJob</code> and never propagate to the caller.</p>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>Rule</th><th>Trigger event</th><th>Action</th><th>Enabled</th><th>Producer exists?</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">implant_followup</td><td class="mono">treatment.completed</td><td>create_task <span class="lead">(implant only)</span></td><td>Yes</td><td><span class="pill p-ok">yes</span></td></tr>
+      <tr><td class="mono">post_treatment_followup</td><td class="mono">treatment.completed</td><td>create_task <span class="lead">(all types)</span></td><td>Yes</td><td><span class="pill p-ok">yes</span></td></tr>
+      <tr><td class="mono">membership_renewal_30d</td><td class="mono">membership.expiring</td><td>create_task</td><td>Yes</td><td><span class="pill p-ok">yes</span></td></tr>
+      <tr><td class="mono">birthday_3d</td><td class="mono">birthday.approaching</td><td>create_task <span class="lead">(whatsapp)</span></td><td>Yes</td><td><span class="pill p-ok">yes</span></td></tr>
+      <tr><td class="mono">opportunity_nudge_7d</td><td class="mono">opportunity.created</td><td>create_task</td><td>Yes</td><td><span class="pill p-ok">yes</span></td></tr>
+      <tr><td class="mono">estimate_followup_3d</td><td class="mono">presentation.sent</td><td>create_task</td><td>Yes</td><td><span class="pill p-ok">yes</span></td></tr>
+      <tr><td class="mono">missed_appointment_followup</td><td class="mono">appointment.missed</td><td>create_task</td><td>Yes</td><td><span class="pill p-ok">yes</span></td></tr>
+      <tr><td class="mono">lab_ready_call</td><td class="mono">lab.received</td><td>create_task</td><td>Yes</td><td><span class="pill p-ok">yes</span></td></tr>
+      <tr><td class="mono">payment_overdue_3d</td><td class="mono">payment.overdue</td><td>create_task</td><td>Yes</td><td><span class="pill p-ok">yes</span></td></tr>
+      <tr><td class="mono">case_opened_followup_2d</td><td class="mono">case.opened</td><td>create_task</td><td>Yes</td><td><span class="pill p-ok">yes</span></td></tr>
+      <tr><td class="mono">case_more_time_requested</td><td class="mono">case.more_time_requested</td><td>create_task</td><td>Yes</td><td><span class="pill p-ok">yes</span></td></tr>
+      <tr><td class="mono">presentation_callback_requested</td><td class="mono">opportunity.callback_requested</td><td>create_task</td><td>Yes</td><td><span class="pill p-bad">no producer</span></td></tr>
+      <tr><td class="mono">recall_6months</td><td class="mono">visit.completed</td><td>create_reminder</td><td>No <span class="lead">(deliberate)</span></td><td><span class="pill p-off">deliberately not emitted</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 id="c-absent">Bells that do NOT exist</h3>
+  <p>Each of the following was looked for specifically and is not implemented. None of them is a defect by itself — several are deliberate — but a module manual must not describe them as if they ring.</p>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>Expected bell</th><th>Reality</th><th>Deliberate?</th></tr></thead>
+    <tbody>
+      <tr><td>Stock crosses reorder / minimum level → alert someone</td><td>Read-time classification only. No task, notification or message is produced. Staff must open Inventory → Alerts.</td><td>Not documented as a decision</td></tr>
+      <tr><td>Lab case created → notify the lab or the front desk</td><td>Draft case is created silently; the only signal is a sidebar badge count.</td><td>Implied by the "draft, then send" design</td></tr>
+      <tr><td>Invoice created / payment received → any downstream automation</td><td>Activity entry only. Explicitly commented as "no rule currently matches".</td><td>Yes — additive logging by design</td></tr>
+      <tr><td>Patient created → welcome message / consent request</td><td>Only the relationship-spine link happens. No communication is triggered.</td><td>Not documented</td></tr>
+      <tr><td>Appointment booked / rescheduled → confirmation to the patient</td><td>No per-event send. Reminders are a scheduled sweep the morning before (<code>relationship:appointment-reminders</code>, <code>whatsapp:send-reminders</code>).</td><td>Yes — batch by design</td></tr>
+      <tr><td>Treatment plan accepted → notify finance to bill</td><td>No prompt. The billing prompt comes from the <em>visit</em>, not the acceptance. Billing from a plan is a manual navigation.</td><td>Consistent with "the visit establishes the fact"</td></tr>
+      <tr><td>Patient requests a callback → task for reception</td><td><b>Broken chain</b> — the rule listens for an event nothing emits. See INV-04.</td><td>No</td></tr>
+      <tr><td>Call outcome closes the matching task</td><td><code>SyncCallOutcomeClosesTask</code> exists as a command but is <b>not scheduled</b> — it is a manual/backfill tool.</td><td><span class="pill p-acc">verify intent</span></td></tr>
+      <tr><td>Real-time push / websockets anywhere</td><td>None. The sidebar badge poller (30 s) and page reloads are the whole of it — "no websockets in V1 by decree" per the sidebar comment.</td><td>Yes</td></tr>
+      <tr><td>Automation Engine owning recalls/reminders/retries</td><td><code>AutomationEngine</code>, <code>RecallAutomationRunner</code>, <code>ReminderAutomationRunner</code> and <code>RecallShadowRunner</code> all exist behind flag <code>automation.engine</code> (OFF). The legacy paths are live.</td><td>Yes — staged cutover</td></tr>
+      <tr><td>Workflow Engine driving multi-step processes</td><td><code>WorkflowEngine</code> + <code>WorkflowShadowRunner</code> exist behind <code>workflow.engine</code> (OFF). Shadow-runs only, log-only.</td><td>Yes</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ══════════ D ══════════ -->
+<section id="d">
+  <div class="sec-head">
+    <div class="sec-letter">D</div>
+    <h2 class="sec-title">Cross-module data-flow map</h2>
+    <p class="sec-note">Inventory level only, as scoped: what each module writes, which tables own it, who reads it, and what changes elsewhere as a result. ~290 tables across 436 migrations; only the canonical ones are named.</p>
+  </div>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>Module</th><th>Creates</th><th>Updates</th><th>Canonical tables / models</th><th>Consumed by</th><th>Downstream effects</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>Patients</b></td>
+        <td>Patient, PatientNote, PatientRelationshipNote, TreatmentOpportunity, PatientCommunication, PatientAlert, PatientAllergy, PatientLink, PatientIdentifier, PatientMerge</td>
+        <td><code>last_visit_date</code> (via observers), <code>relationship_id</code>, consent state, <code>merged_into_id</code>, active/inactive</td>
+        <td class="mono">patients · patient_notes · patient_relationship_notes · patient_links · patient_identifiers · patient_merges · treatment_opportunities · patient_tag</td>
+        <td>Every module. Appointments, Consultations, Plans, Visits, Billing, Lab, PRE, Recalls, Reports, Analytics</td>
+        <td>Creating a patient mints a <code>Relationship</code>; <code>last_visit_date</code> is the recall engine's key input; merging rewrites references across ~20 tables with an undo path</td>
+      </tr>
+      <tr>
+        <td><b>Appointments</b></td>
+        <td>Appointment, DoctorBlockedSlot</td>
+        <td>status, operatory, doctor, time, <code>amount_to_collect</code>, <code>staff_instruction</code>, <code>prep_item</code></td>
+        <td class="mono">appointments · doctor_blocked_slots · operatories</td>
+        <td>Huddle board, Dashboard, PRE (reminders + missed), Reports, Analytics, Consultation wiring</td>
+        <td>Missed → task; completion feeds Huddle "yesterday"; a saved consultation closes the appointment automatically</td>
+      </tr>
+      <tr>
+        <td><b>Consultations</b></td>
+        <td>Consultation, ClinicalFinding, ConsultationPhotograph, ConsultationScan, ConsultationCohaReport, Investigation, BillingPrompt, FhirDocument</td>
+        <td><code>patients.last_visit_date</code>, appointment status, plan linkage</td>
+        <td class="mono">consultations · clinical_findings · consultation_* · investigations · billing_prompts</td>
+        <td>Treatment Plan builder, patient profile, Journey Timeline, ABDM, Insights</td>
+        <td>Three observers fire on save; a billing prompt reaches the front desk; the recall clock resets</td>
+      </tr>
+      <tr>
+        <td><b>Treatment Plans</b></td>
+        <td>TreatmentPlan, TreatmentPlanItem, TreatmentPlanItemTooth, TreatmentConsent, PlanDecision, PlanDecisionItem</td>
+        <td>Lifecycle state, progress (derived), presented/accepted timestamps</td>
+        <td class="mono">treatment_plans · treatment_plan_items · treatment_plan_item_teeth · plan_decisions · treatment_consents</td>
+        <td>Billing (bill-from-plan), Visits, Case Journey / Presentation, PRE opportunities, Recalls, Reports</td>
+        <td>Acceptance commits the Opportunity; an accepted plan with no appointment becomes a recall; a visit re-derives plan progress</td>
+      </tr>
+      <tr>
+        <td><b>Treatment Visits</b></td>
+        <td>TreatmentVisit, TreatmentVisitItem, BillingPrompt, LabCase (draft), ImplantPlacement, StockMovement, Task (recall)</td>
+        <td>Plan status + progress, <code>patients.last_visit_date</code>, stock quantities</td>
+        <td class="mono">treatment_visits · treatment_visit_items · billing_prompts · lab_cases · implant_placements · stock_movements</td>
+        <td>Finance, Lab, Inventory, Plans, PRE, Reports</td>
+        <td>The single widest fan-out in the app — see spine S4. Deleting a visit cascades its items and prompts, and is blocked once items are invoiced</td>
+      </tr>
+      <tr>
+        <td><b>Billing &amp; Finance</b></td>
+        <td>Invoice, InvoiceItem, InvoicePayment, Receipt, FinalBill, WalletTransaction, EmiSchedule, CouponUsage, Voucher, Expense, Payroll, BankTransaction</td>
+        <td>Invoice status, balance due, wallet balance, prompt status, membership enrolment</td>
+        <td class="mono">invoices · invoice_items · invoice_payments · receipts · final_bills · wallets · wallet_transactions · finance_* (20 tables) · billing_prompts · billing_audit_logs</td>
+        <td>Patient Billing/Wallet tabs, Dashboard outstanding alert, Reports Revenue tab, Finance Analytics, PRE payment reminders, GST &amp; CA export</td>
+        <td>Overdue invoices become recall/task work at 07:15; wallet recalculated nightly; every money mutation writes to the audit chain verified at 06:30</td>
+      </tr>
+      <tr>
+        <td><b>Lab</b></td>
+        <td>LabCase, LabCaseItem, LabCaseEvent, LabCaseAttachment, LabCasePrescription, LabCaseRating, LabMonthlyReconciliation, Task (alerts)</td>
+        <td>Case status, <code>active_task_id</code>, <code>recall_queued_at</code>, vendor pricing</td>
+        <td class="mono">lab_cases · lab_case_* · lab_vendors · lab_vendor_services · lab_vendor_price_lists · lab_monthly_reconciliations</td>
+        <td>Patient Lab tab, Huddle, Dashboard, PRE <code>lab_ready</code>, Finance (lab expense + analytics), B2B comms, Reports</td>
+        <td>Receipt fires <code>lab.received</code> → task + recall; reconciliation approval creates the vendor expense</td>
+      </tr>
+      <tr>
+        <td><b>Inventory</b></td>
+        <td>InventoryItem, StockMovement, PurchaseOrder, GoodsReceiptNote, StockCountSession, ImplantCatalog, ImplantPlacement, VendorInvoice, Task (PO)</td>
+        <td>Available quantity, stock status (derived), PO status, asset status</td>
+        <td class="mono">inventory_items · inventory_stocks · stock_movements · purchase_orders · goods_receipt_notes · stock_count_* · implant_* · vendor_invoices</td>
+        <td>Treatment Visits (implant deduction), Finance (procurement analytics), Reports Inventory tab, Dashboard</td>
+        <td>GRN receipt raises stock and is reversible; implant placement from a visit deducts stock idempotently</td>
+      </tr>
+      <tr>
+        <td><b>Relationships (PRE)</b></td>
+        <td>Relationship, Lead, LeadActivity, CommunicationQueue, FollowUp, Activity, TodayAction, RelationshipNotification, ReferralReward, RelationshipJourney</td>
+        <td>Journey/pipeline stage, call-debt due dates, dismissals, relationship score</td>
+        <td class="mono">relationships · leads · lead_activities · communication_queue · follow_ups · activities · today_actions · today_action_dismissals · relationship_journeys · relationship_rule_logs</td>
+        <td>Today's Actions, Huddle snapshot, patient Journey Timeline, Analytics, mobile API</td>
+        <td><code>activities</code> is the Timeline <em>and</em> the rules trigger — every write here can create work elsewhere</td>
+      </tr>
+      <tr>
+        <td><b>Tasks</b></td>
+        <td>Task, Escalation, task evidence files</td>
+        <td>Status, assignee, due date, carry-forward</td>
+        <td class="mono">tasks · escalations · huddle_task_logs</td>
+        <td>Tasks module, Huddle, Today's Actions (<code>system</code> tasks), HR accountability</td>
+        <td>The common sink for nine producers — if a bell "does nothing", check whether it lands here</td>
+      </tr>
+      <tr>
+        <td><b>Clinical Library / CMS</b></td>
+        <td>ClinicalFile, ClinicalMedia, CmsMedia, CmsTreatmentCase, EducationMedia, MediaAsset</td>
+        <td>Approval state, tags, watermark status</td>
+        <td class="mono">clinical_files · clinical_media · cms_media · cms_treatment_cases · cms_tags · education_*</td>
+        <td>Patient Documents tab, case viewer, Case Journey / Presentation content, Marketing (tagged cases)</td>
+        <td>Uploads queue a watermark job; every image is served only through <code>secure.media.*</code></td>
+      </tr>
+      <tr>
+        <td><b>Prescriptions</b></td>
+        <td>Prescription, PrescriptionItem, PrescriptionOverride, FhirDocument</td>
+        <td>Rx status, repeat lineage</td>
+        <td class="mono">prescriptions · prescription_items · prescription_audit_logs · rx_* (14 master tables)</td>
+        <td>Patient Rx tab, print/PDF, WhatsApp send, ABDM</td>
+        <td>Allergy and interaction rules gate saving; overrides are recorded, not silent</td>
+      </tr>
+      <tr>
+        <td><b>HR</b></td>
+        <td>HrStaffProfile, HrAttendance, HrShift, HrTrainingSession, HrPerformanceMemo, HrStaffAdvance, HrBonus</td>
+        <td>Attendance state, salary components, incentive rules, training completion</td>
+        <td class="mono">hr_* (18 tables) · users · roles · role_module_permissions</td>
+        <td>Finance (payroll), Huddle (staff), Tasks (shift reminders), Settings → Roles</td>
+        <td>Every staff row is mirrored into <code>finance_vendors</code>; role changes immediately re-gate the whole app through <code>canAccess()</code></td>
+      </tr>
+      <tr>
+        <td><b>Marketing</b></td>
+        <td>MktPost, MktCampaign, MktIdea, MktAsset, BlogPost + versions + publications, PlatformConnection</td>
+        <td>Post schedule and status, publication ledger, brand kit</td>
+        <td class="mono">mkt_* (17 tables) · blog_* (8 tables)</td>
+        <td>Marketing dashboard, calendar, analytics; Reviews page reads the shared reviews system</td>
+        <td>Publishing is queued (<code>ProcessScheduledPost</code>, <code>ProcessBlogPublication</code>); <code>marketing.integrated_providers</code> decides whether clinic data is real or manually entered</td>
+      </tr>
+      <tr>
+        <td><b>Compliance (DPDP)</b></td>
+        <td>ConsentPurpose, ConsentLog, PatientConsent, DataRequest, DataBreach, RetentionPolicy</td>
+        <td>Consent grants/withdrawals, request state, breach state</td>
+        <td class="mono">consent_purposes · consent_logs · patient_consents · data_requests · data_breaches · retention_policies</td>
+        <td>WhatsApp consent gate, CommunicationGuard, Journey Timeline (consent group), log pruning</td>
+        <td>Consent can never be overridden by urgency (guard design); erasure requests write across patient data</td>
+      </tr>
+      <tr>
+        <td><b>Insights / Search / Workflow</b> <span class="lead">(projections)</span></td>
+        <td>InsightSignal, SearchIndexEntry, AnalyticsSnapshot, TodayAction, WorkflowInstance + step logs</td>
+        <td>Rebuilt wholesale on a schedule</td>
+        <td class="mono">insight_signals · search_index · analytics_snapshots · today_actions · workflow_* · *_shadow_log</td>
+        <td>Only when their flags are ON: <code>insights.signals</code>, <code>search.index</code>, <code>today.projection</code>, <code>workflow.engine</code> — all default OFF</td>
+        <td>These are built continuously and read almost nowhere. Cost is real; benefit is deferred to the cutover</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+<!-- ══════════ E ══════════ -->
+<section id="e">
+  <div class="sec-head">
+    <div class="sec-letter">E</div>
+    <h2 class="sec-title">V1 completeness, with evidence</h2>
+    <p class="sec-note">A status here describes the <em>module as a whole</em>. "Partial" almost never means the core is broken — in every case below the core workflow runs and the gap is at an edge: a mismatched gate, a second door, a projection nobody reads. Nothing in this section is a new audit; it is what the read surfaced, offered as candidate rows for the frozen register rather than a parallel one.</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="v">8</div><div class="k">Complete</div></div>
+    <div class="stat"><div class="v">12</div><div class="k">Partial</div></div>
+    <div class="stat"><div class="v">2</div><div class="k">Live, no sidebar</div></div>
+    <div class="stat"><div class="v">14</div><div class="k">Observations</div></div>
+    <div class="stat"><div class="v">28</div><div class="k">Feature flags</div></div>
+    <div class="stat"><div class="v">1</div><div class="k">Flags ON by default</div></div>
+  </div>
+
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>Module</th><th>Status</th><th>Evidence for the classification</th></tr></thead>
+    <tbody>
+      <tr><td><b>Dashboard</b></td><td><span class="pill p-ok">complete</span></td><td>Single controller, single view, three computed alert cards each with a working deep link, branch-scoped counts. Nothing unwired.</td></tr>
+      <tr><td><b>Daily Huddle</b></td><td><span class="pill p-warn">partial</span></td><td>Board, tasks, comments, report and accountability are all wired, with a matching mobile API. Two soft spots: <code>lab_sent</code> / <code>lab_received</code> in the yesterday summary are hardcoded to <code>0</code> and read by nothing (INV-07); the legacy <code>communication.huddle.*</code> widget endpoints are a second implementation of the same idea.</td></tr>
+      <tr><td><b>Patients</b></td><td><span class="pill p-ok">complete</span></td><td>Deepest module in the app: profile + 10 lazy tabs, cursor-paged permission-filtered Journey Timeline, four typed consultation workflows each with its own edit pair, family links, admin merge with undo, ABHA, import/export. Money tabs carry their own finance gate. Caveat: clinical-file routes are duplicated (INV-01).</td></tr>
+      <tr><td><b>Appointments</b></td><td><span class="pill p-ok">complete</span></td><td>Full status lifecycle with revert, conflict checking, operatory assignment, blocked slots, per-role <code>data_scope</code>, and the app's only record-level policy. Shared service with the mobile API.</td></tr>
+      <tr><td><b>Treatments</b></td><td><span class="pill p-ok">complete</span></td><td>Ten tabs, all with buttons and panels present; separate save routes per tab so SOP and Consent can't overwrite each other; print variants; API detail endpoint consumed by the plan builder and billing.</td></tr>
+      <tr><td><b>Prescriptions</b></td><td><span class="pill p-warn">partial</span></td><td>Rx capture, repeat, print, PDF, WhatsApp send and 14 master tables are complete, with allergy/interaction rules and an audit log. The gap is access, not function: the sidebar shows the item on <code>patients OR treatments</code> while the routes require <code>module:prescriptions</code> (SB-1).</td></tr>
+      <tr><td><b>Clinical Library (CMS)</b></td><td><span class="pill p-warn">partial</span></td><td>Two front doors under one module — <code>/clinical-library</code> (sidebar) and <code>/content-management</code> (five tabs) — with overlapping concepts (case library vs clinical files). Upload, approval, tagging, watermarking and secure serving all work; the split is a navigation and training problem, not a functional one.</td></tr>
+      <tr><td><b>Relationships (PRE)</b></td><td><span class="pill p-warn">partial</span></td><td>The most heavily engineered module: 71 routes, 25 services, 15 live Today's-Actions categories with per-category fault tolerance, four pipelines, owner-configurable settings. Partial because (a) the sidebar shows it ungated while routes require <code>module:relationship</code> (SB-2), (b) its projection (<code>today_actions</code>) is rebuilt every 15 minutes but not read (<code>today.projection</code> OFF), (c) several engine layers behind it are shadow-only.</td></tr>
+      <tr><td><b>Marketing</b></td><td><span class="pill p-warn">partial</span></td><td>Six subnav tabs plus a 22-route Blog Hub behind <code>blog.hub</code>. The provider abstraction (<code>marketing.integrated_providers</code>, default OFF) means Revenue/Patient/Treatment/Review data is <b>manually entered</b> unless flipped — a manual written against the ON state would be wrong for a default install. Integrations are OAuth scaffolding whose live state must be verified per clinic.</td></tr>
+      <tr><td><b>Accounts &amp; Finance</b></td><td><span class="pill p-warn">partial</span></td><td>The money <em>engine</em> is thorough — invoices, allocations, receipts with void, final bills, wallet with campaigns, EMI, coupons, membership, GST, CA export, and a verified audit chain. Partial for reach, not correctness: the Finance dashboard links to only a handful of its own sub-modules, so Wallet, Membership, Coupons, Banking, Cashbook, Vouchers and Analytics are effectively URL-only or reached from elsewhere.</td></tr>
+      <tr><td><b>Inventory</b></td><td><span class="pill p-ok">complete</span></td><td>Eleven tabs, canonical <code>StockStatusService</code>, idempotent GRN receipt with reversal, stock count sessions, implant traceability wired to treatment visits, CSV import, its own trilingual guide. One structural wrinkle: PO creation is implemented twice (INV-05).</td></tr>
+      <tr><td><b>Lab</b></td><td><span class="pill p-ok">complete</span></td><td>Case lifecycle with a transition service and event trail, attachments, lab prescriptions from templates, vendor ratings, vendor master with price lists, and full monthly reconciliation (submit → approve/dispute). Automation is real: overdue and stale-trial tasks with dedup.</td></tr>
+      <tr><td><b>Tasks</b></td><td><span class="pill p-warn">partial</span></td><td>Nine producers write here; the module itself has only seven routes (list, mine, overdue, create, done, evidence, escalate). The human/system split exists as a column and is already read by Today's Actions, but its flag (<code>tasks.human_system_split</code>) is OFF, so the two populations are not yet formally separated in the UI.</td></tr>
+      <tr><td><b>Practice Protocols</b></td><td><span class="pill p-warn">partial</span></td><td>Catalogue + materials + daily generation into Tasks is complete and scheduled. Partial only because the nav item sits inside an Operations wrapper that hides it from a role granted <em>only</em> this module (SB-3).</td></tr>
+      <tr><td><b>HR</b></td><td><span class="pill p-warn">partial</span></td><td>Eight subnav tabs over 18 tables; staff finance, attendance with QR check-in, training with enrolment and periodic requirements, memos with acknowledgement, roles. Partial for the same wrapper reason as Practice Protocols (SB-3), plus Periodic Training has no subnav entry of its own.</td></tr>
+      <tr><td><b>Reports</b></td><td><span class="pill p-ok">complete</span></td><td>One route, six fully populated tabs over a shared date range, charts lazy-initialised per tab. Only cosmetic drift: the page heading still reads "Appointment Reports" from before the tabs existed.</td></tr>
+      <tr><td><b>Analytics</b></td><td><span class="pill p-warn">partial</span></td><td>Nine working pages, but they are the same nine pages as Finance → Analytics, from the same controller and the same views, behind a different permission (INV-03). There is no <code>views/analytics/</code> directory. Its snapshot projection is shadow-only.</td></tr>
+      <tr><td><b>Settings</b></td><td><span class="pill p-ok">complete</span></td><td>Eighteen in-page panels plus three link-outs, a keyword search index, and masters for eleven entity types. Two search entries advertise features that don't exist (INV-10).</td></tr>
+      <tr><td><b>Compliance (DPDP cluster)</b></td><td><span class="pill p-warn">partial</span></td><td>All four registers are functionally complete — purposes, per-patient consent with trail, data requests through to erasure, breach reporting, retention with scheduled pruning. Partial because their route gate is <code>auth</code> only while the nav gate is <code>settings</code> (SB-4): hidden, not protected. Separately, both consent-enforcement flags default OFF.</td></tr>
+      <tr><td><b>Help &amp; Guide</b></td><td><span class="pill p-warn">partial</span></td><td>The page exists; it is gated in the sidebar behind Settings, so the staff most likely to need it can't see it (SB-5). It is also the natural destination for the manuals this inventory precedes, and is currently near-empty.</td></tr>
+      <tr><td><b>Case presentation</b> <span class="lead">(Smart Presentation + Case Journey)</span></td><td><span class="pill p-warn">two engines live</span></td><td>Both are functional and both are reachable under the same <code>presentations</code> permission whenever <code>case_acceptance.enabled</code> is ON — it is ON in this working copy. Smart Presentation lost its sidebar item but kept its routes; Case Journey is opened per-plan. Two patient-facing microsites (<code>/present/{token}</code> and <code>/p/{token}</code>) do the same job.</td></tr>
+      <tr><td><b>Communication OS</b></td><td><span class="pill p-off">superseded, still live</span></td><td>65 routes still registered with no nav entry. Three sub-modules are redirect-only stubs, Timeline is deliberately unregistered because it renders fabricated patients, and its entire alternate shell (sidebar + topbar) is dead code containing references to undefined route names (INV-09). Live and useful within it: WhatsApp inbox, Reviews, B2B, Follow-up Engine, KPI.</td></tr>
+      <tr><td><b>Dentfluence HQ</b></td><td><span class="pill p-off">not a clinic module</span></td><td>Internal superadmin console for clinics, subscriptions, plans and tickets. Correctly excluded from the module catalogue and from any clinic manual.</td></tr>
+      <tr><td><b>Projections &amp; engines behind flags</b></td><td><span class="pill p-off">dormant by design</span></td><td>Automation Engine, Workflow Engine, Insights signals, Search index, Today projection, single communication gateway, all six Integration connectors — built, tested, shadow-run, and switched off. 27 of 28 flags default OFF.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 id="e-obs">Observation register</h3>
+  <p>Findings surfaced by this read, each with the file and line that produced it. These are offered as <b>candidate rows</b> for the existing frozen gap register — deliberately not a competing register, and deliberately not prioritised here.</p>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>ID</th><th>Type</th><th>Observation</th><th>Evidence</th><th>Confidence</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">INV-01</td><td>Duplicate route registration</td>
+        <td><b>Patient clinical files may be effectively <code>auth</code>-only.</b> The same five URIs are registered twice with different gates. Laravel keys its route collection by method+URI, so the <em>later</em> registration is expected to win — and <code>clinical-library.php</code> is loaded from the <code>bootstrap/app.php</code> <code>then:</code> callback, i.e. after <code>web.php</code>. <code>ClinicalFileController</code> performs no module check of its own; its only guard is that the file belongs to the patient in the URL.</td>
+        <td class="mono">web.php:232–236 (<code>module:patients</code> + edit/delete) vs clinical-library.php:23–35 (<code>auth</code>); ClinicalFileController:149,181,231</td>
+        <td><span class="pill p-acc">verify with route:list</span></td>
+      </tr>
+      <tr>
+        <td class="mono">INV-02</td><td>Duplicate route registration</td>
+        <td><code>settings.tags.*</code> is registered twice with identical controllers, URIs and gates. Harmless at runtime; one of the two files is redundant and route listings show duplicates.</td>
+        <td class="mono">tags-routes.php:12–15 · web.php:467–470</td>
+        <td><span class="pill p-ok">confirmed</span></td>
+      </tr>
+      <tr>
+        <td class="mono">INV-03</td><td>Duplicate surface</td>
+        <td><b>Analytics has two doors and one room.</b> Nine <code>analytics.*</code> routes and nine <code>finance.analytics.*</code> routes call the same <code>Finance\AnalyticsController</code> methods and render the same <code>finance.analytics.*</code> views, behind <code>module:analytics</code> and <code>module:finance</code> respectively. There is no <code>resources/views/analytics/</code> directory at all.</td>
+        <td class="mono">web.php:594–604 vs web.php:1065–1073; AnalyticsController view returns</td>
+        <td><span class="pill p-ok">confirmed</span></td>
+      </tr>
+      <tr>
+        <td class="mono">INV-04</td><td>Broken automation chain</td>
+        <td><b>A patient asking for a callback produces no work for anyone.</b> The enabled rule <code>presentation_callback_requested</code> listens for <code>opportunity.callback_requested</code>; grep across <code>app/</code> finds that string only in the config that declares the rule. The event actually emitted on callback request is <code>presentation.follow_up_requested</code>, which no rule matches.</td>
+        <td class="mono">config/relationship_rules.php:420–421; PublicPresentationController::requestCallback</td>
+        <td><span class="pill p-ok">confirmed</span></td>
+      </tr>
+      <tr>
+        <td class="mono">INV-05</td><td>Duplicate implementation</td>
+        <td><b>Purchase-order creation exists twice</b>, including the two auto-created vendor tasks. The web controller has its own copy; the mobile API uses the service. <code>receivePurchaseOrder</code> and <code>reverseLastGrn</code> were consolidated on 2026-07-14 — creation was not, so web and mobile can drift.</td>
+        <td class="mono">InventoryController::storePurchaseOrder (~1195+) vs InventoryService::createPurchaseOrder (461–543)</td>
+        <td><span class="pill p-ok">confirmed</span></td>
+      </tr>
+      <tr>
+        <td class="mono">INV-06</td><td>Nav vs route gate</td>
+        <td>Six sidebar gating mismatches, listed in full as SB-1 … SB-6 in section A. Two produce visible "Access Denied" for roles that can see the item; one hides two whole modules from single-module roles; three leave compliance and help pages hidden-but-open.</td>
+        <td class="mono">components/sidebar.blade.php vs the route files</td>
+        <td><span class="pill p-ok">confirmed</span></td>
+      </tr>
+      <tr>
+        <td class="mono">INV-07</td><td>Dead write</td>
+        <td>Huddle's yesterday summary sets <code>lab_sent</code> and <code>lab_received</code> to a hardcoded <code>0</code>; neither key is read anywhere, including the view.</td>
+        <td class="mono">Modules/Huddle/Controllers/HuddleController.php:113–114</td>
+        <td><span class="pill p-ok">confirmed</span></td>
+      </tr>
+      <tr>
+        <td class="mono">INV-08</td><td>Dead files</td>
+        <td>Views included by nothing: <code>partials/sidebar.blade.php</code> (472 lines — an entire second sidebar), <code>relationship/_tabs.blade.php</code> (self-documented as unused), <code>labs/index.blade.php</code>, <code>crm/index.blade.php</code> (its route is now a redirect), <code>layouts/app.blade.php.bak</code>, and the whole <code>layouts/partials/communication*</code> shell.</td>
+        <td class="mono">grep for includes across resources/views</td>
+        <td><span class="pill p-ok">confirmed</span></td>
+      </tr>
+      <tr>
+        <td class="mono">INV-09</td><td>Latent 500</td>
+        <td>Unreachable views call undefined route names — <code>communication.manager.queue</code>/<code>.overdue</code> (rendered only by the unrouted <code>ManagerController</code>) and <code>communication.timeline.*</code> (deliberately unregistered). Inert today; they would throw <code>RouteNotFoundException</code> the moment either controller is wired back up.</td>
+        <td class="mono">communication/manager/{queue,overdue}.blade.php; communication/timeline/*.blade.php; routes/timeline.php</td>
+        <td><span class="pill p-ok">confirmed</span></td>
+      </tr>
+      <tr>
+        <td class="mono">INV-10</td><td>UI promises absent feature</td>
+        <td>The Settings search index advertises <b>Working Hours</b> and <b>Appointment Slot Duration</b> with <code>'available' =&gt; false</code> and <code>'tab' =&gt; null</code> — searchable, unreachable, unbuilt.</td>
+        <td class="mono">settings/index.blade.php:255–256</td>
+        <td><span class="pill p-ok">confirmed</span></td>
+      </tr>
+      <tr>
+        <td class="mono">INV-11</td><td>Two engines, one job</td>
+        <td>Smart Presentation and the Case Acceptance Journey are both live under the same permission whenever <code>case_acceptance.enabled</code> is ON (true in this working copy), with two separate patient microsites. Training and smoke tests need to name which one V1 ships.</td>
+        <td class="mono">web.php:790–864; config/features.php <code>case_acceptance.enabled</code>; .env <code>FEATURE_CASE_ACCEPTANCE=true</code></td>
+        <td><span class="pill p-ok">confirmed (local)</span></td>
+      </tr>
+      <tr>
+        <td class="mono">INV-12</td><td>Cost without benefit</td>
+        <td>Four projections are rebuilt continuously and read by nothing at default flag state: <code>analytics_snapshots</code> (every 15 min, explicitly "shadow only"), <code>today_actions</code>, <code>search_index</code>, and the workflow/integration/automation shadow logs.</td>
+        <td class="mono">routes/console.php:349,368; config/features.php</td>
+        <td><span class="pill p-ok">confirmed</span></td>
+      </tr>
+      <tr>
+        <td class="mono">INV-13</td><td>Unscheduled automation</td>
+        <td><code>SyncCallOutcomeClosesTask</code> exists as a console command but appears in no <code>Schedule::command</code> call — it is a manual/backfill tool, not a running automation. Worth confirming whether that is the intent.</td>
+        <td class="mono">app/Console/Commands/SyncCallOutcomeClosesTask.php; routes/console.php</td>
+        <td><span class="pill p-acc">verify intent</span></td>
+      </tr>
+      <tr>
+        <td class="mono">INV-14</td><td>Copy drift</td>
+        <td>The Reports page still titles itself "Appointment Reports" although it now carries six tabs. Cosmetic, but it is the first thing a trainee reads.</td>
+        <td class="mono">reports/index.blade.php:14</td>
+        <td><span class="pill p-ok">confirmed</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <p><strong>One thing this read did not find.</strong> No module in the sidebar is a shell. Every one of the 23 entries resolves to a real controller, real persistence and a real read-back path. The V1 risk in this codebase is not missing function — it is <em>duplicate</em> function (INV-01, 03, 05, 11), <em>unreachable</em> function (SB-3, SB-5, Finance sub-modules, Communication OS), and <em>built-but-off</em> function (27 of 28 flags). That is a very different completion problem from "finish the modules", and it should shape the manuals: each manual needs to state which door is canonical.</p>
+  </div>
+</section>
+
+<!-- ══════════ F ══════════ -->
+<section id="f">
+  <div class="sec-head">
+    <div class="sec-letter">F</div>
+    <h2 class="sec-title">Standard module manual template</h2>
+    <p class="sec-note">The structure every module manual will follow. Not populated here — this is the agreed shape, with a note on what each section must contain so that fourteen manuals come out consistent enough to be read side by side.</p>
+  </div>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>#</th><th>Section</th><th>What goes in it</th><th>Source in this inventory</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">1</td><td><b>Purpose</b></td><td>One paragraph. What this module is for in clinic terms, and the one question it answers that no other module does.</td><td>§B module summary</td></tr>
+      <tr><td class="mono">2</td><td><b>Who uses it</b></td><td>Named roles from the six seeded roles (Admin, Manager, Doctor, Assistant, Front Desk, Accounts), and what each of them does here. State the module permission slug and what view / edit / delete each unlock.</td><td>§A permission columns</td></tr>
+      <tr><td class="mono">3</td><td><b>Sidebar location</b></td><td>Exact section and label as rendered, the URL, and — where they differ — the nav gate versus the route gate.</td><td>§A</td></tr>
+      <tr><td class="mono">4</td><td><b>Module structure</b></td><td>The sub-module → workflow tree, using the module's own terminology, not renamed for tidiness.</td><td>§B</td></tr>
+      <tr><td class="mono">5</td><td><b>How it works</b></td><td>The happy path, start to finish, as a clinic day actually runs it. One path per persona if they differ.</td><td>§B + §D</td></tr>
+      <tr><td class="mono">6</td><td><b>Data entry / update training</b></td><td>Field-by-field for the screens staff type into: what is required, what is validated, what a good entry looks like, and which fields other modules depend on (e.g. <code>amount_to_collect</code>, <code>expected_return_date</code>).</td><td>§D "Creates / Updates"</td></tr>
+      <tr><td class="mono">7</td><td><b>Automation / Bells</b></td><td>Only automations from §C. Each written as <em>event → what fires → where it lands → how long it takes</em>. Bells that do not exist must be named as such if staff would otherwise assume them.</td><td>§C</td></tr>
+      <tr><td class="mono">8</td><td><b>Inputs → Processing → Outputs</b></td><td>A three-column table. Inputs include data arriving from other modules, not just typed input.</td><td>§D</td></tr>
+      <tr><td class="mono">9</td><td><b>Where the data goes</b></td><td>Named destination modules and screens. "The Journey Timeline", "the front desk billing badge" — surfaces staff recognise, not table names.</td><td>§D "Consumed by"</td></tr>
+      <tr><td class="mono">10</td><td><b>Expected output / benefit</b></td><td>What the clinic gets when this module is used properly, against the five-question test: saves time · reduces mistakes · improves patient experience · increases revenue · improves decisions.</td><td>—</td></tr>
+      <tr><td class="mono">11</td><td><b>What staff should NOT do</b></td><td>Concrete prohibitions with the reason. Deletions that break downstream records, duplicate entry across two doors, editing through the wrong form, bypassing an approval.</td><td>§E observations</td></tr>
+      <tr><td class="mono">12</td><td><b>Known limitations / incomplete features</b></td><td>Straight from §E for this module, in plain language. A manual that hides a gap gets discovered by a receptionist on a busy Tuesday.</td><td>§E</td></tr>
+      <tr><td class="mono">13</td><td><b>Troubleshooting</b></td><td>Symptom → likely cause → fix. Seed it from the real failure modes: permission denied on a visible menu item, a badge that won't clear, an automation that didn't fire because its flag is off, a message that says "sent" in dry-run.</td><td>§A anomalies + §C send gate</td></tr>
+      <tr><td class="mono">14</td><td><b>V1 status</b></td><td>The pill from §E plus one sentence of evidence, so a reader knows how much to trust the rest of the manual.</td><td>§E</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <p><strong>Two conventions to fix before the first manual is written,</strong> because they will otherwise be decided fourteen times: (1) when a module has two doors — Analytics, Clinical Library, Case Presentation, Communication OS — the manual names <b>one canonical door</b> and says the other exists; (2) every automation statement carries its <b>flag state and send gate</b>, so no manual claims a message reaches a patient that dry-run is swallowing.</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <p><b>Dentfluence V1 Module Inventory</b> · compiled 27 August 2026 from the working tree at <code>E:\Dentfluence\Dentfluence_OS\Dentfluence Web</code>. Read-only: no file was modified, no command executed, no migration or test run. Route data extracted programmatically from <code>routes/*.php</code> plus <code>app/Modules/Huddle</code>, <code>app/Modules/PracticeProtocols</code> and <code>app/Modules/Hq</code> route files; everything else read directly from source.</p>
+  <p>Items marked <span class="pill p-acc">verify at runtime</span> depend on runtime resolution or production configuration and are stated as candidates, not conclusions.</p>
+</footer>
+
+</div>
+</body>
+</html>

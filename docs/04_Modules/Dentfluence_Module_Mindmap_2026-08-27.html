@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dentfluence Module Mindmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+:root{
+  --ground:#FBF9FC; --surface:#FFFFFF; --surface-2:#F5F0F8;
+  --ink:#1E0A2C; --ink-2:#4A3654; --ink-3:#7A6685;
+  --rule:#E8D5F0; --accent:#6A0F70; --accent-soft:#FDF4FF; --accent-line:#D9AEDC;
+  --ok:#1A7A45; --ok-bg:#E8F5EE; --warn:#A05C00; --warn-bg:#FBF1E2;
+  --bad:#B52020; --bad-bg:#FBEAEA; --off:#6B7280; --off-bg:#F1F1F3;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --ground:#140A1B; --surface:#1D1026; --surface-2:#261632;
+  --ink:#EFE4F4; --ink-2:#C3B0CC; --ink-3:#94809E;
+  --rule:#3A2647; --accent:#D08FD4; --accent-soft:#2A1531; --accent-line:#6A3A72;
+  --ok:#5FC58C; --ok-bg:#14301F; --warn:#E0A94D; --warn-bg:#33240D;
+  --bad:#F0736F; --bad-bg:#38161A; --off:#8C8397; --off-bg:#241C2B;
+}}
+:root[data-theme="dark"]{
+  --ground:#140A1B; --surface:#1D1026; --surface-2:#261632;
+  --ink:#EFE4F4; --ink-2:#C3B0CC; --ink-3:#94809E;
+  --rule:#3A2647; --accent:#D08FD4; --accent-soft:#2A1531; --accent-line:#6A3A72;
+  --ok:#5FC58C; --ok-bg:#14301F; --warn:#E0A94D; --warn-bg:#33240D;
+  --bad:#F0736F; --bad-bg:#38161A; --off:#8C8397; --off-bg:#241C2B;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;
+  display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+header{flex:none;padding:20px 26px 16px;border-bottom:1px solid var(--rule);background:var(--surface);
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 22px}
+h1{font-family:'Cormorant Garamond',Georgia,serif;font-size:29px;font-weight:700;margin:0;letter-spacing:-.01em;line-height:1}
+.sub{color:var(--ink-3);font-size:12.5px}
+.tools{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button.t{font:500 12px 'DM Sans',sans-serif;color:var(--ink-2);background:var(--surface-2);
+  border:1px solid var(--rule);padding:6px 12px;border-radius:3px;cursor:pointer}
+button.t:hover{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line)}
+input.q{font:400 12.5px 'DM Sans',sans-serif;color:var(--ink);background:var(--surface-2);
+  border:1px solid var(--rule);padding:6px 11px;border-radius:3px;min-width:190px}
+input.q::placeholder{color:var(--ink-3)}
+.legend{flex:none;display:flex;flex-wrap:wrap;gap:6px 16px;padding:10px 26px;border-bottom:1px solid var(--rule);
+  font-size:11.5px;color:var(--ink-3);background:var(--surface)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.canvas{flex:1;overflow:auto;padding:34px 40px 90px}
+/* ── tree ── */
+.tree,.tree ul{list-style:none;margin:0;padding:0}
+.tree{display:flex;flex-direction:column;gap:2px}
+.node{position:relative}
+.row{display:inline-flex;align-items:center;gap:9px;padding:5px 12px 5px 10px;
+  border:1px solid var(--rule);background:var(--surface);border-radius:3px;cursor:default;
+  max-width:min(760px,72vw);line-height:1.35}
+.row.has-kids{cursor:pointer}
+.row:hover{border-color:var(--accent-line)}
+.tog{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);width:11px;flex:none;text-align:center}
+.lbl{font-weight:500}
+.node.d0>.row{background:var(--accent);border-color:var(--accent);padding:9px 18px}
+.node.d0>.row .lbl{color:#fff;font-family:'Cormorant Garamond',Georgia,serif;font-size:22px;font-weight:700}
+.node.d0>.row .tog{color:rgba(255,255,255,.8)}
+.node.d1>.row{border-left:3px solid var(--accent);background:var(--accent-soft)}
+.node.d1>.row .lbl{font-weight:700;font-size:14.5px;letter-spacing:.02em;text-transform:uppercase;color:var(--accent)}
+.node.d2>.row .lbl{font-weight:700}
+.node.d3>.row{background:transparent;border-style:dashed}
+.node.d4>.row{background:transparent;border:0;padding-left:0}
+.node.d4>.row .lbl{font-weight:400;color:var(--ink-2)}
+.meta{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-3)}
+.kids{margin:2px 0 6px 20px;padding-left:20px;border-left:1px solid var(--rule);
+  display:flex;flex-direction:column;gap:2px}
+.node.collapsed>.kids{display:none}
+.pill{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:2px;white-space:nowrap}
+.p-ok{background:var(--ok-bg);color:var(--ok)} .p-warn{background:var(--warn-bg);color:var(--warn)}
+.p-bad{background:var(--bad-bg);color:var(--bad)} .p-off{background:var(--off-bg);color:var(--off)}
+.p-acc{background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent-line)}
+.hit{outline:2px solid var(--accent);outline-offset:1px}
+.dim{opacity:.28}
+footer{flex:none;padding:10px 26px;border-top:1px solid var(--rule);background:var(--surface);
+  font-size:11.5px;color:var(--ink-3)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(prefers-reduced-motion:no-preference){.row{transition:border-color .12s}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Dentfluence Module Mindmap</h1>
+    <div class="sub">Sidebar → module → sub-module → workflow, plus the automation spine · read from the codebase 27 Aug 2026</div>
+  </div>
+  <div class="tools">
+    <input class="q" id="q" type="search" placeholder="Filter — try &quot;recall&quot; or &quot;wallet&quot;" aria-label="Filter nodes">
+    <button class="t" id="lvl2">Modules</button>
+    <button class="t" id="lvl3">Sub-modules</button>
+    <button class="t" id="all">Expand all</button>
+    <button class="t" id="none">Collapse</button>
+  </div>
+</header>
+<div class="legend">
+  <span><span class="pill p-ok">complete</span> wired end to end</span>
+  <span><span class="pill p-warn">partial</span> gap at an edge</span>
+  <span><span class="pill p-bad">broken</span> path cannot succeed</span>
+  <span><span class="pill p-off">dormant</span> retired or flag-off</span>
+  <span><span class="pill p-acc">no nav</span> live but not in the sidebar</span>
+</div>
+<div class="canvas"><ul class="tree" id="tree"></ul></div>
+<footer>Click any row with a <b>+</b> to expand. Filtering shows matching nodes and their ancestors.</footer>
+
+<script>
+const T = {l:"Dentfluence OS", c:[
+ {l:"Overview", c:[
+   {l:"Dashboard", p:"ok", m:"/dashboard", c:[
+     {l:"Today strip — appointments by status"},
+     {l:"Alert cards", c:[{l:"Overdue lab cases → Lab"},{l:"No-shows today → Appointments"},{l:"Outstanding balance → Finance income"}]},
+     {l:"Global chrome (all pages)", c:[{l:"Topbar · notification bell · universal search"},{l:"Appointment modal · create-task modal · dental notation"},{l:"Yesterday follow-up card · Today's flow card"},{l:"Tulip Assistant drawer"}]}
+   ]},
+   {l:"Daily Huddle", p:"warn", m:"module:daily_huddle · 17 routes", c:[
+     {l:"Board", c:[{l:"Today's appointments + prep + medical alerts"},{l:"Collections target (scheduled only, walk-ins excluded)"},{l:"Yesterday's flow via ClinicFlowRange"},{l:"Staff instruction edit"},{l:"Huddle notes"},{l:"Yesterday's-Flow quick log → task / follow-up"},{l:"Push comms to follow-up queue"}]},
+     {l:"Tasks — index · store · status · assign · proof · carry-forward"},
+     {l:"Comments — index · store · resolve · destroy"},
+     {l:"Accountability (JSON)"},
+     {l:"Report — weekly / monthly / quarterly / annual"},
+     {l:"Settings — GET redirects to Settings ▸ Huddle"},
+     {l:"Mobile API — /api/v1/huddle*"}
+   ]}
+ ]},
+ {l:"Clinical", c:[
+   {l:"Patients", p:"ok", m:"module:patients · 64 routes", c:[
+     {l:"Patient list — search · quick-store · scan-form (OCR) · import"},
+     {l:"Patient profile — 1 eager + 10 lazy tabs", c:[
+       {l:"Profile (eager) — demographics · contact · rapport notes · opportunities · quick pay"},
+       {l:"Consultation"},{l:"Treatment Plan"},{l:"Visits"},{l:"Lab"},{l:"Prescriptions"},
+       {l:"Billing", m:"extra finance,view gate"},{l:"Wallet", m:"extra finance,view gate"},
+       {l:"Membership"},{l:"Documents"},{l:"Notes"}
+     ]},
+     {l:"Journey Timeline", m:"cursor-paged, permission-filtered", c:[{l:"Groups: all · clinical · financial · comms · consent · reviews"}]},
+     {l:"Consultations", c:[
+       {l:"Standard", c:[{l:"Visit Type"},{l:"Chief Complaint"},{l:"Examination Findings"},{l:"Diagnosis"},{l:"Investigations"},{l:"Prescription"},{l:"Follow-up"},{l:"HOPI · Findings Summary · Risk Assessment · Treatment Done"}]},
+       {l:"Same Issue — own create + edit pair"},
+       {l:"Minor Visit — own create + edit pair"},
+       {l:"Emergency — own create + edit pair"},
+       {l:"COHA — assessment + printable report"},
+       {l:"Consult Assist — suggest · section guidance · tooth timeline"}
+     ]},
+     {l:"Treatment Plans", c:[
+       {l:"Create from consultation · AI suggest · items · per-tooth"},
+       {l:"Lifecycle: presented → accept / partial / reject / defer → revert"},
+       {l:"States: draft · decision_pending · accepted · treatment_started · treatment_complete · deferred · declined · closed"},
+       {l:"Outputs: consent doc · plan print · invoice · Case Journey"}
+     ]},
+     {l:"Treatment Visits — create · edit · delete (cascades) · print · none-today"},
+     {l:"Clinical Files — upload · list · update · soft-delete · secure serve", p:"warn", m:"INV-01 duplicate registration"},
+     {l:"Family & identity — links · guardians · merge (admin, undoable) · ABHA · deactivate"},
+     {l:"Relationship surface — rapport notes · opportunities · logged comms · tags"}
+   ]},
+   {l:"Appointments", p:"ok", m:"module:appointments · 20 routes", c:[
+     {l:"Calendar — doctors open on own list (data_scope)"},
+     {l:"Today view · Today queue"},
+     {l:"Booking — create · conflict check · quick view · edit"},
+     {l:"Status lifecycle", c:[{l:"scheduled → checkin → in_chair → checkout → done"},{l:"cancelled (with reason) · no_show"},{l:"revert · reschedule · status counts"}]},
+     {l:"Operatory assignment · blocked slots · hide from calendar"},
+     {l:"AppointmentPolicy — the app's first record-level policy"}
+   ]},
+   {l:"Treatments", p:"ok", m:"module:treatments · 10 tabs", c:[
+     {l:"Catalogue — index · create · price list"},
+     {l:"Treatment record tabs", c:[{l:"Overview"},{l:"Intelligence"},{l:"SOP"},{l:"Consent (own save route)"},{l:"Stages"},{l:"Rules"},{l:"Media"},{l:"Patient Materials"},{l:"Review"},{l:"Usage"}]},
+     {l:"Categories"},
+     {l:"Print — pre-op · post-op · consent"},
+     {l:"API detail → plan builder + billing auto-fill"}
+   ]},
+   {l:"Prescriptions", p:"warn", m:"module:prescriptions · SB-1 gate mismatch", c:[
+     {l:"Global index"},
+     {l:"Patient Rx — create · repeat · print · PDF · WhatsApp send"},
+     {l:"Rx masters (in Settings)", c:[{l:"Categories · Generics · Routes"},{l:"Food instructions · Dose templates · Duration templates"},{l:"Warning rules · Prescription templates"},{l:"Drug register — CRUD · restore · search API"}]},
+     {l:"Safety — allergy rules · interaction rules · overrides · audit log"},
+     {l:"ABDM — FHIR mirror via observer"}
+   ]},
+   {l:"Clinical Library (CMS)", p:"warn", m:"module:cms · two front doors", c:[
+     {l:"/clinical-library — upload · approval queue · protocol steps"},
+     {l:"/content-management", c:[{l:"Case Library — search · filters · case viewer · media gallery · notes · timeline"},{l:"Education — categories · treatments · media"},{l:"Marketing — tag a case"},{l:"Teaching"},{l:"Research"}]},
+     {l:"Watermark settings → GenerateWatermark job"}
+   ]}
+ ]},
+ {l:"Communication", c:[
+   {l:"Relationships (PRE)", p:"warn", m:"module:relationship · 71 routes · SB-2", c:[
+     {l:"Today's Actions — 15 live categories", c:[
+       {l:"new_enquiries · lead_followups · opportunities"},
+       {l:"recall_calls · follow_up_calls · appointment_reminders"},
+       {l:"pending_estimates · membership_renewals · lab_ready"},
+       {l:"payment_reminders · wellness_check_yesterday · logged_communications"},
+       {l:"tasks (system automation output)"},
+       {l:"missed_calls_yesterday · missed_appointments_yesterday"},
+       {l:"birthdays — RETIRED 2026-07-26", p:"off"},
+       {l:"Pending Calls board (overdue window)"},
+       {l:"Call workflow drawer + per-category checklists"}
+     ]},
+     {l:"Reception board"},
+     {l:"Lead Pipeline — move · activity · convert to patient · quick add · AI enrich / draft reply"},
+     {l:"Opportunity Pipeline — board · stage · convert · notes"},
+     {l:"Recall Pipeline — manual recall · ignore · bulk dismiss · bulk assign · convert"},
+     {l:"WhatsApp overview", m:"sidebar slot removed 2026-08-25"},
+     {l:"All Relationships · Relationship profile · Universal search"},
+     {l:"Notifications · Templates · Referral rewards"},
+     {l:"Settings — flags · Today config · referral · recall (general / per-treatment / birthday) · call outcomes · dismiss reasons"},
+     {l:"Engine layer — 25 services", c:[{l:"ActivityEngine · RulesEngine · TaskEngine · ReminderEngine"},{l:"CommunicationEngine · CommunicationGuard · NotificationEngine"},{l:"TodayActionsEngine + Projector · YesterdayReviewService"},{l:"OutcomeAutomationService · IdentityResolver · MergeService"},{l:"JourneyService · RelationshipScoreEngine · UnifiedTimelineService"}]}
+   ]},
+   {l:"Marketing", p:"warn", m:"module:marketing · 71 routes", c:[
+     {l:"Dashboard · Content/Publish · Calendar · Reviews · Analytics · Settings"},
+     {l:"Blog Marketing Hub", m:"flag blog.hub", c:[{l:"CRUD · autosave · duplicate · archive"},{l:"Versioning — restore · destroy"},{l:"Publishing ledger — publish · retry"},{l:"Taxonomy · media assets"}]},
+     {l:"Brainstorm & Ideas — convert to post / campaign / from review"},
+     {l:"Campaigns — goals · team"},
+     {l:"Library & Assets — folders · upload · storage · tags"},
+     {l:"Brand Kit"},
+     {l:"Integrations — WhatsApp · WordPress · OAuth connect / callback / health"},
+     {l:"Provider abstraction", m:"flag marketing.integrated_providers = OFF → manual data", p:"warn"}
+   ]},
+   {l:"Communication OS", p:"acc", m:"65 routes · no sidebar entry", c:[
+     {l:"Live — WhatsApp inbox · Reviews · B2B · Follow-up Engine · KPI · Huddle widgets · Manager log"},
+     {l:"Redirect stubs — Recall Settings · Templates · Opportunity Engine", p:"off"},
+     {l:"Unregistered — Timeline (renders sample patients)", p:"off"},
+     {l:"Dead shell — its own sidebar + topbar, included by nothing", p:"off"}
+   ]}
+ ]},
+ {l:"Operations", c:[
+   {l:"Accounts & Finance", p:"warn", m:"module:finance · 106 routes", c:[
+     {l:"Dashboard · Income (+ trash restore) · Expenses (+ receipt scan)"},
+     {l:"Vendors · Payroll · Cashbook · Banking"},
+     {l:"GST · CA Export · Finance Reports · Vouchers"},
+     {l:"Wallet", c:[{l:"Register + export"},{l:"Per patient — credit · credit note · advance · refund · adjust"},{l:"Wallet campaigns — preview · apply · cancel"}]},
+     {l:"Membership — plans · members · enrolment"},
+     {l:"Coupons"},
+     {l:"Finance Analytics — 9 pages", p:"warn", m:"same pages as sidebar Analytics (INV-03)"},
+     {l:"Billing engine", c:[
+       {l:"Bill from plan · bill from billing prompt"},
+       {l:"Payments — invoice · patient allocation · update · provider paid"},
+       {l:"Receipts + void · final bill"},
+       {l:"Discounts — coupon · membership benefit · manual"},
+       {l:"Cancel with reason · authorised delete / edit"},
+       {l:"EMI — providers · schemes · schedules"},
+       {l:"Audit chain — verified daily 06:30"}
+     ]}
+   ]},
+   {l:"Inventory", p:"ok", m:"module:inventory · 74 routes · 11 tabs", c:[
+     {l:"Dashboard · Items (adjust · history)"},
+     {l:"Products — catalogue · CSV import (template → preview → store)"},
+     {l:"Purchase Orders — create · mark ordered · receive GRN · reverse GRN · print", p:"warn", m:"creation duplicated (INV-05)"},
+     {l:"Stock Movement — in · out · register · reverse"},
+     {l:"Stock Count — session · sheet · complete"},
+     {l:"Implants — catalogue · placements (written from visits)"},
+     {l:"Alerts — out · critical · low · expiring 90d · expired · dead stock", p:"warn", m:"pull only, no push automation"},
+     {l:"Received Stock · Reports · Stock check · Reusable assets"},
+     {l:"Vendor invoices"},
+     {l:"Inventory Settings — categories · locations · sub-types · variants · vendors"},
+     {l:"Interactive guide (EN / हिंदी / मराठी)"}
+   ]},
+   {l:"Lab", p:"ok", m:"module:lab · 42 routes", c:[
+     {l:"Case list · Dashboard"},
+     {l:"Lab case", c:[{l:"Create (also from a visit or a patient)"},{l:"Status transitions via LabCaseTransitionService"},{l:"Attachments · print work order · duplicate · restore"},{l:"Lab prescription from templates"},{l:"Vendor rating"},{l:"Event trail"}]},
+     {l:"Templates"},
+     {l:"Monthly reconciliation — eligible cases · submit · approve · dispute"},
+     {l:"Lab vendors — contacts · services (bulk) · price lists"},
+     {l:"Automation — overdue tasks · stale trial tasks · lab.received rule"}
+   ]},
+   {l:"Tasks", p:"warn", m:"module:tasks · 7 routes · 9 producers", c:[
+     {l:"All · Mine · Overdue"},
+     {l:"Complete · evidence upload · escalate"},
+     {l:"human vs system split", m:"flag tasks.human_system_split = OFF", p:"warn"},
+     {l:"Producers", c:[{l:"RulesEngine → TaskEngine"},{l:"LabAlertService (overdue, stale trial)"},{l:"Inventory PO (×2 implementations)"},{l:"ReminderAutomationRunner"},{l:"ProtocolGenerationService"},{l:"Huddle · Tulip Assistant · mobile API"}]}
+   ]},
+   {l:"Practice Protocols", p:"warn", m:"module:practice_protocols · SB-3 hidden by wrapper", c:[
+     {l:"Protocol catalogue — per role"},
+     {l:"Materials — SOP step · file · link"},
+     {l:"Daily generation 00:10 → Tasks"},
+     {l:"Reminders — shift (5 min) · periodic (2 h)"}
+   ]},
+   {l:"HR", p:"warn", m:"module:hr · 47 routes · SB-3", c:[
+     {l:"Overview"},
+     {l:"Doctors / Staff — documents · HPR · salary · incentive · advances · bonuses"},
+     {l:"Attendance — mark · bulk · QR check-in · auto-absent 10:30"},
+     {l:"Training — sessions · enrol · attendance · complete", c:[{l:"Periodic training — requirements + records (no subnav entry)"}]},
+     {l:"Calendar · Memos (acknowledgeable)"},
+     {l:"Roles & Permissions", m:"admin.only · per-role data_scope"}
+   ]}
+ ]},
+ {l:"Insights", c:[
+   {l:"Reports", p:"ok", m:"module:reports · 1 route · 6 tabs", c:[
+     {l:"Appointments — totals · rates · by doctor / category / day"},
+     {l:"Revenue — KPIs · by mode · top patients · outstanding"},
+     {l:"Patients — new by month · gender · source · city · return rate"},
+     {l:"Treatments — visits by status / doctor / procedure · plans"},
+     {l:"Lab — status · vendor · turnaround · overdue"},
+     {l:"Inventory — low stock · movements · expiring"}
+   ]},
+   {l:"Analytics", p:"warn", m:"module:analytics · duplicate of Finance ▸ Analytics", c:[
+     {l:"Overview · Vendor · Expense · Lab · Procurement"},
+     {l:"Cashflow · Outstanding · Business Intelligence · Audit log"},
+     {l:"analytics_snapshots rebuilt every 15 min — read by nothing", p:"off"}
+   ]}
+ ]},
+ {l:"System", c:[
+   {l:"Settings", p:"ok", m:"module:settings · 21 nav entries", c:[
+     {l:"Clinic Profile · Operatories · Staff & Roles"},
+     {l:"Feature Flags · Import/Export · Masters (11 entity types) · Knowledge Bank"},
+     {l:"Clinical · Patient Defaults · Billing & Invoice (GST · numbering · EMI)"},
+     {l:"Printing · Notifications · Growth & Comms · Inventory · Huddle"},
+     {l:"Personalisation · Calendar"},
+     {l:"Link-outs — HFR/ABDM · Banking · Audit Logs · Clinical Library"},
+     {l:"Search index advertises 2 unbuilt features", p:"warn", m:"Working Hours · Slot Duration (INV-10)"}
+   ]},
+   {l:"Compliance (DPDP)", p:"warn", m:"route gate is auth only (SB-4)", c:[
+     {l:"Consent — purposes register · per-patient consent · audit trail"},
+     {l:"Patient Rights — request → complete / reject / download / erase"},
+     {l:"Breach Register — report to board · notify affected"},
+     {l:"Data Retention — policies · weekly log pruning"},
+     {l:"Enforcement — CommunicationGuard + WhatsApp consent gate", p:"warn", m:"both guard flags default OFF"}
+   ]},
+   {l:"Help & Guide", p:"warn", m:"hidden behind Settings (SB-5)"}
+ ]},
+ {l:"Automation spine", c:[
+   {l:"S1 · Activity ledger → Rules Engine", c:[
+     {l:"ActivityEngine::log writes activities (= the Timeline)"},
+     {l:"After commit → RulesEngine::evaluate"},
+     {l:"After commit → RecalculateRelationshipScoreJob"},
+     {l:"After commit → DomainEventBus"},
+     {l:"13 rules, 12 enabled", c:[{l:"treatment.completed → implant_followup + post_treatment_followup"},{l:"appointment.missed → missed_appointment_followup"},{l:"lab.received → lab_ready_call"},{l:"payment.overdue → payment_overdue_3d"},{l:"membership.expiring → membership_renewal_30d"},{l:"birthday.approaching → birthday_3d"},{l:"opportunity.created → opportunity_nudge_7d"},{l:"presentation.sent → estimate_followup_3d"},{l:"case.opened / case.more_time_requested"},{l:"opportunity.callback_requested — NO PRODUCER", p:"bad"},{l:"visit.completed → recall_6months (disabled by design)", p:"off"}]}
+   ]},
+   {l:"S2 · Model observers (9)", c:[
+     {l:"Consultation ×3 — last_visit_date · close appointment · Activity · FHIR"},
+     {l:"TreatmentVisit — last_visit_date"},
+     {l:"LabCase — comm status sync · lab.received"},
+     {l:"Lead — link · assign · follow-up · enrich · Activity"},
+     {l:"User — mirror into finance_vendors"},
+     {l:"Relationship — search index job"}
+   ]},
+   {l:"S3 · Scheduler (24 commands)", c:[
+     {l:"00:10 protocols:generate · 00:30 wallet:recalculate · 02:00 app:crawl-routes"},
+     {l:"06:30 audit:verify · 06:45 relationship:requeue-due · 07:00 recall:run"},
+     {l:"07:05 morning-briefing · 07:10 membership:scan · 07:15 payments:scan · 07:20 birthdays:scan"},
+     {l:"08:00 appointment-reminders · 08:00 tulip:huddle · 09:00 lab:overdue-tasks"},
+     {l:"10:00 whatsapp:send-reminders · 10:30 hr:mark-absent · 11:00 reviews:request"},
+     {l:"14:00 sla-alert · 18:00 evening-summary"},
+     {l:"5 min tasks:shift-reminder · 15 min today + analytics projections · 30 min auto-escalate · 2 h periodic-reminder"},
+     {l:"Sun 03:30 logs:prune"}
+   ]},
+   {l:"S4 · In-service side-effects", c:[
+     {l:"Treatment visit saved → 7 effects", c:[{l:"visit items → BillingPrompt"},{l:"lab section → draft LabCase"},{l:"implant → placement + stock deduction"},{l:"clinical fact → plan re-derives progress"},{l:"mark complete → plan completed + 6-month recall task"},{l:"treatment.completed → 2 rules → tasks"},{l:"observer → last_visit_date"}]},
+     {l:"Recall engine → 6 generators → CommunicationQueue"},
+     {l:"Call outcome → appointment / close / follow-up / disable automations"},
+     {l:"PO marked ordered → 2 vendor tasks"},
+     {l:"Patient created → relationship spine link"}
+   ]},
+   {l:"Send gate above every outbound bell", p:"warn", c:[
+     {l:"whatsapp.enabled AND NOT whatsapp.dry_run"},
+     {l:"local copy: enabled=true, dry_run=true → nothing leaves"},
+     {l:"MAIL_MAILER=log locally"},
+     {l:"all 6 integration.* flags OFF · comm.single_gateway OFF"}
+   ]},
+   {l:"Bells that do NOT exist", p:"bad", c:[
+     {l:"Stock crosses reorder level → nothing"},
+     {l:"Lab case created → nothing but a badge count"},
+     {l:"Invoice / payment → Activity entry only"},
+     {l:"Patient created → no welcome or consent request"},
+     {l:"Appointment booked → no per-event confirmation"},
+     {l:"Plan accepted → no billing prompt"},
+     {l:"Callback requested → broken chain (INV-04)"},
+     {l:"No websockets / real-time anywhere"}
+   ]}
+ ]}
+]};
+
+const tree = document.getElementById('tree');
+function build(n, depth){
+  const li = document.createElement('li');
+  li.className = 'node d'+Math.min(depth,4);
+  const row = document.createElement('div');
+  row.className = 'row' + (n.c ? ' has-kids' : '');
+  const tog = document.createElement('span'); tog.className='tog'; tog.textContent = n.c ? '+' : '·';
+  const lbl = document.createElement('span'); lbl.className='lbl'; lbl.textContent = n.l;
+  row.append(tog, lbl);
+  if(n.p){
+    const map={ok:['p-ok','complete'],warn:['p-warn','partial'],bad:['p-bad','broken'],off:['p-off','dormant'],acc:['p-acc','no nav']};
+    const [cls,txt]=map[n.p]; const s=document.createElement('span'); s.className='pill '+cls; s.textContent=txt; row.append(s);
+  }
+  if(n.m){ const m=document.createElement('span'); m.className='meta'; m.textContent=n.m; row.append(m); }
+  li.append(row);
+  if(n.c){
+    const ul=document.createElement('ul'); ul.className='kids';
+    n.c.forEach(k => ul.append(build(k, depth+1)));
+    li.append(ul);
+    if(depth>=2) li.classList.add('collapsed');
+    row.addEventListener('click', e=>{ e.stopPropagation(); li.classList.toggle('collapsed');
+      tog.textContent = li.classList.contains('collapsed') ? '+' : '–'; });
+    tog.textContent = li.classList.contains('collapsed') ? '+' : '–';
+  }
+  return li;
+}
+tree.append(build(T,0));
+
+function setAll(collapsed, maxDepth){
+  document.querySelectorAll('.node').forEach(n=>{
+    if(!n.querySelector(':scope > .kids')) return;
+    const d = parseInt(n.className.match(/d(\d)/)[1],10);
+    const c = maxDepth==null ? collapsed : d >= maxDepth;
+    n.classList.toggle('collapsed', c);
+    const t = n.querySelector(':scope > .row > .tog'); if(t) t.textContent = c ? '+' : '–';
+  });
+}
+document.getElementById('all').onclick = ()=>setAll(false);
+document.getElementById('none').onclick = ()=>setAll(true, 1);
+document.getElementById('lvl2').onclick = ()=>setAll(null, 2);
+document.getElementById('lvl3').onclick = ()=>setAll(null, 3);
+setAll(null, 2);
+
+const q = document.getElementById('q');
+q.addEventListener('input', ()=>{
+  const v = q.value.trim().toLowerCase();
+  document.querySelectorAll('.row').forEach(r=>r.classList.remove('hit','dim'));
+  if(!v){ setAll(null,2); return; }
+  const nodes=[...document.querySelectorAll('.node')];
+  nodes.forEach(n=>{
+    const row=n.querySelector(':scope > .row');
+    const text=row.textContent.toLowerCase();
+    if(text.includes(v)){
+      row.classList.add('hit');
+      let p=n; while(p){ p.classList.remove('collapsed'); const t=p.querySelector(':scope > .row > .tog'); if(t && p.querySelector(':scope > .kids')) t.textContent='–'; p=p.parentElement.closest('.node'); }
+    } else { row.classList.add('dim'); }
+  });
+  // keep the path to every hit readable
+  document.querySelectorAll('.row.hit').forEach(r=>{
+    let p = r.closest('.node').parentElement.closest('.node');
+    while(p){ p.querySelector(':scope > .row').classList.remove('dim'); p = p.parentElement.closest('.node'); }
+  });
+});
+</script>
+</body>
+</html>
