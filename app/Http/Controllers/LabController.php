@@ -552,7 +552,9 @@ class LabController extends Controller
     {
         $request->validate(['file' => 'required|file|max:10240']);
 
-        $path = $request->file('file')->store('lab-attachments', 'public');
+        // Private disk: lab attachments carry patient work (x-rays, shade photos,
+        // prescriptions). Served only via SecureMediaController.
+        $path = $request->file('file')->store('lab-attachments', 'local');
 
         $labCase->attachments()->create([
             'file_path'   => $path,
@@ -567,7 +569,7 @@ class LabController extends Controller
 
     public function attachmentDestroy(LabCaseAttachment $attachment)
     {
-        Storage::disk('public')->delete($attachment->file_path);
+        Storage::disk('local')->delete($attachment->file_path);
         $attachment->delete();
         return back()->with('success', 'Attachment removed.');
     }

@@ -14,9 +14,10 @@
 return [
 
     // ── Master on/off switch (kill-switch) ────────────────────────────────────
-    // Set ASSISTANT_ENABLED=false in .env + `php artisan config:clear` to instantly
-    // hide Tulip everywhere and block her endpoints. Flip back to true to restore.
-    'enabled' => filter_var(env('ASSISTANT_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+    // The CODE default is FALSE: Tulip stays off unless a deployment opts in with
+    // ASSISTANT_ENABLED=true. A missing/typo'd env var therefore fails CLOSED.
+    // After changing the env value run `php artisan config:clear` (or config:cache).
+    'enabled' => filter_var(env('ASSISTANT_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
     // ── Identity (rename anytime — this is the single source of truth) ────────
     'name'      => env('ASSISTANT_NAME', 'Tulip'),

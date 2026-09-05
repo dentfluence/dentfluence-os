@@ -262,7 +262,7 @@
                                 <p class="text-xs text-gray-400">{{ $doc->type_label }} · {{ $doc->file_size_human }} · {{ $doc->created_at->format('d M Y') }}</p>
                                 @if($doc->notes)<p class="text-xs text-gray-400 italic">{{ $doc->notes }}</p>@endif
                             </div>
-                            <a href="{{ Storage::url($doc->file_path) }}" target="_blank"
+                            <a href="{{ $doc->url() }}" target="_blank"
                                class="text-xs text-purple-600 hover:underline opacity-0 group-hover:opacity-100 transition px-2 py-1 border border-purple-100 rounded-md">
                                 View
                             </a>

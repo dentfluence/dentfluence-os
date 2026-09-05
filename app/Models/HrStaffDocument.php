@@ -43,6 +43,12 @@ class HrStaffDocument extends Model
         return round($bytes / 1048576, 1) . ' MB';
     }
 
+    /** Authenticated, branch-checked URL. Never a raw /storage path. */
+    public function url(): string
+    {
+        return route('secure.media.hr-document', $this);
+    }
+
     /* ── Relationships ── */
 
     public function user(): BelongsTo

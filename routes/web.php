@@ -1183,4 +1183,10 @@ Route::middleware('auth')->prefix('assistant')->name('assistant.')->group(functi
 Route::middleware('auth')->prefix('secure-media')->name('secure.media.')->group(function () {
     Route::get('/file/{clinicalFile}',    [\App\Http\Controllers\SecureMediaController::class, 'file'])->name('file');
     Route::get('/legacy/{clinicalMedia}', [\App\Http\Controllers\SecureMediaController::class, 'legacy'])->name('legacy');
+
+    // W-2 (G-07): lab attachments and staff documents moved off the public disk.
+    // Each is gated by the SAME module as its upload route, so viewing rights
+    // never drift from adding rights.
+    Route::get('/lab-attachment/{attachment}', [\App\Http\Controllers\SecureMediaController::class, 'labAttachment'])->name('lab-attachment')->middleware('module:lab');
+    Route::get('/hr-document/{document}',      [\App\Http\Controllers\SecureMediaController::class, 'hrDocument'])->name('hr-document')->middleware('module:hr');
 });

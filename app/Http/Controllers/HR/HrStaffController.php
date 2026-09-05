@@ -428,7 +428,9 @@ class HrStaffController extends Controller
         ]);
 
         $file = $request->file('file');
-        $path = $file->store("hr/documents/{$user->id}", 'public');
+        // Private disk: staff documents include ID proof and bank papers.
+        // Served only via SecureMediaController.
+        $path = $file->store("hr/documents/{$user->id}", 'local');
 
         HrStaffDocument::create([
             'user_id'       => $user->id,
@@ -452,7 +454,7 @@ class HrStaffController extends Controller
         // Safety: document must belong to this user
         abort_if($document->user_id !== $user->id, 403);
 
-        Storage::disk('public')->delete($document->file_path);
+        Storage::disk('local')->delete($document->file_path);
         $document->delete();
 
         return back()->with('success', 'Document deleted.');

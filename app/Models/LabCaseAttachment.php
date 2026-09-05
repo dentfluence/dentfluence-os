@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * LabCaseAttachment — file attached to a lab case.
@@ -46,9 +45,10 @@ class LabCaseAttachment extends Model
         return self::CATEGORIES[$this->category] ?? 'Other';
     }
 
+    /** Authenticated, branch-checked URL. Never a raw /storage path. */
     public function url(): string
     {
-        return Storage::disk('public')->url($this->file_path);
+        return route('secure.media.lab-attachment', $this);
     }
 
     /** "2.4 MB" style human-readable size */

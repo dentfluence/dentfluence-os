@@ -368,11 +368,11 @@
                         @php $isImg = str_starts_with($att->mime_type ?? '', 'image/'); @endphp
                         <div class="group relative bg-gray-50 border border-gray-200 rounded-xl p-3 text-center hover:border-[#d8b4e2] transition">
                             @if($isImg)
-                            <a href="{{ Storage::url($att->file_path) }}" target="_blank">
-                                <img src="{{ Storage::url($att->file_path) }}" alt="{{ $att->file_name }}" class="w-full h-20 object-cover rounded-lg mb-2">
+                            <a href="{{ $att->url() }}" target="_blank">
+                                <img src="{{ $att->url() }}" alt="{{ $att->file_name }}" class="w-full h-20 object-cover rounded-lg mb-2">
                             </a>
                             @else
-                            <a href="{{ Storage::url($att->file_path) }}" target="_blank" class="flex flex-col items-center gap-1 mb-2">
+                            <a href="{{ $att->url() }}" target="_blank" class="flex flex-col items-center gap-1 mb-2">
                                 <div class="w-12 h-12 bg-[#f3e8f5] rounded-lg flex items-center justify-center text-xl">
                                     @if(str_ends_with(strtolower($att->file_name), '.pdf')) 📄
                                     @elseif(str_ends_with(strtolower($att->file_name), '.stl')) 🦷

@@ -26,6 +26,11 @@ return [
     |
     | Supported drivers: "local", "ftp", "sftp", "s3"
     |
+    | NOTE: anything placed on the 'public' disk is reachable by ANYONE over HTTP
+    | via the public/storage symlink — no login, no signature, no expiry. Patient
+    | and staff files belong on the private 'local' disk and are served only
+    | through SecureMediaController. Keep it that way.
+    |
     */
 
     'disks' => [
@@ -59,13 +64,6 @@ return [
             'throw' => false,
             'report' => false,
         ],
-            'consultation-photos' => [
-            'driver'     => 'local',
-            'root'       => storage_path('app/public/consultations'),
-            'url'        => env('APP_URL').'/storage/consultations',
-            'visibility' => 'public',
-        ],
-
     ],
 
     /*

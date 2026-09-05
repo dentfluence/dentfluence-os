@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\ClinicalFile;
 use App\Models\ClinicalMedia;
+use App\Models\HrStaffDocument;
+use App\Models\LabCaseAttachment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -71,6 +73,43 @@ class SecureMediaController extends Controller
     }
 
     /**
+     * Serve a lab-case attachment (x-rays, shade photos, STL, prescriptions).
+     * Route is additionally gated by module:lab — the same authority that lets
+     * a user upload one — so viewing is never stricter or looser than adding.
+     */
+    public function labAttachment(Request $request, LabCaseAttachment $attachment): StreamedResponse
+    {
+        $this->authorizeBranch($attachment->labCase?->branch_id);
+
+        return $this->stream(
+            disk:     'local',
+            path:     $attachment->file_path,
+            filename: $attachment->original_name ?: basename((string) $attachment->file_path),
+            request:  $request,
+            model:    $attachment,
+            module:   'lab',
+        );
+    }
+
+    /**
+     * Serve a staff document (contract, ID proof, certificate, bank paper).
+     * Route is gated by module:hr, mirroring hr.staff.documents.store.
+     */
+    public function hrDocument(Request $request, HrStaffDocument $document): StreamedResponse
+    {
+        $this->authorizeBranch($document->user?->branch_id);
+
+        return $this->stream(
+            disk:     'local',
+            path:     $document->file_path,
+            filename: $document->file_name ?: basename((string) $document->file_path),
+            request:  $request,
+            model:    $document,
+            module:   'hr',
+        );
+    }
+
+    /**
      * Ensure the logged-in user may see files for this patient's branch.
      * Admins see everything; everyone else is locked to their own branch.
      */
@@ -92,7 +131,7 @@ class SecureMediaController extends Controller
      * Stream the file from its disk. Inline by default; attachment when ?dl=1.
      * Downloads (not inline thumbnail loads) are written to the audit log.
      */
-    private function stream(string $disk, ?string $path, string $filename, Request $request, $model): StreamedResponse
+    private function stream(string $disk, ?string $path, string $filename, Request $request, $model, string $module = 'clinical_files'): StreamedResponse
     {
         if (! $path || ! Storage::disk($disk)->exists($path)) {
             abort(404, 'File not found.');
@@ -101,7 +140,7 @@ class SecureMediaController extends Controller
         $isDownload = $request->boolean('dl');
 
         if ($isDownload) {
-            $this->audit($model, $request);
+            $this->audit($model, $request, $module);
             return Storage::disk($disk)->download($path, $filename);
         }
 
@@ -112,19 +151,29 @@ class SecureMediaController extends Controller
     }
 
     /** Record a download in the tamper-aware audit trail. */
-    private function audit($model, Request $request): void
+    private function audit($model, Request $request, string $module = 'clinical_files'): void
     {
         AuditLog::create([
             'user_id'        => Auth::id(),
             'action'         => 'downloaded',
             'auditable_type' => $model::class,
             'auditable_id'   => $model->getKey(),
-            'module'         => 'clinical_files',
+            'module'         => $module,
             'old_values'     => null,
-            'new_values'     => ['patient_id' => $model->patient_id],
+            'new_values'     => $this->subjectOf($model),
             'device_type'    => 'web',
             'ip_address'     => $request->ip(),
             'user_agent'     => (string) $request->userAgent(),
         ]);
+    }
+
+    /** What the downloaded file is ABOUT — differs per media type. */
+    private function subjectOf($model): array
+    {
+        return match (true) {
+            $model instanceof LabCaseAttachment => ['lab_case_id'   => $model->lab_case_id],
+            $model instanceof HrStaffDocument   => ['staff_user_id' => $model->user_id],
+            default                             => ['patient_id'    => $model->patient_id ?? null],
+        };
     }
 }

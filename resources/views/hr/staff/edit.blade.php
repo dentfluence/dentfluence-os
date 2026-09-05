@@ -694,7 +694,7 @@
                     <p style="font-size:13px;font-weight:600;color:#1a0320;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ $doc->label }}</p>
                     <p style="font-size:11.5px;color:#9a7aaa;margin:2px 0 0;">{{ $doc->type_label }} · {{ $doc->file_size_human }} · {{ $doc->created_at->format('d M Y') }}</p>
                 </div>
-                <a href="{{ Storage::url($doc->file_path) }}" target="_blank"
+                <a href="{{ $doc->url() }}" target="_blank"
                    style="font-size:12px;color:#6a0f70;padding:4px 10px;border:1px solid #e5d5f0;border-radius:6px;text-decoration:none;">View</a>
                 <form method="POST" action="{{ route('hr.staff.documents.destroy', [$user, $doc]) }}" onsubmit="return confirm('Delete this document?')">
                     @csrf @method('DELETE')
