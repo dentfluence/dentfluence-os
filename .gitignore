@@ -45,3 +45,9 @@ node_modules/
 *.sql
 *.sql.gz
 _to_delete/ 
+
+# Laragon writes a MySQL data directory here whenever its Data Directory
+# preference points at the project folder (it did on 3-4 Sep, 191 MB of a
+# stray database engine landed in the repo root). Never commit it.
+/mysql-8.4/
+/origin)
