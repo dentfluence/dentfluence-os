@@ -1961,44 +1961,142 @@ document.addEventListener('alpine:init', () => {
          CEO ruling 28 Aug (H1): remove now, reserve the slot for V1.1 reading
          real scheduled posts. The .hd-mc* CSS is intentionally kept for that. --}}
 
-    {{-- ── COL: FAILURES / MAINTENANCE ── --}}
-    <div class="hd-col">
+    {{-- ── COL: FAILURES / MAINTENANCE ──
+         Two different things, deliberately kept apart and NOT the same as
+         Inventory Alerts (which is stock levels):
+           FAILURE     = an event. Something broke today/yesterday. Reported
+                         in the huddle as a note (huddle_notes.category=failures).
+           MAINTENANCE = a scheduled job. AC service, autoclave AMC, deep
+                         cleaning. Lives as a task (tasks.category=maintenance).
+         Fixed 2026-09-04: this column previously rendered $criticalAlerts,
+         i.e. the exact same low-stock list as the Inventory column. --}}
+    <div class="hd-col"
+         x-data="{
+             showFailForm: false,
+             failBody: '',
+             saving: false,
+             async saveFailure() {
+                 if (!this.failBody.trim() || this.saving) return;
+                 this.saving = true;
+                 try {
+                     const res = await fetch('{{ route('huddle.notes.store') }}', {
+                         method: 'POST',
+                         headers: {
+                             'Content-Type': 'application/json',
+                             'Accept': 'application/json',
+                             'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                         },
+                         body: JSON.stringify({ category: 'failures', body: this.failBody.trim() }),
+                     });
+                     if (!res.ok) throw new Error('save failed');
+                     window.location.reload();
+                 } catch (e) {
+                     this.saving = false;
+                     alert('Could not save. Try again.');
+                 }
+             }
+         }">
         <div class="hd-col-hdr">
             <div class="hd-col-title">
                 <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                 Failures / Maint.
             </div>
-            <span class="hd-col-count">{{ $criticalAlerts->count() }}</span>
+            <span class="hd-col-count {{ $failuresReported->isNotEmpty() ? 'red' : '' }}">{{ $failuresReported->count() + $maintenanceDue->count() }}</span>
         </div>
         <div class="hd-col-body">
+
+        {{-- ── FAILURES REPORTED ── --}}
+        <div class="hd-cs-hdr" style="cursor:default;">
+            <div class="hd-cs-left" style="color:var(--c-red);">
+                Failures reported
+                <span class="hd-cs-count" style="background:#fee2e2;color:#b91c1c;">{{ $failuresReported->count() }}</span>
+            </div>
+        </div>
         <div class="hd-card">
-            @forelse($criticalAlerts as $alert)
+            @forelse($failuresReported as $f)
             <div class="hd-fc">
-                <div class="hd-fc-ico hd-fc-ico-{{ $alert['level'] === 'error' ? 'high' : ($alert['level'] === 'warning' ? 'medium' : 'low') }}">
+                <div class="hd-fc-ico hd-fc-ico-{{ $f['is_today'] ? 'high' : 'medium' }}">
                     <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                 </div>
                 <div class="hd-fc-body">
-                    <div class="hd-fc-title">{{ $alert['message'] }}</div>
-                    @if(!empty($alert['detail']))
-                    <div class="hd-fc-desc">{{ $alert['detail'] }}</div>
-                    @endif
+                    <div class="hd-fc-title">{{ $f['body'] }}</div>
                     <div class="hd-fc-footer">
-                        <span class="hd-badge hd-b-{{ $alert['level'] === 'error' ? 'high' : 'medium' }}">{{ $alert['level'] === 'error' ? 'High' : 'Medium' }}</span>
+                        <span class="hd-fc-reported">{{ $f['when'] }} · {{ $f['author'] }}</span>
+                        <button type="button"
+                                style="border:none;background:none;padding:0;cursor:pointer;font:inherit;font-size:.63rem;font-weight:600;color:var(--c-accent);"
+                                @click="window.dispatchEvent(new CustomEvent('open-create-task', { detail: { category: 'maintenance', title: @js('Repair: ' . $f['body']) } }))">
+                            Raise repair task
+                        </button>
                     </div>
                 </div>
             </div>
             @empty
             <div class="hd-fc">
-                <div class="hd-fc-body" style="text-align:center;padding:.5rem 0;color:var(--c-muted);font-size:.78rem;">
-                    ✓ No active issues
+                <div class="hd-fc-body" style="text-align:center;padding:.45rem 0;color:var(--c-muted);font-size:.75rem;">
+                    ✓ Nothing broke
+                </div>
+            </div>
+            @endforelse
+
+            <div x-show="showFailForm" x-cloak style="padding:.55rem .75rem;border-top:1px solid #f5f5f7;">
+                <textarea x-model="failBody" rows="2" placeholder="What broke? e.g. Autoclave not reaching temperature"
+                          style="width:100%;font:inherit;font-size:.74rem;padding:.4rem .5rem;border:1px solid var(--c-border);border-radius:7px;resize:vertical;"></textarea>
+                <div style="display:flex;gap:.35rem;margin-top:.35rem;">
+                    <button type="button" @click="saveFailure()" :disabled="saving"
+                            style="flex:1;border:none;border-radius:7px;background:var(--c-red);color:#fff;font:inherit;font-size:.7rem;font-weight:600;padding:.35rem;cursor:pointer;">
+                        <span x-text="saving ? 'Saving…' : 'Log failure'"></span>
+                    </button>
+                    <button type="button" @click="showFailForm=false; failBody=''"
+                            style="border:1px solid var(--c-border);border-radius:7px;background:var(--c-bg);font:inherit;font-size:.7rem;padding:.35rem .6rem;cursor:pointer;">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+
+            <button type="button" x-show="!showFailForm" class="hd-view-all"
+                    style="width:100%;border:none;cursor:pointer;font:inherit;"
+                    @click="showFailForm = true; $nextTick(() => $el.parentElement.querySelector('textarea')?.focus())">
+                + Report a failure
+            </button>
+        </div>
+
+        {{-- ── MAINTENANCE DUE ── --}}
+        <div class="hd-cs-hdr" style="cursor:default;margin-top:.5rem;">
+            <div class="hd-cs-left" style="color:var(--c-amber);">
+                Maintenance due
+                <span class="hd-cs-count" style="background:#fef3c7;color:#92400e;">{{ $maintenanceDue->count() }}</span>
+            </div>
+        </div>
+        <div class="hd-card">
+            @forelse($maintenanceDue as $m)
+            <div class="hd-fc">
+                <div class="hd-fc-ico hd-fc-ico-{{ $m['overdue'] ? 'high' : 'low' }}">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                </div>
+                <div class="hd-fc-body">
+                    <div class="hd-fc-title">{{ $m['title'] }}</div>
+                    @if($m['type_label'])
+                    <div class="hd-fc-desc">{{ $m['type_label'] }}@if($m['recurring']) · recurring @endif</div>
+                    @endif
+                    <div class="hd-fc-footer">
+                        <span class="hd-badge hd-b-{{ $m['overdue'] ? 'high' : 'medium' }}">{{ $m['due_label'] }}</span>
+                        <span class="hd-fc-reported">{{ $m['assignee'] ?? 'Unassigned' }}</span>
+                    </div>
+                </div>
+            </div>
+            @empty
+            <div class="hd-fc">
+                <div class="hd-fc-body" style="text-align:center;padding:.45rem 0;color:var(--c-muted);font-size:.75rem;">
+                    ✓ Nothing due this week
                 </div>
             </div>
             @endforelse
             <button type="button" class="hd-view-all" style="width:100%;border:none;cursor:pointer;font:inherit;"
                     @click="window.dispatchEvent(new CustomEvent('open-create-task', { detail: { category: 'maintenance' } }))">
-                + Add New Issue
+                + Schedule maintenance
             </button>
         </div>
+
         </div>{{-- /hd-col-body --}}
     </div>
 

@@ -1,8 +1,9 @@
 {{-- ══ GLOBAL CREATE TASK MODAL ══════════════════════════════════════════════ --}}
-{{-- Trigger: window.dispatchEvent(new CustomEvent('open-create-task', { detail: { patient_id, patient_name, category } }))
+{{-- Trigger: window.dispatchEvent(new CustomEvent('open-create-task', { detail: { patient_id, patient_name, category, title } }))
      category is optional — defaults to 'admin' if omitted. Pass 'maintenance' to
-     land directly on the Maintenance Details fields (e.g. from Failures/Maintenance's
-     "+ Add New Issue"). --}}
+     land directly on the Maintenance Details fields (e.g. from the Huddle's
+     "+ Schedule maintenance", or "Raise repair task" on a reported failure).
+     title is optional — prefills the Task field. --}}
 @php
     $ctmUsers = \App\Models\User::where('branch_id', auth()->user()->branch_id)
                     ->where('is_active', true)
@@ -14,6 +15,7 @@
     x-data="{
         open: false,
         category: 'admin',
+        title: '',
         isRecurring: false,
         linkedPatient: false,
 
@@ -41,6 +43,7 @@
             window.addEventListener('open-create-task', e => {
                 this.open          = true;
                 this.category      = (e.detail && e.detail.category) ? e.detail.category : 'admin';
+                this.title         = (e.detail && e.detail.title) ? e.detail.title : '';
                 this.isRecurring   = false;
                 this.ptId          = '';
                 this.ptQuery       = '';
@@ -81,7 +84,7 @@
             {{-- Task title --}}
             <div style="margin-bottom:14px;">
                 <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Task *</label>
-                <input type="text" name="title" required placeholder="What needs to be done?"
+                <input type="text" name="title" x-model="title" required placeholder="What needs to be done?"
                        style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">
             </div>
 

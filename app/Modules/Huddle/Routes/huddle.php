@@ -34,7 +34,10 @@ Route::middleware(['auth', 'web', 'module:daily_huddle'])->prefix('huddle')->nam
     Route::post('/yesterday-flow/log', [HuddleController::class, 'logYesterdayFollowUp'])
         ->name('yesterday-flow.log');
 
+    // Huddle notes — wins / lows / failures / concerns.
+    // `failures` is the report path for equipment or process breakdowns.
     Route::post('/notes', [HuddleController::class, 'storeNote'])
+        ->middleware('module:daily_huddle,edit')
         ->name('notes.store');
 
     // ── Tasks ────────────────────────────────────────────────────────────────

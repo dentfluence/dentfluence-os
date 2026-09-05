@@ -466,16 +466,96 @@ class HuddleController extends Controller
         }
 
         // ── Huddle notes ──────────────────────────────────────────────────────
+        // Column is `date` (the huddle day) and author FK is `created_by` — the
+        // earlier version filtered on created_at and read a non-existent
+        // user_id column, so this block silently returned nothing.
         $huddleNotes = DB::table('huddle_notes')
-            ->whereDate('created_at', $today->toDateString())
-            ->where('branch_id', $branchId)
+            ->leftJoin('users', 'users.id', '=', 'huddle_notes.created_by')
+            ->whereDate('huddle_notes.date', $today->toDateString())
+            ->where('huddle_notes.branch_id', $branchId)
+            ->select(['huddle_notes.*', 'users.name as author_name'])
             ->get()
             ->groupBy('category')
             ->map(fn($group) => $group->map(fn($n) => [
                 'body'                 => $n->body,
-                'author'               => ['name' => DB::table('users')->where('id', $n->user_id)->value('name') ?? 'Team'],
+                'author'               => ['name' => $n->author_name ?? 'Team'],
                 'created_at_formatted' => Carbon::parse($n->created_at)->format('H:i'),
             ]));
+
+        // ── Failures — equipment/process things that BROKE ────────────────────
+        // A failure is an EVENT, reported in the huddle ("autoclave stopped
+        // heating yesterday"). It is not a stock alert and it is not a
+        // scheduled job. Source of truth: huddle_notes, category = failures,
+        // over the clinic-flow range (yesterday's working day + today).
+        $failuresReported = DB::table('huddle_notes')
+            ->leftJoin('users', 'users.id', '=', 'huddle_notes.created_by')
+            ->where('huddle_notes.branch_id', $branchId)
+            ->where('huddle_notes.category', 'failures')
+            ->whereBetween('huddle_notes.date', [
+                $flowStart->toDateString(),
+                $today->toDateString(),
+            ])
+            ->orderByDesc('huddle_notes.date')
+            ->orderByDesc('huddle_notes.id')
+            ->select([
+                'huddle_notes.id',
+                'huddle_notes.body',
+                'huddle_notes.date',
+                'users.name as author_name',
+            ])
+            ->limit(10)
+            ->get()
+            ->map(fn($n) => [
+                'id'       => $n->id,
+                'body'     => $n->body,
+                'author'   => $n->author_name ?? 'Team',
+                'when'     => Carbon::parse($n->date)->isToday()
+                                ? 'Today'
+                                : Carbon::parse($n->date)->format('d M'),
+                'is_today' => Carbon::parse($n->date)->isToday(),
+            ]);
+
+        // ── Maintenance — scheduled/recurring upkeep jobs ─────────────────────
+        // A maintenance item is a TASK (AC service, autoclave AMC, deep
+        // cleaning). Source of truth: tasks where category = maintenance.
+        // Shows overdue + due in the next 7 days.
+        $maintenanceDue = DB::table('tasks')
+            ->leftJoin('users as assignee', 'assignee.id', '=', 'tasks.assigned_to')
+            ->where('tasks.branch_id', $branchId)
+            ->where('tasks.category', 'maintenance')
+            ->whereIn('tasks.status', ['pending', 'in_progress'])
+            ->whereNull('tasks.deleted_at')
+            ->where(function ($q) use ($today) {
+                $q->whereNull('tasks.due_date')
+                  ->orWhereDate('tasks.due_date', '<=', $today->copy()->addDays(7)->toDateString());
+            })
+            ->orderByRaw('tasks.due_date IS NULL, tasks.due_date ASC')
+            ->select([
+                'tasks.id',
+                'tasks.title',
+                'tasks.due_date',
+                'tasks.maintenance_type',
+                'tasks.is_recurring',
+                'assignee.name as assignee_name',
+            ])
+            ->limit(10)
+            ->get()
+            ->map(function ($t) use ($today) {
+                $due       = $t->due_date ? Carbon::parse($t->due_date) : null;
+                $isOverdue = $due && $due->lt($today);
+                return [
+                    'id'         => $t->id,
+                    'title'      => $t->title,
+                    'type_label' => \App\Models\Task::MAINTENANCE_TYPES[$t->maintenance_type] ?? null,
+                    'assignee'   => $t->assignee_name,
+                    'recurring'  => (bool) $t->is_recurring,
+                    'overdue'    => $isOverdue,
+                    'due_label'  => $due === null
+                        ? 'No date'
+                        : ($due->isToday() ? 'Today'
+                            : ($isOverdue ? 'Overdue · ' . $due->format('d M') : $due->format('d M'))),
+                ];
+            });
 
         // ── Branch tasks — due today or overdue (all staff) ──────────────────
         // Shown in the Huddle Tasks column so the whole team can see what's due.
@@ -774,6 +854,8 @@ class HuddleController extends Controller
             'labRemakesOpen',
             'criticalAlerts',
             'huddleNotes',
+            'failuresReported',
+            'maintenanceDue',
             'myTasks',
             'commList',
             'upcomingDoctorActions',
@@ -1378,8 +1460,42 @@ class HuddleController extends Controller
     /**
      * POST /huddle/notes
      */
+    /**
+     * POST /huddle/notes
+     * Records a huddle note for the current branch and day.
+     *
+     * The `failures` category is how an equipment/process breakdown enters the
+     * system ("autoclave stopped heating"). It is deliberately a note, not a
+     * task: reporting is instant and needs no owner. If the failure needs
+     * repair work, staff raise a maintenance task from the same column.
+     */
     public function storeNote(Request $request): JsonResponse
     {
-        return response()->json(['message' => 'Not yet implemented.']);
+        $data = $request->validate([
+            'category' => ['required', 'string', 'in:wins,lows,failures,concerns'],
+            'body'     => ['required', 'string', 'max:1000'],
+            'date'     => ['nullable', 'date'],
+        ]);
+
+        $user = auth()->user();
+
+        $note = \App\Models\HuddleNote::create([
+            'branch_id'  => $user->branch_id,
+            'date'       => $data['date'] ?? Carbon::today()->toDateString(),
+            'category'   => $data['category'],
+            'body'       => trim($data['body']),
+            'created_by' => $user->id,
+        ]);
+
+        return response()->json([
+            'message' => 'Saved.',
+            'note'    => [
+                'id'       => $note->id,
+                'category' => $note->category,
+                'body'     => $note->body,
+                'author'   => $user->name,
+                'when'     => 'Today',
+            ],
+        ], 201);
     }
 }
