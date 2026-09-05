@@ -281,11 +281,11 @@ Route::middleware('auth')->group(function () {
         // ── Consult Assist (AJAX) ──────────────────────────────────────────────
         // Receives chief complaint text, returns matched specialties from treatment_knowledge.
         Route::post('/consult-assist/suggest', [App\Http\Controllers\ConsultAssistController::class, 'suggest'])
-            ->name('consult-assist.suggest');
+            ->name('consult-assist.suggest')->middleware('module:patients,edit');
         Route::post('/consult-assist/section-guidance', [App\Http\Controllers\ConsultAssistController::class, 'sectionGuidance'])
-            ->name('consult-assist.section-guidance');
+            ->name('consult-assist.section-guidance')->middleware('module:patients,edit');
         Route::post('/consult-assist/tooth-timeline', [App\Http\Controllers\ConsultAssistController::class, 'toothTimeline'])
-            ->name('consult-assist.tooth-timeline');
+            ->name('consult-assist.tooth-timeline')->middleware('module:patients,edit');
 
         // Print routes
         Route::get('/consultations/{consultation}/print', [App\Http\Controllers\ConsultationController::class, 'print'])->name('consultations.print');
@@ -352,9 +352,9 @@ Route::middleware('auth')->group(function () {
     Route::middleware('module:treatments')->group(function () {
         Route::get('/treatment-categories',                                 [TreatmentCategoryController::class, 'index']);
         Route::get('/treatment-categories/{category}/treatments',           [TreatmentCategoryController::class, 'treatments']);
-        Route::post('/treatment-categories',                                [TreatmentCategoryController::class, 'store'])->name('treatment-categories.store');
-        Route::put('/treatment-categories/{treatmentCategory}',             [TreatmentCategoryController::class, 'update'])->name('treatment-categories.update');
-        Route::delete('/treatment-categories/{treatmentCategory}',          [TreatmentCategoryController::class, 'destroy'])->name('treatment-categories.destroy');
+        Route::post('/treatment-categories',                                [TreatmentCategoryController::class, 'store'])->name('treatment-categories.store')->middleware('module:treatments,edit');
+        Route::put('/treatment-categories/{treatmentCategory}',             [TreatmentCategoryController::class, 'update'])->name('treatment-categories.update')->middleware('module:treatments,edit');
+        Route::delete('/treatment-categories/{treatmentCategory}',          [TreatmentCategoryController::class, 'destroy'])->name('treatment-categories.destroy')->middleware('module:treatments,delete');
     });
     // price-list is registered inside the treatments prefix group below
 
@@ -390,75 +390,75 @@ Route::middleware('auth')->group(function () {
             Route::get('/import/template/{source}', [PatientImportExportController::class, 'downloadTemplate'])->name('import.template');
             Route::get('/export',               [PatientImportExportController::class, 'export'])->name('export')->middleware('admin.only');
         });
-        Route::post('/settings/clinic',               [\App\Http\Controllers\Settings\SettingsController::class, 'saveClinic'])->name('settings.clinic.save');
+        Route::post('/settings/clinic',               [\App\Http\Controllers\Settings\SettingsController::class, 'saveClinic'])->name('settings.clinic.save')->middleware('module:settings,edit');
         // HFR / Health Facility capture for the clinic (local, no live ABDM)
         Route::get  ('/settings/clinic/hfr',          [\App\Http\Controllers\Abdm\ClinicHfrController::class, 'edit'])->name('settings.clinic.hfr.edit');
-        Route::patch('/settings/clinic/hfr',          [\App\Http\Controllers\Abdm\ClinicHfrController::class, 'update'])->name('settings.clinic.hfr.update');
-        Route::post('/settings/inventory',            [\App\Http\Controllers\Settings\SettingsController::class, 'saveInventorySettings'])->name('settings.inventory.save');
-        Route::post('/settings/patient-id',           [\App\Http\Controllers\Settings\SettingsController::class, 'savePatientId'])->name('settings.patient_id.save');
-        Route::post('/settings/notifications',        [\App\Http\Controllers\Settings\SettingsController::class, 'saveNotifications'])->name('settings.notifications.save');
-        Route::post('/settings/billing',              [\App\Http\Controllers\Settings\SettingsController::class, 'saveBilling'])->name('settings.billing.save');
-        Route::post('/settings/print',               [\App\Http\Controllers\Settings\SettingsController::class, 'savePrint'])->name('settings.print.save');
+        Route::patch('/settings/clinic/hfr',          [\App\Http\Controllers\Abdm\ClinicHfrController::class, 'update'])->name('settings.clinic.hfr.update')->middleware('module:settings,edit');
+        Route::post('/settings/inventory',            [\App\Http\Controllers\Settings\SettingsController::class, 'saveInventorySettings'])->name('settings.inventory.save')->middleware('module:settings,edit');
+        Route::post('/settings/patient-id',           [\App\Http\Controllers\Settings\SettingsController::class, 'savePatientId'])->name('settings.patient_id.save')->middleware('module:settings,edit');
+        Route::post('/settings/notifications',        [\App\Http\Controllers\Settings\SettingsController::class, 'saveNotifications'])->name('settings.notifications.save')->middleware('module:settings,edit');
+        Route::post('/settings/billing',              [\App\Http\Controllers\Settings\SettingsController::class, 'saveBilling'])->name('settings.billing.save')->middleware('module:settings,edit');
+        Route::post('/settings/print',               [\App\Http\Controllers\Settings\SettingsController::class, 'savePrint'])->name('settings.print.save')->middleware('module:settings,edit');
         // PRE (Relationship Engine) feature-flag toggles — admin-only, same as everything else in this group
-        Route::post('/settings/feature-flags/toggle', [\App\Http\Controllers\Settings\SettingsController::class, 'toggleFeatureFlag'])->name('settings.feature-flags.toggle');
+        Route::post('/settings/feature-flags/toggle', [\App\Http\Controllers\Settings\SettingsController::class, 'toggleFeatureFlag'])->name('settings.feature-flags.toggle')->middleware('admin.only');
         // EMI Providers & Schemes
         $sc = \App\Http\Controllers\Settings\SettingsController::class;
-        Route::post('/settings/emi-providers',                              [$sc, 'storeEmiProvider'])->name('settings.emi.provider.store');
-        Route::post('/settings/emi-providers/{emiProvider}/toggle',        [$sc, 'toggleEmiProvider'])->name('settings.emi.provider.toggle');
-        Route::post('/settings/emi-providers/{emiProvider}/schemes',       [$sc, 'storeEmiScheme'])->name('settings.emi.scheme.store');
-        Route::post('/settings/emi-schemes/{emiScheme}/toggle',            [$sc, 'toggleEmiScheme'])->name('settings.emi.scheme.toggle');
-        Route::post('/settings/emi-schemes/{emiScheme}/cost-passthrough',  [$sc, 'toggleEmiSchemeCostPassthrough'])->name('settings.emi.scheme.passthrough');
+        Route::post('/settings/emi-providers',                              [$sc, 'storeEmiProvider'])->name('settings.emi.provider.store')->middleware('module:settings,edit');
+        Route::post('/settings/emi-providers/{emiProvider}/toggle',        [$sc, 'toggleEmiProvider'])->name('settings.emi.provider.toggle')->middleware('module:settings,edit');
+        Route::post('/settings/emi-providers/{emiProvider}/schemes',       [$sc, 'storeEmiScheme'])->name('settings.emi.scheme.store')->middleware('module:settings,edit');
+        Route::post('/settings/emi-schemes/{emiScheme}/toggle',            [$sc, 'toggleEmiScheme'])->name('settings.emi.scheme.toggle')->middleware('module:settings,edit');
+        Route::post('/settings/emi-schemes/{emiScheme}/cost-passthrough',  [$sc, 'toggleEmiSchemeCostPassthrough'])->name('settings.emi.scheme.passthrough')->middleware('module:settings,edit');
         // AJAX: get schemes for a provider + calculate breakdown
         Route::get('/settings/emi-schemes',                                [$sc, 'emiSchemesForProvider'])->name('settings.emi.schemes.ajax');
-        Route::post('/settings/staff',                [\App\Http\Controllers\Settings\SettingsController::class, 'storeStaff'])->name('settings.staff.store');
-        Route::post('/settings/staff/{user}/toggle',  [\App\Http\Controllers\Settings\SettingsController::class, 'toggleStaff'])->name('settings.staff.toggle');
-        Route::post('/settings/staff/{user}/role',    [\App\Http\Controllers\Settings\SettingsController::class, 'updateStaffRole'])->name('settings.staff.role');
-        Route::post('/settings/staff/{user}/update',  [\App\Http\Controllers\Settings\SettingsController::class, 'updateStaff'])->name('settings.staff.update');
+        Route::post('/settings/staff',                [\App\Http\Controllers\Settings\SettingsController::class, 'storeStaff'])->name('settings.staff.store')->middleware('admin.only');
+        Route::post('/settings/staff/{user}/toggle',  [\App\Http\Controllers\Settings\SettingsController::class, 'toggleStaff'])->name('settings.staff.toggle')->middleware('admin.only');
+        Route::post('/settings/staff/{user}/role',    [\App\Http\Controllers\Settings\SettingsController::class, 'updateStaffRole'])->name('settings.staff.role')->middleware('admin.only');
+        Route::post('/settings/staff/{user}/update',  [\App\Http\Controllers\Settings\SettingsController::class, 'updateStaff'])->name('settings.staff.update')->middleware('admin.only');
         Route::get('/settings/staff/activity-log',    [\App\Http\Controllers\Settings\SettingsController::class, 'activityLog'])->name('settings.staff.activity-log');
 
         // ── Calendar Preferences ───────────────────────────────────────────────
-        Route::post('/settings/calendar', [\App\Http\Controllers\Settings\SettingsController::class, 'saveCalendarPrefs'])->name('settings.calendar.save');
+        Route::post('/settings/calendar', [\App\Http\Controllers\Settings\SettingsController::class, 'saveCalendarPrefs'])->name('settings.calendar.save')->middleware('module:settings,edit');
 
         // ── Operatories ────────────────────────────────────────────────────────
         Route::prefix('settings/operatories')->name('settings.operatories.')->group(function () {
             $oc = \App\Http\Controllers\Settings\OperatoryController::class;
             Route::get   ('/',                  [$oc, 'index'])->name('index');
-            Route::post  ('/',                  [$oc, 'store'])->name('store');
-            Route::patch ('/{operatory}',       [$oc, 'update'])->name('update');
-            Route::post  ('/{operatory}/toggle',[$oc, 'toggle'])->name('toggle');
-            Route::post  ('/reorder',           [$oc, 'reorder'])->name('reorder');
-            Route::delete('/{operatory}',       [$oc, 'destroy'])->name('destroy');
+            Route::post  ('/',                  [$oc, 'store'])->name('store')->middleware('module:settings,edit');
+            Route::patch ('/{operatory}',       [$oc, 'update'])->name('update')->middleware('module:settings,edit');
+            Route::post  ('/{operatory}/toggle',[$oc, 'toggle'])->name('toggle')->middleware('module:settings,edit');
+            Route::post  ('/reorder',           [$oc, 'reorder'])->name('reorder')->middleware('module:settings,edit');
+            Route::delete('/{operatory}',       [$oc, 'destroy'])->name('destroy')->middleware('module:settings,delete');
         });
 
         // Masters (treatments, complaints, etc.)
         Route::prefix('settings/masters')->name('settings.masters.')->group(function () {
             $c = \App\Http\Controllers\Settings\MastersController::class;
-            Route::post('/treatments',          [$c, 'storeTreatment'])->name('treatments.store');
-            Route::delete('/treatments/{id}',   [$c, 'destroyTreatment'])->name('treatments.destroy');
-            Route::post('/complaints',          [$c, 'storeComplaint'])->name('complaints.store');
-            Route::delete('/complaints/{id}',   [$c, 'destroyComplaint'])->name('complaints.destroy');
-            Route::post('/diagnoses',           [$c, 'storeDiagnosis'])->name('diagnoses.store');
-            Route::delete('/diagnoses/{id}',    [$c, 'destroyDiagnosis'])->name('diagnoses.destroy');
-            Route::post('/investigations',      [$c, 'storeInvestigation'])->name('investigations.store');
-            Route::delete('/investigations/{id}',[$c, 'destroyInvestigation'])->name('investigations.destroy');
+            Route::post('/treatments',          [$c, 'storeTreatment'])->name('treatments.store')->middleware('module:settings,edit');
+            Route::delete('/treatments/{id}',   [$c, 'destroyTreatment'])->name('treatments.destroy')->middleware('module:settings,delete');
+            Route::post('/complaints',          [$c, 'storeComplaint'])->name('complaints.store')->middleware('module:settings,edit');
+            Route::delete('/complaints/{id}',   [$c, 'destroyComplaint'])->name('complaints.destroy')->middleware('module:settings,delete');
+            Route::post('/diagnoses',           [$c, 'storeDiagnosis'])->name('diagnoses.store')->middleware('module:settings,edit');
+            Route::delete('/diagnoses/{id}',    [$c, 'destroyDiagnosis'])->name('diagnoses.destroy')->middleware('module:settings,delete');
+            Route::post('/investigations',      [$c, 'storeInvestigation'])->name('investigations.store')->middleware('module:settings,edit');
+            Route::delete('/investigations/{id}',[$c, 'destroyInvestigation'])->name('investigations.destroy')->middleware('module:settings,delete');
             // Phase 4 — Material/Brand masters (docs/gap-analysis-treatment-planning-knowledge-bank.md)
-            Route::post('/materials',           [$c, 'storeMaterial'])->name('materials.store');
-            Route::delete('/materials/{id}',    [$c, 'destroyMaterial'])->name('materials.destroy');
-            Route::post('/brands',              [$c, 'storeBrand'])->name('brands.store');
-            Route::delete('/brands/{id}',       [$c, 'destroyBrand'])->name('brands.destroy');
+            Route::post('/materials',           [$c, 'storeMaterial'])->name('materials.store')->middleware('module:settings,edit');
+            Route::delete('/materials/{id}',    [$c, 'destroyMaterial'])->name('materials.destroy')->middleware('module:settings,delete');
+            Route::post('/brands',              [$c, 'storeBrand'])->name('brands.store')->middleware('module:settings,edit');
+            Route::delete('/brands/{id}',       [$c, 'destroyBrand'])->name('brands.destroy')->middleware('module:settings,delete');
             // Clinical
-            Route::post('/medicines',           [$c, 'storeMedicine'])->name('medicines.store');
-            Route::delete('/medicines/{id}',    [$c, 'destroyMedicine'])->name('medicines.destroy');
+            Route::post('/medicines',           [$c, 'storeMedicine'])->name('medicines.store')->middleware('module:settings,edit');
+            Route::delete('/medicines/{id}',    [$c, 'destroyMedicine'])->name('medicines.destroy')->middleware('module:settings,delete');
             // Patient defaults
-            Route::post('/medical-conditions',        [$c, 'storeMedicalCondition'])->name('medical_conditions.store');
-            Route::delete('/medical-conditions/{id}', [$c, 'destroyMedicalCondition'])->name('medical_conditions.destroy');
-            Route::post('/dental-conditions',         [$c, 'storeDentalCondition'])->name('dental_conditions.store');
-            Route::delete('/dental-conditions/{id}',  [$c, 'destroyDentalCondition'])->name('dental_conditions.destroy');
-            Route::post('/patient-sources',           [$c, 'storePatientSource'])->name('patient_sources.store');
-            Route::delete('/patient-sources/{id}',    [$c, 'destroyPatientSource'])->name('patient_sources.destroy');
+            Route::post('/medical-conditions',        [$c, 'storeMedicalCondition'])->name('medical_conditions.store')->middleware('module:settings,edit');
+            Route::delete('/medical-conditions/{id}', [$c, 'destroyMedicalCondition'])->name('medical_conditions.destroy')->middleware('module:settings,delete');
+            Route::post('/dental-conditions',         [$c, 'storeDentalCondition'])->name('dental_conditions.store')->middleware('module:settings,edit');
+            Route::delete('/dental-conditions/{id}',  [$c, 'destroyDentalCondition'])->name('dental_conditions.destroy')->middleware('module:settings,delete');
+            Route::post('/patient-sources',           [$c, 'storePatientSource'])->name('patient_sources.store')->middleware('module:settings,edit');
+            Route::delete('/patient-sources/{id}',    [$c, 'destroyPatientSource'])->name('patient_sources.destroy')->middleware('module:settings,delete');
             // Message templates
-            Route::post('/message-templates',         [$c, 'storeMessageTemplate'])->name('message_templates.store');
-            Route::delete('/message-templates/{id}',  [$c, 'destroyMessageTemplate'])->name('message_templates.destroy');
+            Route::post('/message-templates',         [$c, 'storeMessageTemplate'])->name('message_templates.store')->middleware('module:settings,edit');
+            Route::delete('/message-templates/{id}',  [$c, 'destroyMessageTemplate'])->name('message_templates.destroy')->middleware('module:settings,delete');
         });
 
         // Roles & Permissions API moved to hr.roles.* (admin.only-gated) —
@@ -470,7 +470,7 @@ Route::middleware('auth')->group(function () {
         // Tags
         Route::prefix('settings/tags')->name('settings.tags.')->group(function () {
             Route::get('/',         [TagController::class, 'index'])->name('index');
-            Route::post('/',        [TagController::class, 'store'])->name('store');
+            Route::post('/',        [TagController::class, 'store'])->name('store')->middleware('module:settings,edit');
             Route::put('/{tag}',    [TagController::class, 'update'])->name('update');
             Route::delete('/{tag}', [TagController::class, 'destroy'])->name('destroy');
         });
@@ -479,9 +479,9 @@ Route::middleware('auth')->group(function () {
         Route::prefix('settings/knowledge-bank')->name('settings.knowledge-bank.')->group(function () {
             $kb = \App\Http\Controllers\Settings\KnowledgeBankController::class;
             Route::get('/{diagnosis}',           [$kb, 'manage'])->name('manage');
-            Route::post('/{diagnosis}/options',  [$kb, 'store'])->name('options.store');
-            Route::patch('/options/{option}',    [$kb, 'update'])->name('options.update');
-            Route::delete('/options/{option}',   [$kb, 'destroy'])->name('options.destroy');
+            Route::post('/{diagnosis}/options',  [$kb, 'store'])->name('options.store')->middleware('module:settings,edit');
+            Route::patch('/options/{option}',    [$kb, 'update'])->name('options.update')->middleware('module:settings,edit');
+            Route::delete('/options/{option}',   [$kb, 'destroy'])->name('options.destroy')->middleware('module:settings,delete');
         });
     }); // end module:settings
 
@@ -492,36 +492,36 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/',                                  [$tc, 'index'])->name('index');
         Route::get('/create',                            [$tc, 'create'])->name('create');
-        Route::post('/',                                 [$tc, 'store'])->name('store');
+        Route::post('/',                                 [$tc, 'store'])->name('store')->middleware('module:treatments,edit');
         // Static routes — must all be before /{treatment} wildcard
         Route::get('/price-list',                        [$tcc, 'priceList'])->name('price-list');
         Route::get('/patients/search',                   [$tc, 'searchPatients'])->name('patients.search');
         Route::get('/{treatment}',                       [$tc, 'show'])->name('show');
-        Route::put('/{treatment}',                       [$tc, 'update'])->name('update');
-        Route::delete('/{treatment}',                    [$tc, 'destroy'])->name('destroy');
+        Route::put('/{treatment}',                       [$tc, 'update'])->name('update')->middleware('module:treatments,edit');
+        Route::delete('/{treatment}',                    [$tc, 'destroy'])->name('destroy')->middleware('module:treatments,delete');
 
         // SOP
-        Route::post('/{treatment}/sop',                  [$tc, 'saveSop'])->name('sop.save');
+        Route::post('/{treatment}/sop',                  [$tc, 'saveSop'])->name('sop.save')->middleware('module:treatments,edit');
 
         // Consent (2026-07-13) — split out of SOP tab, own save route so it
         // never touches doctor_steps/pre_instructions/etc.
-        Route::post('/{treatment}/consent',               [$tc, 'saveConsent'])->name('consent.save');
+        Route::post('/{treatment}/consent',               [$tc, 'saveConsent'])->name('consent.save')->middleware('module:treatments,edit');
 
         // Stages
-        Route::post('/{treatment}/stages',               [$tc, 'saveStages'])->name('stages.save');
+        Route::post('/{treatment}/stages',               [$tc, 'saveStages'])->name('stages.save')->middleware('module:treatments,edit');
 
         // Rules
-        Route::post('/{treatment}/rules',                [$tc, 'saveRules'])->name('rules.save');
+        Route::post('/{treatment}/rules',                [$tc, 'saveRules'])->name('rules.save')->middleware('module:treatments,edit');
 
         // Media
-        Route::post('/{treatment}/media',                [$tc, 'uploadMedia'])->name('media.upload');
-        Route::delete('/media/{media}',                  [$tc, 'deleteMedia'])->name('media.delete');
+        Route::post('/{treatment}/media',                [$tc, 'uploadMedia'])->name('media.upload')->middleware('module:treatments,edit');
+        Route::delete('/media/{media}',                  [$tc, 'deleteMedia'])->name('media.delete')->middleware('module:treatments,delete');
 
         // Review
-        Route::post('/{treatment}/review',               [$tc, 'markReviewed'])->name('review.mark');
+        Route::post('/{treatment}/review',               [$tc, 'markReviewed'])->name('review.mark')->middleware('module:treatments,edit');
 
         // Intelligence (P2C8)
-        Route::post('/{treatment}/intelligence',         [$tc, 'saveIntelligence'])->name('intelligence.save');
+        Route::post('/{treatment}/intelligence',         [$tc, 'saveIntelligence'])->name('intelligence.save')->middleware('module:treatments,edit');
 
         // Print — patient-facing instruction sheet (pre_op, post_op, consent)
         Route::get('/{treatment}/print/{type}',          [$tc, 'printView'])->name('print');
@@ -534,29 +534,43 @@ Route::middleware('auth')->group(function () {
     // ⚠ Non-resource routes must be defined BEFORE Route::resource to avoid wildcard conflicts
     Route::middleware('module:finance')->group(function () {
         Route::post('/billing/coupon/validate',
-            [\App\Http\Controllers\BillingController::class, 'validateCoupon'])->name('billing.validateCoupon');
+            [\App\Http\Controllers\BillingController::class, 'validateCoupon'])->name('billing.validateCoupon')->middleware('module:finance,edit');
         // F4a — membership benefits AJAX (before resource to avoid {billing} catching it)
         Route::post('/billing/membership/benefits',
-            [\App\Http\Controllers\BillingController::class, 'membershipBenefits'])->name('billing.membership.benefits');
+            [\App\Http\Controllers\BillingController::class, 'membershipBenefits'])->name('billing.membership.benefits')->middleware('module:finance,edit');
         Route::post('/billing-prompt/{prompt}/dismiss',
-            [\App\Http\Controllers\BillingController::class, 'dismissPrompt'])->name('billing.dismissPrompt');
+            [\App\Http\Controllers\BillingController::class, 'dismissPrompt'])->name('billing.dismissPrompt')->middleware('module:finance,edit');
         // GET: "Build Invoice" opens the editable draft form pre-filled from the prompt's visit items
         Route::get('/patients/{patient}/billing-prompt/{prompt}/create-invoice',
             [\App\Http\Controllers\BillingController::class, 'createFromPrompt'])->name('billing.createFromPrompt');
         // F4a — patient membership enrollment
         Route::post('/patients/{patient}/membership/enroll',
-            [\App\Http\Controllers\BillingController::class, 'enrollMembership'])->name('billing.membership.enroll');
+            [\App\Http\Controllers\BillingController::class, 'enrollMembership'])->name('billing.membership.enroll')->middleware('module:finance,edit');
         // Resource uses ->parameters() so the route param is {invoice}
+        // W-3: split so writes require finance Edit and destroy requires finance
+        // Delete, instead of all seven actions riding the group's view gate.
+        // Same pattern as the patients.consultations split above.
         Route::resource('billing', \App\Http\Controllers\BillingController::class)
-             ->parameters(['billing' => 'invoice']);
+             ->parameters(['billing' => 'invoice'])
+             ->only(['index', 'create', 'show', 'edit']);
+        Route::middleware('module:finance,edit')->group(function () {
+            Route::resource('billing', \App\Http\Controllers\BillingController::class)
+                 ->parameters(['billing' => 'invoice'])
+                 ->only(['store', 'update']);
+        });
+        Route::middleware('module:finance,delete')->group(function () {
+            Route::resource('billing', \App\Http\Controllers\BillingController::class)
+                 ->parameters(['billing' => 'invoice'])
+                 ->only(['destroy']);
+        });
         Route::post('/billing/{invoice}/cancel',      [\App\Http\Controllers\BillingController::class, 'cancel'])->name('billing.cancel');
-        Route::post('/billing/{invoice}/payment',     [\App\Http\Controllers\BillingController::class, 'recordPayment'])->name('billing.payment');
+        Route::post('/billing/{invoice}/payment',     [\App\Http\Controllers\BillingController::class, 'recordPayment'])->name('billing.payment')->middleware('module:finance,edit');
         // Patient-level payment — ONE tender allocated oldest-first across every
         // open invoice, surplus to Patient Credit. Additive: the per-invoice
         // route above is untouched and still the only path for EMI / card
         // convenience fee.
         Route::post('/patients/{patient}/payment',
-            [\App\Http\Controllers\BillingController::class, 'recordPatientPayment'])->name('billing.patientPayment');
+            [\App\Http\Controllers\BillingController::class, 'recordPatientPayment'])->name('billing.patientPayment')->middleware('module:finance,edit');
         Route::get('/patients/{patient}/receipt/{receipt}',
             [\App\Http\Controllers\BillingController::class, 'showAllocationReceipt'])->name('billing.patientReceipt');
         // A2 — correct/reverse a consolidated PAY- tender. Admin-only inside the
@@ -570,8 +584,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/billing/from-plan/{plan}', [\App\Http\Controllers\BillingController::class, 'storeFromPlan'])
              ->middleware('module:finance,edit')->name('billing.storeFromPlan');
         // Manual discount (permission-gated, audited)
-        Route::post('/billing/{invoice}/manual-discount',        [\App\Http\Controllers\BillingController::class, 'applyManualDiscount'])->name('billing.manualDiscount.apply');
-        Route::post('/billing/{invoice}/manual-discount/remove', [\App\Http\Controllers\BillingController::class, 'removeManualDiscount'])->name('billing.manualDiscount.remove');
+        Route::post('/billing/{invoice}/manual-discount',        [\App\Http\Controllers\BillingController::class, 'applyManualDiscount'])->name('billing.manualDiscount.apply')->middleware('module:finance,edit');
+        Route::post('/billing/{invoice}/manual-discount/remove', [\App\Http\Controllers\BillingController::class, 'removeManualDiscount'])->name('billing.manualDiscount.remove')->middleware('module:finance,edit');
         Route::get('/billing/{invoice}/print',        [\App\Http\Controllers\BillingController::class, 'printInvoice'])->name('billing.print');
         // Auth-gated destructive actions
         Route::post('/billing/{invoice}/delete-auth', [\App\Http\Controllers\BillingController::class, 'destroyWithAuth'])->name('billing.deleteAuth');
@@ -774,12 +788,12 @@ Route::middleware('auth')->group(function () {
     /* ── Tasks Module ── */
     Route::middleware('module:tasks')->prefix('tasks')->name('tasks.')->group(function () {
         Route::get('/',               [\App\Http\Controllers\Communication\TaskController::class, 'index'])->name('index');
-        Route::post('/',              [\App\Http\Controllers\Communication\TaskController::class, 'store'])->name('store');
+        Route::post('/',              [\App\Http\Controllers\Communication\TaskController::class, 'store'])->name('store')->middleware('module:tasks,edit');
         Route::get('/my',             [\App\Http\Controllers\Communication\TaskController::class, 'myTasks'])->name('mine');
         Route::get('/overdue',        [\App\Http\Controllers\Communication\TaskController::class, 'overdue'])->name('overdue');
         Route::post('/{task}/done',   [\App\Http\Controllers\Communication\TaskController::class, 'markDone'])->name('done');
         Route::post('/{task}/evidence', [\App\Http\Controllers\Communication\TaskController::class, 'uploadEvidence'])->name('evidence');
-        Route::post('/{task}/escalate', [\App\Http\Controllers\Communication\TaskController::class, 'escalate'])->name('escalate');
+        Route::post('/{task}/escalate', [\App\Http\Controllers\Communication\TaskController::class, 'escalate'])->name('escalate')->middleware('module:tasks,edit');
     });
 
     /* ── Smart Treatment Presentation (new, independent module — Slice A+B) ──
@@ -874,72 +888,72 @@ Route::middleware('auth')->group(function () {
         Route::get('/',                        [LabController::class, 'index'])->name('index');
         Route::get('/dashboard',               [LabController::class, 'dashboard'])->name('dashboard');
         Route::get('/create',                  [LabController::class, 'create'])->name('create');
-        Route::post('/',                       [LabController::class, 'store'])->name('store');
+        Route::post('/',                       [LabController::class, 'store'])->name('store')->middleware('module:lab,edit');
         Route::get('/subtypes',                [LabController::class, 'subtypes'])->name('subtypes');
 
         // Attachments (static segment before {labCase} wildcard)
-        Route::delete('/attachments/{attachment}', [LabController::class, 'attachmentDestroy'])->name('attachments.destroy');
+        Route::delete('/attachments/{attachment}', [LabController::class, 'attachmentDestroy'])->name('attachments.destroy')->middleware('module:lab,delete');
 
         Route::get('/{labCase}',               [LabController::class, 'show'])->whereNumber('labCase')->name('show');
         Route::get('/{labCase}/edit',          [LabController::class, 'edit'])->name('edit');
-        Route::put('/{labCase}',               [LabController::class, 'update'])->name('update');
-        Route::post('/{labCase}/status/{to}',  [LabController::class, 'transition'])->name('transition');
-        Route::post('/{labCase}/duplicate',    [LabController::class, 'duplicate'])->name('duplicate');
+        Route::put('/{labCase}',               [LabController::class, 'update'])->name('update')->middleware('module:lab,edit');
+        Route::post('/{labCase}/status/{to}',  [LabController::class, 'transition'])->name('transition')->middleware('module:lab,edit');
+        Route::post('/{labCase}/duplicate',    [LabController::class, 'duplicate'])->name('duplicate')->middleware('module:lab,edit');
         Route::delete('/{labCase}',            [LabController::class, 'destroy'])->name('destroy');   // archive (soft delete)
-        Route::post('/{labCase}/restore',      [LabController::class, 'restore'])->withTrashed()->name('restore');
-        Route::post('/{labCase}/attachments',  [LabController::class, 'attachmentStore'])->name('attachments.store');
+        Route::post('/{labCase}/restore',      [LabController::class, 'restore'])->withTrashed()->name('restore')->middleware('module:lab,edit');
+        Route::post('/{labCase}/attachments',  [LabController::class, 'attachmentStore'])->name('attachments.store')->middleware('module:lab,edit');
         Route::get('/{labCase}/print',         [LabController::class, 'print'])->name('print');
 
         // Prescription routes
-        Route::post('/{labCase}/prescription',         [LabController::class, 'prescriptionStore'])->name('prescription.store');
-        Route::put('/{labCase}/prescription',          [LabController::class, 'prescriptionUpdate'])->name('prescription.update');
+        Route::post('/{labCase}/prescription',         [LabController::class, 'prescriptionStore'])->name('prescription.store')->middleware('module:lab,edit');
+        Route::put('/{labCase}/prescription',          [LabController::class, 'prescriptionUpdate'])->name('prescription.update')->middleware('module:lab,edit');
 
         // Rating route
-        Route::post('/{labCase}/rate',                 [LabController::class, 'ratingStore'])->name('rating.store');
+        Route::post('/{labCase}/rate',                 [LabController::class, 'ratingStore'])->name('rating.store')->middleware('module:lab,edit');
 
         // Prescription template routes (AJAX)
         Route::get('/templates',                       [LabController::class, 'templateIndex'])->name('templates.index');
-        Route::post('/templates',                      [LabController::class, 'templateStore'])->name('templates.store');
-        Route::delete('/templates/{template}',         [LabController::class, 'templateDestroy'])->name('templates.destroy');
+        Route::post('/templates',                      [LabController::class, 'templateStore'])->name('templates.store')->middleware('module:lab,edit');
+        Route::delete('/templates/{template}',         [LabController::class, 'templateDestroy'])->name('templates.destroy')->middleware('module:lab,delete');
     });
 
     /* ── Lab Monthly Reconciliation (Phase 2) ── */
     Route::middleware('module:lab')->prefix('lab/reconciliation')->name('lab.reconciliation.')->group(function () {
         Route::get('/',                                    [\App\Http\Controllers\LabReconciliationController::class, 'index'])->name('index');
         Route::get('/create',                              [\App\Http\Controllers\LabReconciliationController::class, 'create'])->name('create');
-        Route::post('/',                                   [\App\Http\Controllers\LabReconciliationController::class, 'store'])->name('store');
+        Route::post('/',                                   [\App\Http\Controllers\LabReconciliationController::class, 'store'])->name('store')->middleware('module:lab,edit');
         Route::get('/eligible-cases',                      [\App\Http\Controllers\LabReconciliationController::class, 'eligibleCases'])->name('eligible-cases');
         Route::get('/{reconciliation}',                    [\App\Http\Controllers\LabReconciliationController::class, 'show'])->name('show');
-        Route::post('/{reconciliation}/submit',            [\App\Http\Controllers\LabReconciliationController::class, 'submit'])->name('submit');
-        Route::post('/{reconciliation}/approve',           [\App\Http\Controllers\LabReconciliationController::class, 'approve'])->name('approve');
-        Route::post('/{reconciliation}/dispute',           [\App\Http\Controllers\LabReconciliationController::class, 'dispute'])->name('dispute');
-        Route::post('/{reconciliation}/items/{item}/update', [\App\Http\Controllers\LabReconciliationController::class, 'updateItem'])->name('items.update');
-        Route::delete('/{reconciliation}',                 [\App\Http\Controllers\LabReconciliationController::class, 'destroy'])->name('destroy');
+        Route::post('/{reconciliation}/submit',            [\App\Http\Controllers\LabReconciliationController::class, 'submit'])->name('submit')->middleware('module:lab,edit');
+        Route::post('/{reconciliation}/approve',           [\App\Http\Controllers\LabReconciliationController::class, 'approve'])->name('approve')->middleware('module:lab,edit');
+        Route::post('/{reconciliation}/dispute',           [\App\Http\Controllers\LabReconciliationController::class, 'dispute'])->name('dispute')->middleware('module:lab,edit');
+        Route::post('/{reconciliation}/items/{item}/update', [\App\Http\Controllers\LabReconciliationController::class, 'updateItem'])->name('items.update')->middleware('module:lab,edit');
+        Route::delete('/{reconciliation}',                 [\App\Http\Controllers\LabReconciliationController::class, 'destroy'])->name('destroy')->middleware('module:lab,delete');
     });
 
     /* ── Lab Vendors master (Phase 1 enhanced) ── */
     Route::middleware('module:lab')->prefix('lab-vendors')->name('lab-vendors.')->group(function () {
         Route::get('/',                 [\App\Http\Controllers\LabVendorController::class, 'index'])->name('index');
-        Route::post('/',                [\App\Http\Controllers\LabVendorController::class, 'store'])->name('store');
-        Route::put('/{labVendor}',      [\App\Http\Controllers\LabVendorController::class, 'update'])->name('update');
-        Route::delete('/{labVendor}',   [\App\Http\Controllers\LabVendorController::class, 'destroy'])->name('destroy');
+        Route::post('/',                [\App\Http\Controllers\LabVendorController::class, 'store'])->name('store')->middleware('module:lab,edit');
+        Route::put('/{labVendor}',      [\App\Http\Controllers\LabVendorController::class, 'update'])->name('update')->middleware('module:lab,edit');
+        Route::delete('/{labVendor}',   [\App\Http\Controllers\LabVendorController::class, 'destroy'])->name('destroy')->middleware('module:lab,delete');
 
         // Phase 1 — Contacts
-        Route::post('/{labVendor}/contacts',                    [\App\Http\Controllers\LabVendorController::class, 'storeContact'])->name('contacts.store');
+        Route::post('/{labVendor}/contacts',                    [\App\Http\Controllers\LabVendorController::class, 'storeContact'])->name('contacts.store')->middleware('module:lab,edit');
         Route::put('/{labVendor}/contacts/{contact}',           [\App\Http\Controllers\LabVendorController::class, 'updateContact'])->name('contacts.update');
         Route::delete('/{labVendor}/contacts/{contact}',        [\App\Http\Controllers\LabVendorController::class, 'destroyContact'])->name('contacts.destroy');
 
         // Phase 1 — Services
-        Route::post('/{labVendor}/services',                    [\App\Http\Controllers\LabVendorController::class, 'storeService'])->name('services.store');
+        Route::post('/{labVendor}/services',                    [\App\Http\Controllers\LabVendorController::class, 'storeService'])->name('services.store')->middleware('module:lab,edit');
         Route::put('/{labVendor}/services/{service}',           [\App\Http\Controllers\LabVendorController::class, 'updateService'])->name('services.update');
         Route::delete('/{labVendor}/services/{service}',        [\App\Http\Controllers\LabVendorController::class, 'destroyService'])->name('services.destroy');
-        Route::post('/{labVendor}/services/bulk',               [\App\Http\Controllers\LabVendorController::class, 'storeServicesBulk'])->name('services.bulk');
+        Route::post('/{labVendor}/services/bulk',               [\App\Http\Controllers\LabVendorController::class, 'storeServicesBulk'])->name('services.bulk')->middleware('module:lab,edit');
     });
 
     /* ── Patient-nested lab cases (used by patient profile Lab tab) ── */
     Route::middleware('module:lab')->prefix('patients/{patient}/lab-cases')->name('patients.lab.')->group(function () {
         Route::get('/',  [LabController::class, 'patientCases'])->name('index');
-        Route::post('/', [LabController::class, 'store'])->name('store');
+        Route::post('/', [LabController::class, 'store'])->name('store')->middleware('module:lab,edit');
     });
     /* ── Accounts & Finance Module ── */
     Route::middleware('module:finance')->prefix('finance')->name('finance.')->group(function () {
@@ -950,46 +964,46 @@ Route::middleware('auth')->group(function () {
         // Income (tabs: invoices | receipts | bills | trash)
         Route::get('/income',                           [FinanceController::class, 'income'])->name('income');
         Route::get('/income/export',                    [FinanceController::class, 'incomeExport'])->name('income.export');
-        Route::post('/income/trash/invoice/{id}/restore', [FinanceController::class, 'restoreInvoice'])->name('income.trash.invoice.restore');
-        Route::post('/income/trash/receipt/{id}/restore', [FinanceController::class, 'restoreReceipt'])->name('income.trash.receipt.restore');
-        Route::post('/income/trash/bill/{id}/restore',    [FinanceController::class, 'restoreBill'])->name('income.trash.bill.restore');
+        Route::post('/income/trash/invoice/{id}/restore', [FinanceController::class, 'restoreInvoice'])->name('income.trash.invoice.restore')->middleware('module:finance,edit');
+        Route::post('/income/trash/receipt/{id}/restore', [FinanceController::class, 'restoreReceipt'])->name('income.trash.receipt.restore')->middleware('module:finance,edit');
+        Route::post('/income/trash/bill/{id}/restore',    [FinanceController::class, 'restoreBill'])->name('income.trash.bill.restore')->middleware('module:finance,edit');
 
         // Expenses
         Route::get('/expenses',             [FinanceController::class, 'expenses'])->name('expenses');
         Route::get('/expenses/create',      [FinanceController::class, 'expenseCreate'])->name('expenses.create');
-        Route::post('/expenses/scan',       [FinanceController::class, 'expenseScan'])->name('expenses.scan'); // 📷 read a bill photo
-        Route::post('/expenses',            [FinanceController::class, 'expenseStore'])->name('expenses.store');
+        Route::post('/expenses/scan',       [FinanceController::class, 'expenseScan'])->name('expenses.scan')->middleware('module:finance,edit'); // 📷 read a bill photo
+        Route::post('/expenses',            [FinanceController::class, 'expenseStore'])->name('expenses.store')->middleware('module:finance,edit');
         Route::get('/expenses/{expense}/edit',   [FinanceController::class, 'expenseEdit'])->name('expenses.edit');
-        Route::put('/expenses/{expense}',        [FinanceController::class, 'expenseUpdate'])->name('expenses.update');
-        Route::post('/expenses/{expense}/mark-paid', [FinanceController::class, 'expenseMarkPaid'])->name('expenses.mark-paid');
+        Route::put('/expenses/{expense}',        [FinanceController::class, 'expenseUpdate'])->name('expenses.update')->middleware('module:finance,edit');
+        Route::post('/expenses/{expense}/mark-paid', [FinanceController::class, 'expenseMarkPaid'])->name('expenses.mark-paid')->middleware('module:finance,edit');
         Route::get('/expenses/export',      [FinanceController::class, 'expenseExport'])->name('expenses.export');
-        Route::delete('/expenses/{expense}', [FinanceController::class, 'expenseDestroy'])->name('expenses.destroy');
+        Route::delete('/expenses/{expense}', [FinanceController::class, 'expenseDestroy'])->name('expenses.destroy')->middleware('module:finance,delete');
 
         // Expense Categories — inline quick-add from the Expense form
-        Route::post('/expense-categories', [FinanceController::class, 'categoryStore'])->name('expense-categories.store');
+        Route::post('/expense-categories', [FinanceController::class, 'categoryStore'])->name('expense-categories.store')->middleware('module:finance,edit');
 
         // Vendor — inline quick-add from the Expense form
-        Route::post('/vendors/quick-store', [FinanceController::class, 'vendorQuickStore'])->name('vendors.quick-store');
+        Route::post('/vendors/quick-store', [FinanceController::class, 'vendorQuickStore'])->name('vendors.quick-store')->middleware('module:finance,edit');
 
         // Vendors
         Route::get('/vendors',              [FinanceController::class, 'vendors'])->name('vendors');
         Route::get('/vendors/create',       [FinanceController::class, 'vendorCreate'])->name('vendors.create');
-        Route::post('/vendors',             [FinanceController::class, 'vendorStore'])->name('vendors.store');
+        Route::post('/vendors',             [FinanceController::class, 'vendorStore'])->name('vendors.store')->middleware('module:finance,edit');
         Route::get('/vendors/{vendor}/edit', [FinanceController::class, 'vendorEdit'])->name('vendors.edit');
-        Route::put('/vendors/{vendor}',     [FinanceController::class, 'vendorUpdate'])->name('vendors.update');
-        Route::delete('/vendors/{vendor}',  [FinanceController::class, 'vendorDestroy'])->name('vendors.destroy');
+        Route::put('/vendors/{vendor}',     [FinanceController::class, 'vendorUpdate'])->name('vendors.update')->middleware('module:finance,edit');
+        Route::delete('/vendors/{vendor}',  [FinanceController::class, 'vendorDestroy'])->name('vendors.destroy')->middleware('module:finance,delete');
 
         // Payroll
         Route::get('/payroll',              [FinanceController::class, 'payroll'])->name('payroll');
-        Route::post('/payroll',             [FinanceController::class, 'payrollStore'])->name('payroll.store');
-        Route::delete('/payroll/{payroll}', [FinanceController::class, 'payrollDestroy'])->name('payroll.destroy');
+        Route::post('/payroll',             [FinanceController::class, 'payrollStore'])->name('payroll.store')->middleware('module:finance,edit');
+        Route::delete('/payroll/{payroll}', [FinanceController::class, 'payrollDestroy'])->name('payroll.destroy')->middleware('module:finance,delete');
 
         // Cashbook & Banking
         Route::get('/cashbook',             [FinanceController::class, 'cashbook'])->name('cashbook');
         Route::get('/banking',              [FinanceController::class, 'banking'])->name('banking');
-        Route::post('/banking',             [FinanceController::class, 'bankAccountStore'])->name('banking.store');
-        Route::put('/banking/{bankAccount}', [FinanceController::class, 'bankAccountUpdate'])->name('banking.update');
-        Route::post('/banking/{bankAccount}/toggle', [FinanceController::class, 'bankAccountToggle'])->name('banking.toggle');
+        Route::post('/banking',             [FinanceController::class, 'bankAccountStore'])->name('banking.store')->middleware('module:finance,edit');
+        Route::put('/banking/{bankAccount}', [FinanceController::class, 'bankAccountUpdate'])->name('banking.update')->middleware('module:finance,edit');
+        Route::post('/banking/{bankAccount}/toggle', [FinanceController::class, 'bankAccountToggle'])->name('banking.toggle')->middleware('module:finance,edit');
 
         // CA Export
         Route::get('/ca-export',            [FinanceController::class, 'caExport'])->name('ca-export');
@@ -1022,7 +1036,7 @@ Route::middleware('auth')->group(function () {
         Route::prefix('wallets/{patient}')->name('wallets.')->group(function () {
             Route::get('/',              [\App\Http\Controllers\Finance\WalletController::class, 'show'])->name('show');
             Route::get('/credit',        [\App\Http\Controllers\Finance\WalletController::class, 'creditForm'])->name('credit-form');
-            Route::post('/credit',       [\App\Http\Controllers\Finance\WalletController::class, 'credit'])->name('credit');
+            Route::post('/credit',       [\App\Http\Controllers\Finance\WalletController::class, 'credit'])->name('credit')->middleware('module:finance,edit');
             Route::get('/credit-note/{transaction}', [\App\Http\Controllers\Finance\WalletController::class, 'creditNote'])->name('credit-note');
             // Direct wallet money movement (permission-gated, finance-mirrored, audited)
             Route::post('/receive-advance', [\App\Http\Controllers\Finance\WalletController::class, 'receiveAdvance'])->name('receive-advance');
@@ -1034,35 +1048,35 @@ Route::middleware('auth')->group(function () {
         Route::prefix('wallet-campaigns')->name('wallet-campaigns.')->group(function () {
             Route::get('/',                           [\App\Http\Controllers\Finance\WalletCampaignController::class, 'index'])->name('index');
             Route::get('/create',                     [\App\Http\Controllers\Finance\WalletCampaignController::class, 'create'])->name('create');
-            Route::post('/',                          [\App\Http\Controllers\Finance\WalletCampaignController::class, 'store'])->name('store');
+            Route::post('/',                          [\App\Http\Controllers\Finance\WalletCampaignController::class, 'store'])->name('store')->middleware('module:finance,edit');
             Route::get('/{walletCampaign}',           [\App\Http\Controllers\Finance\WalletCampaignController::class, 'show'])->name('show');
-            Route::post('/preview',                   [\App\Http\Controllers\Finance\WalletCampaignController::class, 'preview'])->name('preview');
-            Route::post('/{walletCampaign}/apply',    [\App\Http\Controllers\Finance\WalletCampaignController::class, 'apply'])->name('apply');
-            Route::post('/{walletCampaign}/cancel',   [\App\Http\Controllers\Finance\WalletCampaignController::class, 'cancel'])->name('cancel');
+            Route::post('/preview',                   [\App\Http\Controllers\Finance\WalletCampaignController::class, 'preview'])->name('preview')->middleware('module:finance,edit');
+            Route::post('/{walletCampaign}/apply',    [\App\Http\Controllers\Finance\WalletCampaignController::class, 'apply'])->name('apply')->middleware('module:finance,edit');
+            Route::post('/{walletCampaign}/cancel',   [\App\Http\Controllers\Finance\WalletCampaignController::class, 'cancel'])->name('cancel')->middleware('module:finance,edit');
         });
 
         // Membership Plans
         Route::prefix('membership')->name('membership.')->group(function () {
             Route::get('/',                           [\App\Http\Controllers\Finance\MembershipController::class, 'index'])->name('index');
             Route::get('/create',                     [\App\Http\Controllers\Finance\MembershipController::class, 'create'])->name('create');
-            Route::post('/',                          [\App\Http\Controllers\Finance\MembershipController::class, 'store'])->name('store');
+            Route::post('/',                          [\App\Http\Controllers\Finance\MembershipController::class, 'store'])->name('store')->middleware('module:finance,edit');
             Route::get('/members',                    [\App\Http\Controllers\Finance\MembershipController::class, 'members'])->name('members');
-            Route::delete('/enrollment/{enrollment}', [\App\Http\Controllers\Finance\MembershipController::class, 'destroyEnrollment'])->name('enrollment.destroy');
+            Route::delete('/enrollment/{enrollment}', [\App\Http\Controllers\Finance\MembershipController::class, 'destroyEnrollment'])->name('enrollment.destroy')->middleware('module:finance,delete');
             Route::get('/{membership}/edit',          [\App\Http\Controllers\Finance\MembershipController::class, 'edit'])->name('edit');
-            Route::put('/{membership}',               [\App\Http\Controllers\Finance\MembershipController::class, 'update'])->name('update');
-            Route::post('/{membership}/toggle',       [\App\Http\Controllers\Finance\MembershipController::class, 'toggle'])->name('toggle');
-            Route::delete('/{membership}',            [\App\Http\Controllers\Finance\MembershipController::class, 'destroy'])->name('destroy');
+            Route::put('/{membership}',               [\App\Http\Controllers\Finance\MembershipController::class, 'update'])->name('update')->middleware('module:finance,edit');
+            Route::post('/{membership}/toggle',       [\App\Http\Controllers\Finance\MembershipController::class, 'toggle'])->name('toggle')->middleware('module:finance,edit');
+            Route::delete('/{membership}',            [\App\Http\Controllers\Finance\MembershipController::class, 'destroy'])->name('destroy')->middleware('module:finance,delete');
         });
 
         // Coupons
         Route::prefix('coupons')->name('coupons.')->group(function () {
             Route::get('/',                    [\App\Http\Controllers\Finance\CouponController::class, 'index'])->name('index');
             Route::get('/create',              [\App\Http\Controllers\Finance\CouponController::class, 'create'])->name('create');
-            Route::post('/',                   [\App\Http\Controllers\Finance\CouponController::class, 'store'])->name('store');
+            Route::post('/',                   [\App\Http\Controllers\Finance\CouponController::class, 'store'])->name('store')->middleware('module:finance,edit');
             Route::get('/{coupon}/edit',       [\App\Http\Controllers\Finance\CouponController::class, 'edit'])->name('edit');
-            Route::put('/{coupon}',            [\App\Http\Controllers\Finance\CouponController::class, 'update'])->name('update');
-            Route::post('/{coupon}/toggle',    [\App\Http\Controllers\Finance\CouponController::class, 'toggle'])->name('toggle');
-            Route::delete('/{coupon}',         [\App\Http\Controllers\Finance\CouponController::class, 'destroy'])->name('destroy');
+            Route::put('/{coupon}',            [\App\Http\Controllers\Finance\CouponController::class, 'update'])->name('update')->middleware('module:finance,edit');
+            Route::post('/{coupon}/toggle',    [\App\Http\Controllers\Finance\CouponController::class, 'toggle'])->name('toggle')->middleware('module:finance,edit');
+            Route::delete('/{coupon}',         [\App\Http\Controllers\Finance\CouponController::class, 'destroy'])->name('destroy')->middleware('module:finance,delete');
         });
 
         // C5 (W-1, 2026-09-04): the duplicate Finance → Analytics door was removed.
@@ -1083,30 +1097,43 @@ Route::middleware('auth')->group(function () {
              ->name('dashboard');
 
         // Staff profiles (CRUD — destroy = deactivate, not delete)
+        // W-3: split so writes require hr Edit and destroy (deactivate) requires
+        // hr Delete, instead of all seven actions riding the group's view gate.
         Route::resource('staff', \App\Http\Controllers\HR\HrStaffController::class)
-             ->parameters(['staff' => 'user']);
+             ->parameters(['staff' => 'user'])
+             ->only(['index', 'create', 'show', 'edit']);
+        Route::middleware('module:hr,edit')->group(function () {
+            Route::resource('staff', \App\Http\Controllers\HR\HrStaffController::class)
+                 ->parameters(['staff' => 'user'])
+                 ->only(['store', 'update']);
+        });
+        Route::middleware('module:hr,delete')->group(function () {
+            Route::resource('staff', \App\Http\Controllers\HR\HrStaffController::class)
+                 ->parameters(['staff' => 'user'])
+                 ->only(['destroy']);
+        });
 
         // HPR / Health ID capture for a clinician (local, no live ABDM)
         Route::get  ('staff/{user}/hpr', [\App\Http\Controllers\Abdm\DoctorHprController::class, 'edit'])->name('staff.hpr.edit');
-        Route::patch('staff/{user}/hpr', [\App\Http\Controllers\Abdm\DoctorHprController::class, 'update'])->name('staff.hpr.update');
+        Route::patch('staff/{user}/hpr', [\App\Http\Controllers\Abdm\DoctorHprController::class, 'update'])->name('staff.hpr.update')->middleware('module:hr,edit');
 
         // Staff documents
-        Route::post('staff/{user}/documents',              [\App\Http\Controllers\HR\HrStaffController::class, 'storeDocument'])->name('staff.documents.store');
+        Route::post('staff/{user}/documents',              [\App\Http\Controllers\HR\HrStaffController::class, 'storeDocument'])->name('staff.documents.store')->middleware('module:hr,edit');
         Route::delete('staff/{user}/documents/{document}', [\App\Http\Controllers\HR\HrStaffController::class, 'destroyDocument'])->name('staff.documents.destroy');
 
         // Staff finance
-        Route::post('staff/{user}/finance/salary',                    [\App\Http\Controllers\HR\HrFinanceController::class, 'saveSalary'])->name('staff.finance.salary');
-        Route::post('staff/{user}/finance/incentive',                 [\App\Http\Controllers\HR\HrFinanceController::class, 'saveIncentive'])->name('staff.finance.incentive');
-        Route::post('staff/{user}/finance/advances',                  [\App\Http\Controllers\HR\HrFinanceController::class, 'storeAdvance'])->name('staff.finance.advances.store');
+        Route::post('staff/{user}/finance/salary',                    [\App\Http\Controllers\HR\HrFinanceController::class, 'saveSalary'])->name('staff.finance.salary')->middleware('module:hr,edit');
+        Route::post('staff/{user}/finance/incentive',                 [\App\Http\Controllers\HR\HrFinanceController::class, 'saveIncentive'])->name('staff.finance.incentive')->middleware('module:hr,edit');
+        Route::post('staff/{user}/finance/advances',                  [\App\Http\Controllers\HR\HrFinanceController::class, 'storeAdvance'])->name('staff.finance.advances.store')->middleware('module:hr,edit');
         Route::post('staff/{user}/finance/advances/{advance}/close',  [\App\Http\Controllers\HR\HrFinanceController::class, 'closeAdvance'])->name('staff.finance.advances.close');
-        Route::post('staff/{user}/finance/bonuses',                   [\App\Http\Controllers\HR\HrFinanceController::class, 'storeBonus'])->name('staff.finance.bonuses.store');
+        Route::post('staff/{user}/finance/bonuses',                   [\App\Http\Controllers\HR\HrFinanceController::class, 'storeBonus'])->name('staff.finance.bonuses.store')->middleware('module:hr,edit');
         Route::delete('staff/{user}/finance/bonuses/{bonus}',         [\App\Http\Controllers\HR\HrFinanceController::class, 'destroyBonus'])->name('staff.finance.bonuses.destroy');
 
         // Attendance (Part B)
         Route::prefix('attendance')->name('attendance.')->group(function () {
             Route::get('/',           [\App\Http\Controllers\HR\HrAttendanceController::class, 'index'])->name('index');
-            Route::post('/mark',      [\App\Http\Controllers\HR\HrAttendanceController::class, 'mark'])->name('mark');
-            Route::post('/mark-bulk', [\App\Http\Controllers\HR\HrAttendanceController::class, 'markBulk'])->name('mark-bulk');
+            Route::post('/mark',      [\App\Http\Controllers\HR\HrAttendanceController::class, 'mark'])->name('mark')->middleware('module:hr,edit');
+            Route::post('/mark-bulk', [\App\Http\Controllers\HR\HrAttendanceController::class, 'markBulk'])->name('mark-bulk')->middleware('module:hr,edit');
         });
 
         // Roles & Permissions (moved here from Settings). Admin-only, hard
@@ -1125,23 +1152,23 @@ Route::middleware('auth')->group(function () {
         Route::prefix('training')->name('training.')->group(function () {
             Route::get('/',                                     [\App\Http\Controllers\HR\HrTrainingController::class, 'index'])->name('index');
             Route::get('/create',                               [\App\Http\Controllers\HR\HrTrainingController::class, 'create'])->name('create');
-            Route::post('/',                                    [\App\Http\Controllers\HR\HrTrainingController::class, 'store'])->name('store');
+            Route::post('/',                                    [\App\Http\Controllers\HR\HrTrainingController::class, 'store'])->name('store')->middleware('module:hr,edit');
             Route::get('/{session}',                            [\App\Http\Controllers\HR\HrTrainingController::class, 'show'])->name('show');
             Route::get('/{session}/edit',                       [\App\Http\Controllers\HR\HrTrainingController::class, 'edit'])->name('edit');
-            Route::put('/{session}',                            [\App\Http\Controllers\HR\HrTrainingController::class, 'update'])->name('update');
-            Route::delete('/{session}',                         [\App\Http\Controllers\HR\HrTrainingController::class, 'destroy'])->name('destroy');
-            Route::post('/{session}/enroll',                    [\App\Http\Controllers\HR\HrTrainingController::class, 'enroll'])->name('enroll');
-            Route::delete('/{session}/enroll/{user}',           [\App\Http\Controllers\HR\HrTrainingController::class, 'unenroll'])->name('unenroll');
-            Route::post('/{session}/attendance',                [\App\Http\Controllers\HR\HrTrainingController::class, 'markAttendance'])->name('attendance');
-            Route::post('/{session}/complete',                  [\App\Http\Controllers\HR\HrTrainingController::class, 'markComplete'])->name('complete');
+            Route::put('/{session}',                            [\App\Http\Controllers\HR\HrTrainingController::class, 'update'])->name('update')->middleware('module:hr,edit');
+            Route::delete('/{session}',                         [\App\Http\Controllers\HR\HrTrainingController::class, 'destroy'])->name('destroy')->middleware('module:hr,delete');
+            Route::post('/{session}/enroll',                    [\App\Http\Controllers\HR\HrTrainingController::class, 'enroll'])->name('enroll')->middleware('module:hr,edit');
+            Route::delete('/{session}/enroll/{user}',           [\App\Http\Controllers\HR\HrTrainingController::class, 'unenroll'])->name('unenroll')->middleware('module:hr,delete');
+            Route::post('/{session}/attendance',                [\App\Http\Controllers\HR\HrTrainingController::class, 'markAttendance'])->name('attendance')->middleware('module:hr,edit');
+            Route::post('/{session}/complete',                  [\App\Http\Controllers\HR\HrTrainingController::class, 'markComplete'])->name('complete')->middleware('module:hr,edit');
         });
 
         // Periodic Training Requirements & Compliance
         Route::prefix('periodic-training')->name('periodic.')->group(function () {
             Route::get('/',                                     [\App\Http\Controllers\HR\HrTrainingController::class, 'periodicIndex'])->name('index');
-            Route::post('/requirements',                        [\App\Http\Controllers\HR\HrTrainingController::class, 'storeRequirement'])->name('requirements.store');
-            Route::delete('/requirements/{requirement}',        [\App\Http\Controllers\HR\HrTrainingController::class, 'destroyRequirement'])->name('requirements.destroy');
-            Route::post('/records',                             [\App\Http\Controllers\HR\HrTrainingController::class, 'storeRecord'])->name('records.store');
+            Route::post('/requirements',                        [\App\Http\Controllers\HR\HrTrainingController::class, 'storeRequirement'])->name('requirements.store')->middleware('module:hr,edit');
+            Route::delete('/requirements/{requirement}',        [\App\Http\Controllers\HR\HrTrainingController::class, 'destroyRequirement'])->name('requirements.destroy')->middleware('module:hr,delete');
+            Route::post('/records',                             [\App\Http\Controllers\HR\HrTrainingController::class, 'storeRecord'])->name('records.store')->middleware('module:hr,edit');
         });
 
         // Staff Calendar
@@ -1152,10 +1179,10 @@ Route::middleware('auth')->group(function () {
         Route::prefix('memos')->name('memos.')->group(function () {
             Route::get('/',                                     [\App\Http\Controllers\HR\HrPerformanceMemoController::class, 'index'])->name('index');
             Route::get('/create',                               [\App\Http\Controllers\HR\HrPerformanceMemoController::class, 'create'])->name('create');
-            Route::post('/',                                    [\App\Http\Controllers\HR\HrPerformanceMemoController::class, 'store'])->name('store');
+            Route::post('/',                                    [\App\Http\Controllers\HR\HrPerformanceMemoController::class, 'store'])->name('store')->middleware('module:hr,edit');
             Route::get('/{memo}',                               [\App\Http\Controllers\HR\HrPerformanceMemoController::class, 'show'])->name('show');
-            Route::delete('/{memo}',                            [\App\Http\Controllers\HR\HrPerformanceMemoController::class, 'destroy'])->name('destroy');
-            Route::post('/{memo}/acknowledge',                  [\App\Http\Controllers\HR\HrPerformanceMemoController::class, 'acknowledge'])->name('acknowledge');
+            Route::delete('/{memo}',                            [\App\Http\Controllers\HR\HrPerformanceMemoController::class, 'destroy'])->name('destroy')->middleware('module:hr,delete');
+            Route::post('/{memo}/acknowledge',                  [\App\Http\Controllers\HR\HrPerformanceMemoController::class, 'acknowledge'])->name('acknowledge')->middleware('module:hr,edit');
         });
 
     }); // end hr group

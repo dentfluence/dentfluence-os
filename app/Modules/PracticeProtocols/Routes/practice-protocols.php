@@ -20,12 +20,12 @@ Route::middleware(['auth', 'web', 'module:practice_protocols'])
 
         Route::get('/',                      [PracticeProtocolController::class, 'index'])->name('index');
         Route::get('/create',                [PracticeProtocolController::class, 'create'])->name('create');
-        Route::post('/',                     [PracticeProtocolController::class, 'store'])->name('store');
+        Route::post('/',                     [PracticeProtocolController::class, 'store'])->name('store')->middleware('module:practice_protocols,edit');
         Route::get('/{protocol}/edit',       [PracticeProtocolController::class, 'edit'])->name('edit');
-        Route::put('/{protocol}',            [PracticeProtocolController::class, 'update'])->name('update');
-        Route::delete('/{protocol}',         [PracticeProtocolController::class, 'destroy'])->name('destroy');
+        Route::put('/{protocol}',            [PracticeProtocolController::class, 'update'])->name('update')->middleware('module:practice_protocols,edit');
+        Route::delete('/{protocol}',         [PracticeProtocolController::class, 'destroy'])->name('destroy')->middleware('module:practice_protocols,delete');
 
         // Materials attached to a protocol (SOP steps / file / link)
-        Route::post('/{protocol}/materials',     [PracticeProtocolMaterialController::class, 'store'])->name('materials.store');
-        Route::delete('/materials/{material}',   [PracticeProtocolMaterialController::class, 'destroy'])->name('materials.destroy');
+        Route::post('/{protocol}/materials',     [PracticeProtocolMaterialController::class, 'store'])->name('materials.store')->middleware('module:practice_protocols,edit');
+        Route::delete('/materials/{material}',   [PracticeProtocolMaterialController::class, 'destroy'])->name('materials.destroy')->middleware('module:practice_protocols,delete');
     });

@@ -23,16 +23,16 @@ Route::middleware(['auth', 'web', 'module:daily_huddle'])->prefix('huddle')->nam
         ->name('report');
 
     Route::patch('/appointments/{id}/instruction', [HuddleController::class, 'updateInstruction'])
-        ->name('appointments.instruction');
+        ->name('appointments.instruction')->middleware('module:daily_huddle,edit');
 
     // Push selected huddle comms items to the FollowUp queue
     Route::post('/comms/push', [HuddleController::class, 'pushToCommList'])
-        ->name('comms.push');
+        ->name('comms.push')->middleware('module:daily_huddle,edit');
 
     // Yesterday's Flow quick-action card — logs a task and/or a follow-up call
     // for a patient instead of navigating straight to their profile.
     Route::post('/yesterday-flow/log', [HuddleController::class, 'logYesterdayFollowUp'])
-        ->name('yesterday-flow.log');
+        ->name('yesterday-flow.log')->middleware('module:daily_huddle,edit');
 
     // Huddle notes — wins / lows / failures / concerns.
     // `failures` is the report path for equipment or process breakdowns.
@@ -47,19 +47,19 @@ Route::middleware(['auth', 'web', 'module:daily_huddle'])->prefix('huddle')->nam
             ->name('index');
 
         Route::post('/', [HuddleTaskController::class, 'store'])
-            ->name('store');
+            ->name('store')->middleware('module:daily_huddle,edit');
 
         Route::patch('/{taskId}/status', [HuddleTaskController::class, 'updateStatus'])
-            ->name('status');
+            ->name('status')->middleware('module:daily_huddle,edit');
 
         Route::patch('/{taskId}/assign', [HuddleTaskController::class, 'assign'])
-            ->name('assign');
+            ->name('assign')->middleware('module:daily_huddle,edit');
 
         Route::post('/{taskId}/proof', [HuddleTaskController::class, 'uploadProof'])
-            ->name('proof');
+            ->name('proof')->middleware('module:daily_huddle,edit');
 
         Route::post('/{taskId}/carry-forward', [HuddleTaskController::class, 'carryForward'])
-            ->name('carry-forward');
+            ->name('carry-forward')->middleware('module:daily_huddle,edit');
     });
 
     // ── Comments ─────────────────────────────────────────────────────────────
@@ -69,13 +69,13 @@ Route::middleware(['auth', 'web', 'module:daily_huddle'])->prefix('huddle')->nam
             ->name('index');
 
         Route::post('/', [HuddleCommentController::class, 'store'])
-            ->name('store');
+            ->name('store')->middleware('module:daily_huddle,edit');
 
         Route::patch('/{commentId}/resolve', [HuddleCommentController::class, 'resolve'])
-            ->name('resolve');
+            ->name('resolve')->middleware('module:daily_huddle,edit');
 
         Route::delete('/{commentId}', [HuddleCommentController::class, 'destroy'])
-            ->name('destroy');
+            ->name('destroy')->middleware('module:daily_huddle,delete');
     });
 
     // ── Settings ─────────────────────────────────────────────────────────────
@@ -86,6 +86,6 @@ Route::middleware(['auth', 'web', 'module:daily_huddle'])->prefix('huddle')->nam
             ->name('index');
 
         Route::patch('/', [HuddleSettingsController::class, 'update'])
-            ->name('update');
+            ->name('update')->middleware('module:daily_huddle,edit');
     });
 });

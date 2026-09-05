@@ -8,6 +8,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Role extends Model
 {
+    // W-3: every create / update / delete lands in audit_logs
+    // (hash-chained, append-only, shown at Settings > Activity Log).
+    // who may do what — a permission change must never be silent.
+    use \App\Traits\Auditable;
+
+    protected $auditModule = 'settings';
+
     protected $fillable = [
         'name', 'slug', 'category', 'description', 'color', 'is_system',
     ];

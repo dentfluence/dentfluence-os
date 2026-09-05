@@ -8,7 +8,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class FinalBill extends Model
 {
+    // W-3: every create / update / delete lands in audit_logs
+    // (hash-chained, append-only, shown at Settings > Activity Log).
+    // the closing document.
+    use \App\Traits\Auditable;
     use SoftDeletes;
+
+    protected $auditModule = 'finance';
 
     protected $fillable = [
         'bill_number',

@@ -23,16 +23,16 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/',       [ClinicalFileController::class, 'index'])  ->name('index');
 
         // POST — upload a new file
-        Route::post('/',      [ClinicalFileController::class, 'store'])  ->name('store');
+        Route::post('/',      [ClinicalFileController::class, 'store'])  ->name('store')->middleware('module:patients,edit');
 
         // GET  — single file metadata (for File Viewer panel)
         Route::get('/{file}', [ClinicalFileController::class, 'show'])   ->name('show');
 
         // PUT  — update file metadata
-        Route::put('/{file}', [ClinicalFileController::class, 'update']) ->name('update');
+        Route::put('/{file}', [ClinicalFileController::class, 'update']) ->name('update')->middleware('module:patients,edit');
 
         // DELETE — soft-delete file
-        Route::delete('/{file}', [ClinicalFileController::class, 'destroy'])->name('destroy');
+        Route::delete('/{file}', [ClinicalFileController::class, 'destroy'])->name('destroy')->middleware('module:patients,delete');
     });
 
     // ── Phase 11: Protocol Steps AJAX ──────────────────────────────────────────

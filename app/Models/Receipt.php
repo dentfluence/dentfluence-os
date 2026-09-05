@@ -8,7 +8,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Receipt extends Model
 {
+    // W-3: every create / update / delete lands in audit_logs
+    // (hash-chained, append-only, shown at Settings > Activity Log).
+    // the document the patient is handed.
+    use \App\Traits\Auditable;
     use SoftDeletes;
+
+    protected $auditModule = 'finance';
 
     protected $fillable = [
         'receipt_number',

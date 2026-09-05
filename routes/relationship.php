@@ -125,10 +125,10 @@ Route::middleware(['web', 'auth', 'module:relationship'])->prefix('relationship'
         // Marking YOUR OWN bell notification read is personal UI state, not
         // relationship work — stays on the group view gate (Slice 1.3).
         Route::post('/read-all',      [RelationshipNotificationController::class, 'markAllRead'])
-            ->name('read-all');
+            ->name('read-all')->middleware('module:relationship,edit');
         Route::post('/{id}/read',     [RelationshipNotificationController::class, 'markRead'])
             ->whereNumber('id')
-            ->name('read');
+            ->name('read')->middleware('module:relationship,edit');
     });
 
     // Interactive Guide route REMOVED 2026-08-25 (Sumit) — the PRE subnav

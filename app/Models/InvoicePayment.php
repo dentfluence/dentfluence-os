@@ -11,7 +11,13 @@ use App\Enums\PaymentMode;
 
 class InvoicePayment extends Model
 {
+    // W-3: every create / update / delete lands in audit_logs
+    // (hash-chained, append-only, shown at Settings > Activity Log).
+    // money in — Invoice was audited, the payment was not.
+    use \App\Traits\Auditable;
     use SoftDeletes;
+
+    protected $auditModule = 'finance';
 
     protected $fillable = [
         'invoice_id', 'receipt_id', 'patient_id', 'amount', 'payment_mode',

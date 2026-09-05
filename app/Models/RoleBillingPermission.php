@@ -14,6 +14,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class RoleBillingPermission extends Model
 {
+    // W-3: every create / update / delete lands in audit_logs
+    // (hash-chained, append-only, shown at Settings > Activity Log).
+    // per-role billing limits.
+    use \App\Traits\Auditable;
+
+    protected $auditModule = 'settings';
+
     protected $fillable = [
         'role_id',
         'action_key',

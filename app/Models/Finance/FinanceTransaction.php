@@ -9,7 +9,13 @@ use App\Models\Patient;
 
 class FinanceTransaction extends Model
 {
+    // W-3: every create / update / delete lands in audit_logs
+    // (hash-chained, append-only, shown at Settings > Activity Log).
+    // the master ledger row.
+    use \App\Traits\Auditable;
     use SoftDeletes;
+
+    protected $auditModule = 'finance';
 
     protected $table = 'finance_transactions';
 

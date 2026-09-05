@@ -10,7 +10,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     // user create/rename/delete the clinic's tag vocabulary.)
     Route::prefix('settings/tags')->name('settings.tags.')->middleware('module:settings')->group(function () {
         Route::get('/',                         [TagController::class, 'index'])  ->name('index');
-        Route::post('/',                        [TagController::class, 'store'])  ->name('store');
+        Route::post('/',                        [TagController::class, 'store'])  ->name('store')->middleware('module:settings,edit');
         Route::put('/{tag}',                    [TagController::class, 'update']) ->name('update');
         Route::delete('/{tag}',                 [TagController::class, 'destroy'])->name('destroy');
     });

@@ -7,7 +7,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class FinanceExpense extends Model
 {
+    // W-3: every create / update / delete lands in audit_logs
+    // (hash-chained, append-only, shown at Settings > Activity Log).
+    // money out.
+    use \App\Traits\Auditable;
     use SoftDeletes;
+
+    protected $auditModule = 'finance';
 
     protected $table = 'finance_expenses';
 

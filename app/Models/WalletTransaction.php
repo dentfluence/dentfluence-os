@@ -7,6 +7,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WalletTransaction extends Model
 {
+    // W-3: every create / update / delete lands in audit_logs
+    // (hash-chained, append-only, shown at Settings > Activity Log).
+    // the patient-credit ledger (Wallet itself is a derived balance, not audited).
+    use \App\Traits\Auditable;
+
+    protected $auditModule = 'finance';
+
     protected $fillable = [
         'wallet_id',
         'patient_id',

@@ -49,22 +49,22 @@ Route::prefix('communication')
 
             // Add Communication
             Route::get('/add', [CommunicationController::class, 'logForm'])->name('log.form');
-            Route::post('/add',[CommunicationController::class, 'logStore'])->name('log.store');
+            Route::post('/add',[CommunicationController::class, 'logStore'])->name('log.store')->middleware('module:communication,edit');
 
             // AJAX patient search (before /{id} to avoid conflict)
             Route::get('/patient-search', [CommunicationController::class, 'patientSearch'])->name('patient.search');
 
             // Bulk action
-            Route::post('/bulk', [CommunicationController::class, 'bulkAction'])->name('bulk');
+            Route::post('/bulk', [CommunicationController::class, 'bulkAction'])->name('bulk')->middleware('module:communication,edit');
 
             // Single record
             Route::get('/{id}',          [CommunicationController::class, 'show'])->name('show');
-            Route::put('/{id}',          [CommunicationController::class, 'update'])->name('update');
-            Route::post('/{id}/assign',  [CommunicationController::class, 'assign'])->name('assign');
-            Route::post('/{id}/move',    [CommunicationController::class, 'move'])->name('move');
+            Route::put('/{id}',          [CommunicationController::class, 'update'])->name('update')->middleware('module:communication,edit');
+            Route::post('/{id}/assign',  [CommunicationController::class, 'assign'])->name('assign')->middleware('module:communication,edit');
+            Route::post('/{id}/move',    [CommunicationController::class, 'move'])->name('move')->middleware('module:communication,edit');
             // Phase 1: attempt logging + mandatory-outcome close
-            Route::post('/{id}/attempt', [CommunicationController::class, 'logAttempt'])->name('attempt');
-            Route::post('/{id}/close',   [CommunicationController::class, 'closeWithOutcome'])->name('close');
+            Route::post('/{id}/attempt', [CommunicationController::class, 'logAttempt'])->name('attempt')->middleware('module:communication,edit');
+            Route::post('/{id}/close',   [CommunicationController::class, 'closeWithOutcome'])->name('close')->middleware('module:communication,edit');
         });
 
         // ── PRM Pipeline (RETIRED) ───────────────────────────────────────
@@ -82,13 +82,13 @@ Route::prefix('communication')
             Route::get('/overdue',                   [\App\Http\Controllers\Communication\FollowUpController::class, 'overdue'])->name('overdue');
             Route::get('/calendar',                  [\App\Http\Controllers\Communication\FollowUpController::class, 'calendar'])->name('calendar');
             Route::get('/recalls',                   [\App\Http\Controllers\Communication\FollowUpController::class, 'recalls'])->name('recalls');
-            Route::post('/schedule',                 [\App\Http\Controllers\Communication\FollowUpController::class, 'schedule'])->name('schedule');
-            Route::post('/{id}/complete',            [\App\Http\Controllers\Communication\FollowUpController::class, 'complete'])->name('complete');
-            Route::post('/{id}/reschedule',          [\App\Http\Controllers\Communication\FollowUpController::class, 'reschedule'])->name('reschedule');
-            Route::post('/{id}/note',                [\App\Http\Controllers\Communication\FollowUpController::class, 'addNote'])->name('note');
-            Route::post('/{id}/change-status',       [\App\Http\Controllers\Communication\FollowUpController::class, 'changeStatus'])->name('change-status');
-            Route::post('/{id}/convert',             [\App\Http\Controllers\Communication\FollowUpController::class, 'convertToPatient'])->name('convert');
-            Route::post('/{id}/create-case',         [\App\Http\Controllers\Communication\FollowUpController::class, 'createCase'])->name('create-case');
+            Route::post('/schedule',                 [\App\Http\Controllers\Communication\FollowUpController::class, 'schedule'])->name('schedule')->middleware('module:communication,edit');
+            Route::post('/{id}/complete',            [\App\Http\Controllers\Communication\FollowUpController::class, 'complete'])->name('complete')->middleware('module:communication,edit');
+            Route::post('/{id}/reschedule',          [\App\Http\Controllers\Communication\FollowUpController::class, 'reschedule'])->name('reschedule')->middleware('module:communication,edit');
+            Route::post('/{id}/note',                [\App\Http\Controllers\Communication\FollowUpController::class, 'addNote'])->name('note')->middleware('module:communication,edit');
+            Route::post('/{id}/change-status',       [\App\Http\Controllers\Communication\FollowUpController::class, 'changeStatus'])->name('change-status')->middleware('module:communication,edit');
+            Route::post('/{id}/convert',             [\App\Http\Controllers\Communication\FollowUpController::class, 'convertToPatient'])->name('convert')->middleware('module:communication,edit');
+            Route::post('/{id}/create-case',         [\App\Http\Controllers\Communication\FollowUpController::class, 'createCase'])->name('create-case')->middleware('module:communication,edit');
         });
 
         // ── Communication Timeline ───────────────────────────────────────
@@ -100,7 +100,7 @@ Route::prefix('communication')
         // ── Recall Engine (Phase 2) ──────────────────────────────────────
         Route::prefix('recall')->name('recall.')->group(function () {
             Route::get('/',         [\App\Http\Controllers\Communication\RecallController::class, 'index'])->name('index');
-            Route::post('/run-now', [\App\Http\Controllers\Communication\RecallController::class, 'runNow'])->name('run-now');
+            Route::post('/run-now', [\App\Http\Controllers\Communication\RecallController::class, 'runNow'])->name('run-now')->middleware('module:communication,edit');
         });
 
         // ── Recall + Birthday/Anniversary Settings — RETIRED, redirects only ──
@@ -131,15 +131,15 @@ Route::prefix('communication')
         Route::prefix('opportunities')->name('opportunities.')->group(function () {
             Route::get('/',                    fn () => redirect()->route('relationship.opportunities'))->name('index');
             Route::get('/board',               fn () => redirect()->route('relationship.opportunities'))->name('board');
-            Route::post('/',                   [\App\Http\Controllers\Communication\OpportunityController::class, 'store'])->name('store');
+            Route::post('/',                   [\App\Http\Controllers\Communication\OpportunityController::class, 'store'])->name('store')->middleware('module:communication,edit');
             // AJAX: patient autocomplete for add-opportunity modal
             Route::get('/patient-search',      [\App\Http\Controllers\Communication\OpportunityController::class, 'patientSearch'])->name('patient-search');
             // Single opportunity (must come after named static segments)
             Route::get('/{id}',                [\App\Http\Controllers\Communication\OpportunityController::class, 'detail'])->name('detail');
             // Detail popup content (AJAX) — powers the board/list click-to-open modal
             Route::get('/{id}/modal',          [\App\Http\Controllers\Communication\OpportunityController::class, 'detailModal'])->name('detail-modal');
-            Route::patch('/{id}/stage',        [\App\Http\Controllers\Communication\OpportunityController::class, 'updateStage'])->name('update-stage');
-            Route::post('/{id}/convert',       [\App\Http\Controllers\Communication\OpportunityController::class, 'convertToLead'])->name('convert');
+            Route::patch('/{id}/stage',        [\App\Http\Controllers\Communication\OpportunityController::class, 'updateStage'])->name('update-stage')->middleware('module:communication,edit');
+            Route::post('/{id}/convert',       [\App\Http\Controllers\Communication\OpportunityController::class, 'convertToLead'])->name('convert')->middleware('module:communication,edit');
         });
 
         // ── Daily Huddle Widgets (Session 8) ─────────────────────────────
@@ -177,10 +177,10 @@ Route::prefix('communication')
         Route::prefix('b2b')->name('b2b.')->group(function () {
             Route::get('/',                       [\App\Http\Controllers\Communication\B2BController::class, 'index'])->name('index');
             Route::get('/add',                    [\App\Http\Controllers\Communication\B2BController::class, 'create'])->name('create');
-            Route::post('/add',                   [\App\Http\Controllers\Communication\B2BController::class, 'store'])->name('store');
+            Route::post('/add',                   [\App\Http\Controllers\Communication\B2BController::class, 'store'])->name('store')->middleware('module:communication,edit');
             Route::get('/{id}',                   [\App\Http\Controllers\Communication\B2BController::class, 'show'])->name('show');
-            Route::post('/{id}/attempt',          [\App\Http\Controllers\Communication\B2BController::class, 'logAttempt'])->name('attempt');
-            Route::post('/{id}/close',            [\App\Http\Controllers\Communication\B2BController::class, 'close'])->name('close');
+            Route::post('/{id}/attempt',          [\App\Http\Controllers\Communication\B2BController::class, 'logAttempt'])->name('attempt')->middleware('module:communication,edit');
+            Route::post('/{id}/close',            [\App\Http\Controllers\Communication\B2BController::class, 'close'])->name('close')->middleware('module:communication,edit');
             // AJAX: open lab cases for a vendor (for form dynamic dropdown)
             Route::get('/ajax/lab-cases-for-vendor', [\App\Http\Controllers\Communication\B2BController::class, 'labCasesForVendor'])->name('ajax.lab-cases');
         });
@@ -193,8 +193,8 @@ Route::prefix('communication')
         // ── Phase B 2.4: Reviews / Reputation ─────────────────────────────
         Route::prefix('reviews')->name('reviews.')->group(function () {
             Route::get('/',     [\App\Http\Controllers\Communication\ReviewController::class, 'index'])->name('index');
-            Route::post('/send',[\App\Http\Controllers\Communication\ReviewController::class, 'send'])->name('send');
-            Route::post('/{review}/reply', [\App\Http\Controllers\Communication\ReviewController::class, 'reply'])->name('reply');
+            Route::post('/send',[\App\Http\Controllers\Communication\ReviewController::class, 'send'])->name('send')->middleware('module:communication,edit');
+            Route::post('/{review}/reply', [\App\Http\Controllers\Communication\ReviewController::class, 'reply'])->name('reply')->middleware('module:communication,edit');
         });
 
         // ── Phase B 1.2: WhatsApp two-way Inbox ───────────────────────────
@@ -203,11 +203,11 @@ Route::prefix('communication')
             // every text send point (appointments, reviews, recalls, patient
             // profile). Declared before the /{thread} wildcard so it isn't
             // swallowed by it. See WhatsAppLinkController + WhatsAppLinkService.
-            Route::post('/link',           [\App\Http\Controllers\Communication\WhatsAppLinkController::class, 'build'])->name('link');
+            Route::post('/link',           [\App\Http\Controllers\Communication\WhatsAppLinkController::class, 'build'])->name('link')->middleware('module:communication,edit');
 
             Route::get('/',                [\App\Http\Controllers\Communication\WhatsAppInboxController::class, 'index'])->name('index');
             Route::get('/{thread}',           [\App\Http\Controllers\Communication\WhatsAppInboxController::class, 'show'])->name('show');
-            Route::post('/{thread}/reply',    [\App\Http\Controllers\Communication\WhatsAppInboxController::class, 'reply'])->name('reply');
-            Route::post('/{thread}/template', [\App\Http\Controllers\Communication\WhatsAppInboxController::class, 'sendTemplate'])->name('template');
+            Route::post('/{thread}/reply',    [\App\Http\Controllers\Communication\WhatsAppInboxController::class, 'reply'])->name('reply')->middleware('module:communication,edit');
+            Route::post('/{thread}/template', [\App\Http\Controllers\Communication\WhatsAppInboxController::class, 'sendTemplate'])->name('template')->middleware('module:communication,edit');
         });
     });
