@@ -67,10 +67,16 @@ class FinanceController extends Controller
                             ->sum('amount');
 
         // ── Period KPIs — respect the selected date filter ──────────────────────
-        $periodCollection = InvoicePayment::whereBetween('payment_date', [$from, $to])->sum('amount');
-        $periodExpense    = FinanceExpense::whereBetween('expense_date', [$from, $to])->sum('total_amount');
-        $periodProfit     = $periodCollection - $periodExpense;
-        $periodProfitPct  = $periodCollection > 0 ? round(($periodProfit / $periodCollection) * 100, 1) : 0;
+        // W-4 (G-06): one definition, in ReportMetricsService. The dashboard is
+        // the quick daily screen, so it shows the CASH answer only — money in
+        // minus money out. Outstanding (money owed to us) and unpaid expenses
+        // (money we owe) already have their own tiles, so the earned view is
+        // reconstructible without a second profit figure competing here.
+        $money            = app(\App\Services\Analytics\ReportMetricsService::class)->profit($from, $to);
+        $periodCollection = $money['collected'];
+        $periodExpense    = $money['expenses_paid'];
+        $periodProfit     = $money['cash_profit'];
+        $periodProfitPct  = $money['cash_margin'];
 
         // Avg daily / projected total — formula degrades to the actual total once the period
         // has fully elapsed, so it works unchanged for past, current, and custom ranges.
@@ -171,8 +177,10 @@ class FinanceController extends Controller
             $trendLabels[]  = $m->format('M');
             $trendRevenue[] = (float) InvoicePayment::whereMonth('payment_date', $m->month)
                                 ->whereYear('payment_date', $m->year)->sum('amount');
+            // Paid only — the chart must sit on the same basis as the Profit
+            // KPI above it, or the screen argues with itself.
             $trendExpense[] = (float) FinanceExpense::whereMonth('expense_date', $m->month)
-                                ->whereYear('expense_date', $m->year)->sum('total_amount');
+                                ->whereYear('expense_date', $m->year)->paid()->sum('total_amount');
         }
 
         $dateFilter = compact('preset', 'from', 'to');
@@ -1396,8 +1404,15 @@ class FinanceController extends Controller
             };
         }
 
-        $incomeTotal  = InvoicePayment::whereBetween('payment_date', [$from, $to])->sum('amount');
-        $expenseTotal = FinanceExpense::whereBetween('expense_date', [$from, $to])->sum('total_amount');
+        // W-4 (G-06): the CA sheet deliberately stays on the BOOKED expense
+        // basis — an accountant wants every bill recorded in the period, paid
+        // or not — while the dashboard shows the cash basis. Both now come from
+        // the same service and the view states which basis it is showing, so
+        // the two can never drift apart silently again.
+        $money        = app(\App\Services\Analytics\ReportMetricsService::class)->profit($from, $to);
+        $incomeTotal  = $money['collected'];
+        $expenseTotal = $money['expenses_booked'];
+        $expenseUnpaid = $money['expenses_unpaid'];
         $gstCollected = InvoiceItem::whereHas('invoice', fn($q) =>
                             $q->whereBetween('invoice_date', [$from, $to])
                               ->whereNotIn('status', ['cancelled'])
@@ -1408,7 +1423,7 @@ class FinanceController extends Controller
             return $this->downloadCaExport($from, $to, $format);
         }
 
-        return view('finance.ca-export', compact('from', 'to', 'incomeTotal', 'expenseTotal', 'gstCollected', 'preset'));
+        return view('finance.ca-export', compact('from', 'to', 'incomeTotal', 'expenseTotal', 'expenseUnpaid', 'gstCollected', 'preset'));
     }
 
     /**

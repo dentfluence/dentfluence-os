@@ -68,7 +68,11 @@
         {{-- Net profit line --}}
         @php $net = $incomeTotal - $expenseTotal; @endphp
         <div class="flex items-center justify-between text-sm border border-gray-100 bg-gray-50 px-4 py-2">
-            <span class="text-gray-500">Net Profit (Income minus Expenses)</span>
+            <span class="text-gray-500">Net Profit &mdash; received minus <b>all</b> bills recorded, paid or not
+                @if($expenseUnpaid > 0)
+                    <span class="text-amber-600">(includes &#8377;{{ number_format($expenseUnpaid,0) }} not yet paid)</span>
+                @endif
+            </span>
             <span class="font-bold {{ $net >= 0 ? 'text-green-600' : 'text-red-600' }}">
                 &#8377;{{ number_format($net, 0) }}
             </span>

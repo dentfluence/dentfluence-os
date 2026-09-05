@@ -145,7 +145,9 @@
             'icon'    => 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
         ],
         [
-            'label'   => 'Net Profit',
+            // W-4 (G-06): this tile is the CASH answer — received minus paid.
+            // Money still owed to us and bills we still owe are their own tiles.
+            'label'   => 'Net Profit · in hand',
             'value'   => 'Rs. ' . number_format($kpis['period_profit']),
             'insight' => $kpis['period_profit_pct'] . '% margin' . (
                             $kpis['period_profit_pct'] >= 40 ? ' · Excellent' :
@@ -412,13 +414,13 @@ new Chart(rCtx, {
         labels: {!! json_encode($trendLabels) !!},
         datasets: [
             {
-                label: 'Revenue',
+                label: 'Received',
                 data: {!! json_encode($trendRevenue) !!},
                 backgroundColor: 'rgba(106,15,112,0.70)',
                 borderRadius: 2,
             },
             {
-                label: 'Expenses',
+                label: 'Expenses paid',
                 data: {!! json_encode($trendExpense) !!},
                 backgroundColor: 'rgba(181,32,32,0.55)',
                 borderRadius: 2,

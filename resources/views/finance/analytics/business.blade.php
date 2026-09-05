@@ -27,6 +27,52 @@
         </div>
     </div>
 
+    {{-- W-4 (G-06): the money story in one strip, in plain order.
+         Billed -> Received -> still owed to us -> paid out -> still owed by us.
+         Two profits, because there are two honest questions and one number
+         cannot answer both. --}}
+    <div class="bg-white border border-[#e8d5f0] p-4 mb-3">
+        <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">The money, end to end</p>
+        <div class="grid grid-cols-5 gap-3 text-sm">
+            <div>
+                <p class="text-xs text-gray-500">Billed (work done)</p>
+                <p class="text-lg font-bold text-gray-800">Rs. {{ number_format($kpis['total_billed'],0) }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500">Received</p>
+                <p class="text-lg font-bold text-green-600">Rs. {{ number_format($kpis['total_revenue'],0) }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500">Still to come in</p>
+                <p class="text-lg font-bold text-amber-600">Rs. {{ number_format($kpis['total_receivable'],0) }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500">Expenses paid</p>
+                <p class="text-lg font-bold text-red-600">Rs. {{ number_format($kpis['total_expense'],0) }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500">Bills still to pay</p>
+                <p class="text-lg font-bold text-amber-600">Rs. {{ number_format($kpis['total_expense_unpaid'],0) }}</p>
+            </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-gray-100">
+            <div>
+                <p class="text-xs text-gray-500">In hand &mdash; received minus paid</p>
+                <p class="text-2xl font-bold {{ $kpis['total_profit'] >= 0 ? 'text-green-700' : 'text-red-700' }}">
+                    Rs. {{ number_format($kpis['total_profit'],0) }}
+                    <span class="text-sm font-medium text-gray-400">{{ $kpis['profit_margin'] }}%</span>
+                </p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500">Earned &mdash; billed minus all bills</p>
+                <p class="text-2xl font-bold {{ $kpis['total_earned'] >= 0 ? 'text-green-700' : 'text-red-700' }}">
+                    Rs. {{ number_format($kpis['total_earned'],0) }}
+                    <span class="text-sm font-medium text-gray-400">{{ $kpis['earned_margin'] }}%</span>
+                </p>
+            </div>
+        </div>
+    </div>
+
     {{-- KPIs --}}
     <div class="grid grid-cols-4 gap-3">
         <div class="bg-white border border-[#e8d5f0] p-4">
@@ -38,7 +84,7 @@
             <p class="text-2xl font-bold text-red-600 mt-1">Rs. {{ number_format($kpis['total_expense'],0) }}</p>
         </div>
         <div class="bg-white border border-[#e8d5f0] p-4">
-            <p class="text-xs text-gray-400 uppercase tracking-widest">Net Profit</p>
+            <p class="text-xs text-gray-400 uppercase tracking-widest">Net Profit &middot; in hand</p>
             <p class="text-2xl font-bold {{ $kpis['total_profit'] >= 0 ? 'text-green-700' : 'text-red-700' }} mt-1">
                 Rs. {{ number_format($kpis['total_profit'],0) }}
             </p>
@@ -90,21 +136,25 @@
     <div class="bg-white border border-[#e8d5f0] overflow-hidden">
         <div class="px-4 py-3 border-b border-[#f0e4f7]">
             <p class="text-sm font-medium text-gray-700">Monthly P&L Summary</p>
+            <p class="text-xs text-gray-400 mt-0.5">In hand = received &minus; expenses paid &middot; Earned = billed &minus; all bills recorded</p>
         </div>
         <table class="w-full text-sm">
             <thead class="bg-[#f9f4fb]">
                 <tr>
                     <th class="text-left px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Month</th>
-                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Revenue</th>
-                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Expenses</th>
-                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Net Profit</th>
+                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Billed</th>
+                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Received</th>
+                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Exp. paid</th>
+                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">In hand</th>
                     <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Margin</th>
+                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Earned</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
                 @foreach($profitability as $row)
                 <tr class="hover:bg-[#fdf8ff]">
                     <td class="px-4 py-3 font-medium text-gray-700">{{ $row['label'] }}</td>
+                    <td class="px-4 py-3 text-right text-gray-700">Rs. {{ number_format($row['billed'],0) }}</td>
                     <td class="px-4 py-3 text-right text-green-600 font-semibold">Rs. {{ number_format($row['revenue'],0) }}</td>
                     <td class="px-4 py-3 text-right text-red-600">Rs. {{ number_format($row['expense'],0) }}</td>
                     <td class="px-4 py-3 text-right font-bold {{ $row['profit'] >= 0 ? 'text-green-700' : 'text-red-700' }}">
@@ -114,6 +164,9 @@
                         <span class="text-xs font-medium {{ $row['margin'] >= 20 ? 'text-green-600' : ($row['margin'] >= 0 ? 'text-amber-600' : 'text-red-600') }}">
                             {{ $row['margin'] }}%
                         </span>
+                    </td>
+                    <td class="px-4 py-3 text-right font-semibold {{ $row['earned'] >= 0 ? 'text-green-700' : 'text-red-700' }}">
+                        Rs. {{ number_format($row['earned'],0) }}
                     </td>
                 </tr>
                 @endforeach
@@ -131,9 +184,9 @@
             <thead class="bg-[#f9f4fb]">
                 <tr>
                     <th class="text-left px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Quarter</th>
-                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Revenue</th>
-                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Expenses</th>
-                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Net Profit</th>
+                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Received</th>
+                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Exp. paid</th>
+                    <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">In hand</th>
                     <th class="text-right px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider">Margin</th>
                 </tr>
             </thead>

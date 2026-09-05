@@ -485,10 +485,28 @@ class AnalyticsController extends Controller
             ->orderBy('month')
             ->get()->keyBy('month');
 
-        $expense = FinanceExpense::whereBetween('expense_date', [$from, $to])
-            ->where('payment_status', 'paid')
+        // W-4 (G-06): two expense series, because there are two honest questions.
+        // paid   = money that actually left  -> cash profit
+        // booked = every bill recorded       -> earned profit
+        $expensePaid = FinanceExpense::whereBetween('expense_date', [$from, $to])
+            ->paid()
             ->selectRaw("DATE_FORMAT(expense_date, '%Y-%m') as month, SUM(total_amount) as total")
             ->groupByRaw("DATE_FORMAT(expense_date, '%Y-%m')")
+            ->orderBy('month')
+            ->get()->keyBy('month');
+
+        $expenseBooked = FinanceExpense::whereBetween('expense_date', [$from, $to])
+            ->selectRaw("DATE_FORMAT(expense_date, '%Y-%m') as month, SUM(total_amount) as total")
+            ->groupByRaw("DATE_FORMAT(expense_date, '%Y-%m')")
+            ->orderBy('month')
+            ->get()->keyBy('month');
+
+        // Billed, not just collected — without it "what did the practice earn"
+        // cannot be answered at all.
+        $billed = Invoice::whereBetween('invoice_date', [$from, $to])
+            ->whereNotIn('status', ['cancelled'])
+            ->selectRaw("DATE_FORMAT(invoice_date, '%Y-%m') as month, SUM(total_amount) as total")
+            ->groupByRaw("DATE_FORMAT(invoice_date, '%Y-%m')")
             ->orderBy('month')
             ->get()->keyBy('month');
 
@@ -496,15 +514,25 @@ class AnalyticsController extends Controller
         $cursor = $from->copy();
         while ($cursor <= $to) {
             $key     = $cursor->format('Y-m');
-            $rev     = $revenue[$key]->total ?? 0;
-            $exp     = $expense[$key]->total ?? 0;
+            $rev     = (float) ($revenue[$key]->total ?? 0);       // received
+            $bil     = (float) ($billed[$key]->total ?? 0);        // invoiced
+            $exp     = (float) ($expensePaid[$key]->total ?? 0);   // paid out
+            $expB    = (float) ($expenseBooked[$key]->total ?? 0); // booked
             $profitability->push([
-                'month'   => $key,
-                'label'   => $cursor->format('M Y'),
-                'revenue' => $rev,
-                'expense' => $exp,
+                'month'          => $key,
+                'label'          => $cursor->format('M Y'),
+                'billed'         => $bil,
+                'revenue'        => $rev,
+                'receivable'     => $bil - $rev,
+                'expense'        => $exp,
+                'expense_booked' => $expB,
+                'expense_unpaid' => $expB - $exp,
+                // cash: what stayed in hand
                 'profit'  => $rev - $exp,
                 'margin'  => $rev > 0 ? round((($rev - $exp) / $rev) * 100, 1) : 0,
+                // earned: what the practice actually earned that month
+                'earned'         => $bil - $expB,
+                'earned_margin'  => $bil > 0 ? round((($bil - $expB) / $bil) * 100, 1) : 0,
             ]);
             $cursor->addMonth();
         }
@@ -525,11 +553,15 @@ class AnalyticsController extends Controller
             $qKey    = "FY{$fyStart}-{$fyEnd} Q{$qNum}";
 
             if (! isset($quarterlyMap[$qKey])) {
-                $quarterlyMap[$qKey] = ['quarter' => $qKey, 'revenue' => 0, 'expense' => 0, 'profit' => 0];
+                $quarterlyMap[$qKey] = ['quarter' => $qKey, 'revenue' => 0, 'expense' => 0, 'profit' => 0,
+                                        'billed' => 0, 'expense_booked' => 0, 'earned' => 0];
             }
             $quarterlyMap[$qKey]['revenue'] += $row['revenue'];
             $quarterlyMap[$qKey]['expense'] += $row['expense'];
             $quarterlyMap[$qKey]['profit']  += $row['profit'];
+            $quarterlyMap[$qKey]['billed']         += $row['billed'];
+            $quarterlyMap[$qKey]['expense_booked'] += $row['expense_booked'];
+            $quarterlyMap[$qKey]['earned']         += $row['earned'];
         }
         $quarterly = collect($quarterlyMap)->map(function ($q) {
             $q['margin'] = $q['revenue'] > 0 ? round(($q['profit'] / $q['revenue']) * 100, 1) : 0;
@@ -563,11 +595,23 @@ class AnalyticsController extends Controller
         $totalRevenue = $profitability->sum('revenue');
         $totalExpense = $profitability->sum('expense');
         $totalProfit  = $profitability->sum('profit');
+        // W-4: the earned side, so the screen answers both questions.
+        $totalBilled        = $profitability->sum('billed');
+        $totalReceivable    = $totalBilled - $totalRevenue;
+        $totalExpenseBooked = $profitability->sum('expense_booked');
+        $totalExpenseUnpaid = $totalExpenseBooked - $totalExpense;
+        $totalEarned        = $profitability->sum('earned');
 
         $kpis = [
             'total_revenue'    => $totalRevenue,
             'total_expense'    => $totalExpense,
             'total_profit'     => $totalProfit,
+            'total_billed'         => $totalBilled,
+            'total_receivable'     => $totalReceivable,
+            'total_expense_booked' => $totalExpenseBooked,
+            'total_expense_unpaid' => $totalExpenseUnpaid,
+            'total_earned'         => $totalEarned,
+            'earned_margin'        => $totalBilled > 0 ? round(($totalEarned / $totalBilled) * 100, 1) : 0,
             'profit_margin'    => $totalRevenue > 0 ? round(($totalProfit / $totalRevenue) * 100, 1) : 0,
             'avg_monthly_rev'  => $months > 0 ? round($totalRevenue / $months, 0) : 0,
             'avg_monthly_exp'  => $months > 0 ? round($totalExpense / $months, 0) : 0,
