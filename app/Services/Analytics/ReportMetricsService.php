@@ -6,6 +6,7 @@ use App\Models\Appointment;
 use App\Models\Invoice;
 use App\Models\Finance\FinanceExpense;
 use App\Models\InvoicePayment;
+use App\Models\Wallet;
 use Carbon\Carbon;
 
 /**
@@ -155,10 +156,13 @@ class ReportMetricsService
        ===================================================================== */
 
     /** Money BILLED in the range — invoices raised, cancelled excluded. */
-    public function billed(Carbon $from, Carbon $to): float
+    public function billed(Carbon $from, Carbon $to, ?int $branchId = null): float
     {
         return (float) Invoice::whereBetween('invoice_date', [$from, $to])
             ->whereNotIn('status', ['cancelled'])
+            ->when($branchId, fn ($q) => $q->whereHas(
+                'patient', fn ($p) => $p->where('branch_id', $branchId)
+            ))
             ->sum('total_amount');
     }
 
@@ -214,6 +218,63 @@ class ReportMetricsService
             'earned_profit'   => $earned,
             'earned_margin'   => $billed > 0 ? round(($earned / $billed) * 100, 1) : 0.0,
         ];
+    }
+
+    /* =====================================================================
+       W-5 / G-32, added 2026-09-06.
+
+       FLOW vs STOCK. The CEO ruled on 6 Sep: "outstanding jopryant payment
+       yet nahi topryant constant rahila pahije — date filter shi ghenadena
+       nahi." A receivable does not shrink because someone changed a date
+       filter. So billed() and collected() are FLOWS and take a range;
+       outstanding() and patientCreditHeld() are STOCKS and take none.
+
+       His model, in his words: invoice is raised when treatment starts; an
+       advance goes into the WALLET against an advance receipt; the invoice
+       debits the wallet; whatever is billed and neither paid nor covered by
+       wallet is OUTSTANDING. Wallet must always be spent before taking new
+       money, and both stocks should sit at zero.
+       ===================================================================== */
+
+    /**
+     * Patient credit held in wallets right now — the clinic's cash-backed
+     * liability to its patients. A STOCK: point-in-time, never range-scoped.
+     *
+     * PROMOTIONAL CREDIT IS EXCLUDED, by the CEO's ruling and by U8 rules 11
+     * and 12: promotional credit was never money the clinic received, it may
+     * expire, and it is not cash-refundable. Patient credit never expires and
+     * is refundable — that is the money we actually owe back.
+     *
+     * Reads balance_patient_credit and nothing else. The two neighbouring
+     * columns are TRAPS: balance_permanent is the pre-U8 name of this same
+     * pot, kept live only so older readers would not break, and balance_total
+     * is written as promotional + permanent — patient credit is NOT in it.
+     */
+    public function patientCreditHeld(?int $branchId = null): float
+    {
+        return (float) Wallet::query()
+            ->when($branchId, fn ($q) => $q->whereHas(
+                'patient', fn ($p) => $p->where('branch_id', $branchId)
+            ))
+            ->sum('balance_patient_credit');
+    }
+
+    /**
+     * Collections split by payment mode — the SAME rows as collected(),
+     * grouped instead of summed, for exactly the reason collectionEvents()
+     * exists: a breakdown must never be able to disagree with the total
+     * printed above it.
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    public function collectionsByMode(Carbon $from, Carbon $to, ?int $branchId = null)
+    {
+        return $this->paymentsQuery($branchId)
+            ->whereBetween('payment_date', [$from, $to])
+            ->selectRaw('payment_mode, SUM(amount) as total, COUNT(*) as cnt')
+            ->groupBy('payment_mode')
+            ->orderByDesc('total')
+            ->get();
     }
 
     private function paymentsQuery(?int $branchId)

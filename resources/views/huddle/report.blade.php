@@ -212,6 +212,36 @@
         </div>
     </div>
 
+    {{-- ══ 1b. EXPENSES ══════════════════════════════════════════════════ --}}
+    {{-- Its own strip, never merged into Collections: patient money and clinic
+         outgo in one row is how the hybrid-profit confusion started. No profit
+         card here — that lives on the Finance dashboard and in Analytics. --}}
+    <div class="rp-section">
+        <div class="rp-section-head"><span class="dot" style="background:var(--c-red)"></span>Expenses</div>
+        <div class="rp-cards">
+            @foreach($expenseCards as $c)
+                <div class="rp-card {{ $c['tone'] }}">
+                    <div class="lbl">{{ $c['label'] }}</div>
+                    <div class="row">
+                        <div class="val">{{ $c['value'] }}</div>
+                        @isset($c['trend'])
+                            @php $t = $c['trend']; $cls = $t['good'] === null ? 'flat' : ($t['good'] ? 'good' : 'bad'); @endphp
+                            <span class="rp-trend {{ $cls }}" title="vs previous {{ $rangeDays }} days">
+                                @if($t['dir'] === 'up')
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7"/></svg>
+                                @elseif($t['dir'] === 'down')
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+                                @endif
+                                {{ $t['pct'] }}
+                            </span>
+                        @endisset
+                    </div>
+                    <div class="sub">{{ $c['sub'] }}</div>
+                </div>
+            @endforeach
+        </div>
+    </div>
+
     {{-- ══ 2. APPOINTMENTS & VISITS ═════════════════════════════════════════ --}}
     <div class="rp-section">
         <div class="rp-section-head"><span class="dot" style="background:var(--c-blue)"></span>Appointments &amp; Visits</div>

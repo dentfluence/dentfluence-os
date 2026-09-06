@@ -942,59 +942,68 @@ class HuddleController extends Controller
         $prevFromDate = $prevFrom->toDateString();
         $prevToDate   = $prevTo->toDateString();
 
-        // ══ 1. COLLECTIONS & REVENUE ══════════════════════════════════════════
-        // Source of truth = finance_transactions (same as the AI KpiReport tool).
-        // finance_transactions is clinic-wide (clinic_id, no branch_id column).
-        $collected   = 0.0;  $prevCollected = 0.0;
-        $refunds     = 0.0;  $prevRefunds   = 0.0;
-        $byMode      = collect();
-        $txCount     = 0;
-        if (class_exists(\App\Models\Finance\FinanceTransaction::class)) {
-            $income = \App\Models\Finance\FinanceTransaction::query()
-                ->where('type', 'income')
-                ->where('status', 'active')
-                ->whereBetween('transaction_date', [$fromDate, $toDate]);
-            $collected = (float) (clone $income)->sum('amount');
-            $txCount   = (clone $income)->count();
+        // ══ 1. THE MONEY ════════════════════════════════════════════════
+        // W-5 / G-32. Every figure here now comes from ReportMetricsService —
+        // the ONE definition, shared with the Finance dashboard and Analytics.
+        //
+        // This block used to sum finance_transactions directly. Measured on
+        // production 6 Sep 2026, that read Rs 4,11,412 against the canonical
+        // Rs 3,58,412 for the same 30 days. The whole Rs 53,000 gap was SEVEN
+        // pre-G1 rows that booked wallet ADVANCE DEPOSITS as income. An advance
+        // is the patient's money, not revenue — CEO ruling, 6 Sep. The
+        // InvoicePayment side matched to the rupee, so the bug was never in the
+        // arithmetic; it was in which table counts as "collected".
+        //
+        // FLOW vs STOCK — the CEO's ruling, and why the cards are split:
+        //   billed / received       are FLOWS  → they follow the date filter
+        //   outstanding / wallet    are STOCKS → they do NOT, and say so on
+        //                                        the card itself
+        // "Outstanding jopryant payment yet nahi topryant constant rahila
+        //  pahije" — a receivable does not shrink because someone changed a
+        // date filter. A stock also has no "previous period", so no trend chip.
+        $metrics = app(\App\Services\Analytics\ReportMetricsService::class);
 
-            // Breakdown by payment mode (cash / upi / card / …)
-            $byMode = (clone $income)
-                ->selectRaw('payment_mode, SUM(amount) as total, COUNT(*) as cnt')
-                ->groupBy('payment_mode')
-                ->orderByDesc('total')
-                ->get();
+        $billed    = $metrics->billed($from, $to, $branchId);
+        $collected = $metrics->collected($from, $to, $branchId);
+        $txCount   = $metrics->collectionEvents($from, $to, $branchId);
+        $byMode    = $metrics->collectionsByMode($from, $to, $branchId);
 
-            $refunds = (float) \App\Models\Finance\FinanceTransaction::query()
-                ->where('type', 'refund')
-                ->where('status', 'active')
-                ->whereBetween('transaction_date', [$fromDate, $toDate])
-                ->sum('amount');
+        // Stocks — point-in-time, deliberately NOT range-scoped.
+        // patients.outstanding_balance is a DEAD column: measured on production
+        // 6 Sep, every row was 0.00 while real receivables were Rs 1,30,230.
+        // Nothing writes it. This card read it for months and showed Rs 0.
+        $outstanding  = $metrics->outstanding($branchId);
+        $walletCredit = $metrics->patientCreditHeld($branchId);
 
-            // Previous-window equivalents (for trend chips)
-            $prevCollected = (float) \App\Models\Finance\FinanceTransaction::query()
-                ->where('type', 'income')->where('status', 'active')
-                ->whereBetween('transaction_date', [$prevFromDate, $prevToDate])
-                ->sum('amount');
-            $prevRefunds = (float) \App\Models\Finance\FinanceTransaction::query()
-                ->where('type', 'refund')->where('status', 'active')
-                ->whereBetween('transaction_date', [$prevFromDate, $prevToDate])
-                ->sum('amount');
-        }
-        $netCollected     = $collected - $refunds;
-        $prevNetCollected = $prevCollected - $prevRefunds;
-        $avgPerDay        = $rangeDays > 0 ? $collected / $rangeDays : 0;
-        $prevAvgPerDay    = $rangeDays > 0 ? $prevCollected / $rangeDays : 0;
+        // Previous comparable window — flows only.
+        $prevBilled    = $metrics->billed($prevFrom, $prevTo, $branchId);
+        $prevCollected = $metrics->collected($prevFrom, $prevTo, $branchId);
 
-        // Outstanding is point-in-time (now), scoped to this branch — no trend
-        $outstanding = (float) DB::table('patients')
-            ->where('branch_id', $branchId)
-            ->sum('outstanding_balance');
+        $avgPerDay     = $rangeDays > 0 ? $collected / $rangeDays : 0;
 
         $collectionsCards = [
-            ['label' => 'Total Collected', 'value' => $this->fmtMoney($collected), 'sub' => $txCount . ' transactions', 'tone' => 'green', 'trend' => $this->trend($collected, $prevCollected)],
-            ['label' => 'Net of Refunds',  'value' => $this->fmtMoney($netCollected), 'sub' => 'Refunds ' . $this->fmtMoney($refunds), 'tone' => 'blue', 'trend' => $this->trend($netCollected, $prevNetCollected)],
-            ['label' => 'Avg / Day',       'value' => $this->fmtMoney($avgPerDay), 'sub' => 'Over ' . $rangeDays . ' days', 'tone' => 'teal', 'trend' => $this->trend($avgPerDay, $prevAvgPerDay)],
-            ['label' => 'Outstanding (now)', 'value' => $this->fmtMoney($outstanding), 'sub' => 'Branch receivables', 'tone' => 'amber'],
+            ['label' => 'Billed', 'value' => $this->fmtMoney($billed), 'sub' => 'Invoices raised · ' . $periodLabel, 'tone' => 'blue', 'trend' => $this->trend($billed, $prevBilled)],
+            ['label' => 'Received', 'value' => $this->fmtMoney($collected), 'sub' => $txCount . ' payments · ' . $this->fmtMoney($avgPerDay) . ' / day', 'tone' => 'green', 'trend' => $this->trend($collected, $prevCollected)],
+            ['label' => 'Outstanding', 'value' => $this->fmtMoney($outstanding), 'sub' => 'Still to come in · all time, not filtered by date', 'tone' => 'amber'],
+            ['label' => 'Advance in Wallet', 'value' => $this->fmtMoney($walletCredit), 'sub' => "Patients' money held · all time, promotional excluded", 'tone' => 'teal'],
+        ];
+
+        // ══ 1b. EXPENSES ═══════════════════════════════════════════════
+        // Its own strip on purpose. Patient money and clinic outgo sitting in
+        // one row is exactly how the hybrid-profit confusion W-4 cured began.
+        //
+        // NO profit card here. Profit lives on the Finance dashboard and in
+        // Analytics; a third surface would re-open G-06 the week after it shut.
+        //
+        // Not branch-scoped, and honestly so: finance_expenses carries
+        // clinic_id, not branch_id (same limit W-4 documented).
+        $expensePaid     = $metrics->expensesPaid($from, $to);
+        $expenseUnpaid   = $metrics->expensesUnpaid($from, $to);
+        $prevExpensePaid = $metrics->expensesPaid($prevFrom, $prevTo);
+
+        $expenseCards = [
+            ['label' => 'Expenses Paid', 'value' => $this->fmtMoney($expensePaid), 'sub' => 'Money out · ' . $periodLabel, 'tone' => 'red', 'trend' => $this->trend($expensePaid, $prevExpensePaid, true)],
+            ['label' => 'Bills Unpaid', 'value' => $this->fmtMoney($expenseUnpaid), 'sub' => 'Booked in this period, not yet paid', 'tone' => 'amber'],
         ];
 
         // ══ 2. APPOINTMENTS & VISITS ══════════════════════════════════════════
@@ -1181,6 +1190,7 @@ class HuddleController extends Controller
             'toDate',
             'rangeDays',
             'collectionsCards',
+            'expenseCards',
             'byMode',
             'apptCards',
             'patientCards',
