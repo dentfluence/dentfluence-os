@@ -359,7 +359,23 @@
                 <div class="bg-gray-50 px-5 py-3 border-b border-gray-200 flex items-center justify-between">
                     <h2 class="text-sm font-semibold text-gray-700">Attachments @if($labCase->attachments->count())<span class="ml-1 text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">{{ $labCase->attachments->count() }}</span>@endif</h2>
                 </div>
-                <div class="p-5">
+                @php
+                    $lightbox = $labCase->attachments->map(fn ($a) => [
+                        'url'   => $a->url(),
+                        'name'  => $a->original_name,
+                        'size'  => round($a->size_bytes / 1024) . ' KB',
+                        'isImg' => str_starts_with($a->mime_type ?? '', 'image/'),
+                        'isPdf' => str_ends_with(strtolower($a->original_name), '.pdf'),
+                    ])->values()->all();
+                @endphp
+                <div class="p-5"
+                     x-data="{ open: false, i: 0, files: {{ Js::from($lightbox) }},
+                               show(n) { this.i = n; this.open = true },
+                               next() { if (this.open && this.files.length) this.i = (this.i + 1) % this.files.length },
+                               prev() { if (this.open && this.files.length) this.i = (this.i - 1 + this.files.length) % this.files.length } }"
+                     @keydown.escape.window="open = false"
+                     @keydown.arrow-right.window="next()"
+                     @keydown.arrow-left.window="prev()">
                     @if($labCase->attachments->isEmpty())
                     <p class="text-center text-sm text-gray-400 py-4">No attachments yet.</p>
                     @else
@@ -368,11 +384,15 @@
                         @php $isImg = str_starts_with($att->mime_type ?? '', 'image/'); @endphp
                         <div class="group relative bg-gray-50 border border-gray-200 rounded-xl p-3 text-center hover:border-[#d8b4e2] transition">
                             @if($isImg)
-                            <a href="{{ $att->url() }}" target="_blank">
+                            <button type="button" @click="show({{ $loop->index }})" class="block w-full">
                                 <img src="{{ $att->url() }}" alt="{{ $att->original_name }}" class="w-full h-20 object-cover rounded-lg mb-2">
-                            </a>
+                            </button>
                             @else
-                            <a href="{{ $att->url() }}" target="_blank" class="flex flex-col items-center gap-1 mb-2">
+                            <a href="{{ $att->url() }}" target="_blank"
+                               @if(str_ends_with(strtolower($att->original_name), '.pdf'))
+                               @click.prevent="show({{ $loop->index }})"
+                               @endif
+                               class="flex flex-col items-center gap-1 mb-2">
                                 <div class="w-12 h-12 bg-[#f3e8f5] rounded-lg flex items-center justify-center text-xl">
                                     @if(str_ends_with(strtolower($att->original_name), '.pdf')) 📄
                                     @elseif(str_ends_with(strtolower($att->original_name), '.stl')) 🦷
@@ -390,6 +410,43 @@
                         @endforeach
                     </div>
                     @endif
+                    {{-- Attachment viewer — same page, no second window. --}}
+                    <div x-show="open" x-cloak @click.self="open = false"
+                         class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-xl max-w-5xl w-full max-h-full flex flex-col overflow-hidden">
+                            <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-gray-200">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-medium text-gray-800 truncate" x-text="files[i]?.name"></p>
+                                    <p class="text-xs text-gray-400">
+                                        <span x-text="files[i]?.size"></span>
+                                        <span x-show="files.length > 1">
+                                            &middot; <span x-text="i + 1"></span> of <span x-text="files.length"></span>
+                                        </span>
+                                    </p>
+                                </div>
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <template x-if="files.length > 1">
+                                        <div class="flex gap-1">
+                                            <button type="button" @click="prev()" class="px-2 py-1 text-sm text-gray-500 hover:text-[#6a0f70]">&larr;</button>
+                                            <button type="button" @click="next()" class="px-2 py-1 text-sm text-gray-500 hover:text-[#6a0f70]">&rarr;</button>
+                                        </div>
+                                    </template>
+                                    <a :href="files[i]?.url" target="_blank" class="text-xs text-gray-500 hover:text-[#6a0f70]">Open</a>
+                                    <a :href="files[i]?.url + '?dl=1'" class="text-xs text-gray-500 hover:text-[#6a0f70]">Download</a>
+                                    <button type="button" @click="open = false" class="text-gray-400 hover:text-gray-700 text-xl leading-none px-1">&times;</button>
+                                </div>
+                            </div>
+                            <div class="bg-gray-900 flex items-center justify-center overflow-auto" style="min-height:50vh;max-height:80vh;">
+                                <template x-if="files[i]?.isImg">
+                                    <img :src="files[i]?.url" :alt="files[i]?.name" class="max-w-full max-h-[80vh] object-contain">
+                                </template>
+                                <template x-if="files[i]?.isPdf">
+                                    <iframe :src="files[i]?.url" class="w-full" style="height:80vh;" title="Attachment"></iframe>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
                     <form method="POST" action="{{ route('lab.attachments.store', $labCase) }}" enctype="multipart/form-data"
                         class="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center hover:border-[#d8b4e2] transition">
                         @csrf
