@@ -47,6 +47,16 @@ class LabExpenseService
             'gst_amount'   => 0,
             'total_amount' => $case->lab_cost,
             'payment_mode' => 'other',
+            // CEO ruling 6 Sep: "lab, consultant, material — sagle variable
+            // expenses aahet, te vaja jhale pahijet PAID kelyavar."
+            // finance_expenses.payment_status DEFAULTS TO 'paid', so leaving
+            // this key out silently deducted every lab bill the moment the
+            // case came back, cash unpaid. Inventory already writes 'unpaid'
+            // explicitly; lab did not. Most lab work here runs on a monthly
+            // account (see the note below), so it is genuinely unpaid for
+            // weeks. Marking it paid is the finance module's job, not this
+            // service's.
+            'payment_status' => 'unpaid',
             'status'       => 'approved',
             'notes'        => $case->payment_status === 'monthly_account'
                                 ? 'Monthly lab account — settle with vendor statement.'

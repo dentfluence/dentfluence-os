@@ -333,6 +333,203 @@ class ReportMetricsService
             ->keyBy('name');
     }
 
+    /* =====================================================================
+       W-8 / G-02 — DOCTOR ATTRIBUTION, added 2026-09-06.
+
+       The row asked for a new invoice_items.performed_by_user_id plus a
+       backfill. Measured: NEITHER IS NEEDED, and the row's own path is the
+       weaker one.
+
+       invoices.appointment_id is in $fillable but NO writer ever sets it, so
+       the old chain invoices.appointment_id -> appointments.doctor_id made
+       every rupee read "Unassigned". Meanwhile treatment_visit_items already
+       carries invoice_item_id — a DIRECT link from the work line to the bill
+       line — and treatment_visits carries doctor_id.
+
+           invoice_items.id
+             <- treatment_visit_items.invoice_item_id
+                -> treatment_visits.doctor_id
+
+       No migration, no backfill, and better data: the appointment says who was
+       BOOKED, the visit says who actually DID it. Frozen rule — plan is a
+       promise, visit is a fact. Earnings must sit on the fact.
+
+       KNOWN AMBIGUITY, made deterministic on purpose: if two visit items from
+       two different doctors point at ONE billed line, the money cannot be
+       split without inventing a rule. MIN(doctor_id) picks one, every time,
+       rather than double-counting the line. Rare, and honest; if it ever
+       matters the fix is to bill those separately.
+       ===================================================================== */
+
+    /** One doctor per billed line — see the note above on MIN(). */
+    private function doctorOfLine()
+    {
+        return DB::table('treatment_visit_items as tvi')
+            ->join('treatment_visits as tv', 'tv.id', '=', 'tvi.treatment_visit_id')
+            ->whereNotNull('tvi.invoice_item_id')
+            ->select('tvi.invoice_item_id', DB::raw('MIN(tv.doctor_id) as doctor_id'))
+            ->groupBy('tvi.invoice_item_id');
+    }
+
+    /** Per-invoice sum of line totals — the denominator for apportioning. */
+    private function invoiceLineSums()
+    {
+        return DB::table('invoice_items')
+            ->select('invoice_id', DB::raw('SUM(total) as line_sum'))
+            ->groupBy('invoice_id');
+    }
+
+    /**
+     * BILLED per doctor. Invoice-level discounts are apportioned across the
+     * lines exactly as billedByCategory() does, so the doctor column and the
+     * category column add up to the same billed() figure.
+     */
+    public function billedByDoctor(Carbon $from, Carbon $to, ?int $branchId = null)
+    {
+        return DB::table('invoice_items as ii')
+            ->join('invoices as inv', 'inv.id', '=', 'ii.invoice_id')
+            ->joinSub($this->invoiceLineSums(), 'li', 'li.invoice_id', '=', 'ii.invoice_id')
+            ->leftJoinSub($this->doctorOfLine(), 'dl', 'dl.invoice_item_id', '=', 'ii.id')
+            ->leftJoin('users as u', 'u.id', '=', 'dl.doctor_id')
+            ->when($branchId, fn ($q) => $q
+                ->join('patients as p', 'p.id', '=', 'inv.patient_id')
+                ->where('p.branch_id', $branchId))
+            ->whereBetween('inv.invoice_date', [$from, $to])
+            ->where('inv.status', '<>', 'cancelled')
+            ->select(
+                DB::raw('COALESCE(u.id, 0) as doctor_id'),
+                DB::raw("COALESCE(u.name, 'Unassigned') as doctor"),
+                DB::raw('ROUND(SUM(ii.total * inv.total_amount / NULLIF(li.line_sum, 0)), 2) as billed')
+            )
+            ->groupBy('doctor_id', 'doctor')
+            ->orderByDesc('billed')
+            ->get()
+            ->keyBy('doctor');
+    }
+
+    /**
+     * COLLECTED per doctor. A payment settles an INVOICE, but the doctor sits
+     * on the LINE, so each payment is split across that invoice's lines by
+     * line share and credited onward.
+     *
+     * NOTE the deleted_at guard: InvoicePayment uses SoftDeletes and a voided
+     * payment is soft-deleted, but DB::table() bypasses the model, so without
+     * this filter every voided payment would come back and inflate a doctor's
+     * collections. collected() gets this for free through Eloquent.
+     */
+    public function collectedByDoctor(Carbon $from, Carbon $to, ?int $branchId = null)
+    {
+        return DB::table('invoice_payments as ip')
+            ->join('invoices as inv', 'inv.id', '=', 'ip.invoice_id')
+            ->join('invoice_items as ii', 'ii.invoice_id', '=', 'inv.id')
+            ->joinSub($this->invoiceLineSums(), 'li', 'li.invoice_id', '=', 'inv.id')
+            ->leftJoinSub($this->doctorOfLine(), 'dl', 'dl.invoice_item_id', '=', 'ii.id')
+            ->leftJoin('users as u', 'u.id', '=', 'dl.doctor_id')
+            ->when($branchId, fn ($q) => $q
+                ->join('patients as p', 'p.id', '=', 'inv.patient_id')
+                ->where('p.branch_id', $branchId))
+            ->whereNull('ip.deleted_at')
+            ->whereBetween('ip.payment_date', [$from, $to])
+            ->select(
+                DB::raw('COALESCE(u.id, 0) as doctor_id'),
+                DB::raw("COALESCE(u.name, 'Unassigned') as doctor"),
+                DB::raw('ROUND(SUM(ip.amount * ii.total / NULLIF(li.line_sum, 0)), 2) as collected'),
+                DB::raw('COUNT(DISTINCT ip.invoice_id) as invoice_count'),
+                DB::raw('COUNT(DISTINCT ip.id) as payment_count')
+            )
+            ->groupBy('doctor_id', 'doctor')
+            ->orderByDesc('collected')
+            ->get()
+            ->keyBy('doctor');
+    }
+
+    /**
+     * Collected per doctor per month — feeds the existing Monthly Trend table.
+     * Same chain and same apportioning as collectedByDoctor(); split by month
+     * rather than re-derived, so the two tables can never disagree.
+     */
+    public function collectedByDoctorMonth(Carbon $from, Carbon $to, ?int $branchId = null)
+    {
+        return DB::table('invoice_payments as ip')
+            ->join('invoices as inv', 'inv.id', '=', 'ip.invoice_id')
+            ->join('invoice_items as ii', 'ii.invoice_id', '=', 'inv.id')
+            ->joinSub($this->invoiceLineSums(), 'li', 'li.invoice_id', '=', 'inv.id')
+            ->leftJoinSub($this->doctorOfLine(), 'dl', 'dl.invoice_item_id', '=', 'ii.id')
+            ->leftJoin('users as u', 'u.id', '=', 'dl.doctor_id')
+            ->when($branchId, fn ($q) => $q
+                ->join('patients as p', 'p.id', '=', 'inv.patient_id')
+                ->where('p.branch_id', $branchId))
+            ->whereNull('ip.deleted_at')
+            ->whereBetween('ip.payment_date', [$from, $to])
+            ->select(
+                DB::raw('COALESCE(u.id, 0) as doctor_id'),
+                DB::raw("COALESCE(u.name, 'Unassigned') as doctor_name"),
+                DB::raw("DATE_FORMAT(ip.payment_date, '%Y-%m') as month"),
+                DB::raw('ROUND(SUM(ip.amount * ii.total / NULLIF(li.line_sum, 0)), 2) as total')
+            )
+            ->groupBy('doctor_id', 'doctor_name', 'month')
+            ->orderBy('month')
+            ->orderByDesc('total')
+            ->get()
+            ->groupBy('doctor_name');
+    }
+
+    /**
+     * WORK DONE per doctor: how many of each treatment, by visit date.
+     *
+     * Counted from the work itself, not from the money — a waived or not-yet
+     * billed procedure still happened. The canonical treatment name comes
+     * through the billed line, because treatment_visit_items.treatment_name
+     * and treatment_plan_items.treatment_name are BOTH free text with no id;
+     * invoice_items.treatment_id is the only real link in this chain. Work
+     * that was never invoiced therefore falls back to the typed name, which
+     * is honest but will not group cleanly.
+     *
+     * @return \Illuminate\Support\Collection rows of {doctor, treatment, times}
+     */
+    public function productionByDoctor(Carbon $from, Carbon $to, ?int $branchId = null)
+    {
+        return DB::table('treatment_visit_items as tvi')
+            ->join('treatment_visits as tv', 'tv.id', '=', 'tvi.treatment_visit_id')
+            ->leftJoin('users as u', 'u.id', '=', 'tv.doctor_id')
+            ->leftJoin('invoice_items as ii', 'ii.id', '=', 'tvi.invoice_item_id')
+            ->leftJoin('treatments as t', 't.id', '=', 'ii.treatment_id')
+            ->when($branchId, fn ($q) => $q
+                ->join('patients as p', 'p.id', '=', 'tv.patient_id')
+                ->where('p.branch_id', $branchId))
+            ->whereBetween('tv.visit_date', [$from, $to])
+            ->whereNull('tv.deleted_at')
+            ->select(
+                DB::raw("COALESCE(u.name, 'Unassigned') as doctor"),
+                DB::raw("COALESCE(t.name, tvi.treatment_name, 'Not specified') as treatment"),
+                DB::raw('COUNT(*) as times')
+            )
+            ->groupBy('doctor', 'treatment')
+            ->orderBy('doctor')
+            ->orderByDesc('times')
+            ->get();
+    }
+
+    /** Visits actually conducted per doctor — the denominator for per-visit averages. */
+    public function visitsByDoctor(Carbon $from, Carbon $to, ?int $branchId = null)
+    {
+        return DB::table('treatment_visits as tv')
+            ->leftJoin('users as u', 'u.id', '=', 'tv.doctor_id')
+            ->when($branchId, fn ($q) => $q
+                ->join('patients as p', 'p.id', '=', 'tv.patient_id')
+                ->where('p.branch_id', $branchId))
+            ->whereBetween('tv.visit_date', [$from, $to])
+            ->whereNull('tv.deleted_at')
+            ->select(
+                DB::raw('COALESCE(u.id, 0) as doctor_id'),
+                DB::raw("COALESCE(u.name, 'Unassigned') as doctor"),
+                DB::raw('COUNT(*) as visits')
+            )
+            ->groupBy('doctor_id', 'doctor')
+            ->get()
+            ->keyBy('doctor');
+    }
+
     private function paymentsQuery(?int $branchId)
     {
         return InvoicePayment::query()

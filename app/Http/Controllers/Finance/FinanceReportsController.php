@@ -377,39 +377,71 @@ class FinanceReportsController extends Controller
 
     // ── 12. Provider (Per-Dentist) Earnings ────────────────────────────────
     //
-    // Attributes collected revenue to the treating doctor via
-    // invoice_payments -> invoices.appointment_id -> appointments.doctor_id.
-    // Invoices with no appointment_id (e.g. raised directly against a
-    // treatment plan with no linked appointment) fall into an "Unassigned"
-    // bucket rather than being silently dropped or guessed at — this is the
-    // real attribution the data supports today, not a perfect one.
+    // W-8 / G-02, rebuilt 2026-09-06.
+    //
+    // This used to attribute money via invoices.appointment_id ->
+    // appointments.doctor_id. NO WRITER ANYWHERE SETS invoices.appointment_id,
+    // so every rupee read "Unassigned" — the column is in $fillable and
+    // nothing has ever filled it.
+    //
+    // The tracker row prescribed a new invoice_items.performed_by_user_id plus
+    // a backfill. Measured: neither is needed. treatment_visit_items already
+    // carries invoice_item_id, a direct link from the work line to the bill
+    // line, and treatment_visits carries doctor_id. No migration, no guessed
+    // backfill, and BETTER data — the appointment records who was BOOKED, the
+    // visit records who actually DID the work. Plan is a promise, visit is a
+    // fact; earnings belong on the fact.
+    //
+    // Three numbers, never one: WORK DONE, BILLED, COLLECTED. A doctor doing
+    // 40 scalings and one doing 4 implants cannot be compared on money alone —
+    // that is a case-mix difference, usually decided by who books whom. Money
+    // shown by itself also quietly rewards pushing the expensive treatment.
 
     private function providerData(Carbon $from, Carbon $to): array
     {
-        $baseQuery = fn () => InvoicePayment::whereBetween('invoice_payments.payment_date', [$from, $to])
-            ->join('invoices', 'invoice_payments.invoice_id', '=', 'invoices.id')
-            ->leftJoin('appointments', 'invoices.appointment_id', '=', 'appointments.id')
-            ->leftJoin('users', 'appointments.doctor_id', '=', 'users.id');
+        $metrics = app(\App\Services\Analytics\ReportMetricsService::class);
 
-        $byDoctor = $baseQuery()
-            ->selectRaw("COALESCE(users.id, 0) as doctor_id, COALESCE(users.name, 'Unassigned') as doctor_name, SUM(invoice_payments.amount) as total, COUNT(DISTINCT invoice_payments.invoice_id) as invoice_count, COUNT(*) as payment_count")
-            ->groupBy('doctor_id', 'doctor_name')
-            ->orderByDesc('total')
-            ->get();
+        $collected  = $metrics->collectedByDoctor($from, $to);
+        $billed     = $metrics->billedByDoctor($from, $to);
+        $visits     = $metrics->visitsByDoctor($from, $to);
+        $production = $metrics->productionByDoctor($from, $to)->groupBy('doctor');
 
-        $byDoctorMonth = $baseQuery()
-            ->selectRaw("COALESCE(users.id, 0) as doctor_id, COALESCE(users.name, 'Unassigned') as doctor_name, DATE_FORMAT(invoice_payments.payment_date, '%Y-%m') as month, SUM(invoice_payments.amount) as total")
-            ->groupBy('doctor_id', 'doctor_name', 'month')
-            ->orderBy('month')
-            ->orderByDesc('total')
-            ->get()
-            ->groupBy('doctor_name');
+        $byDoctorMonth = $metrics->collectedByDoctorMonth($from, $to);
+
+        // Union of every doctor appearing in ANY of the three. A doctor who
+        // treated patients but whose work has not been billed or paid yet must
+        // still show up — otherwise the busiest person can be invisible.
+        $names = $collected->keys()
+            ->merge($billed->keys())
+            ->merge($visits->keys())
+            ->unique()
+            ->values();
+
+        $byDoctor = $names->map(function ($name) use ($collected, $billed, $visits) {
+            $c = $collected->get($name);
+            $b = $billed->get($name);
+            $v = $visits->get($name);
+
+            $coll     = (float) ($c->collected ?? 0);
+            $visitQty = (int) ($v->visits ?? 0);
+
+            return (object) [
+                'doctor_id'     => (int) ($c->doctor_id ?? $b->doctor_id ?? $v->doctor_id ?? 0),
+                'doctor_name'   => $name,
+                'total'         => $coll,                       // name kept: the export reads it
+                'billed'        => (float) ($b->billed ?? 0),
+                'visits'        => $visitQty,
+                'per_visit'     => $visitQty > 0 ? round($coll / $visitQty, 2) : 0.0,
+                'invoice_count' => (int) ($c->invoice_count ?? 0),
+                'payment_count' => (int) ($c->payment_count ?? 0),
+            ];
+        })->sortByDesc('total')->values();
 
         $total      = (float) $byDoctor->sum('total');
         $unassigned = (float) optional($byDoctor->first(fn ($r) => (int) $r->doctor_id === 0))->total;
         $doctorRows = $byDoctor->filter(fn ($r) => (int) $r->doctor_id !== 0)->values();
 
-        return compact('byDoctor', 'byDoctorMonth', 'total', 'unassigned', 'doctorRows');
+        return compact('byDoctor', 'byDoctorMonth', 'production', 'total', 'unassigned', 'doctorRows');
     }
 
     // ── Export ─────────────────────────────────────────────────────────────

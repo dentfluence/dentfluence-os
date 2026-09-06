@@ -725,31 +725,71 @@
         <table class="w-full text-sm">
             <thead><tr class="bg-gray-50 text-xs text-gray-500">
                 <th class="px-4 py-2 text-left">Doctor</th>
+                <th class="px-4 py-2 text-right">Visits</th>
                 <th class="px-4 py-2 text-right">Invoices</th>
                 <th class="px-4 py-2 text-right">Payments</th>
-                <th class="px-4 py-2 text-right">Total Collected (&#8377;)</th>
+                <th class="px-4 py-2 text-right">Billed (&#8377;)</th>
+                <th class="px-4 py-2 text-right">Collected (&#8377;)</th>
+                <th class="px-4 py-2 text-right">&#8377; / Visit</th>
             </tr></thead>
             <tbody>
             @forelse($data['byDoctor'] as $r)
             <tr class="border-t border-gray-50 hover:bg-gray-50 {{ (int)$r->doctor_id === 0 ? 'text-gray-400 italic' : '' }}">
                 <td class="px-4 py-2 {{ (int)$r->doctor_id === 0 ? '' : 'font-medium' }}">{{ $r->doctor_name }}</td>
-                <td class="px-4 py-2 text-right">{{ $r->invoice_count }}</td>
-                <td class="px-4 py-2 text-right">{{ $r->payment_count }}</td>
+                <td class="px-4 py-2 text-right">{{ $r->visits ?: '—' }}</td>
+                <td class="px-4 py-2 text-right">{{ $r->invoice_count ?: '—' }}</td>
+                <td class="px-4 py-2 text-right">{{ $r->payment_count ?: '—' }}</td>
+                <td class="px-4 py-2 text-right">{{ $r->billed > 0 ? number_format($r->billed, 0) : '—' }}</td>
                 <td class="px-4 py-2 text-right font-semibold {{ (int)$r->doctor_id === 0 ? 'text-gray-400' : 'text-green-700' }}">{{ number_format($r->total, 0) }}</td>
+                <td class="px-4 py-2 text-right text-gray-500">{{ $r->per_visit > 0 ? number_format($r->per_visit, 0) : '—' }}</td>
             </tr>
             @empty
-            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-400 text-xs">No data</td></tr>
+            <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400 text-xs">No data</td></tr>
             @endforelse
             </tbody>
             <tfoot><tr class="border-t-2 border-gray-200 bg-gray-50 font-semibold">
                 <td class="px-4 py-2">Total</td>
+                <td class="px-4 py-2 text-right">{{ $data['byDoctor']->sum('visits') ?: '' }}</td>
                 <td class="px-4 py-2 text-right"></td>
                 <td class="px-4 py-2 text-right"></td>
+                <td class="px-4 py-2 text-right">{{ number_format($data['byDoctor']->sum('billed'), 0) }}</td>
                 <td class="px-4 py-2 text-right">{{ number_format($data['total'], 0) }}</td>
+                <td class="px-4 py-2 text-right"></td>
             </tr></tfoot>
         </table>
         <p class="px-4 py-2 text-xs text-gray-400 border-t border-gray-50">
-            "Unassigned" = payments on invoices not linked to a specific appointment, so no treating doctor could be attributed. Link the invoice to its appointment at billing time to close this gap.
+            Attributed through the VISIT that did the work, not the appointment that was booked.
+            "Unassigned" = billed lines with no treatment visit recorded against them, so nobody can be
+            credited. Record the visit and bill from it to close that gap. Billed and Collected differ by
+            what has not been paid yet — that is a collection matter, not the doctor's.
+        </p>
+    </div>
+
+    <div class="bg-white border border-gray-100">
+        <div class="px-4 py-3 border-b border-gray-100 text-xs font-semibold text-gray-600 uppercase tracking-wider">Work Done by Doctor</div>
+        <table class="w-full text-sm">
+            <thead><tr class="bg-gray-50 text-xs text-gray-500">
+                <th class="px-4 py-2 text-left">Doctor</th>
+                <th class="px-4 py-2 text-left">Treatment</th>
+                <th class="px-4 py-2 text-right">Times</th>
+            </tr></thead>
+            <tbody>
+            @forelse($data['production'] as $doctorName => $rows)
+                @foreach($rows as $r)
+                <tr class="border-t border-gray-50 hover:bg-gray-50">
+                    <td class="px-4 py-2 {{ $doctorName === 'Unassigned' ? 'text-gray-400 italic' : 'font-medium' }}">{{ $doctorName }}</td>
+                    <td class="px-4 py-2">{{ $r->treatment }}</td>
+                    <td class="px-4 py-2 text-right">{{ $r->times }}</td>
+                </tr>
+                @endforeach
+            @empty
+            <tr><td colspan="3" class="px-4 py-6 text-center text-gray-400 text-xs">No visits recorded in this period</td></tr>
+            @endforelse
+            </tbody>
+        </table>
+        <p class="px-4 py-2 text-xs text-gray-400 border-t border-gray-50">
+            Counted from the visits themselves, so waived and not-yet-billed work is included.
+            "Not specified" = the visit line was never billed with a treatment picked, so only free text was typed.
         </p>
     </div>
 
