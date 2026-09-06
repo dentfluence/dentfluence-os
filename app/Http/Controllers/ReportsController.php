@@ -106,29 +106,41 @@ class ReportsController extends Controller
             ->orderBy('dow')
             ->pluck('total', 'dow');
 
-        // ── Revenue by treatment category (via income entries) ────────
-        $revenueByCategory = DB::table('finance_income_entries')
-            ->join('treatments', 'finance_income_entries.treatment_id', '=', 'treatments.id')
-            ->join('treatment_categories', 'treatments.treatment_category_id', '=', 'treatment_categories.id')
-            ->whereBetween('finance_income_entries.income_date', [$from, $to])
-            ->where('finance_income_entries.status', 'active')
-            ->select(
-                'treatment_categories.name',
-                DB::raw('COALESCE(SUM(finance_income_entries.net_amount), 0) as revenue'),
-                DB::raw('COUNT(*) as txn_count')
-            )
-            ->groupBy('treatment_categories.name')
-            ->orderByDesc('revenue')
-            ->get()
-            ->keyBy('name');
+        // ── Billed by treatment category ──────────────────────────────
+        // W-7 / G-01. This used to read finance_income_entries, a table with
+        // ZERO writers in the whole application, so every category showed
+        // Rs 0 from the day it shipped. It now comes from invoice_items via
+        // the one canonical service, with invoice-level discounts apportioned
+        // across the lines so this table's Total agrees with Billed elsewhere.
+        $revenueByCategory = app(\App\Services\Analytics\ReportMetricsService::class)
+            ->billedByCategory($from, $to);
 
-        // Merge revenue into byCategory (appointments already grouped by category name)
+        // Merge revenue into byCategory (appointments already grouped by name)
         $categoryKpi = $byCategory->map(function ($cat) use ($revenueByCategory) {
             $rev = $revenueByCategory->get($cat->name);
             $cat->revenue   = $rev ? (float) $rev->revenue   : 0;
             $cat->txn_count = $rev ? (int)   $rev->txn_count : 0;
             return $cat;
         });
+
+        // A category can earn money in this period without holding an
+        // appointment in it — and $byCategory is capped at the top 8 anyway.
+        // Without this, that money vanishes from the table AND from its Total,
+        // which looks perfectly healthy while under-reporting. Append the
+        // leftovers with zero appointments so the Total reconciles to billed.
+        $seen = $categoryKpi->pluck('name')->all();
+        foreach ($revenueByCategory as $name => $rev) {
+            if (in_array($name, $seen, true)) {
+                continue;
+            }
+            $categoryKpi->push((object) [
+                'name'      => $name,
+                'total'     => 0,
+                'revenue'   => (float) $rev->revenue,
+                'txn_count' => (int) $rev->txn_count,
+            ]);
+        }
+        $categoryKpi = $categoryKpi->sortByDesc('revenue')->values();
 
         // ── Revenue tab data ──────────────────────────────────────────────
         [

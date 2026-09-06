@@ -8,6 +8,7 @@ use App\Models\Finance\FinanceExpense;
 use App\Models\InvoicePayment;
 use App\Models\Wallet;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * ReportMetricsService — ONE definition for the money/appointment numbers
@@ -275,6 +276,61 @@ class ReportMetricsService
             ->groupBy('payment_mode')
             ->orderByDesc('total')
             ->get();
+    }
+
+    /**
+     * Billed, split by treatment category — W-7 / G-01, added 2026-09-06.
+     *
+     * This replaces a read of finance_income_entries, a table with EXACTLY
+     * ZERO writers anywhere in the application. The report it fed had been
+     * showing Rs 0 against every category since the day it shipped.
+     *
+     * WHY THE ARITHMETIC IS NOT JUST SUM(invoice_items.total):
+     * five discount layers live on the INVOICE, not on the line —
+     * Invoice::recalculate() computes
+     *     total = (taxable + gst) - wallet - coupon - membership - manual
+     * so a plain sum of line totals is always >= the invoice total, and this
+     * table's Total would not agree with Billed anywhere else on the system.
+     * That is the exact class of bug W-4 and W-5 spent the day closing.
+     *
+     * So each line is given its PRO-RATA share of the invoice's real total:
+     *     share = line.total / sum(all line totals on that invoice)
+     *     amount = share * invoice.total_amount
+     * A 10% invoice discount lands as 10% off every treatment on it, and the
+     * categories sum back to billed() to the rupee.
+     *
+     * Lines with no treatment_id fall into 'Uncategorised' rather than being
+     * dropped — treatment_id is nullable by design (manual invoice lines pass
+     * treatment_id ?? null), and silently omitting them would under-report the
+     * total while looking perfectly healthy.
+     *
+     * @return \Illuminate\Support\Collection keyed by category name
+     */
+    public function billedByCategory(Carbon $from, Carbon $to, ?int $branchId = null)
+    {
+        $lineSums = DB::table('invoice_items')
+            ->select('invoice_id', DB::raw('SUM(total) as line_sum'))
+            ->groupBy('invoice_id');
+
+        return DB::table('invoice_items as ii')
+            ->join('invoices as inv', 'inv.id', '=', 'ii.invoice_id')
+            ->joinSub($lineSums, 'li', 'li.invoice_id', '=', 'ii.invoice_id')
+            ->leftJoin('treatments as t', 't.id', '=', 'ii.treatment_id')
+            ->leftJoin('treatment_categories as tc', 'tc.id', '=', 't.treatment_category_id')
+            ->when($branchId, fn ($q) => $q
+                ->join('patients as p', 'p.id', '=', 'inv.patient_id')
+                ->where('p.branch_id', $branchId))
+            ->whereBetween('inv.invoice_date', [$from, $to])
+            ->where('inv.status', '<>', 'cancelled')
+            ->select(
+                DB::raw("COALESCE(tc.name, 'Uncategorised') as name"),
+                DB::raw('ROUND(SUM(ii.total * inv.total_amount / NULLIF(li.line_sum, 0)), 2) as revenue'),
+                DB::raw('COUNT(*) as txn_count')
+            )
+            ->groupBy('name')
+            ->orderByDesc('revenue')
+            ->get()
+            ->keyBy('name');
     }
 
     private function paymentsQuery(?int $branchId)
