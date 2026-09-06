@@ -554,14 +554,19 @@ class LabController extends Controller
 
         // Private disk: lab attachments carry patient work (x-rays, shade photos,
         // prescriptions). Served only via SecureMediaController.
-        $path = $request->file('file')->store('lab-attachments', 'local');
+        // Column names are original_name / size_bytes, NOT file_name / file_size.
+        // Writing the wrong keys let $fillable drop them silently, which left
+        // original_name NULL on a NOT NULL column — every upload 500'd. It was
+        // invisible only because the table had zero rows until 5 Sep.
+        $file = $request->file('file');
+        $path = $file->store('lab-attachments', 'local');
 
         $labCase->attachments()->create([
-            'file_path'   => $path,
-            'file_name'   => $request->file('file')->getClientOriginalName(),
-            'file_size'   => $request->file('file')->getSize(),
-            'mime_type'   => $request->file('file')->getMimeType(),
-            'uploaded_by' => auth()->id(),
+            'file_path'     => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'size_bytes'    => $file->getSize(),
+            'mime_type'     => $file->getMimeType(),
+            'uploaded_by'   => auth()->id(),
         ]);
 
         return back()->with('success', 'Attachment uploaded.');

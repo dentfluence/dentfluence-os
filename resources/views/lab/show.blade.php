@@ -369,19 +369,19 @@
                         <div class="group relative bg-gray-50 border border-gray-200 rounded-xl p-3 text-center hover:border-[#d8b4e2] transition">
                             @if($isImg)
                             <a href="{{ $att->url() }}" target="_blank">
-                                <img src="{{ $att->url() }}" alt="{{ $att->file_name }}" class="w-full h-20 object-cover rounded-lg mb-2">
+                                <img src="{{ $att->url() }}" alt="{{ $att->original_name }}" class="w-full h-20 object-cover rounded-lg mb-2">
                             </a>
                             @else
                             <a href="{{ $att->url() }}" target="_blank" class="flex flex-col items-center gap-1 mb-2">
                                 <div class="w-12 h-12 bg-[#f3e8f5] rounded-lg flex items-center justify-center text-xl">
-                                    @if(str_ends_with(strtolower($att->file_name), '.pdf')) 📄
-                                    @elseif(str_ends_with(strtolower($att->file_name), '.stl')) 🦷
+                                    @if(str_ends_with(strtolower($att->original_name), '.pdf')) 📄
+                                    @elseif(str_ends_with(strtolower($att->original_name), '.stl')) 🦷
                                     @else 📎 @endif
                                 </div>
                             </a>
                             @endif
-                            <p class="text-xs text-gray-600 truncate" title="{{ $att->file_name }}">{{ $att->file_name }}</p>
-                            <p class="text-xs text-gray-400">{{ round($att->file_size / 1024) }} KB</p>
+                            <p class="text-xs text-gray-600 truncate" title="{{ $att->original_name }}">{{ $att->original_name }}</p>
+                            <p class="text-xs text-gray-400">{{ round($att->size_bytes / 1024) }} KB</p>
                             <form method="POST" action="{{ route('lab.attachments.destroy', $att) }}" class="mt-1 opacity-0 group-hover:opacity-100 transition">
                                 @csrf @method('DELETE')
                                 <button type="submit" onclick="return confirm('Remove?')" class="text-xs text-red-400 hover:text-red-600">Remove</button>
