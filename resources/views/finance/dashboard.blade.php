@@ -180,11 +180,9 @@
     </div>
 
     {{-- ── ROW 2: SECONDARY KPI STRIP ── --}}
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
         @foreach([
             ['label'=>"Today's Collection",   'val'=>'today_collection',     'color'=>'#6a0f70'],
-            ['label'=>'Cash In Hand',         'val'=>'cash_in_hand',         'color'=>'#1a7a45'],
-            ['label'=>'Bank Balance',         'val'=>'bank_balance',         'color'=>'#1a5ea8'],
             ['label'=>'Avg Daily Collection', 'val'=>'avg_daily_collection', 'color'=>'#6a0f70'],
             ['label'=>'Projected Period Total','val'=>'projected_total',     'color'=>'#a05c00'],
         ] as $card)

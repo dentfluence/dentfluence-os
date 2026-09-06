@@ -58,8 +58,6 @@ class FinanceController extends Controller
         $todayIncome       = InvoicePayment::whereDate('payment_date', $today)->sum('amount');
         $outstandingAmount = Invoice::whereIn('status', ['draft', 'partial'])->sum('balance_due');
         $outstandingCount  = Invoice::whereIn('status', ['draft', 'partial'])->count();
-        $cashReceived      = InvoicePayment::where('payment_mode', 'cash')->sum('amount');
-        $cashSpent         = FinanceExpense::where('payment_mode', 'cash')->sum('total_amount');
 
         // This calendar month — always, used for the tax estimator regardless of the filter above
         $monthlyRevenue = InvoicePayment::whereMonth('payment_date', $now->month)
@@ -95,8 +93,24 @@ class FinanceController extends Controller
 
         $kpis = [
             'today_collection'     => $todayIncome,
-            'cash_in_hand'         => max(0, $cashReceived - $cashSpent),
-            'bank_balance'         => 0, // wire to FinanceBankAccount when balances tracked
+            // W-6 / G-04 — 'Cash In Hand' and 'Bank Balance' REMOVED from V1
+            // (CEO, 6 Sep: out altogether until we have clarity).
+            //
+            // Cash in hand is not a DERIVED number, it is a COUNTED one. The
+            // right table already exists and nothing writes to it:
+            // finance_cashbook carries opening_balance / cash_in / cash_out /
+            // closing_balance and, decisively, physical_count + difference +
+            // status(open|reconciled|mismatch). Its own shape says a person has
+            // to open the drawer and count.
+            //
+            // What stood here was wrong four separate ways: all-time rather
+            // than the selected period; blind to cash advances (receiveAdvance()
+            // writes a Receipt, not an InvoicePayment); never subtracting cash
+            // refunds; and max(0, ...) hiding a deficit instead of showing it.
+            // bank_balance was the literal integer 0 sitting beside real money.
+            //
+            // Restoring these means wiring the cashbook and a daily cash-close
+            // habit. That is a V1.2 row, not a KPI tile.
             'outstanding_amount'   => $outstandingAmount,
             'outstanding_count'    => $outstandingCount,
             'period_collection'    => $periodCollection,
