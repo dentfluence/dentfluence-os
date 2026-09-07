@@ -71,9 +71,13 @@ class AppointmentTimelineCharacterizationTest extends TestCase
         $this->actingAs($admin)->patchJson(route('appointments.updateStatus', $c), ['status' => 'no_show'])->assertOk();
         $this->assertSame(1, $this->activityCount($c, 'appointment.missed'));
 
+        // W-9 (7 Sep 2026): reason_code + outcome are now required on the web
+        // cancel endpoint. The behaviour under test — exactly one
+        // appointment.cancelled activity row — is unchanged.
         $d = $this->makeAppointment(['status' => 'scheduled']);
         $this->actingAs($admin)->patchJson(route('appointments.cancel', $d), [
             'cancel_reason' => 'x', 'cancelled_party' => 'clinic',
+            'reason_code'   => 'clinic_side', 'outcome' => 'not_returning',
         ])->assertOk();
         $this->assertSame(1, $this->activityCount($d, 'appointment.cancelled'));
     }

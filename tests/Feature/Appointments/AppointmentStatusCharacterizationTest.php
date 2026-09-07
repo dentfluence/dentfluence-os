@@ -75,10 +75,18 @@ class AppointmentStatusCharacterizationTest extends TestCase
         $admin = $this->adminUser();
         $appt  = $this->makeAppointment(['status' => 'scheduled']);
 
+        // W-9 (7 Sep 2026) — the web cancel contract CHANGED ON PURPOSE. A
+        // cancellation may no longer end without a countable reason and a
+        // decision about the patient, so reason_code and outcome are required
+        // here now. This test still characterises what it always did: that the
+        // free-text reason and the party are recorded and previous_status is
+        // kept for the revert button. The mobile API contract is unchanged.
         $this->actingAs($admin)
             ->patchJson(route('appointments.cancel', $appt), [
                 'cancel_reason'   => 'Patient requested',
                 'cancelled_party' => 'patient',
+                'reason_code'     => 'time_clash',
+                'outcome'         => 'not_returning',
             ])
             ->assertOk()
             ->assertJson(['ok' => true]);

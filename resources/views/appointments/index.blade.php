@@ -1253,7 +1253,7 @@ window.__APPT_DATA = {
 {{-- ── Cancel with Reason Modal ─────────────────────────────── --}}
 <div id="cancel-reason-modal"
      style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;">
-    <div style="background:#fff;border-radius:10px;width:380px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+    <div style="background:#fff;border-radius:10px;width:430px;max-height:92vh;overflow-y:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25);">
         <h3 style="font-size:15px;font-weight:700;color:#1e293b;margin:0 0 4px;">Cancel Appointment</h3>
         <p style="font-size:12px;color:#64748b;margin:0 0 16px;" id="crm-patient-name">—</p>
 
@@ -1270,11 +1270,44 @@ window.__APPT_DATA = {
         </div>
 
         <label style="font-size:11.5px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Reason for cancellation *</label>
-        <textarea id="crm-reason" rows="3" placeholder="e.g. Patient requested reschedule, Doctor unavailable…"
+        <select id="crm-reason-code" onchange="onCancelReasonChange()"
+                style="width:100%;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:6px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit;background:#fff;margin-bottom:10px;">
+            <option value="">— Select a reason —</option>
+            @foreach(\App\Enums\CancellationReason::modalMeta() as $code => $meta)
+                <option value="{{ $code }}">{{ $meta['label'] }}</option>
+            @endforeach
+        </select>
+
+        <textarea id="crm-reason" rows="2" placeholder="Anything else worth remembering (optional)"
                   style="width:100%;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:6px;font-size:13px;resize:none;outline:none;box-sizing:border-box;font-family:inherit;"
                   onfocus="this.style.borderColor='#6a0f70'" onblur="this.style.borderColor='#d1d5db'"></textarea>
+
+        {{-- The point of the whole screen: a cancellation may not end here. --}}
+        <label style="font-size:11.5px;font-weight:600;color:#374151;display:block;margin:14px 0 6px;">What happens next? *</label>
+        <div style="display:flex;gap:8px;">
+            <button type="button" id="crm-out-callback" onclick="setCancelOutcome('callback')"
+                    style="flex:1;padding:8px;border:1.5px solid #d1d5db;background:#fff;border-radius:6px;font-size:12.5px;font-weight:600;color:#374151;cursor:pointer;">
+                Call back
+            </button>
+            <button type="button" id="crm-out-notreturning" onclick="setCancelOutcome('not_returning')"
+                    style="flex:1;padding:8px;border:1.5px solid #d1d5db;background:#fff;border-radius:6px;font-size:12.5px;font-weight:600;color:#374151;cursor:pointer;">
+                Not returning
+            </button>
+        </div>
+
+        <div id="crm-callback-wrap" style="display:none;margin-top:10px;">
+            <label style="font-size:11.5px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Call the patient on *</label>
+            <input type="date" id="crm-callback-date"
+                   style="width:100%;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:6px;font-size:13px;outline:none;box-sizing:border-box;font-family:inherit;">
+            <p style="font-size:11px;color:#64748b;margin:6px 0 0;">A task appears in that day's list, assigned to you.</p>
+        </div>
+
         <div id="crm-error" style="display:none;font-size:11.5px;color:#dc2626;margin-top:4px;"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+            <button onclick="cancelModalToReschedule()"
+                    style="padding:7px 16px;border:1.5px solid #6a0f70;background:#fff;border-radius:6px;font-size:13px;cursor:pointer;color:#6a0f70;font-weight:600;margin-right:auto;">
+                Move to another slot
+            </button>
             <button onclick="closeCancelModal()"
                     style="padding:7px 16px;border:1.5px solid #d1d5db;background:#fff;border-radius:6px;font-size:13px;cursor:pointer;color:#374151;">
                 Keep Appointment
@@ -1847,8 +1880,14 @@ function qvcEdit() {
 }
 
 // ── Cancel with reason ───────────────────────────────────────────
-let _cancelAptId = null;
-let _cancelParty = null;
+// W-9: a cancellation may not end here. Reception must pick a countable reason
+// AND say what happens to the patient next — call back on a date (which becomes
+// a task in that day's list) or not returning. There is no third silent option.
+const CANCEL_REASON_META = @json(\App\Enums\CancellationReason::modalMeta());
+
+let _cancelAptId   = null;
+let _cancelParty   = null;
+let _cancelOutcome = null;
 
 function _styleCancelPartyBtn(btn, active) {
     btn.style.borderColor = active ? '#6a0f70' : '#d1d5db';
@@ -1869,8 +1908,13 @@ function qvcCancel() {
     _cancelParty = null;
     document.getElementById('crm-patient-name').textContent = qvcCurrentApt.patient_name + ' — ' + qvcCurrentApt.appointment_time;
     document.getElementById('crm-reason').value = '';
+    document.getElementById('crm-reason-code').value = '';
+    document.getElementById('crm-callback-date').value = '';
+    document.getElementById('crm-callback-wrap').style.display = 'none';
     document.getElementById('crm-error').style.display = 'none';
-    setCancelParty(null); // reset button styling
+    _cancelOutcome = null;
+    setCancelParty(null);   // reset button styling
+    setCancelOutcome(null); // reset button styling
     hideQuickView();
     const modal = document.getElementById('cancel-reason-modal');
     modal.style.display = 'flex';
@@ -1878,23 +1922,84 @@ function qvcCancel() {
 
 function closeCancelModal() {
     document.getElementById('cancel-reason-modal').style.display = 'none';
-    _cancelAptId = null;
-    _cancelParty = null;
+    _cancelAptId   = null;
+    _cancelParty   = null;
+    _cancelOutcome = null;
+}
+
+/**
+ * "Move to another slot" — the honest first question on this screen.
+ *
+ * A patient who takes a new date has not cancelled anything, so nothing is
+ * cancelled: we close the modal and hand over to the existing reschedule flow.
+ * No cancellation row, no reason, no callback task.
+ */
+function cancelModalToReschedule() {
+    closeCancelModal();
+    if (typeof qvcReschedule === 'function' && qvcCurrentApt) { qvcReschedule(); return; }
+    if (window.calendar) window.calendar.refetchEvents();
+}
+
+function setCancelOutcome(outcome) {
+    _cancelOutcome = outcome;
+    _styleCancelPartyBtn(document.getElementById('crm-out-callback'),     outcome === 'callback');
+    _styleCancelPartyBtn(document.getElementById('crm-out-notreturning'), outcome === 'not_returning');
+    document.getElementById('crm-callback-wrap').style.display = (outcome === 'callback') ? 'block' : 'none';
+    if (outcome === 'callback' && !document.getElementById('crm-callback-date').value) {
+        _prefillCallbackDate();
+    }
+    document.getElementById('crm-error').style.display = 'none';
+}
+
+/**
+ * The right day to ring back is a property of WHY they left, so the reason
+ * fills the date in. Reception can always overwrite it — this only saves them
+ * inventing a date under pressure, it does not decide for them.
+ */
+function _prefillCallbackDate() {
+    const code = document.getElementById('crm-reason-code').value;
+    const days = CANCEL_REASON_META[code]?.days;
+    if (!days) return;
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    document.getElementById('crm-callback-date').value = d.toISOString().slice(0, 10);
+}
+
+function onCancelReasonChange() {
+    if (_cancelOutcome === 'callback') _prefillCallbackDate();
+    document.getElementById('crm-error').style.display = 'none';
 }
 
 async function submitCancel() {
-    const reason = document.getElementById('crm-reason').value.trim();
+    const note   = document.getElementById('crm-reason').value.trim();
+    const code   = document.getElementById('crm-reason-code').value;
+    const cbDate = document.getElementById('crm-callback-date').value;
     const errEl  = document.getElementById('crm-error');
-    if (!_cancelParty) { errEl.textContent = 'Please select who cancelled — Patient or Clinic.'; errEl.style.display = 'block'; return; }
-    if (!reason) { errEl.textContent = 'Please enter a reason.'; errEl.style.display = 'block'; return; }
+
+    if (!_cancelParty)   { errEl.textContent = 'Please select who cancelled — Patient or Clinic.'; errEl.style.display = 'block'; return; }
+    if (!code)           { errEl.textContent = 'Please pick a reason.'; errEl.style.display = 'block'; return; }
+    if (!_cancelOutcome) { errEl.textContent = 'Please say what happens next — call back, or not returning.'; errEl.style.display = 'block'; return; }
+    if (_cancelOutcome === 'callback' && !cbDate) { errEl.textContent = 'Please choose the day to call the patient.'; errEl.style.display = 'block'; return; }
     errEl.style.display = 'none';
+
+    // cancel_reason stays a readable sentence — it is what every existing screen
+    // and export already prints. The code beside it is what gets counted.
+    const label  = CANCEL_REASON_META[code]?.label || code;
+    const reason = note ? (label + ' — ' + note) : label;
 
     try {
         const url = window.__APPT_DATA.routes.cancelAppt.replace('{id}', _cancelAptId);
         const r = await fetch(url, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken },
-            body: JSON.stringify({ cancel_reason: reason, cancelled_party: _cancelParty }),
+            body: JSON.stringify({
+                cancel_reason:   reason,
+                cancelled_party: _cancelParty,
+                reason_code:     code,
+                reason_note:     note || null,
+                outcome:         _cancelOutcome,
+                callback_date:   _cancelOutcome === 'callback' ? cbDate : null,
+            }),
         });
         const data = await r.json();
         if (data.ok) {
@@ -1905,7 +2010,8 @@ async function submitCancel() {
             if (window.calendar) window.calendar.refetchEvents();
             if (window._apptApp) { window._apptApp.refreshQueue(); window._apptApp.refreshCounts(); }
         } else {
-            errEl.textContent = data.message || 'Failed to cancel.';
+            const first = data.errors ? Object.values(data.errors)[0]?.[0] : null;
+            errEl.textContent = first || data.message || 'Failed to cancel.';
             errEl.style.display = 'block';
         }
     } catch { errEl.textContent = 'Network error.'; errEl.style.display = 'block'; }

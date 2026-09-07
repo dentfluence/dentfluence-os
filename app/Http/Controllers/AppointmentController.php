@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AppointmentStatus;
+use App\Enums\CancellationReason;
 use App\Models\Appointment;
+use App\Models\AppointmentCancellation;
 use App\Models\AppSetting;
 use App\Models\DoctorBlockedSlot;
 use App\Models\Operatory;
@@ -346,16 +348,35 @@ class AppointmentController extends Controller
     {
         $this->authorize('update', $appointment);
 
-        $request->validate([
+        // W-9. cancel_reason stays exactly as it was — free text, still stored on
+        // the appointment — but it is no longer the only thing captured. The
+        // countable code and the decision about the patient are now required, and
+        // the modal cannot be submitted without them.
+        //
+        // 'rebooked' is NOT an accepted outcome here: moving a patient to another
+        // slot goes through reschedule(), which never cancels the appointment at
+        // all. Offering it on this endpoint would invite a second appointment row
+        // for one visit.
+        $validated = $request->validate([
             'cancel_reason'   => 'required|string|max:500',
             'cancelled_party' => 'required|in:patient,clinic',
+            'reason_code'     => 'required|' . CancellationReason::validationRule(),
+            'reason_note'     => 'nullable|string|max:500',
+            'outcome'         => 'required|in:' . implode(',', AppointmentCancellation::CHOOSABLE_OUTCOMES),
+            'callback_date'   => 'required_if:outcome,callback|nullable|date|after_or_equal:today',
         ]);
 
         $fresh = $this->appointments->cancel(
             $appointment,
-            $request->cancel_reason,
-            $request->cancelled_party,
-            Auth::user()
+            $validated['cancel_reason'],
+            $validated['cancelled_party'],
+            Auth::user(),
+            [
+                'reason_code'   => $validated['reason_code'],
+                'reason_note'   => $validated['reason_note']   ?? null,
+                'outcome'       => $validated['outcome'],
+                'callback_date' => $validated['callback_date'] ?? null,
+            ]
         );
 
         return response()->json([

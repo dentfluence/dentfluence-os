@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Enums\AppointmentStatus;
+use App\Enums\CancellationReason;
 use App\Models\Appointment;
+use App\Models\AppointmentCancellation;
 use App\Models\DoctorBlockedSlot;
 use App\Models\Patient;
+use App\Models\Task;
 use App\Models\TreatmentCategory;
 use App\Models\User;
 use App\Services\Relationship\AppointmentActivityLogger;
@@ -461,9 +464,42 @@ class AppointmentService
     }
 
     /** Cancel an appointment, recording the reason and who initiated it. */
-    public function cancel(Appointment $appointment, string $reason, ?string $cancelledParty = null, ?User $actor = null): Appointment
-    {
-        return DB::transaction(function () use ($appointment, $reason, $cancelledParty, $actor) {
+    /**
+     * Cancel an appointment AND record what happens to the patient next (W-9).
+     *
+     * The cancellation write itself is unchanged — cancel_reason and
+     * cancelled_party still land on the appointment exactly as before, so every
+     * existing read keeps working. What is new is that the call also writes an
+     * `appointment_cancellations` row, and, when the outcome is a callback,
+     * the Task that puts the patient in front of reception on the chosen day.
+     *
+     * Before this, cancel() was a dead end: RecallEngineService has four buckets
+     * (no-visit, birthday, post-op, recent treatment) and not one of them looks
+     * at a cancelled appointment, so a patient who cancelled left no trace that
+     * anything should happen. That is the hole this closes.
+     *
+     * $outcome is optional so the existing callers keep compiling:
+     *   reason_code   string  one of CancellationReason (defaults to 'other')
+     *   reason_note   ?string free text kept alongside the countable code
+     *   outcome       string  callback | not_returning | rebooked | unspecified
+     *   callback_date ?string Y-m-d, required by the caller when outcome=callback
+     *   rebooked_appointment_id ?int
+     * The mobile API (M-9 has not been built yet) still posts the old two-field
+     * body; it lands as `unspecified`, which is a countable "nobody decided"
+     * rather than a silent nothing.
+     *
+     * Everything is inside the existing transaction on purpose: an appointment
+     * that is cancelled without its follow-up task is the exact failure this row
+     * exists to prevent, so either both land or neither does.
+     */
+    public function cancel(
+        Appointment $appointment,
+        string $reason,
+        ?string $cancelledParty = null,
+        ?User $actor = null,
+        array $outcome = []
+    ): Appointment {
+        return DB::transaction(function () use ($appointment, $reason, $cancelledParty, $actor, $outcome) {
             $appointment->update([
                 'previous_status' => $appointment->status,
                 'status'          => 'cancelled',
@@ -471,10 +507,112 @@ class AppointmentService
                 'cancelled_party' => $cancelledParty,
             ]);
 
+            $this->recordCancellation($appointment, $reason, $cancelledParty, $actor, $outcome);
+
             $this->activityLogger->cancelled($appointment, $actor, $reason, $cancelledParty);
 
             return $appointment->fresh()->load(self::WITH);
         });
+    }
+
+    /**
+     * Write the cancellation record and, for a callback, the task that carries it.
+     *
+     * Kept private and called only from cancel() — ONE writer for this fact.
+     */
+    private function recordCancellation(
+        Appointment $appointment,
+        string $reason,
+        ?string $cancelledParty,
+        ?User $actor,
+        array $in
+    ): AppointmentCancellation {
+        $decision = $in['outcome'] ?? AppointmentCancellation::OUTCOME_UNSPECIFIED;
+        if (! array_key_exists($decision, AppointmentCancellation::OUTCOMES)) {
+            $decision = AppointmentCancellation::OUTCOME_UNSPECIFIED;
+        }
+
+        $reasonCode = $in['reason_code'] ?? CancellationReason::Other->value;
+        if (! CancellationReason::tryFrom($reasonCode)) {
+            $reasonCode = CancellationReason::Other->value;
+        }
+
+        // A callback date is only meaningful for a callback. Storing one against
+        // "not returning" would put a date on a patient nobody intends to ring.
+        $callbackDate = $decision === AppointmentCancellation::OUTCOME_CALLBACK
+            ? ($in['callback_date'] ?? null)
+            : null;
+
+        $task = null;
+        if ($callbackDate && $actor) {
+            $task = $this->createCallbackTask($appointment, $actor, $callbackDate, $reasonCode, $in['reason_note'] ?? $reason);
+        }
+
+        return AppointmentCancellation::create([
+            'appointment_id'          => $appointment->id,
+            'patient_id'              => $appointment->patient_id,
+            'branch_id'               => $appointment->branch_id,
+            'reason_code'             => $reasonCode,
+            'reason_note'             => $in['reason_note'] ?? null,
+            'cancelled_party'         => $cancelledParty ?: 'patient',
+            'outcome'                 => $decision,
+            'callback_date'           => $callbackDate,
+            'task_id'                 => $task?->id,
+            'rebooked_appointment_id' => $in['rebooked_appointment_id'] ?? null,
+            'cancelled_by'            => $actor?->id,
+            'cancelled_at'            => now(),
+        ]);
+    }
+
+    /**
+     * The callback task. Deliberately an ordinary Task row, not a FollowUp:
+     * both models exist, and two paths for "ring this patient back" is the same
+     * disease that produced four different definitions of profit. Reception
+     * already lives in the task list; this simply appears there on the day.
+     *
+     * task_type is 'human' explicitly. A 'system' task is hidden from
+     * reception-facing lists once the tasks.human_system_split flag is on, and a
+     * callback nobody can see is worse than no callback at all.
+     *
+     * assigned_to is the person who cancelled — whoever took the call owns the
+     * call back, until someone reassigns it in the task list.
+     *
+     * Note: TaskController::store() also drops a CommunicationQueue entry for
+     * 'call' tasks. This path does not, on purpose — reception should get ONE
+     * item to act on, not the same patient twice in two lists.
+     */
+    private function createCallbackTask(
+        Appointment $appointment,
+        User $actor,
+        string $callbackDate,
+        string $reasonCode,
+        ?string $note
+    ): Task {
+        $appointment->loadMissing('patient');
+        // The calendar payload reads $a->patient?->name — same field, same
+        // fallback, so the task title cannot disagree with the screen it came from.
+        $patientName = $appointment->patient?->name ?? 'Patient';
+
+        $was = $appointment->appointment_date instanceof Carbon
+            ? $appointment->appointment_date->format('d M')
+            : (string) $appointment->appointment_date;
+
+        $reasonLabel = CancellationReason::tryFrom($reasonCode)?->label() ?? $reasonCode;
+
+        return Task::create([
+            'title'       => "Call back: {$patientName}",
+            'description' => "Cancelled the {$was} appointment. Reason: {$reasonLabel}."
+                             . ($note ? " Note: {$note}" : ''),
+            'assigned_to' => $actor->id,
+            'created_by'  => $actor->id,
+            'branch_id'   => $appointment->branch_id,
+            'patient_id'  => $appointment->patient_id,
+            'due_date'    => $callbackDate,
+            'priority'    => 'medium',
+            'category'    => 'call',
+            'task_type'   => 'human',
+            'status'      => 'pending',
+        ]);
     }
 
     /**

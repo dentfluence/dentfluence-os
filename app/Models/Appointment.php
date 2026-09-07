@@ -68,6 +68,24 @@ class Appointment extends Model
     public function treatmentCategory() { return $this->belongsTo(TreatmentCategory::class); }
     public function operatory()          { return $this->belongsTo(Operatory::class); }
     public function chairsideAssistant() { return $this->belongsTo(User::class, 'chairside_assistant_id'); }
+
+    /**
+     * Every cancellation this appointment has ever had (W-9).
+     *
+     * hasMany, not hasOne: `previous_status` exists so a cancellation can be
+     * reverted, and an appointment cancelled twice is a different problem from
+     * one cancelled once. The screen wants the newest; the report wants them all.
+     */
+    public function cancellations()
+    {
+        return $this->hasMany(AppointmentCancellation::class)->latest('cancelled_at');
+    }
+
+    /** The decision that currently stands for this appointment. */
+    public function latestCancellation()
+    {
+        return $this->hasOne(AppointmentCancellation::class)->latestOfMany('cancelled_at');
+    }
  
     // ── Scopes ────────────────────────────────────────────────────
  
