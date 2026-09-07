@@ -278,6 +278,16 @@ Route::middleware('auth')->group(function () {
         // UX-04 — recorded "No Treatment Done Today" answer from the post-consultation gate.
         Route::post('/patients/{patient}/visits/none-today', [App\Http\Controllers\TreatmentVisitController::class, 'noneToday'])->name('visits.none-today')->middleware('module:patients,edit');
 
+        /* ── Visit verification (2026-09-07) ──────────────────────────────────
+           The list is readable by anyone who can see patients; verifying and
+           un-verifying are admin.only, because a doctor who can verify his own
+           work is not a control. Registered BEFORE nothing else matches
+           /visits/unverified — the edit route is three segments, so there is no
+           collision, but keeping them adjacent keeps the intent obvious. */
+        Route::get('/visits/unverified',        [App\Http\Controllers\TreatmentVisitController::class, 'unverified'])->name('visits.unverified')->middleware('module:patients');
+        Route::post('/visits/{visit}/verify',   [App\Http\Controllers\TreatmentVisitController::class, 'verify'])->name('visits.verify')->middleware('admin.only');
+        Route::post('/visits/{visit}/unverify', [App\Http\Controllers\TreatmentVisitController::class, 'unverify'])->name('visits.unverify')->middleware('admin.only');
+
         // ── Consult Assist (AJAX) ──────────────────────────────────────────────
         // Receives chief complaint text, returns matched specialties from treatment_knowledge.
         Route::post('/consult-assist/suggest', [App\Http\Controllers\ConsultAssistController::class, 'suggest'])
@@ -398,6 +408,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/settings/patient-id',           [\App\Http\Controllers\Settings\SettingsController::class, 'savePatientId'])->name('settings.patient_id.save')->middleware('module:settings,edit');
         Route::post('/settings/notifications',        [\App\Http\Controllers\Settings\SettingsController::class, 'saveNotifications'])->name('settings.notifications.save')->middleware('module:settings,edit');
         Route::post('/settings/billing',              [\App\Http\Controllers\Settings\SettingsController::class, 'saveBilling'])->name('settings.billing.save')->middleware('module:settings,edit');
+        // Owner controls are admin.only, not settings,edit — the whole point of
+        // the panel is that it constrains staff, so a staff member with settings
+        // edit must not be able to switch off the thing constraining them.
+        Route::post('/settings/controls',             [\App\Http\Controllers\Settings\SettingsController::class, 'saveOwnerControls'])->name('settings.controls.save')->middleware('admin.only');
         Route::post('/settings/print',               [\App\Http\Controllers\Settings\SettingsController::class, 'savePrint'])->name('settings.print.save')->middleware('module:settings,edit');
         // PRE (Relationship Engine) feature-flag toggles — admin-only, same as everything else in this group
         Route::post('/settings/feature-flags/toggle', [\App\Http\Controllers\Settings\SettingsController::class, 'toggleFeatureFlag'])->name('settings.feature-flags.toggle')->middleware('admin.only');

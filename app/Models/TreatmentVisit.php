@@ -88,6 +88,11 @@ class TreatmentVisit extends Model
         'blood_sugar_type',
         'weight',
         'vitals_notes',
+        // NOTE: verified_at / verified_by / verification_note are deliberately
+        // NOT fillable. Verification is written only by
+        // TreatmentVisitService::verify() / ::unverify(), never by a form post —
+        // otherwise a crafted request could self-verify a visit and walk
+        // straight into a payout.
     ];
 
     protected $casts = [
@@ -104,6 +109,7 @@ class TreatmentVisit extends Model
         // Vitals
         'temperature'                 => 'decimal:1',
         'weight'                      => 'decimal:2',
+        'verified_at'                 => 'datetime',
     ];
 
     // ── Treatment stage definitions (loaded from Treatment module) ────────────
@@ -156,6 +162,11 @@ class TreatmentVisit extends Model
     public function doctor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'doctor_id');
+    }
+
+    public function verifier(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'verified_by');
     }
 
     public function visitItems()
@@ -221,5 +232,37 @@ class TreatmentVisit extends Model
     public function getIsFullyPaidAttribute(): bool
     {
         return $this->balance_due <= 0;
+    }
+
+    // ── Verification (2026-09-07) ────────────────────────────────────────────
+
+    public function isVerified(): bool
+    {
+        return $this->verified_at !== null;
+    }
+
+    /**
+     * Only a finished visit can be verified. Verifying a visit that is still
+     * scheduled or in the chair would be certifying work that has not happened.
+     */
+    public function isVerifiable(): bool
+    {
+        return $this->status === 'completed' && ! $this->isVerified();
+    }
+
+    public function scopeUnverified($query)
+    {
+        return $query->whereNull('verified_at');
+    }
+
+    public function scopeVerified($query)
+    {
+        return $query->whereNotNull('verified_at');
+    }
+
+    /** Completed work still waiting on an administrative check. */
+    public function scopeAwaitingVerification($query)
+    {
+        return $query->whereNull('verified_at')->where('status', 'completed');
     }
 }

@@ -46,6 +46,7 @@ class TreatmentVisitService
     public function __construct(
         private WorkflowShadowRunner $workflowShadow,
         private VisitNextActionService $nextActions,
+        private OwnerControlService $controls,
     ) {
     }
 
@@ -156,6 +157,12 @@ class TreatmentVisitService
      */
     public function create(Patient $patient, array $data): TreatmentVisit
     {
+        // Owner control: how far back staff may date an entry. Admins bypass;
+        // a future date is refused for everyone. Checked BEFORE the
+        // transaction so nothing is written and rolled back for a rule we
+        // already knew would fail.
+        $this->controls->assertDateAllowed($data['visit_date'] ?? null, 'visit_date');
+
         $visit = DB::transaction(function () use ($data, $patient) {
             // Strip visit_items, lab_case, mark_treatment_complete, implant_* —
             // these are transient control params, not real treatment_visits columns.
@@ -214,6 +221,9 @@ class TreatmentVisitService
      */
     public function update(TreatmentVisit $visit, array $data): TreatmentVisit
     {
+        $this->assertNotLockedByVerification($visit, 'edited');
+        $this->controls->assertDateAllowed($data['visit_date'] ?? null, 'visit_date');
+
         DB::transaction(function () use ($data, $visit) {
             $visit->update(array_diff_key($data, $this->transientKeys()));
 
@@ -280,6 +290,8 @@ class TreatmentVisitService
      */
     public function delete(TreatmentVisit $visit): void
     {
+        $this->assertNotLockedByVerification($visit, 'deleted');
+
         DB::transaction(function () use ($visit) {
             if ($visit->visitItems()->where('billing_status', 'invoiced')->exists()) {
                 throw ValidationException::withMessages([
@@ -766,5 +778,118 @@ class TreatmentVisitService
             ])->values()->all(),
             '_isNew' => false,
         ];
+    }
+
+    // ── Verification (2026-09-07) ────────────────────────────────────────────
+    //
+    // Verification is an ADMINISTRATIVE act on a CLINICAL record, so it lives
+    // here — in the one service that already owns every write to a visit —
+    // rather than in a controller. One writer per fact.
+
+    /**
+     * Mark a completed visit as verified.
+     *
+     * Callers are responsible for authorisation (the routes carry admin.only);
+     * this method enforces the STATE rules, which are not the same thing:
+     * only a completed visit can be verified, and only once.
+     */
+    public function verify(TreatmentVisit $visit, ?string $note = null): TreatmentVisit
+    {
+        if ($visit->isVerified()) {
+            throw ValidationException::withMessages([
+                'visit' => 'This visit is already verified.',
+            ]);
+        }
+
+        if ($visit->status !== 'completed') {
+            throw ValidationException::withMessages([
+                'visit' => 'Only a completed visit can be verified. This one is still marked "'
+                    . str_replace('_', ' ', (string) $visit->status) . '".',
+            ]);
+        }
+
+        $visit->forceFill([
+            'verified_at'       => now(),
+            'verified_by'       => Auth::id(),
+            'verification_note' => $note,
+        ])->save();
+
+        app(ActivityEngine::class)->log(
+            subject:     $visit->patient,
+            event:       'treatment_visit.verified',
+            actor:       Auth::user(),
+            metadata:    [
+                'visit_id'   => $visit->id,
+                'visit_date' => optional($visit->visit_date)->toDateString(),
+                'doctor_id'  => $visit->doctor_id,
+                'note'       => $note,
+            ],
+            description: 'Visit verified',
+        );
+
+        return $visit->refresh();
+    }
+
+    /**
+     * Withdraw a verification. Deliberately available, and deliberately
+     * logged: the alternative is a clinic that cannot correct an honest
+     * mistake, which is how a control gets switched off entirely. A REASON IS
+     * REQUIRED — an unverify with no explanation is the event you would most
+     * want to read about later.
+     */
+    public function unverify(TreatmentVisit $visit, string $reason): TreatmentVisit
+    {
+        if (! $visit->isVerified()) {
+            throw ValidationException::withMessages([
+                'visit' => 'This visit is not verified.',
+            ]);
+        }
+
+        if (trim($reason) === '') {
+            throw ValidationException::withMessages([
+                'reason' => 'Give a reason for withdrawing the verification.',
+            ]);
+        }
+
+        $previousBy = $visit->verified_by;
+        $previousAt = optional($visit->verified_at)->toDateTimeString();
+
+        $visit->forceFill([
+            'verified_at'       => null,
+            'verified_by'       => null,
+            'verification_note' => null,
+        ])->save();
+
+        app(ActivityEngine::class)->log(
+            subject:     $visit->patient,
+            event:       'treatment_visit.unverified',
+            actor:       Auth::user(),
+            metadata:    [
+                'visit_id'             => $visit->id,
+                'reason'               => $reason,
+                'previous_verified_by' => $previousBy,
+                'previous_verified_at' => $previousAt,
+            ],
+            description: 'Visit verification withdrawn',
+        );
+
+        return $visit->refresh();
+    }
+
+    /**
+     * Refuse a write to a visit the owner has closed by verifying it.
+     *
+     * Only bites when BOTH the lock is on AND the caller is not an admin —
+     * see OwnerControlService for why admins bypass.
+     */
+    private function assertNotLockedByVerification(TreatmentVisit $visit, string $verb): void
+    {
+        if ($visit->isVerified() && $this->controls->verifiedVisitsLocked()) {
+            throw ValidationException::withMessages([
+                'visit' => "This visit was verified on "
+                    . optional($visit->verified_at)->format('d M Y')
+                    . " and cannot be {$verb}. Ask an admin to withdraw the verification first.",
+            ]);
+        }
     }
 }

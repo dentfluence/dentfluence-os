@@ -125,6 +125,65 @@ class TreatmentVisitController extends Controller
         return response()->json(['success' => true]);
     }
 
+    // ── Verification (2026-09-07) ─────────────────────────────────────────────
+
+    /**
+     * Completed work that nobody has checked yet.
+     *
+     * This is the screen the whole control exists for: if it is empty the
+     * clinic is current, and if it is long the owner is signing off work he
+     * has not looked at. Deliberately NOT paginated away behind a filter —
+     * the default view is "everything still outstanding, oldest first",
+     * because the oldest unverified visit is the one that matters.
+     */
+    public function unverified(Request $request)
+    {
+        $filters = $request->validate([
+            'from'      => ['nullable', 'date'],
+            'to'        => ['nullable', 'date'],
+            'doctor_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+
+        $visits = TreatmentVisit::query()
+            ->awaitingVerification()
+            ->with(['patient:id,name', 'doctor:id,name'])
+            ->withCount('visitItems')
+            ->when($filters['from'] ?? null, fn ($q, $d) => $q->whereDate('visit_date', '>=', $d))
+            ->when($filters['to'] ?? null, fn ($q, $d) => $q->whereDate('visit_date', '<=', $d))
+            ->when($filters['doctor_id'] ?? null, fn ($q, $id) => $q->where('doctor_id', $id))
+            ->orderBy('visit_date')
+            ->paginate(50)
+            ->withQueryString();
+
+        $doctors = \App\Models\User::whereNotNull('role_id')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return view('visits.unverified', compact('visits', 'doctors', 'filters'));
+    }
+
+    public function verify(Request $request, TreatmentVisit $visit)
+    {
+        $data = $request->validate([
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $this->service->verify($visit, $data['note'] ?? null);
+
+        return back()->with('success', 'Visit verified.');
+    }
+
+    public function unverify(Request $request, TreatmentVisit $visit)
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+
+        $this->service->unverify($visit, $data['reason']);
+
+        return back()->with('success', 'Verification withdrawn.');
+    }
+
     // ── Print visit ───────────────────────────────────────────────────────────
     public function print(TreatmentVisit $visit)
     {

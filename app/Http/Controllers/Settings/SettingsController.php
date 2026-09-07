@@ -45,6 +45,7 @@ class SettingsController extends Controller
         $clinic        = AppSetting::group('clinic');
         $notifications = AppSetting::group('notifications');
         $billing       = AppSetting::group('billing');
+        $controls      = AppSetting::group(\App\Services\OwnerControlService::GROUP);
         $print         = AppSetting::group('print');
 
         $staff = User::with('roleModel')->orderBy('name')->get();
@@ -110,7 +111,7 @@ class SettingsController extends Controller
         ];
 
         return view('settings.index', compact(
-            'activeTab', 'clinic', 'notifications', 'billing', 'print',
+            'activeTab', 'clinic', 'notifications', 'billing', 'print', 'controls',
             'staff', 'roles',
             'treatments', 'complaints', 'diagnoses', 'investigations',
             'materials', 'brands',
@@ -327,6 +328,38 @@ class SettingsController extends Controller
         AppSetting::setMany($data, 'billing');
 
         return back()->with('success', 'Billing settings saved.');
+    }
+
+    // ── Save owner controls ─────────────────────────────────────────────────
+
+    /**
+     * The three switches over what staff may change. Admin-only at the route.
+     *
+     * Checkboxes absent from a POST mean "off", so every flag is read with
+     * boolean() rather than from $data — the same trap saveBilling documents
+     * for show_revenue_target.
+     */
+    public function saveOwnerControls(Request $request)
+    {
+        $request->validate([
+            'control_backdate_days' => 'nullable|integer|min:0|max:365',
+        ]);
+
+        // Blank = unlimited back-dating, i.e. today's behaviour.
+        $days = $request->input('control_backdate_days');
+
+        AppSetting::setMany([
+            \App\Services\OwnerControlService::KEY_BACKDATE_DAYS =>
+                ($days === null || $days === '') ? '' : (string) max(0, (int) $days),
+            \App\Services\OwnerControlService::KEY_LOCK_AMOUNT =>
+                $request->boolean('control_lock_amount_after_save') ? '1' : '0',
+            \App\Services\OwnerControlService::KEY_LOCK_VERIFIED =>
+                $request->boolean('control_lock_verified_visit') ? '1' : '0',
+            \App\Services\OwnerControlService::KEY_VERIFICATION_ON =>
+                $request->boolean('control_visit_verification_on') ? '1' : '0',
+        ], \App\Services\OwnerControlService::GROUP);
+
+        return back()->with('success', 'Owner controls saved.');
     }
 
     // ── Save print settings ─────────────────────────────────────────────────
