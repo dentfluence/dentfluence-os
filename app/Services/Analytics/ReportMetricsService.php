@@ -6,6 +6,7 @@ use App\Models\Appointment;
 use App\Models\Invoice;
 use App\Models\Finance\FinanceExpense;
 use App\Models\InvoicePayment;
+use App\Models\Patient;
 use App\Models\Wallet;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -75,6 +76,34 @@ class ReportMetricsService
             ->count();
     }
 
+    /**
+     * Of the money BILLED in this window, how much has come in — whenever the
+     * payment was actually made.
+     *
+     * WHY NOT collected() / billed(): those are two DIFFERENT populations. A
+     * payment made this month may settle an invoice raised in June, so the
+     * naive ratio routinely exceeds 100% and reads like a bug on screen. This
+     * follows the invoices raised in the window to whatever has been paid
+     * against them, so it cannot exceed 100% and answers the question a
+     * practice actually asks: "of what we billed, how much have we got in?"
+     *
+     * NOTE the deleted_at guard: InvoicePayment uses SoftDeletes and a VOID is
+     * a soft delete, but DB::table() bypasses the model — without it, voided
+     * payments come back and inflate the ratio (the W-8 trap).
+     */
+    public function collectedOnBilled(Carbon $from, Carbon $to, ?int $branchId = null): float
+    {
+        return (float) DB::table('invoice_payments as ip')
+            ->join('invoices as inv', 'inv.id', '=', 'ip.invoice_id')
+            ->when($branchId, fn ($q) => $q
+                ->join('patients as p', 'p.id', '=', 'inv.patient_id')
+                ->where('p.branch_id', $branchId))
+            ->whereNull('ip.deleted_at')
+            ->whereBetween('inv.invoice_date', [$from, $to])
+            ->where('inv.status', '<>', 'cancelled')
+            ->sum('ip.amount');
+    }
+
     /** Total receivables right now — canonical filter: draft + partial. */
     public function outstanding(?int $branchId = null): float
     {
@@ -91,6 +120,20 @@ class ReportMetricsService
         return Appointment::whereBetween('appointment_date', [$from, $to])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->where('status', 'done')
+            ->count();
+    }
+
+    /**
+     * Patients REGISTERED in the range — acquisition, not activity.
+     *
+     * Counted on patients.created_at, the same basis ReportsController has
+     * always used, so the Dashboard and the Reports page can never disagree
+     * about how many new patients a month brought in.
+     */
+    public function newPatients(Carbon $from, Carbon $to, ?int $branchId = null): int
+    {
+        return Patient::whereBetween('created_at', [$from, $to])
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->count();
     }
 
