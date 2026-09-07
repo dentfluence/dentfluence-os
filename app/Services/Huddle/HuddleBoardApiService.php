@@ -394,6 +394,10 @@ class HuddleBoardApiService
             ->whereNull('tasks.deleted_at')
             ->where('tasks.branch_id', $branchId);
 
+        // Staff work only — Automation output lives on the PRE Today board
+        // (CEO, 6 Sep). Same rule as Task::scopeVisibleToReception().
+        Task::applyReceptionVisibility($q);
+
         // Status filter — 'all' keeps done tasks too
         if ($scope !== 'all') {
             $q->whereIn('tasks.status', ['pending', 'in_progress']);

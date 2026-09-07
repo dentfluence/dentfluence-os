@@ -562,6 +562,11 @@ class HuddleController extends Controller
         $myTasks = DB::table('tasks')
             ->leftJoin('users as assignee', 'assignee.id', '=', 'tasks.assigned_to')
             ->where('tasks.branch_id', $branchId)
+            // Same rule as the Tasks module (CEO, 6 Sep): Automation output is
+            // Relationship Engine work and belongs on the PRE Today board, not
+            // on a staff board. Also applies the soft-delete guard, which a
+            // DB::table() read does not get for free.
+            ->tap(fn ($q) => \App\Models\Task::applyReceptionVisibility($q))
             ->whereIn('tasks.status', ['pending', 'in_progress'])
             ->where(function ($q) use ($today) {
                 // Due today OR overdue (so nothing falls through the cracks)
@@ -1111,25 +1116,31 @@ class HuddleController extends Controller
 
         $tasksCompleted = 0; $tasksPending = 0; $tasksOverdue = 0; $prevTasksCompleted = 0;
         try {
+            // The Tasks tiles count STAFF work only — same rule as the board's
+            // Tasks column, plus the soft-delete guard these counts never had.
             $tasksCompleted = DB::table('tasks')
                 ->where('branch_id', $branchId)
+                ->tap(fn ($q) => \App\Models\Task::applyReceptionVisibility($q))
                 ->where('status', 'done')
                 ->whereBetween('done_at', [$from, $to])
                 ->count();
 
             $tasksPending = DB::table('tasks')
                 ->where('branch_id', $branchId)
+                ->tap(fn ($q) => \App\Models\Task::applyReceptionVisibility($q))
                 ->where('status', 'pending')
                 ->whereBetween('due_date', [$fromDate, $toDate])
                 ->count();
 
             $tasksOverdue = DB::table('tasks')
                 ->where('branch_id', $branchId)
+                ->tap(fn ($q) => \App\Models\Task::applyReceptionVisibility($q))
                 ->where('status', 'pending')
                 ->whereDate('due_date', '<', $today->toDateString())
                 ->count();
 
             $prevTasksCompleted = DB::table('tasks')->where('branch_id', $branchId)
+                ->tap(fn ($q) => \App\Models\Task::applyReceptionVisibility($q))
                 ->where('status', 'done')->whereBetween('done_at', [$prevFrom, $prevTo])->count();
         } catch (\Exception $e) {
             // Tasks table missing — leave zeros
@@ -1153,6 +1164,7 @@ class HuddleController extends Controller
         try {
             $protocolCompliance = DB::table('tasks')
                 ->join('users', 'users.id', '=', 'tasks.assigned_to')
+                ->whereNull('tasks.deleted_at')
                 ->whereNotNull('tasks.practice_protocol_id')
                 ->where('tasks.branch_id', $branchId)
                 ->whereBetween('tasks.due_date', [$fromDate, $toDate])

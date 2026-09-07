@@ -240,6 +240,25 @@ class Task extends Model
         return $query;
     }
 
+    /**
+     * Query-builder twin of scopeVisibleToReception().
+     *
+     * Several staff-facing surfaces (the Huddle board and its report) read the
+     * tasks table through DB::table() for speed, so the Eloquent scope never
+     * runs there. They must still obey the same rule, so the rule lives in ONE
+     * place and both entry points call it.
+     *
+     * Also guards deleted_at: a DB::table() read does not apply SoftDeletes.
+     */
+    public static function applyReceptionVisibility($query, string $table = 'tasks'): void
+    {
+        $query->whereNull("{$table}.deleted_at");
+
+        if (\App\Support\Features\Feature::enabled('tasks.human_system_split')) {
+            $query->where("{$table}.task_type", 'human');
+        }
+    }
+
     // ── Recurring / AMC Helper ────────────────────────────────────
 
     /**

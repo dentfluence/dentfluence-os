@@ -77,7 +77,7 @@ class HuddleController extends Controller
             'pending_estimates'   => TreatmentPlan::where('status', 'pending')->count(),
 
             // Tasks escalated and unresolved
-            'escalations'         => Task::where('status', 'escalated')->count(),
+            'escalations'         => Task::where('status', 'escalated')->visibleToReception()->count(),
 
             // Follow-ups due more than 7 days from now (long-range pipeline)
             'long_term_followups' => FollowUp::where('status', 'pending')
@@ -150,6 +150,7 @@ class HuddleController extends Controller
 
         // ── Escalated tasks ──────────────────────────────────────────────────
         $escalatedAll   = Task::where('status', 'escalated')
+            ->visibleToReception()
             ->with('patient:id,name')
             ->get();
         $escalatedCount = $escalatedAll->count();
