@@ -62,7 +62,11 @@ return [
 
         // ── Phase 3 (Work surfaces) ─────────────────────────────────────
         'today.projection'         => ['default' => false, 'description' => "Today's Actions served from a projection (no live 12-domain reads)."],
-        'tasks.human_system_split' => ['default' => false, 'description' => 'Task Engine separates Human and System tasks.'],
+        // Flipped ON 2026-09-06 (CEO): Automation-created tasks — birthday
+        // greetings, recall/reminder calls — are Relationship Engine work and
+        // must never appear in reception's Tasks list. They still surface on
+        // the PRE Today board, which reads task_type = 'system'.
+        'tasks.human_system_split' => ['default' => true, 'description' => 'Task Engine separates Human and System tasks; System tasks are hidden from reception lists.'],
 
         // ── Phase 4 (Communication) ─────────────────────────────────────
         'comm.single_gateway'       => ['default' => false, 'description' => 'All patient sends route through the Communication Engine.'],

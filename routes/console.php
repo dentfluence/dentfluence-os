@@ -277,27 +277,29 @@ Schedule::command('app:crawl-routes', [
 
 /*
 |--------------------------------------------------------------------------
-| Relationship Engine — Appointment Reminder Tasks (Phase 4)
+| Relationship Engine — Appointment Reminder Tasks (Phase 4) — UNSCHEDULED
 |--------------------------------------------------------------------------
-| Runs daily at 8:00am. Finds all appointments scheduled for tomorrow and
-| auto-creates a "Reminder call" Task for today so reception knows to call.
-| Idempotent — deduplication prevents double-creation on re-runs.
+| RETIRED FROM THE SCHEDULE 2026-09-06 (CEO: "PRE engine che task vegle ani
+| task manager che vegle"). It used to run daily at 08:00 and write one
+| "Reminder call: <patient>" Task per tomorrow's appointment.
+|
+| Why it is gone:
+|   - Those rows are PRE work, and the Task Manager is the staff's own list.
+|     They were created with Task::create() directly (never TaskEngine), so
+|     they carried task_type = 'human' and survived the human/system split.
+|   - They were a SECOND producer of a list that already exists:
+|     TodayActionsEngine::appointmentReminders() builds the same call list
+|     live from the appointments themselves, ordered by appointment time, and
+|     the confirm-call outcomes hang off that category — not off these tasks.
+|     One owner per stage, one writer per fact.
+|
+| The command still exists and still works if run by hand (its dedup guard is
+| intact); nothing is scheduled to call it. Do not re-add this schedule
+| without settling where reception works reminder calls.
 |
 | Manual trigger: php artisan relationship:appointment-reminders
 | Preview only:   php artisan relationship:appointment-reminders --dry-run
 */
-Schedule::command('relationship:appointment-reminders')
-    ->dailyAt('08:00')
-    ->withoutOverlapping()
-    // Foreground (not runInBackground) so a non-zero exit code reaches
-    // onFailure — matches audit:verify. This job had been failing silently.
-    ->appendOutputTo(storage_path('logs/appointment-reminders.log'))
-    ->onFailure(function () {
-        \Illuminate\Support\Facades\Log::critical(
-            'Appointment reminder job FAILED — no reminder tasks were generated for tomorrow\'s appointments. '
-            . 'Check storage/logs/appointment-reminders.log.'
-        );
-    });
 
 /*
 |--------------------------------------------------------------------------

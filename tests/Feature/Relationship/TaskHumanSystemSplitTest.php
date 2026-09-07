@@ -18,9 +18,11 @@ use Tests\TestCase;
  * Lab, PO, TreatmentVisit, AppointmentReminderEngine — a person still has to
  * act on those even though they're auto-generated.
  *
- * While tasks.human_system_split is OFF (default), reception lists are
- * unchanged — System tasks still show, exactly like before the split existed.
- * Once flipped ON, System tasks disappear from staff "my work" lists.
+ * The flag tasks.human_system_split is ON by default since 2026-09-06 (CEO):
+ * System tasks are hidden from reception's lists and live on the PRE Today
+ * board instead. The legacy OFF behaviour — System tasks visible in reception
+ * lists — is still supported and is asserted here by setting the flag off
+ * explicitly.
  *
  * NOTE: created_by / branch_id are real FKs (tasks.created_by → users.id).
  * Every test creates a real User first and uses its id — never a hard-coded
@@ -79,7 +81,7 @@ class TaskHumanSystemSplitTest extends TestCase
         $this->assertTrue($task->fresh()->isHumanTask());
     }
 
-    public function test_reception_task_list_shows_system_tasks_when_flag_off(): void
+    public function test_reception_task_list_shows_system_tasks_when_flag_forced_off(): void
     {
         $user         = $this->admin();
         $relationship = $this->relationship();
@@ -91,6 +93,8 @@ class TaskHumanSystemSplitTest extends TestCase
             taskData:       ['title' => 'System Record Task', 'due_date' => today()],
             relationshipId: $relationship->id,
         );
+
+        Feature::set('tasks.human_system_split', false);
 
         $response = $this->get(route('tasks.index'));
 
@@ -163,7 +167,8 @@ class TaskHumanSystemSplitTest extends TestCase
             'due_date' => today(), 'branch_id' => $user->branch_id, 'created_by' => $user->id, 'task_type' => 'system',
         ]);
 
-        // Flag off: both visible.
+        // Flag off: both visible (legacy behaviour, now opt-in).
+        Feature::set('tasks.human_system_split', false);
         $this->assertSame(2, Task::visibleToReception()->count());
 
         // Flag on: only human visible.
