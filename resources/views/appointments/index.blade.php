@@ -442,14 +442,64 @@
 
 .fc-timegrid-slot { height: 28px !important; }
 
-/* Blocked slot background band label */
+/* ── Blocked slot bands (2026-09-08) ──────────────────────────────────────
+   Staff reported blocks were invisible: a 15%-opacity wash under a white
+   appointment card reads as nothing, so reception kept promising slots the
+   doctor was away for and hit the server refusal only at data-entry time.
+   Bands are now hatched (pattern survives any card on top of it), carry the
+   doctor's name, and are typed by colour. */
+.fc-blocked-slot {
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(220,38,38,.16) 0 6px,
+        rgba(220,38,38,.05) 6px 12px
+    ) !important;
+    border-left: 3px solid #dc2626 !important;
+}
+.fc-blocked-slot.fc-block-break {
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(217,119,6,.16) 0 6px,
+        rgba(217,119,6,.05) 6px 12px
+    ) !important;
+    border-left-color: #d97706 !important;
+}
+.fc-blocked-slot.fc-block-emergency {
+    background-image: repeating-linear-gradient(
+        135deg,
+        rgba(124,58,237,.18) 0 6px,
+        rgba(124,58,237,.05) 6px 12px
+    ) !important;
+    border-left-color: #7c3aed !important;
+}
 .fc-blocked-slot .fc-event-title {
     font-size: 10px;
-    font-weight: 600;
-    color: #dc2626;
-    padding: 1px 4px;
-    opacity: .85;
+    font-weight: 700;
+    color: #b91c1c;
+    padding: 2px 5px;
+    letter-spacing: .2px;
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff;   /* stays legible over any card */
+    opacity: 1;
 }
+.fc-blocked-slot.fc-block-break    .fc-event-title { color: #b45309; }
+.fc-blocked-slot.fc-block-emergency .fc-event-title { color: #6d28d9; }
+
+/* Month view renders the same block as a solid pill, not a full-cell wash —
+   a whole red day cell for a two-hour block is a lie reception acts on. */
+.fc-block-pill {
+    font-size: 10px;
+    font-weight: 700;
+    color: #b91c1c;
+    background: #fef2f2;
+    border-left: 3px solid #dc2626;
+    padding: 1px 4px;
+    border-radius: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.fc-block-pill.is-break     { color: #b45309; background: #fffbeb; border-left-color: #d97706; }
+.fc-block-pill.is-emergency { color: #6d28d9; background: #f5f3ff; border-left-color: #7c3aed; }
 
 .fc-event {
     border: none !important;       /* kill ALL fc-event borders — our inner div handles the left border */
@@ -1562,18 +1612,62 @@ function buildCalendarEvents(appointments) {
 // ─── Blocked Slots ─────────────────────────────────────────────
 let blockedSlotSource = null; // FullCalendar event source reference
 
-function buildBlockedEvents(slots) {
-    return slots.map(s => ({
-        id:              'block_' + s.id,
-        title:           '' + (s.reason || s.block_type),
-        start:           s.start,
-        end:             s.end,
-        display:         'background',        // renders as a shaded background band
-        backgroundColor: 'rgba(239,68,68,0.15)',
-        borderColor:     '#ef4444',
-        classNames:      ['fc-blocked-slot'],
-        extendedProps:   { ...s, _isBlock: true },
-    }));
+const BLOCK_TYPE_LABEL = {
+    unavailable: 'UNAVAILABLE',
+    break:       'BREAK',
+    emergency:   'EMERGENCY',
+};
+
+function blockTypeClass(t) {
+    return t === 'break' ? 'fc-block-break'
+         : t === 'emergency' ? 'fc-block-emergency'
+         : '';
+}
+
+function shortDoctor(name) {
+    if (!name) return '';
+    return name.replace(/^Dr\.?\s*/i, 'Dr. ').split(' ').slice(0, 2).join(' ');
+}
+
+function blockLabel(s) {
+    const parts = [shortDoctor(s.doctor_name), BLOCK_TYPE_LABEL[s.block_type] || 'BLOCKED'];
+    if (s.reason) parts.push(s.reason);
+    return parts.filter(Boolean).join(' · ');
+}
+
+/**
+ * A block belongs to ONE doctor, but a timegrid background band paints the
+ * whole day column. When the calendar is filtered to a doctor we drop every
+ * other doctor's blocks, otherwise the band claims a doctor is away who is not.
+ */
+function buildBlockedEvents(slots, viewType, doctorId) {
+    const monthView = (viewType || '').startsWith('dayGrid');
+
+    return slots
+        .filter(s => !doctorId || String(s.doctor_id) === String(doctorId))
+        .map(s => {
+            const base = {
+                id:            'block_' + s.id,
+                title:         blockLabel(s),
+                start:         s.start,
+                end:           s.end,
+                extendedProps: { ...s, _isBlock: true },
+            };
+
+            if (monthView) {
+                // Solid pill in month view — a background wash there shades the
+                // entire day cell whatever the block's actual length.
+                return { ...base, display: 'auto', backgroundColor: 'transparent', borderColor: 'transparent' };
+            }
+
+            return {
+                ...base,
+                display:         'background',
+                backgroundColor: 'rgba(220,38,38,0.10)',
+                borderColor:     '#dc2626',
+                classNames:      ['fc-blocked-slot', blockTypeClass(s.block_type)].filter(Boolean),
+            };
+        });
 }
 
 async function fetchAndRenderBlockedSlots(startStr, endStr) {
@@ -1586,7 +1680,9 @@ async function fetchAndRenderBlockedSlots(startStr, endStr) {
         if (blockedSlotSource) {
             blockedSlotSource.remove();
         }
-        blockedSlotSource = calendar.addEventSource(buildBlockedEvents(slots));
+        blockedSlotSource = calendar.addEventSource(
+            buildBlockedEvents(slots, calendar.view.type, window.__APPT_DOCTOR_FILTER || '')
+        );
     } catch {}
 }
 
@@ -1599,7 +1695,7 @@ function initCalendar(appointments) {
         headerToolbar: {
             left:   'prev,next today',
             center: 'title',
-            right:  'dayGridMonth,timeGridWeek,timeGridDay',
+            right:  'dayGridMonth,timeGridWeek,timeGridThreeDay,timeGridDay',
         },
         slotMinTime:    '08:00:00',
         slotMaxTime:    '22:00:00',
@@ -1616,6 +1712,15 @@ function initCalendar(appointments) {
         eventMaxStack: 3,
         views: {
             timeGridDay: { eventMaxStack: 6 },
+            // 3-day view (2026-09-08): week is too narrow to read four
+            // concurrent doctors, day is too short to plan around. Three days
+            // is the width reception actually books in.
+            timeGridThreeDay: {
+                type:       'timeGrid',
+                duration:   { days: 3 },
+                buttonText: '3 day',
+                eventMaxStack: 5,
+            },
         },
         events:         buildCalendarEvents(appointments),
         eventContent:   renderEvent,
@@ -1659,7 +1764,20 @@ window.addEventListener('df:slot-blocked', function() {
 
 function renderEvent(info) {
     const apt  = info.event.extendedProps;
-    if (apt._isBlock) { return; }
+    if (apt._isBlock) {
+        // Background bands render their own title; only the month-view pill
+        // needs markup here.
+        if (info.event.display !== 'background') {
+            const d = document.createElement('div');
+            d.className = 'fc-block-pill'
+                + (apt.block_type === 'break' ? ' is-break'
+                :  apt.block_type === 'emergency' ? ' is-emergency' : '');
+            d.textContent = apt.start_time + '–' + apt.end_time + ' ' + blockLabel(apt);
+            d.title = d.textContent;
+            return { domNodes: [d] };
+        }
+        return;
+    }
 
     const cardStyle   = window.__APPT_DATA.calendarPrefs.cardStyle || 'strip';
     const colorSource = resolveColorSource();
@@ -2389,6 +2507,7 @@ function appointmentApp() {
             calendar.addEventSource(evts);
 
             // Re-render blocked slots
+            window.__APPT_DOCTOR_FILTER = this.filterDoctorId || '';
             if (blockedSlotSource) {
                 const v = calendar.view;
                 // Local date (en-CA) — toISOString() is UTC and shifts a day in IST.

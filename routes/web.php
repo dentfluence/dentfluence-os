@@ -433,6 +433,14 @@ Route::middleware('auth')->group(function () {
         // ── Calendar Preferences ───────────────────────────────────────────────
         Route::post('/settings/calendar', [\App\Http\Controllers\Settings\SettingsController::class, 'saveCalendarPrefs'])->name('settings.calendar.save')->middleware('module:settings,edit');
 
+        /* ── Working hours + holidays (2026-09-07) ────────────────────────────
+           Sits with the Calendar tab because that is the screen it changes.
+           settings,edit is enough: unlike the owner controls, hours are an
+           operational fact a manager may keep current. */
+        Route::post('/settings/working-hours',        [\App\Http\Controllers\Settings\SettingsController::class, 'saveWorkingHours'])->name('settings.working-hours.save')->middleware('module:settings,edit');
+        Route::post('/settings/holidays',             [\App\Http\Controllers\Settings\SettingsController::class, 'storeHoliday'])->name('settings.holidays.store')->middleware('module:settings,edit');
+        Route::delete('/settings/holidays/{holiday}', [\App\Http\Controllers\Settings\SettingsController::class, 'destroyHoliday'])->name('settings.holidays.destroy')->middleware('module:settings,delete');
+
         // ── Operatories ────────────────────────────────────────────────────────
         Route::prefix('settings/operatories')->name('settings.operatories.')->group(function () {
             $oc = \App\Http\Controllers\Settings\OperatoryController::class;

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\Analytics\ReportMetricsService;
 use App\Services\Relationship\TodayActionsEngine;
 use App\Services\Relationship\TodayActionsProjector;
+use App\Services\Relationship\TodayActionsVisibility;
 use App\Support\Features\Feature;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -47,6 +48,7 @@ class HuddleBoardApiService
     public function __construct(
         private readonly TodayActionsEngine    $todayActionsEngine,
         private readonly TodayActionsProjector $todayActionsProjector,
+        private readonly TodayActionsVisibility $visibility,
     ) {}
 
     /**
@@ -125,7 +127,12 @@ class HuddleBoardApiService
         ];
 
         try {
-            $all = $this->todayActionsEngine->generate();
+            // 2026-09-08 (Sumit): today-only, and filtered through the same
+            // visibility rules the Today's Actions board uses. See the matching
+            // note in HuddleAggregationService::getRelationshipItems().
+            $all = $this->visibility->apply(
+                $this->todayActionsEngine->generate(dueWindow: 'today')
+            );
         } catch (\Throwable $e) {
             Log::warning('HuddleBoardApiService: TodayActionsEngine failed', [
                 'error' => $e->getMessage(),

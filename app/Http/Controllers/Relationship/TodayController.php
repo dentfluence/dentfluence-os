@@ -704,36 +704,13 @@ class TodayController extends Controller
     /**
      * Birthday suppression (2026-08-25, Sumit).
      *
-     * Birthdays are NOT a board category — they arrive through two separate
-     * producers and were duplicating each other in the queue:
-     *   1. RecallEngineService::recallBirthday() queues a CommunicationQueue
-     *      row with purpose = 'recall_birthday'  -> surfaces in recall_calls
-     *   2. RulesEngine rule 'birthday_3d' creates a system Task
-     *      (description "[Auto] Rule: birthday_3d") -> surfaces in tasks
-     *
-     * This strips both at the VIEW layer only. Neither producer is touched,
-     * nothing is disabled, and no third producer is introduced — turning the
-     * setting off brings the same rows straight back.
+     * The rule itself now lives in TodayActionsVisibility so the Daily Huddle
+     * — which reads TodayActionsEngine directly — applies exactly the same
+     * filter (2026-09-08). Behaviour here is unchanged.
      */
     private function stripBirthdayRows(array &$raw): void
     {
-        foreach (['recall_calls', 'tasks'] as $key) {
-            if (empty($raw[$key])) {
-                continue;
-            }
-
-            $raw[$key] = array_values(array_filter($raw[$key], function (array $item) {
-                if (($item['meta']['purpose'] ?? null) === 'recall_birthday') {
-                    return false;
-                }
-
-                $haystack = strtolower(
-                    ($item['suggested_action'] ?? '') . ' ' . ($item['meta']['category'] ?? '')
-                );
-
-                return ! str_contains($haystack, 'birthday');
-            }));
-        }
+        app(\App\Services\Relationship\TodayActionsVisibility::class)->stripBirthdayRows($raw);
     }
 
     /**

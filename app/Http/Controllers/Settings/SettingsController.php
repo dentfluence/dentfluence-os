@@ -46,6 +46,14 @@ class SettingsController extends Controller
         $notifications = AppSetting::group('notifications');
         $billing       = AppSetting::group('billing');
         $controls      = AppSetting::group(\App\Services\OwnerControlService::GROUP);
+
+        // Working hours + holidays for the Calendar tab. Keyed by weekday so the
+        // Blade can render Sunday..Saturday without a second query per row.
+        $branchId    = auth()->user()->branch_id;
+        $clinicHours = \App\Models\ClinicHour::where('branch_id', $branchId)->get()->keyBy('weekday');
+        $holidays    = \App\Models\ClinicHoliday::forBranch($branchId)
+                            ->orderBy('holiday_date')
+                            ->get();
         $print         = AppSetting::group('print');
 
         $staff = User::with('roleModel')->orderBy('name')->get();
@@ -112,6 +120,7 @@ class SettingsController extends Controller
 
         return view('settings.index', compact(
             'activeTab', 'clinic', 'notifications', 'billing', 'print', 'controls',
+            'clinicHours', 'holidays',
             'staff', 'roles',
             'treatments', 'complaints', 'diagnoses', 'investigations',
             'materials', 'brands',
@@ -182,13 +191,19 @@ class SettingsController extends Controller
     public function saveCalendarPrefs(Request $request)
     {
         $request->validate([
-            'card_style'   => 'required|in:strip,filled',
-            'color_source' => 'required|in:auto,doctor,treatment',
+            'card_style'       => 'required|in:strip,filled',
+            'color_source'     => 'required|in:auto,doctor,treatment',
+            'slot_minutes'     => 'nullable|integer|min:5|max:120',
+            'default_duration' => 'nullable|integer|min:5|max:480',
         ]);
 
         AppSetting::setMany([
-            'calendar_card_style'   => $request->card_style,
-            'calendar_color_source' => $request->color_source,
+            'calendar_card_style'      => $request->card_style,
+            'calendar_color_source'    => $request->color_source,
+            // The grid the calendar draws and the free-slot query steps through.
+            'calendar_slot_minutes'    => (string) ($request->input('slot_minutes') ?: 15),
+            // Fallback appointment length when the treatment does not set one.
+            'calendar_default_duration'=> (string) ($request->input('default_duration') ?: 30),
         ], 'calendar');
 
         return back()->with('success', 'Calendar preferences saved.');
@@ -360,6 +375,99 @@ class SettingsController extends Controller
         ], \App\Services\OwnerControlService::GROUP);
 
         return back()->with('success', 'Owner controls saved.');
+    }
+
+    // ── Working hours + holidays ────────────────────────────────────────────
+
+    /**
+     * Save the whole week in one post.
+     *
+     * Seven rows, upserted. A day with is_closed ticked keeps whatever times
+     * were typed — the clinic may reopen on Sunday next month and should not
+     * have to retype the hours. Sessions are validated as ordered pairs; a
+     * reversed pair is rejected here rather than silently skipped at read time.
+     */
+    public function saveWorkingHours(Request $request)
+    {
+        $data = $request->validate([
+            'days'                 => ['required', 'array'],
+            'days.*.is_closed'     => ['nullable'],
+            'days.*.slot1_start'   => ['nullable', 'date_format:H:i'],
+            'days.*.slot1_end'     => ['nullable', 'date_format:H:i'],
+            'days.*.slot2_start'   => ['nullable', 'date_format:H:i'],
+            'days.*.slot2_end'     => ['nullable', 'date_format:H:i'],
+        ]);
+
+        $branchId = auth()->user()->branch_id;
+
+        foreach ($data['days'] as $weekday => $row) {
+            $weekday = (int) $weekday;
+
+            if ($weekday < 0 || $weekday > 6) {
+                continue;
+            }
+
+            $closed = ! empty($row['is_closed']);
+
+            // Refuse a reversed or half-open session rather than storing a
+            // range the reader will quietly drop.
+            foreach ([['slot1_start', 'slot1_end', 'first'], ['slot2_start', 'slot2_end', 'second']] as [$sk, $ek, $label]) {
+                $start = $row[$sk] ?? null;
+                $end   = $row[$ek] ?? null;
+
+                if (! $closed && $start && $end && $end <= $start) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        "days.{$weekday}.{$ek}" => ucfirst(\App\Models\ClinicHour::DAY_NAMES[$weekday] ?? '')
+                            . ": the {$label} session ends before it starts.",
+                    ]);
+                }
+            }
+
+            \App\Models\ClinicHour::updateOrCreate(
+                ['branch_id' => $branchId, 'weekday' => $weekday],
+                [
+                    'is_closed'   => $closed,
+                    'slot1_start' => $row['slot1_start'] ?: null,
+                    'slot1_end'   => $row['slot1_end']   ?: null,
+                    'slot2_start' => $row['slot2_start'] ?: null,
+                    'slot2_end'   => $row['slot2_end']   ?: null,
+                ]
+            );
+        }
+
+        app(\App\Services\ClinicHoursService::class)->forget();
+
+        return back()->with('success', 'Working hours saved.');
+    }
+
+    public function storeHoliday(Request $request)
+    {
+        $data = $request->validate([
+            'holiday_date'    => ['required', 'date'],
+            'name'            => ['required', 'string', 'max:120'],
+            'recurs_annually' => ['nullable'],
+        ]);
+
+        \App\Models\ClinicHoliday::updateOrCreate(
+            [
+                'branch_id'    => auth()->user()->branch_id,
+                'holiday_date' => $data['holiday_date'],
+            ],
+            [
+                'name'            => $data['name'],
+                'recurs_annually' => ! empty($data['recurs_annually']),
+                'created_by'      => auth()->id(),
+            ]
+        );
+
+        return back()->with('success', 'Holiday saved.');
+    }
+
+    public function destroyHoliday(\App\Models\ClinicHoliday $holiday)
+    {
+        $holiday->delete();
+
+        return back()->with('success', 'Holiday removed.');
     }
 
     // ── Save print settings ─────────────────────────────────────────────────

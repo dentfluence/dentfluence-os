@@ -13,6 +13,7 @@ use App\Modules\Huddle\DTOs\HuddleBoardDTO;
 use App\Modules\Huddle\DTOs\HuddleCardDTO;
 use App\Modules\Huddle\DTOs\HuddleStatsDTO;
 use App\Services\Relationship\TodayActionsEngine;
+use App\Services\Relationship\TodayActionsVisibility;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -25,6 +26,7 @@ class HuddleAggregationService
         private readonly AppointmentToCardTransformer $appointmentTransformer,
         private readonly TaskToCardTransformer        $taskTransformer,
         private readonly TodayActionsEngine           $todayActionsEngine,
+        private readonly TodayActionsVisibility       $visibility,
     ) {}
 
     public function buildBoardForUser(int $branchId, string $role): HuddleBoardDTO
@@ -303,7 +305,18 @@ class HuddleAggregationService
         ];
 
         try {
-            $all = $this->todayActionsEngine->generate();
+            // 2026-09-08 (Sumit): the Huddle Comms List is a briefing for TODAY.
+            // It previously called generate() with no due-window, which is the
+            // combined "due today + all overdue" view — so months of recall
+            // backlog rendered every morning and reception could not tell what
+            // actually needed calling today. Overdue call-debt has its own home
+            // (Pending Calls board + the overdue widgets on this same screen).
+            $all = $this->todayActionsEngine->generate(dueWindow: 'today');
+
+            // Same presentation rules the Today's Actions board applies —
+            // birthday recalls stripped, hidden categories dropped. Reading the
+            // engine directly used to bypass both.
+            $all = $this->visibility->apply($all);
         } catch (\Throwable $e) {
             Log::warning('HuddleAggregationService: TodayActionsEngine failed', [
                 'error' => $e->getMessage(),
