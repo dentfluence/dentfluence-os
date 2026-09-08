@@ -1149,7 +1149,7 @@ class InventoryController extends Controller
 
     public function storePurchaseOrder(Request $request)
     {
-        $request->validate([
+        $data = $request->validate([
             'vendor_id'        => 'required|exists:inventory_vendors,id',
             'order_date'       => 'required|date',
             'expected_date'    => 'nullable|date|after_or_equal:order_date',
@@ -1162,87 +1162,14 @@ class InventoryController extends Controller
             'items.*.gst'      => 'nullable|numeric|min:0|max:100',
         ]);
 
-        // Calculate totals
-        $subtotal  = 0;
-        $gstTotal  = 0;
-        foreach ($request->items as $line) {
-            $lineTotal  = $line['qty'] * $line['price'];
-            $lineGst    = $lineTotal * (($line['gst'] ?? 0) / 100);
-            $subtotal  += $lineTotal;
-            $gstTotal  += $lineGst;
-        }
-
-        // Phase 1: resolve Finance vendor ID from inventory vendor's sync link
-        $invVendor       = InventoryVendor::find($request->vendor_id);
-        $financeVendorId = $invVendor?->finance_vendor_id
-            ?? $invVendor?->syncToFinance()?->id;
-
-        $po = PurchaseOrder::create([
-            'order_no'          => PurchaseOrder::generateOrderNo(),
-            'vendor_id'         => $request->vendor_id,
-            'finance_vendor_id' => $financeVendorId,
-            'order_date'        => $request->order_date,
-            'expected_date'     => $request->expected_date,
-            'status'            => $request->status,
-            'total_amount'      => $subtotal + $gstTotal,
-            'gst_amount'        => $gstTotal,
-            'notes'             => $request->notes,
-            'created_by'        => auth()->id(),
-        ]);
-
-        foreach ($request->items as $line) {
-            $lineTotal = $line['qty'] * $line['price'];
-            $po->items()->create([
-                'inventory_item_id' => $line['item_id'],
-                'qty_ordered'       => $line['qty'],
-                'qty_received'      => 0,
-                'unit_price'        => $line['price'],
-                'gst_rate'          => $line['gst'] ?? 0,
-                'total_price'       => $lineTotal * (1 + (($line['gst'] ?? 0) / 100)),
-            ]);
-        }
-
-        // ── Auto-create vendor communication tasks (only when PO is "ordered") ──
-        if ($request->status === 'ordered') {
-            $vendorName = $invVendor?->vendor_name ?? 'Vendor';
-            $vendorNote = 'PO# ' . $po->order_no . ' — ' . $vendorName;
-
-            // Task 1: Confirm PO with vendor on the order date itself
-            \App\Models\Task::create([
-                'title'       => 'Confirm PO with ' . $vendorName,
-                'description' => 'Call or WhatsApp ' . $vendorName . ' to confirm receipt of purchase order. ' . $vendorNote . '.',
-                'assigned_to' => auth()->id(),
-                'created_by'  => auth()->id(),
-                'branch_id'   => auth()->user()->branch_id ?? null,
-                'due_date'    => $request->order_date,
-                'priority'    => 'medium',
-                'category'    => 'call',
-                'status'      => 'pending',
-                'po_id'       => $po->id,
-                'vendor_note' => $vendorNote,
-            ]);
-
-            // Task 2: Delivery status follow-up — 1 day before expected date (if set)
-            if ($request->expected_date) {
-                $followUpDate = \Carbon\Carbon::parse($request->expected_date)->subDay();
-                // Only create if follow-up date is in the future
-                if ($followUpDate->isFuture() || $followUpDate->isToday()) {
-                    \App\Models\Task::create([
-                        'title'       => 'Delivery follow-up: ' . $vendorName,
-                        'description' => 'Call ' . $vendorName . ' to check delivery status. Expected date is ' . \Carbon\Carbon::parse($request->expected_date)->format('d M Y') . '. ' . $vendorNote . '.',
-                        'assigned_to' => auth()->id(),
-                        'created_by'  => auth()->id(),
-                        'branch_id'   => auth()->user()->branch_id ?? null,
-                        'due_date'    => $followUpDate->toDateString(),
-                        'priority'    => 'medium',
-                        'category'    => 'call',
-                        'status'      => 'pending',
-                        'po_id'       => $po->id,
-                        'vendor_note' => $vendorNote,
-                    ]);
-                }
-            }
-        }
+        // M-7 (8 Sep 2026): PO creation was implemented TWICE — this method
+        // and InventoryService::createPurchaseOrder() (the mobile API path)
+        // carried the same ~80 lines side by side: totals, Finance vendor
+        // link, line rows, the two vendor tasks. Two writers of one fact
+        // drift; the service is the one writer now, exactly as receive /
+        // reverseLastGrn were consolidated on 14 Jul.
+        $po = app(\App\Services\Inventory\InventoryService::class)
+            ->createPurchaseOrder($data, auth()->user());
 
         return redirect()->route('inventory.purchase')
             ->with('success', 'Purchase Order ' . $po->order_no . ' created successfully.');
