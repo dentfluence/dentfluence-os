@@ -72,6 +72,17 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/auth/me',          [AuthController::class, 'me']);
+
+        /*
+         | -------- HR attendance: self check-in / check-out (M-16, Android V1.1) --------
+         | Auth only, no module gate, by design: every staffer must be able to
+         | say "I am here" from their own phone, HR permission or not. The token
+         | user is the only person these routes can mark. Corrections and
+         | marking others stay on the web behind module:hr,edit.
+         */
+        Route::get('/hr/attendance/today',      [\App\Http\Controllers\Api\V1\HrAttendanceController::class, 'today']);
+        Route::post('/hr/attendance/check-in',  [\App\Http\Controllers\Api\V1\HrAttendanceController::class, 'checkIn']);
+        Route::post('/hr/attendance/check-out', [\App\Http\Controllers\Api\V1\HrAttendanceController::class, 'checkOut']);
         Route::put('/auth/me',          [AuthController::class, 'updateMe']);   // edit profile
         Route::post('/auth/logout',     [AuthController::class, 'logout']);
         Route::post('/auth/logout-all', [AuthController::class, 'logoutAll']); // revoke all devices
@@ -92,6 +103,8 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
          | declared before "/{patient}" so it isn't swallowed as an id.
          */
         Route::get('/patients/search',    [PatientController::class, 'search'])
+            ->middleware('api.role:module:patients,view');
+        Route::get('/patients/filter-options', [PatientController::class, 'filterOptions'])
             ->middleware('api.role:module:patients,view');
         Route::get('/patients',           [PatientController::class, 'index'])
             ->middleware('api.role:module:patients,view');
@@ -639,6 +652,7 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
          */
         Route::get('/appointments/today',          [AppointmentController::class, 'today']);
         Route::get('/appointments/form-options',   [AppointmentController::class, 'formOptions']);
+        Route::get('/appointments/cancel-options', [AppointmentController::class, 'cancelOptions']);
         Route::get('/appointments/blocked-slots',  [AppointmentController::class, 'blockedSlots']);
         Route::get('/appointments',                [AppointmentController::class, 'index']);
         Route::get('/appointments/{appointment}',  [AppointmentController::class, 'show']);

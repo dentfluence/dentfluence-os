@@ -35,6 +35,29 @@ class PatientController extends ApiController
     public function __construct(private PatientService $patients) {}
 
     /** Paginated, filtered list — scoped to the caller's branch. */
+    /**
+     * The values the phone's filter sheet renders — the same lists the web
+     * patient index builds for its dropdowns. The filter PARAMETERS themselves
+     * (q, gender, area, membership, follow_up, source, family, age_min,
+     * age_max, birthday_month, sort) already match the web exactly because
+     * both screens go through PatientService::filteredQuery(); measured 8 Sep
+     * (M-4). What the phone lacked was where the option VALUES come from.
+     *
+     *   GET /api/v1/patients/filter-options
+     */
+    public function filterOptions(Request $request): JsonResponse
+    {
+        return $this->success([
+            'areas'      => $this->patients->distinctAreas($request->user()->branch_id)->values(),
+            'sources'    => ['Google', 'Instagram', 'Facebook', 'Referral', 'Walk-In', 'Camp', 'Website', 'Other'],
+            'membership' => ['active', 'expired', 'not_enrolled'],
+            'follow_up'  => ['due', 'pending', 'completed'],
+            'family'     => ['has_family', 'no_family'],
+            'gender'     => ['male', 'female', 'other'],
+            'sort'       => ['newest', 'oldest', 'name', 'name_desc'],
+        ], 'Patient filter options');
+    }
+
     public function index(Request $request): JsonResponse
     {
         $query = $this->patients
