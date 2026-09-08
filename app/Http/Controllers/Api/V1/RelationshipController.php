@@ -192,9 +192,37 @@ class RelationshipController extends ApiController
      * Query params:
      *   ?categories=recall_calls,lead_followups  (optional, comma-separated filter)
      */
+    /**
+     * M-5 (8 Sep 2026) — SAME rows as the web Today's Actions board.
+     *
+     * Until now this called generate() bare: the legacy combined view — due
+     * today PLUS every overdue row, no done rows, no Settings visibility. The
+     * web board moved to dueWindow 'today' on 24 Aug (overdue call-debt has
+     * its own Pending Calls page), shows rows already handled today faded,
+     * and hides birthday rows + hidden categories per Settings > Today's
+     * Actions. So the phone showed months of backlog the web had stopped
+     * showing — the opposite of parity.
+     *
+     *   ?window=today   (default) rows due today, handled ones carry 'done'
+     *   ?window=overdue the Pending Calls view — open overdue rows only
+     *   ?window=all     the old combined view, kept for the Action Board
+     */
     public function today(Request $request): JsonResponse
     {
-        $actions = $this->todayActionsEngine->generate();
+        $window = (string) $request->query('window', 'today');
+        if (! in_array($window, ['today', 'overdue', 'all'], true)) {
+            $window = 'today';
+        }
+
+        $actions = match ($window) {
+            'overdue' => $this->todayActionsEngine->generate(includeDone: false, dueWindow: 'overdue'),
+            'all'     => $this->todayActionsEngine->generate(),
+            default   => $this->todayActionsEngine->generate(includeDone: true, dueWindow: 'today'),
+        };
+
+        // Settings > Today's Actions — the same filter the web board and the
+        // huddle apply. Presentation only; nothing here changes generation.
+        $actions = app(\App\Services\Relationship\TodayActionsVisibility::class)->apply($actions);
 
         // Optional category filter — mobile can ask for a subset
         if ($request->filled('categories')) {
@@ -205,10 +233,14 @@ class RelationshipController extends ApiController
         // Summary counts for the mobile header bar
         $totals = [];
         $grandTotal = 0;
+        $doneTotals = [];
         foreach ($actions as $category => $items) {
-            $count          = count($items);
-            $totals[$category] = $count;
-            $grandTotal    += $count;
+            // Open items only — done rows ride along faded, they are not work.
+            $done  = count(array_filter($items, fn ($i) => ! empty($i['done'])));
+            $count = count($items) - $done;
+            $totals[$category]     = $count;
+            $doneTotals[$category] = $done;
+            $grandTotal           += $count;
         }
 
         return $this->success(
@@ -216,7 +248,9 @@ class RelationshipController extends ApiController
             '',
             200,
             [
+                'window'            => $window,
                 'totals'            => $totals,
+                'done_totals'       => $doneTotals,
                 'grand_total'       => $grandTotal,
                 'as_of'             => now()->toIso8601String(),
                 // Call-outcome / dismiss-reason config, same source the web
