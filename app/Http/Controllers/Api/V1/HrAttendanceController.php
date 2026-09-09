@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\ApiController;
 use App\Models\HrAttendance;
 use App\Models\HrEntryExitLog;
+use App\Services\HR\ShiftMetricsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -110,7 +111,17 @@ class HrAttendanceController extends ApiController
         $in  = $row?->check_in  ? substr((string) $row->check_in, 0, 5) : null;
         $out = $row?->check_out ? substr((string) $row->check_out, 0, 5) : null;
 
-        return [
+        // Shift metrics (CEO 9 Sep): late arrival and overtime against the
+        // shift this staffer is actually assigned on this date. All nulls
+        // when no shift is assigned — never a guessed working day.
+        $shift = $row
+            ? app(ShiftMetricsService::class)->metrics($request->user(), $row)
+            : app(ShiftMetricsService::class)->metrics(
+                $request->user(),
+                new HrAttendance(['user_id' => $request->user()->id, 'date' => today()])
+            );
+
+        return array_merge([
             'date'          => today()->toDateString(),
             'status'        => $row?->status ?? HrAttendance::STATUS_ABSENT,
             'check_in'      => $in,
@@ -118,6 +129,6 @@ class HrAttendanceController extends ApiController
             'hours_worked'  => $row?->hours_worked,
             'can_check_in'  => $in === null,
             'can_check_out' => $in !== null && $out === null,
-        ];
+        ], $shift);
     }
 }
