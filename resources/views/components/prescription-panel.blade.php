@@ -26,6 +26,10 @@
     'instructValue' => [],
     'collapsible'   => true,
     'startOpen'     => true,
+    // Optional. Given a patient, the typeahead grades every drug against their
+    // allergies, conditions, current medication and age, and greys the ones that
+    // should not be reached for. Omitted, the panel behaves exactly as before.
+    'patient'       => null,
 ])
 
 @php
@@ -56,6 +60,17 @@
     $drugsJson   = json_encode($normalised);
     $instrJson   = json_encode(array_values((array) $instructValue));
     $noteVal     = old($noteField, $noteValue);
+
+    // Point-of-selection safety context. Resolved here rather than over another
+    // request: the panel already knows the patient at render time.
+    $rxPatientId = $patient?->id;
+    $rxContext   = $patient
+        ? app(\App\Services\Prescription\PrescriptionRiskService::class)->context($patient)
+        : null;
+    $rxHasContext = $rxContext && (
+        count($rxContext['allergies']) || count($rxContext['conditions'])
+        || count($rxContext['medications']) || count($rxContext['flags'])
+    );
 @endphp
 
 {{-- Scoped styles for this component --}}
@@ -117,6 +132,18 @@
 .rx-chip:hover { border-color:#fca5a5; color:#dc2626; background:#fff5f5; }
 .rx-chip.rx-chip-on { background:#fef2f2; border-color:#fca5a5; color:#dc2626; font-weight:600; }
 
+/* Patient safety context strip */
+.rx-ctx { border:1px solid #fde68a; background:#fffbeb; border-radius:6px; padding:8px 10px; display:flex; flex-direction:column; gap:3px; }
+.rx-ctx-row { display:flex; gap:8px; align-items:baseline; font-size:11px; line-height:1.45; }
+.rx-ctx-label { flex:0 0 84px; font-weight:700; color:#92400e; text-transform:uppercase; font-size:9px; letter-spacing:.05em; }
+.rx-ctx-label-danger { color:#b91c1c; }
+.rx-ctx-val { color:#374151; }
+
+/* Pre-issue safety check results */
+.rx-alerts { border:1px solid #fecaca; background:#fff5f5; border-radius:6px; padding:8px 10px; display:flex; flex-direction:column; gap:4px; }
+.rx-alerts-title { font-size:9px; font-weight:700; color:#b91c1c; text-transform:uppercase; letter-spacing:.05em; }
+.rx-alert-row { font-size:11px; line-height:1.45; }
+
 /* Notes textarea */
 .rx-notes {
     width:100%; border:1px solid #e5e7eb; border-radius:5px;
@@ -132,6 +159,58 @@
         open: {{ $startOpen ? 'true' : 'false' }},
         drugs: {{ $drugsJson }},
         selectedInstr: {{ $instrJson }},
+        patientId: @js($rxPatientId),
+        rxAlerts: [],
+        rxCleared: false,
+        rxChecking: false,
+
+        /**
+         * Pre-issue safety check. /api/rx/check-alerts has existed since the CDSS
+         * was written but no view ever called it — every duplicate, interaction and
+         * allergy it can catch went unasked on the web pad. Runs on submit, shows
+         * what it found, and asks once before letting a flagged prescription through.
+         *
+         * Never blocks on failure: if the check itself errors, the save proceeds.
+         * A safety net that jams the door shut is worse than no net.
+         */
+        async rxPreflight(form) {
+            const items = this.drugs
+                .filter(d => d.drug_id)
+                .map(d => ({ drug_id: d.drug_id, drug_name: d.drug }));
+
+            if (!this.patientId || items.length === 0) {
+                this.rxCleared = true; form.requestSubmit(); return;
+            }
+
+            this.rxChecking = true;
+            try {
+                const res = await fetch('/api/rx/check-alerts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name=\'csrf-token\']')?.content || '',
+                    },
+                    body: JSON.stringify({ patient_id: this.patientId, items }),
+                });
+                const data = await res.json();
+                this.rxAlerts = Array.isArray(data.alerts) ? data.alerts : [];
+            } catch (e) {
+                this.rxAlerts = [];
+            }
+            this.rxChecking = false;
+
+            const blocking = this.rxAlerts.filter(a => a.severity === 'critical' || a.severity === 'major');
+            if (blocking.length) {
+                const lines = blocking.map(a => '• ' + a.message).join('\n\n');
+                if (!window.confirm('Safety check on this prescription:\n\n' + lines + '\n\nIssue anyway?')) {
+                    return;
+                }
+            }
+
+            this.rxCleared = true;
+            form.requestSubmit();
+        },
 
         addDrug() {
             this.drugs.push({ drug:'', drug_id:null, form_type:'tablet', food:'', sos:false, sos_dose:'', morn:false, noon:false, night:false, duration:'', unit:'days' });
@@ -181,7 +260,15 @@
         },
         drugsJson() { return JSON.stringify(this.drugs); },
         instrJson() { return JSON.stringify(this.selectedInstr); },
-    }">
+    }"
+    x-init="
+        const rxForm = $el.closest('form');
+        if (rxForm) rxForm.addEventListener('submit', (ev) => {
+            if (rxCleared) return;
+            ev.preventDefault();
+            rxPreflight(rxForm);
+        });
+    ">
 
     {{-- Header --}}
     <div class="rx-panel-head"
@@ -214,6 +301,52 @@
     {{-- Body --}}
     <div class="rx-panel-body" x-show="open" x-cloak>
 
+        {{-- Patient safety context. Shown before the drug table so the doctor reads
+             WHY a row will grey out, rather than meeting the effect with no cause. --}}
+        @if($rxHasContext)
+        <div class="rx-ctx">
+            @if(count($rxContext['allergies']))
+                <div class="rx-ctx-row">
+                    <span class="rx-ctx-label rx-ctx-label-danger">Allergies</span>
+                    <span class="rx-ctx-val">{{ implode(', ', $rxContext['allergies']) }}</span>
+                </div>
+            @endif
+            @if(count($rxContext['conditions']))
+                <div class="rx-ctx-row">
+                    <span class="rx-ctx-label">Conditions</span>
+                    <span class="rx-ctx-val">{{ implode(', ', $rxContext['conditions']) }}</span>
+                </div>
+            @endif
+            @if(count($rxContext['medications']))
+                <div class="rx-ctx-row">
+                    <span class="rx-ctx-label">On medication</span>
+                    <span class="rx-ctx-val">{{ implode(', ', $rxContext['medications']) }}</span>
+                </div>
+            @endif
+            @if(count($rxContext['flags']))
+                <div class="rx-ctx-row">
+                    <span class="rx-ctx-label">Flags</span>
+                    <span class="rx-ctx-val">{{ implode(' · ', $rxContext['flags']) }}</span>
+                </div>
+            @endif
+        </div>
+        @endif
+
+        {{-- What the pre-issue check found. Shown in place as well as in the
+             confirm dialog, so the doctor can read it properly rather than
+             squinting at a browser modal. --}}
+        <div x-show="rxAlerts.length" x-cloak class="rx-alerts">
+            <div class="rx-alerts-title">Safety check</div>
+            <template x-for="(alert, i) in rxAlerts" :key="i">
+                <div class="rx-alert-row"
+                     :style="(alert.severity === 'critical' || alert.severity === 'major')
+                                ? 'color:#b91c1c;' : 'color:#b45309;'">
+                    <span x-text="alert.drug_name ? alert.drug_name + ' — ' : ''" style="font-weight:700;"></span>
+                    <span x-text="alert.message"></span>
+                </div>
+            </template>
+        </div>
+
         {{-- Drug table --}}
         <div>
             {{-- Column headers --}}
@@ -236,6 +369,7 @@
                     {{-- Drug typeahead — fetches from drug master --}}
                     <div x-data="{
                             q: row.drug,
+                            patientId: @js($rxPatientId),
                             results: [],
                             showDrop: false,
                             loading: false,
@@ -248,7 +382,9 @@
                                 this.loading = true;
                                 this._timer = setTimeout(async () => {
                                     try {
-                                        const res = await fetch('/api/rx/drugs/search?q=' + encodeURIComponent(val) + '&form_type=' + encodeURIComponent(row.form_type));
+                                        const res = await fetch('/api/rx/drugs/search?q=' + encodeURIComponent(val)
+                                            + '&form_type=' + encodeURIComponent(row.form_type)
+                                            + (this.patientId ? '&patient_id=' + this.patientId : ''));
                                         const data = await res.json();
                                         this.results = Array.isArray(data) ? data : (data.drugs ?? []);
                                         this.showDrop = true;
@@ -257,6 +393,15 @@
                                 }, 220);
                             },
                             pick(drug) {
+                                // Advisory, not a gate: the dentist overrules the software.
+                                // One deliberate confirmation, then the drug goes on the pad.
+                                if (drug.risk === 'contraindicated') {
+                                    const why = (drug.risk_reasons || []).join('\n• ');
+                                    if (!window.confirm(
+                                        drug.brand_name + ' is flagged for this patient:\n\n• ' + why
+                                        + '\n\nPrescribe anyway?'
+                                    )) { return; }
+                                }
                                 // Brand only — the strength is snapshotted server-side
                                 // from the drug master and printed in its own line.
                                 row.drug    = drug.brand_name;
@@ -355,10 +500,18 @@
                             <template x-for="drug in results" :key="drug.id">
                                 <div @click="pick(drug)"
                                      style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #fef2f2;font-size:12px;"
-                                     @mouseover="$el.style.background='#fff5f5'"
-                                     @mouseout="$el.style.background=''">
+                                     :style="drug.risk === 'contraindicated'
+                                                ? 'background:#fafafa;'
+                                                : (drug.risk === 'caution' ? 'background:#fffdf5;' : '')"
+                                     @mouseover="$el.style.background = drug.risk === 'contraindicated' ? '#f4f4f5' : '#fff5f5'"
+                                     @mouseout="$el.style.background = drug.risk === 'contraindicated'
+                                                ? '#fafafa'
+                                                : (drug.risk === 'caution' ? '#fffdf5' : '')">
                                     <span x-text="drug.brand_name"
-                                          style="font-weight:600;color:#111827;"></span>
+                                          style="font-weight:600;"
+                                          :style="drug.risk === 'contraindicated'
+                                                    ? 'color:#9ca3af;text-decoration:line-through;'
+                                                    : 'color:#111827;'"></span>
                                     <template x-if="drug.strength">
                                         <span x-text="' ' + drug.strength"
                                               style="color:#6b7280;font-size:11px;"></span>
@@ -370,6 +523,17 @@
                                     <template x-if="drug.dosage_form">
                                         <span x-text="' · ' + drug.dosage_form"
                                               style="color:#9ca3af;font-size:10px;"></span>
+                                    </template>
+
+                                    {{-- Why this row is greyed. Naming the reason is the
+                                         whole point — a greyed row with no explanation
+                                         just looks broken. --}}
+                                    <template x-if="drug.risk && drug.risk !== 'ok' && (drug.risk_reasons || []).length">
+                                        <div style="font-size:10px;margin-top:3px;line-height:1.4;"
+                                             :style="drug.risk === 'contraindicated' ? 'color:#b91c1c;' : 'color:#b45309;'">
+                                            <span x-text="(drug.risk === 'contraindicated' ? 'Contraindicated — ' : 'Caution — ')
+                                                          + drug.risk_reasons.join('; ')"></span>
+                                        </div>
                                     </template>
                                 </div>
                             </template>

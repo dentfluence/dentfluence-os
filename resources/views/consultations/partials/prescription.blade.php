@@ -56,6 +56,7 @@
 
     <div class="c-body">
         <x-prescription-panel
+            :patient="$patient"
             prefix="prescriptions_data"
             note-field="rx_general_instructions"
             instruct-field="instructions_data"

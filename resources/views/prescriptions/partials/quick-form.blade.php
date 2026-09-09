@@ -101,6 +101,7 @@
 
     {{-- Universal prescription panel --}}
     <x-prescription-panel
+        :patient="$patient"
         prefix="prescriptions_data"
         note-field="prescription_notes"
         instruct-field="instructions_data"
