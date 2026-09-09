@@ -230,6 +230,9 @@ class RelationshipController extends ApiController
             $actions = array_intersect_key($actions, array_flip($allowed));
         }
 
+        $opts         = app(\App\Services\Relationship\TodayActionOptions::class);
+        $responseOpts = $opts->responseOptions();
+
         // Summary counts for the mobile header bar
         $totals = [];
         $grandTotal = 0;
@@ -256,9 +259,18 @@ class RelationshipController extends ApiController
                 // Call-outcome / dismiss-reason config, same source the web
                 // Action Board drawer reads (Settings > Call Outcomes),
                 // added 2026-07-06 for mobile parity — see logAction()/dismiss().
-                'response_options'    => $this->buildResponseOptions(),
-                'next_actions'        => $this->buildNextActions(),
-                'requires_notes_map'  => $this->buildRequiresNotesMap(),
+                'response_options'    => $responseOpts,
+                'next_actions'        => $opts->nextActions(),
+                'requires_notes_map'  => $opts->requiresNotesMap(),
+                // M-17 (9 Sep 2026): the two maps the web drawer has always
+                // had and the phone never did. Without closes_task_map the
+                // phone cannot say whether an outcome completes the action or
+                // just records an attempt; without call_results it cannot ask
+                // "did the call connect?" first, so it flattened five outcomes
+                // into one list. Both come from Settings > Call Outcomes.
+                'closes_task_map'     => $opts->closesTaskMap(),
+                'call_results'        => $opts->callResults($responseOpts),
+                'contact_results'     => \App\Services\Relationship\TodayActionOptions::CONTACT_RESULTS,
                 'dismiss_reasons'     => ActionOptionList::query()->dismissReasons()->get()
                     ->map(fn (ActionOptionList $r) => [
                         'key'            => $r->key,
@@ -269,58 +281,6 @@ class RelationshipController extends ApiController
         );
     }
 
-    /**
-     * category => [key => label] call-outcome map. Mirrors
-     * TodayController::buildResponseOptions() exactly (web parity) — starts
-     * from config('relationship_rules.response_options'), then overrides any
-     * category with active Settings > Call Outcomes rows.
-     */
-    private function buildResponseOptions(): array
-    {
-        $merged = config('relationship_rules.response_options', []);
-
-        $dbRows = ActionOptionList::query()
-            ->where('option_type', 'call_outcome')
-            ->active()
-            ->get()
-            ->groupBy('action_category');
-
-        foreach ($dbRows as $category => $rows) {
-            $merged[$category] = ActionOptionList::labelMap($rows);
-        }
-
-        return $merged;
-    }
-
-    /** Mirrors TodayController::buildNextActions() exactly. */
-    private function buildNextActions(): array
-    {
-        $overrides = ActionOptionList::query()
-            ->where('option_type', 'call_outcome')
-            ->whereNotNull('next_action_key')
-            ->active()
-            ->pluck('next_action_key', 'key')
-            ->toArray();
-
-        return array_merge(config('relationship_rules.next_actions', []), $overrides);
-    }
-
-    /** Mirrors TodayController::buildRequiresNotesMap() exactly. */
-    private function buildRequiresNotesMap(): array
-    {
-        $rows = ActionOptionList::query()
-            ->where('option_type', 'call_outcome')
-            ->where('requires_notes', true)
-            ->active()
-            ->get(['action_category', 'key']);
-
-        $map = [];
-        foreach ($rows as $row) {
-            $map[$row->action_category][$row->key] = true;
-        }
-
-        return $map;
-    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // POST /api/v1/relationships/today/action
@@ -330,78 +290,21 @@ class RelationshipController extends ApiController
 
     public function todayLogAction(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'category'        => ['required', 'string'],
-            'patient_id'      => ['nullable', 'integer'],
-            'lead_id'         => ['nullable', 'integer'],
-            'relationship_id' => ['nullable', 'integer'],
-            'response'        => ['required', 'string'],
-            'next_action'     => ['nullable', 'string'],
-            'notes'           => ['nullable', 'string', 'max:500'],
-        ]);
-
-        $optionRow = ActionOptionList::query()
-            ->where('option_type', 'call_outcome')
-            ->where('key', $validated['response'])
-            ->where(function ($q) use ($validated) {
-                $q->where('action_category', $validated['category'])
-                  ->orWhere('action_category', 'default');
-            })
-            ->active()
-            ->orderByRaw('action_category = ? desc', [$validated['category']])
-            ->first();
-
-        if ($optionRow?->requires_notes && blank($validated['notes'] ?? null)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This outcome requires a note before it can be logged.',
-            ], 422);
-        }
-
-        try {
-            $subject = null;
-            if ($validated['patient_id']) {
-                $subject = Patient::find($validated['patient_id']);
-            } elseif ($validated['lead_id']) {
-                $subject = Lead::find($validated['lead_id']);
-            }
-
-            if ($subject) {
-                $this->activityEngine->log(
-                    subject       : $subject,
-                    event         : 'call.logged',
-                    actor         : $request->user(),
-                    metadata      : [
-                        'category'    => $validated['category'],
-                        'response'    => $validated['response'],
-                        'next_action' => $validated['next_action'] ?? null,
-                        'notes'       => $validated['notes'] ?? null,
-                        'source'      => 'today_actions_mobile',
-                    ],
-                    relationshipId: $validated['relationship_id'] ?? null,
-                    description   : 'Call logged from Today\'s Actions: ' . $validated['response'],
-                );
-            }
-
-            $nextActionLabel = config('relationship_rules.next_actions.' . $validated['response'])
-                ?? $validated['next_action']
-                ?? 'No next action set';
-
-            return response()->json([
-                'success'           => true,
-                'next_action_label' => $nextActionLabel,
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Api/V1/RelationshipController::todayLogAction failed', [
-                'data'  => $validated,
-                'error' => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Could not log action. Please try again.',
-            ], 500);
-        }
+        // M-17 (9 Sep 2026) — DELEGATED, not reimplemented.
+        //
+        // This used to be a second, shorter implementation, and the gap was
+        // not cosmetic: it wrote an Activity row and stopped. It never read
+        // closes_task, never called closeUnderlyingRecord(), never ran the
+        // outcome automations, and did not even accept subject_id — so a
+        // staffer logging "Booked pickup appointment" on the phone saw the
+        // call appear in the web timeline while the action itself stayed open
+        // forever. Sumit reported exactly that on 9 Sep: "mobile madhun
+        // kelya tar web madhye distayt pan completed madhye nahi jat".
+        //
+        // The phone now runs the SAME method the web board runs. Two copies
+        // of a completion rule is one copy too many; there is nothing left
+        // here to drift.
+        return app(\App\Http\Controllers\Relationship\TodayController::class)->logAction($request);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -436,92 +339,21 @@ class RelationshipController extends ApiController
 
     public function todayDismiss(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'category'        => ['required', 'string'],
-            'subject_id'      => ['required', 'integer'],
-            'reason_key'      => ['required', 'string'],
-            'notes'           => ['nullable', 'string', 'max:500'],
-            'patient_id'      => ['nullable', 'integer'],
-            'relationship_id' => ['nullable', 'integer'],
-        ]);
-
-        $reason = ActionOptionList::query()
-            ->where('option_type', 'dismiss_reason')
-            ->where('key', $validated['reason_key'])
-            ->active()
-            ->first();
-
-        if (! $reason) {
-            return response()->json(['success' => false, 'message' => 'Unknown dismiss reason.'], 422);
-        }
-
-        if ($reason->requires_notes && blank($validated['notes'] ?? null)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This reason requires a note before it can be dismissed.',
-            ], 422);
-        }
-
-        try {
-            if ($validated['category'] === 'recall_calls' || $validated['category'] === 'missed_calls_yesterday') {
-                $queueItem = CommunicationQueue::find($validated['subject_id']);
-                if (! $queueItem) {
-                    return response()->json(['success' => false, 'message' => 'Item not found — it may already be handled.'], 404);
-                }
-                $queueItem->dismiss($request->user()->id, $reason->label . ($validated['notes'] ?? '' ? ' — ' . $validated['notes'] : ''));
-            } else {
-                $modelClass = self::DISMISSIBLE_MODELS[$validated['category']] ?? null;
-                if (! $modelClass) {
-                    return response()->json(['success' => false, 'message' => 'This category cannot be dismissed.'], 422);
-                }
-
-                TodayActionDismissal::updateOrCreate(
-                    [
-                        'category'           => $validated['category'],
-                        'subject_type'       => $modelClass,
-                        'subject_id'         => $validated['subject_id'],
-                        'dismissed_for_date' => \Illuminate\Support\Carbon::today()->toDateString(),
-                    ],
-                    [
-                        'reason_key'   => $reason->key,
-                        'notes'        => $validated['notes'] ?? null,
-                        'dismissed_by' => $request->user()->id,
-                    ]
-                );
-            }
-
-            $subject = null;
-            if ($request->filled('patient_id')) {
-                $subject = Patient::find($request->integer('patient_id'));
-            }
-            if ($subject) {
-                $this->activityEngine->log(
-                    subject       : $subject,
-                    event         : 'today_action.dismissed',
-                    actor         : $request->user(),
-                    metadata      : [
-                        'category' => $validated['category'],
-                        'reason'   => $reason->label,
-                        'notes'    => $validated['notes'] ?? null,
-                        'source'   => 'today_actions_mobile',
-                    ],
-                    relationshipId: $request->integer('relationship_id') ?: null,
-                    description   : 'Dismissed from Today\'s Actions: ' . $reason->label,
-                );
-            }
-
-            return response()->json(['success' => true]);
-        } catch (\Throwable $e) {
-            Log::error('Api/V1/RelationshipController::todayDismiss failed', [
-                'data'  => $validated,
-                'error' => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Could not dismiss item. Please try again.',
-            ], 500);
-        }
+        // M-17 (9 Sep 2026) — DELEGATED, not reimplemented.
+        //
+        // This used to be a second, shorter implementation, and the gap was
+        // not cosmetic: it wrote an Activity row and stopped. It never read
+        // closes_task, never called closeUnderlyingRecord(), never ran the
+        // outcome automations, and did not even accept subject_id — so a
+        // staffer logging "Booked pickup appointment" on the phone saw the
+        // call appear in the web timeline while the action itself stayed open
+        // forever. Sumit reported exactly that on 9 Sep: "mobile madhun
+        // kelya tar web madhye distayt pan completed madhye nahi jat".
+        //
+        // The phone now runs the SAME method the web board runs. Two copies
+        // of a completion rule is one copy too many; there is nothing left
+        // here to drift.
+        return app(\App\Http\Controllers\Relationship\TodayController::class)->dismiss($request);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -534,46 +366,21 @@ class RelationshipController extends ApiController
 
     public function todayClose(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'category'        => ['required', 'string'],
-            'patient_id'      => ['nullable', 'integer'],
-            'lead_id'         => ['nullable', 'integer'],
-            'relationship_id' => ['nullable', 'integer'],
-            'subject_id'      => ['nullable', 'integer'],
-            'notes'           => ['nullable', 'string', 'max:500'],
-        ]);
-
-        try {
-            $this->closeUnderlyingRecord(array_merge($validated, ['response' => 'closed_manually']));
-
-            $subject = $this->resolveNoteSubject($validated['patient_id'] ?? null, $validated['lead_id'] ?? null);
-            if ($subject) {
-                $this->activityEngine->log(
-                    subject       : $subject,
-                    event         : 'today_action.closed',
-                    actor         : $request->user(),
-                    metadata      : [
-                        'category' => $validated['category'],
-                        'notes'    => $validated['notes'] ?? null,
-                        'source'   => 'today_actions_mobile',
-                    ],
-                    relationshipId: $validated['relationship_id'] ?? null,
-                    description   : "Closed from Today's Actions",
-                );
-            }
-
-            return response()->json(['success' => true]);
-        } catch (\Throwable $e) {
-            Log::error('Api/V1/RelationshipController::todayClose failed', [
-                'data'  => $validated,
-                'error' => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Could not close. Please try again.',
-            ], 500);
-        }
+        // M-17 (9 Sep 2026) — DELEGATED, not reimplemented.
+        //
+        // This used to be a second, shorter implementation, and the gap was
+        // not cosmetic: it wrote an Activity row and stopped. It never read
+        // closes_task, never called closeUnderlyingRecord(), never ran the
+        // outcome automations, and did not even accept subject_id — so a
+        // staffer logging "Booked pickup appointment" on the phone saw the
+        // call appear in the web timeline while the action itself stayed open
+        // forever. Sumit reported exactly that on 9 Sep: "mobile madhun
+        // kelya tar web madhye distayt pan completed madhye nahi jat".
+        //
+        // The phone now runs the SAME method the web board runs. Two copies
+        // of a completion rule is one copy too many; there is nothing left
+        // here to drift.
+        return app(\App\Http\Controllers\Relationship\TodayController::class)->closeAction($request);
     }
 
     /**

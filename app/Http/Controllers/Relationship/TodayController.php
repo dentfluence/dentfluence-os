@@ -264,7 +264,7 @@ class TodayController extends Controller
             }
         }
 
-        $responseOpts = $this->buildResponseOptions();
+        $responseOpts = $this->actionOptions()->responseOptions();
 
         if ($mode === 'today') {
             // Stamp each open row with its most recent call.logged activity from
@@ -347,10 +347,10 @@ class TodayController extends Controller
         $pendingCount  = $pendingCount ?? 0;
         $boardMode     = 'today';
         $checklists    = config('relationship_rules.call_checklists', []);
-        $nextActions   = $this->buildNextActions();
-        $requiresNotesMap = $this->buildRequiresNotesMap();
-        $closesTaskMap  = $this->buildClosesTaskMap();
-        $callResults    = $this->buildCallResults($responseOpts);
+        $nextActions   = $this->actionOptions()->nextActions();
+        $requiresNotesMap = $this->actionOptions()->requiresNotesMap();
+        $closesTaskMap  = $this->actionOptions()->closesTaskMap();
+        $callResults    = $this->actionOptions()->callResults($responseOpts);
         $dismissReasons = ActionOptionList::query()->dismissReasons()->get()->values();
 
         return view('relationship.today.index', compact(
@@ -404,7 +404,7 @@ class TodayController extends Controller
             $raw = $this->engine->generate(includeDone: false, dueWindow: 'overdue');
         }
 
-        $responseOpts = $this->buildResponseOptions();
+        $responseOpts = $this->actionOptions()->responseOptions();
         $this->annotateCallState($raw, $today, $responseOpts);
 
         // Keep ONLY overdue open items — the mirror image of index().
@@ -441,10 +441,10 @@ class TodayController extends Controller
 
         $totalCount       = array_sum(array_column($groups, 'count'));
         $checklists       = config('relationship_rules.call_checklists', []);
-        $nextActions      = $this->buildNextActions();
-        $requiresNotesMap = $this->buildRequiresNotesMap();
-        $closesTaskMap    = $this->buildClosesTaskMap();
-        $callResults      = $this->buildCallResults($responseOpts);
+        $nextActions      = $this->actionOptions()->nextActions();
+        $requiresNotesMap = $this->actionOptions()->requiresNotesMap();
+        $closesTaskMap    = $this->actionOptions()->closesTaskMap();
+        $callResults      = $this->actionOptions()->callResults($responseOpts);
         $dismissReasons   = ActionOptionList::query()->dismissReasons()->get()->values();
         $selectedDate     = $today->copy();
         $mode             = 'today';        // reuse the live-board rendering path
@@ -607,22 +607,6 @@ class TodayController extends Controller
      * that has active DB rows configured from Settings > Call Outcomes.
      * See docs/feature-specs/feature-spec-custom-call-outcomes.md.
      */
-    private function buildResponseOptions(): array
-    {
-        $merged = config('relationship_rules.response_options', []);
-
-        $dbRows = ActionOptionList::query()
-            ->where('option_type', 'call_outcome')
-            ->active()
-            ->get()
-            ->groupBy('action_category');
-
-        foreach ($dbRows as $category => $rows) {
-            $merged[$category] = ActionOptionList::labelMap($rows);
-        }
-
-        return $merged;
-    }
 
     /**
      * Build the response-key => next-action-label map, same shape as
@@ -632,17 +616,6 @@ class TodayController extends Controller
      * entry, the "Suggested Next Action" box simply stays empty, which is
      * correct for outcomes like "Confirmed attendance" that need no follow-up.
      */
-    private function buildNextActions(): array
-    {
-        $overrides = ActionOptionList::query()
-            ->where('option_type', 'call_outcome')
-            ->whereNotNull('next_action_key')
-            ->active()
-            ->pluck('next_action_key', 'key')
-            ->toArray();
-
-        return array_merge(config('relationship_rules.next_actions', []), $overrides);
-    }
 
     /**
      * category => [key => true] for every outcome that requires a note before
@@ -686,6 +659,11 @@ class TodayController extends Controller
         uasort($out, fn ($a, $b) => [$a['group_rank'], $a['order']] <=> [$b['group_rank'], $b['order']]);
 
         return $out;
+    }
+
+    private function actionOptions(): \App\Services\Relationship\TodayActionOptions
+    {
+        return app(\App\Services\Relationship\TodayActionOptions::class);
     }
 
     private function hiddenCategories(): array
@@ -734,19 +712,8 @@ class TodayController extends Controller
      * Keys are matched against the category's own configured outcomes only —
      * we never inject an option a clinic has switched off.
      */
-    private const CONTACT_RESULT_KEYS = [
-        'no_answer'         => ['no_answer', 'voicemail', 'not_reachable'],
-        'unable_to_connect' => ['busy', 'switched_off', 'out_of_coverage', 'rejected'],
-        'wrong_number'      => ['wrong_number', 'invalid_number'],
-    ];
-
-    /** Display order + labels for the four result buttons. */
-    public const CONTACT_RESULTS = [
-        'answered'          => 'Answered',
-        'no_answer'         => 'No Answer',
-        'unable_to_connect' => 'Unable to Connect',
-        'wrong_number'      => 'Wrong Number',
-    ];
+    /** @see \App\Services\Relationship\TodayActionOptions — the shared definition both surfaces read. */
+    public const CONTACT_RESULTS = \App\Services\Relationship\TodayActionOptions::CONTACT_RESULTS;
 
     /**
      * category => result bucket => [outcome key => label].
@@ -758,31 +725,6 @@ class TodayController extends Controller
      * that button), because inventing an option the clinic has not configured
      * would submit an outcome with no closes_task rule behind it.
      */
-    private function buildCallResults(array $responseOpts): array
-    {
-        $out = [];
-
-        foreach ($responseOpts as $category => $options) {
-            $buckets = ['answered' => [], 'no_answer' => [], 'unable_to_connect' => [], 'wrong_number' => []];
-
-            foreach ($options as $key => $label) {
-                $bucket = 'answered';
-
-                foreach (self::CONTACT_RESULT_KEYS as $name => $keys) {
-                    if (in_array($key, $keys, true)) {
-                        $bucket = $name;
-                        break;
-                    }
-                }
-
-                $buckets[$bucket][$key] = $label;
-            }
-
-            $out[$category] = $buckets;
-        }
-
-        return $out;
-    }
 
     /**
      * category => [key => bool] — whether logging this outcome completes the
@@ -792,36 +734,7 @@ class TodayController extends Controller
      * stays due for another try." Presentation only; the server remains the
      * authority.
      */
-    private function buildClosesTaskMap(): array
-    {
-        $rows = ActionOptionList::query()
-            ->where('option_type', 'call_outcome')
-            ->active()
-            ->get(['action_category', 'key', 'closes_task']);
 
-        $map = [];
-        foreach ($rows as $row) {
-            $map[$row->action_category][$row->key] = (bool) $row->closes_task;
-        }
-
-        return $map;
-    }
-
-    private function buildRequiresNotesMap(): array
-    {
-        $rows = ActionOptionList::query()
-            ->where('option_type', 'call_outcome')
-            ->where('requires_notes', true)
-            ->active()
-            ->get(['action_category', 'key']);
-
-        $map = [];
-        foreach ($rows as $row) {
-            $map[$row->action_category][$row->key] = true;
-        }
-
-        return $map;
-    }
 
     // ─────────────────────────────────────────────────────────────────────
     // GET /relationship/today/summary  (JSON) — slice E4
@@ -1435,7 +1348,7 @@ class TodayController extends Controller
      */
     private function interactionHistory(Model $subject, ?string $category): array
     {
-        $responseOpts = $this->buildResponseOptions();
+        $responseOpts = $this->actionOptions()->responseOptions();
 
         $rows = Activity::query()
             ->with('actor:id,name')
