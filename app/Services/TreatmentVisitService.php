@@ -15,6 +15,8 @@ use App\Models\TreatmentVisit;
 use App\Models\TreatmentPlanItem;
 use App\Models\TreatmentVisitItem;
 use App\Services\Clinical\VisitNextActionService;
+use App\Services\Notifications\ChairsideNotifier;
+use App\Support\Handover;
 use App\Services\Relationship\ActivityEngine;
 use App\Services\TreatmentPlan\PlanLifecycleService;
 use Illuminate\Validation\ValidationException;
@@ -149,7 +151,7 @@ class TreatmentVisitService
             'lab_case.priority'                => ['nullable', 'in:routine,urgent,express'],
             'lab_case.expected_return_date'    => ['nullable', 'date'],
             'lab_case.instructions'            => ['nullable', 'string'],
-        ] + VisitNextActionService::rules();
+        ] + VisitNextActionService::rules() + Handover::rules(); // N-2 doctor → front desk handover
     }
 
     /**
@@ -212,6 +214,12 @@ class TreatmentVisitService
         } catch (Throwable $e) {
             report($e);
         }
+
+        // N-1 Notification (2026-09-09): tell the front desk the visit is
+        // done — AFTER commit, so a rolled-back visit is never announced, and
+        // after saveVisitItems() so the popup can name the work and land on
+        // the billing prompt it produced. The dispatcher never throws.
+        app(ChairsideNotifier::class)->visitSaved($visit);
 
         return $visit->load(['doctor', 'visitItems']);
     }
@@ -707,6 +715,8 @@ class TreatmentVisitService
             'chief_complaint'     => $v->chief_complaint,
             'next_visit_date'     => $v->next_visit_date?->format('Y-m-d'),
             'next_visit_type'     => $v->next_visit_type,
+            'handover'            => $v->handover,
+            'handover_summary'    => Handover::summary($v->handover),
             // Visit → Next Action — pending reception actions, ids included.
             // Load-bearing: the web JS swaps this payload into its in-memory
             // visit list after a save, and the edit form re-populates from it.

@@ -691,6 +691,17 @@
             </section>
             @endif
 
+            {{-- 14b. N-2 Doctor → Front Desk handover ───────────────────── --}}
+            @php $handoverLine = \App\Support\Handover::summary($consultation->handover); @endphp
+            @if($handoverLine !== '')
+            <section id="sec-handover" class="bg-white rounded-xl border border-gray-200 shadow-sm">
+                <div class="px-5 py-3 border-b border-gray-100">
+                    <h3 class="font-semibold text-gray-800">Message to Front Desk</h3>
+                </div>
+                <div class="px-5 py-4 text-sm text-gray-800">{{ $handoverLine }}</div>
+            </section>
+            @endif
+
             {{-- 10b. Treatment Rendered & Advice (Emergency / Minor-Visit) ─── --}}
             @php $hasRendered = $consultation->procedure_performed || $consultation->emergency_treatment_rendered || $consultation->advice; @endphp
             @if($hasRendered)

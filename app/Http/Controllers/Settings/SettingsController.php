@@ -118,8 +118,10 @@ class SettingsController extends Controller
             'Integrations'        => ['integration.whatsapp', 'integration.google', 'integration.meta', 'integration.website', 'integration.payments', 'integration.abdm'],
         ];
 
+        $notificationMatrix = $this->notificationMatrix(); // N-4 event × role rules
+
         return view('settings.index', compact(
-            'activeTab', 'clinic', 'notifications', 'billing', 'print', 'controls',
+            'activeTab', 'clinic', 'notifications', 'billing', 'print', 'controls', 'notificationMatrix',
             'clinicHours', 'holidays',
             'staff', 'roles',
             'treatments', 'complaints', 'diagnoses', 'investigations',
@@ -229,23 +231,79 @@ class SettingsController extends Controller
         return back()->with('success', 'Patient ID settings saved.');
     }
 
-    // ── Save notifications preferences ─────────────────────────────────────
+    // ── Save notification rules (N-4, 2026-09-09) ───────────────────────────
+    // The matrix posts rules[event_with_dots_as__][role][level|push]. Every cell is written
+    // as an explicit notification_rules row (branch-wide, branch_id NULL) so
+    // the matrix — not the catalogue default — is the authority from the
+    // first save on. Unknown events or roles are dropped, never stored.
+    // (The old notif_* app_settings this method wrote were read by nothing.)
     public function saveNotifications(Request $request)
     {
-        $keys = [
-            'notif_appointment_reminder', 'notif_followup_due',
-            'notif_new_lead', 'notif_task_assigned',
-            'notif_whatsapp', 'notif_sms', 'notif_email',
-        ];
+        $request->validate([
+            'rules'               => ['required', 'array'],
+            'rules.*'             => ['array'],
+            'rules.*.*'           => ['array'],
+            'rules.*.*.level'     => ['required', 'string', 'in:' . implode(',', \App\Services\Notifications\NotificationCatalog::LEVELS)],
+            'rules.*.*.push'      => ['nullable', 'boolean'],
+        ]);
 
-        $data = [];
-        foreach ($keys as $k) {
-            $data[$k] = $request->boolean($k) ? '1' : '0';
+        $validRoles = array_merge(
+            \App\Services\Notifications\NotificationCatalog::roleColumns(),
+            [\App\Services\Notifications\NotificationCatalog::OWNER]
+        );
+
+        $written = 0;
+        DB::transaction(function () use ($request, $validRoles, &$written) {
+            foreach ($request->input('rules', []) as $postedKey => $roles) {
+                // The form encodes the event key's dots (see the matrix partial):
+                // Laravel splits a validation attribute on dots, so a raw
+                // 'consultation.saved' field name is unreachable.
+                $eventKey = str_replace('__', '.', $postedKey);
+
+                if (! \App\Services\Notifications\NotificationCatalog::has($eventKey)) {
+                    continue;
+                }
+                $def = \App\Services\Notifications\NotificationCatalog::get($eventKey);
+
+                foreach ($roles as $role => $cell) {
+                    if (! in_array($role, $validRoles, true)) {
+                        continue;
+                    }
+                    // Owner cell only exists for events that have an owner.
+                    if ($role === \App\Services\Notifications\NotificationCatalog::OWNER && ! $def['owner']) {
+                        continue;
+                    }
+
+                    $level = $cell['level'];
+                    $push  = $level === \App\Services\Notifications\NotificationCatalog::LEVEL_POPUP
+                        && filter_var($cell['push'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+                    \App\Models\NotificationRule::updateOrCreate(
+                        ['event_key' => $eventKey, 'role' => $role, 'branch_id' => null],
+                        ['level' => $level, 'push' => $push, 'updated_by' => auth()->id()]
+                    );
+                    $written++;
+                }
+            }
+        });
+
+        return back()->with('success', "Notification rules saved ({$written} cells).");
+    }
+
+    /**
+     * Effective matrix for the Settings tab: [event_key => [role => ['level','push']]].
+     * Reads through NotificationRule::effectiveFor so a cell shows what will
+     * actually happen (rule row, else catalogue default). Off cells are
+     * included explicitly so the view never has to guess.
+     */
+    private function notificationMatrix(): array
+    {
+        $matrix = [];
+        foreach (array_keys(\App\Services\Notifications\NotificationCatalog::all()) as $eventKey) {
+            $matrix[$eventKey] = \App\Models\NotificationRule::effectiveFor($eventKey, null, includeOff: true)->all();
         }
 
-        AppSetting::setMany($data, 'notifications');
-
-        return back()->with('success', 'Notification preferences saved.');
+        return $matrix;
     }
 
     // ── EMI Providers CRUD ──────────────────────────────────────────────────

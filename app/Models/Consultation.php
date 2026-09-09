@@ -80,6 +80,7 @@ class Consultation extends Model
         'treatment_done',
         'treatment_plan_note',
         'follow_up_note',
+        'handover',          // N-2 doctor → front desk message (App\Support\Handover)
         'follow_up_date',
         'risks_discussed',
         'treatment_acceptance',
@@ -120,6 +121,7 @@ class Consultation extends Model
         'aocp_acceptable'    => 'boolean',
         'tooth_numbers'      => 'array',
         'follow_up_date'     => 'date',
+        'handover'           => 'array',
         'consultation_date'  => 'datetime',
         'next_visit_date'    => 'date',
         'attachments'        => 'array',
@@ -271,4 +273,13 @@ class Consultation extends Model
     // ──────────────────────────────────────────────────────────────────────────
     // ↑↑↑  Paste any remaining existing methods / scopes / accessors below  ↑↑↑
     // ──────────────────────────────────────────────────────────────────────────
+    /**
+     * N-2 — normalise the doctor's handover on the way in, so an untouched
+     * form stores NULL and the desk popup never reads an empty object.
+     */
+    public function setHandoverAttribute($value): void
+    {
+        $clean = \App\Support\Handover::normalize(is_string($value) ? json_decode($value, true) : $value);
+        $this->attributes['handover'] = $clean ? json_encode($clean) : null;
+    }
 }

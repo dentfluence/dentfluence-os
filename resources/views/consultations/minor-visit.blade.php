@@ -223,6 +223,8 @@
                     placeholder="e.g. Review healing in 1 week">
             </div>
         </div>
+        {{-- N-2: doctor → front desk handover; becomes the desk popup text on save --}}
+        @include('consultations.partials.handover', ['consultation' => $consultation ?? null])
     </div>
 
     {{-- ── First question ── --}}

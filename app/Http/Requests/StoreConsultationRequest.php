@@ -150,6 +150,6 @@ class StoreConsultationRequest extends FormRequest
 
             // Backdated entry — optional link to an existing appointment
             'appointment_id'              => ['nullable', 'exists:appointments,id'],
-        ];
+        ] + \App\Support\Handover::rules(); // N-2 doctor → front desk handover
     }
 }

@@ -36,6 +36,7 @@ class TreatmentVisit extends Model
         // Do not re-add them; add a real read path through ReportMetricsService.
         'next_visit_date',
         'next_visit_type',
+        'handover',          // N-2 doctor → front desk message (App\Support\Handover)
         'recall_queued_at',   // recall-engine cooldown stamp
 
         // RCT
@@ -98,6 +99,7 @@ class TreatmentVisit extends Model
     protected $casts = [
         'visit_date'                  => 'date',
         'next_visit_date'             => 'date',
+        'handover'                    => 'array',
         'cost'                        => 'decimal:2',
         'amount_paid'                 => 'decimal:2',
         'completed_stages'            => 'array',
@@ -264,5 +266,14 @@ class TreatmentVisit extends Model
     public function scopeAwaitingVerification($query)
     {
         return $query->whereNull('verified_at')->where('status', 'completed');
+    }
+    /**
+     * N-2 — normalise the doctor's handover on the way in, so an untouched
+     * form stores NULL and the desk popup never reads an empty object.
+     */
+    public function setHandoverAttribute($value): void
+    {
+        $clean = \App\Support\Handover::normalize(is_string($value) ? json_decode($value, true) : $value);
+        $this->attributes['handover'] = $clean ? json_encode($clean) : null;
     }
 }

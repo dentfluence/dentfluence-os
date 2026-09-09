@@ -573,7 +573,9 @@ window.dfQuickPicker = (function () {
             row.style.cssText = 'display:flex;gap:10px;padding:10px 16px;border-bottom:1px solid #f8f2fb;' + (n.is_read ? '' : 'background:#fdf8ff;');
             row.innerHTML = '<div style="flex-shrink:0;margin-top:3px;">' + dot + '</div>'
                 + '<div style="flex:1;min-width:0;">'
-                + '<p style="font-size:12.5px;font-weight:' + (n.is_read ? '400' : '600') + ';color:#1a0a24;margin:0 0 2px;line-height:1.4;">' + n.title + '</p>'
+                + '<p style="font-size:12.5px;font-weight:' + (n.is_read ? '400' : '600') + ';color:#1a0a24;margin:0 0 2px;line-height:1.4;">'
+                    + (n.priority === 'popup' && !n.is_read ? '<span style="font-size:9px;font-weight:700;letter-spacing:.4px;color:#6a0f70;background:#f3e6f5;border-radius:4px;padding:1px 5px;margin-right:6px;vertical-align:1px;">DESK</span>' : '')
+                    + n.title + '</p>'
                 + (n.message ? '<p style="font-size:11.5px;color:#7a6884;margin:0 0 3px;line-height:1.4;">' + n.message + '</p>' : '')
                 + '<div style="display:flex;align-items:center;gap:10px;">'
                 + '<span style="font-size:10.5px;color:#b0a4bc;">' + n.time_ago + '</span>'
@@ -611,6 +613,10 @@ window.dfQuickPicker = (function () {
     // Load on page init, then poll every 60 seconds
     loadNotifications();
     setInterval(loadNotifications, 60000);
+
+    // N-3: the desk popup layer (components/desk-popup) refreshes the bell
+    // after Done / Later so the count and dots never lag behind the card.
+    if (window.DFTopbar) { window.DFTopbar.reloadNotifications = loadNotifications; }
 
 })();
 </script>

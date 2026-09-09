@@ -9,20 +9,38 @@ class AppNotification extends Model
 {
     protected $table = 'app_notifications';
 
+    public const PRIORITY_POPUP = 'popup';
+    public const PRIORITY_BELL  = 'bell';
+
     protected $fillable = [
         'user_id',
         'type',
+        'priority',
+        'event_key',
+        'target_role',
+        'branch_id',
+        'source_type',
+        'source_id',
+        'group_key',
+        'dedupe_key',
         'title',
         'message',
         'action_url',
         'action_label',
         'is_read',
         'read_at',
+        'acknowledged_at',
+        'acknowledged_by',
+        'push',
+        'push_sent_at',
     ];
 
     protected $casts = [
-        'is_read' => 'boolean',
-        'read_at' => 'datetime',
+        'is_read'         => 'boolean',
+        'push'            => 'boolean',
+        'read_at'         => 'datetime',
+        'acknowledged_at' => 'datetime',
+        'push_sent_at'    => 'datetime',
     ];
 
     // ── Relationships ─────────────────────────────────────────────────────────
@@ -49,10 +67,27 @@ class AppNotification extends Model
         return $query->where('is_read', false);
     }
 
+    /**
+     * Popups this user still has to answer. A popup that nobody answered
+     * within 12 hours is stale — the patient has long left — so it quietly
+     * degrades to a bell item rather than ambushing tomorrow's shift.
+     */
+    public function scopePendingPopups($query, int $userId)
+    {
+        return $query->where('user_id', $userId)
+            ->where('priority', self::PRIORITY_POPUP)
+            ->whereNull('acknowledged_at')
+            ->where('created_at', '>=', now()->subHours(12));
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /**
      * Create a notification for a specific user (or broadcast if $userId = null).
+     *
+     * Direct writer kept for the legacy callers (lab, tasks, shift reminders).
+     * New events go through NotificationDispatcher::fire(), which resolves
+     * recipients from notification_rules — do not add callers here.
      */
     public static function notify(
         ?int   $userId,
@@ -84,6 +119,43 @@ class AppNotification extends Model
     }
 
     /**
+     * "Done" on a popup. One popup at the desk is one piece of work whoever
+     * picks it up, so acknowledging clears EVERY row in the group — the other
+     * receptionist's screen stops showing it too. Rows are also marked read.
+     */
+    public function acknowledgeGroup(int $byUserId): int
+    {
+        $now = now();
+
+        $query = $this->group_key
+            ? static::where('group_key', $this->group_key)
+            : static::whereKey($this->id);
+
+        return $query->whereNull('acknowledged_at')->update([
+            'acknowledged_at' => $now,
+            'acknowledged_by' => $byUserId,
+            'is_read'         => true,
+            'read_at'         => $now,
+        ]);
+    }
+
+    /**
+     * "Later" on a popup — for THIS user only. The row drops to the bell
+     * (still unread) so it stops popping; a colleague's popup is untouched.
+     */
+    public function snoozeToBell(): void
+    {
+        if ($this->priority === self::PRIORITY_POPUP) {
+            $this->update(['priority' => self::PRIORITY_BELL]);
+        }
+    }
+
+    public function isPopup(): bool
+    {
+        return $this->priority === self::PRIORITY_POPUP;
+    }
+
+    /**
      * Icon SVG path(s) by type — used in the blade view.
      */
     public function getIconAttribute(): string
@@ -93,6 +165,7 @@ class AppNotification extends Model
             'lab'            => '<path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/>',
             'inventory'      => '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
             'payment'        => '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+            'clinical'       => '<path d="M12 2a5 5 0 0 0-5 5c0 2 1 3 1 5s-1 4-1 6a2 2 0 0 0 4 0c0-1 .5-2 1-2s1 1 1 2a2 2 0 0 0 4 0c0-2-1-4-1-6s1-3 1-5a5 5 0 0 0-5-5z"/>',
             'task_assigned'  => '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
             'task_reminder'  => '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
             'shift_start'    => '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
@@ -111,6 +184,7 @@ class AppNotification extends Model
             'lab'           => '#0070b0',
             'inventory'     => '#a05c00',
             'payment'       => '#b52020',
+            'clinical'      => '#1a7a45',
             'task_assigned' => '#6a0f70',
             'task_reminder' => '#a05c00',
             'shift_start'   => '#1a7a45',

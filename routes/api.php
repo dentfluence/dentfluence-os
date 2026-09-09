@@ -193,6 +193,13 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::get('/notifications/unread',             [\App\Http\Controllers\Api\V1\NotificationsController::class, 'unread']);
         Route::patch('/notifications/{id}/read',        [\App\Http\Controllers\Api\V1\NotificationsController::class, 'markRead']);
         Route::post('/notifications/mark-all-read',     [\App\Http\Controllers\Api\V1\NotificationsController::class, 'markAllRead']);
+        // N-1 (2026-09-09) — popup channel + push device registration. Auth only,
+        // no module gate: a notification is already scoped to its recipient.
+        Route::get('/notifications/popups',             [\App\Http\Controllers\Api\V1\NotificationsController::class, 'popups']);
+        Route::post('/notifications/{id}/acknowledge',  [\App\Http\Controllers\Api\V1\NotificationsController::class, 'acknowledge'])->whereNumber('id');
+        Route::post('/notifications/{id}/later',        [\App\Http\Controllers\Api\V1\NotificationsController::class, 'later'])->whereNumber('id');
+        Route::post('/devices/token',                   [\App\Http\Controllers\Api\V1\NotificationsController::class, 'registerDevice']);
+        Route::delete('/devices/token',                 [\App\Http\Controllers\Api\V1\NotificationsController::class, 'forgetDevice']);
 
         // Consultation create — 4 workflows (mirrors web).
         // Variants hardening 2026-08-03: these two clinical reads were the only

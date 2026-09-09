@@ -247,7 +247,7 @@
         ['keyword' => 'Permissions',  'label' => 'Roles & Permissions',         'owner' => 'Staff & Roles',      'tab' => 'staff-roles',   'available' => true],
         ['keyword' => 'Roles',        'label' => 'Roles & Permissions',         'owner' => 'Staff & Roles',      'tab' => 'staff-roles',   'available' => true],
         ['keyword' => 'Staff',        'label' => 'Staff Directory',             'owner' => 'Staff & Roles',      'tab' => 'staff-roles',   'available' => true],
-        ['keyword' => 'Reminder',     'label' => 'Reminder Toggles',            'owner' => 'Notifications',      'tab' => 'notifications', 'available' => true],
+        ['keyword' => 'Popup',        'label' => 'Notification Rules (who · bell / popup · push)', 'owner' => 'Notifications', 'tab' => 'notifications', 'available' => true],
         ['keyword' => 'Patient ID',   'label' => 'Patient ID Numbering',        'owner' => 'Clinic Profile',     'tab' => 'clinic',        'available' => true],
         ['keyword' => 'Logo',         'label' => 'Clinic Logo & Letterhead',    'owner' => 'Clinic Profile',     'tab' => 'clinic',        'available' => true],
         ['keyword' => 'Feature Flag', 'label' => 'Feature Flags',               'owner' => 'Advanced',           'tab' => 'cross-app-flags', 'available' => true],
@@ -933,60 +933,20 @@
          TAB · NOTIFICATIONS
     ════════════════════════════════════════════ --}}
     <div x-show="activeTab==='notifications'" x-cloak>
-        <div style="max-width:620px;margin:0 auto;">
+        {{-- N-4 (2026-09-09): the seven notif_* toggles that used to live here
+             were saved to app_settings and read by NOTHING. Replaced by the
+             event × role matrix that NotificationDispatcher actually obeys. --}}
+        <div style="max-width:1180px;margin:0 auto;">
             <form action="{{ route('settings.notifications.save') }}" method="POST">
                 @csrf
-                @php
-                $n = $notifications;
-                $on = fn($k) => ($n[$k] ?? '0') === '1';
-                @endphp
-
-                <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:24px;margin-bottom:20px;">
-                    <h3 class="settings-section-title">Delivery Channels</h3>
-                    <div style="display:flex;flex-direction:column;gap:16px;">
-                        @foreach([
-                            ['notif_whatsapp','WhatsApp Notifications','Send automated follow-up and reminder messages via WhatsApp.'],
-                            ['notif_sms','SMS Notifications','Send SMS alerts for appointments and follow-ups.'],
-                            ['notif_email','Email Notifications','Send email digests and system alerts.'],
-                        ] as [$key,$label,$desc])
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border:1.5px solid #ede4f3;border-radius:8px;">
-                            <div>
-                                <div style="font-size:13.5px;font-weight:500;color:#1a0320;">{{ $label }}</div>
-                                <div style="font-size:12px;color:#9a7aaa;margin-top:2px;">{{ $desc }}</div>
-                            </div>
-                            <label class="df-toggle {{ $on($key) ? 'on' : '' }}">
-                                <input type="checkbox" name="{{ $key }}" value="1" {{ $on($key) ? 'checked' : '' }} style="display:none;" onchange="this.parentElement.classList.toggle('on', this.checked)">
-                                <span class="df-toggle-track"></span>
-                            </label>
-                        </div>
-                        @endforeach
-                    </div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:6px;">
+                    <h3 class="settings-section-title" style="margin:0;">Who is told what — and how loudly</h3>
+                    <button type="submit" class="settings-save-btn" style="margin:0;">Save Notification Rules</button>
                 </div>
-
-                <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:24px;margin-bottom:20px;">
-                    <h3 class="settings-section-title">Alert Triggers</h3>
-                    <div style="display:flex;flex-direction:column;gap:12px;">
-                        @foreach([
-                            ['notif_appointment_reminder','Appointment Reminders','24hr reminder sent to patients before their appointment.'],
-                            ['notif_followup_due','Follow-up Due Alerts','Alert staff when a follow-up is due or overdue.'],
-                            ['notif_new_lead','New Lead Alerts','Notify team when a new lead is added to PRM.'],
-                            ['notif_task_assigned','Task Assignment','Notify staff when a task is assigned to them.'],
-                        ] as [$key,$label,$desc])
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #f5f0f8;">
-                            <div>
-                                <div style="font-size:13px;font-weight:500;color:#1a0320;">{{ $label }}</div>
-                                <div style="font-size:11.5px;color:#9a7aaa;margin-top:1px;">{{ $desc }}</div>
-                            </div>
-                            <label class="df-toggle {{ $on($key) ? 'on' : '' }}">
-                                <input type="checkbox" name="{{ $key }}" value="1" {{ $on($key) ? 'checked' : '' }} style="display:none;" onchange="this.parentElement.classList.toggle('on', this.checked)">
-                                <span class="df-toggle-track"></span>
-                            </label>
-                        </div>
-                        @endforeach
-                    </div>
+                @include('settings.partials.notification-matrix')
+                <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+                    <button type="submit" class="settings-save-btn">Save Notification Rules</button>
                 </div>
-
-                <button type="submit" class="settings-save-btn">Save Notification Settings</button>
             </form>
         </div>
     </div>

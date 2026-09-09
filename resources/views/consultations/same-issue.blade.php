@@ -326,6 +326,12 @@
         </div>
     </div>
 
+    {{-- ── N-2: Message to Front Desk ── --}}
+    <div class="card">
+        <div class="card-title"><span class="dot"></span> Front Desk</div>
+        @include('consultations.partials.handover', ['consultation' => $consultation ?? null])
+    </div>
+
     {{-- ── Submit ── --}}
     <div style="display:flex;justify-content:flex-end;gap:10px;padding-bottom:32px;">
         <a href="{{ route('patients.show', $patient) }}" class="btn-outline">Cancel</a>
