@@ -289,7 +289,7 @@
                                     if (liquid) { if (typeof row[k] === 'boolean') row[k] = ''; }
                                     else { if (typeof row[k] !== 'boolean') row[k] = (parseFloat(row[k]) || 0) > 0; }
                                 });
-                                this.q       = label;
+                                this.q       = drug.brand_name;
                                 this.results = [];
                                 this.showDrop = false;
                             },
