@@ -149,23 +149,34 @@ class PrescriptionAlertService
                 continue;
             }
 
-            $group    = strtolower($drug->duplicate_molecule_group);
             $drugName = $item['drug_name'] ?? $drug->brand_name;
 
-            if (isset($seen[$group])) {
-                $alerts[] = [
-                    'type'      => 'duplicate',
-                    'severity'  => 'major',
-                    'drug_id'   => $drug->id,
-                    'drug_name' => $drugName,
-                    'code'      => 'DUP_' . strtoupper($group),
-                    'message'   => "Duplicate molecule group \"{$drug->duplicate_molecule_group}\": "
-                                   . "{$seen[$group]} and {$drugName} are both in this prescription. "
-                                   . "Prescribing both may cause additive toxicity.",
-                    'blockable' => false,
-                ];
-            } else {
-                $seen[$group] = $drugName;
+            // Combination products store a comma-joined list ("ibuprofen,paracetamol").
+            // Compare molecule by molecule: keying on the whole string means a
+            // combination never matches the single-molecule product that duplicates
+            // it — Zerodol P (aceclofenac,paracetamol) + Dolo 650 (paracetamol) is
+            // 650mg of paracetamol twice over and used to pass silently.
+            $molecules = array_unique(array_filter(array_map(
+                static fn ($m) => trim(strtolower($m)),
+                explode(',', $drug->duplicate_molecule_group)
+            ), static fn ($m) => $m !== ''));
+
+            foreach ($molecules as $molecule) {
+                if (isset($seen[$molecule])) {
+                    $alerts[] = [
+                        'type'      => 'duplicate',
+                        'severity'  => 'major',
+                        'drug_id'   => $drug->id,
+                        'drug_name' => $drugName,
+                        'code'      => 'DUP_' . strtoupper($molecule),
+                        'message'   => "Duplicate molecule \"{$molecule}\": "
+                                       . "{$seen[$molecule]} and {$drugName} both contain it. "
+                                       . "Prescribing both may cause additive toxicity.",
+                        'blockable' => false,
+                    ];
+                } else {
+                    $seen[$molecule] = $drugName;
+                }
             }
         }
 
