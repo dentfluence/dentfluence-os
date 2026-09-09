@@ -2,6 +2,7 @@
 
 namespace App\Services\Notifications;
 
+use App\Jobs\SendPushNotification;
 use App\Models\AppNotification;
 use App\Models\NotificationRule;
 use App\Models\Role;
@@ -38,8 +39,8 @@ use Throwable;
  *    record is a silent no-op — callers may fire from model events freely.
  *  - Never throws. A notification is best-effort; it must not roll back the
  *    clinical or money write that produced it. Failures are report()ed.
- *  - Push (N-5) is NOT sent here. Rows carry priority + push intent; the FCM
- *    sender picks up popup-level rows where push is on.
+ *  - Push (N-5) is queued, never sent inline: a popup-level row with push on
+ *    dispatches SendPushNotification afterCommit. FcmSender does the rest.
  */
 class NotificationDispatcher
 {
@@ -47,7 +48,8 @@ class NotificationDispatcher
      * @param  array{
      *   title:string, message?:?string, action_url?:?string, action_label?:?string,
      *   source?:?Model, source_type?:?string, source_id?:?int,
-     *   branch_id?:?int, owner?:User|int|null, actor_id?:?int, type?:?string
+     *   branch_id?:?int, owner?:User|int|null, actor_id?:?int, type?:?string,
+     *   dedupe_scope?:?string
      * } $ctx
      * @return int number of notification rows created
      */
@@ -73,7 +75,7 @@ class NotificationDispatcher
         }
 
         [$sourceType, $sourceId] = $this->sourceOf($ctx);
-        $groupKey = $this->groupKey($eventKey, $sourceType, $sourceId);
+        $groupKey = $this->groupKey($eventKey, $sourceType, $sourceId, $ctx['dedupe_scope'] ?? null);
         $actorId  = array_key_exists('actor_id', $ctx) ? $ctx['actor_id'] : Auth::id();
 
         // recipient user_id => [level, push, role-label]
@@ -119,8 +121,15 @@ class NotificationDispatcher
             ];
 
             try {
-                AppNotification::create($row);
+                $created_row = AppNotification::create($row);
                 $created++;
+
+                // N-5: the phone copy. afterCommit so a rolled-back clinical
+                // write can never leave a push already on its way — the worker
+                // would read a row that no longer exists.
+                if ($created_row->push) {
+                    SendPushNotification::dispatch($created_row->id)->afterCommit();
+                }
             } catch (QueryException $e) {
                 // Unique dedupe_key hit — this recipient already has this
                 // event for this record. Exactly the designed outcome.
@@ -209,14 +218,21 @@ class NotificationDispatcher
         return [$ctx['source_type'] ?? null, isset($ctx['source_id']) ? (int) $ctx['source_id'] : null];
     }
 
-    private function groupKey(string $eventKey, ?string $sourceType, ?int $sourceId): string
+    /**
+     * `dedupe_scope` widens the key for events that SHOULD repeat on a cycle.
+     * A lab case overdue for ten days is ten separate pieces of news, once a
+     * day — passing the date as the scope makes the daily sweep announce it
+     * once per day instead of once ever (no scope) or ten times (no dedupe).
+     */
+    private function groupKey(string $eventKey, ?string $sourceType, ?int $sourceId, ?string $scope = null): string
     {
         if ($sourceType === null || $sourceId === null) {
             // No source → nothing to dedupe against; every fire is its own group.
             return $eventKey . ':' . now()->format('YmdHis') . ':' . bin2hex(random_bytes(3));
         }
 
-        return $eventKey . ':' . class_basename($sourceType) . ':' . $sourceId;
+        return $eventKey . ':' . class_basename($sourceType) . ':' . $sourceId
+            . ($scope !== null ? ':' . $scope : '');
     }
 
     private function isDuplicateKey(QueryException $e): bool

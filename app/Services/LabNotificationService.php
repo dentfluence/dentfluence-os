@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Models\AppNotification;
 use App\Models\LabCase;
 use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -21,9 +21,21 @@ use Illuminate\Support\Facades\Log;
  *   - App\Http\Controllers\Api\V1\LabController::transition() (mobile)
  *
  * Scheduled overdue alerts live in App\Console\Commands\LabOverdueAlert.
+ *
+ * N-5 (2026-09-09): every in-app notification here now goes through
+ * NotificationDispatcher instead of writing AppNotification rows directly.
+ * Before this, these five alerts hard-coded their own recipients from the
+ * LEGACY users.role string ('dentist', 'receptionist' — neither of which is a
+ * Role slug), so the Settings > Notifications matrix showed switches for lab
+ * events that did nothing at all. The WhatsApp-to-patient path is untouched:
+ * that is a different channel with its own DPDP gate.
  */
 class LabNotificationService
 {
+    public function __construct(private readonly NotificationDispatcher $dispatcher)
+    {
+    }
+
     /**
      * Called after every status transition.
      *
@@ -59,21 +71,20 @@ class LabNotificationService
      */
     private function notifyTrialReceived(LabCase $case, User $actor): void
     {
-        $doctor   = $this->resolveDoctor($case);
-        $patient  = $case->patient?->name   ?? 'Patient';
-        $vendor   = $case->vendor?->name    ?? ($case->lab_vendor ?? 'Lab');
-        $round    = $case->trial_round ?? 1;
-        $caseNo   = $case->case_number;
-        $url      = route('lab.show', $case);
+        $patient = $case->patient?->name ?? 'Patient';
+        $vendor  = $case->vendor?->name  ?? ($case->lab_vendor ?? 'Lab');
+        $round   = $case->trial_round ?? 1;
 
-        AppNotification::notify(
-            $doctor?->id,
-            'lab',
-            "Trial {$round} received — {$patient}",
-            "Lab case {$caseNo} · Trial {$round} has arrived from {$vendor}. Please review and approve before returning.",
-            $url,
-            'Review Case'
-        );
+        $this->dispatcher->fire('lab.trial_received', [
+            'title'        => "Trial {$round} received — {$patient}",
+            'message'      => "Lab case {$case->case_number} · Trial {$round} has arrived from {$vendor}. Review and approve before returning.",
+            'action_url'   => route('lab.show', $case),
+            'action_label' => 'Review case',
+            'source'       => $case,
+            'branch_id'    => $case->branch_id,
+            'owner'        => $case->doctor_id ?: $this->resolveDoctor($case)?->id,
+            'actor_id'     => $actor->id,
+        ]);
     }
 
     /**
@@ -81,37 +92,23 @@ class LabNotificationService
      */
     private function notifyFinalReceived(LabCase $case, User $actor): void
     {
-        $frontDesk = $this->resolveFrontDesk($case);
-        $patient   = $case->patient?->name ?? 'Patient';
-        $vendor    = $case->vendor?->name  ?? ($case->lab_vendor ?? 'Lab');
-        $caseNo    = $case->case_number;
-        $url       = route('lab.show', $case);
+        $patient = $case->patient?->name ?? 'Patient';
+        $vendor  = $case->vendor?->name  ?? ($case->lab_vendor ?? 'Lab');
 
-        // In-app → front desk (or broadcast if no receptionist found)
-        AppNotification::notify(
-            $frontDesk?->id,
-            'lab',
-            "Final work received — {$patient}",
-            "Lab case {$caseNo} · Final restoration received from {$vendor}. Please schedule patient delivery appointment.",
-            $url,
-            'Schedule Delivery'
-        );
+        // Front desk + admin, from the matrix — NOT the doctor. Whoever books
+        // the delivery appointment is the one who has to act on this.
+        $this->dispatcher->fire('lab.final_received', [
+            'title'        => "Final work received — {$patient}",
+            'message'      => "Lab case {$case->case_number} · Final restoration received from {$vendor}. Schedule the patient's delivery appointment.",
+            'action_url'   => route('lab.show', $case),
+            'action_label' => 'Schedule delivery',
+            'source'       => $case,
+            'branch_id'    => $case->branch_id,
+            'actor_id'     => $actor->id,
+        ]);
 
-        // In-app → admin as well (for awareness)
-        $admin = User::where('branch_id', $case->branch_id)
-            ->where('role', 'admin')->orderBy('id')->first();
-        if ($admin && $admin->id !== $frontDesk?->id) {
-            AppNotification::notify(
-                $admin->id,
-                'lab',
-                "Lab case ready for delivery — {$patient}",
-                "{$caseNo} · Final work received from {$vendor}.",
-                $url,
-                'View Case'
-            );
-        }
-
-        // WhatsApp → patient (DPDP-gated, best-effort)
+        // WhatsApp → patient (DPDP-gated, best-effort). A different channel
+        // with its own consent rules; the dispatcher has no say over it.
         $this->sendPatientWhatsApp($case, 'lab_ready', [
             'name' => $this->firstName($patient),
             'work' => 'dental work',
@@ -123,19 +120,18 @@ class LabNotificationService
      */
     private function notifyComplete(LabCase $case, User $actor): void
     {
-        $doctor  = $this->resolveDoctor($case);
         $patient = $case->patient?->name ?? 'Patient';
-        $caseNo  = $case->case_number;
-        $url     = route('lab.show', $case);
 
-        AppNotification::notify(
-            $doctor?->id,
-            'lab',
-            "Lab case complete — {$patient}",
-            "Case {$caseNo} has been marked complete and delivered to the patient.",
-            $url,
-            'View Case'
-        );
+        $this->dispatcher->fire('lab.complete', [
+            'title'        => "Lab case complete — {$patient}",
+            'message'      => "Case {$case->case_number} has been marked complete and delivered to the patient.",
+            'action_url'   => route('lab.show', $case),
+            'action_label' => 'View case',
+            'source'       => $case,
+            'branch_id'    => $case->branch_id,
+            'owner'        => $case->doctor_id ?: $this->resolveDoctor($case)?->id,
+            'actor_id'     => $actor->id,
+        ]);
     }
 
     /**
@@ -143,19 +139,18 @@ class LabNotificationService
      */
     private function notifyRejected(LabCase $case, User $actor): void
     {
-        $doctor  = $this->resolveDoctor($case);
         $patient = $case->patient?->name ?? 'Patient';
-        $caseNo  = $case->case_number;
-        $url     = route('lab.show', $case);
 
-        AppNotification::notify(
-            $doctor?->id,
-            'lab',
-            "Lab case rejected — {$patient}",
-            "Case {$caseNo} was rejected. Please review and decide on next steps.",
-            $url,
-            'View Case'
-        );
+        $this->dispatcher->fire('lab.rejected', [
+            'title'        => "Lab case rejected — {$patient}",
+            'message'      => "Case {$case->case_number} was rejected. Review and decide on next steps.",
+            'action_url'   => route('lab.show', $case),
+            'action_label' => 'View case',
+            'source'       => $case,
+            'branch_id'    => $case->branch_id,
+            'owner'        => $case->doctor_id ?: $this->resolveDoctor($case)?->id,
+            'actor_id'     => $actor->id,
+        ]);
     }
 
     // ── Overdue alert (called from scheduler, not from transition) ───────────
@@ -184,30 +179,25 @@ class LabNotificationService
                         $caseNo   = $case->case_number;
                         $url      = route('lab.show', $case);
 
-                        // Notify doctor
-                        $doctor = $this->resolveDoctor($case);
-                        AppNotification::notify(
-                            $doctor?->id,
-                            'lab',
-                            "⏰ Lab case overdue {$daysLate}d — {$patient}",
-                            "Case {$caseNo} from {$vendor} is {$daysLate} day(s) overdue. Current status: " . (LabCase::STATUS_LABELS[$case->status] ?? $case->status),
-                            $url,
-                            'View Case'
-                        );
-
-                        // Notify admin
-                        $admin = User::where('branch_id', $case->branch_id)
-                            ->where('role', 'admin')->orderBy('id')->first();
-                        if ($admin && $admin->id !== $doctor?->id) {
-                            AppNotification::notify(
-                                $admin->id,
-                                'lab',
-                                "Lab overdue — {$patient}",
-                                "Case {$caseNo} is {$daysLate}d overdue.",
-                                $url,
-                                'View'
-                            );
-                        }
+                        // ONE alert per case per DAY. Before N-5 this
+                        // claimed "dedup via existing records" and had none —
+                        // a case ten days late produced ten notifications, so
+                        // the alert taught people to ignore it. The date in
+                        // dedupe_scope is what makes the daily sweep honest.
+                        $this->dispatcher->fire('lab.overdue', [
+                            'title'        => "Lab case overdue {$daysLate}d — {$patient}",
+                            'message'      => "Case {$caseNo} from {$vendor} is {$daysLate} day(s) overdue. Status: "
+                                . (LabCase::STATUS_LABELS[$case->status] ?? $case->status),
+                            'action_url'   => $url,
+                            'action_label' => 'View case',
+                            'source'       => $case,
+                            'branch_id'    => $case->branch_id,
+                            'owner'        => $case->doctor_id ?: $this->resolveDoctor($case)?->id,
+                            'dedupe_scope' => $today,
+                            // A scheduled sweep has no actor — nobody "did"
+                            // this, so nobody is excluded from hearing it.
+                            'actor_id'     => null,
+                        ]);
 
                         $notified++;
                     } catch (\Throwable $e) {
@@ -235,12 +225,12 @@ class LabNotificationService
             ->where('role', 'dentist')->orderBy('id')->first();
     }
 
-    private function resolveFrontDesk(LabCase $case): ?User
-    {
-        return User::where('branch_id', $case->branch_id)
-            ->whereIn('role', ['receptionist', 'front_desk'])
-            ->orderBy('id')->first();
-    }
+    // resolveFrontDesk() was retired on 9 Sep with the N-5 migration: the
+    // front desk is now resolved by NotificationDispatcher from the Roles
+    // system, not by picking the first user whose LEGACY role string happens
+    // to read 'receptionist' or 'front_desk'. That old lookup also told
+    // exactly ONE receptionist — whichever had the lowest id — so the other
+    // one never saw lab work at all.
 
     // ── WhatsApp helper ──────────────────────────────────────────────────────
 

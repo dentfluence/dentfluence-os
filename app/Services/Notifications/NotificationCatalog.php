@@ -143,10 +143,28 @@ final class NotificationCatalog
             'label'  => 'Lab draft not sent for 24 hours',
             'targets' => [Role::MANAGER => self::B], 'owner' => null,
         ],
-        'lab.received' => [
+        // Split from a single 'lab.received' on 9 Sep: trial and final have
+        // DIFFERENT audiences in the code that already exists — a trial goes to
+        // the doctor to review before it is returned, a final goes to the front
+        // desk to book the delivery. One event would have silently dropped one
+        // of those two jobs.
+        'lab.trial_received' => [
             'module' => 'lab', 'type' => 'lab',
-            'label'  => 'Lab work received (trial / final)',
+            'label'  => 'Trial work received — doctor to review',
             'targets' => [], 'owner' => self::BP,
+        ],
+        'lab.final_received' => [
+            'module' => 'lab', 'type' => 'lab',
+            'label'  => 'Final work received — book the delivery',
+            'targets' => [Role::FRONT_DESK => self::B, Role::ADMIN => self::B], 'owner' => null,
+        ],
+        'lab.complete' => [
+            'module' => 'lab', 'type' => 'lab',
+            'label'  => 'Lab case complete and delivered',
+            // The weakest of the five lab events — nobody acts on it. Kept
+            // because it already existed; turn it off in the matrix if it
+            // is just noise.
+            'targets' => [], 'owner' => self::B,
         ],
         'lab.overdue' => [
             'module' => 'lab', 'type' => 'lab',
