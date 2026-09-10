@@ -61,7 +61,12 @@ class ChairsideNotifier
 
     public function visitSaved(TreatmentVisit $visit): int
     {
-        $visit->loadMissing(['patient', 'doctor', 'visitItems', 'billingPrompts']);
+        // load(), NOT loadMissing(): on an edit the service hands us the same
+        // model it has been holding through the save, whose visitItems were
+        // read BEFORE the new items were written. loadMissing() would keep
+        // that stale, empty collection and the desk would be told about work
+        // that is already recorded but invisible here.
+        $visit->load(['patient', 'doctor', 'visitItems', 'billingPrompts']);
         $patient = $visit->patient;
         if (! $patient) {
             return 0;
@@ -100,7 +105,7 @@ class ChairsideNotifier
         // click — land them on it, not on the patient's front page.
         $prompt = $visit->billingPrompts->firstWhere('status', 'pending');
 
-        return $this->dispatcher->fire('visit.saved', [
+        return $this->dispatcher->fireOrRefresh('visit.saved', [
             'title'        => $patient->name . ' — ' . ($work ?: 'treatment visit done'),
             'message'      => implode(' · ', $parts) ?: null,
             'action_url'   => $prompt

@@ -281,6 +281,14 @@ class TreatmentVisitService
             report($e);
         }
 
+        // N-7 (CEO ruling, 2026-09-10): an edit must reach the front desk too.
+        // A visit is routinely saved empty at the chair and given its items and
+        // its handover minutes later; before this, the desk was told the visit
+        // existed and never told to collect the money. Same notifier as
+        // create() — it refreshes the existing card instead of writing a
+        // second one, and stays silent when nothing the desk acts on changed.
+        app(ChairsideNotifier::class)->visitSaved($visit);
+
         return $visit->load(['doctor', 'visitItems']);
     }
 

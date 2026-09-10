@@ -64,7 +64,34 @@ class NotificationDispatcher
         }
     }
 
-    private function dispatch(string $eventKey, array $ctx): int
+    /**
+     * Same as fire(), but for an event whose SOURCE RECORD can change after
+     * the first announcement — a treatment visit given its handover on a
+     * later edit, a consultation reopened and completed.
+     *
+     * fire() alone cannot do this: dedupe_key is UNIQUE, so a second fire for
+     * the same record is swallowed and the desk keeps the stale card. This
+     * refreshes the row that is already there and re-opens it, so ONE record
+     * keeps ONE card that always carries the latest truth — never a second
+     * card for the same piece of work.
+     *
+     * A refresh happens only when the payload the desk actually sees has
+     * changed; see deskPayloadUnchanged().
+     *
+     * @return int rows created OR refreshed
+     */
+    public function fireOrRefresh(string $eventKey, array $ctx): int
+    {
+        try {
+            return $this->dispatch($eventKey, $ctx, refresh: true);
+        } catch (Throwable $e) {
+            report($e);
+
+            return 0;
+        }
+    }
+
+    private function dispatch(string $eventKey, array $ctx, bool $refresh = false): int
     {
         $def      = NotificationCatalog::get($eventKey);
         $branchId = $ctx['branch_id'] ?? null;
@@ -119,6 +146,40 @@ class NotificationDispatcher
                 // level rule never pushes whatever the matrix says about push.
                 'push'         => $push && $level === NotificationCatalog::LEVEL_POPUP,
             ];
+
+            // N-7: the record was announced before and has been edited since.
+            // Update the card in place and re-open it rather than writing a
+            // second one — two cards for one visit is how an alert becomes
+            // noise. Deliberately does NOT re-queue push: the desk card is the
+            // channel, and buzzing a phone again for an edit is exactly the
+            // habit that teaches staff to dismiss alerts unread.
+            if ($refresh) {
+                $existing = AppNotification::where('dedupe_key', $row['dedupe_key'])->first();
+
+                if ($existing) {
+                    if ($this->deskPayloadUnchanged($existing, $row)) {
+                        continue;
+                    }
+
+                    $existing->update([
+                        'title'           => $row['title'],
+                        'message'         => $row['message'],
+                        'action_url'      => $row['action_url'],
+                        'action_label'    => $row['action_label'],
+                        // Back to the level the matrix asks for: a row the user
+                        // sent to the bell with "Later" must pop again once what
+                        // it says has materially changed.
+                        'priority'        => $level,
+                        'is_read'         => false,
+                        'read_at'         => null,
+                        'acknowledged_at' => null,
+                        'acknowledged_by' => null,
+                    ]);
+                    $created++;
+
+                    continue;
+                }
+            }
 
             try {
                 $created_row = AppNotification::create($row);
@@ -209,6 +270,24 @@ class NotificationDispatcher
     // ── Keys ─────────────────────────────────────────────────────────────────
 
     /** @return array{0:?string,1:?int} */
+    /**
+     * Has anything the desk must ACT on changed?
+     *
+     * Compared on the payload the desk actually sees, not on the source
+     * record: the handover, the work list, the amount and the button all live
+     * in the title, the message and the action. A doctor fixing a spelling in
+     * a clinical note changes none of them, so reception is not interrupted —
+     * which is the whole difference between an alert people read and an alert
+     * people learn to dismiss.
+     */
+    private function deskPayloadUnchanged(AppNotification $existing, array $row): bool
+    {
+        return $existing->title === $row['title']
+            && $existing->message === $row['message']
+            && $existing->action_url === $row['action_url']
+            && $existing->action_label === $row['action_label'];
+    }
+
     private function sourceOf(array $ctx): array
     {
         if (isset($ctx['source']) && $ctx['source'] instanceof Model) {
