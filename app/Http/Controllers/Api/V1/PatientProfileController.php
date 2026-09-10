@@ -92,21 +92,36 @@ class PatientProfileController extends ApiController
     {
         $p = $this->find($request, $patient);
 
+        // G-33 / M-7 (8 Sep 2026): 'cost' and 'paid' used to read
+        // treatment_visits.cost / amount_paid — columns NO migration ever
+        // created, so the phone showed nothing on every visit. Billing is
+        // owned by the invoice: a visit's money is the invoice lines its
+        // visit items are linked to (treatment_visit_items.invoice_item_id,
+        // the W-8 link). 'paid' is deliberately NOT derived — a payment
+        // settles an invoice, not a visit, and apportioning it here would
+        // invent a number the web does not show either.
         $rows = $p->treatmentVisits()
-            ->with('doctor:id,name')
+            ->with(['doctor:id,name', 'visitItems.invoiceItem:id,total'])
             ->orderByDesc('visit_date')
             ->get()
-            ->map(fn ($v) => [
-                'id'        => $v->id,
-                'date'      => $v->visit_date,
-                'status'    => $v->status,
-                'procedure' => $v->procedure,
-                'treatment' => $v->treatment_name,
-                'tooth'     => $v->tooth_number,
-                'cost'      => $v->cost,
-                'paid'      => $v->amount_paid,
-                'doctor'    => $v->doctor?->name,
-            ]);
+            ->map(function ($v) {
+                $items   = $v->visitItems;
+                $billed  = (float) $items->sum(fn ($i) => (float) ($i->invoiceItem?->total ?? 0));
+                $pending = $items->where('billing_status', 'pending')->count();
+
+                return [
+                    'id'             => $v->id,
+                    'date'           => $v->visit_date,
+                    'status'         => $v->status,
+                    'procedure'      => $v->procedure,
+                    'treatment'      => $v->treatment_name,
+                    'tooth'          => $v->tooth_number,
+                    'billed'         => $billed,
+                    'billing_status' => $items->isEmpty() ? null : ($pending > 0 ? 'pending' : 'billed'),
+                    'items_count'    => $items->count(),
+                    'doctor'         => $v->doctor?->name,
+                ];
+            });
 
         return $this->success($rows, '');
     }

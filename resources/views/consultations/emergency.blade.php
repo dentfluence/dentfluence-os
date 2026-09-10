@@ -273,6 +273,7 @@
             $notePart   = $instrLines[1] ?? (str_contains($chipsPart, ';') ? '' : $chipsPart);
         @endphp
         <x-prescription-panel
+            :patient="$patient"
             prefix="prescriptions_data"
             note-field="rx_general_instructions"
             instruct-field="instructions_data"
@@ -289,6 +290,12 @@
         @endif
     </div>
 
+
+    {{-- ── N-2: Message to Front Desk ── --}}
+    <div class="card">
+        <div class="card-title"><span class="dot"></span> Front Desk</div>
+        @include('consultations.partials.handover', ['consultation' => $consultation ?? null])
+    </div>
 
     {{-- ── Convert to New Consultation call-out ── --}}
     <div class="convert-box">

@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             RxMasterSeeder::class,             // Prescription masters: drugs, templates, rules
             RxDentalBrandsSeeder::class,       // 120+ Indian brand drugs (ICPA, Mankind, Dr. Reddy's, IPCA, Abbott, etc.)
             RxPrescriptionTemplatesSeeder::class, // 20 dental treatment prescription templates
+            RxClinicalSafetySeeder::class,     // Gap drugs, safety flags, interaction/warning/allergy rules
             MarketingModuleSeeder::class,          // Register marketing module as active
             FestivalDateSeeder::class,             // 20+ festival + dental awareness dates
         ]);

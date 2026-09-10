@@ -14,6 +14,7 @@ use App\Models\Prescription\{
 };
 use App\Services\Prescription\PrescriptionAlertService;
 use App\Services\Prescription\PrescriptionQuickSaveService;
+use App\Services\Prescription\PrescriptionRiskService;
 use App\Services\Relationship\CommunicationGuard;
 
 class PrescriptionController extends Controller
@@ -21,6 +22,7 @@ class PrescriptionController extends Controller
     public function __construct(
         private PrescriptionAlertService $alertService,
         private PrescriptionQuickSaveService $quickSave,
+        private PrescriptionRiskService $riskService,
     ) {}
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -255,13 +257,25 @@ class PrescriptionController extends Controller
 
     public function drugSearch(Request $request)
     {
-        $term  = $request->get('q', '');
-        $drugs = RxDrug::active()
+        $term = $request->get('q', '');
+
+        $models = RxDrug::active()
             ->search($term)
             ->with(['generic', 'category', 'defaultFoodInstruction'])
             ->limit(15)
-            ->get()
-            ->map(fn($d) => [
+            ->get();
+
+        // Point-of-selection risk grading. The patient is optional — without one
+        // the pad still searches exactly as before and every row grades as 'ok',
+        // so call sites that have no patient in scope keep working unchanged.
+        $risk = [];
+        if ($patientId = $request->get('patient_id')) {
+            if ($patient = Patient::find($patientId)) {
+                $risk = $this->riskService->assess($patient, $models);
+            }
+        }
+
+        $drugs = $models->map(fn($d) => [
                 'id'                       => $d->id,
                 'brand_name'               => $d->brand_name,
                 'generic_name'             => $d->generic?->name,
@@ -290,6 +304,9 @@ class PrescriptionController extends Controller
                 'pregnancy_category'       => $d->pregnancy_category,
                 'allergy_tags'             => $d->allergy_tags ?? [],
                 'interaction_tags'         => $d->interaction_tags ?? [],
+                // Point-of-selection grading — drives the greying in the typeahead.
+                'risk'                     => $risk[$d->id]['risk']    ?? PrescriptionRiskService::RISK_OK,
+                'risk_reasons'             => $risk[$d->id]['reasons'] ?? [],
             ]);
 
         return response()->json($drugs);

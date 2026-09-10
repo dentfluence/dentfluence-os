@@ -241,6 +241,50 @@ class AuthController extends ApiController
             'is_admin'    => $user->isAdminRole(),
             'branch_id'   => $user->branch_id,
             'avatar'      => $user->avatar,
+            'permissions' => $this->permissionMap($user),
         ];
+    }
+
+    /**
+     * M-6 (Android V1.1, 8 Sep 2026) — the module permission map the phone
+     * gates its UI with. Same source of truth as the web's `module:` middleware
+     * and User::canAccess(): the assigned role's rows in role_module_permissions.
+     *
+     *   { "<module slug>": {"view":bool,"edit":bool,"delete":bool,"settings":bool}, … }
+     *
+     * Every registered module is present, so the phone never has to guess
+     * whether a missing key means "no" or "unknown". The Clinic Owner / Admin
+     * role reads all-true — the same owner exception canAccess() applies. A
+     * user with no role gets all-false and, per Slice 1.2, no access.
+     *
+     * The API itself stays the real guard: this map only decides what the
+     * phone SHOWS, exactly as the web sidebar does.
+     */
+    private function permissionMap(User $user): array
+    {
+        $modules = \App\Models\Module::query()->orderBy('slug')->pluck('slug');
+        $isAdmin = $user->isAdminRole();
+
+        $rows = [];
+        if (! $isAdmin && $user->role_id) {
+            $rows = \App\Models\RoleModulePermission::query()
+                ->where('role_id', $user->role_id)
+                ->with('module:id,slug')
+                ->get()
+                ->keyBy(fn ($r) => $r->module?->slug);
+        }
+
+        $map = [];
+        foreach ($modules as $slug) {
+            $row = $isAdmin ? null : ($rows[$slug] ?? null);
+            $map[$slug] = [
+                'view'     => $isAdmin || (bool) ($row?->can_view),
+                'edit'     => $isAdmin || (bool) ($row?->can_edit),
+                'delete'   => $isAdmin || (bool) ($row?->can_delete),
+                'settings' => $isAdmin || (bool) ($row?->can_settings),
+            ];
+        }
+
+        return $map;
     }
 }

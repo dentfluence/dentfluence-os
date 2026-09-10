@@ -41,9 +41,16 @@ class HrAttendanceController extends Controller
             ->get()
             ->keyBy('user_id');
 
-        // Merge: for each staff, attach their attendance record (or null)
-        $staffWithAttendance = $allStaff->map(function ($user) use ($records) {
-            $user->todayAttendance = $records->get($user->id);
+        // Merge: for each staff, attach their attendance record (or null),
+        // plus late/overtime measured against the shift they were assigned
+        // on this date (M-14, 9 Sep 2026 — same numbers the phone shows).
+        $shiftMetrics = app(\App\Services\HR\ShiftMetricsService::class);
+
+        $staffWithAttendance = $allStaff->map(function ($user) use ($records, $shiftMetrics) {
+            $rec = $records->get($user->id);
+            $user->todayAttendance = $rec;
+            $user->shiftMetrics = $rec ? $shiftMetrics->metrics($user, $rec) : null;
+
             return $user;
         });
 

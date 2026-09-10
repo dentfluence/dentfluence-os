@@ -11,6 +11,7 @@ use App\Models\Prescription\Prescription;
 use App\Models\Presentation;
 use App\Models\User;
 use App\Services\Prescription\PrescriptionQuickSaveService;
+use App\Support\Handover;
 use App\Support\QrCodeGenerator;
 use Illuminate\Http\Request;
 
@@ -525,7 +526,7 @@ class ConsultationController extends Controller
             // LEGACY (retired 2026-07-31, kept for rollback — see ConsultationController LEGACY block below)
             // 'prescriptions_data'      => 'nullable|string',
             // 'instructions_data'       => 'nullable|string',
-        ]);
+        ] + Handover::rules()); // N-2 doctor → front desk handover
 
         // ── LEGACY — retired 2026-07-31 ────────────────────────────────────────
         // This form never actually posts prescriptions_data/instructions_data
@@ -603,7 +604,7 @@ class ConsultationController extends Controller
             'finishing_notes'         => 'nullable|string',
             // previous_consultation_id is deliberately NOT accepted on update —
             // which visit this one continues is a fact set at creation.
-        ]);
+        ] + Handover::rules()); // N-2 doctor → front desk handover
 
         $consultation->update($data);
 
@@ -665,7 +666,7 @@ class ConsultationController extends Controller
             // LEGACY (retired 2026-07-31, kept for rollback — see LEGACY block below)
             // 'prescriptions_data'          => 'nullable|string',
             // 'instructions_data'           => 'nullable|string',
-        ]);
+        ] + Handover::rules()); // N-2 doctor → front desk handover
 
         $charges = $data['charges'] ?? null;
         unset($data['charges']); // not a Consultation column — handled via BillingPrompt below
@@ -762,7 +763,7 @@ class ConsultationController extends Controller
             // drove a one-time BillingPrompt at creation (see minorVisitStore());
             // re-processing it here on every edit would queue a duplicate
             // billing prompt each time the record is saved.
-        ]);
+        ] + Handover::rules()); // N-2 doctor → front desk handover
 
         $data['advice'] = $data['related_to_clinic_treatment']
             ? ($data['advice_clinic_related'] ?? null)
@@ -810,7 +811,7 @@ class ConsultationController extends Controller
             // LEGACY (retired 2026-07-31, kept for rollback — see LEGACY block below)
             // 'prescriptions_data'           => 'nullable|string',
             // 'instructions_data'            => 'nullable|string',
-        ]);
+        ] + Handover::rules()); // N-2 doctor → front desk handover
 
         // ── LEGACY — retired 2026-07-31 ────────────────────────────────────────
         // Same retirement/reasoning as sameIssueStore() above: emergency.blade.php
@@ -898,7 +899,7 @@ class ConsultationController extends Controller
             'emergency_treatment_rendered' => 'required|string',
             'advice'                       => 'nullable|string',
             'finishing_notes'              => 'nullable|string',
-        ]);
+        ] + Handover::rules()); // N-2 doctor → front desk handover
 
         $consultation->update($data);
 

@@ -84,11 +84,84 @@ class NotificationsController extends ApiController
         return $this->success(null, 'All notifications marked read.');
     }
 
+    // ── N-1: popup channel (same contract as web NotificationsController) ────
+
+    /** GET /notifications/popups — desk popups this user still has to answer. */
+    public function popups(Request $request): JsonResponse
+    {
+        $items = AppNotification::pendingPopups($request->user()->id)
+            ->orderBy('created_at')
+            ->limit(5)
+            ->get()
+            ->map(fn ($n) => $this->map($n))
+            ->values();
+
+        return $this->success(['items' => $items], '');
+    }
+
+    /** POST /notifications/{id}/acknowledge — "Done": clears the popup for every recipient. */
+    public function acknowledge(Request $request, int $id): JsonResponse
+    {
+        $notification = AppNotification::where('user_id', $request->user()->id)->find($id);
+        if (! $notification) {
+            return $this->error('Notification not found.', [], 404);
+        }
+
+        $cleared = $notification->acknowledgeGroup($request->user()->id);
+
+        return $this->success(['cleared' => $cleared], 'Acknowledged.');
+    }
+
+    /** POST /notifications/{id}/later — "Later": this user's copy drops to the bell. */
+    public function later(Request $request, int $id): JsonResponse
+    {
+        $notification = AppNotification::where('user_id', $request->user()->id)->find($id);
+        if (! $notification) {
+            return $this->error('Notification not found.', [], 404);
+        }
+
+        $notification->snoozeToBell();
+
+        return $this->success(null, 'Moved to bell.');
+    }
+
+    /**
+     * POST /devices/token — register this phone for pushes (N-5 sender reads
+     * device_tokens). Body: token (required), platform, device_name, app_version.
+     */
+    public function registerDevice(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'token'       => ['required', 'string', 'max:255'],
+            'platform'    => ['nullable', 'string', 'in:android,ios,web'],
+            'device_name' => ['nullable', 'string', 'max:120'],
+            'app_version' => ['nullable', 'string', 'max:40'],
+        ]);
+
+        \App\Models\DeviceToken::register($request->user()->id, $data['token'], $data);
+
+        return $this->success(null, 'Device registered.');
+    }
+
+    /** DELETE /devices/token — on logout, so the next user of this phone does not get this user's pushes. */
+    public function forgetDevice(Request $request): JsonResponse
+    {
+        $data = $request->validate(['token' => ['required', 'string', 'max:255']]);
+
+        \App\Models\DeviceToken::where('token', $data['token'])
+            ->where('user_id', $request->user()->id)
+            ->update(['invalidated_at' => now()]);
+
+        return $this->success(null, 'Device forgotten.');
+    }
+
     private function map(AppNotification $n): array
     {
         return [
             'id'           => $n->id,
             'type'         => $n->type,
+            'priority'     => $n->priority,
+            'event_key'    => $n->event_key,
             'title'        => $n->title,
             'message'      => $n->message,
             'action_url'   => $n->action_url,

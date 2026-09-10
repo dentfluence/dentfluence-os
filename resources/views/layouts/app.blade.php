@@ -828,6 +828,12 @@
     aria-atomic="false"
 ></div>
 
+{{-- N-3 (2026-09-09): front-desk popup layer — popup-level notifications
+     pinned to the top of every page until answered. See components/desk-popup. --}}
+@auth
+    @include('components.desk-popup')
+@endauth
+
 
 {{-- ══════════════════════════════════════════════════════════════
      LAYOUT JAVASCRIPT

@@ -145,9 +145,15 @@ class AppointmentResponseCharacterizationTest extends TestCase
         $this->patchJson("/api/v1/appointments/{$appt->id}/status", ['status' => 'checkin'])
             ->assertOk()->assertJsonPath('message', 'Status updated.');
 
+        // 2026-09-08 (M-3): the API cancel contract was changed ON PURPOSE to
+        // match the web modal (W-9) — reason_code + outcome are required. The
+        // old two-field body now gets a 422; that is the row working, not a
+        // regression. Do not "restore" the old body here.
         $this->patchJson("/api/v1/appointments/{$appt->id}/cancel", [
             'cancel_reason'   => 'x',
             'cancelled_party' => 'clinic',
+            'reason_code'     => 'clinic_side',
+            'outcome'         => 'not_returning',
         ])->assertOk()->assertJsonPath('message', 'Appointment cancelled.');
 
         $this->deleteJson("/api/v1/appointments/{$appt->id}")

@@ -463,3 +463,23 @@ Schedule::command('logs:prune --apply')
 Schedule::command('wallet:recalculate')
     ->dailyAt('00:30')
     ->withoutOverlapping();
+
+/*
+|--------------------------------------------------------------------------
+| N-5 — Push safety net (2026-09-09)
+|--------------------------------------------------------------------------
+|
+| NotificationDispatcher queues a SendPushNotification the moment it writes a
+| popup-level row with push on. If the queue worker happened to be down, that
+| job is simply gone and the row would sit unsent forever with nobody the
+| wiser — the same silent-failure shape as a dead scheduler.
+|
+| This re-queues anything between 2 minutes and 2 hours old. The ceiling is
+| deliberate: a push about a patient who was at the desk three hours ago is
+| noise, and the bell already carries it.
+|
+| Manual: php artisan push:sweep
+*/
+Schedule::command('push:sweep')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();

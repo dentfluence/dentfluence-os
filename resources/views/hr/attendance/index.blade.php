@@ -91,7 +91,10 @@
             </thead>
             <tbody class="divide-y divide-gray-50">
                 @forelse($staffWithAttendance as $member)
-                @php $rec = $member->todayAttendance; @endphp
+                @php
+                    $rec = $member->todayAttendance;
+                    $sm  = $member->shiftMetrics;
+                @endphp
                 <tr class="hover:bg-gray-50 transition" x-data="{ open: false }">
 
                     {{-- Checkbox --}}
@@ -121,7 +124,7 @@
                             {{ $member->currentShift->shift->name }}
                             <span class="text-gray-300">({{ $member->currentShift->shift->timing }})</span>
                         @else
-                            —
+                            <span class="text-gray-300" title="No shift assigned — late and overtime cannot be calculated">No shift</span>
                         @endif
                     </td>
 
@@ -142,6 +145,11 @@
                     <td class="px-4 py-3 text-gray-600 hidden lg:table-cell">
                         @if($rec?->check_in)
                             {{ \Carbon\Carbon::parse($rec->check_in)->format('h:i A') }}
+                            @if($sm && $sm['is_late'])
+                                <span class="block text-xs text-amber-600">Late by {{ $sm['late_minutes'] }}m</span>
+                            @elseif($sm && $sm['late_minutes'] !== null)
+                                <span class="block text-xs text-emerald-600">On time</span>
+                            @endif
                         @else
                             <span class="text-gray-300">—</span>
                         @endif
@@ -153,6 +161,11 @@
                             {{ \Carbon\Carbon::parse($rec->check_out)->format('h:i A') }}
                             @if($rec->hours_worked)
                             <span class="text-xs text-gray-400 ml-1">({{ $rec->hours_worked }})</span>
+                            @endif
+                            @if($sm && ($sm['overtime_minutes'] ?? 0) > 0)
+                                <span class="block text-xs text-indigo-600">OT {{ intdiv($sm['overtime_minutes'], 60) }}h {{ $sm['overtime_minutes'] % 60 }}m</span>
+                            @elseif($sm && ($sm['early_leave_minutes'] ?? 0) > 0)
+                                <span class="block text-xs text-rose-600">Left {{ $sm['early_leave_minutes'] }}m early</span>
                             @endif
                         @else
                             <span class="text-gray-300">—</span>

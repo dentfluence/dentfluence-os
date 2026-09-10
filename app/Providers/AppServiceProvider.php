@@ -85,6 +85,16 @@ class AppServiceProvider extends ServiceProvider
         // recalled as "not seen in 6 months" (recall R-9).
         \App\Models\TreatmentVisit::observe(\App\Observers\TreatmentVisitClinicalWiringObserver::class);
 
+        // N-1 Notification system (2026-09-09): model-event choke points that
+        // hand clinic facts to NotificationDispatcher, which resolves WHO hears
+        // them from notification_rules. Treatment visits fire from
+        // TreatmentVisitService::create() instead — the items the message
+        // names do not exist yet when the visit row's own `created` fires.
+        Consultation::observe(\App\Observers\Notifications\ConsultationNotificationObserver::class);
+        \App\Models\Invoice::observe(\App\Observers\Notifications\InvoiceNotificationObserver::class);
+        \App\Models\InvoicePayment::observe(\App\Observers\Notifications\InvoicePaymentNotificationObserver::class);
+        LabCase::observe(\App\Observers\Notifications\LabCaseNotificationObserver::class);
+
         // Finance: keep every staff member mirrored into finance_vendors
         // (vendor_type = 'staff') so they appear in the Expense form's
         // Vendor dropdown for petty cash / reimbursements.

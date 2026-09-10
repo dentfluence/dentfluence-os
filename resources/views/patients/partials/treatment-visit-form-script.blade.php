@@ -274,6 +274,8 @@ function treatmentVisits() {
                 notes: '',
                 chief_complaint: '',
                 next_visit_date: '', next_visit_type: '',
+                // N-2 doctor → front desk handover (becomes the desk popup text)
+                handover: { collect_amount: '', offer_aocp: false, xray: false, book_in_days: '', note: '' },
                 mark_treatment_complete: false,
                 rct_num_canals: '', rct_canal_lengths: [], rct_file_type: '', rct_irrigant: '', rct_obturation_method: '',
                 impl_brand: '', impl_size: '', impl_torque: '', impl_graft_used: '', impl_graft_brand: '', impl_membrane: '', impl_healing_collar: '',
@@ -913,6 +915,13 @@ function treatmentVisits() {
                 chief_complaint:   visit.chief_complaint || '',
                 next_visit_date:   visit.next_visit_date || '',
                 next_visit_type:   visit.next_visit_type || '',
+                handover: {
+                    collect_amount: visit.handover?.collect_amount ?? '',
+                    offer_aocp:     !!visit.handover?.offer_aocp,
+                    xray:           !!visit.handover?.xray,
+                    book_in_days:   visit.handover?.book_in_days ?? '',
+                    note:           visit.handover?.note ?? '',
+                },
                 rct_num_canals:        visit.rct_num_canals || '',
                 rct_canal_lengths:     [...(visit.rct_canal_lengths||[])],
                 rct_file_type:         visit.rct_file_type || '',

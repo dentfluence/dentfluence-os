@@ -7,6 +7,7 @@ use App\Http\Resources\AppointmentResource;
 use App\Models\Invoice;
 use App\Models\LabCase;
 use App\Models\Patient;
+use App\Services\Analytics\ReportMetricsService;
 use App\Services\AppointmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,14 +19,37 @@ use Illuminate\Http\Request;
  * schedule. Everything is branch-scoped to the logged-in user.
  *
  *   GET /api/v1/dashboard
+ *
+ * MONEY (M-2, 8 Sep 2026): every rupee here comes from ReportMetricsService —
+ * the one canonical definition the web dashboard, Reports and the Huddle
+ * report already read (W-4, W-5, W-7, W-8). Before this, the phone computed
+ * its own figures and they were wrong in two ways the web had already fixed:
+ *
+ *   - today_revenue summed invoices.paid_amount BY INVOICE DATE, so a payment
+ *     taken today against last week's invoice was invisible, and a payment
+ *     taken next week against today's invoice would count as today. The
+ *     canonical figure is invoice_payments by payment_date — collected().
+ *   - outstanding filtered status IN ('unpaid','partial'). There is no
+ *     'unpaid' status on invoices — a fully unpaid invoice is 'draft' — so
+ *     every invoice with nothing paid against it was missing from the phone's
+ *     receivable. outstanding() reads draft + partial.
+ *
+ * Outstanding and patient credit are STOCKS (CEO ruling 6 Sep): they carry no
+ * date and no trend. Money is admin-only, the same rule as the web dashboard;
+ * other roles receive `finance` = null and `money_visible` = false so the
+ * screen can hide the tiles instead of printing Rs 0.
  */
 class DashboardController extends ApiController
 {
-    public function __construct(private AppointmentService $appointments) {}
+    public function __construct(
+        private readonly AppointmentService $appointments,
+        private readonly ReportMetricsService $metrics,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
-        $branchId = $request->user()->branch_id;
+        $user     = $request->user();
+        $branchId = $user->branch_id;
 
         $patientsTotal = Patient::where('branch_id', $branchId)->count();
 
@@ -35,30 +59,44 @@ class DashboardController extends ApiController
             ->count();
 
         $todayList = $this->appointments
-            ->filteredQuery($branchId, ['scope' => 'today'], $request->user())
+            ->filteredQuery($branchId, ['scope' => 'today'], $user)
             ->get();
 
         $upcomingCount = $this->appointments
-            ->filteredQuery($branchId, ['scope' => 'upcoming'], $request->user())
+            ->filteredQuery($branchId, ['scope' => 'upcoming'], $user)
             ->count();
 
-        // ── KPIs the web dashboard shows — same queries as web
-        //    DashboardController::index() so the two dashboards agree
-        //    (2026-07-14 parity: these were missing from mobile entirely).
         $today = now()->toDateString();
 
-        $todayRevenue = (float) Invoice::whereDate('invoice_date', $today)
-            ->whereHas('patient', fn ($q) => $q->where('branch_id', $branchId))
-            ->whereNotIn('status', ['cancelled'])
-            ->sum('paid_amount');
+        // Money is admin-only — same gate as web DashboardController::index().
+        $showMoney = $user->isAdminRole();
+        $finance   = null;
 
-        $outstandingBalance = (float) Invoice::whereIn('status', ['unpaid', 'partial'])
-            ->whereHas('patient', fn ($q) => $q->where('branch_id', $branchId))
-            ->sum('balance_due');
+        if ($showMoney) {
+            $collectedToday = $this->metrics->collected(
+                now()->startOfDay(),
+                now()->endOfDay(),
+                $branchId
+            );
 
-        $outstandingCount = Invoice::whereIn('status', ['unpaid', 'partial'])
-            ->whereHas('patient', fn ($q) => $q->where('branch_id', $branchId))
-            ->count();
+            // Stocks — no date range by design.
+            $outstanding   = $this->metrics->outstanding($branchId);
+            $patientCredit = $this->metrics->patientCreditHeld($branchId);
+
+            // Count uses the SAME filter as outstanding() so the number of
+            // invoices can never disagree with the rupees beside it.
+            $outstandingCount = Invoice::whereIn('status', ['draft', 'partial'])
+                ->whereHas('patient', fn ($q) => $q->where('branch_id', $branchId))
+                ->count();
+
+            $finance = [
+                'today_revenue'       => $collectedToday,   // legacy key the app reads today
+                'collected_today'     => $collectedToday,   // canonical name, same value
+                'outstanding_balance' => $outstanding,
+                'outstanding_count'   => $outstandingCount,
+                'patient_credit'      => $patientCredit,
+            ];
+        }
 
         $pendingLabCount = LabCase::where('branch_id', $branchId)
             ->whereIn('status', LabCase::OPEN_STATUSES)
@@ -70,8 +108,8 @@ class DashboardController extends ApiController
             ->whereDate('expected_return_date', '<', $today)
             ->count();
 
-        // ── Alert strip — same three rules as the web dashboard. `key` lets
-        //    the client route to the right module (no web URLs on mobile).
+        // ── Alert strip — same rules as the web dashboard. `key` lets the
+        //    client route to the right module (no web URLs on mobile).
         $alerts = [];
         if ($overdueLabCount > 0) {
             $alerts[] = [
@@ -88,11 +126,11 @@ class DashboardController extends ApiController
                 'message' => "{$missedToday} no-show " . str('appointment')->plural($missedToday) . ' today. Consider a recall message.',
             ];
         }
-        if ($outstandingCount > 5) {
+        if ($finance && $finance['outstanding_count'] > 5) {
             $alerts[] = [
                 'type'    => 'warning',
                 'key'     => 'outstanding',
-                'message' => '₹' . number_format($outstandingBalance, 0) . " outstanding across {$outstandingCount} invoices.",
+                'message' => '₹' . number_format($finance['outstanding_balance'], 0) . " outstanding across {$finance['outstanding_count']} invoices.",
             ];
         }
 
@@ -102,14 +140,11 @@ class DashboardController extends ApiController
                 'new_this_month' => $newPatientsThisMonth,
             ],
             'appointments' => [
-                'today'          => $this->appointments->todayCounts($branchId, $request->user()),
+                'today'          => $this->appointments->todayCounts($branchId, $user),
                 'upcoming_count' => $upcomingCount,
             ],
-            'finance' => [
-                'today_revenue'       => $todayRevenue,
-                'outstanding_balance' => $outstandingBalance,
-                'outstanding_count'   => $outstandingCount,
-            ],
+            'money_visible'      => $showMoney,
+            'finance'            => $finance,
             'lab' => [
                 'pending_count' => $pendingLabCount,
                 'overdue_count' => $overdueLabCount,

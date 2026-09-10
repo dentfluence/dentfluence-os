@@ -46,6 +46,14 @@ class SettingsController extends Controller
         $notifications = AppSetting::group('notifications');
         $billing       = AppSetting::group('billing');
         $controls      = AppSetting::group(\App\Services\OwnerControlService::GROUP);
+
+        // Working hours + holidays for the Calendar tab. Keyed by weekday so the
+        // Blade can render Sunday..Saturday without a second query per row.
+        $branchId    = auth()->user()->branch_id;
+        $clinicHours = \App\Models\ClinicHour::where('branch_id', $branchId)->get()->keyBy('weekday');
+        $holidays    = \App\Models\ClinicHoliday::forBranch($branchId)
+                            ->orderBy('holiday_date')
+                            ->get();
         $print         = AppSetting::group('print');
 
         $staff = User::with('roleModel')->orderBy('name')->get();
@@ -110,8 +118,11 @@ class SettingsController extends Controller
             'Integrations'        => ['integration.whatsapp', 'integration.google', 'integration.meta', 'integration.website', 'integration.payments', 'integration.abdm'],
         ];
 
+        $notificationMatrix = $this->notificationMatrix(); // N-4 event × role rules
+
         return view('settings.index', compact(
-            'activeTab', 'clinic', 'notifications', 'billing', 'print', 'controls',
+            'activeTab', 'clinic', 'notifications', 'billing', 'print', 'controls', 'notificationMatrix',
+            'clinicHours', 'holidays',
             'staff', 'roles',
             'treatments', 'complaints', 'diagnoses', 'investigations',
             'materials', 'brands',
@@ -182,13 +193,19 @@ class SettingsController extends Controller
     public function saveCalendarPrefs(Request $request)
     {
         $request->validate([
-            'card_style'   => 'required|in:strip,filled',
-            'color_source' => 'required|in:auto,doctor,treatment',
+            'card_style'       => 'required|in:strip,filled',
+            'color_source'     => 'required|in:auto,doctor,treatment',
+            'slot_minutes'     => 'nullable|integer|min:5|max:120',
+            'default_duration' => 'nullable|integer|min:5|max:480',
         ]);
 
         AppSetting::setMany([
-            'calendar_card_style'   => $request->card_style,
-            'calendar_color_source' => $request->color_source,
+            'calendar_card_style'      => $request->card_style,
+            'calendar_color_source'    => $request->color_source,
+            // The grid the calendar draws and the free-slot query steps through.
+            'calendar_slot_minutes'    => (string) ($request->input('slot_minutes') ?: 15),
+            // Fallback appointment length when the treatment does not set one.
+            'calendar_default_duration'=> (string) ($request->input('default_duration') ?: 30),
         ], 'calendar');
 
         return back()->with('success', 'Calendar preferences saved.');
@@ -214,23 +231,79 @@ class SettingsController extends Controller
         return back()->with('success', 'Patient ID settings saved.');
     }
 
-    // ── Save notifications preferences ─────────────────────────────────────
+    // ── Save notification rules (N-4, 2026-09-09) ───────────────────────────
+    // The matrix posts rules[event_with_dots_as__][role][level|push]. Every cell is written
+    // as an explicit notification_rules row (branch-wide, branch_id NULL) so
+    // the matrix — not the catalogue default — is the authority from the
+    // first save on. Unknown events or roles are dropped, never stored.
+    // (The old notif_* app_settings this method wrote were read by nothing.)
     public function saveNotifications(Request $request)
     {
-        $keys = [
-            'notif_appointment_reminder', 'notif_followup_due',
-            'notif_new_lead', 'notif_task_assigned',
-            'notif_whatsapp', 'notif_sms', 'notif_email',
-        ];
+        $request->validate([
+            'rules'               => ['required', 'array'],
+            'rules.*'             => ['array'],
+            'rules.*.*'           => ['array'],
+            'rules.*.*.level'     => ['required', 'string', 'in:' . implode(',', \App\Services\Notifications\NotificationCatalog::LEVELS)],
+            'rules.*.*.push'      => ['nullable', 'boolean'],
+        ]);
 
-        $data = [];
-        foreach ($keys as $k) {
-            $data[$k] = $request->boolean($k) ? '1' : '0';
+        $validRoles = array_merge(
+            \App\Services\Notifications\NotificationCatalog::roleColumns(),
+            [\App\Services\Notifications\NotificationCatalog::OWNER]
+        );
+
+        $written = 0;
+        DB::transaction(function () use ($request, $validRoles, &$written) {
+            foreach ($request->input('rules', []) as $postedKey => $roles) {
+                // The form encodes the event key's dots (see the matrix partial):
+                // Laravel splits a validation attribute on dots, so a raw
+                // 'consultation.saved' field name is unreachable.
+                $eventKey = str_replace('__', '.', $postedKey);
+
+                if (! \App\Services\Notifications\NotificationCatalog::has($eventKey)) {
+                    continue;
+                }
+                $def = \App\Services\Notifications\NotificationCatalog::get($eventKey);
+
+                foreach ($roles as $role => $cell) {
+                    if (! in_array($role, $validRoles, true)) {
+                        continue;
+                    }
+                    // Owner cell only exists for events that have an owner.
+                    if ($role === \App\Services\Notifications\NotificationCatalog::OWNER && ! $def['owner']) {
+                        continue;
+                    }
+
+                    $level = $cell['level'];
+                    $push  = $level === \App\Services\Notifications\NotificationCatalog::LEVEL_POPUP
+                        && filter_var($cell['push'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+                    \App\Models\NotificationRule::updateOrCreate(
+                        ['event_key' => $eventKey, 'role' => $role, 'branch_id' => null],
+                        ['level' => $level, 'push' => $push, 'updated_by' => auth()->id()]
+                    );
+                    $written++;
+                }
+            }
+        });
+
+        return back()->with('success', "Notification rules saved ({$written} cells).");
+    }
+
+    /**
+     * Effective matrix for the Settings tab: [event_key => [role => ['level','push']]].
+     * Reads through NotificationRule::effectiveFor so a cell shows what will
+     * actually happen (rule row, else catalogue default). Off cells are
+     * included explicitly so the view never has to guess.
+     */
+    private function notificationMatrix(): array
+    {
+        $matrix = [];
+        foreach (array_keys(\App\Services\Notifications\NotificationCatalog::all()) as $eventKey) {
+            $matrix[$eventKey] = \App\Models\NotificationRule::effectiveFor($eventKey, null, includeOff: true)->all();
         }
 
-        AppSetting::setMany($data, 'notifications');
-
-        return back()->with('success', 'Notification preferences saved.');
+        return $matrix;
     }
 
     // ── EMI Providers CRUD ──────────────────────────────────────────────────
@@ -360,6 +433,99 @@ class SettingsController extends Controller
         ], \App\Services\OwnerControlService::GROUP);
 
         return back()->with('success', 'Owner controls saved.');
+    }
+
+    // ── Working hours + holidays ────────────────────────────────────────────
+
+    /**
+     * Save the whole week in one post.
+     *
+     * Seven rows, upserted. A day with is_closed ticked keeps whatever times
+     * were typed — the clinic may reopen on Sunday next month and should not
+     * have to retype the hours. Sessions are validated as ordered pairs; a
+     * reversed pair is rejected here rather than silently skipped at read time.
+     */
+    public function saveWorkingHours(Request $request)
+    {
+        $data = $request->validate([
+            'days'                 => ['required', 'array'],
+            'days.*.is_closed'     => ['nullable'],
+            'days.*.slot1_start'   => ['nullable', 'date_format:H:i'],
+            'days.*.slot1_end'     => ['nullable', 'date_format:H:i'],
+            'days.*.slot2_start'   => ['nullable', 'date_format:H:i'],
+            'days.*.slot2_end'     => ['nullable', 'date_format:H:i'],
+        ]);
+
+        $branchId = auth()->user()->branch_id;
+
+        foreach ($data['days'] as $weekday => $row) {
+            $weekday = (int) $weekday;
+
+            if ($weekday < 0 || $weekday > 6) {
+                continue;
+            }
+
+            $closed = ! empty($row['is_closed']);
+
+            // Refuse a reversed or half-open session rather than storing a
+            // range the reader will quietly drop.
+            foreach ([['slot1_start', 'slot1_end', 'first'], ['slot2_start', 'slot2_end', 'second']] as [$sk, $ek, $label]) {
+                $start = $row[$sk] ?? null;
+                $end   = $row[$ek] ?? null;
+
+                if (! $closed && $start && $end && $end <= $start) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        "days.{$weekday}.{$ek}" => ucfirst(\App\Models\ClinicHour::DAY_NAMES[$weekday] ?? '')
+                            . ": the {$label} session ends before it starts.",
+                    ]);
+                }
+            }
+
+            \App\Models\ClinicHour::updateOrCreate(
+                ['branch_id' => $branchId, 'weekday' => $weekday],
+                [
+                    'is_closed'   => $closed,
+                    'slot1_start' => $row['slot1_start'] ?: null,
+                    'slot1_end'   => $row['slot1_end']   ?: null,
+                    'slot2_start' => $row['slot2_start'] ?: null,
+                    'slot2_end'   => $row['slot2_end']   ?: null,
+                ]
+            );
+        }
+
+        app(\App\Services\ClinicHoursService::class)->forget();
+
+        return back()->with('success', 'Working hours saved.');
+    }
+
+    public function storeHoliday(Request $request)
+    {
+        $data = $request->validate([
+            'holiday_date'    => ['required', 'date'],
+            'name'            => ['required', 'string', 'max:120'],
+            'recurs_annually' => ['nullable'],
+        ]);
+
+        \App\Models\ClinicHoliday::updateOrCreate(
+            [
+                'branch_id'    => auth()->user()->branch_id,
+                'holiday_date' => $data['holiday_date'],
+            ],
+            [
+                'name'            => $data['name'],
+                'recurs_annually' => ! empty($data['recurs_annually']),
+                'created_by'      => auth()->id(),
+            ]
+        );
+
+        return back()->with('success', 'Holiday saved.');
+    }
+
+    public function destroyHoliday(\App\Models\ClinicHoliday $holiday)
+    {
+        $holiday->delete();
+
+        return back()->with('success', 'Holiday removed.');
     }
 
     // ── Save print settings ─────────────────────────────────────────────────

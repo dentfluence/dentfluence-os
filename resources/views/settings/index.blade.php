@@ -247,13 +247,17 @@
         ['keyword' => 'Permissions',  'label' => 'Roles & Permissions',         'owner' => 'Staff & Roles',      'tab' => 'staff-roles',   'available' => true],
         ['keyword' => 'Roles',        'label' => 'Roles & Permissions',         'owner' => 'Staff & Roles',      'tab' => 'staff-roles',   'available' => true],
         ['keyword' => 'Staff',        'label' => 'Staff Directory',             'owner' => 'Staff & Roles',      'tab' => 'staff-roles',   'available' => true],
-        ['keyword' => 'Reminder',     'label' => 'Reminder Toggles',            'owner' => 'Notifications',      'tab' => 'notifications', 'available' => true],
+        ['keyword' => 'Popup',        'label' => 'Notification Rules (who · bell / popup · push)', 'owner' => 'Notifications', 'tab' => 'notifications', 'available' => true],
         ['keyword' => 'Patient ID',   'label' => 'Patient ID Numbering',        'owner' => 'Clinic Profile',     'tab' => 'clinic',        'available' => true],
         ['keyword' => 'Logo',         'label' => 'Clinic Logo & Letterhead',    'owner' => 'Clinic Profile',     'tab' => 'clinic',        'available' => true],
         ['keyword' => 'Feature Flag', 'label' => 'Feature Flags',               'owner' => 'Advanced',           'tab' => 'cross-app-flags', 'available' => true],
         ['keyword' => 'Inventory',    'label' => 'Inventory Categories & Vendors', 'owner' => 'Inventory',       'tab' => 'inventory',     'available' => true],
-        ['keyword' => 'Working Hours','label' => 'Working Hours',               'owner' => 'Appointment Settings', 'tab' => null,          'available' => false],
-        ['keyword' => 'Slot Duration','label' => 'Appointment Slot Duration',   'owner' => 'Appointment Settings', 'tab' => null,          'available' => false],
+        ['keyword' => 'Back-date',    'label' => 'Back-dating Limit',           'owner' => 'Owner Controls',     'tab' => 'controls',      'available' => true],
+        ['keyword' => 'Verify',       'label' => 'Visit Verification',          'owner' => 'Owner Controls',     'tab' => 'controls',      'available' => true],
+        ['keyword' => 'Lock',         'label' => 'Owner Controls',              'owner' => 'Owner Controls',     'tab' => 'controls',      'available' => true],
+        ['keyword' => 'Working Hours','label' => 'Working Hours',               'owner' => 'Calendar',           'tab' => 'calendar',      'available' => true],
+        ['keyword' => 'Holiday',      'label' => 'Clinic Holidays',             'owner' => 'Calendar',           'tab' => 'calendar',      'available' => true],
+        ['keyword' => 'Slot Duration','label' => 'Appointment Slot Duration',   'owner' => 'Calendar',           'tab' => 'calendar',      'available' => true],
     ];
 @endphp
 
@@ -302,6 +306,7 @@
             ['id'=>'patient-defaults','label'=>'Patient Defaults',  'icon'=>'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'],
             ['id'=>'clinical-library-link', 'label'=>'Clinical Library', 'icon'=>'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/><path d="M7 7h2m0 0h2m-2 0v4"/>', 'href' => 'settings.clinical-library'],
             ['id'=>'billing',         'label'=>'Billing & Invoice', 'icon'=>'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'],
+            ['id'=>'controls',        'label'=>'Owner Controls',    'icon'=>'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'],
             ['id'=>'printing',        'label'=>'Printing',          'icon'=>'<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>'],
             ['id'=>'notifications',   'label'=>'Notifications',     'icon'=>'<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'],
             ['id'=>'growth',          'label'=>'Growth & Comms',    'icon'=>'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>'],
@@ -928,60 +933,20 @@
          TAB · NOTIFICATIONS
     ════════════════════════════════════════════ --}}
     <div x-show="activeTab==='notifications'" x-cloak>
-        <div style="max-width:620px;margin:0 auto;">
+        {{-- N-4 (2026-09-09): the seven notif_* toggles that used to live here
+             were saved to app_settings and read by NOTHING. Replaced by the
+             event × role matrix that NotificationDispatcher actually obeys. --}}
+        <div style="max-width:1180px;margin:0 auto;">
             <form action="{{ route('settings.notifications.save') }}" method="POST">
                 @csrf
-                @php
-                $n = $notifications;
-                $on = fn($k) => ($n[$k] ?? '0') === '1';
-                @endphp
-
-                <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:24px;margin-bottom:20px;">
-                    <h3 class="settings-section-title">Delivery Channels</h3>
-                    <div style="display:flex;flex-direction:column;gap:16px;">
-                        @foreach([
-                            ['notif_whatsapp','WhatsApp Notifications','Send automated follow-up and reminder messages via WhatsApp.'],
-                            ['notif_sms','SMS Notifications','Send SMS alerts for appointments and follow-ups.'],
-                            ['notif_email','Email Notifications','Send email digests and system alerts.'],
-                        ] as [$key,$label,$desc])
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border:1.5px solid #ede4f3;border-radius:8px;">
-                            <div>
-                                <div style="font-size:13.5px;font-weight:500;color:#1a0320;">{{ $label }}</div>
-                                <div style="font-size:12px;color:#9a7aaa;margin-top:2px;">{{ $desc }}</div>
-                            </div>
-                            <label class="df-toggle {{ $on($key) ? 'on' : '' }}">
-                                <input type="checkbox" name="{{ $key }}" value="1" {{ $on($key) ? 'checked' : '' }} style="display:none;" onchange="this.parentElement.classList.toggle('on', this.checked)">
-                                <span class="df-toggle-track"></span>
-                            </label>
-                        </div>
-                        @endforeach
-                    </div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:6px;">
+                    <h3 class="settings-section-title" style="margin:0;">Who is told what — and how loudly</h3>
+                    <button type="submit" class="settings-save-btn" style="margin:0;">Save Notification Rules</button>
                 </div>
-
-                <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:24px;margin-bottom:20px;">
-                    <h3 class="settings-section-title">Alert Triggers</h3>
-                    <div style="display:flex;flex-direction:column;gap:12px;">
-                        @foreach([
-                            ['notif_appointment_reminder','Appointment Reminders','24hr reminder sent to patients before their appointment.'],
-                            ['notif_followup_due','Follow-up Due Alerts','Alert staff when a follow-up is due or overdue.'],
-                            ['notif_new_lead','New Lead Alerts','Notify team when a new lead is added to PRM.'],
-                            ['notif_task_assigned','Task Assignment','Notify staff when a task is assigned to them.'],
-                        ] as [$key,$label,$desc])
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #f5f0f8;">
-                            <div>
-                                <div style="font-size:13px;font-weight:500;color:#1a0320;">{{ $label }}</div>
-                                <div style="font-size:11.5px;color:#9a7aaa;margin-top:1px;">{{ $desc }}</div>
-                            </div>
-                            <label class="df-toggle {{ $on($key) ? 'on' : '' }}">
-                                <input type="checkbox" name="{{ $key }}" value="1" {{ $on($key) ? 'checked' : '' }} style="display:none;" onchange="this.parentElement.classList.toggle('on', this.checked)">
-                                <span class="df-toggle-track"></span>
-                            </label>
-                        </div>
-                        @endforeach
-                    </div>
+                @include('settings.partials.notification-matrix')
+                <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+                    <button type="submit" class="settings-save-btn">Save Notification Rules</button>
                 </div>
-
-                <button type="submit" class="settings-save-btn">Save Notification Settings</button>
             </form>
         </div>
     </div>
@@ -989,6 +954,95 @@
     {{-- ════════════════════════════════════════════
          TAB 5 · BILLING & INVOICE
     ════════════════════════════════════════════ --}}
+    {{-- ════════════════════════════════════════════
+         TAB · OWNER CONTROLS
+         What staff may change. Admin-only route (settings.controls.save):
+         a staff member with settings-edit must not be able to switch off the
+         thing constraining them. Every control is OFF by default, so nothing
+         changes until the owner turns one on.
+    ════════════════════════════════════════════ --}}
+    <div x-show="activeTab==='controls'" x-cloak>
+        <div style="max-width:620px;margin:0 auto;">
+
+            @if(! auth()->user()->isAdminRole())
+            <div style="background:#fff8e6;border:1.5px solid #f0dda8;border-radius:12px;padding:18px 20px;color:#8a6d1f;font-size:13px;">
+                Only an admin can change these. They are shown here so you know which rules are in force.
+            </div>
+            @endif
+
+            <form action="{{ route('settings.controls.save') }}" method="POST">
+                @csrf
+                @php
+                    $c        = $controls ?? [];
+                    $ctlOn    = fn ($k) => (string)($c[$k] ?? '0') === '1';
+                    $isAdmin  = auth()->user()->isAdminRole();
+                    $disabled = $isAdmin ? '' : 'disabled';
+                @endphp
+
+                {{-- ── Back-dating ── --}}
+                <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:24px;margin-bottom:20px;">
+                    <h3 class="settings-section-title">Back-dating</h3>
+                    <p style="font-size:12px;color:#8a7a95;margin:0 0 14px;">
+                        How many days back staff may date a treatment visit. Leave blank for no limit —
+                        that is how the app behaves today. <b>Admins are never blocked</b>, and a date in
+                        the future is refused for everyone.
+                    </p>
+                    <label class="settings-label">Allow back-dating up to (days)</label>
+                    <input type="number" name="control_backdate_days" min="0" max="365" {{ $disabled }}
+                           value="{{ $c['control_backdate_days'] ?? '' }}"
+                           class="settings-input" style="max-width:180px;" placeholder="blank = no limit">
+                    <p style="font-size:11px;color:#b0a0bb;margin:6px 0 0;">
+                        0 = today only · 3 = up to three days back
+                    </p>
+                </div>
+
+                {{-- ── Visit verification ── --}}
+                <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:24px;margin-bottom:20px;">
+                    <h3 class="settings-section-title">Visit Verification</h3>
+                    <p style="font-size:12px;color:#8a7a95;margin:0 0 14px;">
+                        A visit is a claim about work done. Verification makes it a checked fact — and only
+                        checked work should ever reach a doctor payout. Verifying and withdrawing are
+                        admin-only, and both are written to the activity log.
+                    </p>
+
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#4a3a55;cursor:pointer;margin-bottom:10px;">
+                        <input type="checkbox" name="control_visit_verification_on" value="1" {{ $disabled }}
+                               {{ $ctlOn(\App\Services\OwnerControlService::KEY_VERIFICATION_ON) ? 'checked' : '' }}>
+                        Show the verification workflow and the Unverified Visits list
+                    </label>
+
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#4a3a55;cursor:pointer;">
+                        <input type="checkbox" name="control_lock_verified_visit" value="1" {{ $disabled }}
+                               {{ $ctlOn(\App\Services\OwnerControlService::KEY_LOCK_VERIFIED) ? 'checked' : '' }}>
+                        A verified visit cannot be edited or deleted by staff
+                    </label>
+
+                    <p style="font-size:11px;color:#b0a0bb;margin:12px 0 0;">
+                        <a href="{{ route('visits.unverified') }}" style="color:#6a0f70;">Open the Unverified Visits list →</a>
+                    </p>
+                </div>
+
+                {{-- ── Amount lock ── --}}
+                <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:24px;margin-bottom:20px;">
+                    <h3 class="settings-section-title">Money</h3>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#4a3a55;cursor:pointer;">
+                        <input type="checkbox" name="control_lock_amount_after_save" value="1" {{ $disabled }}
+                               {{ $ctlOn(\App\Services\OwnerControlService::KEY_LOCK_AMOUNT) ? 'checked' : '' }}>
+                        An amount cannot be edited after it is saved — it must be voided and re-entered
+                    </label>
+                    <p style="font-size:11px;color:#b0a0bb;margin:8px 0 0;">
+                        The setting is saved now; the invoice, payment and expense screens start honouring
+                        it in the next slice. Until then it changes nothing.
+                    </p>
+                </div>
+
+                @if($isAdmin)
+                <button type="submit" class="settings-save-btn">Save Owner Controls</button>
+                @endif
+            </form>
+        </div>
+    </div>
+
     <div x-show="activeTab==='billing'" x-cloak>
         <div style="max-width:620px;margin:0 auto;">
             <form action="{{ route('settings.billing.save') }}" method="POST">
@@ -2886,6 +2940,28 @@
                     </div>
                 </div>
 
+                {{-- ── Slot grid ── --}}
+                <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:24px;margin-bottom:18px;">
+                    <p class="settings-section-title">Slot Grid</p>
+                    <p style="font-size:12.5px;color:#7a6080;margin:0 0 16px;">
+                        The step the calendar draws and the free-slot search walks. A 15-minute grid with
+                        30-minute appointments is the usual setup.
+                    </p>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                        <div>
+                            <label class="settings-label">Slot size (minutes)</label>
+                            <input type="number" name="slot_minutes" min="5" max="120" class="settings-input"
+                                   value="{{ $calendarPrefs['calendar_slot_minutes'] ?? 15 }}">
+                        </div>
+                        <div>
+                            <label class="settings-label">Default appointment length (minutes)</label>
+                            <input type="number" name="default_duration" min="5" max="480" class="settings-input"
+                                   value="{{ $calendarPrefs['calendar_default_duration'] ?? 30 }}">
+                            <p style="font-size:11px;color:#b0a0bb;margin:4px 0 0;">Used when the treatment does not set its own.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div style="display:flex;justify-content:flex-end;">
                     <button type="submit" class="settings-save-btn">
                         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
@@ -2893,6 +2969,110 @@
                     </button>
                 </div>
             </form>
+
+            {{-- ══════════════════════════════════════════
+                 WORKING HOURS — two sessions per day.
+                 With no rows saved the app is unconstrained; the moment a week
+                 is filled in, ClinicHoursService starts answering with it.
+            ══════════════════════════════════════════ --}}
+            <form action="{{ route('settings.working-hours.save') }}" method="POST">
+                @csrf
+                <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:24px;margin-bottom:18px;">
+                    <p class="settings-section-title">Working Hours</p>
+                    <p style="font-size:12.5px;color:#7a6080;margin:0 0 16px;">
+                        Two sessions a day — morning and evening, with the afternoon break between them.
+                        Leave the second session blank if the clinic runs straight through.
+                        <b>Until this is filled in nothing is restricted.</b>
+                    </p>
+
+                    <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                        <thead>
+                            <tr style="text-align:left;color:#a090b0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;">
+                                <th style="padding:6px 8px;">Day</th>
+                                <th style="padding:6px 8px;">Closed</th>
+                                <th style="padding:6px 8px;">Session 1</th>
+                                <th style="padding:6px 8px;">Session 2</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach(\App\Models\ClinicHour::DAY_NAMES as $wd => $dayName)
+                        @php $h = ($clinicHours ?? collect())->get($wd); @endphp
+                        <tr style="border-top:1px solid #f2ecf6;">
+                            <td style="padding:8px;font-weight:600;color:#2d1845;white-space:nowrap;">{{ $dayName }}</td>
+                            <td style="padding:8px;">
+                                <input type="checkbox" name="days[{{ $wd }}][is_closed]" value="1" {{ optional($h)->is_closed ? 'checked' : '' }}>
+                            </td>
+                            <td style="padding:8px;white-space:nowrap;">
+                                <input type="time" name="days[{{ $wd }}][slot1_start]" class="settings-input" style="width:110px;display:inline-block;"
+                                       value="{{ $h && $h->slot1_start ? substr($h->slot1_start,0,5) : '' }}">
+                                <span style="color:#b0a0bb;">–</span>
+                                <input type="time" name="days[{{ $wd }}][slot1_end]" class="settings-input" style="width:110px;display:inline-block;"
+                                       value="{{ $h && $h->slot1_end ? substr($h->slot1_end,0,5) : '' }}">
+                            </td>
+                            <td style="padding:8px;white-space:nowrap;">
+                                <input type="time" name="days[{{ $wd }}][slot2_start]" class="settings-input" style="width:110px;display:inline-block;"
+                                       value="{{ $h && $h->slot2_start ? substr($h->slot2_start,0,5) : '' }}">
+                                <span style="color:#b0a0bb;">–</span>
+                                <input type="time" name="days[{{ $wd }}][slot2_end]" class="settings-input" style="width:110px;display:inline-block;"
+                                       value="{{ $h && $h->slot2_end ? substr($h->slot2_end,0,5) : '' }}">
+                            </td>
+                        </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                    </div>
+
+                    <div style="display:flex;justify-content:flex-end;margin-top:16px;">
+                        <button type="submit" class="settings-save-btn">Save Working Hours</button>
+                    </div>
+                </div>
+            </form>
+
+            {{-- ══════════════════════════════════════════
+                 HOLIDAYS — dated closures that beat the weekly pattern.
+            ══════════════════════════════════════════ --}}
+            <div style="background:#fff;border:1.5px solid #ede4f3;border-radius:12px;padding:24px;margin-bottom:18px;">
+                <p class="settings-section-title">Holidays</p>
+                <p style="font-size:12.5px;color:#7a6080;margin:0 0 16px;">
+                    Days the clinic is shut regardless of the weekly pattern. Tick <b>every year</b> only for
+                    fixed-date holidays — Diwali and Gudi Padwa move, so enter those per year.
+                </p>
+
+                <form action="{{ route('settings.holidays.store') }}" method="POST"
+                      style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin-bottom:18px;">
+                    @csrf
+                    <div>
+                        <label class="settings-label">Date</label>
+                        <input type="date" name="holiday_date" required class="settings-input" style="width:160px;">
+                    </div>
+                    <div style="flex:1;min-width:180px;">
+                        <label class="settings-label">Name</label>
+                        <input type="text" name="name" required maxlength="120" class="settings-input" placeholder="Diwali">
+                    </div>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#4a3a55;padding-bottom:9px;">
+                        <input type="checkbox" name="recurs_annually" value="1"> every year
+                    </label>
+                    <button type="submit" class="settings-save-btn" style="padding-top:9px;padding-bottom:9px;">Add</button>
+                </form>
+
+                @forelse(($holidays ?? collect()) as $holiday)
+                <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #f2ecf6;font-size:13px;">
+                    <span style="font-weight:600;color:#2d1845;width:120px;">{{ $holiday->holiday_date->format('d M Y') }}</span>
+                    <span style="flex:1;color:#4a3a55;">{{ $holiday->name }}</span>
+                    @if($holiday->recurs_annually)
+                    <span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6a0f70;background:#f5eef9;padding:2px 7px;border-radius:3px;">every year</span>
+                    @endif
+                    <form action="{{ route('settings.holidays.destroy', $holiday) }}" method="POST"
+                          onsubmit="return confirm('Remove this holiday?');">
+                        @csrf @method('DELETE')
+                        <button type="submit" style="background:none;border:none;color:#b4432f;font-size:12px;cursor:pointer;">Remove</button>
+                    </form>
+                </div>
+                @empty
+                <p style="font-size:12.5px;color:#b0a0bb;margin:0;">No holidays yet.</p>
+                @endforelse
+            </div>
 
         </div>
 

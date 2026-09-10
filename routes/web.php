@@ -406,7 +406,8 @@ Route::middleware('auth')->group(function () {
         Route::patch('/settings/clinic/hfr',          [\App\Http\Controllers\Abdm\ClinicHfrController::class, 'update'])->name('settings.clinic.hfr.update')->middleware('module:settings,edit');
         Route::post('/settings/inventory',            [\App\Http\Controllers\Settings\SettingsController::class, 'saveInventorySettings'])->name('settings.inventory.save')->middleware('module:settings,edit');
         Route::post('/settings/patient-id',           [\App\Http\Controllers\Settings\SettingsController::class, 'savePatientId'])->name('settings.patient_id.save')->middleware('module:settings,edit');
-        Route::post('/settings/notifications',        [\App\Http\Controllers\Settings\SettingsController::class, 'saveNotifications'])->name('settings.notifications.save')->middleware('module:settings,edit');
+        // N-4 (2026-09-09): the notification matrix decides who is interrupted at the desk — admin-only, like Roles & Permissions.
+        Route::post('/settings/notifications',        [\App\Http\Controllers\Settings\SettingsController::class, 'saveNotifications'])->name('settings.notifications.save')->middleware('admin.only');
         Route::post('/settings/billing',              [\App\Http\Controllers\Settings\SettingsController::class, 'saveBilling'])->name('settings.billing.save')->middleware('module:settings,edit');
         // Owner controls are admin.only, not settings,edit — the whole point of
         // the panel is that it constrains staff, so a staff member with settings
@@ -432,6 +433,14 @@ Route::middleware('auth')->group(function () {
 
         // ── Calendar Preferences ───────────────────────────────────────────────
         Route::post('/settings/calendar', [\App\Http\Controllers\Settings\SettingsController::class, 'saveCalendarPrefs'])->name('settings.calendar.save')->middleware('module:settings,edit');
+
+        /* ── Working hours + holidays (2026-09-07) ────────────────────────────
+           Sits with the Calendar tab because that is the screen it changes.
+           settings,edit is enough: unlike the owner controls, hours are an
+           operational fact a manager may keep current. */
+        Route::post('/settings/working-hours',        [\App\Http\Controllers\Settings\SettingsController::class, 'saveWorkingHours'])->name('settings.working-hours.save')->middleware('module:settings,edit');
+        Route::post('/settings/holidays',             [\App\Http\Controllers\Settings\SettingsController::class, 'storeHoliday'])->name('settings.holidays.store')->middleware('module:settings,edit');
+        Route::delete('/settings/holidays/{holiday}', [\App\Http\Controllers\Settings\SettingsController::class, 'destroyHoliday'])->name('settings.holidays.destroy')->middleware('module:settings,delete');
 
         // ── Operatories ────────────────────────────────────────────────────────
         Route::prefix('settings/operatories')->name('settings.operatories.')->group(function () {
@@ -644,9 +653,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/notifications/unread',        [\App\Http\Controllers\NotificationsController::class, 'unread'])->name('notifications.unread');
     // UX-07 — sidebar workflow queue badges (pending billing prompts, draft lab cases)
     Route::get('/notifications/nav-badges',    [\App\Http\Controllers\NotificationsController::class, 'navBadges'])->name('notifications.navBadges');
+    // N-1 (2026-09-09) — popup channel: pending desk popups + Done / Later
+    Route::get('/notifications/popups',        [\App\Http\Controllers\NotificationsController::class, 'popups'])->name('notifications.popups');
     // mark-all-read must come BEFORE {id}/read to avoid wildcard conflict
     Route::post('/notifications/mark-all-read',[\App\Http\Controllers\NotificationsController::class, 'markAllRead'])->name('notifications.markAllRead');
     Route::post('/notifications/{id}/read',    [\App\Http\Controllers\NotificationsController::class, 'markRead'])->name('notifications.read');
+    Route::post('/notifications/{id}/acknowledge', [\App\Http\Controllers\NotificationsController::class, 'acknowledge'])->whereNumber('id')->name('notifications.acknowledge');
+    Route::post('/notifications/{id}/later',   [\App\Http\Controllers\NotificationsController::class, 'later'])->whereNumber('id')->name('notifications.later');
 
     // ── Marketing Module ──
     require __DIR__ . '/marketing.php';

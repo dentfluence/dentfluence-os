@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\AppointmentStatus;
+use App\Enums\CancellationReason;
 use App\Http\Controllers\Api\ApiController;
 use App\Http\Requests\Api\V1\StoreAppointmentRequest;
 use App\Http\Requests\Api\V1\WalkInRequest;
@@ -10,6 +11,7 @@ use App\Http\Requests\Api\V1\BlockSlotRequest;
 use App\Http\Resources\AppointmentResource;
 use Illuminate\Support\Carbon;
 use App\Models\Appointment;
+use App\Models\AppointmentCancellation;
 use App\Models\Operatory;
 use App\Models\Patient;
 use App\Models\TreatmentCategory;
@@ -131,7 +133,54 @@ class AppointmentController extends ApiController
         );
     }
 
-    /** Cancel with a reason. */
+    /**
+     * The fixed vocabulary the phone's cancel sheet renders — reasons (with the
+     * default callback gap each one carries) and the outcomes it may send.
+     * Same source the web modal reads (CancellationReason::modalMeta()), so the
+     * two screens cannot drift apart.
+     *
+     *   GET /api/v1/appointments/cancel-options
+     */
+    public function cancelOptions(): JsonResponse
+    {
+        $reasons = [];
+        foreach (CancellationReason::modalMeta() as $code => $meta) {
+            $reasons[] = [
+                'code'                  => $code,
+                'label'                 => $meta['label'],
+                'default_callback_days' => $meta['days'],
+            ];
+        }
+
+        $outcomes = [];
+        foreach (AppointmentCancellation::CHOOSABLE_OUTCOMES as $value) {
+            $outcomes[] = [
+                'value' => $value,
+                'label' => AppointmentCancellation::OUTCOMES[$value] ?? $value,
+            ];
+        }
+
+        return $this->success([
+            'reasons'  => $reasons,
+            'outcomes' => $outcomes,
+        ], 'Cancel options');
+    }
+
+    /**
+     * Cancel — SAME contract as the web modal (W-9, 7 Sep 2026).
+     *
+     * A cancellation must end somewhere: a fixed reason_code (counted, unlike
+     * free text) and exactly one outcome — call back on a date (which writes
+     * the reception Task) or not returning. `rebooked` is deliberately not
+     * accepted here: a patient who takes another slot has not cancelled, so
+     * the client calls reschedule() instead and nothing is written.
+     *
+     * M-3 (8 Sep): until this change the phone still sent the old two-field
+     * body, so every phone-side cancellation landed as outcome 'unspecified'
+     * and no callback was ever created. The fields are REQUIRED on purpose —
+     * an optional path would keep that leak alive. The July app gets a clear
+     * 422 naming the missing fields, not a silent 'unspecified'.
+     */
     public function cancel(Request $request, $appointment): JsonResponse
     {
         $model = $this->findInBranch($request, $appointment);
@@ -139,9 +188,24 @@ class AppointmentController extends ApiController
         $data = $request->validate([
             'cancel_reason'   => ['required', 'string', 'max:500'],
             'cancelled_party' => ['required', 'in:patient,clinic'],
+            'reason_code'     => ['required', CancellationReason::validationRule()],
+            'reason_note'     => ['nullable', 'string', 'max:500'],
+            'outcome'         => ['required', 'in:' . implode(',', AppointmentCancellation::CHOOSABLE_OUTCOMES)],
+            'callback_date'   => ['required_if:outcome,callback', 'nullable', 'date', 'after_or_equal:today'],
         ]);
 
-        $cancelled = $this->appointments->cancel($model, $data['cancel_reason'], $data['cancelled_party'], $request->user());
+        $cancelled = $this->appointments->cancel(
+            $model,
+            $data['cancel_reason'],
+            $data['cancelled_party'],
+            $request->user(),
+            [
+                'reason_code'   => $data['reason_code'],
+                'reason_note'   => $data['reason_note'] ?? null,
+                'outcome'       => $data['outcome'],
+                'callback_date' => $data['callback_date'] ?? null,
+            ]
+        );
 
         return $this->success(new AppointmentResource($cancelled), 'Appointment cancelled.');
     }

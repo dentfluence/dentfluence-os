@@ -238,6 +238,12 @@
                             Next: <span x-text="fmtFull(visit.next_visit_date)"></span>
                         </div>
 
+                        {{-- N-2: doctor → front desk handover --}}
+                        <div x-show="visit.handover_summary"
+                             class="mt-1 inline-flex items-center gap-1 text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full ml-1">
+                            Desk: <span x-text="visit.handover_summary"></span>
+                        </div>
+
                         {{-- Linked formal prescription --}}
                         <template x-if="visit.linked_rx">
                             <div class="mt-1 inline-flex items-center gap-1 text-[10px] text-green-700 bg-green-50 px-2 py-0.5 rounded-full ml-1 font-semibold">

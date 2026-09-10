@@ -1279,6 +1279,45 @@
                     </div>
                 </div>
 
+                {{-- CARD 5a — Message to Front Desk (N-2, 2026-09-09).
+
+                     Distinct from CARD 5 (clinical next visit, printed on the
+                     case sheet) and CARD 5b (a dated task for later): this is
+                     what the desk must do in the next five minutes, while the
+                     patient walks from the chair to the counter. On save it is
+                     the text of the front-desk popup (N-1). Four taps, one line,
+                     zero cost when empty. Posts as form.handover. --}}
+                <div class="bg-white border border-dashed border-[#c9b3d1] rounded-lg shadow-sm px-4 py-3.5" style="background:#fcf8fd;">
+                    <div class="flex items-baseline justify-between gap-2">
+                        <div class="tv-section-legend">Message to Front Desk</div>
+                        <span class="text-[10px] text-gray-400 italic">Pops up at the desk on save</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs mt-1">
+                        <label class="inline-flex items-center gap-1.5 whitespace-nowrap">
+                            <span>Collect ₹</span>
+                            <input type="number" min="0" step="1" inputmode="numeric" x-model="form.handover.collect_amount" placeholder="0"
+                                   class="w-24 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-[#6a0f70]">
+                        </label>
+                        <label class="inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+                            <input type="checkbox" x-model="form.handover.offer_aocp" class="rounded border-gray-300 text-[#6a0f70]">
+                            <span>Offer AOCP</span>
+                        </label>
+                        <label class="inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+                            <input type="checkbox" x-model="form.handover.xray" class="rounded border-gray-300 text-[#6a0f70]">
+                            <span>X-ray</span>
+                        </label>
+                        <label class="inline-flex items-center gap-1.5 whitespace-nowrap">
+                            <span>Book in</span>
+                            <input type="number" min="1" max="365" step="1" inputmode="numeric" x-model="form.handover.book_in_days" placeholder="—"
+                                   class="w-14 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-[#6a0f70]">
+                            <span>days</span>
+                        </label>
+                    </div>
+                    <input type="text" maxlength="200" x-model="form.handover.note"
+                           placeholder="Anything else for the desk — e.g. explain the AOCP plan, patient wants an EMI"
+                           class="mt-2 w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#6a0f70]">
+                </div>
+
                 {{-- CARD 5b — Reception Next Action (Visit → Next Action, 08-14).
 
                      The doctor answers "I finished this patient — what does
