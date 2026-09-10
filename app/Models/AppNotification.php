@@ -25,6 +25,7 @@ class AppNotification extends Model
         'dedupe_key',
         'title',
         'message',
+        'payload',
         'action_url',
         'action_label',
         'is_read',
@@ -36,6 +37,7 @@ class AppNotification extends Model
     ];
 
     protected $casts = [
+        'payload'         => 'array',
         'is_read'         => 'boolean',
         'push'            => 'boolean',
         'read_at'         => 'datetime',

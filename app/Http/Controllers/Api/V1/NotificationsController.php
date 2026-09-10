@@ -164,6 +164,7 @@ class NotificationsController extends ApiController
             'event_key'    => $n->event_key,
             'title'        => $n->title,
             'message'      => $n->message,
+            'payload'      => $n->payload,
             'action_url'   => $n->action_url,
             'action_label' => $n->action_label,
             'is_read'      => (bool) $n->is_read,

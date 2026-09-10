@@ -124,6 +124,18 @@ class NotificationDispatcher
 
         unset($recipients[$actorId]);
 
+        // N-10: a card with nothing on it for the desk to DO is not worth
+        // interrupting anyone — it drops to the bell instead. Four empty cards
+        // reached reception on 10 Sep and were cleared unread in three seconds;
+        // that is how a popup becomes wallpaper.
+        if (($ctx['max_level'] ?? null) === NotificationCatalog::LEVEL_BELL) {
+            foreach ($recipients as $uid => [$level, $push, $roleLabel]) {
+                if ($level === NotificationCatalog::LEVEL_POPUP) {
+                    $recipients[$uid] = [NotificationCatalog::LEVEL_BELL, false, $roleLabel];
+                }
+            }
+        }
+
         $created = 0;
         foreach ($recipients as $userId => [$level, $push, $roleLabel]) {
             $row = [
@@ -139,6 +151,10 @@ class NotificationDispatcher
                 'dedupe_key'   => $groupKey . ':u' . $userId,
                 'title'        => mb_substr($ctx['title'], 0, 200),
                 'message'      => $ctx['message'] ?? null,
+                // N-10: the three things the desk must DO, structured. The message
+                // stays as the one-line fallback the bell, the phone and a push
+                // body can read; the card renders from this.
+                'payload'      => $ctx['payload'] ?? null,
                 'action_url'   => $ctx['action_url'] ?? null,
                 'action_label' => $ctx['action_label'] ?? null,
                 'is_read'      => false,
@@ -164,6 +180,7 @@ class NotificationDispatcher
                     $existing->update([
                         'title'           => $row['title'],
                         'message'         => $row['message'],
+                        'payload'         => $row['payload'],
                         'action_url'      => $row['action_url'],
                         'action_label'    => $row['action_label'],
                         // Back to the level the matrix asks for: a row the user
@@ -284,6 +301,7 @@ class NotificationDispatcher
     {
         return $existing->title === $row['title']
             && $existing->message === $row['message']
+            && json_encode($existing->payload) === json_encode($row['payload'])
             && $existing->action_url === $row['action_url']
             && $existing->action_label === $row['action_label'];
     }

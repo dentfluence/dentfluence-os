@@ -86,19 +86,59 @@ class ChairsideNotifier
             $work .= ' +' . ($items->count() - 3);
         }
 
+        // N-10 (CEO ruling, 2026-09-10): reception reads THREE things and
+        // nothing else — how much to collect, what to do next, when to book.
+        // A note only if the doctor wrote one. Everything else is context and
+        // belongs on the patient's page, not on a card read standing up.
+        $h = (array) ($visit->handover ?? []);
+
+        $collect = isset($h['collect_amount']) && (int) $h['collect_amount'] > 0
+            ? (int) $h['collect_amount']
+            : null;
+
+        $actions = [];
+        if (! empty($h['xray'])) {
+            $actions[] = 'X-ray';
+        }
+        if (! empty($h['offer_aocp'])) {
+            $actions[] = 'Offer AOCP';
+        }
+
+        // A date the doctor SET beats a "book in N days" instruction — one is
+        // a decision, the other a rule of thumb.
+        $appointment = $visit->next_visit_date
+            ?: (! empty($h['book_in_days']) ? now()->addDays((int) $h['book_in_days']) : null);
+
+        $note = ! empty($h['note']) ? trim($h['note']) : null;
+
+        // 'Dr. Dr. Anushka Ayare' — the stored name often already carries the
+        // title, so strip it before adding one.
+        $doctor = $visit->doctor
+            ? 'Dr. ' . preg_replace('/^\s*Dr\.?\s+/i', '', $visit->doctor->name)
+            : null;
+
+        $payload = [
+            'collect'     => $collect,
+            'action'      => $actions ? implode(' · ', $actions) : null,
+            'appointment' => $appointment ? $appointment->format('d M (D)') : null,
+            'note'        => $note,
+            'doctor'      => $doctor,
+        ];
+
+        // The one-line fallback the bell list, the phone and a push body read.
+        // Same three facts, same order, no paragraph.
         $parts = [];
-        if ($handover = Handover::summary($visit->handover)) {
-            $parts[] = $handover;
+        if ($collect) {
+            $parts[] = 'Collect ₹' . number_format($collect);
         }
-        $suggested = (float) $items->sum('suggested_price');
-        if ($suggested > 0) {
-            $parts[] = 'Bill ₹' . number_format($suggested, 0);
+        if ($payload['action']) {
+            $parts[] = $payload['action'];
         }
-        if ($visit->next_visit_date) {
-            $parts[] = 'Next visit ' . $visit->next_visit_date->format('d M');
+        if ($payload['appointment']) {
+            $parts[] = 'Book ' . $payload['appointment'];
         }
-        if ($visit->doctor) {
-            $parts[] = 'Dr. ' . $visit->doctor->name;
+        if ($note) {
+            $parts[] = $note;
         }
 
         // The pending billing prompt this visit produced IS the desk's next
@@ -108,6 +148,10 @@ class ChairsideNotifier
         return $this->dispatcher->fireOrRefresh('visit.saved', [
             'title'        => $patient->name . ' — ' . ($work ?: 'treatment visit done'),
             'message'      => implode(' · ', $parts) ?: null,
+            'payload'      => $payload,
+            // Nothing for the desk to DO → no interruption; it waits in the
+            // bell. This is the guard against the empty cards of 10 Sep.
+            'max_level'    => $parts ? null : NotificationCatalog::LEVEL_BELL,
             'action_url'   => $prompt
                 ? route('billing.createFromPrompt', [$patient, $prompt])
                 : route('patients.show', $patient),

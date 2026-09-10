@@ -166,6 +166,50 @@ class VisitUpdateNotificationTest extends TestCase
         );
     }
 
+    public function test_the_three_facts_travel_as_fields_and_a_changed_amount_re_opens_the_card(): void
+    {
+        $d = app(NotificationDispatcher::class);
+
+        $ctx = $this->ctx('N7 Patient — Composite Filling (26)', 'Collect ₹4,000');
+        $ctx['payload'] = ['collect' => 4000, 'action' => 'X-ray', 'appointment' => '28 Sep (Sun)', 'note' => null];
+        $d->fire('consultation.saved', $ctx);
+
+        $row = AppNotification::where('user_id', $this->deskA->id)->firstOrFail();
+        $this->assertSame(4000, $row->payload['collect'], 'the amount is a field, not a sentence');
+        $this->assertSame('X-ray', $row->payload['action']);
+
+        $row->acknowledgeGroup($this->deskA->id);
+
+        // The doctor corrects the amount. The words around it never change —
+        // only the payload does — and the desk must still be told.
+        $ctx['payload']['collect'] = 6500;
+        $refreshed = $d->fireOrRefresh('consultation.saved', $ctx);
+
+        $this->assertGreaterThan(0, $refreshed, 'a changed amount is a changed card');
+        $row->refresh();
+        $this->assertSame(6500, $row->payload['collect']);
+        $this->assertNull($row->acknowledged_at, 'the card comes back with the new figure');
+    }
+
+    public function test_a_card_with_nothing_to_do_waits_in_the_bell(): void
+    {
+        $d = app(NotificationDispatcher::class);
+
+        $ctx = $this->ctx('N7 Patient — treatment visit done', null);
+        $ctx['max_level'] = \App\Services\Notifications\NotificationCatalog::LEVEL_BELL;
+
+        $d->fire('consultation.saved', $ctx);
+
+        foreach ($this->deskRows() as $row) {
+            $this->assertSame(
+                AppNotification::PRIORITY_BELL,
+                $row->priority,
+                'an empty visit must never interrupt reception'
+            );
+            $this->assertFalse((bool) $row->push, 'and must never buzz a phone');
+        }
+    }
+
     public function test_plain_fire_still_never_writes_twice(): void
     {
         $d = app(NotificationDispatcher::class);

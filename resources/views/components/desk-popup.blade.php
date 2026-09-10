@@ -1,7 +1,7 @@
 {{--
     components/desk-popup.blade.php — N-3 web popup layer (2026-09-09)
 
-    The front-desk popup. Polls GET /notifications/popups every 8 seconds
+    The front-desk popup. Polls GET /notifications/popups every 4 seconds
     (only while the tab is visible) and shows every popup-level notification
     this user has not yet answered as a card pinned to the top of the screen.
     The card stays until the person presses DONE (clears it for everyone who
@@ -25,27 +25,36 @@
         z-index: 9500; width: min(560px, calc(100vw - 24px));
         display: flex; flex-direction: column; gap: 10px; pointer-events: none;
     }
+    /* Deliberately RED and deliberately unlike the rest of the OS: this card
+       is the one thing on screen that is not part of the page the receptionist
+       is working in, and it must not read as another purple panel. */
     .df-desk-card {
         pointer-events: auto;
-        background: #fff; border: 1px solid #d8b8de; border-left: 5px solid #6a0f70;
-        border-radius: 10px; box-shadow: 0 12px 32px rgba(56, 7, 64, .22);
+        background: #fff; border: 2px solid #c62828; border-left: 7px solid #c62828;
+        border-radius: 10px; box-shadow: 0 14px 38px rgba(140, 20, 20, .28);
         padding: 12px 14px 10px; font-family: 'DM Sans', system-ui, sans-serif;
         animation: dfDeskIn .18s ease-out;
     }
     @keyframes dfDeskIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
     @media (prefers-reduced-motion: reduce) { .df-desk-card { animation: none; } }
-    .df-desk-kicker { font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: #6a0f70; display: flex; justify-content: space-between; gap: 8px; }
+    .df-desk-kicker { font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: #c62828; display: flex; justify-content: space-between; gap: 8px; }
     .df-desk-kicker span:last-child { color: #9ca3af; font-weight: 500; letter-spacing: 0; text-transform: none; }
     .df-desk-title { font-size: 15px; font-weight: 700; color: #1a0a24; margin: 4px 0 2px; line-height: 1.3; }
     .df-desk-msg { font-size: 13px; color: #3d2b47; line-height: 1.45; }
-    .df-desk-msg b { color: #6a0f70; }
+    /* Three facts, label + value, nothing else. A grid so the values line up
+       and the eye reads DOWN the column instead of through a sentence. */
+    .df-desk-rows { margin: 8px 0 2px; display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; align-items: baseline; }
+    .df-row-l { font-size: 10.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: #8a8a8a; white-space: nowrap; }
+    .df-row-v { font-size: 14px; font-weight: 600; color: #1a0a24; }
+    .df-row-v.df-money { font-size: 22px; font-weight: 800; color: #c62828; line-height: 1.15; }
+    .df-row-v.df-note  { font-size: 13px; font-weight: 500; color: #3d2b47; }
     .df-desk-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
     .df-desk-actions a, .df-desk-actions button {
         font: 600 12.5px 'DM Sans', system-ui, sans-serif; border-radius: 7px; padding: 7px 14px;
         cursor: pointer; text-decoration: none; border: 1px solid transparent; line-height: 1;
     }
-    .df-desk-go    { background: #6a0f70; color: #fff; }
-    .df-desk-go:hover { background: #56095b; }
+    .df-desk-go    { background: #c62828; color: #fff; }
+    .df-desk-go:hover { background: #a81f1f; }
     .df-desk-done  { background: #e4f2ec; color: #0f7355; border-color: #a9d6c4 !important; }
     .df-desk-done:hover { background: #d3ebe0; }
     .df-desk-later { background: #fff; color: #6b7280; border-color: #d1d5db !important; margin-left: auto; }
@@ -59,7 +68,9 @@
     var POPUPS_URL = '{{ route("notifications.popups") }}';
     var ACK_URL    = '{{ url("/notifications") }}/'; // + id + '/acknowledge' | '/later'
     var CSRF       = '{{ csrf_token() }}';
-    var INTERVAL   = 8000;
+    // 4s, not 8: the desk noticed the wait. Real-time (Reverb, N-9) removes
+    // the poll entirely; until then this is one indexed query twice as often.
+    var INTERVAL   = 4000;
     var SEEN_KEY   = 'df_desk_popups_seen';
 
     var host = document.getElementById('df-desk-popups');
@@ -103,13 +114,28 @@
         });
     }
 
-    // The doctor's handover leads the message (N-2). Bold it so the desk
-    // reads the instruction before the context.
-    function renderMessage(msg) {
-        if (!msg) return '';
-        var parts = String(msg).split(' · ');
-        var lead  = /^(Collect ₹|Offer AOCP|X-ray|Book in )/.test(parts[0]) ? parts.shift() : null;
-        return (lead ? '<b>' + esc(lead) + '</b>' + (parts.length ? ' · ' : '') : '') + esc(parts.join(' · '));
+    // N-10: three labelled lines — collect, do, book — plus a note if the
+    // doctor wrote one. Money is the biggest thing on the card because it is
+    // the thing that is forgotten. Older rows carry no payload and fall back
+    // to the plain message.
+    function row(label, value, mod) {
+        if (value === null || value === undefined || value === '') return '';
+        return '<span class="df-row-l">' + esc(label) + '</span>' +
+               '<span class="df-row-v' + (mod ? ' ' + mod : '') + '">' + esc(value) + '</span>';
+    }
+
+    function body(n) {
+        var p = n.payload;
+        if (!p) {
+            return n.message ? '<div class="df-desk-msg">' + esc(n.message) + '</div>' : '';
+        }
+        var money = p.collect ? '₹' + Number(p.collect).toLocaleString('en-IN') : '';
+        var rows  = row('Collect', money, 'df-money') +
+                    row('Next action', p.action) +
+                    row('Next appointment', p.appointment) +
+                    row('Note', p.note, 'df-note');
+
+        return rows ? '<div class="df-desk-rows">' + rows + '</div>' : '';
     }
 
     function card(n) {
@@ -118,9 +144,9 @@
         el.setAttribute('role', 'alert');
         el.dataset.id = n.id;
         el.innerHTML =
-            '<div class="df-desk-kicker"><span>Front desk · now</span><span>' + esc(n.time_ago) + '</span></div>' +
+            '<div class="df-desk-kicker"><span>' + esc((n.payload && n.payload.doctor) || 'Front desk') + '</span><span>' + esc(n.time_ago) + '</span></div>' +
             '<div class="df-desk-title">' + esc(n.title) + '</div>' +
-            (n.message ? '<div class="df-desk-msg">' + renderMessage(n.message) + '</div>' : '') +
+            body(n) +
             '<div class="df-desk-actions">' +
                 (n.action_url ? '<a class="df-desk-go" href="' + esc(n.action_url) + '">' + esc(n.action_label || 'Open') + ' →</a>' : '') +
                 '<button type="button" class="df-desk-done" data-act="acknowledge">Done</button>' +
