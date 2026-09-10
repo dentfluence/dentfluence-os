@@ -2,14 +2,24 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
- * TodayActionDismissal — "not today" suppression for one occurrence of a
- * live-computed Today's Actions row. See
- * docs/feature-specs/feature-spec-action-board-dismiss.md and
+ * TodayActionDismissal — suppression of one live-computed Today's Actions row.
+ * See docs/feature-specs/feature-spec-action-board-dismiss.md and
  * App\Services\Relationship\TodayActionsEngine.
+ *
+ * Two lifetimes (W-10, 2026-09-10):
+ *  - is_permanent = true  — "Stop chasing", "Not needed", or a closes_task
+ *    outcome. The row stays off the board on every later day until the date
+ *    that drives it moves (App\Observers\TodayActionDismissalLiftObserver).
+ *  - is_permanent = false — one occurrence only ("not today"). Kept for the
+ *    birthday WhatsApp send, which must come back next year.
+ * dismissed_for_date is always the day the row was handled — that is what
+ * the board's faded "done today" render keys on.
  */
 class TodayActionDismissal extends Model
 {
@@ -18,6 +28,7 @@ class TodayActionDismissal extends Model
         'subject_type',
         'subject_id',
         'dismissed_for_date',
+        'is_permanent',
         'reason_key',
         'notes',
         'dismissed_by',
@@ -25,6 +36,7 @@ class TodayActionDismissal extends Model
 
     protected $casts = [
         'dismissed_for_date' => 'date',
+        'is_permanent'       => 'boolean',
     ];
 
     public function dismissedByUser(): BelongsTo
@@ -32,13 +44,22 @@ class TodayActionDismissal extends Model
         return $this->belongsTo(User::class, 'dismissed_by');
     }
 
-    /** Subject ids already dismissed today for a given category — used to exclude them from the live query. */
-    public static function dismissedIdsFor(string $category, string $subjectType, \Illuminate\Support\Carbon $date): array
+    /** Rows for one category + subject model. */
+    private static function scopedTo(string $category, string $subjectType): Builder
     {
         return static::query()
             ->where('category', $category)
-            ->where('subject_type', $subjectType)
-            ->whereDate('dismissed_for_date', $date->toDateString())
+            ->where('subject_type', $subjectType);
+    }
+
+    /** Subject ids to keep off the board on $date — handled that day, or closed for good. */
+    public static function dismissedIdsFor(string $category, string $subjectType, Carbon $date): array
+    {
+        return static::scopedTo($category, $subjectType)
+            ->where(function (Builder $q) use ($date) {
+                $q->whereDate('dismissed_for_date', $date->toDateString())
+                  ->orWhere('is_permanent', true);
+            })
             ->pluck('subject_id')
             ->all();
     }
@@ -55,21 +76,46 @@ class TodayActionDismissal extends Model
     }
 
     /**
-     * Like dismissedIdsFor(), but only rows written by a TRUE dismiss
-     * ("wrong number", "shouldn't be on this list" — reason_key is one of the
-     * configured dismiss reasons). Rows written by a logged call outcome,
-     * the explicit Close tab ('closed_manually'), or a birthday WhatsApp send
-     * ('whatsapp_sent') are excluded, so the Action Board can render those
-     * as DONE (faded, with the outcome) instead of hiding them (2026-07-14).
+     * Action Board (includeDone) variant of dismissedIdsFor(): hides a TRUE
+     * dismiss ("wrong number", "not needed" — reason_key is a configured
+     * dismiss reason) whether it was written today or is permanent, and hides
+     * a permanent HANDLED row from any earlier day. A row handled TODAY by a
+     * call outcome, "Stop chasing" ('closed_manually') or a birthday send
+     * ('whatsapp_sent') is deliberately NOT returned, so the board can render
+     * it faded with its outcome instead of hiding it (2026-07-14).
      */
-    public static function trueDismissedIdsFor(string $category, string $subjectType, \Illuminate\Support\Carbon $date): array
+    public static function trueDismissedIdsFor(string $category, string $subjectType, Carbon $date): array
     {
-        return static::query()
-            ->where('category', $category)
-            ->where('subject_type', $subjectType)
-            ->whereDate('dismissed_for_date', $date->toDateString())
-            ->whereIn('reason_key', static::dismissReasonKeys())
+        $day = $date->toDateString();
+
+        return static::scopedTo($category, $subjectType)
+            ->where(function (Builder $q) use ($day) {
+                $q->where(function (Builder $true) use ($day) {
+                    $true->whereIn('reason_key', static::dismissReasonKeys())
+                         ->where(function (Builder $when) use ($day) {
+                             $when->whereDate('dismissed_for_date', $day)
+                                  ->orWhere('is_permanent', true);
+                         });
+                })->orWhere(function (Builder $earlier) use ($day) {
+                    $earlier->where('is_permanent', true)
+                            ->whereDate('dismissed_for_date', '<', $day);
+                });
+            })
             ->pluck('subject_id')
             ->all();
+    }
+
+    /**
+     * The date that drives this subject's row moved (appointment rescheduled,
+     * follow-up date changed) — a permanent close no longer describes the
+     * new occurrence. Demote to a one-day row; the audit trail stays.
+     */
+    public static function liftFor(Model $subject): int
+    {
+        return static::query()
+            ->where('subject_type', get_class($subject))
+            ->where('subject_id', $subject->getKey())
+            ->where('is_permanent', true)
+            ->update(['is_permanent' => false]);
     }
 }

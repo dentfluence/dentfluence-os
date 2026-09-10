@@ -267,6 +267,9 @@ class TodayActionsEngine
     // ═══════════════════════════════════════════════════════════════════════
     // CATEGORY 3 — Treatment Opportunities
     // follow_up_date <= today, status not in [completed, declined]
+    // W-10 (2026-09-10): status 'quoted' is EXCLUDED here — a quoted card is
+    // Pending Estimates (category 6). One TreatmentOpportunity, one card;
+    // before this the same row sat in both, with two separate close buttons.
     // ═══════════════════════════════════════════════════════════════════════
 
     private function opportunities(): array
@@ -275,6 +278,7 @@ class TodayActionsEngine
             ->whereNotNull('follow_up_date')
             ->tap(fn ($q) => $this->applyDueWindow($q, 'follow_up_date'))
             ->whereNotIn('status', TreatmentOpportunity::CLOSED_STATUSES)
+            ->where('status', '!=', 'quoted')
             ->whereNotIn('id', $this->dismissedIds('opportunities', TreatmentOpportunity::class))
             ->orderBy('follow_up_date')
             ->limit($this->limit())
@@ -571,7 +575,13 @@ class TodayActionsEngine
 
     // ═══════════════════════════════════════════════════════════════════════
     // CATEGORY 6 — Pending Estimates
-    // TreatmentOpportunity status = quoted, follow_up_date overdue
+    // TreatmentOpportunity status = quoted, follow_up_date <= today
+    // W-10 (2026-09-10): the ONLY card a quoted opportunity gets (category 3
+    // now skips 'quoted'). Was strictly overdue-only with no due_date key, so
+    // a quote due today showed nowhere and an overdue one never reached the
+    // Pending Calls board; it now takes the same due-window as every other
+    // date-driven category. Hiding this card in Settings hides quoted
+    // opportunities entirely — deliberate, one card per row.
     // ═══════════════════════════════════════════════════════════════════════
 
     private function pendingEstimates(): array
@@ -579,20 +589,23 @@ class TodayActionsEngine
         return TreatmentOpportunity::with('patient:id,name,phone,relationship_id')
             ->where('status', 'quoted')
             ->whereNotNull('follow_up_date')
-            ->where('follow_up_date', '<', Carbon::today())
+            ->tap(fn ($q) => $this->applyDueWindow($q, 'follow_up_date'))
             ->whereNotIn('id', $this->dismissedIds('pending_estimates', TreatmentOpportunity::class))
             ->orderBy('follow_up_date')
             ->limit($this->limit())
             ->get()
             ->map(fn (TreatmentOpportunity $opp) => [
                 'category'        => 'pending_estimates',
+                'due_date'        => $opp->follow_up_date?->toDateString(),
                 'patient_name'    => $opp->patient?->name ?? 'Unknown',
                 'patient_id'      => $opp->patient_id,
                 'lead_id'         => null,
                 'relationship_id' => $opp->patient?->relationship_id ?? null,
-                'reason'          => 'Estimate sent — awaiting decision (overdue by '
-                    . $opp->follow_up_date->diffForHumans(now(), true) . ')',
-                'priority'        => 'medium',
+                'reason'          => $opp->follow_up_date->isToday()
+                    ? 'Estimate sent — decision due today'
+                    : 'Estimate sent — awaiting decision (overdue by '
+                        . $opp->follow_up_date->diffForHumans(now(), true) . ')',
+                'priority'        => $opp->follow_up_date->isToday() ? 'medium' : 'high',
                 'suggested_action'=> 'Call to check if they have reviewed the estimate',
                 'link'            => route('patients.show', $opp->patient_id),
                 'meta'            => [
@@ -1197,30 +1210,31 @@ class TodayActionsEngine
 
     /**
      * Row ids to exclude from a live-computed category's query — anything
-     * dismissed "for today" via the Action Board drawer. Only applies to
+     * closed or dismissed via the Action Board drawer. Only applies to
      * categories with no CommunicationQueue row of their own (recall_calls /
      * missed_calls_yesterday use CommunicationQueue's own ignore()/dismiss()
      * instead — see docs/feature-specs/feature-spec-action-board-dismiss.md).
+     *
+     * W-10 (2026-09-10): a close from the board is PERMANENT (is_permanent),
+     * not "for today" — the row stays off the board until the date driving
+     * it moves. Both lifetimes are resolved inside TodayActionDismissal so
+     * every consumer (this engine, YesterdayReviewService) reads one rule.
      *
      * 2026-07-14 (includeDone mode, Action Board only): TodayActionDismissal
      * rows are written by TWO different flows that deserve different display —
      *  - a true dismiss ("wrong number", "shouldn't be on this list"):
      *    reason_key is a dismiss_reason from Settings → still hidden.
-     *  - a handled row (logAction() with a closes_task outcome, the explicit
-     *    Close tab's 'closed_manually', birthday 'whatsapp_sent'): the call
+     *  - a row handled TODAY (logAction() with a closes_task outcome, "Stop
+     *    chasing" = 'closed_manually', birthday 'whatsapp_sent'): the call
      *    HAPPENED — keep it visible, faded, with the outcome (annotateDone()).
+     *    From tomorrow it is simply gone.
      * Default mode excludes both, exactly as before.
      */
     private function dismissedIds(string $category, string $modelClass): array
     {
-        if (! $this->includeDone) {
-            return TodayActionDismissal::dismissedIdsFor($category, $modelClass, Carbon::today());
-        }
-
-        return $this->todayDismissals($category, $modelClass)
-            ->filter(fn (TodayActionDismissal $d) => $this->isTrueDismissal($d))
-            ->pluck('subject_id')
-            ->all();
+        return $this->includeDone
+            ? TodayActionDismissal::trueDismissedIdsFor($category, $modelClass, Carbon::today())
+            : TodayActionDismissal::dismissedIdsFor($category, $modelClass, Carbon::today());
     }
 
     /** Today's dismissal rows for a category+model, cached per request. */

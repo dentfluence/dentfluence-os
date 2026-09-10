@@ -95,6 +95,13 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\InvoicePayment::observe(\App\Observers\Notifications\InvoicePaymentNotificationObserver::class);
         LabCase::observe(\App\Observers\Notifications\LabCaseNotificationObserver::class);
 
+        // W-10 (2026-09-10): a permanent Today's Actions close describes one
+        // occurrence. Moving the date that drives the row (reschedule, new
+        // follow-up date) lifts it so the next occurrence comes back.
+        foreach ([Appointment::class, \App\Models\Lead::class, \App\Models\TreatmentOpportunity::class] as $driven) {
+            $driven::observe(\App\Observers\TodayActionDismissalLiftObserver::class);
+        }
+
         // Finance: keep every staff member mirrored into finance_vendors
         // (vendor_type = 'staff') so they appear in the Expense form's
         // Vendor dropdown for petty cash / reimbursements.

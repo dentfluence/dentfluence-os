@@ -6,20 +6,14 @@ use App\Http\Controllers\Api\ApiController;
 use App\Models\Activity;
 use App\Models\ActionOptionList;
 use App\Models\AppNotification;
-use App\Models\Appointment;
 use App\Models\CommunicationQueue;
-use App\Models\Finance\FinancePatientMembership;
 use App\Models\FollowUp;
-use App\Models\Invoice;
-use App\Models\LabCase;
 use App\Models\Lead;
 use App\Models\Patient;
 use App\Models\Relationship;
 use App\Models\Scopes\BranchScope;
 use App\Models\Task;
-use App\Models\TodayActionDismissal;
 use App\Models\TreatmentOpportunity;
-use App\Models\TreatmentVisit;
 use App\Models\User;
 use App\Modules\Huddle\Models\HuddleTaskLog;
 use App\Modules\Huddle\Repositories\HuddleBoardRepository;
@@ -312,31 +306,6 @@ class RelationshipController extends ApiController
     // Mobile equivalent of TodayController::dismiss(). 2026-07-06 parity.
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * category => model class, for the live-computed categories that use
-     * TodayActionDismissal. 2026-07-08: reconciled with the web
-     * TodayController's map (was missing 3 categories — new_enquiries,
-     * lead_followups, missed_appointments_yesterday — see
-     * project_mobile_web_gap_audit_0708 memory) so Close/Dismiss behave
-     * identically on mobile and web for every category.
-     */
-    private const DISMISSIBLE_MODELS = [
-        'opportunities'                 => TreatmentOpportunity::class,
-        'appointment_reminders'         => Appointment::class,
-        'missed_appointments_yesterday' => Appointment::class,
-        'pending_estimates'             => TreatmentOpportunity::class,
-        'membership_renewals'           => FinancePatientMembership::class,
-        'birthdays'                     => Patient::class,
-        'lab_ready'                     => LabCase::class,
-        'payment_reminders'             => Invoice::class,
-        'wellness_check_yesterday'      => TreatmentVisit::class,
-        'new_enquiries'                 => Lead::class,
-        'lead_followups'                => Lead::class,
-    ];
-
-    /** category keys whose Today's Actions row is backed by a communication_queue record. */
-    private const QUEUE_BACKED_CATEGORIES = ['recall_calls', 'missed_calls_yesterday', 'logged_communications'];
-
     public function todayDismiss(Request $request): JsonResponse
     {
         // M-17 (9 Sep 2026) — DELEGATED, not reimplemented.
@@ -383,67 +352,11 @@ class RelationshipController extends ApiController
         return app(\App\Http\Controllers\Relationship\TodayController::class)->closeAction($request);
     }
 
-    /**
-     * Mirrors TodayController::closeUnderlyingRecord() exactly (same three
-     * branches: queue-backed autoClose, follow_up_calls completion, or a
-     * TodayActionDismissal suppression row for everything else in
-     * DISMISSIBLE_MODELS). Kept private/local rather than reaching into the
-     * web controller, matching this class's existing self-contained convention.
-     */
-    private function closeUnderlyingRecord(array $validated): void
-    {
-        $category  = $validated['category'];
-        $subjectId = $validated['subject_id'] ?? null;
-
-        if (in_array($category, self::QUEUE_BACKED_CATEGORIES, true)) {
-            if ($subjectId) {
-                CommunicationQueue::find($subjectId)?->autoClose(
-                    $validated['response'],
-                    $validated['notes'] ?? "Logged from Today's Actions"
-                );
-            }
-            return;
-        }
-
-        if ($category === 'follow_up_calls') {
-            if ($subjectId) {
-                FollowUp::where('id', $subjectId)->update([
-                    'status'          => 'completed',
-                    'completed_at'    => now(),
-                    'completed_by'    => auth()->id(),
-                    'completion_note' => $validated['notes'] ?? null,
-                ]);
-            }
-            return;
-        }
-
-        $modelClass = self::DISMISSIBLE_MODELS[$category] ?? null;
-        if (! $modelClass) {
-            return;
-        }
-
-        $resolvedSubjectId = $modelClass === Lead::class
-            ? ($validated['lead_id'] ?? $subjectId)
-            : $subjectId;
-
-        if (! $resolvedSubjectId) {
-            return;
-        }
-
-        TodayActionDismissal::updateOrCreate(
-            [
-                'category'           => $category,
-                'subject_type'       => $modelClass,
-                'subject_id'         => $resolvedSubjectId,
-                'dismissed_for_date' => \Illuminate\Support\Carbon::today()->toDateString(),
-            ],
-            [
-                'reason_key'   => $validated['response'],
-                'notes'        => $validated['notes'] ?? null,
-                'dismissed_by' => auth()->id(),
-            ]
-        );
-    }
+    // W-10 (2026-09-10): the private closeUnderlyingRecord() copy that lived
+    // here — and the category maps only it read — is gone. All three mobile
+    // endpoints delegate to TodayController (M-17), so the web method is the
+    // only writer of a TodayActionDismissal row, and it now writes the
+    // permanent form.
 
     /** Patient first, then Lead — same precedence as todayLogAction()/todayDismiss(). */
     private function resolveNoteSubject(?int $patientId, ?int $leadId): ?\Illuminate\Database\Eloquent\Model

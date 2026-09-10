@@ -294,7 +294,9 @@ return [
                 'days_after' => 0,
             ],
             'cooldown_days' => 25,
-            'enabled'       => true,
+            // W-10 (2026-09-10): OFF — this task duplicated the board's membership_renewals card (30-day end_date window).
+            // One event, one row; the board card carries the call workflow.
+            'enabled'       => false,
         ],
 
         /*
@@ -330,7 +332,9 @@ return [
                 'days_after' => 7,
             ],
             'cooldown_days' => 14,
-            'enabled'       => true,
+            // W-10 (2026-09-10): OFF — this task duplicated the board's opportunities card — plan-synced cards now get follow_up_date = +7d (TreatmentPlanOpportunitySync).
+            // One event, one row; the board card carries the call workflow.
+            'enabled'       => false,
         ],
 
         /*
@@ -353,7 +357,9 @@ return [
                 'days_after' => 3,
             ],
             'cooldown_days' => 7,
-            'enabled'       => true,
+            // W-10 (2026-09-10): OFF — this task duplicated the board's pending_estimates card; a plan presented
+            // (quoted) is born with follow_up_date = +3d in TreatmentPlanOpportunitySync, which IS the estimate chase.
+            'enabled'       => false,
         ],
 
         /*
@@ -371,7 +377,9 @@ return [
                 'days_after' => 0,
             ],
             'cooldown_days' => 3,
-            'enabled'       => true,
+            // W-10 (2026-09-10): OFF — this task duplicated the board's missed_appointments_yesterday card.
+            // One event, one row; the board card carries the call workflow.
+            'enabled'       => false,
         ],
 
         /*
@@ -389,7 +397,9 @@ return [
                 'days_after' => 0,
             ],
             'cooldown_days' => 7,
-            'enabled'       => true,
+            // W-10 (2026-09-10): OFF — this task duplicated the board's lab_ready card AND the recall engine's lab_received_no_appt queue row.
+            // One event, one row; the board card carries the call workflow.
+            'enabled'       => false,
         ],
 
         /*
@@ -406,7 +416,9 @@ return [
                 'days_after' => 0,
             ],
             'cooldown_days' => 7,
-            'enabled'       => true,
+            // W-10 (2026-09-10): OFF — this task duplicated the board's payment_reminders card.
+            // One event, one row; the board card carries the call workflow.
+            'enabled'       => false,
         ],
 
         /*

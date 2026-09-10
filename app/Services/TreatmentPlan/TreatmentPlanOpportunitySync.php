@@ -72,6 +72,8 @@ class TreatmentPlanOpportunitySync
                 $opportunity = $existing;
                 $created     = false;
             } else {
+                $isOpenOnCreate = ! in_array($status, TreatmentOpportunity::CLOSED_STATUSES, true);
+
                 $opportunity = TreatmentOpportunity::create(array_merge($attributes, [
                     'patient_id'        => $plan->patient_id,
                     'treatment_plan_id' => $plan->id,
@@ -80,6 +82,17 @@ class TreatmentPlanOpportunitySync
                     'priority'          => $opts['priority'] ?? 'medium',
                     'estimated_value'   => $value ?: null,
                     'created_by'        => $opts['created_by'] ?? Auth::id(),
+                    // W-10 (2026-09-10): a plan-synced card used to be born with
+                    // no follow_up_date, so it never reached the board — its
+                    // only nudges were the opportunity_nudge_7d (day 7) and
+                    // estimate_followup_3d (day 3) system tasks, both switched
+                    // off as duplicates. The date IS the nudge, on the card
+                    // that has the call workflow: a presented plan (quoted) is
+                    // chased in 3 days, any other open stage in 7. Closed-on-
+                    // birth cards (converted / declined / committed) get none.
+                    'follow_up_date'    => $isOpenOnCreate
+                        ? now()->addDays($status === 'quoted' ? 3 : 7)->toDateString()
+                        : null,
                 ]));
                 $created = true;
             }
