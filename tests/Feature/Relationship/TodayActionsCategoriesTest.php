@@ -81,7 +81,10 @@ class TodayActionsCategoriesTest extends TestCase
             'patient_id'      => $patient->id,
             'type'            => 'implant',
             'label'           => 'Implant consult',
-            'status'          => 'quoted',
+            // W-10 (2026-09-10): 'quoted' now lives under pending_estimates
+            // only — this test is about the overdue → high priority path,
+            // so it uses an unquoted stage.
+            'status'          => 'discussed',
             'follow_up_date'  => now()->subDays(3)->toDateString(),
             'estimated_value' => 45000,
         ]);

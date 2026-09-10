@@ -967,13 +967,14 @@ class TodayController extends Controller
      *  - follow_up_calls → FollowUp has its own completed_at/completed_by/
      *    completion_note fields built for exactly this; use them.
      *  - Everything else in DISMISSIBLE_MODELS is a live-computed query (no
-     *    single "the row" to close) → same "not today" TodayActionDismissal
-     *    suppression the Dismiss button already writes, just triggered from
-     *    a logged call instead of an explicit dismiss reason. For
-     *    lead_followups in particular this only suppresses today's
-     *    occurrence — the lead's followup_date isn't touched, so if it's
-     *    still due tomorrow it will (correctly) come back, same as every
-     *    other date-driven category behaves today.
+     *    single "the row" to close) → a PERMANENT TodayActionDismissal
+     *    suppression, the same row the Dismiss button writes, just carrying
+     *    the logged outcome instead of a dismiss reason. W-10 (2026-09-10):
+     *    this used to be "not today" only, so lab case #5 was closed
+     *    "booked pickup" three mornings running. The record itself is not
+     *    touched; if staff later move the date that drives the row
+     *    (reschedule, new follow-up date) the suppression lifts and the new
+     *    occurrence returns — see TodayActionDismissalLiftObserver.
      */
     private function closeUnderlyingRecord(array $validated): void
     {
@@ -1037,6 +1038,7 @@ class TodayController extends Controller
                 'dismissed_for_date' => \Illuminate\Support\Carbon::today()->toDateString(),
             ],
             [
+                'is_permanent' => true,
                 'reason_key'   => $validated['response'],
                 'notes'        => $validated['notes'] ?? null,
                 'dismissed_by' => auth()->id(),
@@ -1112,8 +1114,9 @@ class TodayController extends Controller
     //    rows, so this just calls its existing dismiss() method (same one used
     //    by Missed Calls / Recall Pipeline bulk-dismiss).
     //  - everything else is computed live with no row to flag, so a
-    //    TodayActionDismissal suppression row is written for "today only" —
-    //    see docs/feature-specs/feature-spec-action-board-dismiss.md.
+    //    PERMANENT TodayActionDismissal suppression row is written (W-10,
+    //    2026-09-10 — was "today only", which is why dismissed rows came
+    //    back every morning). See docs/feature-specs/feature-spec-action-board-dismiss.md.
     // ─────────────────────────────────────────────────────────────────────
 
     /**
@@ -1138,13 +1141,12 @@ class TodayController extends Controller
         // 2026-07-26: follow_up_calls was missing here, so an individual
         // Dismiss on a Follow-up Call card was rejected with "This category
         // cannot be dismissed" even for a user holding relationship,edit.
-        // Dismiss ≠ complete: it suppresses the card for TODAY via
-        // TodayActionDismissal (auditable, reason + actor recorded) and leaves
-        // the FollowUp row pending, so a still-due follow-up returns tomorrow.
-        // Completing it remains the Log/Close path (closeUnderlyingRecord).
+        // Dismiss ≠ complete: it suppresses the card via TodayActionDismissal
+        // (auditable, reason + actor recorded) and leaves the FollowUp row
+        // pending. Completing it remains the Log/Close path (closeUnderlyingRecord).
         'follow_up_calls'               => FollowUp::class,
         // Sprint A / G-27 (2026-08-24): system tasks (automation output) are
-        // now on the board; Dismiss suppresses for today, Log/Close completes
+        // now on the board; Dismiss suppresses the card, Log/Close completes
         // the task itself (closeUnderlyingRecord).
         'tasks'                         => \App\Models\Task::class,
     ];
@@ -1222,6 +1224,7 @@ class TodayController extends Controller
                         'dismissed_for_date'  => \Illuminate\Support\Carbon::today()->toDateString(),
                     ],
                     [
+                        'is_permanent' => true,
                         'reason_key'   => $reason->key,
                         'notes'        => $validated['notes'] ?? null,
                         'dismissed_by' => auth()->id(),
