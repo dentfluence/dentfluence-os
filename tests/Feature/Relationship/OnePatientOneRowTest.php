@@ -281,6 +281,30 @@ class OnePatientOneRowTest extends TestCase
         $this->travelBack();
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // 5 — a DELIVERED lab case is not "ready to deliver" (Sumit, 11 Sep)
+    // ═══════════════════════════════════════════════════════════════════
+
+    public function test_a_delivered_lab_case_leaves_the_board(): void
+    {
+        $user    = $this->user();
+        $patient = $this->patient('Lab Delivered');
+
+        $case = \App\Models\LabCase::create([
+            'patient_id'    => $patient->id,
+            'work_category' => 'Crown & Bridge',
+            'status'        => 'final_received',
+            'branch_id'     => 1,
+        ]);
+
+        $this->assertArrayHasKey($patient->id, $this->rowsFor($user), 'final work in, no appointment → call to book delivery');
+
+        // "Mark as Delivered ✓" on the lab case (lab/show.blade) → complete.
+        $case->update(['status' => 'complete', 'delivered_date' => today()->toDateString()]);
+
+        $this->assertArrayNotHasKey($patient->id, $this->rowsFor($user), 'delivered — nothing left to call about');
+    }
+
     public function test_a_non_closing_outcome_leaves_every_reason_open(): void
     {
         $user    = $this->user();

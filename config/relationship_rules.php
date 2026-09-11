@@ -39,8 +39,12 @@ return [
         // Window (days) for "birthday today ± N days" to catch yesterday/tomorrow too
         'birthday_window_days'             => (int) env('REL_BIRTHDAY_WINDOW', 1),
 
-        // Lab statuses considered "ready for patient to collect"
-        'lab_ready_statuses'               => ['final_received', 'complete'],
+        // Lab statuses considered "ready for patient to collect".
+        // 2026-09-11 (Sumit): 'complete' REMOVED — "Mark as Delivered" moves a
+        // case final_received → complete, so a delivered case was listed as
+        // "ready to deliver" every morning until someone hit Stop chasing.
+        // Same definition as LabCase::scopeAwaitingDelivery().
+        'lab_ready_statuses'               => ['final_received'],
 
         // Max items per category to return (prevents overwhelming UI)
         'max_per_category'                 => (int) env('REL_MAX_PER_CAT', 50),

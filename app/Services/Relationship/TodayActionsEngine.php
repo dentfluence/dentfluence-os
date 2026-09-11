@@ -754,14 +754,17 @@ class TodayActionsEngine
 
     // ═══════════════════════════════════════════════════════════════════════
     // CATEGORY 9 — Lab Ready
-    // LabCase status = final_received or complete, no upcoming appointment
+    // LabCase status = final_received (work is in, patient not yet booked),
+    // no upcoming appointment. 'complete' means DELIVERED (lab/show.blade
+    // "Mark as Delivered ✓" → complete) and must never be listed — it was,
+    // until 2026-09-11, which is why delivered cases came back every morning.
     // ═══════════════════════════════════════════════════════════════════════
 
     private function labReady(): array
     {
         $readyStatuses = config(
             'relationship_rules.today_actions.lab_ready_statuses',
-            ['final_received', 'complete']
+            ['final_received']
         );
 
         // Patient IDs who have an upcoming scheduled appointment (exclude them)
