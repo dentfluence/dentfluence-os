@@ -1055,26 +1055,32 @@ document.addEventListener('alpine:init', () => {
          stack to ~150px, roughly double a stat pill's natural height. This
          keeps the same numbers at a glance but sized to match the pills next
          to it, per Sumit's "half the height" call 2026-07-06. --}}
-    @isset($todaySnapshot)
-    @php
-        $tas_total = $todaySnapshot['total'] ?? 0;
-        $tas_high  = $todaySnapshot['by_priority']['high'] ?? 0;
-    @endphp
+    {{-- W-10 finish (2026-09-11): the SAME numbers the Today's Actions board
+         shows — patients to call today, and patients on Pending Calls. One
+         patient = one call, whatever the number of reasons. Not the engine's
+         raw item count any more (that said 87 while the desk had 13 people). --}}
+    @isset($callCounts)
     <a href="{{ route('relationship.today') }}" class="hd-stat-pill" style="text-decoration:none;color:inherit;min-width:190px;">
         <div style="width:100%;">
             <div style="display:flex;align-items:center;justify-content:space-between;">
-                <span class="hd-stat-label" style="margin:0;">Today's Actions</span>
+                <span class="hd-stat-label" style="margin:0;">Calls Today</span>
                 <span style="color:var(--c-accent);font-size:.68rem;font-weight:600;">Open →</span>
             </div>
             <div style="display:flex;align-items:baseline;gap:.9rem;margin-top:.2rem;">
-                <span>
-                    <span class="hd-stat-val" style="font-size:1.1rem;">{{ number_format($tas_total) }}</span>
-                    <span style="font-size:.62rem;color:var(--c-muted);"> total</span>
+                <span title="Patients with a call due today — {{ $callCounts['reasons'] }} {{ Str::plural('reason', $callCounts['reasons']) }} folded in">
+                    <span class="hd-stat-val" style="font-size:1.1rem;">{{ number_format($callCounts['today']) }}</span>
+                    <span style="font-size:.62rem;color:var(--c-muted);"> to call</span>
                 </span>
-                <span>
-                    <span class="hd-stat-val" style="font-size:1.1rem;color:{{ $tas_high > 0 ? 'var(--c-red)' : 'var(--c-text)' }};">{{ number_format($tas_high) }}</span>
-                    <span style="font-size:.62rem;color:var(--c-muted);"> high</span>
+                <span title="Patients with overdue calls and nothing due today (Pending Calls)">
+                    <span class="hd-stat-val" style="font-size:1.1rem;color:{{ $callCounts['pending'] > 0 ? 'var(--c-red)' : 'var(--c-text)' }};">{{ number_format($callCounts['pending']) }}</span>
+                    <span style="font-size:.62rem;color:var(--c-muted);"> pending</span>
                 </span>
+                @if($callCounts['done'] > 0)
+                <span title="Patients fully handled today">
+                    <span class="hd-stat-val" style="font-size:1.1rem;color:var(--c-green, #1a7a45);">{{ number_format($callCounts['done']) }}</span>
+                    <span style="font-size:.62rem;color:var(--c-muted);"> done</span>
+                </span>
+                @endif
             </div>
         </div>
     </a>
@@ -1090,16 +1096,8 @@ document.addEventListener('alpine:init', () => {
         </div>
     </a>
 
-    {{-- Today's Calls — points at PRE's Today's Actions directly. The old
-         Communication Manager screen this used to link to is retired
-         (2026-07-06, Sumit's call — it read like the old PRM board). --}}
-    <a href="{{ route('relationship.today') }}" class="hd-stat-pill" style="text-decoration:none;color:inherit;">
-        <div>
-            <div class="hd-stat-val">{{ $commTotalCount }}</div>
-            <div class="hd-stat-label">Today's Calls</div>
-            <div class="hd-stat-sub">{{ $commList->where('status','pending')->count() }} pending</div>
-        </div>
-    </a>
+    {{-- "Today's Calls" tile REMOVED 2026-09-11 — it was the same number as
+         "Calls Today" counted a third way (comm list + relationship items). --}}
 
     {{-- Collections — front-desk target from scheduled appointments' "Amount to
          Collect" (Today's Patient Flow popup). Walk-ins excluded — see Huddle

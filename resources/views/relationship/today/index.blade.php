@@ -856,7 +856,7 @@
                             <th style="width:150px;">Category</th>
                             <th>Also on this call</th>
                             <th style="width:112px;">Due</th>
-                            <th style="width:118px;">Owner</th>
+                            <th style="width:118px;" title="Who logged or closed this call. Nobody is assigned in advance — the desk on shift owns the board.">Handled by</th>
                             <th style="width:104px;">Status</th>
                             <th style="width:68px;"></th>
                         </tr>
@@ -908,7 +908,7 @@
                             <th style="width:150px;">Category</th>
                             <th>Also handled</th>
                             <th style="width:112px;">Due</th>
-                            <th style="width:118px;">Owner</th>
+                            <th style="width:118px;">Handled by</th>
                             <th style="width:104px;">Status</th>
                             <th style="width:68px;"></th>
                         </tr>

@@ -109,12 +109,14 @@
         {{-- 6 · DUE — the primary reason's date --}}
         <td><span class="taw-due {{ $primary['dueCls'] }}" title="{{ $primary['dueTip'] }}">{{ $primary['dueTxt'] }}</span></td>
 
-        {{-- 7 · OWNER --}}
+        {{-- 7 · HANDLED BY — who logged or closed it. Nobody is assigned in
+             advance (2026-09-11, Sumit): the desk on shift owns the board, the
+             record shows who actually made the call. --}}
         <td>
             @if($row['owner'])
                 <span class="taw-owner" title="Handled by {{ $row['owner'] }}">{{ $row['owner'] }}</span>
             @else
-                <span class="taw-owner taw-owner--none" title="Not yet picked up by anyone">Unassigned</span>
+                <span class="taw-owner taw-owner--none" title="Not yet called by anyone">—</span>
             @endif
         </td>
 

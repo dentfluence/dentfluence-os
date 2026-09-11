@@ -9,8 +9,6 @@ use App\Modules\Huddle\Resources\HuddleBoardResource;
 use App\Modules\Huddle\Services\HuddleAggregationService;
 use App\Models\CommunicationQueue;
 use App\Models\User;
-use App\Services\Relationship\TodayActionsProjector;
-use App\Support\Features\Feature;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -823,27 +821,19 @@ class HuddleController extends Controller
             $relationshipItems = [];
         }
 
-        // Slice E4 (Workstream E) — shared read: the Daily Huddle shows the
-        // Today's Actions projection summary instead of running its own queries.
-        // 2026-07-08 fix: this used to always read the projection regardless of
-        // the `today.projection` flag, so Huddle could silently disagree with a
-        // live-read Today's Actions page by up to one 15-min cron cycle (or
-        // indefinitely, if the scheduler wasn't running). Now it follows the
-        // same flag TodayController does, so both surfaces are always in sync.
-        $projector     = app(TodayActionsProjector::class);
-        $todaySnapshot = Feature::enabled('today.projection')
-            ? $projector->summary()
-            : $projector->liveSummary();
-
-        // ── Comms List total, including PRE relationship items ────────────────
-        // "Today's Calls" used to count only $commList (reminders + follow-ups +
-        // legacy PRM queue). It now also counts the PRE relationship items so the
-        // stat reflects everything actually shown in the widget.
-        $commTotalCount = $commList->count() + count($relationshipItems);
+        // ── ONE number for calls (W-10 finish, 2026-09-11, Sumit) ────────────
+        // The "Today's Actions" tile used to read TodayActionsProjector
+        // ::liveSummary() — every category, no due-window, no Settings filters,
+        // one count per REASON — and a second "Today's Calls" tile counted the
+        // comm list + relationship items. Three counters, three answers: the
+        // Huddle said 87 while the board had 13 patients to call. The tile now
+        // quotes the board itself (TodayBoardCounts = the board's own pipeline),
+        // and the duplicate "Today's Calls" tile is gone.
+        $callCounts = app(\App\Services\Relationship\TodayBoardCounts::class)->counts();
 
         return view('huddle.index', compact(
             'today',
-            'todaySnapshot',
+            'callCounts',
             'staff',
             'yesterday',
             'flowCombined',
@@ -871,7 +861,6 @@ class HuddleController extends Controller
             'commOverdue',
             'commAlerts',
             'relationshipItems',
-            'commTotalCount',
             'collectionsTarget',
             'collectionsLoggedCount',
             'collectionsTotalCount',

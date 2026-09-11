@@ -174,6 +174,13 @@ class OnePatientOneRowTest extends TestCase
         // The patient is being called today, so they are NOT pending.
         $this->assertSame(0, $this->actingAs($user)->get(route('relationship.today'))->viewData('pendingCount'));
         $this->assertArrayNotHasKey($patient->id, $this->rowsFor($user, 'relationship.today.pending'));
+
+        // The Huddle quotes the board, never counts for itself (11 Sep):
+        // one patient to call, three reasons, nobody pending.
+        $counts = app(\App\Services\Relationship\TodayBoardCounts::class)->counts();
+        $this->assertSame(1, $counts['today']);
+        $this->assertSame(3, $counts['reasons']);
+        $this->assertSame(0, $counts['pending']);
     }
 
     // ═══════════════════════════════════════════════════════════════════
