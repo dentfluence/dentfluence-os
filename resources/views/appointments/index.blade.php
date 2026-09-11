@@ -442,72 +442,101 @@
 
 .fc-timegrid-slot { height: 28px !important; }
 
-/* ── Blocked slot bands (2026-09-08, made visible 2026-09-11) ─────────────
-   Staff reported blocks were invisible - twice. The 8 Sep hatch never painted:
-   FullCalendar 6 gives background events the `fc-event` class as well, so the
-   `.fc-event { background: transparent; border: none }` reset further down won
-   on source order at equal specificity and wiped the fill AND the border, and
-   eventContent returning nothing dropped the label. These selectors out-rank
-   that reset (three classes) - keep them that way. */
+/* ── Blocked slot bands (2026-09-08 · visible 09-11 · calmed 09-11) ───────
+   Three rules learned the hard way:
+   1. FullCalendar 6 puts `fc-event` on BACKGROUND events too, so the
+      `.fc-event { background: transparent; border: none }` reset further down
+      beats any single-class rule. These are three classes deep - KEEP THEM.
+   2. A block is not an error. The first visible version shouted in #dc2626 at
+      22% hatch and read as a system fault; a doctor being out of clinic is an
+      ordinary calendar fact. Unavailable is now SLATE. Red stays reserved for
+      cancellations. Break = amber, Emergency = violet, both muted.
+   3. The band sits BEHIND patient cards and must never compete with them:
+      a light wash plus a faint wide hatch, not candy stripes. */
 .fc .fc-bg-event.fc-blocked-slot {
     opacity: 1 !important;                 /* FullCalendar's own default is .3 */
-    background-color: transparent !important;
+    background-color: rgba(100,116,139,.07) !important;
     background-image: repeating-linear-gradient(
         135deg,
-        rgba(220,38,38,.22) 0 6px,
-        rgba(220,38,38,.06) 6px 12px
+        rgba(71,85,105,.09) 0 4px,
+        rgba(71,85,105,0)  4px 10px
     ) !important;
-    border-left: 3px solid #dc2626 !important;
+    border-left: 2px solid rgba(100,116,139,.55) !important;
     border-radius: 0 !important;
     cursor: default !important;
 }
 .fc .fc-bg-event.fc-blocked-slot.fc-block-break {
+    background-color: rgba(217,119,6,.07) !important;
     background-image: repeating-linear-gradient(
         135deg,
-        rgba(217,119,6,.22) 0 6px,
-        rgba(217,119,6,.06) 6px 12px
+        rgba(180,83,9,.10) 0 4px,
+        rgba(180,83,9,0)  4px 10px
     ) !important;
-    border-left-color: #d97706 !important;
+    border-left-color: rgba(217,119,6,.55) !important;
 }
 .fc .fc-bg-event.fc-blocked-slot.fc-block-emergency {
+    background-color: rgba(124,58,237,.07) !important;
     background-image: repeating-linear-gradient(
         135deg,
-        rgba(124,58,237,.24) 0 6px,
-        rgba(124,58,237,.06) 6px 12px
+        rgba(109,40,217,.11) 0 4px,
+        rgba(109,40,217,0)  4px 10px
     ) !important;
-    border-left-color: #7c3aed !important;
+    border-left-color: rgba(124,58,237,.55) !important;
 }
+
+/* The label. Two short lines instead of one long one - "Dr. Sumit ·
+   UNAVAIL…" truncated mid-word in every week column and read as broken. */
 .fc .fc-bg-event.fc-blocked-slot .fc-block-label {
-    font-size: 10px;
-    font-weight: 700;
-    color: #b91c1c;
-    padding: 2px 5px;
-    letter-spacing: .2px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 3px 5px 0;
+    overflow: hidden;
+    line-height: 1.3;
+    pointer-events: none;
+    /* Only needed where a card edge crosses the label; invisible otherwise. */
+    text-shadow: 0 0 3px #fff, 0 0 2px #fff;
+}
+.fc .fc-bg-event.fc-blocked-slot .fc-block-type,
+.fc .fc-bg-event.fc-blocked-slot .fc-block-who {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-shadow: 0 0 3px #fff, 0 0 3px #fff;   /* stays legible over any card */
-    pointer-events: none;
+    display: block;
 }
-.fc .fc-bg-event.fc-blocked-slot.fc-block-break     .fc-block-label { color: #b45309; }
-.fc .fc-bg-event.fc-blocked-slot.fc-block-emergency .fc-block-label { color: #6d28d9; }
+.fc .fc-bg-event.fc-blocked-slot .fc-block-type {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: #475569;
+}
+.fc .fc-bg-event.fc-blocked-slot .fc-block-who {
+    font-size: 10px;
+    font-weight: 500;
+    color: #64748b;
+}
+.fc .fc-bg-event.fc-blocked-slot.fc-block-break     .fc-block-type { color: #b45309; }
+.fc .fc-bg-event.fc-blocked-slot.fc-block-break     .fc-block-who  { color: #c2810c; }
+.fc .fc-bg-event.fc-blocked-slot.fc-block-emergency .fc-block-type { color: #6d28d9; }
+.fc .fc-bg-event.fc-blocked-slot.fc-block-emergency .fc-block-who  { color: #7c56d4; }
 
-/* Month view renders the same block as a solid pill, not a full-cell wash —
-   a whole red day cell for a two-hour block is a lie reception acts on. */
+/* Month view renders the same block as a solid pill, not a full-cell wash -
+   a whole shaded day cell for a two-hour block is a lie reception acts on. */
 .fc-block-pill {
     font-size: 10px;
-    font-weight: 700;
-    color: #b91c1c;
-    background: #fef2f2;
-    border-left: 3px solid #dc2626;
+    font-weight: 600;
+    color: #475569;
+    background: #f1f5f9;
+    border-left: 2px solid rgba(100,116,139,.6);
     padding: 1px 4px;
     border-radius: 2px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.fc-block-pill.is-break     { color: #b45309; background: #fffbeb; border-left-color: #d97706; }
-.fc-block-pill.is-emergency { color: #6d28d9; background: #f5f3ff; border-left-color: #7c3aed; }
+.fc-block-pill.is-break     { color: #b45309; background: #fffbeb; border-left-color: rgba(217,119,6,.6); }
+.fc-block-pill.is-emergency { color: #6d28d9; background: #f5f3ff; border-left-color: rgba(124,58,237,.6); }
 
 .fc-event {
     border: none !important;       /* kill ALL fc-event borders — our inner div handles the left border */
@@ -1647,6 +1676,20 @@ function blockLabel(s) {
 }
 
 /**
+ * The band is one narrow week column wide, so a single joined string always
+ * truncated mid-word. Split it: the TYPE is the thing reception must read at a
+ * glance, the doctor (and reason, when they bothered to type one) is the
+ * second line and may clip harmlessly.
+ */
+function blockLabelParts(s) {
+    const who = shortDoctor(s.doctor_name).replace(/^Dr\.\s*/i, '');
+    return {
+        type: BLOCK_TYPE_LABEL[s.block_type] || 'BLOCKED',
+        who:  [who, s.reason].filter(Boolean).join(' · '),
+    };
+}
+
+/**
  * A block belongs to ONE doctor, but a timegrid background band paints the
  * whole day column. When the calendar is filtered to a doctor we drop every
  * other doctor's blocks, otherwise the band claims a doctor is away who is not.
@@ -1936,8 +1979,20 @@ function renderEvent(info) {
         if (info.event.display === 'background') {
             // FullCalendar 6 routes background events through eventContent
             // too; returning nothing here rendered the band with NO label.
-            d.className   = 'fc-block-label';
-            d.textContent = blockLabel(apt);
+            const p = blockLabelParts(apt);
+            d.className = 'fc-block-label';
+            const t = document.createElement('span');
+            t.className = 'fc-block-type';
+            t.textContent = p.type;
+            d.appendChild(t);
+            if (p.who) {
+                const w = document.createElement('span');
+                w.className = 'fc-block-who';
+                w.textContent = p.who;
+                d.appendChild(w);
+            }
+            d.title = blockLabel(apt);
+            return { domNodes: [d] };
         } else {
             // Month view: a solid pill instead of a full-cell wash.
             d.className = 'fc-block-pill'
@@ -1977,7 +2032,10 @@ function renderEvent(info) {
         bg = '#f0fdf4'; borderColor = '#86efac';
     } else if (cardStyle === 'filled') {
         // Filled: light wash of the hue, bold border in the SAME hue.
-        bg = hue + '2e';   // ~18% — lighter than before so the text stays readable
+        // Layered over solid white rather than `hue + '2e'`: an 8-digit hex is
+        // TRANSLUCENT, so over a blocked-slot band the hatch showed straight
+        // through the card and the patient's name sat on stripes (09-11).
+        bg = `linear-gradient(${hue}2e, ${hue}2e), #ffffff`;
         borderColor = hue;
     } else {
         // Strip: white card, bold left border in the hue.
