@@ -51,6 +51,13 @@ Route::middleware(['web', 'auth', 'module:relationship'])->prefix('relationship'
         ->name('today.action')
         ->middleware('module:relationship,edit');
 
+    // One call, every reason (W-10 finish, 2026-09-11): the board shows one
+    // row per patient; this records the single outcome against all of that
+    // row's reasons. logAction() above stays for single-item callers.
+    Route::post('/today/log-call', [TodayController::class, 'logCall'])
+        ->name('today.log-call')
+        ->middleware('module:relationship,edit');
+
     // Birthday Wishes — one-click WhatsApp send (2026-07-06), replacing the
     // Call Workflow drawer for this category only. See TodayController.
     Route::post('/today/birthday-whatsapp', [TodayController::class, 'sendBirthdayWhatsapp'])

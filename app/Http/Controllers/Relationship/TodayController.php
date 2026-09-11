@@ -21,6 +21,7 @@ use App\Models\TreatmentVisit;
 use App\Services\Relationship\ActivityEngine;
 use App\Services\Relationship\TodayActionsEngine;
 use App\Services\Relationship\TodayActionsProjector;
+use App\Services\Relationship\TodayCallList;
 use App\Services\Communication\WhatsAppLinkService;
 use App\Services\Whatsapp\OutboundMessageService;
 use App\Support\Features\Feature;
@@ -55,7 +56,10 @@ class TodayController extends Controller
         'recall_calls'                 => 'Recall Calls',
         'follow_up_calls'              => 'Follow-up Calls',
         'appointment_reminders'        => 'Appointment Reminders',
-        'missed_calls_yesterday'       => 'Yesterday\'s Missed Calls',
+        // W-10 finish (2026-09-11): no longer a board section of its own —
+        // a call due yesterday is overdue work and rides on the patient's row
+        // (or Pending). The key stays for the engine, Huddle and mobile API.
+        'missed_calls_yesterday'       => 'Missed Yesterday',
         'missed_appointments_yesterday'=> 'Yesterday\'s Missed Appointments',
         'pending_estimates'            => 'Pending Estimates',
         'membership_renewals'          => 'Membership Renewals',
@@ -124,7 +128,9 @@ class TodayController extends Controller
         'lead_followups'                 => ['growth', 2],
         'opportunities'                  => ['growth', 3],
         'membership_renewals'            => ['growth', 4],
-        'missed_calls_yesterday'         => ['growth', 5],
+        // 2026-09-11: was ['growth', 5] — an overdue call is not a lead. It
+        // sat under "Leads & Opportunities" on the live board (Sumit, 11 Sep).
+        'missed_calls_yesterday'         => ['essential', 8],
 
         'recall_calls'                   => ['other', 1],
         'payment_reminders'              => ['other', 2],
@@ -139,6 +145,10 @@ class TodayController extends Controller
         'essential' => ['rank' => 1, 'label' => 'Most Important',       'sub' => 'Immediate clinic actions'],
         'growth'    => ['rank' => 2, 'label' => 'Leads & Opportunities', 'sub' => 'Growth and revenue opportunities'],
         'other'     => ['rank' => 3, 'label' => 'Other Reminders',       'sub' => 'Secondary follow-ups and reminders'],
+        // 2026-09-11 (Sumit): an attempted call (no answer, busy, call back
+        // later) leaves its band and sinks here, so the first pass through the
+        // queue is never blocked by a retry. Rows keep their own order inside.
+        'retry'     => ['rank' => 4, 'label' => 'Try again',             'sub' => 'Attempted today — no answer, busy, or asked to call back later'],
     ];
 
     /**
@@ -173,6 +183,7 @@ class TodayController extends Controller
         private readonly TodayActionsProjector $projector,
         private readonly ActivityEngine        $activityEngine,
         private readonly \App\Services\Relationship\OutcomeAutomationService $outcomeAutomation,
+        private readonly TodayCallList         $callList,
     ) {}
 
     // ─────────────────────────────────────────────────────────────────────
@@ -234,34 +245,7 @@ class TodayController extends Controller
             // Split the single "appointment_reminders" bucket into "today" and
             // "tomorrow morning" so they can sit at opposite ends of the list
             // (confirm today's sessions first thing, tomorrow's sessions last).
-            // Pure display-layer split — TodayActionsEngine itself is untouched.
-            if (array_key_exists('appointment_reminders', $raw)) {
-                $todayItems    = [];
-                $tomorrowItems = [];
-
-                foreach ($raw['appointment_reminders'] as $item) {
-                    $isToday = false;
-                    $rawDate = $item['meta']['appointment_date'] ?? null;
-
-                    if ($rawDate) {
-                        try {
-                            $isToday = \Illuminate\Support\Carbon::createFromFormat('d M Y', $rawDate)->isToday();
-                        } catch (\Throwable $e) {
-                            $isToday = false; // if unparsable, fall back to the "tomorrow" bucket
-                        }
-                    }
-
-                    if ($isToday) {
-                        $todayItems[] = $item;
-                    } else {
-                        $tomorrowItems[] = $item;
-                    }
-                }
-
-                unset($raw['appointment_reminders']);
-                $raw['appointment_reminders_today']    = $todayItems;
-                $raw['appointment_reminders_tomorrow'] = $tomorrowItems;
-            }
+            $this->splitAppointmentReminders($raw);
         }
 
         $responseOpts = $this->actionOptions()->responseOptions();
@@ -272,6 +256,16 @@ class TodayController extends Controller
             // resolve human labels for both that and the engine's 'done' info,
             // and sink done rows to the bottom of their card.
             $this->annotateCallState($raw, $today, $responseOpts);
+
+            // W-10 finish (2026-09-11): the overdue window feeds TWO things —
+            // the calls carried onto a patient's Today row, and the Pending
+            // board's patient set. Same engine, same categories, only the
+            // window differs (see pending()). On the projection path the
+            // snapshot is already combined, so it is its own overdue source
+            // (copied BEFORE extractPendingItems() strips it).
+            $overdueRaw = Feature::enabled('today.projection')
+                ? $raw
+                : $this->overdueGroups($today, $responseOpts);
 
             // ── Sprint A (2026-08-24): Today vs Pending split ─────────────
             // Today's Actions = what is due TODAY. An open call whose due
@@ -286,10 +280,6 @@ class TodayController extends Controller
             // On the live-engine path the window already excluded them and
             // this is a no-op.
             $this->extractPendingItems($raw, $today->toDateString());
-
-            // Badge count is UNCAPPED and query-based — never derived from
-            // the capped board sample (the "+1760 invisible" bug class).
-            $pendingCount = $this->engine->pendingCallsCount();
         }
 
         // ── Settings -> Today's Actions (2026-08-25) ────────────────────
@@ -300,7 +290,22 @@ class TodayController extends Controller
 
         if (AppSetting::get('today.hide_birthdays', '1') === '1') {
             $this->stripBirthdayRows($raw);
+            if (isset($overdueRaw)) {
+                $this->stripBirthdayRows($overdueRaw);
+            }
         }
+
+        // ── ONE PATIENT, ONE ROW (W-10 finish, 2026-09-11) ────────────────
+        // The category groups below still feed the tab strip and every
+        // existing consumer; the board itself renders patient rows built
+        // from the same items. Hidden categories never reach a row.
+        $visibleRaw    = array_diff_key($raw, array_flip($hidden));
+        $visibleOverdue = array_diff_key($overdueRaw ?? [], array_flip($hidden));
+        $list = $this->callList->build($visibleRaw, $visibleOverdue, $today, self::categoryMeta());
+
+        // Badge = what the Pending board will actually show: patients with
+        // overdue calls and nothing due today. Same rows, same count.
+        $pendingCount = count($list['pendingRows']);
 
         // Build enriched groups array for the view
         $groups = [];
@@ -343,9 +348,14 @@ class TodayController extends Controller
                <=> [$b['group_rank'], $b['group_order']];
         });
 
-        $totalCount    = array_sum(array_column($groups, 'count')); // open items only
+        $totalCount    = count($list['rows']); // open PATIENT rows — one call each
         $pendingCount  = $pendingCount ?? 0;
         $boardMode     = 'today';
+        $rows          = $list['rows'];
+        $doneRows      = $list['doneRows'];
+        $tabCounts     = $list['tabCounts'];
+        $carriedCount  = $list['carried'];
+        $missedYesterday = $list['missedYesterday'];
         $checklists    = config('relationship_rules.call_checklists', []);
         $nextActions   = $this->actionOptions()->nextActions();
         $requiresNotesMap = $this->actionOptions()->requiresNotesMap();
@@ -368,7 +378,81 @@ class TodayController extends Controller
             'today',
             'pendingCount',
             'boardMode',
+            'rows',
+            'doneRows',
+            'tabCounts',
+            'carriedCount',
+            'missedYesterday',
         ));
+    }
+
+    /**
+     * The overdue window, prepared exactly like the Today window: source,
+     * appointment split, call-state annotation. Shared by index() (carried
+     * reasons + badge) and pending() (the board itself).
+     */
+    private function overdueGroups(\Illuminate\Support\Carbon $today, array $responseOpts): array
+    {
+        $raw = $this->engine->generate(includeDone: false, dueWindow: 'overdue');
+        $this->splitAppointmentReminders($raw);
+        $this->annotateCallState($raw, $today, $responseOpts);
+
+        return $raw;
+    }
+
+    /**
+     * Split the single "appointment_reminders" bucket into "today" and
+     * "tomorrow morning" so they can sit at opposite ends of the list.
+     * Pure display-layer split — TodayActionsEngine itself is untouched.
+     */
+    private function splitAppointmentReminders(array &$raw): void
+    {
+        if (! array_key_exists('appointment_reminders', $raw)) {
+            return;
+        }
+
+        $todayItems    = [];
+        $tomorrowItems = [];
+
+        foreach ($raw['appointment_reminders'] as $item) {
+            $isToday = false;
+            $rawDate = $item['meta']['appointment_date'] ?? null;
+
+            if ($rawDate) {
+                try {
+                    $isToday = \Illuminate\Support\Carbon::createFromFormat('d M Y', $rawDate)->isToday();
+                } catch (\Throwable $e) {
+                    $isToday = false; // if unparsable, fall back to the "tomorrow" bucket
+                }
+            }
+
+            if ($isToday) {
+                $todayItems[] = $item;
+            } else {
+                $tomorrowItems[] = $item;
+            }
+        }
+
+        unset($raw['appointment_reminders']);
+        $raw['appointment_reminders_today']    = $todayItems;
+        $raw['appointment_reminders_tomorrow'] = $tomorrowItems;
+    }
+
+    /** category => label/icon/band for TodayCallList. Single source: the constants above. */
+    public static function categoryMeta(): array
+    {
+        $out = [];
+        foreach (self::CATEGORY_LABELS as $key => $label) {
+            $band = self::bandOf($key);
+            $out[$key] = [
+                'label'       => $label,
+                'icon'        => self::CATEGORY_ICONS[$key] ?? 'ti-circle',
+                'group'       => $band,
+                'group_rank'  => self::GROUP_ORDER[$band]['rank'],
+                'group_order' => self::CATEGORY_GROUPS[$key][1] ?? 99,
+            ];
+        }
+        return $out;
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -386,50 +470,62 @@ class TodayController extends Controller
 
     public function pending(Request $request): \Illuminate\View\View
     {
-        $today = \Illuminate\Support\Carbon::today();
+        $today        = \Illuminate\Support\Carbon::today();
+        $responseOpts = $this->actionOptions()->responseOptions();
 
-        // Same source selection as index()'s today path.
+        // W-10 finish (2026-09-11): Pending = patients with overdue calls and
+        // NOTHING due today. A patient being called today carries their
+        // overdue reasons on that call (index()), so they are not here. That
+        // needs the Today window too — same source selection as index().
         if (Feature::enabled('today.projection')) {
             $projected = $this->projector->grouped();
-            $raw = [];
+            $todayRaw = [];
             foreach (array_keys(self::CATEGORY_LABELS) as $key) {
-                $raw[$key] = $projected[$key] ?? [];
+                $todayRaw[$key] = $projected[$key] ?? [];
             }
             foreach ($projected as $key => $items) {
-                if (! array_key_exists($key, $raw)) {
-                    $raw[$key] = $items;
+                if (! array_key_exists($key, $todayRaw)) {
+                    $todayRaw[$key] = $items;
                 }
             }
+            $this->splitAppointmentReminders($todayRaw);
+            $this->annotateCallState($todayRaw, $today, $responseOpts);
+            $overdueRaw = $todayRaw; // combined snapshot; the list keeps only past-due items
+            $this->extractPendingItems($todayRaw, $today->toDateString());
         } else {
-            $raw = $this->engine->generate(includeDone: false, dueWindow: 'overdue');
+            $todayRaw = $this->engine->generate(includeDone: true, dueWindow: 'today');
+            $this->splitAppointmentReminders($todayRaw);
+            $this->annotateCallState($todayRaw, $today, $responseOpts);
+            $this->extractPendingItems($todayRaw, $today->toDateString());
+
+            $overdueRaw = $this->overdueGroups($today, $responseOpts);
         }
 
-        $responseOpts = $this->actionOptions()->responseOptions();
-        $this->annotateCallState($raw, $today, $responseOpts);
-
-        // Keep ONLY overdue open items — the mirror image of index().
-        $todayStr = $today->toDateString();
-        foreach ($raw as $key => $items) {
-            $raw[$key] = array_values(array_filter($items, function ($item) use ($todayStr) {
-                return empty($item['done'])
-                    && ! empty($item['due_date'])
-                    && $item['due_date'] < $todayStr;
-            }));
+        // Same presentation rules as Today (Settings -> Today's Actions):
+        // hidden categories and birthday rows never reach this board either.
+        $hidden = $this->hiddenCategories();
+        if (AppSetting::get('today.hide_birthdays', '1') === '1') {
+            $this->stripBirthdayRows($todayRaw);
+            $this->stripBirthdayRows($overdueRaw);
         }
+        $todayRaw   = array_diff_key($todayRaw, array_flip($hidden));
+        $overdueRaw = array_diff_key($overdueRaw, array_flip($hidden));
 
+        $list = $this->callList->build($todayRaw, $overdueRaw, $today, self::categoryMeta());
+        $rows = $list['pendingRows'];
+
+        // Tab strip: the categories present on the pending rows, counted in
+        // PATIENTS. Built in the same shape index() gives the view.
         $groups = [];
-        foreach ($raw as $key => $items) {
-            if ($items === []) {
-                continue; // Pending shows only categories that actually have backlog
-            }
+        foreach ($list['pendingTabCounts'] as $key => $count) {
             $groups[$key] = [
-                'key'        => $key,
-                'label'      => self::CATEGORY_LABELS[$key] ?? ucwords(str_replace('_', ' ', $key)),
-                'icon'       => self::CATEGORY_ICONS[$key] ?? 'ti-circle',
-                'items'      => $items,
-                'count'      => count($items),
-                'done_count' => 0,
-                'priority'   => self::CATEGORY_PRIORITY[$key] ?? 99,
+                'key'         => $key,
+                'label'       => self::CATEGORY_LABELS[$key] ?? ucwords(str_replace('_', ' ', $key)),
+                'icon'        => self::CATEGORY_ICONS[$key] ?? 'ti-circle',
+                'items'       => [],
+                'count'       => $count,
+                'done_count'  => 0,
+                'priority'    => self::CATEGORY_PRIORITY[$key] ?? 99,
                 'group'       => self::bandOf($key),
                 'group_rank'  => self::GROUP_ORDER[self::bandOf($key)]['rank'],
                 'group_label' => self::GROUP_ORDER[self::bandOf($key)]['label'],
@@ -439,7 +535,7 @@ class TodayController extends Controller
         }
         uasort($groups, fn ($a, $b) => $a['priority'] <=> $b['priority']);
 
-        $totalCount       = array_sum(array_column($groups, 'count'));
+        $totalCount       = count($rows);
         $checklists       = config('relationship_rules.call_checklists', []);
         $nextActions      = $this->actionOptions()->nextActions();
         $requiresNotesMap = $this->actionOptions()->requiresNotesMap();
@@ -450,6 +546,10 @@ class TodayController extends Controller
         $mode             = 'today';        // reuse the live-board rendering path
         $pendingCount     = $totalCount;
         $boardMode        = 'pending';
+        $doneRows         = [];
+        $tabCounts        = $list['pendingTabCounts'];
+        $carriedCount     = 0;
+        $missedYesterday  = $list['missedYesterday'];
 
         return view('relationship.today.index', compact(
             'groups',
@@ -466,6 +566,11 @@ class TodayController extends Controller
             'today',
             'pendingCount',
             'boardMode',
+            'rows',
+            'doneRows',
+            'tabCounts',
+            'carriedCount',
+            'missedYesterday',
         ));
     }
 
@@ -542,9 +647,7 @@ class TodayController extends Controller
                 ->get()
                 ->each(function (Activity $act) use (&$lastCalls) {
                     $prefix = $act->subject_type === Patient::class ? 'P' : 'L';
-                    $key    = $prefix . ':' . $act->subject_id . '|' . ($act->metadata['category'] ?? '');
-
-                    $lastCalls[$key] = [
+                    $entry  = [
                         // 'response' = web drawer log; 'outcome' = the shared
                         // OutcomeAutomationService (Sprint A) — accept both.
                         'outcome' => $act->metadata['response'] ?? $act->metadata['outcome'] ?? null,
@@ -552,6 +655,17 @@ class TodayController extends Controller
                         'at'      => $act->occurred_at?->format('g:i A'),
                         'by'      => $act->actor?->name,
                     ];
+
+                    // One call may cover several reasons (logCall(), 2026-09-11):
+                    // 'categories' lists every one it touched — each gets the
+                    // attempt, so the whole row reads Attempted, not one chip.
+                    $cats = array_unique(array_merge(
+                        [$act->metadata['category'] ?? ''],
+                        (array) ($act->metadata['categories'] ?? [])
+                    ));
+                    foreach ($cats as $cat) {
+                        $lastCalls[$prefix . ':' . $act->subject_id . '|' . $cat] = $entry;
+                    }
                 });
         }
 
@@ -950,6 +1064,177 @@ class TodayController extends Controller
                 'message' => 'Could not log action. Please try again.',
             ], 500);
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // POST /relationship/today/log-call  (AJAX) — ONE CALL, EVERY REASON
+    //
+    // W-10 finish (2026-09-11, Sumit): the board shows one row per patient;
+    // that row may carry several reasons (today's appointment + lab ready +
+    // an overdue estimate). Reception makes ONE call and records ONE outcome.
+    // This endpoint applies that outcome to every reason on the row:
+    //
+    //   - the outcome vocabulary and its closes_task rule come from the
+    //     PRIMARY reason (items[0]) — the one the drawer showed buttons for;
+    //   - a closing outcome closes every item through the SAME per-category
+    //     path logAction() uses (queue automations for queue rows, permanent
+    //     TodayActionDismissal / FollowUp / Task for the rest), so nothing
+    //     resurfaces tomorrow;
+    //   - a non-closing outcome ("No answer", "Will call back") closes nothing
+    //     — the whole row stays due, exactly as one row would;
+    //   - ONE call.logged Activity is written for the patient, naming every
+    //     category it covered. Queue rows still run their automations but
+    //     skip their own Activity so the timeline shows one call, not three.
+    // ─────────────────────────────────────────────────────────────────────
+
+    public function logCall(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'patient_id'         => ['nullable', 'integer'],
+            'lead_id'            => ['nullable', 'integer'],
+            'relationship_id'    => ['nullable', 'integer'],
+            'response'           => ['required', 'string'],
+            'next_action'        => ['nullable', 'string'],
+            'notes'              => ['nullable', 'string', 'max:500'],
+            'direction'          => ['nullable', 'in:outbound,inbound'],
+            'items'              => ['required', 'array', 'min:1'],
+            'items.*.category'   => ['required', 'string'],
+            'items.*.subject_id' => ['nullable', 'integer'],
+        ]);
+
+        $direction = $validated['direction'] ?? 'outbound';
+        $primary   = $validated['items'][0]['category'];
+
+        // Callback resolution — same rule as logAction().
+        if ($direction === 'inbound'
+            && $primary === 'appointment_reminders'
+            && $validated['response'] === 'confirmed_attendance'
+            && ActionOptionList::query()
+                ->where('option_type', 'call_outcome')
+                ->where('action_category', 'appointment_reminders')
+                ->where('key', 'patient_called_back_confirmed')
+                ->active()
+                ->exists()) {
+            $validated['response'] = 'patient_called_back_confirmed';
+        }
+
+        $optionRow = $this->optionRowFor($primary, $validated['response']);
+
+        if ($optionRow?->requires_notes && blank($validated['notes'] ?? null)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This outcome requires a note before it can be logged.',
+            ], 422);
+        }
+
+        $closes         = (bool) $optionRow?->closes_task;
+        $serviceOutcome = self::WEB_OUTCOME_TO_SERVICE[$validated['response']] ?? $validated['response'];
+        $serviceKnows   = array_key_exists($serviceOutcome, CommunicationQueue::allCallOutcomes());
+
+        try {
+            $subject = $this->resolveNoteSubject($validated['patient_id'] ?? null, $validated['lead_id'] ?? null);
+
+            if ($subject) {
+                $this->activityEngine->log(
+                    subject       : $subject,
+                    event         : 'call.logged',
+                    actor         : $request->user(),
+                    metadata      : [
+                        'category'    => $primary,
+                        'categories'  => array_values(array_unique(array_column($validated['items'], 'category'))),
+                        'reasons'     => count($validated['items']),
+                        'response'    => $validated['response'],
+                        'next_action' => $validated['next_action'] ?? null,
+                        'notes'       => $validated['notes'] ?? null,
+                        'direction'   => $direction,
+                        'source'      => 'today_actions',
+                    ],
+                    relationshipId: $validated['relationship_id'] ?? null,
+                    description   : ($direction === 'inbound' ? 'Inbound call' : 'Outbound call')
+                        . ' logged from Today\'s Actions: ' . $validated['response']
+                        . (count($validated['items']) > 1 ? ' (' . count($validated['items']) . ' reasons)' : ''),
+                );
+            }
+
+            $closedItems = 0;
+
+            foreach ($validated['items'] as $entry) {
+                $category  = $entry['category'];
+                $subjectId = $entry['subject_id'] ?? null;
+
+                // Queue-backed reasons keep their automations (will call back
+                // → +2d, wrong number → contact invalid, …) — the one outcome
+                // path Sprint A established. Only the Activity is skipped.
+                if (in_array($category, self::QUEUE_BACKED_CATEGORIES, true) && $subjectId && $serviceKnows) {
+                    $comm = CommunicationQueue::find($subjectId);
+                    if (! $comm) {
+                        continue;
+                    }
+                    if ($comm->status === 'closed') {
+                        $closedItems++;
+                        continue;
+                    }
+                    $this->outcomeAutomation->apply(
+                        comm:    $comm,
+                        outcome: $serviceOutcome,
+                        actor:   $request->user(),
+                        options: ['notes' => $validated['notes'] ?? null, 'direction' => $direction, 'skip_activity' => true],
+                    );
+                    if (in_array($comm->fresh()->status, ['closed', 'waiting_for_patient'], true)) {
+                        $closedItems++;
+                    }
+                    continue;
+                }
+
+                if ($closes) {
+                    $this->closeUnderlyingRecord([
+                        'category'   => $category,
+                        'subject_id' => $subjectId,
+                        'lead_id'    => $validated['lead_id'] ?? null,
+                        'response'   => $validated['response'],
+                        'notes'      => $validated['notes'] ?? null,
+                    ]);
+                    $closedItems++;
+                }
+            }
+
+            $nextActionLabel = config('relationship_rules.next_actions.' . $validated['response'])
+                ?? $validated['next_action']
+                ?? 'No next action set';
+
+            return response()->json([
+                'success'           => true,
+                // The ROW leaves the board only when every reason is closed.
+                'closed'            => $closedItems === count($validated['items']),
+                'closed_items'      => $closedItems,
+                'next_action_label' => $nextActionLabel,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('TodayController::logCall failed', [
+                'data'  => $validated,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not log the call. Please try again.',
+            ], 500);
+        }
+    }
+
+    /** The Settings > Call Outcomes row for a category + outcome key (category-specific first, then default). */
+    private function optionRowFor(string $category, string $response): ?ActionOptionList
+    {
+        return ActionOptionList::query()
+            ->where('option_type', 'call_outcome')
+            ->where('key', $response)
+            ->where(function ($q) use ($category) {
+                $q->where('action_category', $category)
+                  ->orWhere('action_category', 'default');
+            })
+            ->active()
+            ->orderByRaw("action_category = ? desc", [$category])
+            ->first();
     }
 
     /**

@@ -62,7 +62,11 @@ class OutcomeAutomationService
         $subject        = $patient ?? $comm;
         $relationshipId = $patient?->relationship_id;
 
-        $activity = $this->activityEngine->log(
+        // 'skip_activity' (W-10 finish, 2026-09-11): when one call covers
+        // several reasons, TodayController::logCall() writes the single
+        // call.logged row itself and asks this service to run only the
+        // automations. Every other caller keeps the entry written here.
+        $activity = ! empty($options['skip_activity']) ? null : $this->activityEngine->log(
             subject:        $subject,
             event:          'call.logged',
             actor:          $actor,

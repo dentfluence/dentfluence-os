@@ -594,6 +594,26 @@
     .taw-owner { white-space:nowrap; color:#5a4a62; max-width:120px; overflow:hidden; text-overflow:ellipsis; }
     .taw-owner--none { color:#b8a8c0; }
     .taw-tag { display:inline-block; padding:2px 7px; border-radius:5px; background:#f4eef7; color:#684a72; font-size:10.5px; font-weight:600; white-space:nowrap; max-width:150px; overflow:hidden; text-overflow:ellipsis; }
+    /* One patient, one row (2026-09-11): every further reason for the same
+       call is a chip. The lead chip names the primary reason's category. */
+    .taw-chips { display:flex; flex-wrap:wrap; gap:4px; }
+    .taw-chip { display:inline-block; padding:2px 7px; border-radius:5px; border:1px solid #e2d4e8; background:#f7f2f9; color:#5a2a62; font-size:10.5px; font-weight:600; white-space:nowrap; max-width:220px; overflow:hidden; text-overflow:ellipsis; }
+    .taw-chip--lead { background:#f4eef7; border-color:#f4eef7; color:#684a72; font-weight:600; }
+    .taw-chip--over { border-color:#f0c9c6; background:#fdeaea; color:#b52020; }
+    .taw-chip--money { border-color:#efd7a8; background:#fff4e0; color:#8a5a05; }
+    .taw-reasons { display:block; font-size:10.5px; color:#6a0f70; font-weight:700; margin-top:1px; white-space:nowrap; }
+    .taw-t tbody tr.is-done .taw-chip { opacity:.7; }
+    /* Drawer — the reasons this one call covers */
+    .ta-reasons { margin-top:12px; border:1px solid #ece2f1; border-radius:9px; background:#fcfafd; padding:9px 11px; }
+    .ta-reason { display:flex; gap:9px; align-items:flex-start; padding:5px 0; border-top:1px dashed #efe6f3; cursor:pointer; }
+    .ta-reason:first-of-type { border-top:none; }
+    .ta-reason input { margin-top:3px; flex:0 0 auto; accent-color:#6a0f70; }
+    .ta-reason.off .ta-reason-body { opacity:.45; text-decoration:line-through; }
+    .ta-reason-body { min-width:0; display:flex; flex-direction:column; gap:1px; }
+    .ta-reason-do { font-size:12.5px; font-weight:600; color:#2c1033; }
+    .ta-reason-why { font-size:11px; color:#8a7a92; }
+    .ta-reason-why .over { color:#c92a2a; font-weight:700; }
+    .ta-reason-hint { margin:6px 0 0; font-size:11px; color:#a892b0; }
     .taw-ch { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:#6b5573; white-space:nowrap; }
     .taw-st { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:99px; font-size:10.5px; font-weight:700; white-space:nowrap; }
     .taw-st--open  { background:#f3e8f4; color:#6a0f70; }
@@ -660,163 +680,21 @@
 
     {{-- ══════════════════════════════════════════════════════════════════
          WORKLIST DATA PREP (view layer only)
-         Flattens the category groups into one operational list and cleans
-         internal wording for display. No queries, no engine calls.
+         W-10 finish (2026-09-11): the rows are PATIENT rows built by
+         App\Services\Relationship\TodayCallList — one row per patient, the
+         highest-ranked reason leads, every other reason is a chip on the
+         same row. This block only splits them into bands and indexes them
+         for the client-side filter. No queries, no engine calls.
     ══════════════════════════════════════════════════════════════════ --}}
     @php
-        // Internal automation-rule names must never surface to reception.
-        // Display-only translation — the stored text itself is untouched.
-        $ruleLabels = [
-            'implant_followup'                => 'Implant follow-up',
-            'post_treatment_followup'         => 'Post-treatment follow-up',
-            'recall_6months'                  => 'Six-month recall due',
-            'membership_renewal_30d'          => 'Membership renewal due',
-            'birthday_3d'                     => 'Birthday in 3 days',
-            'opportunity_nudge_7d'            => 'Treatment decision follow-up',
-            'estimate_followup_3d'            => 'Estimate follow-up',
-            'missed_appointment_followup'     => 'Missed appointment follow-up',
-            'lab_ready_call'                  => 'Lab work ready',
-            'payment_overdue_3d'              => 'Payment follow-up',
-            'presentation_callback_requested' => 'Call-back requested by patient',
-            'case_opened_followup_2d'         => 'Case follow-up',
-            'case_more_time_requested'        => 'Patient asked for more time',
-        ];
+        $rows            = $rows            ?? [];
+        $doneRows        = $doneRows        ?? [];
+        $tabCounts       = $tabCounts       ?? [];
+        $carriedCount    = $carriedCount    ?? 0;
+        $missedYesterday = $missedYesterday ?? 0;
+        $reasonTotal     = array_sum(array_map(fn ($r) => $r['reasonCount'], $rows));
 
-        $humanise = function (?string $text) use ($ruleLabels) {
-            $text = trim((string) $text);
-            if ($text === '') { return ''; }
-            $text = preg_replace('/\[\s*auto\s*\]\s*/i', '', $text);
-            $text = preg_replace_callback('/rule\s*:\s*([a-z0-9_]+)/i', function ($m) use ($ruleLabels) {
-                $key = strtolower($m[1]);
-                return $ruleLabels[$key] ?? ucfirst(str_replace('_', ' ', $key));
-            }, $text);
-            return trim($text);
-        };
-
-        $channelMeta = [
-            'call'     => ['ti-phone',          'Call'],
-            'phone'    => ['ti-phone',          'Call'],
-            'whatsapp' => ['ti-brand-whatsapp', 'WhatsApp'],
-            'sms'      => ['ti-message-2',      'SMS'],
-            'email'    => ['ti-mail',           'Email'],
-            'visit'    => ['ti-building-store', 'In clinic'],
-        ];
-
-        $todayStr    = $today->toDateString();
-        $tomorrowStr = $today->copy()->addDay()->toDateString();
-        $prRank      = ['high' => 0, 'medium' => 1, 'low' => 2];
-
-        $rows = [];
-        foreach ($groups as $catKey => $group) {
-            foreach ($group['items'] as $idx => $item) {
-                $done     = $item['done'] ?? null;
-                $lastCall = $item['last_call'] ?? null;
-
-                // ── WHEN ── the item's own due date, else the most
-                // meaningful date its meta already carries. Never invented.
-                $parse = function ($v) {
-                    try { return $v ? \Illuminate\Support\Carbon::parse($v) : null; }
-                    catch (\Throwable $e) { return null; }
-                };
-                $dueTxt = '—'; $dueCls = 'taw-due--none'; $dueTip = 'No date on record';
-                $d = $parse($item['due_date'] ?? null);
-                $kind = 'due';
-                if (! $d) {
-                    foreach ([['due_date','due'], ['follow_up_date','due'], ['appointment_date','appt'],
-                              ['end_date','expires'], ['ready_since','ready'], ['visit_date','visit']] as $probe) {
-                        if (! empty($item['meta'][$probe[0]])) {
-                            $d = $parse($item['meta'][$probe[0]]);
-                            if ($d) { $kind = $probe[1]; break; }
-                        }
-                    }
-                }
-                if ($d) {
-                    $ds = $d->toDateString();
-                    $long = $d->format('D, d M Y');
-                    if ($kind === 'due') {
-                        if ($ds === $todayStr)          { $dueTxt = 'Today';    $dueCls = ''; $dueTip = 'Due today'; }
-                        elseif ($ds === $tomorrowStr)   { $dueTxt = 'Tomorrow'; $dueCls = ''; $dueTip = 'Due ' . $long; }
-                        elseif ($ds < $todayStr)        { $dueTxt = $d->format('d M'); $dueCls = 'taw-due--over'; $dueTip = 'Overdue since ' . $long; }
-                        else                            { $dueTxt = $d->format('d M'); $dueCls = ''; $dueTip = 'Due ' . $long; }
-                    } else {
-                        $prefix = ['appt' => 'Appt', 'expires' => 'Expires', 'ready' => 'Ready', 'visit' => 'Visit'][$kind] ?? '';
-                        $when   = $ds === $todayStr ? 'today' : ($ds === $tomorrowStr ? 'tomorrow' : $d->format('d M'));
-                        $dueTxt = trim($prefix . ' ' . $when);
-                        $dueCls = ($kind === 'expires' && $ds < $todayStr) ? 'taw-due--over' : '';
-                        $dueTip = $prefix . ': ' . $long;
-
-                        // An appointment's TIME is the thing reception works to
-                        // (2026-08-26, Sumit) — the day alone tells them nothing
-                        // about which call is next. Shown on the row for today's
-                        // and tomorrow's sessions, always in the tooltip.
-                        if ($kind === 'appt' && ! empty($item['meta']['appointment_time'])) {
-                            $apptTime = $parse($item['meta']['appointment_time']);
-                            $timeTxt  = $apptTime ? $apptTime->format('g:i A') : $item['meta']['appointment_time'];
-                            $dueTip  .= ' at ' . $timeTxt;
-
-                            if ($ds === $todayStr || $ds === $tomorrowStr) {
-                                $dueTxt = trim($prefix . ' ' . ($ds === $todayStr ? '' : 'tmrw') . ' ' . $timeTxt);
-                            }
-                        }
-                    }
-                }
-                $isOverdue = $dueCls === 'taw-due--over';
-
-                // ── CHANNEL ── real values only: the queue's own channel, the
-                // WhatsApp-first birthday path, otherwise this board's call action.
-                $chKey = strtolower((string) ($item['meta']['channel'] ?? ''));
-                if (($item['primary_action'] ?? null) === 'whatsapp') { $chKey = 'whatsapp'; }
-                if ($chKey === '' || ! isset($channelMeta[$chKey]))   { $chKey = 'call'; }
-
-                // ── OWNER ── whoever actually handled/attempted it. PRE has no
-                // assignment field, so unworked rows read "Unassigned" rather
-                // than inventing a name.
-                $owner = $done['by'] ?? $lastCall['by'] ?? null;
-
-                // ── STATUS ──
-                if ($done)          { $stCls = 'taw-st--done';  $stTxt = 'Done'; }
-                elseif ($lastCall)  { $stCls = 'taw-st--tried'; $stTxt = 'Attempted'; }
-                elseif ($isOverdue) { $stCls = 'taw-st--over';  $stTxt = 'Overdue'; }
-                else                { $stCls = 'taw-st--open';  $stTxt = 'Open'; }
-
-                $doText  = $humanise($item['suggested_action'] ?? '') ?: 'Call the patient';
-                $whyText = $humanise($item['reason'] ?? '');
-
-                $rows[] = [
-                    'id' => $catKey . '_' . $idx, 'cat' => $catKey, 'catLabel' => $group['label'],
-                    'item' => $item, 'done' => $done, 'lastCall' => $lastCall,
-                    'dueTxt' => $dueTxt, 'dueCls' => $dueCls, 'dueTip' => $dueTip,
-                    'dueSort' => $d ? $d->toDateString() : '9999-12-31',
-                    'chIcon' => $channelMeta[$chKey][0], 'chLabel' => $channelMeta[$chKey][1],
-                    'owner' => $owner, 'stCls' => $stCls, 'stTxt' => $stTxt,
-                    'doText' => $doText, 'whyText' => $whyText,
-                    'isDone'    => (bool) $done,
-                    'band'      => $group['group'] ?? 'other',
-                    'bandRank'  => $group['group_rank'] ?? 3,
-                    'bandOrder' => $group['group_order'] ?? 99,
-                    'sortPr'    => $prRank[$item['priority'] ?? 'low'] ?? 3,
-                    // Chronological tiebreaker. Only appointment rows carry a
-                    // time; every other category gets the same sentinel, so
-                    // their existing order is untouched.
-                    'timeSort'  => (string) ($item['meta']['appointment_time'] ?? '99:99:99'),
-                ];
-            }
-        }
-
-        // Worked order: open work first, then urgency, then the clinic's own
-        // category order, then oldest due date.
-        usort($rows, fn ($a, $b) =>
-            [$a['bandRank'], $a['bandOrder'], $a['sortPr'], $a['dueSort'], $a['timeSort']]
-            <=> [$b['bandRank'], $b['bandOrder'], $b['sortPr'], $b['dueSort'], $b['timeSort']]);
-
-        // ── ACTIVE vs COMPLETED ──────────────────────────────────────────
-        // The queue answers "what does the team need to do now?", so handled
-        // rows leave it entirely and live in their own section below. The
-        // header count and every band count are ACTIVE rows only.
-        $doneRows   = array_values(array_filter($rows, fn ($r) => $r['isDone']));
-        $rows       = array_values(array_filter($rows, fn ($r) => ! $r['isDone']));
-
-        // Rows split into the three bands, each keeping the order above.
+        // Rows split into the three bands, each keeping the worked order.
         $bands = [];
         foreach (\App\Http\Controllers\Relationship\TodayController::GROUP_ORDER as $bandKey => $meta) {
             $bandRows = array_values(array_filter($rows, fn ($r) => $r['band'] === $bandKey));
@@ -826,16 +704,16 @@
         }
 
         $rowMeta = array_map(fn ($r) => [
-            'id'  => $r['id'],
-            'cat' => $r['cat'],
+            'id'   => $r['id'],
+            'cats' => $r['categories'],
             'band' => $r['band'],
-            's'   => mb_strtolower(($r['item']['patient_name'] ?? '') . ' ' . $r['doText'] . ' ' . $r['whyText'] . ' ' . $r['catLabel']),
+            's'    => $r['search'],
         ], $rows);
 
-        // Chips filter the ACTIVE queue only — completed rows live in their own
-        // section and must never inflate a chip count.
-        $activeGroups = collect($groups)->filter(fn ($g) => $g['count'] > 0);
-        $emptyCount   = collect($groups)->filter(fn ($g) => $g['count'] === 0 && ($g['done_count'] ?? 0) === 0)->count();
+        // Chips filter the ACTIVE queue only, and count PATIENTS: a tab shows
+        // how many rows carry that reason, not how many reasons exist.
+        $activeGroups = collect($groups)->filter(fn ($g, $k) => ($tabCounts[$k] ?? 0) > 0);
+        $emptyCount   = collect($groups)->filter(fn ($g, $k) => ($tabCounts[$k] ?? 0) === 0 && ($g['done_count'] ?? 0) === 0)->count();
     @endphp
 
     <script>window.__TA_ROWS = @json($rowMeta);</script>
@@ -865,8 +743,9 @@
                 </p>
             </div>
 
-            <span class="taw-count">
-                {{ $totalCount }} open {{ Str::plural(($mode === 'today' ? 'action' : 'call'), $totalCount) }}
+            <span class="taw-count" title="One row per patient — every reason for the call is on that row">
+                {{ $totalCount }} {{ Str::plural('patient', $totalCount) }} to call
+                @if($reasonTotal > $totalCount) · {{ $reasonTotal }} reasons @endif
             </span>
 
             <div class="taw-spacer"></div>
@@ -921,10 +800,11 @@
             @foreach($activeGroups as $catKey => $group)
             <button type="button" class="taw-cat"
                     :class="cat === '{{ $catKey }}' ? 'taw-cat--on' : ''"
-                    @click="setCat('{{ $catKey }}')">
+                    @click="setCat('{{ $catKey }}')"
+                    title="Patients with this reason on their call">
                 <i class="ti {{ $group['icon'] }}"></i>
                 {{ $group['label'] }}
-                <span class="taw-cat-n">{{ $group['count'] }}</span>
+                <span class="taw-cat-n">{{ $tabCounts[$catKey] ?? 0 }}</span>
             </button>
             @endforeach
         </div>
@@ -972,11 +852,11 @@
                         <tr>
                             <th style="width:78px;">Priority</th>
                             <th style="width:190px;">Patient</th>
-                            <th>Action &amp; Reason</th>
+                            <th style="width:32%;">Call for</th>
+                            <th style="width:150px;">Category</th>
+                            <th>Also on this call</th>
                             <th style="width:112px;">Due</th>
                             <th style="width:118px;">Owner</th>
-                            <th style="width:172px;">Category</th>
-                            <th style="width:96px;">Channel</th>
                             <th style="width:104px;">Status</th>
                             <th style="width:68px;"></th>
                         </tr>
@@ -1024,11 +904,11 @@
                         <tr>
                             <th style="width:78px;">Priority</th>
                             <th style="width:190px;">Patient</th>
-                            <th>Outcome</th>
+                            <th style="width:32%;">Outcome</th>
+                            <th style="width:150px;">Category</th>
+                            <th>Also handled</th>
                             <th style="width:112px;">Due</th>
                             <th style="width:118px;">Owner</th>
-                            <th style="width:172px;">Category</th>
-                            <th style="width:96px;">Channel</th>
                             <th style="width:104px;">Status</th>
                             <th style="width:68px;"></th>
                         </tr>
@@ -1047,16 +927,20 @@
         <div class="taw-foot" style="border:1px solid #ece2f1;border-radius:10px;margin-top:8px;">
             <span>
                 <strong class="taw-pgn" x-text="total">{{ count($rows) }}</strong>
-                active {{ Str::plural('action', count($rows)) }} in the queue
+                {{ Str::plural('patient', count($rows)) }} in the queue
+                @if($reasonTotal > count($rows)) · {{ $reasonTotal }} reasons folded into {{ count($rows) }} {{ Str::plural('call', count($rows)) }} @endif
             </span>
+            @if($carriedCount > 0)
+                <span class="taw-muted" title="Calls due on earlier days, still open — shown on the patient's row instead of a second list">· {{ $carriedCount }} overdue {{ Str::plural('reason', $carriedCount) }} carried onto today's rows</span>
+            @endif
             @if(! empty($doneRows))
                 <span class="taw-muted">· {{ count($doneRows) }} completed today</span>
             @endif
             @if($emptyCount > 0)
                 <span class="taw-muted">· {{ $emptyCount }} {{ Str::plural('category', $emptyCount) }} with nothing to show</span>
             @endif
-            @if(isset($groups['missed_calls_yesterday']) && $groups['missed_calls_yesterday']['count'] > 0 && $mode === 'today')
-                <span>· <a href="{{ route('relationship.today.missed-calls') }}">View full missed-calls list</a></span>
+            @if($boardMode === 'today' && $mode === 'today' && $pendingCount > 0)
+                <span>· <a href="{{ route('relationship.today.pending') }}">{{ $pendingCount }} {{ Str::plural('patient', $pendingCount) }} with overdue calls and nothing today → Pending Calls</a></span>
             @endif
         </div>
 
@@ -1073,7 +957,7 @@
                 <div class="ta-drawer-header">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
                         <span style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;opacity:0.75;"
-                              x-text="categoryLabel(drawer.item?.category)"></span>
+                              x-text="categoryLabel(drawer.item?.category) + (drawer.items.length > 1 ? ' · ' + drawer.items.length + ' reasons, one call' : '')"></span>
                         <button @click="closeDrawer()"
                                 style="background:rgba(255,255,255,0.15);border:none;border-radius:6px;padding:3px 7px;color:#fff;cursor:pointer;font-size:13px;line-height:1;">
                             <i class="ti ti-x"></i>
@@ -1134,6 +1018,33 @@
                             </div>
                         </template>
                     </div>
+
+                    {{-- ── 2b. ON THIS CALL — every reason the patient's row
+                         carries (W-10 finish, 2026-09-11). One outcome below
+                         applies to all ticked reasons; untick one to leave it
+                         open after the call. Hidden for a single-reason row. --}}
+                    <template x-if="drawer.items.length > 1">
+                        <div class="ta-reasons">
+                            <div class="ta-drawer-section-label" style="margin-bottom:4px;">
+                                On this call — <span x-text="selectedCount"></span> of <span x-text="drawer.items.length"></span> reasons
+                            </div>
+                            <template x-for="it in drawer.items" :key="it.item_id">
+                                <label class="ta-reason" :class="selected[it.item_id] === false ? 'off' : ''">
+                                    <input type="checkbox" :checked="selected[it.item_id] !== false"
+                                           @change="selected[it.item_id] = $event.target.checked" :disabled="historyOnly">
+                                    <span class="ta-reason-body">
+                                        <span class="ta-reason-do" x-text="it.suggested_action"></span>
+                                        <span class="ta-reason-why">
+                                            <span x-text="it.cat_label"></span>
+                                            <template x-if="it.reason"><span> · <span x-text="it.reason"></span></span></template>
+                                            <template x-if="it.due_label && it.due_label !== '—'"><span> · <span :class="it.is_overdue ? 'over' : ''" x-text="it.due_label"></span></span></template>
+                                        </span>
+                                    </span>
+                                </label>
+                            </template>
+                            <p class="ta-reason-hint" x-show="!historyOnly">Untick a reason to leave it open after this call.</p>
+                        </div>
+                    </template>
 
                     {{-- ── 3. CALL GUIDANCE — what to say. Guidance ONLY;
                          never mixed with what happened or with task status. --}}
@@ -1313,8 +1224,9 @@
                      endpoint, same server behaviour. --}}
                 <div x-show="closeMode" x-cloak style="padding:12px 18px;border-top:1px solid #f3f4f6;background:#fafafa;">
                     <p style="font-size:12.5px;color:#6b7280;margin:0 0 9px;">
-                        Marks this action finished without a call outcome — use it once you have
-                        tried enough times, or the action has been handled some other way.
+                        <span x-text="selectedCount > 1 ? 'Marks all ' + selectedCount + ' ticked reasons finished' : 'Marks this action finished'"></span>
+                        without a call outcome — use it once you have tried enough times, or it has
+                        been handled some other way. It stays off the board until the date behind it moves.
                     </p>
                     <div class="ta-form-group">
                         <label class="ta-form-label">Note (optional)</label>
@@ -1445,7 +1357,7 @@ function taWorklist(rows) {
         matches() {
             const needle = this.q.trim().toLowerCase();
             return this.rows.filter(r =>
-                (this.cat === 'all' || r.cat === this.cat) &&
+                (this.cat === 'all' || (r.cats || []).includes(this.cat)) &&
                 (needle === '' || (r.s || '').indexOf(needle) !== -1)
             );
         },
@@ -1486,9 +1398,14 @@ function todayActions() {
         // ── Drawer state ────────────────────────────────────────────────
         drawer: {
             open: false,
-            item: null,
-            itemId: null,
+            item: null,     // the PRIMARY reason — the drawer's vocabulary comes from it
+            items: [],      // every reason on this patient's row (W-10 finish, 2026-09-11)
+            row: null,      // the patient row itself (ids for the call log)
+            itemId: null,   // the row id — what actioned[] / lastResponse[] key on
         },
+
+        // Which reasons this call covers. item_id => true|false; absent = true.
+        selected: {},
 
         // ── CALL RESULT (redesign 2026-08-26) ───────────────────────────
         // Two steps, not three overlapping concepts. `direction` is who
@@ -1558,6 +1475,11 @@ function todayActions() {
         // ── Per-item actioned tracker (itemId → bool) ───────────────────
         actioned: {},
 
+        // ── Per-row attempted tracker (rowId → bool): a non-closing outcome
+        // was logged this page load. On the next load the server sinks the
+        // row into the "Try again" band. ─────────────────────────────────
+        attempted: {},
+
         // ── Per-item last logged response label (itemId → "Confirmed · 11:43 AM")
         // Live within this page load; on refresh the server re-renders the
         // same info from the activity log / dismissal rows. ──────────────
@@ -1574,12 +1496,22 @@ function todayActions() {
         // ─────────────────────────────────────────────────────────────────
         // Open the Call Workflow drawer for a given item
         // ─────────────────────────────────────────────────────────────────
-        openDrawer(item, itemId) {
-            const cat = item.category;
+        openDrawer(row, itemId) {
+            // A patient ROW carries `item` (primary) + `items` (all reasons).
+            // A bare engine item (older callers) is its own single reason.
+            const items = Array.isArray(row?.items) && row.items.length ? row.items : [row.item || row];
+            const item  = row?.item || items[0];
+            const cat   = item.category;
 
+            this.drawer.row    = row;
             this.drawer.item   = item;
+            this.drawer.items  = items;
             this.drawer.itemId = itemId;
             this.drawer.open   = true;
+
+            const sel = {};
+            items.forEach(i => { sel[i.item_id] = true; });
+            this.selected = sel;
 
             // Reset the two secondary panels
             this.closeMode  = false;
@@ -1595,7 +1527,10 @@ function todayActions() {
             // 'appointment_reminders', so that guidance never reached the
             // drawer before.
             this.guidance  = item?.meta?.ai_summary || '';
-            this.checklist = CHECKLISTS[cat] || CHECKLISTS[(cat || '').replace(/s$/, '')] || [];
+            // One call, several reasons: the checklist is the union of every
+            // reason's checklist, primary first, duplicates removed.
+            const cats = [...new Set(items.map(i => i.category))];
+            this.checklist = [...new Set(cats.flatMap(c => CHECKLISTS[c] || CHECKLISTS[(c || '').replace(/s$/, '')] || []))];
 
             // Outcome vocabulary for this category (labels for the row badge)
             this.responseOptions = RESPONSE_OPTS[cat] || RESPONSE_OPTS['default'] || {};
@@ -1718,13 +1653,22 @@ function todayActions() {
                     + (next ? ' Next: ' + next.toLowerCase() + '.' : '');
             }
 
-            return 'Marks this action complete.'
+            const n = this.selectedCount;
+            return (n > 1 ? 'Marks all ' + n + ' reasons complete.' : 'Marks this action complete.')
                 + (next ? ' Next: ' + next.toLowerCase() + '.' : '');
         },
+
+        /** The reasons this outcome will be applied to (ticked in the drawer). */
+        get selectedItems() {
+            return (this.drawer.items || []).filter(i => this.selected[i.item_id] !== false);
+        },
+
+        get selectedCount() { return this.selectedItems.length; },
 
         get canSave() {
             if (!this.form.response) return false;
             if (this.requiresNotes && !this.form.notes) return false;
+            if (this.selectedCount === 0) return false;
             return true;
         },
 
@@ -1775,10 +1719,12 @@ function todayActions() {
 
             this.historyLoading = true;
             try {
+                // One row = one patient, so the history is the patient's whole
+                // call story, not one category's slice of it.
                 const params = new URLSearchParams({
                     patient_id: item.patient_id ?? '',
                     lead_id:    item.lead_id ?? '',
-                    category:   item.category ?? '',
+                    category:   '',
                 });
                 const res  = await fetch('{{ route('relationship.today.notes.index') }}?' + params.toString(), {
                     headers: { 'Accept': 'application/json' },
@@ -1837,47 +1783,55 @@ function todayActions() {
             this.dismissing   = true;
             this.dismissError = '';
 
-            const item   = this.drawer.item;
+            const row    = this.drawer.row || {};
             const itemId = this.drawer.itemId;
+            const items  = this.selectedItems;
 
-            // Subject resolution MUST mirror the server's category→record map
-            // (TodayController: QUEUE_BACKED_CATEGORIES / follow_up_calls /
-            // DISMISSIBLE_MODELS). Fixed 2026-07-26: this used a two-way check
-            // that omitted logged_communications and follow_up_calls, and never
-            // handled the lead- and patient-keyed categories — so Dismiss failed
-            // with "missing reference id" on five of the fifteen categories.
-            // logAction()/confirmClose() already resolve via subjectIdFor().
-            const subjectId = this.subjectIdFor(item);
-
-            if (!subjectId) {
-                this.dismissError = 'This item cannot be dismissed (missing reference id).';
+            if (items.length === 0) {
+                this.dismissError = 'Tick at least one reason to dismiss.';
                 this.dismissing = false;
                 return;
             }
 
+            // Subject resolution MUST mirror the server's category→record map
+            // (TodayController: QUEUE_BACKED_CATEGORIES / follow_up_calls /
+            // DISMISSIBLE_MODELS) — one shared resolver, subjectIdFor().
+            // Every ticked reason is dismissed through the same endpoint,
+            // one record at a time.
             try {
-                const res = await fetch('{{ route('relationship.today.dismiss') }}', {
-                    method:  'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body:    JSON.stringify({
-                        _token:          document.querySelector('meta[name="csrf-token"]').content,
-                        category:        item.category,
-                        subject_id:      subjectId,
-                        reason_key:      this.dismissReason,
-                        notes:           this.dismissNotes,
-                        patient_id:      item.patient_id,
-                        relationship_id: item.relationship_id,
-                    }),
-                });
+                for (const item of items) {
+                    const subjectId = this.subjectIdFor(item);
+                    if (!subjectId) {
+                        this.dismissError = 'One of the reasons cannot be dismissed (missing reference id).';
+                        this.dismissing = false;
+                        return;
+                    }
 
-                const data = await res.json();
-
-                if (data.success) {
-                    this.actioned[itemId] = true;
-                    this.closeDrawer();
-                } else {
-                    this.dismissError = data.message || 'Could not dismiss. Please try again.';
+                    const res = await fetch('{{ route('relationship.today.dismiss') }}', {
+                        method:  'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                        body:    JSON.stringify({
+                            _token:          document.querySelector('meta[name="csrf-token"]').content,
+                            category:        item.category,
+                            subject_id:      subjectId,
+                            reason_key:      this.dismissReason,
+                            notes:           this.dismissNotes,
+                            patient_id:      row.patient_id ?? item.patient_id,
+                            relationship_id: row.relationship_id ?? item.relationship_id,
+                        }),
+                    });
+                    const data = await res.json();
+                    if (!data.success) {
+                        this.dismissError = data.message || 'Could not dismiss. Please try again.';
+                        this.dismissing = false;
+                        return;
+                    }
                 }
+
+                if (items.length === this.drawer.items.length) {
+                    this.actioned[itemId] = true;
+                }
+                this.closeDrawer();
             } catch (err) {
                 this.dismissError = 'Network error. Please check your connection.';
             } finally {
@@ -1889,6 +1843,9 @@ function todayActions() {
         closeDrawer() {
             this.drawer.open  = false;
             this.drawer.item  = null;
+            this.drawer.items = [];
+            this.drawer.row   = null;
+            this.selected     = {};
             this.closeMode    = false;
             this.dismissMode  = false;
             this.historyOnly  = false;
@@ -1967,25 +1924,24 @@ function todayActions() {
             this.submitting  = true;
             this.submitError = '';
 
+            const row    = this.drawer.row || {};
             const item   = this.drawer.item;
             const itemId = this.drawer.itemId;
 
-            // subject_id identifies which record this row is backed by, so
-            // the server can auto-close it when the logged outcome's
-            // closes_task is true (2026-07-10). Mirrors confirmClose()'s
-            // identical subject resolution just below.
-            // One shared resolver — see subjectIdFor(). Previously duplicated
-            // here and in confirmClose(), and a third (stale) copy in
-            // confirmDismiss() caused the "missing reference id" defect.
-            const subjectId = this.subjectIdFor(item);
+            // ONE call, every ticked reason (W-10 finish, 2026-09-11). Each
+            // reason resolves to the record behind it exactly as before —
+            // see subjectIdFor() — and the server applies the one outcome to
+            // all of them through their own close paths.
+            const items = this.selectedItems.map(i => ({
+                category:   i.category,
+                subject_id: this.subjectIdFor(i),
+            }));
 
             const payload = {
                 _token:          document.querySelector('meta[name="csrf-token"]').content,
-                category:        item.category,
-                patient_id:      item.patient_id,
-                lead_id:         item.lead_id,
-                relationship_id: item.relationship_id,
-                subject_id:      subjectId,
+                patient_id:      row.patient_id ?? item.patient_id,
+                lead_id:         row.lead_id ?? item.lead_id,
+                relationship_id: row.relationship_id ?? item.relationship_id,
                 response:        this.form.response,
                 next_action:     this.form.next_action,
                 notes:           this.form.notes,
@@ -1993,10 +1949,11 @@ function todayActions() {
                 // server records it as a distinct interaction and resolves
                 // THIS open action, leaving the earlier attempt intact.
                 direction:       this.direction,
+                items:           items,
             };
 
             try {
-                const res = await fetch('{{ route('relationship.today.action') }}', {
+                const res = await fetch('{{ route('relationship.today.log-call') }}', {
                     method:  'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                     body:    JSON.stringify(payload),
@@ -2005,21 +1962,20 @@ function todayActions() {
                 const data = await res.json();
 
                 if (data.success) {
-                    // 2026-07-10: whether the row fades as done now depends
-                    // on the outcome — resolved outcomes (booked, confirmed,
-                    // declined...) auto-close server-side and report
-                    // `closed: true`; "needs retry" outcomes (no answer,
-                    // still deciding...) report `closed: false` and the row
-                    // stays for staff to log again or Close manually later.
-                    // Either way the logged response shows on the row
-                    // immediately (2026-07-14) so staff can see the call
-                    // happened and what the patient said.
+                    // Whether the row fades as done depends on the outcome:
+                    // a resolving outcome closes every ticked reason and the
+                    // server reports `closed: true`; a "needs retry" outcome
+                    // leaves the row open. Either way the logged response
+                    // shows on the row immediately.
                     this.lastResponse[itemId] =
                         (this.direction === 'inbound' ? 'Patient called back — ' : '')
                         + (this.responseOptions[this.form.response] || this.form.response)
+                        + (items.length > 1 ? ' · ' + (data.closed_items ?? 0) + '/' + items.length + ' reasons' : '')
                         + ' · ' + new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
                     if (data.closed) {
                         this.actioned[itemId] = true;
+                    } else {
+                        this.attempted[itemId] = true;
                     }
                     this.closeDrawer();
                 } else {
@@ -2044,39 +2000,50 @@ function todayActions() {
             this.closing    = true;
             this.closeError = '';
 
-            const item   = this.drawer.item;
+            const row    = this.drawer.row || {};
             const itemId = this.drawer.itemId;
+            const items  = this.selectedItems;
 
-            // One shared resolver — see subjectIdFor(). Previously duplicated
-            // here and in confirmClose(), and a third (stale) copy in
-            // confirmDismiss() caused the "missing reference id" defect.
-            const subjectId = this.subjectIdFor(item);
+            if (items.length === 0) {
+                this.closeError = 'Tick at least one reason to stop chasing.';
+                this.closing = false;
+                return;
+            }
 
+            // Stop chasing applies to every ticked reason — same endpoint,
+            // same server behaviour, once per record. Sequential on purpose:
+            // a failure stops the loop and is reported, nothing is half-done
+            // silently.
             try {
-                const res = await fetch('{{ route('relationship.today.close') }}', {
-                    method:  'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body:    JSON.stringify({
-                        _token:          document.querySelector('meta[name="csrf-token"]').content,
-                        category:        item.category,
-                        patient_id:      item.patient_id,
-                        lead_id:         item.lead_id,
-                        relationship_id: item.relationship_id,
-                        subject_id:      subjectId,
-                        notes:           this.closeNotes,
-                    }),
-                });
-
-                const data = await res.json();
-
-                if (data.success) {
-                    this.actioned[itemId] = true;
-                    this.lastResponse[itemId] = 'Closed · '
-                        + new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
-                    this.closeDrawer();
-                } else {
-                    this.closeError = data.message || 'Could not close. Please try again.';
+                for (const item of items) {
+                    const res = await fetch('{{ route('relationship.today.close') }}', {
+                        method:  'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                        body:    JSON.stringify({
+                            _token:          document.querySelector('meta[name="csrf-token"]').content,
+                            category:        item.category,
+                            patient_id:      row.patient_id ?? item.patient_id,
+                            lead_id:         row.lead_id ?? item.lead_id,
+                            relationship_id: row.relationship_id ?? item.relationship_id,
+                            subject_id:      this.subjectIdFor(item),
+                            notes:           this.closeNotes,
+                        }),
+                    });
+                    const data = await res.json();
+                    if (!data.success) {
+                        this.closeError = data.message || 'Could not close. Please try again.';
+                        this.closing = false;
+                        return;
+                    }
                 }
+
+                if (items.length === this.drawer.items.length) {
+                    this.actioned[itemId] = true;
+                }
+                this.lastResponse[itemId] = 'Closed'
+                    + (items.length < this.drawer.items.length ? ' ' + items.length + '/' + this.drawer.items.length + ' reasons' : '')
+                    + ' · ' + new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+                this.closeDrawer();
             } catch (err) {
                 this.closeError = 'Network error. Please check your connection.';
             } finally {

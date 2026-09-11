@@ -65,11 +65,16 @@ class TodayActionsVisibility
      *
      * This strips both at the VIEW layer only. Neither producer is touched.
      *
+     * 2026-09-11: 'missed_calls_yesterday' added. A birthday recall hidden on
+     * its due day was never actioned, so the next morning it came back as a
+     * HIGH "Overdue (Recall birthday)" missed call — 4 of the 7 rows on the
+     * live board that day. Hidden means hidden on every day it could appear.
+     *
      * @param  array<string, array<int, array<string,mixed>>>  $raw
      */
     public function stripBirthdayRows(array &$raw): void
     {
-        foreach (['recall_calls', 'tasks'] as $key) {
+        foreach (['recall_calls', 'tasks', 'missed_calls_yesterday'] as $key) {
             if (empty($raw[$key])) {
                 continue;
             }
