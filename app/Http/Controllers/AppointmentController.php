@@ -45,7 +45,15 @@ class AppointmentController extends Controller
             ->orderBy('appointment_date')
             ->orderBy('appointment_time');
 
-        if ($request->filled('date')) {
+        if ($request->filled('start') && $request->filled('end')) {
+            // Calendar live refresh (2026-09-11): the visible range exactly as
+            // FullCalendar reports it. Takes precedence over date/view.
+            $request->validate([
+                'start' => 'date',
+                'end'   => 'date|after_or_equal:start',
+            ]);
+            $query->inDateRange($request->start, $request->end);
+        } elseif ($request->filled('date')) {
             $date = $request->get('date');
             $view = $request->get('view', 'day');
 
@@ -75,6 +83,14 @@ class AppointmentController extends Controller
             $query->where('status', $request->status);
         }
 
+        $appointments = $query->get()->map(fn($a) => $this->formatAppointment($a))->values();
+
+        // The calendar's live refresh asks for just the list; skip the page
+        // furniture (doctors, categories, queue, counters) for that caller.
+        if ($request->boolean('json')) {
+            return response()->json($appointments);
+        }
+
         $doctors = User::where('branch_id', $branchId)
             ->where('is_active', true)
             ->where(fn($q) => $q->whereIn('role', User::DOCTOR_ROLES)->orWhere('name', 'like', 'Dr.%'))
@@ -92,8 +108,6 @@ class AppointmentController extends Controller
             $timeSlots[] = sprintf('%02d:30', $h);
         }
 
-        $appointments = $query->get()->map(fn($a) => $this->formatAppointment($a))->values();
-
         // Today's queue for sidebar
         $todayAppointments = Appointment::with(['patient', 'doctor', 'treatmentCategory', 'treatment', 'operatory'])
             ->forBranch($branchId)
@@ -107,10 +121,6 @@ class AppointmentController extends Controller
         // Live status counters - scoped the same way, otherwise the sidebar
         // would say "24 patients" over a grid showing six.
         $statusCounts = $this->getTodayStatusCounts($branchId, $viewer, $showAllDoctors);
-
-        if ($request->boolean('json')) {
-            return response()->json($appointments);
-        }
 
         $calendarPrefs = AppSetting::group('calendar');
 
@@ -771,6 +781,42 @@ class AppointmentController extends Controller
         ]);
 
         return response()->json($slots);
+    }
+
+    // ── Live refresh: change token for the calendar poll (2026-09-11) ──
+    /**
+     * Two indexed aggregates, no rows serialised, so the calendar can ask
+     * every second and re-read the range only when something moved. A create,
+     * reschedule, status change, hide, soft delete (stamps updated_at) or a
+     * new block all move the token. Same scope as index() so a doctor's own
+     * list and the whole-clinic view each get their own token.
+     */
+    public function version(Request $request)
+    {
+        $request->validate([
+            'start' => 'required|date',
+            'end'   => 'required|date|after_or_equal:start',
+        ]);
+
+        $viewer = Auth::user();
+        $sum    = "COUNT(*) AS c, COALESCE(SUM(CRC32(CONCAT_WS('|', id, updated_at))), 0) AS s";
+
+        $appts = Appointment::query()
+            ->forBranch($viewer->branch_id)
+            ->visibleTo($viewer, $request->boolean('all_doctors'))
+            ->visibleOnCalendar()
+            ->inDateRange($request->start, $request->end)
+            ->selectRaw($sum)
+            ->first();
+
+        $blocks = DoctorBlockedSlot::query()
+            ->inRange($request->start, $request->end)
+            ->selectRaw($sum)
+            ->first();
+
+        return response()->json([
+            'v' => "{$appts->c}.{$appts->s}-{$blocks->c}.{$blocks->s}",
+        ]);
     }
 
     // ── Private helpers ──────────────────────────────────────────

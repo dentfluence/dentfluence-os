@@ -442,47 +442,55 @@
 
 .fc-timegrid-slot { height: 28px !important; }
 
-/* ── Blocked slot bands (2026-09-08) ──────────────────────────────────────
-   Staff reported blocks were invisible: a 15%-opacity wash under a white
-   appointment card reads as nothing, so reception kept promising slots the
-   doctor was away for and hit the server refusal only at data-entry time.
-   Bands are now hatched (pattern survives any card on top of it), carry the
-   doctor's name, and are typed by colour. */
-.fc-blocked-slot {
+/* ── Blocked slot bands (2026-09-08, made visible 2026-09-11) ─────────────
+   Staff reported blocks were invisible - twice. The 8 Sep hatch never painted:
+   FullCalendar 6 gives background events the `fc-event` class as well, so the
+   `.fc-event { background: transparent; border: none }` reset further down won
+   on source order at equal specificity and wiped the fill AND the border, and
+   eventContent returning nothing dropped the label. These selectors out-rank
+   that reset (three classes) - keep them that way. */
+.fc .fc-bg-event.fc-blocked-slot {
+    opacity: 1 !important;                 /* FullCalendar's own default is .3 */
+    background-color: transparent !important;
     background-image: repeating-linear-gradient(
         135deg,
-        rgba(220,38,38,.16) 0 6px,
-        rgba(220,38,38,.05) 6px 12px
+        rgba(220,38,38,.22) 0 6px,
+        rgba(220,38,38,.06) 6px 12px
     ) !important;
     border-left: 3px solid #dc2626 !important;
+    border-radius: 0 !important;
+    cursor: default !important;
 }
-.fc-blocked-slot.fc-block-break {
+.fc .fc-bg-event.fc-blocked-slot.fc-block-break {
     background-image: repeating-linear-gradient(
         135deg,
-        rgba(217,119,6,.16) 0 6px,
-        rgba(217,119,6,.05) 6px 12px
+        rgba(217,119,6,.22) 0 6px,
+        rgba(217,119,6,.06) 6px 12px
     ) !important;
     border-left-color: #d97706 !important;
 }
-.fc-blocked-slot.fc-block-emergency {
+.fc .fc-bg-event.fc-blocked-slot.fc-block-emergency {
     background-image: repeating-linear-gradient(
         135deg,
-        rgba(124,58,237,.18) 0 6px,
-        rgba(124,58,237,.05) 6px 12px
+        rgba(124,58,237,.24) 0 6px,
+        rgba(124,58,237,.06) 6px 12px
     ) !important;
     border-left-color: #7c3aed !important;
 }
-.fc-blocked-slot .fc-event-title {
+.fc .fc-bg-event.fc-blocked-slot .fc-block-label {
     font-size: 10px;
     font-weight: 700;
     color: #b91c1c;
     padding: 2px 5px;
     letter-spacing: .2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     text-shadow: 0 0 3px #fff, 0 0 3px #fff;   /* stays legible over any card */
-    opacity: 1;
+    pointer-events: none;
 }
-.fc-blocked-slot.fc-block-break    .fc-event-title { color: #b45309; }
-.fc-blocked-slot.fc-block-emergency .fc-event-title { color: #6d28d9; }
+.fc .fc-bg-event.fc-blocked-slot.fc-block-break     .fc-block-label { color: #b45309; }
+.fc .fc-bg-event.fc-blocked-slot.fc-block-emergency .fc-block-label { color: #6d28d9; }
 
 /* Month view renders the same block as a solid pill, not a full-cell wash —
    a whole red day cell for a two-hour block is a lie reception acts on. */
@@ -964,6 +972,8 @@ window.__APPT_DATA = {
     csrfToken:     "{{ csrf_token() }}",
     routes: {
         store:        "{{ route('appointments.store') }}",
+        index:        "{{ route('appointments.index') }}",
+        version:      "{{ route('appointments.version') }}",
         todayQueue:   "{{ route('appointments.queue.today') }}",
         statusCounts: "{{ route('appointments.status.counts') }}",
         statusUpdate: "{{ url('/appointments') }}/{{'{id}'}}/status",
@@ -1611,6 +1621,7 @@ function buildCalendarEvents(appointments) {
 
 // ─── Blocked Slots ─────────────────────────────────────────────
 let blockedSlotSource = null; // FullCalendar event source reference
+let _blockFingerprint = null; // last payload + how it was drawn
 
 const BLOCK_TYPE_LABEL = {
     unavailable: 'UNAVAILABLE',
@@ -1675,15 +1686,164 @@ async function fetchAndRenderBlockedSlots(startStr, endStr) {
         const url = `/appointments/blocked-slots?start=${startStr}&end=${endStr}`;
         const r   = await fetch(url, { headers: { 'Accept': 'application/json' } });
         if (!r.ok) return;
-        const slots = await r.json();
-        // Remove old block source, add fresh one
-        if (blockedSlotSource) {
-            blockedSlotSource.remove();
-        }
+        const slots    = await r.json();
+        const doctorId = window.__APPT_DOCTOR_FILTER || '';
+
+        // Redraw only when the payload, or the way it is drawn, changed -
+        // this runs on every live-refresh tick.
+        const fp = JSON.stringify(slots) + '|' + calendar.view.type + '|' + doctorId;
+        if (fp === _blockFingerprint && blockedSlotSource) return;
+        _blockFingerprint = fp;
+
+        if (blockedSlotSource) blockedSlotSource.remove();
         blockedSlotSource = calendar.addEventSource(
-            buildBlockedEvents(slots, calendar.view.type, window.__APPT_DOCTOR_FILTER || '')
+            buildBlockedEvents(slots, calendar.view.type, doctorId)
         );
     } catch {}
+}
+
+// ─── Live refresh (2026-09-11) ─────────────────────────────────
+// Until now the calendar was a snapshot: every appointment was embedded in
+// the page at render time and nothing ever asked the server again, so a
+// booking made at the other desk stayed invisible until someone pressed F5.
+// The visible range is now re-read from the server on every navigation,
+// after every write from this screen, when the tab regains focus, and the
+// moment another desk changes it: every second the page asks for a change
+// TOKEN (two indexed aggregates, no rows) and re-reads the range only when
+// the token moved. Nothing is redrawn unless the payload changed, so an
+// idle screen never flickers and a hover card is never yanked away.
+let apptSource        = null;   // the ONE appointment event source on the calendar
+let _apptFingerprint  = null;   // last server payload, for change detection
+let _interacting      = false;  // drag/resize in flight - never redraw under the cursor
+let _refreshInFlight  = false;
+let _refreshQueued    = false;
+let _lastVersion      = null;   // { key: 'start|end', v } - baseline for the token poll
+let _versionInFlight  = false;
+const VERSION_POLL_MS = 1000;   // token check: ~25 ms of server time per desk per tick
+const FULL_REFRESH_MS = 60000;  // safety net if a token ever misses
+
+// Visible range as LOCAL YYYY-MM-DD. toISOString() is UTC and shifts the date
+// back a day at IST (UTC+5:30) local-midnight boundaries. activeEnd is exclusive.
+function viewRange() {
+    const v = calendar.view;
+    return {
+        start: v.activeStart.toLocaleDateString('en-CA'),
+        end:   v.activeEnd.toLocaleDateString('en-CA'),
+    };
+}
+
+// Draw window.__APPT_DATA.appointments through the topbar filters, replacing
+// the previous drawing. One source, always replaced, never accumulated - so
+// a refresh can never double a card.
+function renderAppointmentEvents() {
+    const app = window._apptApp;
+    let evts  = buildCalendarEvents(window.__APPT_DATA.appointments);
+
+    if (app?.filterDoctorId) {
+        evts = evts.filter(e => String(e.extendedProps.doctor_id) === String(app.filterDoctorId));
+    }
+
+    const q = (app?.searchQuery || '').trim().toLowerCase();
+    if (q) {
+        evts = evts.filter(e => {
+            const ap = e.extendedProps;
+            return (ap.patient_name || '').toLowerCase().includes(q)
+                || (ap.patient_phone || '').includes(q)
+                || (ap.treatment_category || ap.type || '').toLowerCase().includes(q)
+                || (ap.doctor_name || '').toLowerCase().includes(q);
+        });
+    }
+
+    if (apptSource) apptSource.remove();
+    apptSource = calendar.addEventSource(evts);
+}
+
+function rangeParams(start, end) {
+    const params = new URLSearchParams({ start, end });
+    // Same slice the page was rendered with - a doctor viewing the whole
+    // clinic must not snap back to his own list on the next tick.
+    if (window.__APPT_DATA.viewerScope.showing_all) params.append('all_doctors', '1');
+    return params;
+}
+
+async function fetchVersion(start, end) {
+    try {
+        const r = await fetch(`${window.__APPT_DATA.routes.version}?${rangeParams(start, end)}`, {
+            headers: { 'Accept': 'application/json' },
+        });
+        if (!r.ok) return null;
+        return (await r.json()).v || null;
+    } catch { return null; }
+}
+
+// Re-read the visible range from the server; redraw only if it changed.
+// A call that arrives while one is in flight is run again afterwards, so a
+// write followed by a refresh can never be answered by a stale response.
+async function refreshCalendar() {
+    if (!calendar) return;
+    if (_interacting || _refreshInFlight) { _refreshQueued = true; return; }
+
+    _refreshInFlight = true;
+    try {
+        const { start, end } = viewRange();
+        // Token BEFORE the list: anything written after this instant differs
+        // from the baseline and the next poll picks it up - no blind window.
+        const token  = await fetchVersion(start, end);
+        const params = rangeParams(start, end);
+        params.append('json', '1');
+        const r = await fetch(`${window.__APPT_DATA.routes.index}?${params}`, {
+            headers: { 'Accept': 'application/json' },
+        });
+        if (token) _lastVersion = { key: start + '|' + end, v: token };
+        if (r.ok) {
+            const list = await r.json();
+            const fp   = JSON.stringify(list);
+            if (fp !== _apptFingerprint) {
+                _apptFingerprint = fp;
+                window.__APPT_DATA.appointments = list;
+                renderAppointmentEvents();
+                if (window._apptApp) { window._apptApp.refreshQueue(); window._apptApp.refreshCounts(); }
+            }
+        }
+        await fetchAndRenderBlockedSlots(start, end);
+    } catch {
+        // Network hiccup: keep what is on screen; the next tick tries again.
+    } finally {
+        _refreshInFlight = false;
+        if (_refreshQueued && !_interacting) { _refreshQueued = false; refreshCalendar(); }
+    }
+}
+
+// Ask for the token; re-read the range only when it moved. A range the page
+// has no baseline for (first tick after navigation, before refreshCalendar
+// landed) just records one - refreshCalendar is already fetching that range.
+async function pollVersion() {
+    if (!calendar || _versionInFlight || _refreshInFlight || _interacting) return;
+    if (document.visibilityState !== 'visible') return;
+
+    _versionInFlight = true;
+    try {
+        const { start, end } = viewRange();
+        const v = await fetchVersion(start, end);
+        if (!v) return;
+        const key     = start + '|' + end;
+        const changed = _lastVersion !== null && _lastVersion.key === key && _lastVersion.v !== v;
+        _lastVersion  = { key, v };
+        if (changed) refreshCalendar();
+    } finally {
+        _versionInFlight = false;
+    }
+}
+
+function startLiveRefresh() {
+    setInterval(pollVersion, VERSION_POLL_MS);
+    setInterval(() => {
+        if (document.visibilityState === 'visible') refreshCalendar();
+    }, FULL_REFRESH_MS);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') refreshCalendar();
+    });
+    window.addEventListener('focus', () => refreshCalendar());
 }
 
 function initCalendar(appointments) {
@@ -1722,7 +1882,7 @@ function initCalendar(appointments) {
                 eventMaxStack: 5,
             },
         },
-        events:         buildCalendarEvents(appointments),
+        events:         [],   // drawn by renderAppointmentEvents() as ONE replaceable source
         eventContent:   renderEvent,
         eventClick:     onEventClick,
         dateClick:      onDateClick,
@@ -1732,17 +1892,28 @@ function initCalendar(appointments) {
         editable:       true,   // enables drag AND resize
         eventDrop:      onEventDrop,
         eventResize:    onEventResize,
+        // A live refresh must never redraw the card someone is holding. A drag
+        // that lands back where it started fires no eventDrop, so the flag is
+        // released on *Stop as well; onEventDrop/onEventResize re-take it while
+        // they save.
+        eventDragStart:   () => { _interacting = true;  },
+        eventDragStop:    () => { _interacting = false; },
+        eventResizeStart: () => { _interacting = true;  },
+        eventResizeStop:  () => { _interacting = false; },
         // Compact card handled entirely by CSS container queries — no JS needed
-        // Reload blocked slots whenever the calendar view changes date range
-        datesSet: function(info) {
-            const start = info.startStr.split('T')[0];
-            const end   = info.endStr.split('T')[0];
-            fetchAndRenderBlockedSlots(start, end);
-        },
+        // Any navigation (prev/next/today/view switch) re-reads that range -
+        // appointments AND blocked slots - from the server.
+        datesSet: function() { refreshCalendar(); },
     });
 
     calendar.render();
     window.calendar = calendar; // expose globally so sidebar toggle can call updateSize()
+
+    // Paint what the page came with straight away; refreshCalendar() (already
+    // running from the first datesSet) converges on the server's copy of the
+    // range as soon as it lands.
+    renderAppointmentEvents();
+    startLiveRefresh();
 
     // Init date pickers and time slot selects after DOM is ready
     initFlatpickrs();
@@ -1754,29 +1925,28 @@ function initCalendar(appointments) {
 // Refresh blocked slots immediately when a slot is saved from the modal
 window.addEventListener('df:slot-blocked', function() {
     if (!calendar) return;
-    const view  = calendar.view;
-    // en-CA gives LOCAL YYYY-MM-DD; toISOString() is UTC and shifts the date
-    // back a day for IST (UTC+5:30) local-midnight boundaries.
-    const start = view.activeStart.toLocaleDateString('en-CA');
-    const end   = view.activeEnd.toLocaleDateString('en-CA');
+    const { start, end } = viewRange();
     fetchAndRenderBlockedSlots(start, end);
 });
 
 function renderEvent(info) {
     const apt  = info.event.extendedProps;
     if (apt._isBlock) {
-        // Background bands render their own title; only the month-view pill
-        // needs markup here.
-        if (info.event.display !== 'background') {
-            const d = document.createElement('div');
+        const d = document.createElement('div');
+        if (info.event.display === 'background') {
+            // FullCalendar 6 routes background events through eventContent
+            // too; returning nothing here rendered the band with NO label.
+            d.className   = 'fc-block-label';
+            d.textContent = blockLabel(apt);
+        } else {
+            // Month view: a solid pill instead of a full-cell wash.
             d.className = 'fc-block-pill'
                 + (apt.block_type === 'break' ? ' is-break'
                 :  apt.block_type === 'emergency' ? ' is-emergency' : '');
             d.textContent = apt.start_time + '–' + apt.end_time + ' ' + blockLabel(apt);
-            d.title = d.textContent;
-            return { domNodes: [d] };
         }
-        return;
+        d.title = d.textContent;
+        return { domNodes: [d] };
     }
 
     const cardStyle   = window.__APPT_DATA.calendarPrefs.cardStyle || 'strip';
@@ -1928,6 +2098,7 @@ async function onEventDrop(info) {
     const apt  = info.event.extendedProps;
     if (apt._isBlock) { info.revert(); return; }  // never drag blocked-slot backgrounds
 
+    _interacting = true;   // hold the live refresh until the server has the move
     const newStart = info.event.start;
     const newDate  = newStart.toLocaleDateString('en-CA'); // YYYY-MM-DD
     const hh       = newStart.getHours().toString().padStart(2,'0');
@@ -1952,6 +2123,9 @@ async function onEventDrop(info) {
     } catch(e) {
         info.revert();
         showDragToast('Network error — move reverted', 'error');
+    } finally {
+        _interacting = false;
+        refreshCalendar();
     }
 }
 
@@ -1960,6 +2134,7 @@ async function onEventResize(info) {
     const apt = info.event.extendedProps;
     if (apt._isBlock) { info.revert(); return; }
 
+    _interacting = true;
     const start    = info.event.start;
     const end      = info.event.end;
     const diffMins = Math.round((end - start) / 60000);
@@ -1983,6 +2158,9 @@ async function onEventResize(info) {
     } catch(e) {
         info.revert();
         showDragToast('Network error — resize reverted', 'error');
+    } finally {
+        _interacting = false;
+        refreshCalendar();
     }
 }
 
@@ -2055,7 +2233,7 @@ function closeCancelModal() {
 function cancelModalToReschedule() {
     closeCancelModal();
     if (typeof qvcReschedule === 'function' && qvcCurrentApt) { qvcReschedule(); return; }
-    if (window.calendar) window.calendar.refetchEvents();
+    refreshCalendar();
 }
 
 function setCancelOutcome(outcome) {
@@ -2125,7 +2303,7 @@ async function submitCancel() {
             // Update in-memory + calendar
             const apt = window.__APPT_DATA.appointments.find(a => a.id === _cancelAptId);
             if (apt) { apt.status = 'cancelled'; apt.cancel_reason = reason; apt.cancelled_party = data.appointment?.cancelled_party; }
-            if (window.calendar) window.calendar.refetchEvents();
+            refreshCalendar();
             if (window._apptApp) { window._apptApp.refreshQueue(); window._apptApp.refreshCounts(); }
         } else {
             const first = data.errors ? Object.values(data.errors)[0]?.[0] : null;
@@ -2150,17 +2328,23 @@ async function qvcRevert() {
         if (data.ok) {
             const apt = window.__APPT_DATA.appointments.find(a => a.id === aptId);
             if (apt) { apt.status = data.appointment.status; apt.previous_status = null; }
-            if (window.calendar) window.calendar.refetchEvents();
+            refreshCalendar();
             if (window._apptApp) { window._apptApp.refreshQueue(); window._apptApp.refreshCounts(); }
         } else { alert(data.message || 'Cannot revert.'); }
     } catch { alert('Network error.'); }
 }
 
+/**
+ * Reschedule = move THIS appointment. Until 11 Sep this opened the modal in
+ * NEW mode with only the patient and date copied over, so reception saw a
+ * blank booking form and, if they filled it in, created a SECOND appointment
+ * while the original stayed on the grid. Edit mode loads the same record
+ * (doctor, time, duration, type, notes, chair) and PATCHes it in place.
+ */
 function qvcReschedule() {
     if (!qvcCurrentApt) return;
     hideQuickView();
-    // Open global modal pre-filled with this patient + date
-    openAppointmentModal('appointment', qvcCurrentApt.appointment_date, qvcCurrentApt.patient_id);
+    window.openEditAppointmentModal(qvcCurrentApt.id);
 }
 
 // ── Hide cancelled appointment from calendar (keeps record) ──────
@@ -2178,7 +2362,7 @@ async function qvcHideFromCalendar() {
         if (data.ok) {
             // Remove from in-memory list so calendar doesn't show it
             window.__APPT_DATA.appointments = window.__APPT_DATA.appointments.filter(a => a.id !== aptId);
-            if (window.calendar) window.calendar.refetchEvents();
+            refreshCalendar();
             if (window._apptApp) { window._apptApp.refreshQueue(); window._apptApp.refreshCounts(); }
         } else { alert('Failed to hide appointment.'); }
     } catch { alert('Network error.'); }
@@ -2200,7 +2384,7 @@ async function qvcDeleteAppt() {
         const data = await r.json();
         if (data.ok) {
             window.__APPT_DATA.appointments = window.__APPT_DATA.appointments.filter(a => a.id !== aptId);
-            if (window.calendar) window.calendar.refetchEvents();
+            refreshCalendar();
             if (window._apptApp) { window._apptApp.refreshQueue(); window._apptApp.refreshCounts(); }
         } else { alert('Failed to delete appointment.'); }
     } catch { alert('Network error.'); }
@@ -2324,11 +2508,13 @@ document.addEventListener('click', e => {
 
 function onEventHover(info) {
     const apt = info.event.extendedProps;
+    if (apt._isBlock) return;   // a block has no patient card
     showQuickView(apt, info.jsEvent);
 }
 
 function onEventClick(info) {
     const apt = info.event.extendedProps;
+    if (apt._isBlock) return;
     showQuickView(apt, info.jsEvent);
 }
 
@@ -2363,10 +2549,7 @@ window.addEventListener('df:appointment-booked', function(e) {
 
 // ── Listen for appointment update → refresh calendar ─────────────────────
 window.addEventListener('df:appointment-updated', function(e) {
-    if (window.calendar) {
-        // Refetch all events to reflect the update
-        window.calendar.refetchEvents();
-    }
+    refreshCalendar();
     if (window._apptApp) {
         window._apptApp.refreshQueue();
     }
@@ -2486,36 +2669,13 @@ function appointmentApp() {
         },
 
         applyFilters() {
-            let evts = buildCalendarEvents(window.__APPT_DATA.appointments);
+            renderAppointmentEvents();
 
-            if (this.filterDoctorId) {
-                evts = evts.filter(e => String(e.extendedProps.doctor_id) === String(this.filterDoctorId));
-            }
-
-            if (this.searchQuery.trim()) {
-                const q = this.searchQuery.toLowerCase();
-                evts = evts.filter(e => {
-                    const ap = e.extendedProps;
-                    return (ap.patient_name || '').toLowerCase().includes(q)
-                        || (ap.patient_phone || '').includes(q)
-                        || (ap.treatment_category || ap.type || '').toLowerCase().includes(q)
-                        || (ap.doctor_name || '').toLowerCase().includes(q);
-                });
-            }
-
-            calendar.removeAllEvents();
-            calendar.addEventSource(evts);
-
-            // Re-render blocked slots
+            // Blocks follow the doctor filter too - a band is one doctor's,
+            // but it paints the whole column.
             window.__APPT_DOCTOR_FILTER = this.filterDoctorId || '';
-            if (blockedSlotSource) {
-                const v = calendar.view;
-                // Local date (en-CA) — toISOString() is UTC and shifts a day in IST.
-                fetchAndRenderBlockedSlots(
-                    v.activeStart.toLocaleDateString('en-CA'),
-                    v.activeEnd.toLocaleDateString('en-CA')
-                );
-            }
+            const { start, end } = viewRange();
+            fetchAndRenderBlockedSlots(start, end);
         },
 
         toggleStatusFilter(key) {
@@ -2548,9 +2708,10 @@ function appointmentApp() {
                     calEvt.setProp('classNames', [`status-${newStatus}`]);
                 }
 
-                // Refresh queue and counts
+                // Refresh queue and counts, then converge the grid on the server
                 this.refreshQueue();
                 this.refreshCounts();
+                refreshCalendar();
             } catch(e) {
                 console.error('Status update error:', e);
                 alert('Failed to update status. Please try again.');
@@ -2676,12 +2837,11 @@ function appointmentApp() {
         },
 
         addAppointmentToCalendar(apt) {
-            // Add to in-memory list
+            // Show it now from the modal's payload, then let the live refresh
+            // converge on the server's copy (id, colours, doctor scope).
             window.__APPT_DATA.appointments.push(apt);
-
-            // Add to calendar
-            const events = buildCalendarEvents([apt]);
-            if (events.length) calendar.addEventSource(events);
+            renderAppointmentEvents();
+            refreshCalendar();
 
             // Refresh sidebar
             this.refreshQueue();

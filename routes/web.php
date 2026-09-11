@@ -328,6 +328,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/check-conflict',           [AppointmentController::class, 'checkConflict'])->name('check.conflict')->middleware('module:appointments');
         Route::post('/block-slot',             [AppointmentController::class, 'storeBlockedSlot'])->name('block.slot')->middleware('module:appointments,edit');
         Route::get('/blocked-slots',           [AppointmentController::class, 'indexBlockedSlots'])->name('blocked.slots')->middleware('module:appointments');
+        Route::get('/version',                 [AppointmentController::class, 'version'])->name('version')->middleware('module:appointments');
         Route::get('/{appointment}',            [AppointmentController::class, 'show'])->name('show')->middleware('module:appointments');
         Route::get('/{appointment}/quick',      [AppointmentController::class, 'quickView'])->name('quick')->middleware('module:appointments');
         Route::get('/{appointment}/edit',       [AppointmentController::class, 'edit'])->name('edit')->middleware('module:appointments');
