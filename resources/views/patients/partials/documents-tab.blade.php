@@ -679,6 +679,19 @@
                         <p class="text-[11px] font-semibold text-gray-800 leading-tight truncate" title="{{ $displayTitle }}">
                             {{ $displayTitle }}
                         </p>
+
+                        {{-- The treatment, on the tile. A card that says only PHOTO /
+                             AFTER / IMG_9653.JPG names the camera's filing system, not
+                             the clinic's — and the treatment is the first thing anyone
+                             scanning a grid is actually looking for. --}}
+                        @php $treatmentLine = $file->procedure ?: $file->treatment_category_label; @endphp
+                        @if($treatmentLine)
+                            <p class="text-[10px] text-[#6a0f70] font-medium leading-tight truncate mt-0.5"
+                               title="{{ $treatmentLine }}">{{ $treatmentLine }}</p>
+                        @else
+                            <p class="text-[10px] text-amber-600 leading-tight mt-0.5">Treatment not tagged</p>
+                        @endif
+
                         @if($file->tooth_number)
                             <span class="inline-block mt-1 px-1.5 py-0.5 text-[9px] font-medium bg-gray-100 text-gray-600 rounded">
                                 Tooth {{ $file->tooth_number }}

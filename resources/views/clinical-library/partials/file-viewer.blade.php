@@ -303,9 +303,30 @@
                         </template>
                     </div>
 
-                    {{-- FILE METADATA --}}
+                    {{-- CLINICAL CONTEXT — treatment, stage and teeth, EDITABLE.
+
+                         These three fields are what the whole library is searched by, and
+                         until now there was no screen anywhere that could set them after
+                         upload. A photo that arrived without a tooth stayed without one
+                         forever, and then did not come back for "26" — which reads as a
+                         broken search rather than as an empty field. --}}
                     <div class="px-5 py-4 border-b border-gray-100 space-y-2.5">
-                        <div class="flex items-center gap-1.5 flex-wrap">
+
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Clinical context</span>
+                            <button @click="editingContext ? cancelEditContext() : startEditContext()"
+                                    :disabled="saving"
+                                    class="text-[10px] text-[#6a0f70] hover:underline disabled:opacity-50">
+                                <span x-text="editingContext ? 'Cancel' : 'Edit'"></span>
+                            </button>
+                        </div>
+
+                        {{-- read view --}}
+                        <div x-show="!editingContext" class="flex items-center gap-1.5 flex-wrap">
+                            <template x-if="file && file.treatment_category_label">
+                                <span class="px-2 py-0.5 text-[10px] font-semibold bg-[#f5eef9] text-[#6a0f70] border border-purple-200 rounded-full"
+                                      x-text="file.treatment_category_label"></span>
+                            </template>
                             <template x-if="file && file.procedure">
                                 <span class="px-2 py-0.5 text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 rounded-full"
                                       x-text="file.procedure"></span>
@@ -318,6 +339,77 @@
                                 <span class="px-2 py-0.5 text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-200 rounded-full"
                                       x-text="'Tooth ' + file.tooth_number"></span>
                             </template>
+                            <span x-show="file && !file.treatment_category_label && !file.procedure && !file.tooth_number"
+                                  class="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                                Not tagged — this file will not come back in a treatment or tooth search
+                            </span>
+                        </div>
+
+                        {{-- edit view --}}
+                        <div x-show="editingContext" style="display:none" class="space-y-3 pt-1">
+
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1.5">Treatment</label>
+                                <select x-model="ctx.treatment_category"
+                                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs
+                                               text-gray-700 bg-white focus:outline-none focus:border-[#6a0f70]">
+                                    <option value="">— Not set —</option>
+                                    @foreach(\App\Models\ClinicalFile::TREATMENT_CATEGORIES as $key => $label)
+                                        <option value="{{ $key }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                <p class="text-[10px] text-gray-400 mt-1">
+                                    This is what the Treatment filter and the Case Library group by.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1.5">Procedure</label>
+                                <input type="text" x-model="ctx.procedure"
+                                       placeholder="e.g. Implant placement 26"
+                                       class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs
+                                              text-gray-700 bg-white focus:outline-none focus:border-[#6a0f70]">
+                                <p class="text-[10px] text-gray-400 mt-1">
+                                    Free text, in your own words. This is the line the watermark prints.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1.5">Stage</label>
+                                <div class="flex flex-wrap gap-1.5">
+                                    @foreach([
+                                        ['val' => 'general',  'label' => 'General'],
+                                        ['val' => 'before',   'label' => 'Before'],
+                                        ['val' => 'during',   'label' => 'During'],
+                                        ['val' => 'after',    'label' => 'After'],
+                                        ['val' => 'followup', 'label' => 'Follow-up'],
+                                    ] as $s)
+                                    <button type="button"
+                                            @click="ctx.stage = '{{ $s['val'] }}'"
+                                            :class="ctx.stage === '{{ $s['val'] }}'
+                                                ? 'bg-[#6a0f70] text-white border-[#6a0f70]'
+                                                : 'bg-white text-gray-500 border-gray-200 hover:border-[#6a0f70]/60'"
+                                            class="px-2.5 py-1 text-[10px] font-semibold border rounded-full transition-colors">
+                                        {{ $s['label'] }}
+                                    </button>
+                                    @endforeach
+                                </div>
+                            </div>
+
+                            <x-tooth-chart model="ctxTeeth" label="Teeth in this file" />
+
+                            <div class="flex items-center gap-2 pt-1">
+                                <button @click="saveContext()" :disabled="saving"
+                                        class="flex-1 px-3 py-2 text-[11px] font-semibold text-white bg-[#6a0f70]
+                                               rounded-lg hover:bg-[#560c5b] transition-colors disabled:opacity-50">
+                                    <span x-text="saving ? 'Saving…' : 'Save clinical context'"></span>
+                                </button>
+                                <button @click="cancelEditContext()" :disabled="saving"
+                                        class="px-3 py-2 text-[11px] font-semibold text-gray-500 bg-gray-100
+                                               rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50">
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
 
                         <div class="space-y-1.5 text-xs">
@@ -553,6 +645,13 @@ function dfFileViewer() {
         newTag:        '',
         deleteConfirm: false,
 
+        // Clinical context editor. tooth_number is stored as a comma list
+        // ("24, 25") because one file can cover a whole bridge; the chart works
+        // in numbers, so it is split on the way in and joined on the way out.
+        editingContext: false,
+        ctx:            { treatment_category: '', procedure: '', stage: 'general' },
+        ctxTeeth:       [],
+
         flagDefs: [
             { key: 'is_marketing_eligible',    label: 'Marketing',    hint: '(consent required)' },
             { key: 'is_education_eligible',    label: 'Education',    hint: null },
@@ -568,8 +667,9 @@ function dfFileViewer() {
                 this.file          = null;
                 this.error         = null;
                 this.open          = true;
-                this.deleteConfirm = false;
-                this.editingNotes  = false;
+                this.deleteConfirm  = false;
+                this.editingNotes   = false;
+                this.editingContext = false;
                 this.zoomLevel     = 1;
                 this.showWatermark = this.loadWatermarkPref();
                 document.body.style.overflow = 'hidden';
@@ -668,6 +768,41 @@ function dfFileViewer() {
                 return false;
             } finally {
                 this.saving = false;
+            }
+        },
+
+        // ── Clinical context ─────────────────────────────────────────────
+        startEditContext() {
+            this.ctx = {
+                treatment_category: this.file?.treatment_category || '',
+                procedure:          this.file?.procedure || '',
+                stage:              this.file?.stage || 'general',
+            };
+            this.ctxTeeth = String(this.file?.tooth_number || '')
+                .split(',')
+                .map(t => parseInt(t.trim(), 10))
+                .filter(n => Number.isInteger(n));
+            this.editingContext = true;
+        },
+
+        cancelEditContext() {
+            this.editingContext = false;
+        },
+
+        async saveContext() {
+            const teeth = this.ctxTeeth.slice().sort((a, b) => a - b).join(', ');
+
+            const ok = await this.saveMeta({
+                treatment_category: this.ctx.treatment_category || null,
+                procedure:          (this.ctx.procedure || '').trim() || null,
+                stage:              this.ctx.stage || 'general',
+                tooth_number:       teeth || null,
+            });
+
+            if (ok) {
+                this.editingContext = false;
+                // The grid behind the panel is now showing stale chips.
+                window.dispatchEvent(new CustomEvent('file-viewer-updated', { detail: { id: this.fileId } }));
             }
         },
 
