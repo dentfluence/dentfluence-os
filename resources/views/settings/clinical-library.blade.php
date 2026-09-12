@@ -548,111 +548,173 @@
 
 
         {{-- ════════════════════════════════════════════
-             SECTION 3 · WATERMARK TEMPLATES
+             SECTION 3 · WATERMARK
+
+             A real form. What was here before had no <form>, no name attributes
+             and no handler on "Save Template", and the controller behind it
+             expected field names that appeared nowhere on the page — and even if
+             they had, WatermarkService read an entirely different set of keys.
+             No watermark setting had ever changed a single pixel.
+
+             The four template tabs (Marketing / Education / Conference /
+             Internal Review) are gone: there is one watermark configuration, and
+             four tabs that all write to it is a promise the product cannot keep.
         ════════════════════════════════════════════ --}}
         <div x-show="activeSection==='watermarks'" x-cloak>
 
             <div class="cl-card">
-                <h3 class="settings-section-title" style="margin-bottom:6px;">Watermark Templates</h3>
-                <p style="font-size:12.5px;color:#9a7aaa;margin:0 0 20px;">Configure text overlays applied when exporting or sharing clinical files. The original file is never modified.</p>
+                <h3 class="settings-section-title" style="margin-bottom:6px;">Watermark</h3>
+                <p style="font-size:12.5px;color:#9a7aaa;margin:0 0 20px;">
+                    Stamped onto a resized copy used for viewing and sharing. <strong>The original file is never modified.</strong>
+                </p>
 
-                {{-- Template selector tabs --}}
-                <div style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;">
-                    @php
-                    $wmTemplates = ['Marketing', 'Education', 'Conference', 'Internal Review'];
-                    @endphp
-                    @foreach($wmTemplates as $wmt)
-                    <button @click="activeWmTemplate='{{ $wmt }}'"
-                            :class="activeWmTemplate==='{{ $wmt }}' ? 'wm-tab-btn active' : 'wm-tab-btn'">
-                        {{ $wmt }}
-                    </button>
-                    @endforeach
+                @if(session('success'))
+                <div style="margin-bottom:18px;padding:11px 15px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;font-size:13px;color:#15803d;">
+                    {{ session('success') }}
+                </div>
+                @endif
+
+                @if($errors->any())
+                <div style="margin-bottom:18px;padding:11px 15px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:13px;color:#b91c1c;">
+                    @foreach($errors->all() as $error)<div>{{ $error }}</div>@endforeach
+                </div>
+                @endif
+
+                <form method="POST" action="{{ route('cms.watermark.save') }}" enctype="multipart/form-data"
+                      x-data="watermarkForm({
+                          enabled:  {{ $watermark['wm_enabled'] ? 'true' : 'false' }},
+                          clinic:   {{ $watermark['wm_clinic_name'] ? 'true' : 'false' }},
+                          treatment:{{ $watermark['wm_treatment'] ? 'true' : 'false' }},
+                          doctor:   {{ $watermark['wm_doctor_name'] ? 'true' : 'false' }},
+                          stage:    {{ $watermark['wm_stage'] ? 'true' : 'false' }},
+                          tooth:    {{ $watermark['wm_tooth_number'] ? 'true' : 'false' }},
+                          date:     {{ $watermark['wm_date'] ? 'true' : 'false' }},
+                          position: @js($watermark['wm_position']),
+                          opacity:  {{ (int) $watermark['wm_opacity'] }},
+                          fontSize: {{ (int) $watermark['wm_font_size'] }},
+                          clinicName: @js($clinicName)
+                      })">
+                    @csrf
+
+                    {{-- Master switch --}}
+                    <label style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border:1.5px solid #ede4f3;border-radius:10px;margin-bottom:20px;cursor:pointer;"
+                           :style="enabled ? 'border-color:#86efac;background:#f0fdf4;' : ''">
+                        <span>
+                            <span style="font-size:13.5px;font-weight:600;color:#1a0320;">Watermark new uploads</span>
+                            <span style="display:block;font-size:11.5px;color:#9a7aaa;margin-top:2px;">Off means files are served exactly as uploaded.</span>
+                        </span>
+                        <input type="checkbox" name="wm_enabled" value="1" x-model="enabled" style="accent-color:#16a34a;width:17px;height:17px;">
+                    </label>
+
+                    <div style="display:grid;grid-template-columns:1fr 320px;gap:24px;align-items:start;">
+
+                        {{-- ── Left: what goes in it ── --}}
+                        <div>
+                            <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9a7aaa;margin:0 0 10px;">Elements to include</p>
+
+                            <div style="border:1.5px solid #ede4f3;border-radius:10px;overflow:hidden;margin-bottom:8px;">
+                                @php
+                                $wmElements = [
+                                    ['name' => 'wm_clinic_name',  'model' => 'clinic',    'label' => 'Clinic name'],
+                                    ['name' => 'wm_treatment',    'model' => 'treatment', 'label' => 'Treatment'],
+                                    ['name' => 'wm_doctor_name',  'model' => 'doctor',    'label' => 'Doctor name'],
+                                    ['name' => 'wm_stage',        'model' => 'stage',     'label' => 'Stage (before / after)'],
+                                    ['name' => 'wm_tooth_number', 'model' => 'tooth',     'label' => 'Tooth number'],
+                                    ['name' => 'wm_date',         'model' => 'date',      'label' => 'Date'],
+                                ];
+                                @endphp
+                                @foreach($wmElements as $el)
+                                <label style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;cursor:pointer;border-bottom:{{ !$loop->last ? '1px solid #f5f0f8' : 'none' }};">
+                                    <span style="font-size:13px;color:#1a0320;">{{ $el['label'] }}</span>
+                                    <input type="checkbox" name="{{ $el['name'] }}" value="1" x-model="{{ $el['model'] }}" style="accent-color:#6a0f70;width:16px;height:16px;">
+                                </label>
+                                @endforeach
+                            </div>
+
+                            <p style="font-size:11.5px;color:#9a7aaa;margin:0 0 20px;line-height:1.6;">
+                                There is no patient-name option, and there will not be one. A name burned into an image cannot be taken back later, and these files exist to be shared for marketing, teaching and case discussion.
+                            </p>
+
+                            {{-- Position --}}
+                            <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9a7aaa;margin:0 0 10px;">Position</p>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
+                                @foreach(['top-left' => 'Top left', 'top-right' => 'Top right', 'bottom-left' => 'Bottom left', 'bottom-right' => 'Bottom right'] as $posKey => $posLabel)
+                                <label style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1.5px solid #ede4f3;border-radius:8px;cursor:pointer;"
+                                       :style="position === '{{ $posKey }}' ? 'border-color:#6a0f70;background:#faf5fb;' : ''">
+                                    <input type="radio" name="wm_position" value="{{ $posKey }}" x-model="position" style="accent-color:#6a0f70;">
+                                    <span style="font-size:13px;color:#1a0320;">{{ $posLabel }}</span>
+                                </label>
+                                @endforeach
+                            </div>
+                            <p style="font-size:11.5px;color:#9a7aaa;margin:0 0 20px;">Centre is deliberately not offered — a stamp across the middle destroys the clinical detail it is meant to protect.</p>
+
+                            {{-- Opacity --}}
+                            <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9a7aaa;margin:0 0 10px;">Opacity</p>
+                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                                <input type="range" name="wm_opacity" min="10" max="100" x-model.number="opacity" style="flex:1;accent-color:#6a0f70;height:4px;">
+                                <span style="font-size:13px;font-weight:600;color:#6a0f70;min-width:40px;text-align:right;" x-text="opacity + '%'"></span>
+                            </div>
+
+                            {{-- Size --}}
+                            <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9a7aaa;margin:0 0 10px;">Text size</p>
+                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                                <input type="range" name="wm_font_size" min="10" max="120" x-model.number="fontSize" style="flex:1;accent-color:#6a0f70;height:4px;">
+                                <span style="font-size:13px;font-weight:600;color:#6a0f70;min-width:40px;text-align:right;" x-text="fontSize + 'px'"></span>
+                            </div>
+
+                            {{-- Logo --}}
+                            <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9a7aaa;margin:0 0 10px;">Clinic logo</p>
+                            <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;font-size:13px;color:#1a0320;">
+                                <input type="checkbox" name="wm_logo" value="1" @checked($watermark['wm_logo']) style="accent-color:#6a0f70;width:16px;height:16px;">
+                                Include the logo in the watermark
+                                @if($hasLogo)
+                                    <span style="font-size:11px;color:#15803d;">&middot; a logo is on file</span>
+                                @else
+                                    <span style="font-size:11px;color:#c27803;">&middot; none uploaded yet</span>
+                                @endif
+                            </label>
+                            <input type="file" name="watermark_logo" accept=".png,.jpg,.jpeg"
+                                   style="width:100%;padding:8px 12px;border:1.5px solid #ede4f3;border-radius:8px;font-size:12.5px;background:#faf5fb;cursor:pointer;">
+                            <p style="font-size:11.5px;color:#9a7aaa;margin:6px 0 24px;">PNG or JPG, up to 2 MB. Scaled to 120px wide.</p>
+
+                            <button type="submit" class="settings-save-btn">Save watermark settings</button>
+                        </div>
+
+                        {{-- ── Right: preview built from the real values ── --}}
+                        <div>
+                            <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9a7aaa;margin:0 0 10px;">Preview</p>
+                            <div class="wm-preview">
+                                <div class="wm-preview-img-placeholder">
+                                    <svg width="64" height="64" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="1" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                </div>
+                                <div class="wm-overlay-text"
+                                     x-show="enabled"
+                                     :style="`opacity:${opacity/100}; font-size:${Math.max(9, Math.round(fontSize/2))}px; ${positionStyle()}`"
+                                     x-text="previewText()">
+                                </div>
+                            </div>
+                            <p style="font-size:11.5px;color:#9a7aaa;margin:10px 0 0;text-align:center;line-height:1.6;">
+                                Sample values.<br>Originals are never modified.
+                            </p>
+                        </div>
+
+                    </div>{{-- /grid --}}
+                </form>
+
+                {{-- Re-stamp: settings only reach NEW uploads until this is run --}}
+                <div style="margin-top:26px;padding-top:20px;border-top:1px solid #f5f0f8;">
+                    <form method="POST" action="{{ route('cms.files.restamp') }}"
+                          onsubmit="return confirm('Re-stamp every image in the library with the current settings? Originals are not touched.');">
+                        @csrf
+                        <button type="submit" class="cm-btn-outline" style="border:1.5px solid #ede4f3;padding:9px 16px;border-radius:8px;background:#fff;font-size:13px;color:#6a0f70;cursor:pointer;">
+                            Re-stamp existing files
+                        </button>
+                        <span style="font-size:11.5px;color:#9a7aaa;margin-left:10px;">
+                            Saving settings only affects new uploads — a file already in the library keeps the stamp it was given. This queues them all again.
+                        </span>
+                    </form>
                 </div>
 
-                {{-- Two-column layout: controls left, preview right --}}
-                <div style="display:grid;grid-template-columns:1fr 320px;gap:24px;align-items:start;">
-
-                    {{-- ── Left: element toggles + position + opacity ── --}}
-                    <div>
-                        {{-- Element toggles --}}
-                        <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9a7aaa;margin:0 0 10px;">Elements to include</p>
-
-                        @php
-                        $wmElements = [
-                            ['key' => 'clinic_name',   'label' => 'Clinic Name',    'default' => true],
-                            ['key' => 'doctor_name',   'label' => 'Doctor Name',    'default' => true],
-                            ['key' => 'treatment',     'label' => 'Treatment',      'default' => false],
-                            ['key' => 'stage',         'label' => 'Stage',          'default' => false],
-                            ['key' => 'tooth_number',  'label' => 'Tooth Number',   'default' => false],
-                            ['key' => 'date',          'label' => 'Date',           'default' => true],
-                        ];
-                        @endphp
-
-                        <div style="border:1.5px solid #ede4f3;border-radius:10px;overflow:hidden;margin-bottom:20px;">
-                            @foreach($wmElements as $el)
-                            <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:{{ !$loop->last ? '1px solid #f5f0f8' : 'none' }};">
-                                <span style="font-size:13px;color:#1a0320;">{{ $el['label'] }}</span>
-                                <label class="cl-toggle">
-                                    <input type="checkbox" {{ $el['default'] ? 'checked' : '' }}
-                                           @change="refreshWatermarkPreview()">
-                                    <span class="cl-toggle-slider"></span>
-                                </label>
-                            </div>
-                            @endforeach
-                        </div>
-
-                        {{-- Position selector --}}
-                        <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9a7aaa;margin:0 0 10px;">Position</p>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;">
-                            @php
-                            $positions = ['Top Left', 'Top Right', 'Bottom Left', 'Bottom Right'];
-                            @endphp
-                            @foreach($positions as $pos)
-                            <label style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1.5px solid #ede4f3;border-radius:8px;cursor:pointer;">
-                                <input type="radio" name="wm_position" value="{{ $pos }}"
-                                       {{ $pos === 'Bottom Right' ? 'checked' : '' }}
-                                       @change="wmPosition='{{ $pos }}';refreshWatermarkPreview()"
-                                       style="accent-color:#6a0f70;">
-                                <span style="font-size:13px;color:#1a0320;">{{ $pos }}</span>
-                            </label>
-                            @endforeach
-                        </div>
-
-                        {{-- Opacity slider --}}
-                        <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9a7aaa;margin:0 0 10px;">Opacity</p>
-                        <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
-                            <input type="range" min="10" max="100" x-model="wmOpacity" @input="refreshWatermarkPreview()"
-                                   style="flex:1;accent-color:#6a0f70;height:4px;">
-                            <span style="font-size:13px;font-weight:600;color:#6a0f70;min-width:36px;text-align:right;" x-text="wmOpacity + '%'"></span>
-                        </div>
-
-                        <button class="settings-save-btn" style="margin-top:4px;">
-                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                            Save Template
-                        </button>
-                    </div>
-
-                    {{-- ── Right: live preview panel ── --}}
-                    <div>
-                        <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9a7aaa;margin:0 0 10px;">Preview</p>
-                        <div class="wm-preview">
-                            {{-- Placeholder clinical image background --}}
-                            <div class="wm-preview-img-placeholder">
-                                <svg width="64" height="64" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="1" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                            </div>
-                            {{-- Dynamic watermark overlay --}}
-                            <div class="wm-overlay-text"
-                                 :style="`opacity: ${wmOpacity/100}; ${wmPositionStyle}`"
-                                 x-text="wmPreviewText">
-                            </div>
-                        </div>
-                        <p style="font-size:11.5px;color:#9a7aaa;margin:10px 0 0;text-align:center;">
-                            Preview uses sample clinic data.<br>
-                            Original files are never modified.
-                        </p>
-                    </div>
-
-                </div>{{-- /grid --}}
             </div>
 
         </div>{{-- /watermarks --}}
@@ -837,29 +899,42 @@ function clinicalLibrarySettings() {
             this.selectedProtocol = index;
         },
 
-        // ── Watermark templates ─────────────────────────────────────
-        activeWmTemplate: 'Marketing',
-        wmOpacity: 80,
-        wmPosition: 'Bottom Right',
-        wmPreviewText: 'Tulip Dental\nDr. Priya Mehta • 14 Jun 2026',
-        wmPositionStyle: 'bottom:16px;right:16px;',
-
-        refreshWatermarkPreview() {
-            const posMap = {
-                'Top Left':     'top:16px;left:16px;',
-                'Top Right':    'top:16px;right:16px;',
-                'Bottom Left':  'bottom:16px;left:16px;',
-                'Bottom Right': 'bottom:16px;right:16px;',
-            };
-            this.wmPositionStyle = posMap[this.wmPosition] || 'bottom:16px;right:16px;';
-        },
-
         // ── Init ────────────────────────────────────────────────────
         init() {
             // Check URL hash for deep-link to a section
             const hash = window.location.hash.replace('#', '');
             if (hash) this.activeSection = hash;
-            this.refreshWatermarkPreview();
+        },
+    };
+}
+
+/**
+ * The watermark form. The preview is built from the SAME values the form posts
+ * and the same rules WatermarkService applies, so what is on screen is what gets
+ * stamped. The old preview was a fixed string with an invented doctor's name.
+ */
+function watermarkForm(initial) {
+    return {
+        ...initial,
+
+        previewText() {
+            const parts = [];
+            if (this.clinic)    parts.push(String(this.clinicName || '').toUpperCase());
+            if (this.treatment) parts.push('Root Canal');
+            if (this.doctor)    parts.push('Dr. Sumit Firke');
+            if (this.stage)     parts.push('After');
+            if (this.tooth)     parts.push('Tooth 26');
+            if (this.date)      parts.push('12 Sep 2026');
+            return parts.join('  |  ');
+        },
+
+        positionStyle() {
+            return {
+                'top-left':     'top:14px;left:14px;text-align:left;',
+                'top-right':    'top:14px;right:14px;text-align:right;',
+                'bottom-left':  'bottom:14px;left:14px;text-align:left;',
+                'bottom-right': 'bottom:14px;right:14px;text-align:right;',
+            }[this.position] || 'bottom:14px;right:14px;text-align:right;';
         },
     };
 }

@@ -3,239 +3,73 @@
 namespace App\Http\Controllers\ContentManagement;
 
 use App\Http\Controllers\Controller;
-use App\Models\Patient;
-use App\Models\CmsMedia;
-use App\Services\ContentManagement\CmsSearchService;
 use Illuminate\Http\Request;
 use App\Models\WatermarkSetting;
-use App\Models\User;
-use App\Models\ClinicalFile;
 
+/**
+ * CmsController — what is left of the old Content Manager backend.
+ *
+ * index(), clinical(), marketing(), patientView() and sharedViewData() are gone
+ * (P4). index() had no route at all and carried ~150 lines duplicating
+ * ClinicalLibraryController's case-grouping; the other three rendered the same
+ * Blade with the pre-P3 variable shape and would now fail on it, since that view
+ * expects $activeTab and $files. Their URLs still work — routes/cms.php redirects
+ * them to the tab they meant, so a bookmark lands somewhere sensible instead of
+ * on an error.
+ *
+ * Watermark settings are the only thing this class still owns.
+ */
 class CmsController extends Controller
 {
-    public function __construct(private CmsSearchService $searchService) {}
-
-    // ── Shared data needed by every index() render ────────────────
-    private function sharedViewData(): array
+    /**
+     * POST /content-management/watermark-settings
+     *
+     * Saves every key WatermarkService actually reads. It used to save five keys
+     * that the service never looked at (it spoke a different vocabulary
+     * entirely), posted from field names that did not exist anywhere on the
+     * settings page — so no watermark setting had ever changed a single pixel.
+     *
+     * There is deliberately NO patient-name option, and the legacy
+     * wm_patient_name key is discarded by the service if an old settings file
+     * still carries one. A name burned into an image cannot be withdrawn later,
+     * and these files exist to be shared.
+     */
+    public function saveWatermarkSettings(Request $request)
     {
-        $toothOptions = collect([
-            18,
-            17,
-            16,
-            15,
-            14,
-            13,
-            12,
-            11,
-            21,
-            22,
-            23,
-            24,
-            25,
-            26,
-            27,
-            28,
-            31,
-            32,
-            33,
-            34,
-            35,
-            36,
-            37,
-            38,
-            41,
-            42,
-            43,
-            44,
-            45,
-            46,
-            47,
-            48,
+        $validated = $request->validate([
+            'wm_position'    => ['required', \Illuminate\Validation\Rule::in(['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'])],
+            'wm_opacity'     => ['required', 'integer', 'min:10', 'max:100'],
+            'wm_font_size'   => ['required', 'integer', 'min:10', 'max:120'],
+            'watermark_logo' => ['nullable', 'image', 'max:2048'],
         ]);
 
-        // Phase 8E — cms_media dropped; source is now clinical_files.procedure
-        $treatments = \App\Models\ClinicalFile::distinct()
-            ->orderBy('procedure')
-            ->pluck('procedure')
-            ->filter()
-            ->values();
-
-        $patients = Patient::orderBy('name')->get(['id', 'name']);
-
-        // Doctors = all active users (filter by role if available)
-        $doctors = User::orderBy('name')->get(['id', 'name']);
-
-        // Tag options from clinical_media tags column
-        $tagOptions = $this->searchService->getTagOptions();
-
-        // Fixed-vocabulary treatment categories for the "Treatment" filter —
-        // reliable, unlike matching free-text procedure names.
-        $treatmentCategoryOptions = $this->searchService->getTreatmentCategoryOptions();
-
-        $stats = $this->searchService->getStats();
-
-        $treatmentOptions = $treatments;
-
-        // Tab badge counts — mirrors ClinicalLibraryController logic
-        $tabCounts = [
-            'marketing'    => ClinicalFile::marketingEligible()->count(),
-            'education'    => ClinicalFile::educationEligible()->count(),
-            'case-library' => ClinicalFile::caseLibraryEligible()->distinct('patient_id')->count('patient_id'),
-            'teaching'     => ClinicalFile::teachingEligible()->count(),
-            'research'     => ClinicalFile::researchEligible()->count(),
+        // Unchecked boxes are absent from the POST, so each one is read
+        // explicitly — otherwise switching an element OFF would silently do
+        // nothing, which is exactly how this screen behaved before.
+        $data = [
+            'wm_enabled'      => $request->boolean('wm_enabled'),
+            'wm_clinic_name'  => $request->boolean('wm_clinic_name'),
+            'wm_treatment'    => $request->boolean('wm_treatment'),
+            'wm_doctor_name'  => $request->boolean('wm_doctor_name'),
+            'wm_stage'        => $request->boolean('wm_stage'),
+            'wm_tooth_number' => $request->boolean('wm_tooth_number'),
+            'wm_date'         => $request->boolean('wm_date'),
+            'wm_logo'         => $request->boolean('wm_logo'),
+            'wm_position'     => $validated['wm_position'],
+            'wm_opacity'      => (int) $validated['wm_opacity'],
+            'wm_font_size'    => (int) $validated['wm_font_size'],
         ];
 
-        // ── Marketing tab data ─────────────────────────────────────────────
-        $marketingFiles = ClinicalFile::marketingEligible()
-            ->with('uploadedBy:id,name')
-            ->latest('captured_at')
-            ->paginate(48)
-            ->withQueryString();
-
-        $marketingByMonth = $marketingFiles->getCollection()
-            ->groupBy(fn($f) => $f->captured_at
-                ? $f->captured_at->format('F Y')
-                : 'Unknown');
-
-        // ── Education tab data ─────────────────────────────────────────────
-        $educationFiles = ClinicalFile::educationEligible()
-            ->latest('captured_at')
-            ->get();
-
-        // ── Case Library tab data (anonymised) ────────────────────────────
-        $rawCaseFiles = ClinicalFile::caseLibraryEligible()
-            ->with('uploadedBy:id,name')
-            ->latest('captured_at')
-            ->get();
-
-        $caseFiles = $rawCaseFiles
-            ->groupBy(fn($f) => $f->patient_id . '_' . ($f->procedure ?? 'general'))
-            ->map(function ($group) {
-                $first      = $group->first();
-                $letter     = chr(65 + ($first->patient_id % 26));
-                $number     = str_pad(($first->patient_id * 7 + 13) % 1000, 3, '0', STR_PAD_LEFT);
-                $anonId     = "Case #{$letter}{$number}";
-                $beforeFile = $group->firstWhere('stage', 'before') ?? $group->first();
-                $afterFile  = $group->firstWhere('stage', 'after')  ?? $group->last();
-                $dates      = $group->pluck('captured_at')->filter()->sort();
-                $duration   = $dates->count() >= 2
-                    ? $dates->first()->format('M Y') . '–' . $dates->last()->format('M Y')
-                    : ($dates->first()?->format('M Y') ?? '—');
-
-                return [
-                    'id'           => 'cl_' . $first->id,
-                    'anon_id'      => $anonId,
-                    'procedure'    => $first->procedure ?? 'General',
-                    'tooth'        => $first->tooth_number ?? '—',
-                    'doctor'       => $first->uploadedBy?->name ?? '—',
-                    'duration'     => $duration,
-                    'before_url'   => ($beforeFile?->isImage()) ? $beforeFile->display_url : null,
-                    'after_url'    => ($afterFile?->isImage())  ? $afterFile->display_url  : null,
-                    'stage_counts' => $group->groupBy('stage')->map->count()->toArray(),
-                    'tags'         => $group->pluck('tags')->flatten()->filter()->unique()->values()->toArray(),
-                    'rating'       => $first->content_rating ?? 0,
-                    'file_count'   => $group->count(),
-                ];
-            })
-            ->values();
-
-        $casesByProcedure = $caseFiles->groupBy('procedure');
-
-        return compact(
-            'toothOptions', 'treatments', 'treatmentOptions', 'treatmentCategoryOptions',
-            'patients', 'doctors',
-            'tagOptions', 'stats', 'tabCounts',
-            'marketingFiles', 'marketingByMonth',
-            'educationFiles',
-            'caseFiles', 'casesByProcedure'
-        );
-    }
-
-    // Main entry — clinical tab by default
-    public function index(Request $request)
-    {
-        $activeTab = $request->get('tab', 'clinical');
-        $filters   = $request->only(['q', 'patient_id', 'tooth', 'treatment', 'doctor_id', 'date_range', 'tag', 'sort']);
-        $cases     = $this->searchService->searchCases($filters);
-
-        return view('content-management.index', array_merge(
-            $this->sharedViewData(),
-            ['activeTab' => $activeTab, 'filters' => $filters, 'cases' => $cases]
-        ));
-    }
-
-    // Clinical tab — full page or AJAX
-    public function clinical(Request $request)
-    {
-        $results = $this->searchService->search($request->all());
-
-        if ($request->ajax()) {
-            return view('content-management.partials.clinical.results-table', compact('results'));
-        }
-
-        return view('content-management.index', array_merge(
-            $this->sharedViewData(),
-            [
-                'activeTab' => 'clinical',
-                'results'   => $results,
-            ]
-        ));
-    }
-
-    // NOTE: education() was removed here (2026-07-09 cleanup) — it had no route
-    // pointing to it (the live education tab is
-    // ContentManagement\ClinicalLibraryController::education(), using
-    // EducationCategory/EducationTreatment/EducationMedia) and it referenced
-    // CmsEduCategory/CmsEduItem, which were deleted in the same pass as
-    // confirmed-dead models. See docs/CLAUDE memory: project_clinical_library_audit_0709.
-
-    // Marketing tab
-    public function marketing()
-    {
-        return view('content-management.index', array_merge(
-            $this->sharedViewData(),
-            ['activeTab' => 'marketing']
-        ));
-    }
-
-    // Patient profile shortcut — opens clinical tab pre-filtered
-    public function patientView(int $patientId)
-    {
-        $patient = Patient::findOrFail($patientId);
-        $results = $this->searchService->search(['patient_id' => $patientId]);
-
-        return view('content-management.index', array_merge(
-            $this->sharedViewData(),
-            [
-                'activeTab'        => 'clinical',
-                'prefilterPatient' => $patient,
-                'results'          => $results,
-            ]
-        ));
-    }
-
-    public function saveWatermarkSettings(Request $request): \Illuminate\Http\JsonResponse
-    {
-        $data = $request->only([
-            'wm_clinic_name',
-            'wm_doctor_name',
-            'wm_patient_name',
-            'wm_position',
-            'wm_opacity',
-        ]);
-
         if ($request->hasFile('watermark_logo')) {
-            $file = $request->file('watermark_logo');
-            $dir  = storage_path('app/public/settings');
-            if (! is_dir($dir)) {
-                mkdir($dir, 0755, true);
-            }
-            $file->move($dir, 'watermark_logo.png');
-            $data['has_logo'] = true;
+            // Same path WatermarkService::resolveLogoPath() looks in. The two
+            // used to point at different folders, so an uploaded logo was
+            // saved and then never found.
+            \Illuminate\Support\Facades\Storage::disk('public')
+                ->putFileAs('settings', $request->file('watermark_logo'), 'watermark_logo.png');
         }
 
         WatermarkSetting::save($data);
 
-        return response()->json(['success' => true]);
+        return back()->with('success', 'Watermark settings saved. New uploads are stamped with these — use "Re-stamp existing files" to apply them to what is already in the library.');
     }
 }

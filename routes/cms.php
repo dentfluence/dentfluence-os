@@ -31,6 +31,9 @@ Route::middleware(['auth', 'module:cms'])->prefix('clinical-library')->name('cms
     // Manager filter bar. See ClinicalLibrarySearchService.
     Route::get('/search', [ClinicalLibraryController::class, 'search'])->name('library-search');
 
+    // Re-apply the current watermark settings to files already in the library.
+    Route::post('/restamp', [ClinicalLibraryController::class, 'restamp'])->name('files.restamp')->middleware('module:cms,edit');
+
     // ── Marketing approval actions (Phase 9) ──
     // PUT /clinical-library/files/{file}/approve
     // PUT /clinical-library/files/{file}/reject
@@ -65,12 +68,16 @@ Route::middleware(['auth', 'module:cms'])->prefix('content-management')->name('c
 
     // ── Routes merged from routes/content-management.php (consolidated Phase 0) ──
 
-    // Tab views
-    Route::get('/clinical',                [CmsController::class, 'clinical'])->name('clinical');
-    Route::get('/marketing',               [CmsController::class, 'marketing'])->name('marketing');
+    // ── Legacy tab URLs (P4) ───────────────────────────────────────────────
+    // These used to render content-management/index.blade with the pre-P3
+    // variable shape and would now fail on it. Kept alive as redirects rather
+    // than deleted: a bookmark or an old link should land on the right tab, not
+    // on a 404 and not on an error.
+    Route::get('/clinical',  fn () => redirect()->route('cms.index', ['tab' => 'case-library']))->name('clinical');
+    Route::get('/marketing', fn () => redirect()->route('cms.index', ['tab' => 'marketing']))->name('marketing');
 
-    // Patient shortcut from profile
-    Route::get('/patient/{patientId}',     [CmsController::class, 'patientView'])->name('patient');
+    // A patient's files live on their profile now, not on a Content Manager tab.
+    Route::get('/patient/{patientId}', fn ($patientId) => redirect()->to(route('patients.show', $patientId) . '#documents'))->name('patient');
 
     // Search + filter (AJAX)
     Route::get('/search',                  [CmsSearchController::class, 'search'])->name('search');

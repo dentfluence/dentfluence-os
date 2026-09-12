@@ -126,6 +126,64 @@
 
 
 {{-- ══════════════════════════════════════════════════════════════════════
+     STORAGE — one thin line, not a card.
+
+     file_size has been recorded on every file since the table was created and
+     has never been shown anywhere. Storage is free right now and stops being
+     free the moment this is multi-tenant: at ~20 photos a case this clinic
+     alone makes several GB a month before a single CBCT. A number nobody can
+     see is a number nobody can manage.
+
+     Stamped copies are counted apart from originals on purpose — the stamped
+     half can always be regenerated, the originals never can.
+══════════════════════════════════════════════════════════════════════ --}}
+@php
+    $fmtBytes = function ($bytes) {
+        $bytes = (int) $bytes;
+        if ($bytes >= 1073741824) return round($bytes / 1073741824, 2) . ' GB';
+        if ($bytes >= 1048576)    return round($bytes / 1048576, 1) . ' MB';
+        if ($bytes >= 1024)       return round($bytes / 1024) . ' KB';
+        return $bytes . ' B';
+    };
+@endphp
+<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px 18px;padding:10px 16px;margin-bottom:20px;background:#fff;border:1px solid rgba(185,92,183,0.16);border-radius:6px;font-size:12px;color:#7a6080;">
+
+    <span style="font-weight:600;color:#4b3060;">
+        Storage
+        <span style="color:#6a0f70;font-weight:700;margin-left:4px;">{{ $fmtBytes($storage['bytes']) }}</span>
+        <span style="color:#b0a0be;font-weight:400;">across {{ number_format($storage['files']) }} {{ $storage['files'] === 1 ? 'file' : 'files' }}</span>
+    </span>
+
+    @if($storage['by_type']->isNotEmpty())
+    <span style="color:#c9bcd4;">|</span>
+    @foreach($storage['by_type']->take(4) as $row)
+        <span>{{ ucfirst(str_replace('_', ' ', $row->file_type)) }}
+            <strong style="color:#4b3060;">{{ $fmtBytes($row->bytes) }}</strong>
+            <span style="color:#b0a0be;">({{ $row->files }})</span>
+        </span>
+    @endforeach
+    @endif
+
+    @if($storage['heaviest']->isNotEmpty())
+    <span style="color:#c9bcd4;">|</span>
+    <span>Heaviest
+        <a href="{{ route('patients.show', $storage['heaviest']->first()->patient_id) }}#documents"
+           style="color:#6a0f70;text-decoration:none;font-weight:600;">{{ $storage['heaviest']->first()->patient?->name ?? 'Unknown' }}</a>
+        <span style="color:#b0a0be;">{{ $fmtBytes($storage['heaviest']->first()->bytes) }}</span>
+    </span>
+    @endif
+
+    <span style="margin-left:auto;color:#b0a0be;">
+        {{ $storage['stamped'] }} stamped &middot; {{ $storage['unstamped'] }} not
+        @if($storage['unstamped'] > 0)
+            <a href="{{ route('settings.clinical-library') }}#watermarks" style="color:#6a0f70;text-decoration:none;margin-left:4px;">re-stamp &rarr;</a>
+        @endif
+    </span>
+
+</div>
+
+
+{{-- ══════════════════════════════════════════════════════════════════════
      SECTION 3 — RESUME WORK (most prominent — 6 recent patient cards)
 ══════════════════════════════════════════════════════════════════════ --}}
 <div class="df-card" style="margin-bottom:20px;">

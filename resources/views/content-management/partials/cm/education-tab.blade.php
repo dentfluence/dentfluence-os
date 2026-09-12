@@ -12,7 +12,8 @@
  * Phase 9: $educationFiles is a collection of ClinicalFile where is_education_eligible = true.
  * Passed from ClinicalLibraryController::index().
  *
- * Section 2 ($libraryResources) remains static — generic educational content is a future feature.
+ * Section 2 was an invented list of resources and is gone (P4); the real
+ * education library lives at Content Manager → Education Library.
  */
 $stageColors = [
     'before'   => '#2563eb',
@@ -22,14 +23,10 @@ $stageColors = [
     'general'  => '#9ca3af',
 ];
 
-// Generic library resources — static placeholder (not patient-linked, future feature)
-$libraryResources = [
-    ['id'=>'lr1', 'icon'=>'', 'title'=>'Tooth Anatomy — Patient Explainer', 'type'=>'PDF',   'size'=>'2.1 MB', 'added'=>'Jan 2024', 'downloads'=>42],
-    ['id'=>'lr2', 'icon'=>'', 'title'=>'How Root Canal Works — Animation',  'type'=>'Video', 'size'=>'18 MB',  'added'=>'Feb 2024', 'downloads'=>67],
-    ['id'=>'lr3', 'icon'=>'', 'title'=>'Implant Care After Procedure',       'type'=>'PDF',   'size'=>'1.4 MB', 'added'=>'Dec 2023', 'downloads'=>31],
-    ['id'=>'lr4', 'icon'=>'',  'title'=>'Stages of Orthodontic Treatment',   'type'=>'Image', 'size'=>'3.8 MB', 'added'=>'Mar 2024', 'downloads'=>19],
-    ['id'=>'lr5', 'icon'=>'', 'title'=>'Post-Extraction Care Instructions',  'type'=>'PDF',   'size'=>'0.9 MB', 'added'=>'Jan 2024', 'downloads'=>88],
-];
+// The "Library Resources" block that used to sit below this section was a
+// hardcoded list of five documents that do not exist, with invented download
+// counts. Removed in P4 — generic patient-education material is a real feature
+// with its own home (Content Manager → Education Library), not a decoration.
 @endphp
 
 {{-- ═══════════════════════════════════════════════════ --}}
@@ -116,67 +113,17 @@ $libraryResources = [
 </div>
 @endif
 
-{{-- ═══════════════════════════════════════════════════ --}}
-{{-- SECTION 2: LIBRARY RESOURCES                        --}}
-{{-- Generic educational content — not patient-specific  --}}
-{{-- ═══════════════════════════════════════════════════ --}}
+{{-- ═══════════════════════════════════════════════════
+     SECTION 2 removed in P4.
 
-<div class="edu-section-title">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6a0f70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-    Library Resources
-    <span class="edu-section-badge" style="background:#eff6ff;color:#2563eb;">{{ count($libraryResources) }} resources</span>
-    <span style="font-size:11px;font-weight:400;color:#9ca3af;margin-left:4px;">Generic educational content not tied to patient records</span>
-</div>
+     What stood here was a hardcoded list of five documents that do not exist —
+     "Tooth Anatomy — Patient Explainer", "How Root Canal Works — Animation" and
+     three more — each with an invented file size and download count, plus View
+     and Download buttons wired to nothing and an "Add Resource" button that did
+     nothing either.
 
-{{-- Resource list --}}
-<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px;">
-    @foreach($libraryResources as $res)
-    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:white;border:1px solid #e5e7eb;border-radius:8px;transition:all .15s;cursor:pointer;"
-         onmouseover="this.style.borderColor='#d8b4fe';this.style.boxShadow='0 2px 8px rgba(106,15,112,.08)'"
-         onmouseout="this.style.borderColor='#e5e7eb';this.style.boxShadow='none'">
-
-        {{-- File icon --}}
-        <div style="width:38px;height:38px;border-radius:8px;background:#f5f3ff;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">
-            {{ $res['icon'] }}
-        </div>
-
-        {{-- Info --}}
-        <div style="flex:1;min-width:0;">
-            <div style="font-size:13px;font-weight:700;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ $res['title'] }}</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
-                <span style="font-size:10px;font-weight:700;padding:1px 6px;background:#eff6ff;color:#2563eb;border-radius:99px;">{{ $res['type'] }}</span>
-                <span style="font-size:10px;color:#9ca3af;">{{ $res['size'] }}</span>
-                <span style="width:3px;height:3px;background:#d1d5db;border-radius:50%;display:inline-block;"></span>
-                <span style="font-size:10px;color:#9ca3af;">Added {{ $res['added'] }}</span>
-                <span style="width:3px;height:3px;background:#d1d5db;border-radius:50%;display:inline-block;"></span>
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                <span style="font-size:10px;color:#9ca3af;">{{ $res['downloads'] }} downloads</span>
-            </div>
-        </div>
-
-        {{-- Actions --}}
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-            <button style="padding:5px 12px;border-radius:5px;border:1px solid #e5e7eb;background:white;font-size:11px;font-weight:600;color:#374151;cursor:pointer;transition:all .15s;"
-                    onmouseover="this.style.borderColor='#6a0f70';this.style.color='#6a0f70'"
-                    onmouseout="this.style.borderColor='#e5e7eb';this.style.color='#374151'">
-                View
-            </button>
-            <button style="padding:5px 12px;border-radius:5px;border:none;background:#6a0f70;font-size:11px;font-weight:600;color:white;cursor:pointer;transition:background .15s;"
-                    onmouseover="this.style.background='#380740'" onmouseout="this.style.background='#6a0f70'">
-                Download
-            </button>
-        </div>
-
-    </div>
-    @endforeach
-</div>
-
-{{-- Add resource button --}}
-<div style="display:flex;justify-content:center;padding:24px 0 8px;">
-    <button style="display:flex;align-items:center;gap:6px;padding:9px 20px;border-radius:7px;border:1.5px dashed #d8b4fe;background:#faf5fb;font-size:12px;font-weight:700;color:#6a0f70;cursor:pointer;transition:all .15s;"
-            onmouseover="this.style.background='#f5f3ff';this.style.borderColor='#a855f7'"
-            onmouseout="this.style.background='#faf5fb';this.style.borderColor='#d8b4fe'">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Upload Library Resource
-    </button>
-</div>
+     Generic patient-education material is a real feature with a real home:
+     Content Manager → Education Library (EducationCategory / EducationTreatment
+     / EducationMedia, reachable from cms.education.manage). A fake shelf beside
+     the real one only teaches staff not to trust the screen.
+═══════════════════════════════════════════════════ --}}

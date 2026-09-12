@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\ContentManagement;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\GenerateWatermark;
 use App\Models\ClinicalFile;
 use App\Models\EducationCategory;
 use App\Models\Patient;
@@ -90,6 +91,29 @@ class ClinicalLibraryController extends Controller
         // Patients list for upload modal
         $patients = Patient::orderBy('name')->get(['id', 'name']);
 
+        // ── Storage ────────────────────────────────────────────────────────
+        // file_size has always been recorded and never shown. Storage stops
+        // being free the moment this is multi-tenant, and nobody can manage a
+        // number they cannot see. The watermarked display copies are counted
+        // separately because they are the half that can be regenerated — the
+        // originals are the half that can never be recreated.
+        $storage = [
+            'files'     => $totalFiles,
+            'bytes'     => (int) ClinicalFile::sum('file_size'),
+            'by_type'   => ClinicalFile::selectRaw('file_type, COUNT(*) as files, SUM(file_size) as bytes')
+                                ->groupBy('file_type')
+                                ->orderByDesc('bytes')
+                                ->get(),
+            'heaviest'  => ClinicalFile::with('patient:id,name')
+                                ->selectRaw('patient_id, COUNT(*) as files, SUM(file_size) as bytes')
+                                ->groupBy('patient_id')
+                                ->orderByDesc('bytes')
+                                ->limit(5)
+                                ->get(),
+            'stamped'   => ClinicalFile::whereNotNull('watermarked_path')->count(),
+            'unstamped' => ClinicalFile::whereNull('watermarked_path')->count(),
+        ];
+
         // ── Options for the search drawer's filter strip ───────────────────
         // Doctors are whoever has actually uploaded something, not every user —
         // a dropdown of thirty names where three have files is a worse answer
@@ -131,6 +155,7 @@ class ClinicalLibraryController extends Controller
             'visitsWithNoFiles',
             'patients',
             'searchOptions',
+            'storage',
         ));
     }
 
@@ -184,6 +209,41 @@ class ClinicalLibraryController extends Controller
         }
 
         return back()->with('success', "{$count} file(s) uploaded successfully.");
+    }
+
+    /**
+     * POST /clinical-library/restamp
+     *
+     * Changing a watermark setting only affects NEW uploads — the stamped copy
+     * of an existing file was baked when it was uploaded. This clears those
+     * copies and queues them again, so a settings change can actually be seen
+     * on the library you already have.
+     *
+     * The ORIGINAL is never touched. Only the derived wm_*.jpg is regenerated,
+     * and the old one is simply overwritten at the same path.
+     *
+     * ⚠ Needs a queue worker running, and one started BEFORE composer installed
+     * intervention/image will keep failing with a stale autoloader — restart it
+     * after any install rather than trusting the log line.
+     */
+    public function restamp(Request $request)
+    {
+        ClinicalFile::whereNotNull('watermarked_path')->update(['watermarked_path' => null]);
+
+        $queued = 0;
+
+        ClinicalFile::whereNull('watermarked_path')
+            ->cursor()
+            ->each(function (ClinicalFile $file) use (&$queued) {
+                if ($file->isImage()) {
+                    GenerateWatermark::dispatch($file);
+                    $queued++;
+                }
+            });
+
+        return back()->with('success', $queued === 0
+            ? 'Nothing to re-stamp — there are no viewable images in the library yet.'
+            : "{$queued} image(s) queued for re-stamping. They update as the queue worker gets to them.");
     }
 
     // ── Content Manager index ─────────────────────────────────────────────────

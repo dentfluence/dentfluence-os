@@ -349,7 +349,7 @@ class WatermarkService
         $center = \Intervention\Image\Alignment::CENTER;
         $right  = \Intervention\Image\Alignment::RIGHT;
         $top    = \Intervention\Image\Alignment::TOP;
-        $middle = \Intervention\Image\Alignment::CENTER;
+        $middle = \Intervention\Image\Alignment::MIDDLE;
         $bottom = \Intervention\Image\Alignment::BOTTOM;
 
         return match ($position) {
@@ -465,6 +465,10 @@ class WatermarkService
     private function resolveLogoPath(): ?string
     {
         $candidates = [
+            // Where Settings → Clinical Library actually saves an uploaded logo.
+            // This was missing, so a logo could be uploaded successfully and then
+            // never be found by the thing that draws it.
+            storage_path('app/public/settings/watermark_logo.png'),
             public_path('images/clinic-logo.png'),
             public_path('images/clinic-logo.jpg'),
             public_path('images/logo.png'),

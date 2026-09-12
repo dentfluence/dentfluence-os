@@ -727,8 +727,34 @@ class SettingsController extends Controller
     }
 
     // ── Clinical Library Settings (Phase 6 — static UI only) ───────────────
+    /**
+     * Settings → Clinical Library.
+     *
+     * This used to pass NOTHING to the view, which is half the reason nothing on
+     * that screen ever had an effect: the watermark panel had no form, no field
+     * names and no current values to show, so it could only ever be a picture of
+     * a settings page. The defaults here are the same ones WatermarkService
+     * falls back to, so what is on screen is what will actually be stamped.
+     */
     public function clinicalLibrary()
     {
-        return view('settings.clinical-library');
+        $watermark = array_merge([
+            'wm_enabled'      => true,
+            'wm_clinic_name'  => true,
+            'wm_treatment'    => true,
+            'wm_doctor_name'  => false,
+            'wm_stage'        => false,
+            'wm_tooth_number' => false,
+            'wm_date'         => false,
+            'wm_logo'         => false,
+            'wm_position'     => 'bottom-right',
+            'wm_opacity'      => 70,
+            'wm_font_size'    => 22,
+        ], \App\Models\WatermarkSetting::all());
+
+        $clinicName = \App\Models\AppSetting::get('clinic_name', config('app.name'));
+        $hasLogo    = is_file(storage_path('app/public/settings/watermark_logo.png'));
+
+        return view('settings.clinical-library', compact('watermark', 'clinicName', 'hasLogo'));
     }
 }
