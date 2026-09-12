@@ -56,8 +56,23 @@ class WatermarkService
             return null;
         }
 
+        // ── 1. Config + text are resolved BEFORE the image is touched ────────
+        // so that a switched-off (or empty) watermark costs nothing at all.
+        $config = $this->buildConfig($file, $overrides);
+
+        if (! $config['enabled']) {
+            return null;
+        }
+
+        $text = $this->buildWatermarkText($file, $config);
+
+        if ($text === '' && ! $config['show_logo']) {
+            // Nothing to stamp — do not write a second copy of the original.
+            return null;
+        }
+
         try {
-            // ── 1. Load original image ────────────────────────────────────────
+            // ── 2. Load original image ────────────────────────────────────────
             $absolutePath = Storage::disk($file->disk)->path($file->path);
 
             if (! file_exists($absolutePath)) {
@@ -69,16 +84,12 @@ class WatermarkService
             $manager = new \Intervention\Image\ImageManager($driver);
             $image   = $manager->read($absolutePath);
 
-            // ── 2. Build watermark config from settings + overrides ───────────
-            $config = $this->buildConfig($file, $overrides);
-
             // ── 3. Apply logo (if configured and file exists) ─────────────────
             if ($config['show_logo'] && $config['logo_path']) {
                 $this->applyLogo($image, $config);
             }
 
             // ── 4. Apply text watermark ───────────────────────────────────────
-            $text = $this->buildWatermarkText($file, $config);
             if ($text !== '') {
                 $this->applyTextWatermark($image, $text, $config);
             }
@@ -108,15 +119,26 @@ class WatermarkService
      */
     private function buildConfig(ClinicalFile $file, array $overrides): array
     {
-        // Base defaults (used when settings/watermark.json doesn't exist yet)
+        // Base defaults (used when settings/watermark.json doesn't exist yet).
+        //
+        // CEO ruling 12 Sep 2026: the watermark carries the CLINIC NAME and the
+        // TREATMENT, and nothing else. Doctor name, stage, tooth number and date
+        // are still supported switches but default OFF — a stamp that spans the
+        // whole frame stops being a credit line and becomes damage to the photo.
+        //
+        // PATIENT NAME IS NOT A SWITCH AND NEVER WILL BE. These images are shared
+        // for marketing, teaching and case discussion; burning a patient's name
+        // into the pixels is irreversible and is a DPDP exposure the consent
+        // workflow cannot undo. See buildWatermarkText().
         $defaults = [
             // Text elements — each can be toggled independently
+            'enabled'           => true,
             'show_clinic_name'  => true,
-            'show_doctor_name'  => true,
             'show_treatment'    => true,
-            'show_stage'        => true,
-            'show_tooth_number' => true,
-            'show_date'         => true,
+            'show_doctor_name'  => false,
+            'show_stage'        => false,
+            'show_tooth_number' => false,
+            'show_date'         => false,
             // Logo
             'show_logo'         => false,
             'logo_path'         => null,   // absolute path to logo file
@@ -124,14 +146,19 @@ class WatermarkService
             'position'          => 'bottom-right',
             // Style
             'opacity'           => 0.70,   // 0.0 – 1.0
-            'font_size'         => 12,
+            'font_size'         => 22,
+            'font_path'         => null,   // absolute path to a .ttf; null => GD's tiny built-in font
             'quality'           => 88,     // JPEG output quality
             // Clinic name fallback (if not in settings, read from app config)
             'clinic_name'       => config('app.clinic_name', config('app.name', 'Dentfluence')),
         ];
 
-        // Merge saved settings from WatermarkSetting JSON store
-        $saved = WatermarkSetting::all();
+        // Merge saved settings from WatermarkSetting JSON store. The settings
+        // screen posts its own key names (wm_clinic_name, wm_position, …), so
+        // they are translated here rather than leaving two vocabularies that
+        // silently never meet — which is exactly why no saved setting has ever
+        // had an effect on a generated watermark until now.
+        $saved = $this->normaliseSavedSettings(WatermarkSetting::all());
 
         // Auto-resolve logo path from public storage
         if (empty($saved['logo_path'])) {
@@ -139,6 +166,20 @@ class WatermarkService
         }
 
         $config = array_merge($defaults, $saved, $overrides);
+
+        // A bundled font is what makes font_size mean anything: without a .ttf
+        // the GD driver falls back to a fixed-size bitmap face that ignores both
+        // size and alignment, which is how the stamp ended up mid-frame.
+        if (empty($config['font_path'])) {
+            $config['font_path'] = $this->resolveFontPath();
+        }
+
+        // Opacity may arrive as 0–1 (config) or 10–100 (the settings slider).
+        $config['opacity'] = $config['opacity'] > 1
+            ? min(1.0, $config['opacity'] / 100)
+            : $config['opacity'];
+
+        $config['position'] = $this->normalisePosition($config['position']);
 
         // Inject doctor name from file relationships if not explicitly overridden
         if (empty($config['doctor_name']) && $file->relationLoaded('visit') && $file->visit?->doctor) {
@@ -153,7 +194,12 @@ class WatermarkService
     /**
      * Build the watermark text string from enabled elements.
      *
-     * Example output: "SmileCare Clinic  |  Dr. Patel  |  Root Canal  |  After  |  Tooth 26  |  14 Jun 2026"
+     * Default output: "Tulip Dental  |  Root Canal"
+     *
+     * There is deliberately NO patient-name branch here. Do not add one: a name
+     * burned into an exported image cannot be withdrawn later, and every other
+     * patient-identifying surface in this module (Case Library, Education) is
+     * anonymised precisely so these files can be shared.
      */
     private function buildWatermarkText(ClinicalFile $file, array $config): string
     {
@@ -203,7 +249,12 @@ class WatermarkService
 
         [$x, $y, $hAlign, $vAlign] = $this->resolvePosition($config['position'], $width, $height, $margin);
 
-        $image->text($text, $x, $y, function (\Intervention\Image\Typography\FontFactory $font) use ($size, $color, $hAlign, $vAlign) {
+        $fontPath = $config['font_path'] ?? null;
+
+        $image->text($text, $x, $y, function (\Intervention\Image\Typography\FontFactory $font) use ($size, $color, $hAlign, $vAlign, $fontPath) {
+            if ($fontPath) {
+                $font->filename($fontPath);
+            }
             $font->size($size);
             $font->color($color);
             $font->align($hAlign);
@@ -277,6 +328,87 @@ class WatermarkService
             return new \Intervention\Image\Drivers\Imagick\Driver();
         }
         throw new \RuntimeException('WatermarkService: neither GD nor Imagick extension is loaded.');
+    }
+
+    /**
+     * Translate the settings screen's key names into the service's own, and
+     * drop anything unknown. Accepts both spellings so an older settings file
+     * keeps working.
+     *
+     * @param  array<string,mixed>  $saved
+     * @return array<string,mixed>
+     */
+    private function normaliseSavedSettings(array $saved): array
+    {
+        $map = [
+            'wm_enabled'      => 'enabled',
+            'wm_clinic_name'  => 'show_clinic_name',
+            'wm_treatment'    => 'show_treatment',
+            'wm_doctor_name'  => 'show_doctor_name',
+            'wm_stage'        => 'show_stage',
+            'wm_tooth_number' => 'show_tooth_number',
+            'wm_date'         => 'show_date',
+            'wm_logo'         => 'show_logo',
+            'wm_position'     => 'position',
+            'wm_opacity'      => 'opacity',
+            'wm_font_size'    => 'font_size',
+        ];
+
+        $out = [];
+
+        foreach ($saved as $key => $value) {
+            $target = $map[$key] ?? $key;
+
+            // wm_patient_name is accepted by the old settings form and is
+            // deliberately discarded here — see buildWatermarkText().
+            if ($key === 'wm_patient_name' || $target === 'show_patient_name') {
+                continue;
+            }
+
+            if (str_starts_with($target, 'show_') || $target === 'enabled') {
+                $out[$target] = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+                continue;
+            }
+
+            $out[$target] = $value;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Accept both machine values ('bottom-right') and the settings screen's
+     * human labels ('Bottom Right'). Anything unrecognised falls back to
+     * bottom-right rather than centre — a watermark across the middle of a
+     * clinical photo destroys the thing it is supposed to protect.
+     */
+    private function normalisePosition(mixed $position): string
+    {
+        $slug = str_replace(' ', '-', strtolower(trim((string) $position)));
+
+        return in_array($slug, ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'], true)
+            ? $slug
+            : 'bottom-right';
+    }
+
+    /**
+     * Absolute path to the bundled watermark typeface, or null if it is missing
+     * (in which case GD's built-in bitmap font is used and font_size is ignored).
+     */
+    private function resolveFontPath(): ?string
+    {
+        $candidates = [
+            resource_path('fonts/DejaVuSans-Bold.ttf'),
+            public_path('fonts/DejaVuSans-Bold.ttf'),
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**

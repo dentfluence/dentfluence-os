@@ -125,14 +125,25 @@
                                      :alt="file.title || 'Clinical file'"
                                      class="max-w-full max-h-[75vh] rounded-lg object-contain select-none"
                                      draggable="false">
-                                {{-- Watermark overlay (toggleable, real data) --}}
+                                {{-- Watermark overlay.
+                                     This is a PREVIEW of the stamp the downloaded file
+                                     carries (App\Services\ClinicalLibrary\WatermarkService),
+                                     so it deliberately mirrors it: same content, same
+                                     corner, no rotation. What is on screen is what is saved.
+
+                                     CEO ruling 12 Sep 2026 — clinic name and treatment
+                                     ONLY. The PATIENT NAME that used to sit on line 2 is
+                                     gone and must not come back: these images are shared
+                                     for marketing, teaching and case discussion, and a
+                                     name on the picture is the one thing consent cannot
+                                     take back afterwards. --}}
                                 <div x-show="showWatermark"
-                                     class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    <div class="text-white/30 text-lg font-bold tracking-widest rotate-[-30deg] text-center"
-                                         style="font-family: monospace; font-size: 11px; line-height: 2;">
-                                        {{ strtoupper(\App\Models\AppSetting::get('clinic_name', config('app.name'))) }}<br>
-                                        <span x-text="(file.patient ? file.patient.name : '') + (file.captured_at ? ' · ' + file.captured_at : '')"></span><br>
-                                        <span x-text="(file.procedure || '') + (file.tooth_number ? ' · Tooth ' + file.tooth_number : '')"></span>
+                                     class="absolute inset-0 pointer-events-none">
+                                    <div class="absolute bottom-2.5 right-3 text-right text-white/70"
+                                         style="font-size: 11px; font-weight: 600; letter-spacing: .05em; text-shadow: 0 1px 3px rgba(0,0,0,.8);">
+                                        <span>{{ strtoupper(\App\Models\AppSetting::get('clinic_name', config('app.name'))) }}</span><span
+                                              x-show="file.procedure"
+                                              x-text="'  |  ' + (file.procedure || '')"></span>
                                     </div>
                                 </div>
                             </div>
@@ -225,7 +236,7 @@
                     {{-- Right: watermark toggle (images only) --}}
                     <div class="flex items-center gap-2" x-show="file && mediaKind() === 'image'">
                         <span class="text-[10px] text-gray-500">Watermark</span>
-                        <button @click="showWatermark = !showWatermark"
+                        <button @click="toggleWatermark()"
                                 :class="showWatermark
                                     ? 'bg-[#6a0f70]'
                                     : 'bg-gray-700'"
@@ -533,7 +544,9 @@ function dfFileViewer() {
         saving:        false,
 
         zoomLevel:     1,
-        showWatermark: false,
+        // ON by default — the stamp is the safe state, so it should never depend
+        // on someone remembering to switch it on. A change is remembered per browser.
+        showWatermark: true,
 
         editingNotes:  false,
         notesDraft:    '',
@@ -558,7 +571,7 @@ function dfFileViewer() {
                 this.deleteConfirm = false;
                 this.editingNotes  = false;
                 this.zoomLevel     = 1;
-                this.showWatermark = false;
+                this.showWatermark = this.loadWatermarkPref();
                 document.body.style.overflow = 'hidden';
                 this.fetchFile();
             });
@@ -567,6 +580,27 @@ function dfFileViewer() {
         close() {
             this.open = false;
             document.body.style.overflow = '';
+        },
+
+        /**
+         * Watermark preference. Defaults to ON when nothing is stored, so a fresh
+         * browser always starts stamped; storage is per-browser and may be blocked,
+         * hence the try/catch on both sides.
+         */
+        loadWatermarkPref() {
+            try {
+                const stored = localStorage.getItem('df_file_viewer_watermark');
+                return stored === null ? true : stored === '1';
+            } catch (e) {
+                return true;
+            }
+        },
+
+        toggleWatermark() {
+            this.showWatermark = !this.showWatermark;
+            try {
+                localStorage.setItem('df_file_viewer_watermark', this.showWatermark ? '1' : '0');
+            } catch (e) { /* private window / storage blocked — keep working, just don't remember */ }
         },
 
         fileUrl() {

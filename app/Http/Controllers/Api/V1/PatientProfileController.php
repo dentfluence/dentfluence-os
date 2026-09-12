@@ -333,7 +333,7 @@ class PatientProfileController extends ApiController
         $p = $this->find($request, $patient);
 
         $request->validate([
-            'file'     => 'required|file|max:20480|mimes:jpg,jpeg,png,pdf,dcm,doc,docx',
+            'file'     => ClinicalFileUploadService::validationRule(20480), // one shared allowlist — see the service
             'category' => 'required|string|max:100',
             'title'    => 'nullable|string|max:255',
             'notes'    => 'nullable|string|max:2000',
@@ -377,7 +377,7 @@ class PatientProfileController extends ApiController
         $p = $this->find($request, $patient);
 
         $request->validate([
-            'file'               => 'required|file|max:51200|mimes:jpg,jpeg,png,heic,heif',
+            'file'               => ClinicalFileUploadService::validationRule(), // one shared allowlist — see the service
             'procedure'          => 'nullable|string|max:255',
             'treatment_category' => ['nullable', Rule::in(array_keys(ClinicalFile::TREATMENT_CATEGORIES))],
             'stage'              => ['nullable', Rule::in(ClinicalFile::STAGES)],

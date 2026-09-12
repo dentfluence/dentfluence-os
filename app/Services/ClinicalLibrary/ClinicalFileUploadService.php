@@ -41,6 +41,44 @@ class ClinicalFileUploadService
     private const DISK = 'local';
 
     /**
+     * The ONLY formats the Clinical Library accepts — CEO ruling, 12 Sep 2026.
+     *
+     * Why an allowlist and not a blocklist: a camera RAW (.CR2) uploaded on
+     * 12 Sep was accepted, stored, and then could not be shown — its MIME type
+     * starts with image/ so the app called it a photo, but no browser can decode
+     * a RAW and neither can GD, so the thumbnail was permanently broken and the
+     * file could never be watermarked. Anything outside this list has the same
+     * problem waiting in it, so nothing gets in unless it is listed here.
+     *
+     * Before this existed, FOUR upload endpoints carried THREE different rules
+     * (web: none at all; mobile documents: jpg,jpeg,png,pdf,dcm,doc,docx;
+     * mobile capture: jpg,jpeg,png,heic,heif). This constant is now the one
+     * list; every endpoint reads it through validationRule().
+     *
+     * Deliberately NOT here yet, each needing its own decision:
+     *   stl  — lab cases carry them, so P1 (lab → clinical_files) needs it added
+     *   heic/heif — iPhone's native camera format; the mobile capture endpoint
+     *               used to accept it and no longer does
+     *   dcm  — DICOM / CBCT
+     * Adding any of them is one line in this array plus a matching accept="".
+     */
+    public const ALLOWED_EXTENSIONS = [
+        'jpg', 'jpeg', 'png', 'avif',   // images
+        'pdf',                          // documents
+        'doc', 'docx',                  // Word
+        'xls', 'xlsx',                  // Excel
+    ];
+
+    /**
+     * The Laravel validation rule every upload endpoint must use, so the
+     * accepted formats can never drift apart between web, mobile and library.
+     */
+    public static function validationRule(int $maxKb = 51200): string
+    {
+        return 'required|file|max:' . $maxKb . '|mimes:' . implode(',', self::ALLOWED_EXTENSIONS);
+    }
+
+    /**
      * Store an uploaded file and create its ClinicalFile record.
      * Dispatches watermark generation automatically for image types.
      */
@@ -48,6 +86,18 @@ class ClinicalFileUploadService
     {
         if (empty($context['patient_id'])) {
             throw new \InvalidArgumentException('ClinicalFileUploadService::store() requires patient_id in context.');
+        }
+
+        // Defence in depth: the controllers validate too, but this is the one
+        // door every upload path walks through, so the format rule is enforced
+        // here as well — a new caller cannot forget it.
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        if (! in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
+            throw new \InvalidArgumentException(
+                "ClinicalFileUploadService::store() rejected .{$extension} — accepted formats are: "
+                . implode(', ', self::ALLOWED_EXTENSIONS) . '.'
+            );
         }
 
         $fileType = $context['file_type'] ?? $this->detectFileType($file);

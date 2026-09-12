@@ -441,9 +441,10 @@
             <div style="margin-bottom:16px;">
                 <label style="display:block;font-size:12px;font-weight:600;color:#4b3060;margin-bottom:6px;">Files <span style="color:#dc2626;">*</span></label>
                 <input type="file" name="files[]" multiple required
+                    accept=".jpg,.jpeg,.png,.avif,.pdf,.doc,.docx,.xls,.xlsx"
                     style="width:100%;padding:8px 12px;border:1px solid rgba(185,92,183,0.30);border-radius:4px;font-size:13px;color:#1e0a2c;background:#faf5fb;cursor:pointer;"
                 >
-                <div style="font-size:11px;color:#b0a0be;margin-top:4px;">Select one or more files. Max 50 MB each.</div>
+                <div style="font-size:11px;color:#b0a0be;margin-top:4px;">JPG, PNG, AVIF, PDF, Word or Excel. Max 50 MB each.<br>Camera RAW (CR2, NEF, ARW) is not accepted — export a JPG first.</div>
                 @error('files')<div style="font-size:11px;color:#dc2626;margin-top:4px;">{{ $message }}</div>@enderror
             </div>
 

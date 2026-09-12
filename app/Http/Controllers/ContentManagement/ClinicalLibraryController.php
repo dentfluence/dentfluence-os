@@ -7,6 +7,7 @@ use App\Models\ClinicalFile;
 use App\Models\EducationCategory;
 use App\Models\Patient;
 use App\Models\TreatmentVisit;
+use App\Services\ClinicalLibrary\ClinicalFileUploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -103,12 +104,30 @@ class ClinicalLibraryController extends Controller
 
     // ── Upload Clinical Files ─────────────────────────────────────────────────
 
-    public function store(Request $request)
+    /**
+     * POST /clinical-library/upload
+     *
+     * Every upload path in the app goes through ClinicalFileUploadService — the
+     * one place that decides where a clinical file is stored, what its
+     * treatment_category is, and whether it enters the marketing review queue.
+     * This method used to duplicate that logic inline, which cost it three
+     * things the shared service does for free: watermark generation,
+     * TreatmentCategoryDetector, and MarketingEligibilityDetector.
+     *
+     * It also hard-set marketing_status = 'pending' on every row. That looked
+     * harmless and was not: MarketingEligibilityDetector only ever touches rows
+     * where marketing_status IS NULL (so it can never re-open a file a human has
+     * already approved or rejected). A file created here could therefore NEVER
+     * be auto-flagged when its before/after partner arrived. Do not reintroduce
+     * a default marketing_status here — eligibility is decided by the detector
+     * or by a human, never by the upload form.
+     */
+    public function store(Request $request, ClinicalFileUploadService $uploads)
     {
         $validated = $request->validate([
             'patient_id'  => 'required|exists:patients,id',
             'files'       => 'required|array|min:1',
-            'files.*'     => 'required|file|max:51200', // 50 MB per file
+            'files.*'     => ClinicalFileUploadService::validationRule(), // 50 MB, allowlisted formats only
             'procedure'   => 'nullable|string|max:100',
             'stage'       => 'nullable|in:general,before,during,after,followup',
             'file_type'   => 'nullable|in:photo,video,xray,opg,cbct,stl,intraoral_scan,pdf,consent,estimate,invoice,lab_slip,other',
@@ -116,53 +135,23 @@ class ClinicalLibraryController extends Controller
             'notes'       => 'nullable|string|max:1000',
         ]);
 
-        $patientId = $validated['patient_id'];
-        $count     = 0;
+        $count = 0;
 
         foreach ($request->file('files') as $file) {
-            // Detect file type from MIME if not provided
-            $fileType = $validated['file_type'] ?? $this->guessFileType($file);
-
-            // Security (Phase A): clinical files go to the PRIVATE disk and are
-            // served only via the authenticated SecureMediaController route.
-            $path = $file->store("clinical-files/{$patientId}", 'local');
-
-            ClinicalFile::create([
-                'patient_id'       => $patientId,
-                'procedure'        => $validated['procedure'] ?? null,
-                'stage'            => $validated['stage']     ?? 'general',
-                'file_type'        => $fileType,
-                'tooth_number'     => $validated['tooth_number'] ?? null,
-                'notes'            => $validated['notes']     ?? null,
-                'disk'             => 'local',
-                'path'             => $path,
-                'original_filename'=> $file->getClientOriginalName(),
-                'mime_type'        => $file->getMimeType(),
-                'file_size'        => $file->getSize(),
-                'captured_at'      => now(),
-                'uploaded_by'      => auth()->id(),
-                'source_type'      => 'manual_upload',
-                'marketing_status' => 'pending',
+            $uploads->store($file, [
+                'patient_id'   => $validated['patient_id'],
+                'procedure'    => $validated['procedure']     ?? null,
+                'stage'        => $validated['stage']         ?? 'general',
+                'file_type'    => $validated['file_type']     ?? null, // null => detected from MIME
+                'tooth_number' => $validated['tooth_number']  ?? null,
+                'notes'        => $validated['notes']         ?? null,
+                'source_type'  => 'manual_upload',
             ]);
 
             $count++;
         }
 
         return back()->with('success', "{$count} file(s) uploaded successfully.");
-    }
-
-    /**
-     * Guess a file_type enum value from the uploaded file's MIME type.
-     */
-    private function guessFileType(\Illuminate\Http\UploadedFile $file): string
-    {
-        $mime = $file->getMimeType();
-
-        if (str_starts_with($mime, 'image/')) return 'photo';
-        if (str_starts_with($mime, 'video/')) return 'video';
-        if ($mime === 'application/pdf')       return 'pdf';
-
-        return 'other';
     }
 
     // ── Content Manager index — all tabs ──────────────────────────────────────

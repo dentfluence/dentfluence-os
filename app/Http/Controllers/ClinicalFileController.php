@@ -77,7 +77,7 @@ class ClinicalFileController extends Controller
     public function store(Request $request, Patient $patient): JsonResponse
     {
         $request->validate([
-            'file'                    => 'required|file|max:51200', // 50 MB max
+            'file'                    => ClinicalFileUploadService::validationRule(), // 50 MB, allowlisted formats only
             'visit_id'                => ['nullable', 'integer', 'exists:treatment_visits,id'],
             'treatment_plan_item_id'  => ['nullable', 'integer', 'exists:treatment_plan_items,id'],
             'procedure'               => ['nullable', 'string', 'max:255'],
