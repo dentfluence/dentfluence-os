@@ -1042,7 +1042,12 @@ class TodayController extends Controller
             // still deciding...) leaves the row open. The Close tab remains
             // for staff to manually give up on a row after however many
             // failed attempts.
-            if ($optionRow?->closes_task) {
+            // 12 Sep 2026: a call that never connected closes nothing, even if
+            // Settings says closes_task — see TodayActionOptions::nonContactKeys().
+            $closes = (bool) $optionRow?->closes_task
+                && ! \App\Services\Relationship\TodayActionOptions::isNonContact($validated['response']);
+
+            if ($closes) {
                 $this->closeUnderlyingRecord($validated);
             }
 
@@ -1053,7 +1058,7 @@ class TodayController extends Controller
 
             return response()->json([
                 'success'          => true,
-                'closed'           => (bool) $optionRow?->closes_task,
+                'closed'           => $closes,
                 'next_action_label'=> $nextActionLabel,
             ]);
         } catch (\Throwable $e) {
@@ -1130,7 +1135,12 @@ class TodayController extends Controller
             ], 422);
         }
 
-        $closes         = (bool) $optionRow?->closes_task;
+        // A call that never connected closes nothing, whatever Settings says —
+        // see TodayActionOptions::nonContactKeys(). Without this, "No answer"
+        // on a non-queue category (appointment_reminders, opportunities, …)
+        // wrote a dismissal row and the patient read as Done.
+        $closes         = (bool) $optionRow?->closes_task
+            && ! \App\Services\Relationship\TodayActionOptions::isNonContact($validated['response']);
         $serviceOutcome = self::WEB_OUTCOME_TO_SERVICE[$validated['response']] ?? $validated['response'];
         $serviceKnows   = array_key_exists($serviceOutcome, CommunicationQueue::allCallOutcomes());
 

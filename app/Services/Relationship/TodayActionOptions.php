@@ -34,6 +34,37 @@ class TodayActionOptions
         'wrong_number'      => ['wrong_number', 'invalid_number'],
     ];
 
+    /**
+     * Outcomes where the call NEVER REACHED the patient — the union of the
+     * 'no_answer' and 'unable_to_connect' buckets above.
+     *
+     * These can never complete an action, whatever Settings > Call Outcomes
+     * says for them. Nobody was spoken to, so nothing was resolved: the row
+     * stays open and renders as Attempted under "Try again".
+     *
+     * 12 Sep 2026: seeded `closes_task` for these keys was still 1 on at
+     * least appointment_reminders, so "No answer" wrote a dismissal row and
+     * the patient showed as Done — a call that never happened, marked
+     * handled. The clinic can edit labels and notes rules freely; this one
+     * rule is not theirs to get wrong.
+     *
+     * 'wrong_number' / 'invalid_number' are deliberately NOT here — they DO
+     * resolve the action (the contact is marked invalid).
+     */
+    public static function nonContactKeys(): array
+    {
+        return array_merge(
+            self::CONTACT_RESULT_KEYS['no_answer'],
+            self::CONTACT_RESULT_KEYS['unable_to_connect'],
+        );
+    }
+
+    /** True when this outcome means the call did not connect. */
+    public static function isNonContact(?string $key): bool
+    {
+        return $key !== null && in_array($key, self::nonContactKeys(), true);
+    }
+
     /** Display order + labels for the four result buttons. */
     public const CONTACT_RESULTS = [
         'answered'          => 'Answered',
@@ -106,7 +137,11 @@ class TodayActionOptions
             ->active()
             ->get(['action_category', 'key', 'closes_task'])
             ->each(function ($row) use (&$map) {
-                $map[$row->action_category][$row->key] = (bool) $row->closes_task;
+                // A call that never connected closes nothing — see
+                // nonContactKeys(). Applied here too so the drawer's
+                // "Marks this action complete" hint tells the truth.
+                $map[$row->action_category][$row->key] = (bool) $row->closes_task
+                    && ! self::isNonContact($row->key);
             });
 
         return $map;
