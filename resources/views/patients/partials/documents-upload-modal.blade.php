@@ -167,7 +167,7 @@
                             Drag files here or click to browse
                         </p>
                         <p class="text-xs text-gray-400">
-                            Multi-file support &middot; Up to 100 MB per file
+                            Multi-file support &middot; Images 15 MB &middot; Documents 25 MB &middot; STL 60 MB &middot; DICOM 100 MB
                         </p>
                     </div>
                 </template>
@@ -183,7 +183,11 @@
 
                 {{-- Accepted file types legend --}}
                 <div class="flex flex-wrap items-center justify-center gap-1.5 mt-4">
-                    @foreach(['JPG','PNG','MP4','MOV','PDF','DCM','STL','OBJ','TIFF','BMP'] as $ext)
+                    {{-- The real allowlist, read from the constant that enforces it.
+                         This strip used to advertise MP4, MOV, OBJ, TIFF and BMP —
+                         none of which have ever been accepted. A screen that invites
+                         a file the server will refuse teaches staff to distrust it. --}}
+                    @foreach(array_map('strtoupper', array_values(array_diff(\App\Services\ClinicalLibrary\ClinicalFileUploadService::allowedExtensions(), ['jpeg']))) as $ext)
                     <span class="px-2 py-0.5 text-[10px] text-gray-400 bg-white border border-gray-200 rounded">
                         {{ $ext }}
                     </span>
@@ -268,7 +272,16 @@
 
             <div class="space-y-5">
 
-                {{-- ── Row 1: Visit + Procedure ──────────────────── --}}
+                {{-- ── Row 1: Visit + Treatment ──────────────────── --}}
+                @php
+                    // This patient's REAL visits. The three that used to be hardcoded
+                    // here (12 Jan 2025 — Root Canal, 03 Mar 2025 — Crown Prep,
+                    // 28 May 2025 — Follow-up, values v1/v2/v3) belonged to nobody:
+                    // visit_id is validated `exists:treatment_visits,id`, so choosing
+                    // any of them made the upload fail with a 422 and no explanation
+                    // on screen. A picture of a dropdown is worse than no dropdown.
+                    $patientVisits = $patient->treatmentVisits()->limit(50)->get();
+                @endphp
                 <div class="grid grid-cols-2 gap-4">
 
                     <div>
@@ -280,34 +293,55 @@
                                 class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs
                                        text-gray-700 bg-white focus:outline-none focus:border-[#6a0f70]">
                             <option value="">— No visit —</option>
-                            <option value="v1">12 Jan 2025 — Root Canal</option>
-                            <option value="v2">03 Mar 2025 — Crown Prep</option>
-                            <option value="v3">28 May 2025 — Follow-up</option>
+                            @foreach($patientVisits as $v)
+                                <option value="{{ $v->id }}">{{ optional($v->visit_date)->format('d M Y') ?: 'Undated' }}@if($v->treatment_name) — {{ $v->treatment_name }}@endif</option>
+                            @endforeach
                         </select>
+                        @if($patientVisits->isEmpty())
+                            <p class="text-[10px] text-gray-400 mt-1">No visits recorded for this patient yet.</p>
+                        @endif
                     </div>
 
                     <div>
                         <label class="block text-xs font-semibold text-gray-600 mb-1.5">
-                            Treatment / Procedure
+                            Treatment
                         </label>
-                        {{-- Phase 11: @change fetches protocol steps via AJAX --}}
-                        <select x-model="uploadProcedure"
-                                @change="fetchProtocolSteps($event.target.value)"
+                        {{-- The SAME vocabulary the library filters by, the Case Library
+                             groups by, and the File Viewer edits. It used to be seven
+                             hardcoded strings of its own — a fourth vocabulary in a
+                             module that already had three — and four of the ten real
+                             categories could not be produced from here at all.
+                             "Scaling" matched nothing, so those files were invisible to
+                             the Treatment filter forever. --}}
+                        <select x-model="uploadTreatment"
+                                @change="onTreatmentChange()"
                                 class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs
                                        text-gray-700 bg-white focus:outline-none focus:border-[#6a0f70]">
-                            <option value="">— Select procedure —</option>
-                            <option value="Root Canal">Root Canal Treatment</option>
-                            <option value="Crown">Crown Preparation</option>
-                            <option value="Implant">Implant Placement</option>
-                            <option value="Scaling">Scaling &amp; Polishing</option>
-                            <option value="Extraction">Extraction</option>
-                            <option value="Aligner">Aligner Treatment</option>
-                            <option value="other">Other</option>
+                            <option value="">— Select treatment —</option>
+                            @foreach(\App\Models\ClinicalFile::TREATMENT_CATEGORIES as $key => $label)
+                                <option value="{{ $key }}">{{ $label }}</option>
+                            @endforeach
                         </select>
                     </div>
 
                 </div>
-                {{-- /visit + procedure --}}
+
+                {{-- Procedure — free text, and the line the watermark prints. --}}
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1.5">
+                        Procedure
+                        <span class="text-gray-400 font-normal">(optional — in your own words)</span>
+                    </label>
+                    <input type="text" x-model="uploadProcedure"
+                           placeholder="e.g. Implant placement 26"
+                           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs
+                                  text-gray-700 bg-white focus:outline-none focus:border-[#6a0f70]">
+                    <p class="text-[10px] text-gray-400 mt-1">
+                        Left blank, the treatment above is used. This is what the watermark
+                        stamps and what the tile shows.
+                    </p>
+                </div>
+                {{-- /visit + treatment + procedure --}}
 
                 {{-- ── Phase 11: Protocol Steps Suggestion ────────────────── --}}
                 {{-- Shows after procedure selected; AJAX-loaded checklist     --}}

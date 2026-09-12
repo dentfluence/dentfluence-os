@@ -109,9 +109,21 @@
     uploadSelectedTeeth: [],   // FDI tooth numbers
     // Upload form field bindings (Step 2)
     uploadStage:         'general',
-    uploadProcedure:     '',
+    uploadTreatment:     '',   // ClinicalFile::TREATMENT_CATEGORIES key
+    uploadProcedure:     '',   // free text; falls back to the treatment label
     uploadVisitId:       '',
     uploadNotes:         '',
+
+    // key => label, from ClinicalFile::TREATMENT_CATEGORIES. The label is what
+    // the protocol lookup matches on (it does a LIKE against procedure_type and
+    // name), and what `procedure` falls back to when nothing is typed.
+    treatmentLabels: { {!! collect(\App\Models\ClinicalFile::TREATMENT_CATEGORIES)
+        ->map(fn ($label, $key) => "'" . $key . "': '" . addslashes($label) . "'")
+        ->implode(', ') !!} },
+
+    onTreatmentChange() {
+        this.fetchProtocolSteps(this.treatmentLabels[this.uploadTreatment] || '');
+    },
     // Upload progress tracking
     uploadProgress:      {},   // { fileIndex: 0-100 }
     uploadStatus:        'idle', // idle | uploading | done | error
@@ -130,7 +142,13 @@
             const formData = new FormData();
             formData.append('file',          files[i]);
             formData.append('stage',         this.uploadStage);
-            formData.append('procedure',     this.uploadProcedure);
+            // Both are sent, explicitly. treatment_category used to be GUESSED from
+            // the procedure string by a keyword detector, so "Scaling" produced no
+            // category at all and the file never appeared under any treatment filter.
+            // A dropdown the user actually chose from should not be re-derived.
+            formData.append('treatment_category', this.uploadTreatment || '');
+            formData.append('procedure',
+                (this.uploadProcedure || '').trim() || this.treatmentLabels[this.uploadTreatment] || '');
             formData.append('visit_id',      this.uploadVisitId ?? '');
             formData.append('tooth_number',  this.uploadSelectedTeeth.join(', '));
             formData.append('notes',         this.uploadNotes);
@@ -324,7 +342,7 @@
             </div>
 
             {{-- Upload button — triggers Phase 2 upload modal --}}
-            <button @click="showUploadModal = true; uploadStep = 1; uploadHasFiles = false; uploadFiles = []; uploadSelectedTeeth = []; uploadStage = 'general'; uploadProcedure = ''; uploadVisitId = ''; uploadNotes = ''; uploadTags = []; uploadProgress = {}; uploadStatus = 'idle'; uploadErrors = []"
+            <button @click="showUploadModal = true; uploadStep = 1; uploadHasFiles = false; uploadFiles = []; uploadSelectedTeeth = []; uploadStage = 'general'; uploadTreatment = ''; uploadProcedure = ''; uploadVisitId = ''; uploadNotes = ''; uploadTags = []; uploadProgress = {}; uploadStatus = 'idle'; uploadErrors = []"
                     class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white
                            bg-[#6a0f70] hover:bg-[#380740] rounded-lg transition-colors">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -454,7 +472,7 @@
             <p class="text-xs text-gray-400 mb-5 max-w-xs mx-auto">
                 Upload X-rays, photos, consent forms, and other clinical documents for this patient.
             </p>
-            <button @click="showUploadModal = true; uploadStep = 1; uploadHasFiles = false; uploadFiles = []; uploadSelectedTeeth = []; uploadStage = 'general'; uploadProcedure = ''; uploadVisitId = ''; uploadNotes = ''; uploadTags = []; uploadProgress = {}; uploadStatus = 'idle'; uploadErrors = []"
+            <button @click="showUploadModal = true; uploadStep = 1; uploadHasFiles = false; uploadFiles = []; uploadSelectedTeeth = []; uploadStage = 'general'; uploadTreatment = ''; uploadProcedure = ''; uploadVisitId = ''; uploadNotes = ''; uploadTags = []; uploadProgress = {}; uploadStatus = 'idle'; uploadErrors = []"
                     class="inline-flex items-center gap-1.5 px-5 py-2 text-sm font-semibold text-white
                            bg-[#6a0f70] hover:bg-[#380740] rounded-lg transition-colors">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
