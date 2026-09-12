@@ -307,12 +307,31 @@ class PatientProfileController extends ApiController
                 'id'                        => $f->id,
                 'title'                     => $f->title,
                 'file_type'                 => $f->file_type,
+                'file_type_label'           => $f->file_type_label,
                 'procedure'                 => $f->procedure,
                 'treatment_category'        => $f->treatment_category,
                 'treatment_category_label'  => $f->treatment_category_label,
                 'tooth'                     => $f->tooth_number,
+                'stage'                     => $f->stage,
+                'stage_label'               => $f->stage_label,
                 'captured_at'               => $f->captured_at,
                 'filename'                  => $f->original_filename,
+                // Added for the mobile tagging + thumbnail work. The phone
+                // could edit none of this and display none of it: the edit API
+                // existed with no screen calling it, and the image route was
+                // behind the session guard a bearer token cannot pass.
+                'notes'                     => $f->notes,
+                'is_image'                  => $f->isImage(),
+                'no_preview_reason'         => $f->no_preview_reason,
+                'file_size_human'           => $f->file_size_human,
+                'url'                       => route('api.clinical-library.raw', [$f->id, 'v' => 'wm']),
+                'consent_status'            => $f->consent_status,
+                'marketing_status'          => $f->marketing_status,
+                'is_marketing_eligible'     => (bool) $f->is_marketing_eligible,
+                'is_education_eligible'     => (bool) $f->is_education_eligible,
+                'is_teaching_eligible'      => (bool) $f->is_teaching_eligible,
+                'is_research_eligible'      => (bool) $f->is_research_eligible,
+                'is_case_library_eligible'  => (bool) $f->is_case_library_eligible,
             ]);
 
         return $this->success($rows, '');
@@ -337,6 +356,15 @@ class PatientProfileController extends ApiController
             'category' => 'required|string|max:100',
             'title'    => 'nullable|string|max:255',
             'notes'    => 'nullable|string|max:2000',
+            // Added with the mobile tagging work. This endpoint accepted none
+            // of these, so EVERY document uploaded from the phone's patient
+            // profile arrived with no treatment, no tooth and no stage — and a
+            // file with none of those never comes back in a search. The phone
+            // had no screen to fix it afterwards either.
+            'procedure'          => 'nullable|string|max:255',
+            'treatment_category' => ['nullable', Rule::in(array_keys(ClinicalFile::TREATMENT_CATEGORIES))],
+            'stage'              => ['nullable', Rule::in(ClinicalFile::STAGES)],
+            'tooth_number'       => 'nullable|string|max:50',
         ]);
 
         $fileTypeMap = [
@@ -348,13 +376,17 @@ class PatientProfileController extends ApiController
         ];
 
         $record = app(ClinicalFileUploadService::class)->store($request->file('file'), [
-            'patient_id'  => $p->id,
-            'file_type'   => $fileTypeMap[$request->category] ?? 'other',
-            'title'       => $request->title,
-            'notes'       => $request->notes,
-            'tags'        => [$request->category],
-            'uploaded_by' => Auth::id(),
-            'source_type' => 'mobile_document',
+            'patient_id'         => $p->id,
+            'file_type'          => $fileTypeMap[$request->category] ?? 'other',
+            'title'              => $request->title,
+            'notes'              => $request->notes,
+            'procedure'          => $request->procedure,
+            'treatment_category' => $request->treatment_category,
+            'stage'              => $request->input('stage', 'general'),
+            'tooth_number'       => $request->tooth_number,
+            'tags'               => [$request->category],
+            'uploaded_by'        => Auth::id(),
+            'source_type'        => 'mobile_document',
         ]);
 
         return $this->success(['document' => [

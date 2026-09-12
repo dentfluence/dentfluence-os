@@ -208,6 +208,16 @@ class ClinicalLibrarySearchService
             });
         }
 
+        // OPTIONAL branch lock. The web surfaces do not pass this, so nothing
+        // that existed changed when it was added; the mobile endpoints do pass
+        // it, matching PatientProfileController::find() and every other mobile
+        // read. Whether a two-branch clinic wants one pooled library or one per
+        // branch is a product decision nobody has made yet — this leaves both
+        // possible instead of quietly choosing.
+        if (! empty($input['branch_id'])) {
+            $query->whereHas('patient', fn (Builder $p) => $p->where('branch_id', $input['branch_id']));
+        }
+
         if (! empty($input['patient_id']))  { $query->where('patient_id', $input['patient_id']); }
         if (! empty($input['doctor_id']))   { $query->where('uploaded_by', $input['doctor_id']); }
         if (! empty($input['tag']))         { $query->whereJsonContains('tags', $input['tag']); }

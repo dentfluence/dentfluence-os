@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\V1\SystemController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\PatientController;
+use App\Http\Controllers\Api\V1\ClinicalLibraryController;
 use App\Http\Controllers\Api\V1\PatientProfileController;
 use App\Http\Controllers\Api\V1\ConsultationController;
 use App\Http\Controllers\Api\V1\CohaController;
@@ -139,6 +140,41 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::get('/patients/{patient}/communications',  [PatientProfileController::class, 'communications']);
         Route::get('/consultations/{consultation}', [ConsultationController::class, 'show']);
         }); // end PHI read group (Slice 1.4)
+
+        // ── Clinical Library (mobile) ────────────────────────────────────────
+        // Reads only. Every one of these is a skin over something the web app
+        // already uses — see ClinicalLibraryController's docblock for why none
+        // of them carries a query of its own, and why these reads are locked to
+        // the caller's branch while the web search is not.
+        //
+        // Gated on `cms`, which is the module the web Clinical Library and
+        // Content Manager live under, and the slug the phone's own Library tile
+        // is already gated by. Using `patients` here would have let the tile
+        // appear for someone the endpoints then refused.
+        Route::middleware('api.role:module:cms,view')->group(function () {
+            Route::get('/clinical-library/options',   [ClinicalLibraryController::class, 'options'])
+                ->name('api.clinical-library.options');
+            Route::get('/clinical-library/search',    [ClinicalLibraryController::class, 'search'])
+                ->name('api.clinical-library.search');
+            Route::get('/clinical-library/showcase',  [ClinicalLibraryController::class, 'showcase'])
+                ->name('api.clinical-library.showcase');
+        });
+
+        // The bytes of one clinical file.
+        //
+        // Deliberately NOT behind a module gate: this is the token-auth twin of
+        // secure.media.file, which the web serves to any authenticated user in
+        // the right branch with no module check at all, and the branch check is
+        // enforced in the controller. Putting it under `cms` would break the
+        // patient Documents tab (gated `patients`) and putting it under
+        // `patients` would break the library grid — the same file is reached
+        // from both, so it answers to neither and to the branch instead.
+        //
+        // It exists because SecureMediaController sits behind the SESSION
+        // guard, which a bearer token cannot satisfy. That is why every
+        // clinical list on this phone has been text and icons until now.
+        Route::get('/clinical-library/files/{file}/raw', [ClinicalLibraryController::class, 'raw'])
+            ->name('api.clinical-library.raw');
 
         // Clinical-file + document writes — Slice 1.2/1.4: mirror the web gates
         // exactly (module:patients edit for writes, delete for destroy). These
