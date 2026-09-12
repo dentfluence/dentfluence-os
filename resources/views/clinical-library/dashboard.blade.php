@@ -537,6 +537,10 @@
 <div
     x-show="searchOpen"
     x-data="dfLibrarySearch()"
+    {{-- Opening the drawer already shows the newest files. Nothing has to be
+         typed and no filter has to be set to start looking — a search screen
+         that is blank until you guess the right word is a dead end. --}}
+    x-effect="if (searchOpen && !loaded) { loaded = true; run(); }"
     x-transition:enter="transition ease-out duration-200"
     x-transition:enter-start="opacity-0"
     x-transition:enter-end="opacity-100"
@@ -565,6 +569,10 @@
             </button>
         </div>
 
+        <div style="padding:0 20px 10px;font-size:11px;color:#c0b0cc;">
+            Type a patient name, a treatment or a tooth number — or just use the filters.
+        </div>
+
         {{-- ── filter strip ──────────────────────────────────────────────
              The box alone already understands stage, type and treatment when
              they are typed, but a dentist under time pressure should not have
@@ -576,6 +584,22 @@
              scrolling everything and remembering each patient's consent.
         --}}
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:0 20px 14px;">
+
+            <select x-model="tooth" @change="run()" :style="selStyle(tooth)">
+                <option value="">All teeth</option>
+                <optgroup label="Region">
+                    @foreach($searchOptions['teeth']['regions'] as $key => $label)
+                        <option value="{{ $key }}">{{ $label }}</option>
+                    @endforeach
+                </optgroup>
+                @foreach($searchOptions['teeth']['quadrants'] as $quadrant => $teethList)
+                <optgroup label="{{ $quadrant }}">
+                    @foreach($teethList as $toothNo)
+                        <option value="{{ $toothNo }}">{{ $toothNo }}</option>
+                    @endforeach
+                </optgroup>
+                @endforeach
+            </select>
 
             <select x-model="stage" @change="run()" :style="selStyle(stage)">
                 <option value="">All stages</option>
@@ -638,21 +662,20 @@
         {{-- ── results ── --}}
         <div style="border-top:1px solid rgba(185,92,183,0.12);overflow-y:auto;flex:1;min-height:0;">
 
-            <template x-if="!loading && active() && results.length === 0">
+            <template x-if="!loading && results.length === 0">
                 <div style="padding:36px 20px;text-align:center;font-size:13px;color:#b0a0be;">
-                    Nothing matches this search.
+                    <span x-show="active()">Nothing matches this search.</span>
+                    <span x-show="!active()">No files in the library yet.</span>
                 </div>
             </template>
 
-            <template x-if="!active()">
-                <div style="padding:26px 20px;font-size:12px;color:#b0a0be;line-height:1.9;">
-                    <div style="font-weight:600;color:#9b8aaa;margin-bottom:6px;">Search by patient name, treatment or tooth number</div>
-                    <div><code style="color:#6a0f70;">Kulkarni</code> &nbsp;everything for that patient</div>
-                    <div><code style="color:#6a0f70;">implant</code> &nbsp;every implant case</div>
-                    <div><code style="color:#6a0f70;">26</code> &nbsp;every file on that tooth</div>
-                    <div style="margin-top:8px;color:#c9bcd4;">Mix them — <code style="color:#6a0f70;">kulkarni implant 26</code> — or narrow with the filters above. Use them on their own to browse.</div>
-                </div>
-            </template>
+            {{-- Says what is on screen: the newest files, or a result set. --}}
+            <div x-show="!loading && results.length > 0" x-cloak
+                 style="padding:8px 20px 4px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#c0b0cc;">
+                <span x-show="!active()">Recent uploads</span>
+                <span x-show="active()">Results</span>
+            </div>
+
 
             <template x-for="file in results" :key="file.id">
                 <div @click="openFile(file)"
@@ -705,6 +728,8 @@
 function dfLibrarySearch() {
     return {
         q: '',
+        loaded: false,
+        tooth: '',
         stage: '',
         treatment: '',
         fileType: '',
@@ -724,11 +749,11 @@ function dfLibrarySearch() {
         },
 
         hasFilters() {
-            return !!(this.stage || this.treatment || this.fileType || this.period || this.doctor || this.readyToPost);
+            return !!(this.tooth || this.stage || this.treatment || this.fileType || this.period || this.doctor || this.readyToPost);
         },
 
         clearFilters() {
-            this.stage = this.treatment = this.fileType = this.period = this.doctor = '';
+            this.tooth = this.stage = this.treatment = this.fileType = this.period = this.doctor = '';
             this.readyToPost = false;
             this.run();
         },
@@ -749,15 +774,13 @@ function dfLibrarySearch() {
          * answers to a question you already finished typing.
          */
         async run() {
-            if (! this.active()) {
-                this.results = []; this.interpreted = []; this.total = 0; this.loading = false;
-                return;
-            }
-
+            // No early return on an empty box: with nothing set this lists the
+            // most recent files, which is what "browse the library" means.
             const params = new URLSearchParams();
             const term = this.q.trim();
 
             if (term.length >= 2) params.set('q', term);
+            if (this.tooth)      params.set('tooth', this.tooth);
             if (this.stage)      params.set('stage', this.stage);
             if (this.treatment)  params.set('treatment_category', this.treatment);
             if (this.fileType)   params.set('file_type', this.fileType);

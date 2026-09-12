@@ -148,12 +148,20 @@ $stageColors = [
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </a>
 
-            {{-- Approve button (only shown if pending) --}}
+            {{-- Approve / Reject — both, and only while the decision is open.
+                 rejectFile() has existed in this file since it shipped and
+                 nothing ever called it, so a flagged photo could be let in but
+                 never turned away. --}}
             @if($approval === 'pending')
-            <button class="cm-card-action-btn" title="Approve"
+            <button class="cm-card-action-btn" title="Approve for marketing"
                     style="background:rgba(22,163,74,.5);"
                     onclick="approveFile({{ $file->id }}, this)">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </button>
+            <button class="cm-card-action-btn" title="Reject for marketing"
+                    style="background:rgba(220,38,38,.5);"
+                    onclick="rejectFile({{ $file->id }}, this)">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
             @endif
 
@@ -165,12 +173,7 @@ $stageColors = [
 
 @endforeach
 
-{{-- ── PAGINATION LINKS ── --}}
-@if($marketingFiles->hasPages())
-<div style="display:flex;justify-content:center;padding:20px 0;">
-    {{ $marketingFiles->links() }}
-</div>
-@endif
+{{-- Pagination is rendered once by content-management/index.blade.php --}}
 
 @endif {{-- /empty state --}}
 
@@ -198,7 +201,8 @@ function approveFile(fileId, btn) {
                 badge.className = 'cm-approval-badge badge-approved';
                 badge.textContent = '✓ Approved';
             }
-            btn.remove();
+            card.querySelectorAll('.cm-card-actions button[title^="Approve"], .cm-card-actions button[title^="Reject"]')
+                .forEach(b => b.remove());
         }
     })
     .catch(console.error);
@@ -221,6 +225,9 @@ function rejectFile(fileId, btn) {
                 badge.className = 'cm-approval-badge badge-rejected';
                 badge.textContent = '✕ Rejected';
             }
+            // The decision is made — neither button applies any more.
+            card.querySelectorAll('.cm-card-actions button[title^="Approve"], .cm-card-actions button[title^="Reject"]')
+                .forEach(b => b.remove());
         }
     })
     .catch(console.error);

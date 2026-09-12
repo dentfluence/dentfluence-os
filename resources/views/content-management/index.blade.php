@@ -351,122 +351,161 @@
             </div>
         </div>
 
-        {{-- ── SUB-NAV TABS ── --}}
+        {{-- ── SUB-NAV TABS ──
+             Links, not Alpine toggles. Each tab is its own URL, so a filtered
+             view can be reloaded, bookmarked or sent to someone — and only the
+             tab being looked at is queried. Every tab used to be loaded on every
+             page view, two of them with an unbounded ->get().
+        --}}
+        @php
+            $tabLabels = [
+                'marketing'    => 'Marketing',
+                'education'    => 'Education',
+                'case-library' => 'Case Library',
+                'teaching'     => 'Teaching',
+                'research'     => 'Research',
+            ];
+        @endphp
         <div class="cm-tabs">
-
-            {{-- Marketing --}}
-            <div class="cm-tab" :class="activeTab==='marketing' ? 'active' : ''" @click="switchTab('marketing')">
-                Marketing
-                <span class="cm-tab-badge" x-text="tabCounts['marketing']">{{ $tabCounts['marketing'] }}</span>
-            </div>
-
-            {{-- Education --}}
-            <div class="cm-tab" :class="activeTab==='education' ? 'active' : ''" @click="switchTab('education')">
-                Education
-                <span class="cm-tab-badge" x-text="tabCounts['education']">{{ $tabCounts['education'] }}</span>
-            </div>
-
-            {{-- Case Library --}}
-            <div class="cm-tab" :class="activeTab==='case-library' ? 'active' : ''" @click="switchTab('case-library')">
-                Case Library
-                <span class="cm-tab-badge" x-text="tabCounts['case-library']">{{ $tabCounts['case-library'] }}</span>
-            </div>
-
-            {{-- Teaching --}}
-            <div class="cm-tab" :class="activeTab==='teaching' ? 'active' : ''" @click="switchTab('teaching')">
-                Teaching
-                <span class="cm-tab-badge" x-text="tabCounts['teaching']">{{ $tabCounts['teaching'] }}</span>
-            </div>
-
-            {{-- Research --}}
-            <div class="cm-tab" :class="activeTab==='research' ? 'active' : ''" @click="switchTab('research')">
-                Research
-                <span class="cm-tab-badge" x-text="tabCounts['research']">{{ $tabCounts['research'] }}</span>
-            </div>
-
+            @foreach($tabLabels as $tabKey => $tabLabel)
+            <a href="{{ route('cms.index', array_merge($filters, ['tab' => $tabKey])) }}"
+               class="cm-tab {{ $activeTab === $tabKey ? 'active' : '' }}"
+               style="text-decoration:none;">
+                {{ $tabLabel }}
+                <span class="cm-tab-badge">{{ $tabCounts[$tabKey] }}</span>
+            </a>
+            @endforeach
         </div>
     </div>
 
-    {{-- ══ STICKY FILTER BAR ══ --}}
-    <div id="cm-filter-bar">
+    {{-- ══ STICKY FILTER BAR ══
+         A real form now. Every control used to be a static <select> with no
+         name, no binding and no handler sitting on top of filter code that
+         already worked and could not be reached. It posts back to this page and
+         the controller hands the values to ClinicalLibrarySearchService — the
+         same brain as the dashboard search drawer, so the two screens cannot
+         answer the same question differently.
+    ══ --}}
+    <form method="GET" action="{{ route('cms.index') }}" id="cm-filter-bar">
+        <input type="hidden" name="tab" value="{{ $activeTab }}">
 
-        {{-- Treatment type --}}
+        {{-- Free text --}}
+        <div class="filter-group">
+            <span class="filter-label">Search</span>
+            <input type="text" name="q" value="{{ $filters['q'] ?? '' }}"
+                   class="filter-input" style="width:190px;"
+                   placeholder="Patient &middot; treatment &middot; tooth">
+        </div>
+
+        {{-- Tooth — arches and quadrants first, then every tooth --}}
+        <div class="filter-group">
+            <span class="filter-label">Tooth</span>
+            <select name="tooth" class="filter-select" style="min-width:165px;" onchange="this.form.submit()">
+                <option value="">All teeth</option>
+                <optgroup label="Region">
+                    @foreach($filterOptions['teeth']['regions'] as $key => $label)
+                        <option value="{{ $key }}" @selected(($filters['tooth'] ?? '') === $key)>{{ $label }}</option>
+                    @endforeach
+                </optgroup>
+                @foreach($filterOptions['teeth']['quadrants'] as $quadrant => $teeth)
+                <optgroup label="{{ $quadrant }}">
+                    @foreach($teeth as $tooth)
+                        <option value="{{ $tooth }}" @selected(($filters['tooth'] ?? '') == $tooth)>{{ $tooth }}</option>
+                    @endforeach
+                </optgroup>
+                @endforeach
+            </select>
+        </div>
+
+        {{-- Treatment --}}
         <div class="filter-group">
             <span class="filter-label">Treatment</span>
-            <select class="filter-select" style="min-width:150px;">
-                <option value="">All Treatments</option>
-                <option>Root Canal</option>
-                <option>Implant</option>
-                <option>Crown & Bridge</option>
-                <option>Extraction</option>
-                <option>Aligners</option>
-                <option>Scaling & Polishing</option>
-                <option>Whitening</option>
+            <select name="treatment_category" class="filter-select" style="min-width:135px;" onchange="this.form.submit()">
+                <option value="">All treatments</option>
+                @foreach($filterOptions['treatments'] as $key => $label)
+                    <option value="{{ $key }}" @selected(($filters['treatment_category'] ?? '') === $key)>{{ $label }}</option>
+                @endforeach
             </select>
         </div>
 
         {{-- Stage --}}
         <div class="filter-group">
             <span class="filter-label">Stage</span>
-            <select class="filter-select" style="min-width:130px;">
-                <option value="">All Stages</option>
-                <option>Before</option>
-                <option>During</option>
-                <option>After</option>
-                <option>Follow-up</option>
-                <option>General</option>
+            <select name="stage" class="filter-select" style="min-width:115px;" onchange="this.form.submit()">
+                <option value="">All stages</option>
+                @foreach($filterOptions['stages'] as $key => $label)
+                    <option value="{{ $key }}" @selected(($filters['stage'] ?? '') === $key)>{{ $label }}</option>
+                @endforeach
             </select>
         </div>
 
-        {{-- Approval status — only on Marketing tab --}}
-        <div class="filter-group approval-filter" x-show="activeTab==='marketing'">
-            <span class="filter-label">Approval</span>
-            <select class="filter-select" style="min-width:130px;">
-                <option value="">All Status</option>
-                <option>Pending</option>
-                <option>Approved</option>
-                <option>Rejected</option>
+        {{-- File type --}}
+        <div class="filter-group">
+            <span class="filter-label">Type</span>
+            <select name="file_type" class="filter-select" style="min-width:110px;" onchange="this.form.submit()">
+                <option value="">All types</option>
+                @foreach($filterOptions['file_types'] as $key => $label)
+                    <option value="{{ $key }}" @selected(($filters['file_type'] ?? '') === $key)>{{ $label }}</option>
+                @endforeach
             </select>
         </div>
+
+        {{-- Approval — only means anything on the Marketing tab --}}
+        @if($activeTab === 'marketing')
+        <div class="filter-group">
+            <span class="filter-label">Approval</span>
+            <select name="approval" class="filter-select" style="min-width:115px;" onchange="this.form.submit()">
+                <option value="">All status</option>
+                @foreach(['pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected'] as $key => $label)
+                    <option value="{{ $key }}" @selected(($filters['approval'] ?? '') === $key)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+        @endif
 
         <div class="filter-divider"></div>
 
-        {{-- Date range --}}
+        {{-- Date --}}
         <div class="filter-group">
             <span class="filter-label">Date</span>
-            <select class="filter-select" style="min-width:130px;">
-                <option value="">All Time</option>
-                <option>Last 30 Days</option>
-                <option>Last 3 Months</option>
-                <option>Last 6 Months</option>
-                <option>Last Year</option>
+            <select name="period" class="filter-select" style="min-width:125px;" onchange="this.form.submit()">
+                <option value="">All time</option>
+                @foreach(['30' => 'Last 30 days', '90' => 'Last 3 months', '180' => 'Last 6 months', '365' => 'Last year'] as $key => $label)
+                    <option value="{{ $key }}" @selected(($filters['period'] ?? '') === $key)>{{ $label }}</option>
+                @endforeach
             </select>
         </div>
 
-        {{-- Tags --}}
+        {{-- Doctor --}}
+        @if($filterOptions['doctors']->count() > 1)
         <div class="filter-group">
-            <span class="filter-label">Tag</span>
-            <input type="text" class="filter-input" placeholder="Search tags…" style="width:150px;">
-        </div>
-
-        {{-- Sort --}}
-        <div class="filter-group" style="margin-left:auto;">
-            <span class="filter-label">Sort by</span>
-            <select class="filter-select" style="min-width:140px;">
-                <option>Newest First</option>
-                <option>Oldest First</option>
-                <option>Rating</option>
-                <option>Treatment</option>
+            <span class="filter-label">Doctor</span>
+            <select name="doctor_id" class="filter-select" style="min-width:130px;" onchange="this.form.submit()">
+                <option value="">Any doctor</option>
+                @foreach($filterOptions['doctors'] as $doc)
+                    <option value="{{ $doc->id }}" @selected((string) ($filters['doctor_id'] ?? '') === (string) $doc->id)>{{ $doc->name }}</option>
+                @endforeach
             </select>
         </div>
+        @endif
 
-        {{-- Reset --}}
-        <button class="cm-btn-outline" style="align-self:flex-end;">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.95"/></svg>
+        {{-- Ready to post — consent given AND marketing approved --}}
+        <div class="filter-group" style="align-self:flex-end;">
+            <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:6px;font-size:12px;cursor:pointer;user-select:none;border:1px solid {{ !empty($filters['ready']) ? '#86efac' : '#e5e7eb' }};background:{{ !empty($filters['ready']) ? '#f0fdf4' : '#fff' }};color:{{ !empty($filters['ready']) ? '#15803d' : '#374151' }};">
+                <input type="checkbox" name="ready" value="1" @checked(!empty($filters['ready']))
+                       onchange="this.form.submit()" style="accent-color:#16a34a;margin:0;">
+                Ready to post
+            </label>
+        </div>
+
+        <button type="submit" class="cm-btn-primary" style="align-self:flex-end;">Apply</button>
+
+        @if(!empty($filters))
+        <a href="{{ route('cms.index', ['tab' => $activeTab]) }}" class="cm-btn-outline" style="align-self:flex-end;text-decoration:none;">
             Reset
-        </button>
-
-    </div>
+        </a>
+        @endif
+    </form>
 
     {{-- ══ CONTENT AREA ══ --}}
     <div id="cm-content">
@@ -474,65 +513,56 @@
         {{-- RESULTS META ROW --}}
         <div class="cm-results-meta">
             <div class="cm-results-count">
-                <strong x-text="tabCounts[activeTab]"></strong>
-                <span x-text="' files in ' + tabLabels[activeTab]"></span>
+                <strong>{{ $files->total() }}</strong>
+                {{ $files->total() === 1 ? 'file' : 'files' }} in {{ $tabLabels[$activeTab] }}
+                @if(!empty($filters))
+                    <span style="color:#6a0f70;font-weight:600;">&middot; filtered</span>
+                @endif
             </div>
             <div style="display:flex;align-items:center;gap:10px;">
                 <span x-show="selectedCount > 0" style="font-size:12px;color:#6a0f70;font-weight:700;"
                       x-text="selectedCount + ' selected'"></span>
-                <div class="cm-view-toggle">
-                    <button class="cm-view-btn active" title="Grid view">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                    </button>
-                    <button class="cm-view-btn" title="List view">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                    </button>
-                </div>
             </div>
         </div>
 
-        {{-- ── TAB: MARKETING ── --}}
-        <div x-show="activeTab==='marketing'" x-cloak>
+        {{-- Only the tab being looked at is rendered — the others are a page load away. --}}
+        @if($activeTab === 'marketing')
             @include('content-management.partials.cm.marketing-tab')
-        </div>
-
-        {{-- ── TAB: EDUCATION ── --}}
-        <div x-show="activeTab==='education'" x-cloak>
+        @elseif($activeTab === 'education')
             @include('content-management.partials.cm.education-tab')
-        </div>
-
-        {{-- ── TAB: CASE LIBRARY ── --}}
-        <div x-show="activeTab==='case-library'" x-cloak>
+        @elseif($activeTab === 'case-library')
             @include('content-management.partials.cm.case-library-tab')
-        </div>
-
-        {{-- ── TAB: TEACHING ── --}}
-        <div x-show="activeTab==='teaching'" x-cloak>
+        @elseif($activeTab === 'teaching')
             @include('content-management.partials.cm.teaching-tab')
-        </div>
-
-        {{-- ── TAB: RESEARCH ── --}}
-        <div x-show="activeTab==='research'" x-cloak>
+        @elseif($activeTab === 'research')
             @include('content-management.partials.cm.research-tab')
+        @endif
+
+        @if($files->hasPages())
+        <div style="display:flex;justify-content:center;padding:22px 0;">
+            {{ $files->links() }}
         </div>
+        @endif
 
     </div>
 
-    {{-- ══ BATCH ACTION BAR (fixed bottom) ══ --}}
+    {{-- ══ BATCH ACTION BAR (fixed bottom) ══
+         Approve / Reject used to be decoration — no handler on either, and no
+         Reject anywhere on the page at all, so a flagged photo could be let in
+         but never turned away.
+    ══ --}}
     <div id="cm-batch-bar" :class="selectedCount > 0 ? 'visible' : ''">
         <div class="batch-count">
             <span x-text="selectedCount"></span> file<span x-show="selectedCount !== 1">s</span> selected
         </div>
         <div class="batch-actions">
-            <button class="batch-action-btn batch-download">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Download
+            <button class="batch-action-btn batch-reject" @click="decideSelected('reject')" :disabled="working"
+                    x-show="activeTab === 'marketing'">
+                <span x-text="working ? 'Working…' : 'Reject selected'"></span>
             </button>
-            <button class="batch-action-btn batch-reject" x-show="activeTab==='marketing'">
-                Reject Selected
-            </button>
-            <button class="batch-action-btn batch-approve" x-show="activeTab==='marketing'">
-                ✓ Approve Selected
+            <button class="batch-action-btn batch-approve" @click="decideSelected('approve')" :disabled="working"
+                    x-show="activeTab === 'marketing'">
+                <span x-text="working ? 'Working…' : '✓ Approve selected'"></span>
             </button>
             <button class="batch-cancel" @click="clearSelection()">✕ Cancel</button>
         </div>
@@ -549,38 +579,15 @@
 <script>
 function cmApp() {
     return {
-        /* ── State ── */
-        activeTab: 'marketing',
+        /* The server decides which tab this page is; Alpine only owns selection. */
+        activeTab: @js($activeTab),
         selectedIds: [],
+        working: false,
 
-        /* Phase 9: real counts from ClinicalLibraryController::index() */
-        tabCounts: {!! json_encode($tabCounts) !!},
-        tabLabels: {
-            marketing:    'Marketing',
-            education:    'Education',
-            'case-library': 'Case Library',
-            teaching:     'Teaching',
-            research:     'Research',
-        },
-
-        /* Case viewer */
-        caseViewerOpen: false,
-        activeCaseId: null,
-
-        /* ── Computed ── */
         get selectedCount() { return this.selectedIds.length; },
 
-        /* ── Lifecycle ── */
         init() {
-            // Listen for card toggle events dispatched by partials
             window.addEventListener('cm-toggle-select', e => this.toggleSelect(e.detail.id));
-            window.addEventListener('cm-open-case',     e => this.openCaseViewer(e.detail.id));
-        },
-
-        /* ── Methods ── */
-        switchTab(tab) {
-            this.activeTab = tab;
-            this.clearSelection();
         },
 
         toggleSelect(id) {
@@ -592,21 +599,43 @@ function cmApp() {
         isSelected(id) { return this.selectedIds.includes(id); },
 
         selectAll() {
-            // Collect all visible card IDs from the DOM
-            const cards = document.querySelectorAll('.cm-card[data-id]');
-            this.selectedIds = Array.from(cards).map(c => c.dataset.id);
+            this.selectedIds = Array.from(document.querySelectorAll('.cm-card[data-id]')).map(c => c.dataset.id);
         },
 
         clearSelection() { this.selectedIds = []; },
 
-        openCaseViewer(id) {
-            this.activeCaseId = id;
-            this.caseViewerOpen = true;
-        },
+        /**
+         * Approve or reject everything selected, one request each against the
+         * endpoints the single-card buttons already use — no bulk endpoint was
+         * invented for something that runs a few dozen times a week, and doing
+         * it this way means one failure cannot silently take the rest with it.
+         * The page reloads at the end so the badges and the Approval filter
+         * cannot disagree with what is on screen.
+         */
+        async decideSelected(decision) {
+            if (!this.selectedIds.length || this.working) return;
 
-        closeCaseViewer() {
-            this.caseViewerOpen = false;
-            setTimeout(() => { this.activeCaseId = null; }, 300);
+            const word = decision === 'approve' ? 'Approve' : 'Reject';
+            if (!confirm(word + ' ' + this.selectedIds.length + ' file(s) for marketing use?')) return;
+
+            this.working = true;
+            const token = document.querySelector('meta[name="csrf-token"]')?.content;
+            let failed = 0;
+
+            for (const id of this.selectedIds) {
+                try {
+                    const res = await fetch('/clinical-library/files/' + id + '/' + decision, {
+                        method: 'PUT',
+                        headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json' },
+                    });
+                    if (!res.ok) failed++;
+                } catch (e) { failed++; }
+            }
+
+            this.working = false;
+
+            if (failed) alert(failed + ' file(s) could not be updated. The rest went through.');
+            window.location.reload();
         },
     };
 }

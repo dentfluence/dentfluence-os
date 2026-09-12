@@ -44,6 +44,30 @@ class ClinicalLibrarySearchService
         71, 72, 73, 74, 75,  81, 82, 83, 84, 85,
     ];
 
+    /**
+     * Tooth regions, the way the chart in the rest of the app is laid out.
+     * A dentist thinks "upper arch", not "11,12,13,14,15,16,17,18,21,…", and
+     * a full-arch case is filed tooth by tooth — so the filter has to speak
+     * both. Deciduous codes are included because Tulip Kids uses the same
+     * library; leaving them out would quietly hide every paediatric file.
+     */
+    public const TOOTH_REGIONS = [
+        'full_mouth'  => 'Full mouth (any tooth)',
+        'maxillary'   => 'Maxillary arch (upper)',
+        'mandibular'  => 'Mandibular arch (lower)',
+        'q1'          => 'Upper right',
+        'q2'          => 'Upper left',
+        'q3'          => 'Lower left',
+        'q4'          => 'Lower right',
+    ];
+
+    private const REGION_TEETH = [
+        'q1' => [18, 17, 16, 15, 14, 13, 12, 11, 55, 54, 53, 52, 51],
+        'q2' => [21, 22, 23, 24, 25, 26, 27, 28, 61, 62, 63, 64, 65],
+        'q3' => [31, 32, 33, 34, 35, 36, 37, 38, 71, 72, 73, 74, 75],
+        'q4' => [41, 42, 43, 44, 45, 46, 47, 48, 81, 82, 83, 84, 85],
+    ];
+
     /** Words a clinician actually types for a stage. */
     private const STAGE_ALIASES = [
         'before' => 'before', 'pre' => 'before', 'preop' => 'before', 'pre-op' => 'before',
@@ -144,7 +168,19 @@ class ClinicalLibrarySearchService
 
         $query = ClinicalFile::query()->with(['patient:id,name', 'uploadedBy:id,name']);
 
-        if ($teeth)      { $query->whereIn('tooth_number', $teeth); }
+        // A lab case files one row for the WHOLE case, so tooth_number can read
+        // "36, 37" — an exact whereIn would never find it. FIND_IN_SET against
+        // the de-spaced value matches a single tooth and a list identically,
+        // without the false positives a LIKE '%36%' would bring.
+        if ($teeth) {
+            $teeth = self::expandTeeth($teeth);
+
+            $query->where(function (Builder $sub) use ($teeth) {
+                foreach ($teeth as $tooth) {
+                    $sub->orWhereRaw("FIND_IN_SET(?, REPLACE(COALESCE(tooth_number, ''), ' ', ''))", [$tooth]);
+                }
+            });
+        }
         if ($stages)     { $query->whereIn('stage', $stages); }
         if ($fileTypes)  { $query->whereIn('file_type', $fileTypes); }
         if ($categories) { $query->whereIn('treatment_category', $categories); }
@@ -223,6 +259,56 @@ class ClinicalLibrarySearchService
         return $chips;
     }
 
+    /**
+     * Turn whatever the tooth filter sent — a region key, a single tooth, or a
+     * mix — into the list of tooth numbers to match.
+     *
+     * @param  array<int,string>  $values
+     * @return array<int,string>
+     */
+    public static function expandTeeth(array $values): array
+    {
+        $teeth = [];
+
+        foreach ($values as $value) {
+            $value = strtolower(trim((string) $value));
+
+            if ($value === '') {
+                continue;
+            }
+
+            $teeth = match (true) {
+                $value === 'full_mouth'  => array_merge($teeth, self::FDI_TEETH),
+                $value === 'maxillary'   => array_merge($teeth, self::REGION_TEETH['q1'], self::REGION_TEETH['q2']),
+                $value === 'mandibular'  => array_merge($teeth, self::REGION_TEETH['q3'], self::REGION_TEETH['q4']),
+                isset(self::REGION_TEETH[$value]) => array_merge($teeth, self::REGION_TEETH[$value]),
+                default                  => array_merge($teeth, [$value]),
+            };
+        }
+
+        return array_values(array_unique(array_map('strval', $teeth)));
+    }
+
+    /**
+     * Options for the tooth dropdown: regions first, then every tooth grouped
+     * by quadrant. One list, used by the dashboard drawer and the Content
+     * Manager filter bar, so the two cannot offer different teeth.
+     *
+     * @return array{regions:array<string,string>,quadrants:array<string,array<int,int>>}
+     */
+    public static function toothOptions(): array
+    {
+        return [
+            'regions'   => self::TOOTH_REGIONS,
+            'quadrants' => [
+                'Upper right' => self::REGION_TEETH['q1'],
+                'Upper left'  => self::REGION_TEETH['q2'],
+                'Lower left'  => self::REGION_TEETH['q3'],
+                'Lower right' => self::REGION_TEETH['q4'],
+            ],
+        ];
+    }
+
     /** Match a word against the fixed treatment vocabulary, by key or by label. */
     private function matchTreatmentCategory(string $word): ?string
     {
@@ -244,11 +330,25 @@ class ClinicalLibrarySearchService
         return null;
     }
 
-    /** Combine words understood from the box with explicit filters from the UI. */
+    /**
+     * Combine what the box was understood to mean with what the user explicitly
+     * picked — and when both speak to the same dimension, THE EXPLICIT PICK WINS.
+     *
+     * Merging them would widen instead of narrow: type "after", then set the
+     * Stage filter to Before, and a union returns both, which is the opposite of
+     * what setting a filter means. Every filter is optional, but each one that
+     * IS set must only ever reduce the result.
+     */
     private function merge(array $fromText, mixed $explicit): array
     {
-        $explicit = is_array($explicit) ? $explicit : (blank($explicit) ? [] : [$explicit]);
+        $explicit = is_array($explicit)
+            ? array_values(array_filter($explicit, fn ($v) => $v !== null && $v !== ''))
+            : (blank($explicit) ? [] : [$explicit]);
 
-        return array_values(array_unique(array_merge($fromText, $explicit)));
+        if ($explicit !== []) {
+            return array_values(array_unique($explicit));
+        }
+
+        return array_values(array_unique($fromText));
     }
 }

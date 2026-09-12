@@ -117,6 +117,7 @@ class ClinicalLibraryController extends Controller
                     'id',
                     ClinicalFile::whereNotNull('uploaded_by')->distinct()->pluck('uploaded_by')
                 )->orderBy('name')->get(['id', 'name']),
+            'teeth'      => ClinicalLibrarySearchService::toothOptions(),
         ];
 
         return view('clinical-library.dashboard', compact(
@@ -185,18 +186,45 @@ class ClinicalLibraryController extends Controller
         return back()->with('success', "{$count} file(s) uploaded successfully.");
     }
 
-    // ── Content Manager index — all tabs ──────────────────────────────────────
+    // ── Content Manager index ─────────────────────────────────────────────────
 
-    public function index(Request $request)
+    /** Eligibility lane behind each tab. */
+    private const TAB_LANES = [
+        'marketing'    => 'marketing',
+        'education'    => 'education',
+        'case-library' => 'case_library',
+        'teaching'     => 'teaching',
+        'research'     => 'research',
+    ];
+
+    /**
+     * GET /content-management
+     *
+     * Reads through ClinicalLibrarySearchService — the SAME brain behind the
+     * dashboard search drawer and GET /clinical-library/search. It used to carry
+     * its own filter code, and the two disagreed: the Treatment dropdown matched
+     * a hardcoded specialty list against free-text `procedure` while the page
+     * beside it filtered on `treatment_category`, so the same question got two
+     * answers depending on which screen you asked. One brain now, no drift.
+     *
+     * Only the ACTIVE tab is loaded. Every tab used to be queried on every page
+     * load, two of them with an unbounded ->get() that would fetch the entire
+     * library once this clinic has a real one. Tabs are now links, so each has
+     * its own URL and the filters survive a reload or a shared link.
+     */
+    public function index(Request $request, ClinicalLibrarySearchService $search)
     {
-        // ── Filters (shared across tabs) ───────────────────────────────────
-        $filters = $request->only([
-            'treatment', 'stage', 'approval', 'tag',
-            'date_from', 'date_to', 'date_range', 'sort',
-        ]);
-        $filters = $this->resolveDateRange($filters);
+        $activeTab = array_key_exists($request->get('tab'), self::TAB_LANES)
+            ? $request->get('tab')
+            : 'marketing';
 
-        // ── Tab counts for badge display ───────────────────────────────────
+        $filters = array_filter($request->only([
+            'q', 'tooth', 'treatment_category', 'stage', 'file_type',
+            'doctor_id', 'period', 'approval', 'ready',
+        ]), fn ($v) => $v !== null && $v !== '');
+
+        // ── Tab badge counts — the whole library, never the filtered slice, so
+        // the badges do not move around as someone narrows a search.
         $tabCounts = [
             'marketing'    => ClinicalFile::marketingEligible()->count(),
             'education'    => ClinicalFile::educationEligible()->count(),
@@ -207,64 +235,62 @@ class ClinicalLibraryController extends Controller
             'research'     => ClinicalFile::researchEligible()->count(),
         ];
 
-        // ── Marketing files ────────────────────────────────────────────────
-        $marketingQuery = ClinicalFile::marketingEligible()
-            ->with('uploadedBy:id,name');
+        // ── Translate the filter bar into the search service's vocabulary ──
+        $input = $filters;
+        $input['eligible_' . self::TAB_LANES[$activeTab]] = true;
+        $input['per_page'] = 48;
 
-        $this->applyCommonFilters($marketingQuery, $filters);
-
-        if (!empty($filters['approval'])) {
-            $marketingQuery->where('marketing_status', $filters['approval']);
+        // "Ready to post" is both halves or neither — a photo with consent but
+        // no approval is not publishable, and neither is the reverse.
+        //
+        // Order matters: Ready sets marketing=approved, so an explicit Approval
+        // choice is applied AFTER it and wins. Picking Approval=Pending together
+        // with Ready used to silently become Approved — a filter that changes
+        // another filter's answer is worse than one that does nothing.
+        if (! empty($filters['ready'])) {
+            $input['consent']   = 'given';
+            $input['marketing'] = 'approved';
         }
 
-        $marketingFiles = $marketingQuery
-            ->latest('captured_at')
-            ->paginate(48)
-            ->withQueryString();
+        if (! empty($filters['approval'])) {
+            $input['marketing'] = $filters['approval'];
+        }
 
-        // Group marketing files by calendar month for the view
-        $marketingByMonth = $marketingFiles->getCollection()
-            ->groupBy(fn($f) => $f->captured_at
-                ? $f->captured_at->format('F Y')
-                : 'Unknown');
+        if (! empty($filters['period'])) {
+            $input['from'] = now()->subDays((int) $filters['period'])->toDateString();
+        }
 
-        // ── Education files ────────────────────────────────────────────────
-        $educationQuery = ClinicalFile::educationEligible();
-        $this->applyCommonFilters($educationQuery, $filters);
-        $educationFiles = $educationQuery->latest('captured_at')->get();
+        $files = $search->search($input);
 
-        // ── Case Library files — anonymised in controller ──────────────────
+        // ── Shapes the existing tab partials expect ────────────────────────
+        $marketingFiles   = $files;
+        $marketingByMonth = $files->getCollection()
+            ->groupBy(fn ($f) => $f->captured_at ? $f->captured_at->format('F Y') : 'Unknown');
+
+        $educationFiles = $files->getCollection();
+
+        // Case Library is anonymised HERE, in the controller.
         // NEVER expose patient name / patient_id / contact details in $caseFiles.
-        $caseQuery = ClinicalFile::caseLibraryEligible()
-            ->with('uploadedBy:id,name');
-        $this->applyCommonFilters($caseQuery, $filters);
-        $rawCaseFiles = $caseQuery->latest('captured_at')->get();
-
-        // Group by patient+procedure → one "case" per combination
-        $caseFiles = $rawCaseFiles
-            ->groupBy(fn($f) => $f->patient_id . '_' . ($f->procedure ?? 'general'))
+        $caseFiles = $files->getCollection()
+            ->groupBy(fn ($f) => $f->patient_id . '_' . ($f->procedure ?? 'general'))
             ->map(function ($group) {
                 $first = $group->first();
 
-                // Anonymous ID derived from patient_id — no real patient data exposed
+                // Anonymous label derived from patient_id — never the real one.
                 $letter = chr(65 + ($first->patient_id % 26));
                 $number = str_pad(($first->patient_id * 7 + 13) % 1000, 3, '0', STR_PAD_LEFT);
-                $anonId = "Case #{$letter}{$number}";
 
-                // Before / after representative files
                 $beforeFile = $group->firstWhere('stage', 'before') ?? $group->first();
                 $afterFile  = $group->firstWhere('stage', 'after')  ?? $group->last();
 
-                // Date range
                 $dates    = $group->pluck('captured_at')->filter()->sort();
                 $duration = $dates->count() >= 2
                     ? $dates->first()->format('M Y') . '–' . $dates->last()->format('M Y')
                     : ($dates->first()?->format('M Y') ?? '—');
 
                 return [
-                    // ID used only for UI interactions — NOT patient_id
                     'id'           => 'cl_' . $first->id,
-                    'anon_id'      => $anonId,
+                    'anon_id'      => "Case #{$letter}{$number}",
                     'procedure'    => $first->procedure ?? 'General',
                     'tooth'        => $first->tooth_number ?? '—',
                     'doctor'       => $first->uploadedBy?->name ?? '—',
@@ -279,17 +305,28 @@ class ClinicalLibraryController extends Controller
             })
             ->values();
 
-        // Group by procedure for the view's grouped display
         $casesByProcedure = $caseFiles->groupBy('procedure');
 
-        // ── Distinct treatment options for filter dropdowns ────────────────
-        $treatmentOptions = ClinicalFile::distinct()
-            ->orderBy('procedure')
-            ->pluck('procedure')
-            ->filter()
-            ->values();
+        // Filter-bar options — the same fixed vocabularies the search understands,
+        // not a hardcoded list that can drift away from what is stored.
+        $filterOptions = [
+            'treatments' => ClinicalFile::TREATMENT_CATEGORIES,
+            'stages'     => ['before' => 'Before', 'during' => 'During', 'after' => 'After', 'followup' => 'Follow-up'],
+            'file_types' => [
+                'photo' => 'Photo', 'xray' => 'X-ray', 'opg' => 'OPG', 'cbct' => 'CBCT',
+                'intraoral_scan' => 'Scan', 'stl' => 'STL', 'pdf' => 'PDF',
+                'consent' => 'Consent', 'lab_slip' => 'Lab slip',
+            ],
+            'doctors'    => \App\Models\User::whereIn(
+                    'id',
+                    ClinicalFile::whereNotNull('uploaded_by')->distinct()->pluck('uploaded_by')
+                )->orderBy('name')->get(['id', 'name']),
+            'teeth'      => ClinicalLibrarySearchService::toothOptions(),
+        ];
 
         return view('content-management.index', compact(
+            'activeTab',
+            'files',
             'marketingFiles',
             'marketingByMonth',
             'educationFiles',
@@ -297,7 +334,7 @@ class ClinicalLibraryController extends Controller
             'casesByProcedure',
             'tabCounts',
             'filters',
-            'treatmentOptions',
+            'filterOptions',
         ));
     }
 
