@@ -126,7 +126,26 @@ class ClinicalFileUploadService
         return [
             'required',
             'file',
-            'mimes:' . implode(',', self::allowedExtensions()),
+            // `extensions:`, NOT `mimes:`.
+            //
+            // `mimes:` does not read the filename at all — it sniffs the file's
+            // content, guesses an extension from the detected MIME type, and
+            // matches THAT against the list. For a JPEG or a PDF the two agree.
+            // For the two formats P1 deliberately added they never can: a real
+            // .stl and a real .dcm are sniffed as application/octet-stream,
+            // which guesses back as `.bin`, which is not in any allowlist and
+            // never will be. So `mimes:` silently rejected every STL and every
+            // DICOM — the exact files a lab case exists to carry — while the
+            // allowlist above said they were accepted. Two rules, one of them
+            // decorative; this module has shipped that mistake three times.
+            //
+            // `extensions:` reads the extension the upload actually carries,
+            // which is the same thing store() re-checks below and the same thing
+            // the per-format cap is chosen by. The cost is that a renamed file
+            // passes this rule — which is survivable here and nowhere else in
+            // the app: clinical files go to a private disk, are streamed back
+            // through SecureMediaController, and are never executed or included.
+            'extensions:' . implode(',', self::allowedExtensions()),
             // Outer guard so an enormous file is rejected before the closure runs.
             'max:' . ($ceilingKb ?? max(self::MAX_KB_BY_EXTENSION)),
             function (string $attribute, mixed $value, \Closure $fail) use ($ceilingKb) {
@@ -156,6 +175,20 @@ class ClinicalFileUploadService
     {
         if (empty($context['patient_id'])) {
             throw new \InvalidArgumentException('ClinicalFileUploadService::store() requires patient_id in context.');
+        }
+
+        // uploaded_by is NOT NULL in the schema, deliberately: every clinical
+        // file has someone answerable for it. Auth::id() is null in a console
+        // command, a queued job or a scheduled import, and without this guard
+        // that arrives as a raw SQLSTATE 1364 from deep inside Eloquent — which
+        // says nothing about what the caller forgot to pass.
+        $uploadedBy = $context['uploaded_by'] ?? Auth::id();
+
+        if (empty($uploadedBy)) {
+            throw new \InvalidArgumentException(
+                'ClinicalFileUploadService::store() requires uploaded_by in context when no user is authenticated '
+                . '(console commands, queued jobs and imports must name the uploader).'
+            );
         }
 
         // Defence in depth: the controllers validate too, but this is the one
@@ -195,7 +228,7 @@ class ClinicalFileUploadService
             'mime_type'                => $file->getMimeType(),
             'file_size'                => $file->getSize(),
             'captured_at'              => $context['captured_at'] ?? now(),
-            'uploaded_by'              => $context['uploaded_by'] ?? Auth::id(),
+            'uploaded_by'              => $uploadedBy,
             'source_type'              => $context['source_type'] ?? null,
             'source_id'                => $context['source_id'] ?? null,
             'tags'                     => $context['tags'] ?? [],
@@ -228,20 +261,24 @@ class ClinicalFileUploadService
      */
     private function detectFileType(UploadedFile $file): string
     {
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        // The extension is checked FIRST, and only for these two, because their
+        // MIME types are unreliable: a .stl and a .dcm both commonly arrive as
+        // application/octet-stream, and some servers announce a .dcm as image/*.
+        // That last case is the whole problem — it is exactly the route by which
+        // a file nothing can render gets labelled a photo, rendered into an <img>
+        // no browser can decode, and left as a permanently broken tile. The
+        // comment here used to claim the extension won while the MIME test sat
+        // above it and took every image/* DICOM first.
+        if ($extension === 'stl') return 'stl';
+        if ($extension === 'dcm') return 'cbct';
+
         $mime = $file->getMimeType();
 
         if (str_starts_with($mime, 'image/')) return 'photo';
         if (str_starts_with($mime, 'video/')) return 'video';
         if ($mime === 'application/pdf') return 'pdf';
-
-        $extension = strtolower($file->getClientOriginalExtension());
-
-        // Extension wins for the 3D/imaging formats: their MIME types are
-        // unreliable (a .stl and a .dcm both commonly arrive as
-        // application/octet-stream, and some servers report .dcm as image/*,
-        // which is exactly how a file nothing can render ends up labelled a photo).
-        if ($extension === 'stl') return 'stl';
-        if ($extension === 'dcm') return 'cbct';
 
         return 'other';
     }
