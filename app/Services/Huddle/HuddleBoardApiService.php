@@ -11,6 +11,7 @@ use App\Services\Relationship\TodayActionsEngine;
 use App\Services\Relationship\TodayActionsProjector;
 use App\Services\Relationship\TodayActionsVisibility;
 use App\Support\Features\Feature;
+use App\Support\Phi;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -267,7 +268,8 @@ class HuddleBoardApiService
                     : null,
                 'status'                   => $r->status,
                 'type'                     => $r->type,
-                'medical_alert'            => $r->medical_alert,
+                // PHI read raw via DB::table() — decrypt (no Eloquent cast on a builder row).
+                'medical_alert'            => Phi::decrypt($r->medical_alert),
                 'staff_instruction'        => $r->staff_instruction,
                 // Today's Patient Flow popup (Huddle board, 2026-07-06)
                 'is_walkin'                => (bool) $r->is_walkin,
@@ -378,7 +380,8 @@ class HuddleBoardApiService
                 // visit_flag = should have a visit logged but doesn't (needs attention)
                 'visit_flag'    => $shouldHave && ! $logged,
                 'visit_source'  => $hasConsult ? 'consultation' : ($hasVisit ? 'treatment_visit' : null),
-                'medical_alert' => $r->medical_alert,
+                // PHI read raw via DB::table() — decrypt (no Eloquent cast on a builder row).
+                'medical_alert' => Phi::decrypt($r->medical_alert),
                 'next_appt'     => $nextAppt,
             ];
         });

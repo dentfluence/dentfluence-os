@@ -9,6 +9,7 @@ use App\Modules\Huddle\Resources\HuddleBoardResource;
 use App\Modules\Huddle\Services\HuddleAggregationService;
 use App\Models\CommunicationQueue;
 use App\Models\User;
+use App\Support\Phi;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -83,6 +84,8 @@ class HuddleController extends Controller
             ->orderBy('appointments.appointment_time')
             ->get()
             ->map(function ($row) {
+                // PHI read raw via DB::table() — Eloquent casts never ran, so decrypt here.
+                $row->medical_alert = Phi::decrypt($row->medical_alert);
                 $row->patient  = (object) ['name' => $row->patient_name, 'medical_alert' => $row->medical_alert];
                 $row->doctor   = (object) ['name' => $row->doctor_name];
                 $row->treatment = $row->treatment_name ? (object) ['name' => $row->treatment_name] : null;
@@ -187,6 +190,10 @@ class HuddleController extends Controller
                 $row->visit_flag   = $shouldHaveVisit && !$visitLogged;
                 // Which record backs the "logged" badge (for the label shown in the view)
                 $row->visit_source = $hasConsult ? 'consultation' : ($hasVisit ? 'treatment_visit' : null);
+                // PHI read raw via DB::table() — Eloquent casts never ran, so decrypt here.
+                $row->medical_alert     = Phi::decrypt($row->medical_alert);
+                $row->primary_diagnosis = Phi::decrypt($row->primary_diagnosis);
+                $row->finishing_notes   = Phi::decrypt($row->finishing_notes);
                 $row->patient      = (object) ['name' => $row->patient_name, 'medical_alert' => $row->medical_alert];
                 $row->doctor       = (object) ['name' => $row->doctor_name];
                 $row->treatment    = $row->treatment_name ? (object) ['name' => $row->treatment_name] : null;
@@ -339,6 +346,8 @@ class HuddleController extends Controller
             ])
             ->get()
             ->map(function ($row) {
+                // PHI read raw via DB::table() — Eloquent casts never ran, so decrypt here.
+                $row->primary_diagnosis = Phi::decrypt($row->primary_diagnosis);
                 $row->patient = (object) ['name' => $row->patient_name];
                 $row->doctor  = (object) ['name' => $row->doctor_name];
                 return $row;
