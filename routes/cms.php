@@ -26,6 +26,11 @@ Route::middleware(['auth', 'module:cms'])->prefix('clinical-library')->name('cms
     // ── Upload clinical files ──────────────────────────────────────────────
     Route::post('/upload', [ClinicalLibraryController::class, 'store'])->name('files.store')->middleware('module:cms,edit');
 
+    // ── Universal search (P2) ──────────────────────────────────────────────
+    // One endpoint behind both the dashboard search drawer and the Content
+    // Manager filter bar. See ClinicalLibrarySearchService.
+    Route::get('/search', [ClinicalLibraryController::class, 'search'])->name('library-search');
+
     // ── Marketing approval actions (Phase 9) ──
     // PUT /clinical-library/files/{file}/approve
     // PUT /clinical-library/files/{file}/reject

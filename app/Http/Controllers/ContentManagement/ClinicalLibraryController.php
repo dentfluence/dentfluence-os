@@ -8,6 +8,7 @@ use App\Models\EducationCategory;
 use App\Models\Patient;
 use App\Models\TreatmentVisit;
 use App\Services\ClinicalLibrary\ClinicalFileUploadService;
+use App\Services\ClinicalLibrary\ClinicalLibrarySearchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -89,6 +90,35 @@ class ClinicalLibraryController extends Controller
         // Patients list for upload modal
         $patients = Patient::orderBy('name')->get(['id', 'name']);
 
+        // ── Options for the search drawer's filter strip ───────────────────
+        // Doctors are whoever has actually uploaded something, not every user —
+        // a dropdown of thirty names where three have files is a worse answer
+        // than no dropdown at all.
+        $searchOptions = [
+            'stages' => [
+                'before'   => 'Before',
+                'during'   => 'During',
+                'after'    => 'After',
+                'followup' => 'Follow-up',
+            ],
+            'file_types' => [
+                'photo'          => 'Photo',
+                'xray'           => 'X-ray',
+                'opg'            => 'OPG',
+                'cbct'           => 'CBCT',
+                'intraoral_scan' => 'Scan',
+                'stl'            => 'STL',
+                'pdf'            => 'PDF',
+                'consent'        => 'Consent',
+                'lab_slip'       => 'Lab slip',
+            ],
+            'treatments' => ClinicalFile::TREATMENT_CATEGORIES,
+            'doctors'    => \App\Models\User::whereIn(
+                    'id',
+                    ClinicalFile::whereNotNull('uploaded_by')->distinct()->pluck('uploaded_by')
+                )->orderBy('name')->get(['id', 'name']),
+        ];
+
         return view('clinical-library.dashboard', compact(
             'totalFiles',
             'totalPatients',
@@ -99,6 +129,7 @@ class ClinicalLibraryController extends Controller
             'pendingApproval',
             'visitsWithNoFiles',
             'patients',
+            'searchOptions',
         ));
     }
 
@@ -391,6 +422,65 @@ class ClinicalLibraryController extends Controller
             ],
 
             'tags' => $files->pluck('tags')->flatten()->filter()->unique()->values(),
+        ]);
+    }
+
+    // ── AJAX: Universal search ────────────────────────────────────────────────
+
+    /**
+     * GET /clinical-library/search
+     *
+     * The ONE search endpoint. It drives the Clinical Library dashboard's search
+     * drawer and the Content Manager's filter bar, so those two surfaces can
+     * never answer the same question differently again — which is exactly what
+     * they did before, one matching a hardcoded specialty list against free-text
+     * `procedure` while the other filtered on `treatment_category`.
+     *
+     * Takes one line of plain text plus any explicit chips:
+     *   ?q=26                    every file on tooth 26
+     *   ?q=sharma implant after  that patient's implant after-photos
+     *   ?q=opg 36 pending        OPGs on 36 whose treatment is not yet done
+     *
+     * `interpreted` says what each word was taken to mean so the UI can show it
+     * back as removable chips — a search that silently reinterprets the typing
+     * is worse than one that shows its working.
+     */
+    public function search(Request $request, ClinicalLibrarySearchService $search): JsonResponse
+    {
+        $results = $search->search($request->all());
+
+        return response()->json([
+            'query'       => (string) $request->get('q', ''),
+            'interpreted' => $search->interpretation($request->get('q')),
+            'total'       => $results->total(),
+            'per_page'    => $results->perPage(),
+            'current_page'=> $results->currentPage(),
+            'last_page'   => $results->lastPage(),
+            'next_page_url' => $results->nextPageUrl(),
+            'results'     => $results->getCollection()->map(fn (ClinicalFile $f) => [
+                'id'                 => $f->id,
+                'patient_id'         => $f->patient_id,
+                'patient_name'       => $f->patient?->name,
+                'title'              => $f->title ?: $f->original_filename,
+                'procedure'          => $f->procedure,
+                'treatment_category' => $f->treatment_category,
+                'treatment_label'    => $f->treatment_category_label,
+                'tooth_number'       => $f->tooth_number,
+                'stage'              => $f->stage,
+                'stage_label'        => $f->stage_label,
+                'file_type'          => $f->file_type,
+                'file_type_label'    => $f->file_type_label,
+                'is_image'           => $f->isImage(),
+                'no_preview_reason'  => $f->no_preview_reason,
+                'thumbnail_url'      => $f->thumbnail_url,
+                'display_url'        => $f->display_url,
+                'captured_at'        => $f->captured_at?->format('d M Y'),
+                'uploaded_by'        => $f->uploadedBy?->name,
+                'file_size'          => $f->file_size_human,
+                'consent_status'     => $f->consent_status,
+                'marketing_status'   => $f->marketing_status,
+                'tags'               => $f->tags ?? [],
+            ])->values(),
         ]);
     }
 

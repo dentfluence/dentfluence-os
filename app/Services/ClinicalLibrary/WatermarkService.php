@@ -61,9 +61,22 @@ class WatermarkService
             return null;
         }
 
-        // Require Intervention Image v3
+        // Requires intervention/image v4.
+        //
+        // This class was originally written against v3 and silently produced
+        // nothing for weeks: composer resolved ^4.3, and v4 REMOVED
+        // ImageManager::read(), so every job threw "Call to undefined method"
+        // and the catch below swallowed it into a warning nobody was reading.
+        // The guard now separates "not installed at all" from "installed but the
+        // wrong major", because those need different fixes and the old message
+        // sent us to reinstall a package that was already there.
         if (! class_exists(\Intervention\Image\ImageManager::class)) {
-            Log::warning('WatermarkService: intervention/image not installed. Run: composer require intervention/image');
+            Log::warning('WatermarkService: intervention/image is not loadable in THIS process. Either it is not installed (run: composer require intervention/image) or a queue worker was started before it was installed and is still running with a stale autoloader - restart the worker.');
+            return null;
+        }
+
+        if (! method_exists(\Intervention\Image\ImageManager::class, 'decodePath')) {
+            Log::warning('WatermarkService: intervention/image v4 is required (v3 or older is installed — ImageManager::decodePath() is missing). Run: composer require intervention/image');
             return null;
         }
 
@@ -91,9 +104,9 @@ class WatermarkService
                 return null;
             }
 
-            $driver  = $this->resolveDriver();
-            $manager = new \Intervention\Image\ImageManager($driver);
-            $image   = $manager->read($absolutePath);
+            // v4: the manager takes a driver CLASS, and read() became decodePath().
+            $manager = \Intervention\Image\ImageManager::usingDriver($this->resolveDriver());
+            $image   = $manager->decodePath($absolutePath);
 
             // Scale BEFORE stamping so the text is sized against the final image,
             // not against a 6000px original it will never be seen at.
@@ -113,7 +126,12 @@ class WatermarkService
 
             // ── 5. Write watermarked copy — NEVER overwrite the original ──────
             $watermarkedPath = $this->buildWatermarkedPath($file->path);
-            $encoded         = $image->toJpeg((int) ($config['quality'] ?? 88));
+
+            // v4: the per-format toJpeg()/toPng() helpers are gone; encoding goes
+            // through an encoder object.
+            $encoded = $image->encode(
+                new \Intervention\Image\Encoders\JpegEncoder(quality: (int) ($config['quality'] ?? 82))
+            );
 
             Storage::disk($file->disk)->put($watermarkedPath, (string) $encoded);
 
@@ -260,22 +278,26 @@ class WatermarkService
         $width  = $image->width();
         $height = $image->height();
         $margin = 14;
-        $size   = (int) ($config['font_size'] ?? 12);
-        $alpha  = (int) round(($config['opacity'] ?? 0.70) * 255); // 0–255 for Intervention v3
-        $color  = \Intervention\Image\Colors\Rgb\Color::create(255, 255, 255, $alpha);
+        $size   = (int) ($config['font_size'] ?? 22);
+        $alpha  = max(0.05, min(1.0, (float) ($config['opacity'] ?? 0.70)));
+
+        // v4 takes colour as a string and alpha as a 0-1 float (v3 used an
+        // integer 0-255 on a Color object).
+        $colour = sprintf('rgba(255, 255, 255, %.2f)', $alpha);
 
         [$x, $y, $hAlign, $vAlign] = $this->resolvePosition($config['position'], $width, $height, $margin);
 
         $fontPath = $config['font_path'] ?? null;
 
-        $image->text($text, $x, $y, function (\Intervention\Image\Typography\FontFactory $font) use ($size, $color, $hAlign, $vAlign, $fontPath) {
+        $image->text($text, $x, $y, function (\Intervention\Image\Typography\FontFactory $font) use ($size, $colour, $hAlign, $vAlign, $fontPath) {
             if ($fontPath) {
-                $font->filename($fontPath);
+                // v4: filename() became filepath().
+                $font->filepath($fontPath);
             }
             $font->size($size);
-            $font->color($color);
-            $font->align($hAlign);
-            $font->valign($vAlign);
+            $font->color($colour);
+            // v4: align() now takes BOTH axes; valign() is gone.
+            $font->align($hAlign, $vAlign);
         });
     }
 
@@ -291,9 +313,8 @@ class WatermarkService
         }
 
         try {
-            $driver  = $this->resolveDriver();
-            $manager = new \Intervention\Image\ImageManager($driver);
-            $logo    = $manager->read($logoPath);
+            $manager = \Intervention\Image\ImageManager::usingDriver($this->resolveDriver());
+            $logo    = $manager->decodePath($logoPath);
 
             // Scale logo to max 120px wide, preserving aspect ratio
             $logo->scaleDown(120);
@@ -308,7 +329,8 @@ class WatermarkService
             $px = ($config['position'] === 'bottom-left') ? $iw - $lw - $margin : $margin;
             $py = ($config['position'] === 'top-left')    ? $ih - $lh - $margin : $margin;
 
-            $image->place($logo, 'top-left', $px, $py);
+            // v4: place() was renamed insert().
+            $image->insert($logo, 'top-left', $px, $py);
 
         } catch (\Throwable $e) {
             // Logo failure should never block the text watermark
@@ -323,12 +345,19 @@ class WatermarkService
      */
     private function resolvePosition(string $position, int $width, int $height, int $margin): array
     {
+        $left   = \Intervention\Image\Alignment::LEFT;
+        $center = \Intervention\Image\Alignment::CENTER;
+        $right  = \Intervention\Image\Alignment::RIGHT;
+        $top    = \Intervention\Image\Alignment::TOP;
+        $middle = \Intervention\Image\Alignment::CENTER;
+        $bottom = \Intervention\Image\Alignment::BOTTOM;
+
         return match ($position) {
-            'top-left'     => [$margin,          $margin,           'left',  'top'],
-            'top-right'    => [$width - $margin,  $margin,           'right', 'top'],
-            'bottom-left'  => [$margin,          $height - $margin, 'left',  'bottom'],
-            'center'       => [(int)($width / 2), (int)($height / 2), 'center', 'middle'],
-            default        => [$width - $margin,  $height - $margin, 'right', 'bottom'], // bottom-right
+            'top-left'     => [$margin,           $margin,            $left,   $top],
+            'top-right'    => [$width - $margin,  $margin,            $right,  $top],
+            'bottom-left'  => [$margin,           $height - $margin,  $left,   $bottom],
+            'center'       => [(int) ($width / 2), (int) ($height / 2), $center, $middle],
+            default        => [$width - $margin,  $height - $margin,  $right,  $bottom], // bottom-right
         };
     }
 
@@ -336,13 +365,14 @@ class WatermarkService
      * Resolve the Intervention Image driver.
      * Prefers GD (always available in Laragon); falls back to Imagick if GD missing.
      */
-    private function resolveDriver(): \Intervention\Image\Interfaces\DriverInterface
+    private function resolveDriver(): string
     {
+        // v4's ImageManager::usingDriver() takes the driver CLASS NAME.
         if (extension_loaded('gd')) {
-            return new \Intervention\Image\Drivers\Gd\Driver();
+            return \Intervention\Image\Drivers\Gd\Driver::class;
         }
         if (extension_loaded('imagick')) {
-            return new \Intervention\Image\Drivers\Imagick\Driver();
+            return \Intervention\Image\Drivers\Imagick\Driver::class;
         }
         throw new \RuntimeException('WatermarkService: neither GD nor Imagick extension is loaded.');
     }

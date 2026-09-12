@@ -520,10 +520,23 @@
 </div>
 
 {{-- ══════════════════════════════════════════════════════════════════════
-     SEARCH DRAWER PLACEHOLDER (Alpine toggle — no functionality yet)
+     UNIVERSAL SEARCH DRAWER (P2)
+
+     One box. It works out what each word is — a tooth number, a stage, a file
+     type, a treatment, a treatment status — and matches whatever is left over
+     against the patient, procedure, title, notes and tags.
+
+     It calls GET /clinical-library/search, the SAME endpoint the Content
+     Manager filter bar uses, so the two surfaces can never answer the same
+     question differently. All the thinking lives in
+     App\Services\ClinicalLibrary\ClinicalLibrarySearchService.
+
+     Clicking a result opens the existing global File Viewer rather than
+     navigating away — the drawer is for finding, the viewer is for looking.
 ══════════════════════════════════════════════════════════════════════ --}}
 <div
     x-show="searchOpen"
+    x-data="dfLibrarySearch()"
     x-transition:enter="transition ease-out duration-200"
     x-transition:enter-start="opacity-0"
     x-transition:enter-end="opacity-100"
@@ -534,21 +547,292 @@
     style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(14,1,24,0.50);"
     @click.self="searchOpen = false"
 >
-    <div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;padding:16px;box-sizing:border-box;">
-    <div style="background:#ffffff;border-radius:4px;width:560px;max-width:100%;padding:24px;box-shadow:0 20px 60px rgba(14,1,24,0.25);">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:0;">
+    <div style="display:flex;align-items:flex-start;justify-content:center;width:100%;height:100%;padding:64px 16px 16px;box-sizing:border-box;">
+    <div style="background:#ffffff;border-radius:6px;width:720px;max-width:100%;max-height:100%;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(14,1,24,0.25);overflow:hidden;">
+
+        {{-- ── the box ── --}}
+        <div style="display:flex;align-items:center;gap:10px;padding:18px 20px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9b8aaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" placeholder="Search clinical files, patients, procedures…" style="flex:1;border:none;outline:none;font-size:15px;color:#1e0a2c;font-family:'Inter',sans-serif;" autofocus>
+            <input type="text"
+                   x-model="q"
+                   @input.debounce.250ms="run()"
+                   x-ref="box"
+                   placeholder="Patient name &nbsp;&middot;&nbsp; treatment &nbsp;&middot;&nbsp; tooth no."
+                   style="flex:1;border:none;outline:none;font-size:15px;color:#1e0a2c;font-family:'Inter',sans-serif;">
+            <span x-show="loading" style="font-size:11px;color:#b0a0be;">searching…</span>
             <button @click="searchOpen = false" style="background:none;border:none;cursor:pointer;color:#9b8aaa;padding:2px;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
         </div>
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(185,92,183,0.10);font-size:12px;color:#b0a0be;text-align:center;">
-            Global search — Phase 3 placeholder. Full search built in Phase 9.
+
+        {{-- ── filter strip ──────────────────────────────────────────────
+             The box alone already understands stage, type and treatment when
+             they are typed, but a dentist under time pressure should not have
+             to KNOW that. These make the same filters visible and clickable.
+
+             "Ready to post" is the one that earns this whole module its keep:
+             consent given AND marketing approved, i.e. what can actually be
+             published tomorrow. Without it, finding marketing photos means
+             scrolling everything and remembering each patient's consent.
+        --}}
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:0 20px 14px;">
+
+            <select x-model="stage" @change="run()" :style="selStyle(stage)">
+                <option value="">All stages</option>
+                @foreach($searchOptions['stages'] as $key => $label)
+                    <option value="{{ $key }}">{{ $label }}</option>
+                @endforeach
+            </select>
+
+            <select x-model="treatment" @change="run()" :style="selStyle(treatment)">
+                <option value="">All treatments</option>
+                @foreach($searchOptions['treatments'] as $key => $label)
+                    <option value="{{ $key }}">{{ $label }}</option>
+                @endforeach
+            </select>
+
+            <select x-model="fileType" @change="run()" :style="selStyle(fileType)">
+                <option value="">All types</option>
+                @foreach($searchOptions['file_types'] as $key => $label)
+                    <option value="{{ $key }}">{{ $label }}</option>
+                @endforeach
+            </select>
+
+            <select x-model="period" @change="run()" :style="selStyle(period)">
+                <option value="">Any time</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 3 months</option>
+                <option value="180">Last 6 months</option>
+                <option value="365">Last year</option>
+            </select>
+
+            @if($searchOptions['doctors']->count() > 1)
+            <select x-model="doctor" @change="run()" :style="selStyle(doctor)">
+                <option value="">Any doctor</option>
+                @foreach($searchOptions['doctors'] as $doc)
+                    <option value="{{ $doc->id }}">{{ $doc->name }}</option>
+                @endforeach
+            </select>
+            @endif
+
+            <label style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid rgba(185,92,183,0.30);border-radius:4px;font-size:11.5px;color:#4b3060;cursor:pointer;user-select:none;"
+                   :style="readyToPost ? 'background:#f0fdf4;border-color:#86efac;color:#15803d;' : ''">
+                <input type="checkbox" x-model="readyToPost" @change="run()" style="accent-color:#16a34a;margin:0;">
+                Ready to post
+            </label>
+
+            <button x-show="hasFilters()" x-cloak @click="clearFilters()"
+                    style="background:none;border:none;cursor:pointer;font-size:11.5px;color:#9b8aaa;text-decoration:underline;padding:5px;">
+                Clear
+            </button>
         </div>
+
+        {{-- ── what the box understood, shown back as chips ── --}}
+        <div x-show="interpreted.length" x-cloak
+             style="display:flex;flex-wrap:wrap;gap:6px;padding:0 20px 14px;">
+            <template x-for="chip in interpreted" :key="chip.type + chip.value">
+                <span :style="chipStyle(chip.type)" x-text="chip.label"></span>
+            </template>
+        </div>
+
+        {{-- ── results ── --}}
+        <div style="border-top:1px solid rgba(185,92,183,0.12);overflow-y:auto;flex:1;min-height:0;">
+
+            <template x-if="!loading && active() && results.length === 0">
+                <div style="padding:36px 20px;text-align:center;font-size:13px;color:#b0a0be;">
+                    Nothing matches this search.
+                </div>
+            </template>
+
+            <template x-if="!active()">
+                <div style="padding:26px 20px;font-size:12px;color:#b0a0be;line-height:1.9;">
+                    <div style="font-weight:600;color:#9b8aaa;margin-bottom:6px;">Search by patient name, treatment or tooth number</div>
+                    <div><code style="color:#6a0f70;">Kulkarni</code> &nbsp;everything for that patient</div>
+                    <div><code style="color:#6a0f70;">implant</code> &nbsp;every implant case</div>
+                    <div><code style="color:#6a0f70;">26</code> &nbsp;every file on that tooth</div>
+                    <div style="margin-top:8px;color:#c9bcd4;">Mix them — <code style="color:#6a0f70;">kulkarni implant 26</code> — or narrow with the filters above. Use them on their own to browse.</div>
+                </div>
+            </template>
+
+            <template x-for="file in results" :key="file.id">
+                <div @click="openFile(file)"
+                     style="display:flex;gap:12px;align-items:center;padding:10px 20px;cursor:pointer;border-bottom:1px solid rgba(185,92,183,0.07);"
+                     onmouseover="this.style.background='#faf5fb'" onmouseout="this.style.background='transparent'">
+
+                    {{-- thumbnail, or a labelled tile for anything a browser can't render --}}
+                    <template x-if="file.is_image">
+                        <img :src="file.thumbnail_url" :alt="file.title"
+                             style="width:52px;height:52px;object-fit:cover;border-radius:4px;background:#1c1c2e;flex-shrink:0;">
+                    </template>
+                    <template x-if="!file.is_image">
+                        <div style="width:52px;height:52px;border-radius:4px;background:#f3e8f5;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:9px;font-weight:700;color:#6a0f70;text-align:center;line-height:1.2;padding:3px;"
+                             x-text="file.file_type_label"></div>
+                    </template>
+
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:13px;font-weight:600;color:#1e0a2c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                             x-text="file.patient_name || file.title"></div>
+                        <div style="font-size:11.5px;color:#9b8aaa;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                            <span x-show="file.procedure" x-text="file.procedure"></span>
+                            <span x-show="file.tooth_number" x-text="' &middot; Tooth ' + file.tooth_number"></span>
+                            <span x-show="file.captured_at" x-text="' &middot; ' + file.captured_at"></span>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;gap:5px;flex-shrink:0;">
+                        <span x-show="file.stage && file.stage !== 'general'"
+                              :style="stagePill(file.stage)" x-text="file.stage_label"></span>
+                        <span style="padding:2px 7px;border-radius:99px;font-size:9px;font-weight:700;background:#f3f4f6;color:#6b7280;text-transform:uppercase;"
+                              x-text="file.file_type_label"></span>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        {{-- ── footer count ── --}}
+        <div x-show="total > 0" x-cloak
+             style="padding:9px 20px;border-top:1px solid rgba(185,92,183,0.12);font-size:11px;color:#b0a0be;display:flex;justify-content:space-between;">
+            <span><strong x-text="results.length" style="color:#6a0f70;"></strong> shown of <strong x-text="total" style="color:#6a0f70;"></strong></span>
+            <span>Click a result to open it</span>
+        </div>
+
     </div>
     </div>{{-- /centering wrapper --}}
 </div>
+
+@push('scripts')
+<script>
+function dfLibrarySearch() {
+    return {
+        q: '',
+        stage: '',
+        treatment: '',
+        fileType: '',
+        period: '',
+        doctor: '',
+        readyToPost: false,
+
+        results: [],
+        interpreted: [],
+        total: 0,
+        loading: false,
+        seq: 0,
+
+        /** Is there anything to search for at all? */
+        active() {
+            return this.q.trim().length >= 2 || this.hasFilters();
+        },
+
+        hasFilters() {
+            return !!(this.stage || this.treatment || this.fileType || this.period || this.doctor || this.readyToPost);
+        },
+
+        clearFilters() {
+            this.stage = this.treatment = this.fileType = this.period = this.doctor = '';
+            this.readyToPost = false;
+            this.run();
+        },
+
+        /** Grey when off, branded when a filter is actually doing something. */
+        selStyle(value) {
+            const on = !!value;
+            return 'padding:5px 8px;border-radius:4px;font-size:11.5px;font-family:inherit;outline:none;cursor:pointer;'
+                 + (on
+                     ? 'border:1px solid #6a0f70;background:#faf5fb;color:#6a0f70;font-weight:600;'
+                     : 'border:1px solid rgba(185,92,183,0.30);background:#fff;color:#4b3060;');
+        },
+
+        /**
+         * Every keystroke past 2 characters asks the server. Responses are
+         * sequence-stamped: a slow earlier request must never overwrite the
+         * results of a later one, which is how a search box ends up showing
+         * answers to a question you already finished typing.
+         */
+        async run() {
+            if (! this.active()) {
+                this.results = []; this.interpreted = []; this.total = 0; this.loading = false;
+                return;
+            }
+
+            const params = new URLSearchParams();
+            const term = this.q.trim();
+
+            if (term.length >= 2) params.set('q', term);
+            if (this.stage)      params.set('stage', this.stage);
+            if (this.treatment)  params.set('treatment_category', this.treatment);
+            if (this.fileType)   params.set('file_type', this.fileType);
+            if (this.doctor)     params.set('doctor_id', this.doctor);
+
+            if (this.period) {
+                const from = new Date();
+                from.setDate(from.getDate() - parseInt(this.period, 10));
+                params.set('from', from.toISOString().slice(0, 10));
+            }
+
+            // "Ready to post" is both halves or neither: a photo with consent
+            // but no approval is not publishable, and neither is the reverse.
+            if (this.readyToPost) {
+                params.set('consent', 'given');
+                params.set('marketing', 'approved');
+            }
+
+            const mine = ++this.seq;
+            this.loading = true;
+
+            try {
+                const res = await fetch('{{ route('cms.library-search') }}?' + params.toString(), {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+
+                if (mine !== this.seq) return;   // a newer search already answered
+
+                this.results     = data.results ?? [];
+                this.interpreted = data.interpreted ?? [];
+                this.total       = data.total ?? 0;
+            } catch (e) {
+                if (mine !== this.seq) return;
+                this.results = []; this.interpreted = []; this.total = 0;
+            } finally {
+                if (mine === this.seq) this.loading = false;
+            }
+        },
+
+        openFile(file) {
+            this.searchOpen = false;
+            window.dispatchEvent(new CustomEvent('open-file-viewer', {
+                detail: { id: file.id, patientId: file.patient_id }
+            }));
+        },
+
+        chipStyle(type) {
+            const colours = {
+                tooth:     ['#eef2ff', '#3730a3'],
+                treatment: ['#f5f3ff', '#6a0f70'],
+                stage:     ['#ecfdf5', '#047857'],
+                file_type: ['#fff7ed', '#9a3412'],
+                status:    ['#fef2f2', '#b91c1c'],
+                text:      ['#f3f4f6', '#4b5563'],
+            };
+            const [bg, fg] = colours[type] || colours.text;
+            return `padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:600;background:${bg};color:${fg};`;
+        },
+
+        stagePill(stage) {
+            const colours = {
+                before:   ['#eff6ff', '#2563eb'],
+                during:   ['#fffbeb', '#d97706'],
+                after:    ['#f0fdf4', '#16a34a'],
+                followup: ['#f5f3ff', '#7c3aed'],
+            };
+            const [bg, fg] = colours[stage] || ['#f3f4f6', '#6b7280'];
+            return `padding:2px 7px;border-radius:99px;font-size:9px;font-weight:700;text-transform:uppercase;background:${bg};color:${fg};`;
+        },
+    };
+}
+</script>
+@endpush
 
 </div>{{-- /x-data wrapper --}}
 
