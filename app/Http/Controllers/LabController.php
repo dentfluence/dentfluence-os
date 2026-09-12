@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ClinicalFile;
 use App\Models\LabCase;
 use App\Models\LabCaseAttachment;
 use App\Models\LabVendor;
 use App\Models\Patient;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\ClinicalLibrary\ClinicalFileUploadService;
 use App\Services\LabAlertService;
 use App\Models\LabCasePrescription;
 use App\Models\LabCaseRating;
@@ -354,7 +356,7 @@ class LabController extends Controller
     public function show(LabCase $labCase)
     {
         $labCase->load([
-            'patient', 'doctor', 'vendor', 'items', 'attachments',
+            'patient', 'doctor', 'vendor', 'items', 'clinicalFiles',
             'events.createdBy', 'expense', 'reconciliation',
             'prescription.createdBy',  // structured clinical prescription
             'remakeOf.patient',         // original case (if remake)
@@ -548,34 +550,66 @@ class LabController extends Controller
 
     // ── ATTACHMENTS ──────────────────────────────────────────────────────
 
-    public function attachmentStore(Request $request, LabCase $labCase)
+    /**
+     * POST /lab/{labCase}/attachments
+     *
+     * Writes into clinical_files through the one shared upload service, exactly
+     * like the patient Documents tab and the Clinical Library dashboard. It used
+     * to write into lab_case_attachments — a fourth, parallel media table with no
+     * patient_id, no stage, no tooth and no eligibility flags, which meant a lab
+     * photo could never appear in the patient's Documents tab, the Clinical
+     * Library, the Case Library or anywhere marketing or teaching could reach it.
+     * Nothing about the file changed; where it is filed did.
+     *
+     * Consequence worth stating: these files are now served by
+     * secure.media.file (auth + the patient's branch) instead of the
+     * module:lab-gated lab-attachment route. That is deliberate — it is a
+     * clinical file of that patient and is now governed the same way every other
+     * clinical file of that patient is.
+     */
+    public function attachmentStore(Request $request, LabCase $labCase, ClinicalFileUploadService $uploads)
     {
-        $request->validate(['file' => 'required|file|max:10240']);
+        $request->validate(['file' => ClinicalFileUploadService::validationRule()]);
 
-        // Private disk: lab attachments carry patient work (x-rays, shade photos,
-        // prescriptions). Served only via SecureMediaController.
-        // Column names are original_name / size_bytes, NOT file_name / file_size.
-        // Writing the wrong keys let $fillable drop them silently, which left
-        // original_name NULL on a NOT NULL column — every upload 500'd. It was
-        // invisible only because the table had zero rows until 5 Sep.
-        $file = $request->file('file');
-        $path = $file->store('lab-attachments', 'local');
+        // Every clinical file is anchored to a patient. A case with none has
+        // nothing to anchor to, and guessing one would be worse than refusing.
+        abort_if(! $labCase->patient_id, 422, 'This lab case has no patient linked, so a file cannot be attached to it.');
 
-        $labCase->attachments()->create([
-            'file_path'     => $path,
-            'original_name' => $file->getClientOriginalName(),
-            'size_bytes'    => $file->getSize(),
-            'mime_type'     => $file->getMimeType(),
-            'uploaded_by'   => auth()->id(),
+        $labCase->loadMissing('items');
+
+        $procedure = trim(($labCase->work_category ?: 'Lab work') . ' ' . ($labCase->work_subtype ?: ''));
+
+        $uploads->store($request->file('file'), [
+            'patient_id'   => $labCase->patient_id,
+            'visit_id'     => $labCase->treatment_visit_id,
+            'procedure'    => $procedure,
+            // The teeth the case is for — the same summary the case header shows.
+            'tooth_number' => $labCase->items->pluck('tooth_number')->filter()->unique()->implode(', ') ?: null,
+            // Lab work happens mid-treatment; 'before'/'after' are the clinician's
+            // call on the photo itself and can be corrected in the File Viewer.
+            'stage'        => 'during',
+            'source_type'  => LabCase::class,
+            'source_id'    => $labCase->id,
+            'uploaded_by'  => auth()->id(),
         ]);
 
         return back()->with('success', 'Attachment uploaded.');
     }
 
-    public function attachmentDestroy(LabCaseAttachment $attachment)
+    /**
+     * DELETE /lab/attachments/{clinicalFile}
+     *
+     * Soft delete only — the file stays on disk. An original is never destroyed
+     * by one click of a UI button; ClinicalFileController::destroy() already
+     * works this way and the two must not disagree.
+     */
+    public function attachmentDestroy(ClinicalFile $clinicalFile)
     {
-        Storage::disk('local')->delete($attachment->file_path);
-        $attachment->delete();
+        // Only files that belong to a lab case may be removed from a lab screen.
+        abort_unless($clinicalFile->source_type === LabCase::class, 404);
+
+        $clinicalFile->delete();
+
         return back()->with('success', 'Attachment removed.');
     }
 

@@ -62,20 +62,90 @@ class ClinicalFileUploadService
      *   dcm  — DICOM / CBCT
      * Adding any of them is one line in this array plus a matching accept="".
      */
-    public const ALLOWED_EXTENSIONS = [
-        'jpg', 'jpeg', 'png', 'avif',   // images
-        'pdf',                          // documents
-        'doc', 'docx',                  // Word
-        'xls', 'xlsx',                  // Excel
+    /**
+     * The ONLY formats the Clinical Library accepts, each with its OWN size cap
+     * in KB — CEO rulings 12 Sep 2026.
+     *
+     * Why per-format and not one blanket cap: a single 50 MB limit let someone
+     * upload a 50 MB JPEG, which no clinical photo needs, while still being too
+     * small for the CBCT and STL files a lab case genuinely carries. One number
+     * cannot be right for both, and storage is a real cost line the moment this
+     * is multi-tenant — at ~20 photos a case this clinic alone generates several
+     * GB a month before a single scan is counted.
+     *
+     * Why an allowlist at all: a Canon RAW (.CR2) uploaded cleanly on 12 Sep and
+     * was then unviewable forever — RAW's MIME starts with image/ so the app
+     * called it a photo, but no browser can decode RAW and neither can GD, so the
+     * thumbnail was permanently broken and it could never be watermarked.
+     * Anything outside this list has the same problem waiting in it.
+     *
+     * DICOM is accepted but is a poor use of the vault: the app cannot display it,
+     * so it sits there as cost. The JPG/PDF report exported from the CBCT software
+     * is what belongs here — the 100 MB cap is set to make that the easy path.
+     */
+    public const MAX_KB_BY_EXTENSION = [
+        // images — nothing clinical needs more than this
+        'jpg'  => 15360,  'jpeg' => 15360,  'png'  => 15360,  'avif' => 15360,   // 15 MB
+        // documents
+        'pdf'  => 25600,  'doc'  => 25600,  'docx' => 25600,
+        'xls'  => 25600,  'xlsx' => 25600,                                        // 25 MB
+        // dental 3D / imaging — added for P1 (lab cases carry STL)
+        'stl'  => 61440,                                                          // 60 MB
+        'dcm'  => 102400,                                                         // 100 MB
     ];
 
     /**
-     * The Laravel validation rule every upload endpoint must use, so the
-     * accepted formats can never drift apart between web, mobile and library.
+     * Accepted extensions, derived from the cap map so the two can never drift
+     * apart. Still excluded, each needing its own decision: heic/heif (iPhone's
+     * native camera format — the mobile capture endpoint accepted it before
+     * 12 Sep and no longer does).
      */
-    public static function validationRule(int $maxKb = 51200): string
+    public static function allowedExtensions(): array
     {
-        return 'required|file|max:' . $maxKb . '|mimes:' . implode(',', self::ALLOWED_EXTENSIONS);
+        return array_keys(self::MAX_KB_BY_EXTENSION);
+    }
+
+    /**
+     * The cap that applies to one extension. $ceilingKb lets an endpoint be
+     * STRICTER than the format allows (the mobile documents endpoint caps
+     * everything at 20 MB) but never looser.
+     */
+    public static function maxKbFor(string $extension, ?int $ceilingKb = null): int
+    {
+        $max = self::MAX_KB_BY_EXTENSION[strtolower($extension)] ?? 15360;
+
+        return $ceilingKb ? min($max, $ceilingKb) : $max;
+    }
+
+    /**
+     * The validation rule every upload endpoint must use, so accepted formats and
+     * sizes can never drift apart between web, mobile and library.
+     */
+    public static function validationRule(?int $ceilingKb = null): array
+    {
+        return [
+            'required',
+            'file',
+            'mimes:' . implode(',', self::allowedExtensions()),
+            // Outer guard so an enormous file is rejected before the closure runs.
+            'max:' . ($ceilingKb ?? max(self::MAX_KB_BY_EXTENSION)),
+            function (string $attribute, mixed $value, \Closure $fail) use ($ceilingKb) {
+                if (! $value instanceof UploadedFile) {
+                    return;
+                }
+
+                $extension = strtolower($value->getClientOriginalExtension());
+                $limitKb   = self::maxKbFor($extension, $ceilingKb);
+
+                if (($value->getSize() / 1024) > $limitKb) {
+                    $fail(sprintf(
+                        'A .%s file may be at most %d MB.',
+                        $extension,
+                        (int) round($limitKb / 1024)
+                    ));
+                }
+            },
+        ];
     }
 
     /**
@@ -93,10 +163,10 @@ class ClinicalFileUploadService
         // here as well — a new caller cannot forget it.
         $extension = strtolower($file->getClientOriginalExtension());
 
-        if (! in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
+        if (! in_array($extension, self::allowedExtensions(), true)) {
             throw new \InvalidArgumentException(
                 "ClinicalFileUploadService::store() rejected .{$extension} — accepted formats are: "
-                . implode(', ', self::ALLOWED_EXTENSIONS) . '.'
+                . implode(', ', self::allowedExtensions()) . '.'
             );
         }
 
@@ -163,7 +233,15 @@ class ClinicalFileUploadService
         if (str_starts_with($mime, 'image/')) return 'photo';
         if (str_starts_with($mime, 'video/')) return 'video';
         if ($mime === 'application/pdf') return 'pdf';
-        if ($mime === 'model/stl' || str_ends_with($file->getClientOriginalName(), '.stl')) return 'stl';
+
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        // Extension wins for the 3D/imaging formats: their MIME types are
+        // unreliable (a .stl and a .dcm both commonly arrive as
+        // application/octet-stream, and some servers report .dcm as image/*,
+        // which is exactly how a file nothing can render ends up labelled a photo).
+        if ($extension === 'stl') return 'stl';
+        if ($extension === 'dcm') return 'cbct';
 
         return 'other';
     }

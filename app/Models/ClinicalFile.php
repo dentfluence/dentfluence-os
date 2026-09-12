@@ -91,7 +91,19 @@ class ClinicalFile extends Model
         'invoice', 'lab_slip', 'other',
     ];
 
+    /**
+     * Clinically image-like file types. NOTE: this is a CLINICAL grouping, not a
+     * rendering one — a CBCT is clinically an image and is still something no
+     * browser can display. Use isImage() for anything to do with showing a file.
+     */
     const IMAGE_TYPES = ['photo', 'xray', 'opg', 'cbct', 'intraoral_scan'];
+
+    /**
+     * What a browser can render in an <img> and GD can decode for watermarking.
+     * These two questions have the same answer, which is why one list serves both.
+     */
+    const WEB_IMAGE_MIMES = ['image/jpeg', 'image/pjpeg', 'image/png', 'image/avif'];
+    const WEB_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'avif'];
 
     /**
      * Fixed-vocabulary treatment category, separate from the free-text `procedure`
@@ -184,11 +196,54 @@ class ClinicalFile extends Model
         return asset('images/clinical/file-placeholder.svg');
     }
 
+    /**
+     * Human label for why a file has no preview — shown on the placeholder tile so
+     * an STL or a CBCT reads as "no preview available", not as a broken image.
+     */
+    public function getNoPreviewReasonAttribute(): ?string
+    {
+        if ($this->isImage()) return null;
+
+        return match ($this->file_type) {
+            'stl'            => 'STL — open in your design software',
+            'cbct'           => 'CBCT — open in your imaging software',
+            'video'          => 'Video',
+            default          => $this->file_type_label,
+        };
+    }
+
     // ── Type Helpers ───────────────────────────────────────────────────────────
 
+    /**
+     * Can this file be shown in an <img> and watermarked?
+     *
+     * This deliberately reads the MIME type, NOT file_type. It used to read
+     * file_type, and that conflated two different questions: "is this clinically
+     * an image" and "can anything actually display it". A Canon RAW uploaded on
+     * 12 Sep answered yes to the first and no to the second — it was stored as
+     * file_type 'photo', rendered into an <img> no browser can decode, and left a
+     * permanently broken thumbnail. A DICOM saved as 'cbct' would do exactly the
+     * same. Every caller of this method — thumbnails, grids, the case viewer, the
+     * watermark job — is asking the rendering question, so this is what it answers.
+     *
+     * Falls back to the filename extension for rows whose mime_type was never
+     * recorded properly (older backfilled data).
+     */
     public function isImage(): bool
     {
-        return in_array($this->file_type, self::IMAGE_TYPES);
+        if (in_array(strtolower((string) $this->mime_type), self::WEB_IMAGE_MIMES, true)) {
+            return true;
+        }
+
+        $extension = strtolower(pathinfo((string) $this->original_filename, PATHINFO_EXTENSION));
+
+        return in_array($extension, self::WEB_IMAGE_EXTENSIONS, true);
+    }
+
+    /** Clinically image-like (x-ray, CBCT, scan) even when nothing can display it. */
+    public function isClinicalImageType(): bool
+    {
+        return in_array($this->file_type, self::IMAGE_TYPES, true);
     }
 
     public function isVideo(): bool

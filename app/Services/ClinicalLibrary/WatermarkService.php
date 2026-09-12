@@ -33,6 +33,17 @@ use Illuminate\Support\Facades\Storage;
  */
 class WatermarkService
 {
+    /**
+     * Longest edge of the watermarked copy, in pixels.
+     *
+     * The stamped file is what every grid, thumbnail and case view loads all day;
+     * the untouched original stays on disk as the archive. Capping the copy at
+     * this size takes a 3.2 MB clinical photo to roughly 400 KB, which roughly
+     * halves total storage instead of doubling it, and makes the library load
+     * noticeably faster. Raise it only with a storage number in hand.
+     */
+    private const DISPLAY_MAX_EDGE = 2000;
+
     // ── Public API ─────────────────────────────────────────────────────────────
 
     /**
@@ -83,6 +94,12 @@ class WatermarkService
             $driver  = $this->resolveDriver();
             $manager = new \Intervention\Image\ImageManager($driver);
             $image   = $manager->read($absolutePath);
+
+            // Scale BEFORE stamping so the text is sized against the final image,
+            // not against a 6000px original it will never be seen at.
+            if (max($image->width(), $image->height()) > self::DISPLAY_MAX_EDGE) {
+                $image->scaleDown(self::DISPLAY_MAX_EDGE, self::DISPLAY_MAX_EDGE);
+            }
 
             // ── 3. Apply logo (if configured and file exists) ─────────────────
             if ($config['show_logo'] && $config['logo_path']) {
@@ -148,7 +165,7 @@ class WatermarkService
             'opacity'           => 0.70,   // 0.0 – 1.0
             'font_size'         => 22,
             'font_path'         => null,   // absolute path to a .ttf; null => GD's tiny built-in font
-            'quality'           => 88,     // JPEG output quality
+            'quality'           => 82,     // JPEG quality of the display copy (the original is untouched)
             // Clinic name fallback (if not in settings, read from app config)
             'clinic_name'       => config('app.clinic_name', config('app.name', 'Dentfluence')),
         ];

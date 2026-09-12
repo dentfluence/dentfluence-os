@@ -611,6 +611,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/billing/{invoice}/manual-discount',        [\App\Http\Controllers\BillingController::class, 'applyManualDiscount'])->name('billing.manualDiscount.apply')->middleware('module:finance,edit');
         Route::post('/billing/{invoice}/manual-discount/remove', [\App\Http\Controllers\BillingController::class, 'removeManualDiscount'])->name('billing.manualDiscount.remove')->middleware('module:finance,edit');
         Route::get('/billing/{invoice}/print',        [\App\Http\Controllers\BillingController::class, 'printInvoice'])->name('billing.print');
+        // Same template as /print, rendered to PDF server-side. The mobile app
+        // consumes the identical bytes via the API, so app and web can never drift.
+        Route::get('/billing/{invoice}/pdf',          [\App\Http\Controllers\BillingController::class, 'pdfInvoice'])->name('billing.pdf');
         // Auth-gated destructive actions
         Route::post('/billing/{invoice}/delete-auth', [\App\Http\Controllers\BillingController::class, 'destroyWithAuth'])->name('billing.deleteAuth');
         Route::post('/billing/{invoice}/edit-auth',   [\App\Http\Controllers\BillingController::class, 'editWithAuth'])->name('billing.editAuth');
@@ -920,7 +923,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/subtypes',                [LabController::class, 'subtypes'])->name('subtypes');
 
         // Attachments (static segment before {labCase} wildcard)
-        Route::delete('/attachments/{attachment}', [LabController::class, 'attachmentDestroy'])->name('attachments.destroy')->middleware('module:lab,delete');
+        // Binds a ClinicalFile now, not a LabCaseAttachment — lab files live in the
+        // one clinical vault (see LabController::attachmentStore).
+        Route::delete('/attachments/{clinicalFile}', [LabController::class, 'attachmentDestroy'])->name('attachments.destroy')->middleware('module:lab,delete');
 
         Route::get('/{labCase}',               [LabController::class, 'show'])->whereNumber('labCase')->name('show');
         Route::get('/{labCase}/edit',          [LabController::class, 'edit'])->name('edit');

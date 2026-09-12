@@ -352,9 +352,32 @@ class LabCase extends Model
         return $this->hasMany(LabCaseItem::class)->orderBy('sort_order');
     }
 
+    /**
+     * @deprecated Legacy lab-only attachment table. Superseded by clinicalFiles().
+     *   Kept readable so nothing already stored disappears; nothing writes to it
+     *   any more. Run `php artisan lab:migrate-attachments` to move old rows into
+     *   clinical_files, then this relation has nothing left to return.
+     */
     public function attachments(): HasMany
     {
         return $this->hasMany(LabCaseAttachment::class);
+    }
+
+    /**
+     * Files attached to this lab case.
+     *
+     * They live in clinical_files — the single vault every clinical file goes
+     * into — rather than a lab-only table. That is the whole point: a shade photo
+     * or an STL is a file about a PATIENT, and before this it was invisible to the
+     * patient's Documents tab, to the Clinical Library and to the Content Manager,
+     * because lab_case_attachments carries no patient_id, no stage, no tooth and
+     * no eligibility flags. Same file, now findable from every direction.
+     */
+    public function clinicalFiles(): HasMany
+    {
+        return $this->hasMany(ClinicalFile::class, 'source_id')
+            ->where('source_type', self::class)
+            ->orderBy('created_at');
     }
 
     public function events(): HasMany

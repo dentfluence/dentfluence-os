@@ -357,15 +357,19 @@
             {{-- 4. ATTACHMENTS --}}
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div class="bg-gray-50 px-5 py-3 border-b border-gray-200 flex items-center justify-between">
-                    <h2 class="text-sm font-semibold text-gray-700">Attachments @if($labCase->attachments->count())<span class="ml-1 text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">{{ $labCase->attachments->count() }}</span>@endif</h2>
+                    <h2 class="text-sm font-semibold text-gray-700">Attachments @if($labCase->clinicalFiles->count())<span class="ml-1 text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">{{ $labCase->clinicalFiles->count() }}</span>@endif</h2>
                 </div>
                 @php
-                    $lightbox = $labCase->attachments->map(fn ($a) => [
-                        'url'   => $a->url(),
-                        'name'  => $a->original_name,
-                        'size'  => round($a->size_bytes / 1024) . ' KB',
-                        'isImg' => str_starts_with($a->mime_type ?? '', 'image/'),
-                        'isPdf' => str_ends_with(strtolower($a->original_name), '.pdf'),
+                    // Files now come from clinical_files (LabCase::clinicalFiles), the one
+                    // vault — not the retired lab_case_attachments table.
+                    // isImage() answers "can a browser render this", so an STL or a DICOM
+                    // gets a labelled tile instead of a broken <img>.
+                    $lightbox = $labCase->clinicalFiles->map(fn ($f) => [
+                        'url'   => $f->display_url,
+                        'name'  => $f->original_filename,
+                        'size'  => $f->file_size_human,
+                        'isImg' => $f->isImage(),
+                        'isPdf' => $f->isPdf(),
                     ])->values()->all();
                 @endphp
                 <div class="p-5"
@@ -376,35 +380,38 @@
                      @keydown.escape.window="open = false"
                      @keydown.arrow-right.window="next()"
                      @keydown.arrow-left.window="prev()">
-                    @if($labCase->attachments->isEmpty())
+                    @if($labCase->clinicalFiles->isEmpty())
                     <p class="text-center text-sm text-gray-400 py-4">No attachments yet.</p>
                     @else
                     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
-                        @foreach($labCase->attachments as $att)
-                        @php $isImg = str_starts_with($att->mime_type ?? '', 'image/'); @endphp
+                        @foreach($labCase->clinicalFiles as $file)
                         <div class="group relative bg-gray-50 border border-gray-200 rounded-xl p-3 text-center hover:border-[#d8b4e2] transition">
-                            @if($isImg)
+                            @if($file->isImage())
                             <button type="button" @click="show({{ $loop->index }})" class="block w-full">
-                                <img src="{{ $att->url() }}" alt="{{ $att->original_name }}" class="w-full h-20 object-cover rounded-lg mb-2">
+                                <img src="{{ $file->thumbnail_url }}" alt="{{ $file->original_filename }}" class="w-full h-20 object-cover rounded-lg mb-2">
                             </button>
                             @else
-                            <a href="{{ $att->url() }}" target="_blank"
-                               @if(str_ends_with(strtolower($att->original_name), '.pdf'))
+                            <a href="{{ $file->display_url }}" target="_blank"
+                               @if($file->isPdf())
                                @click.prevent="show({{ $loop->index }})"
                                @endif
                                class="flex flex-col items-center gap-1 mb-2">
                                 <div class="w-12 h-12 bg-[#f3e8f5] rounded-lg flex items-center justify-center text-xl">
-                                    @if(str_ends_with(strtolower($att->original_name), '.pdf')) 📄
-                                    @elseif(str_ends_with(strtolower($att->original_name), '.stl')) 🦷
+                                    @if($file->isPdf()) 📄
+                                    @elseif($file->file_type === 'stl') 🦷
+                                    @elseif($file->file_type === 'cbct') 🩻
                                     @else 📎 @endif
                                 </div>
+                                {{-- Says WHY there is no preview, so an STL or a CBCT never
+                                     reads as a broken image the way a RAW file once did. --}}
+                                <span class="text-[10px] text-gray-400 leading-tight">{{ $file->no_preview_reason }}</span>
                             </a>
                             @endif
-                            <p class="text-xs text-gray-600 truncate" title="{{ $att->original_name }}">{{ $att->original_name }}</p>
-                            <p class="text-xs text-gray-400">{{ round($att->size_bytes / 1024) }} KB</p>
-                            <form method="POST" action="{{ route('lab.attachments.destroy', $att) }}" class="mt-1 opacity-0 group-hover:opacity-100 transition">
+                            <p class="text-xs text-gray-600 truncate" title="{{ $file->original_filename }}">{{ $file->original_filename }}</p>
+                            <p class="text-xs text-gray-400">{{ $file->file_size_human }}</p>
+                            <form method="POST" action="{{ route('lab.attachments.destroy', $file) }}" class="mt-1 opacity-0 group-hover:opacity-100 transition">
                                 @csrf @method('DELETE')
-                                <button type="submit" onclick="return confirm('Remove?')" class="text-xs text-red-400 hover:text-red-600">Remove</button>
+                                <button type="submit" onclick="return confirm('Remove from this case? The file itself is kept.')" class="text-xs text-red-400 hover:text-red-600">Remove</button>
                             </form>
                         </div>
                         @endforeach
@@ -450,9 +457,12 @@
                     <form method="POST" action="{{ route('lab.attachments.store', $labCase) }}" enctype="multipart/form-data"
                         class="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center hover:border-[#d8b4e2] transition">
                         @csrf
-                        <input type="file" name="file" id="direct-file-input" accept=".jpg,.jpeg,.png,.gif,.pdf,.stl,.zip" class="hidden" onchange="this.form.submit()">
+                        <input type="file" name="file" id="direct-file-input"
+                               accept=".jpg,.jpeg,.png,.avif,.pdf,.doc,.docx,.xls,.xlsx,.stl,.dcm"
+                               class="hidden" onchange="this.form.submit()">
                         <label for="direct-file-input" class="cursor-pointer text-sm text-gray-400 hover:text-[#6a0f70]">
-                            📂 Click to upload · Photos, X-rays, STL, PDF (max 10MB)
+                            📂 Click to upload · Photos, X-rays, STL, PDF
+                            <span class="block text-xs text-gray-300 mt-0.5">Images 15 MB &middot; PDF/Word/Excel 25 MB &middot; STL 60 MB &middot; DICOM 100 MB &middot; saved to the patient's file</span>
                         </label>
                     </form>
                 </div>
