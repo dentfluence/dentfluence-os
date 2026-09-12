@@ -325,7 +325,7 @@ class TodayActionsEngine
                   ->orWhere('purpose', 'recall_birthday');
             })
             ->where(function ($q) {
-                $q->where('status', 'pending');
+                $q->whereIn('status', CommunicationQueue::OPEN_STATUSES);
                 // Action Board only: keep rows closed TODAY (a real call
                 // happened) so they render faded with their outcome instead
                 // of silently disappearing mid-morning.
@@ -474,7 +474,7 @@ class TodayActionsEngine
         return CommunicationQueue::with('patient:id,name,phone,relationship_id')
             ->where('source_engine', 'manual')
             ->where(function ($q) {
-                $q->where('status', 'pending');
+                $q->whereIn('status', CommunicationQueue::OPEN_STATUSES);
                 if ($this->includeDone) {
                     $q->orWhere(fn ($q2) => $q2->where('status', 'closed')
                         ->whereDate('updated_at', Carbon::today()));
@@ -1002,7 +1002,7 @@ class TodayActionsEngine
                   ->orWhere('purpose', 'recall_due')
                   ->orWhere('purpose', 'recall_birthday');
             })
-            ->where('status', 'pending')
+            ->whereIn('status', CommunicationQueue::OPEN_STATUSES)
             ->whereDate('follow_up_date', $date)
             ->orderBy('follow_up_date')
             ->limit($this->limit())
@@ -1331,7 +1331,7 @@ class TodayActionsEngine
 
         try {
             return CommunicationQueue::query()
-                    ->where('status', 'pending')
+                    ->whereIn('status', CommunicationQueue::OPEN_STATUSES)
                     ->whereNotNull('follow_up_date')
                     ->whereDate('follow_up_date', '<', $today)
                     ->count()

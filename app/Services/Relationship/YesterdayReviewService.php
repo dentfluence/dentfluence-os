@@ -71,7 +71,7 @@ class YesterdayReviewService
                 $q->where('follow_up_date', '<=', $yesterday->toDateString())
                   ->orWhere('due_at', '<=', $yesterday);
             })
-            ->where('status', 'pending')
+            ->whereIn('status', CommunicationQueue::OPEN_STATUSES)
             ->orderByDesc('priority')
             ->orderBy('follow_up_date');
 
@@ -167,7 +167,7 @@ class YesterdayReviewService
                       ->orWhereBetween('due_at', [$startDate, $endBound]);
                 })
                 ->where(function ($q) use ($includeDone) {
-                    $q->where('status', 'pending');
+                    $q->whereIn('status', CommunicationQueue::OPEN_STATUSES);
                     // Action Board only: rows closed TODAY stay visible, faded,
                     // with their logged outcome (2026-07-14).
                     if ($includeDone) {

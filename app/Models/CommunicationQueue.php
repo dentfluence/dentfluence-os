@@ -143,6 +143,41 @@ class CommunicationQueue extends Model
         'closed'              => 'Closed',
     ];
 
+    /**
+     * Statuses that still owe the clinic a call.
+     *
+     * 'waiting_for_patient' is an ATTEMPT, not a resolution: logAttempt()
+     * flips pending → waiting_for_patient on the first No Answer / Busy /
+     * Switched Off, and onFollowUpScheduled() sets it for "will call back".
+     * The row is still open call debt — only 'closed' ends it.
+     *
+     * Boards that filtered on 'pending' alone made an attempted row VANISH
+     * the moment it was logged (fixed 12 Sep 2026): it showed neither as
+     * Attempted nor as Done, and the call debt went invisible.
+     */
+    public const OPEN_STATUSES = ['pending', 'waiting_for_patient', 'overdue'];
+
+    /**
+     * Labels for the recall purposes RecallEngineService stamps (its six
+     * triggers + createManual, plus OutcomeAutomationService's long-term
+     * recall). ONE list, read by the web recall board's type chips
+     * (resources/views/relationship/recalls/index.blade.php) and by the mobile
+     * recall API (Api\V1\RelationshipController::pipelineRecalls, M-13).
+     * Keys are the stored `purpose` values — nothing invented.
+     */
+    public const RECALL_TYPE_LABELS = [
+        'recall_no_visit'      => 'Dormant / No-Visit',
+        'recall_approved_plan' => 'Approved Plan',
+        'recall_post_op'       => 'Post-Op Follow-up',
+        'recall_lab_received'  => 'Lab Work Ready',
+        'recall_7day_followup' => '7-Day Follow-up',
+        'recall_birthday'      => 'Birthday Recall',
+        'recall_manual'        => 'Manual Recall',
+        'recall_long_term'     => 'Long-term Recall',
+        'recall_due'           => 'Recall Due',
+        'recall'               => 'Recall',
+    ];
+
     public const PRIORITIES = [
         'high'   => 'High',
         'medium' => 'Medium',
@@ -293,6 +328,12 @@ class CommunicationQueue extends Model
     public function scopePending($query)
     {
         return $query->where('status', 'pending');
+    }
+
+    /** Still owes a call — pending OR attempted-but-unresolved. See OPEN_STATUSES. */
+    public function scopeOpen($query)
+    {
+        return $query->whereIn('status', self::OPEN_STATUSES);
     }
 
     public function scopeOverdue($query)

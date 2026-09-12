@@ -972,7 +972,10 @@ class TodayController extends Controller
                         // "closed" here means "leaves the pending board":
                         // closed outright, or rescheduled/waiting (the
                         // requeue-due pass brings it back when due).
-                        'closed'            => in_array($freshStatus, ['closed', 'waiting_for_patient'], true),
+                        // Only 'closed' ends the row. 'waiting_for_patient' is
+                        // an ATTEMPT (No Answer / Busy / will call back) — the
+                        // row stays open and renders under "Try again".
+                        'closed'            => $freshStatus === 'closed',
                         'next_action_label' => config('relationship_rules.next_actions.' . $validated['response'])
                             ?? $validated['next_action']
                             ?? 'Logged',
@@ -1180,7 +1183,9 @@ class TodayController extends Controller
                         actor:   $request->user(),
                         options: ['notes' => $validated['notes'] ?? null, 'direction' => $direction, 'skip_activity' => true],
                     );
-                    if (in_array($comm->fresh()->status, ['closed', 'waiting_for_patient'], true)) {
+                    // 'waiting_for_patient' is an attempt, not a close — see
+                    // CommunicationQueue::OPEN_STATUSES.
+                    if ($comm->fresh()->status === 'closed') {
                         $closedItems++;
                     }
                     continue;
