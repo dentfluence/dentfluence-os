@@ -482,13 +482,31 @@
             <input type="hidden" name="from_patient" value="{{ $fromPatient }}">
             @endif
 
+            @php
+                // A-2 (2026-09-13) — WALLET-FIRST BY DEFAULT.
+                // Patient credit used to sit at value="0": it was spent only if
+                // reception remembered to spend it, and a field you have to
+                // remember is a field that does not get used. Measured on
+                // production 12 Sep: two patients holding Rs 44,450 of their own
+                // money while owing Rs 73,800.
+                // Both numbers are computed HERE, not in JavaScript, so the form
+                // is already correct on first paint and stays correct if a script
+                // fails to load. onWalletUsedChange() keeps them in step after any
+                // edit; the cap is the same min(credit, balance) the input's max
+                // attribute already carried.
+                $creditPrefill = (isset($wallet) && $wallet->balance_patient_credit > 0)
+                    ? round(min((float) $wallet->balance_patient_credit, (float) $invoice->balance_due), 2)
+                    : 0.0;
+                $cashPrefill   = round(max(0, (float) $invoice->balance_due - $creditPrefill), 2);
+            @endphp
+
             {{-- Amount + Date --}}
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="block text-xs font-medium text-gray-600 mb-1">Amount (Rs. ) <span class="text-red-500">*</span></label>
                     <input type="number" name="amount" id="pmtAmount" required
                            min="0"
-                           value="{{ old('amount', $invoice->balance_due) }}"
+                           value="{{ old('amount', $cashPrefill) }}"
                            step="0.01"
                            oninput="onAmountChange()"
                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
@@ -509,7 +527,8 @@
                     <span class="text-xs text-gray-500">Available: Rs. {{ number_format($wallet->balance_patient_credit, 2) }}</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <input type="number" name="wallet_used" id="pmtWallet" min="0" step="0.01" value="0"
+                    <input type="number" name="wallet_used" id="pmtWallet" min="0" step="0.01"
+                           value="{{ old('wallet_used', $creditPrefill) }}"
                            max="{{ min($wallet->balance_patient_credit, $invoice->balance_due) }}"
                            data-balance="{{ (float) $invoice->balance_due }}"
                            oninput="onWalletUsedChange()"
@@ -517,7 +536,7 @@
                     <button type="button" onclick="useAllWallet()"
                             class="px-2 py-2 text-[10px] bg-purple-100 text-[#6a0f70] rounded hover:bg-purple-200 whitespace-nowrap">Use Max</button>
                 </div>
-                <p class="text-[11px] text-gray-500 mt-1">Patient credit is a payment, like cash — it settles the invoice without changing the invoice value. The Amount above is the remaining cash to collect, and may be 0.</p>
+                <p class="text-[11px] text-gray-500 mt-1"><b>Credit is applied by default.</b> The Amount above is the cash still to collect, and may be 0. To take the full amount in cash instead, set this box to 0. Patient credit is a payment, like cash — it settles the invoice without changing the invoice value.</p>
             </div>
             @endif
 

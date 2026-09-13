@@ -172,6 +172,25 @@ class BillingController extends Controller
         ));
     }
 
+    /**
+     * T-1 Slice B — bind one invoice line to the visit work line it came from.
+     *
+     * Deliberately scoped to the invoice's own patient: visit_item_id arrives
+     * from the browser, and `exists:treatment_visit_items,id` on its own would
+     * happily accept another patient's work line. The patient check is what
+     * makes the id safe to trust.
+     */
+    private function linkVisitItemToInvoiceItem(array $row, InvoiceItem $item, int $patientId): void
+    {
+        if (empty($row['visit_item_id'])) {
+            return;
+        }
+
+        TreatmentVisitItem::whereKey($row['visit_item_id'])
+            ->where('patient_id', $patientId)
+            ->update(['invoice_item_id' => $item->id]);
+    }
+
     // ── Dismiss Prompt ──────────────────────────────────────────────────────
 
     public function dismissPrompt(BillingPrompt $prompt)
@@ -332,6 +351,10 @@ class BillingController extends Controller
             'items.*.gst_pct'       => 'nullable|numeric|min:0|max:100',
             'items.*.tooth_number'  => 'nullable|string|max:100',
             'items.*.treatment_id'  => 'nullable|integer|exists:treatments,id',
+            // T-1 Slice B — the visit work line this invoice line was made from.
+            // Sent per row (not as the old flat visit_item_ids[] array) so the
+            // link is line-to-line and survives rows being added or removed.
+            'items.*.visit_item_id' => 'nullable|integer|exists:treatment_visit_items,id',
             'items.*.inventory_item_id' => 'nullable|integer|exists:inventory_items,id',
             // Discount layers
             'coupon_code'           => 'nullable|string|max:50',
@@ -386,6 +409,13 @@ class BillingController extends Controller
                 ]);
                 $item->compute();
                 $item->save();
+
+                // T-1 Slice B — write the link back onto the work line.
+                // Nothing wrote treatment_visit_items.invoice_item_id before
+                // this: the block further down only bulk-set billing_status.
+                // W-8 doctor revenue, N-1's invoice.created and M-7's patient
+                // "billed" flag all read a column that had no writer at all.
+                $this->linkVisitItemToInvoiceItem($row, $item, (int) $request->patient_id);
             }
 
             $invoice->recalculate();
@@ -557,7 +587,14 @@ class BillingController extends Controller
             ->get(['id', 'product_name', 'mrp', 'gst_rate']);
         $selectedPatient = $invoice->patient;
 
-        return view('billing.form', compact('invoice', 'patients', 'treatments', 'sellableProducts', 'selectedPatient'));
+        // T-1 Slice B — invoice_item_id => treatment_visit_item_id for the lines
+        // already on this invoice. Without it the edit form would post no
+        // visit_item_id, and re-saving an untouched invoice would drop every
+        // link the original save made.
+        $visitItemByInvoiceItem = TreatmentVisitItem::whereIn('invoice_item_id', $invoice->items->pluck('id'))
+            ->pluck('id', 'invoice_item_id');
+
+        return view('billing.form', compact('invoice', 'patients', 'treatments', 'sellableProducts', 'selectedPatient', 'visitItemByInvoiceItem'));
     }
 
     // ── Update ───────────────────────────────────────────────────────────────
@@ -582,6 +619,9 @@ class BillingController extends Controller
             'items.*.gst_pct'     => 'nullable|numeric|min:0|max:100',
             'items.*.tooth_number'=> 'nullable|string|max:100',
             'items.*.treatment_id'=> 'nullable|integer|exists:treatments,id',
+            // T-1 Slice B — see store(). The edit path rebuilds every line, so
+            // it must re-establish the link the delete below tore down.
+            'items.*.visit_item_id' => 'nullable|integer|exists:treatment_visit_items,id',
             'items.*.inventory_item_id' => 'nullable|integer|exists:inventory_items,id',
             'manual_discount_type'  => 'nullable|in:flat,percentage',
             'manual_discount_value' => 'nullable|numeric|min:0',
@@ -632,6 +672,11 @@ class BillingController extends Controller
                 ]);
                 $item->compute();
                 $item->save();
+
+                // T-1 Slice B — the wholesale delete above nulled invoice_item_id
+                // on every work line this invoice was holding (the FK is
+                // nullOnDelete). Re-link here or the edit silently unbills them.
+                $this->linkVisitItemToInvoiceItem($row, $item, (int) $request->patient_id);
             }
 
             $invoice->recalculate();
@@ -1761,7 +1806,15 @@ class BillingController extends Controller
             ->with(['schemes' => fn($q) => $q->where('is_active', true)])
             ->orderBy('name')->get();
 
-        return view('billing._invoice_panel', compact('invoice', 'activeEmiProviders'));
+        // A-2 (2026-09-13): the side panel is the form reception actually opens
+        // from the patient profile, and it could not apply patient credit at all
+        // because the wallet was never loaded here. Same two lines show() has
+        // carried since U8 — forPatient() re-syncs a wallet whose promotional
+        // cache has lapsed, recalculate() refreshes the running totals.
+        $wallet = Wallet::forPatient($invoice->patient_id);
+        $wallet->recalculate();
+
+        return view('billing._invoice_panel', compact('invoice', 'activeEmiProviders', 'wallet'));
     }
 
     // ── Show Receipt ─────────────────────────────────────────────────────────
@@ -2157,5 +2210,28 @@ class BillingController extends Controller
         ])->pluck('value', 'key');
 
         return view('billing.print', compact('invoice', 'clinic'));
+    }
+
+    /**
+     * The same invoice, rendered to PDF server-side from the same Blade view.
+     *
+     * This is the single source of the printed document: the browser prints
+     * this template, and the mobile app downloads the PDF produced from it,
+     * so the two can no longer diverge.
+     */
+    public function pdfInvoice(Invoice $invoice, \App\Services\Print\PdfRenderer $renderer)
+    {
+        $invoice->load(['patient', 'items', 'payments']);
+
+        $clinic = \App\Models\AppSetting::whereIn('key', [
+            'clinic_name', 'clinic_address', 'clinic_phone', 'clinic_email', 'clinic_gst_no'
+        ])->pluck('value', 'key');
+
+        $pdf = $renderer->fromView('billing.print', compact('invoice', 'clinic'));
+
+        return response($pdf, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . ($invoice->invoice_number ?: 'invoice') . '.pdf"',
+        ]);
     }
 }

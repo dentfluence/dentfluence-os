@@ -39,6 +39,13 @@
     $labelClass  = $labelClass  ?? 'block text-xs font-medium text-gray-500 mb-1';
     $inputClass  = $inputClass  ?? 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500';
     $submitLabel = $submitLabel ?? 'Save Payment';
+    // A-2 (2026-09-13) — patient credit on the side panel. Defaults to 0, so a
+    // caller that passes nothing renders byte-identically to before.
+    $patientCredit = round((float) ($patientCredit ?? 0), 2);
+    $creditPrefill = $patientCredit > 0
+        ? round(min($patientCredit, (float) $invoice->balance_due), 2)
+        : 0.0;
+    $cashPrefill   = round(max(0, (float) $invoice->balance_due - $creditPrefill), 2);
     // Caller decides how Cancel dismisses it — the panel collapses an inline
     // block, a modal closes itself. No default that silently no-ops.
     $cancelOnclick = $cancelOnclick ?? "document.getElementById('panelPayForm').classList.add('hidden');document.querySelector('#panelPaySection button').classList.remove('hidden')";
@@ -52,8 +59,12 @@
             <div class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="{{ $labelClass }}">Amount (Rs. ) *</label>
+                    {{-- A-2: min drops to 0 ONLY when credit is in play — a bill
+                         settled entirely from credit has no cash leg, and the
+                         server already accepts amount 0 when wallet_used > 0.
+                         With no credit the attribute is unchanged at 0.01. --}}
                     <input type="number" name="amount" id="{{ $idPrefix }}Amount" required
-                           value="{{ $invoice->balance_due }}" min="0.01" step="0.01"
+                           value="{{ $cashPrefill }}" min="{{ $creditPrefill > 0 ? '0' : '0.01' }}" step="0.01"
                            oninput="{{ $fnPrefix }}OnAmountChange()"
                            class="{{ $inputClass }}">
                 </div>
@@ -64,6 +75,29 @@
                            class="{{ $inputClass }}">
                 </div>
             </div>
+
+            {{-- A-2 — Use Patient Credit. Same block, same cap and same default
+                 as the full invoice page, so the two screens cannot disagree. --}}
+            @if($patientCredit > 0)
+            <div class="bg-purple-50 border border-purple-100 rounded-lg p-3">
+                <div class="flex items-center justify-between mb-1">
+                    <label class="text-xs font-semibold text-[#6a0f70]">Use Patient Credit</label>
+                    <span class="text-xs text-gray-500">Available: Rs. {{ number_format($patientCredit, 2) }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="number" name="wallet_used" id="{{ $idPrefix }}Wallet" min="0" step="0.01"
+                           value="{{ $creditPrefill }}"
+                           max="{{ $creditPrefill }}"
+                           data-balance="{{ (float) $invoice->balance_due }}"
+                           oninput="{{ $fnPrefix }}CreditSync(this)"
+                           class="flex-1 border border-purple-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
+                    <button type="button"
+                            onclick="var w=document.getElementById('{{ $idPrefix }}Wallet');w.value=0;{{ $fnPrefix }}CreditSync(w);"
+                            class="px-2 py-2 text-[10px] bg-gray-100 text-gray-600 rounded hover:bg-gray-200 whitespace-nowrap">Cash only</button>
+                </div>
+                <p class="text-[11px] text-gray-500 mt-1"><b>Credit is applied by default.</b> The Amount above is the cash still to collect, and may be 0. Press "Cash only" to take the full amount in cash instead.</p>
+            </div>
+            @endif
 
             {{-- Mode --}}
             <div>
@@ -294,3 +328,23 @@
                 </button>
             </div>
         </form>
+@if($patientCredit > 0)
+<script>
+// A-2 — keeps "cash to collect" in step with the credit box. Named with the
+// caller's own prefix so it cannot collide with the panel's existing handlers,
+// and it calls OnAmountChange only if that handler exists, so the card
+// convenience-fee panel stays correct without this file knowing about it.
+function {{ $fnPrefix }}CreditSync(el) {
+    var balance = parseFloat(el.dataset.balance) || 0;
+    var maxUse  = parseFloat(el.max) || 0;
+    var used    = parseFloat(el.value) || 0;
+    if (used < 0) { used = 0; el.value = 0; }
+    if (used > maxUse) { used = maxUse; el.value = maxUse; }
+    var amt = document.getElementById('{{ $idPrefix }}Amount');
+    if (amt) {
+        amt.value = Math.max(0, +(balance - used).toFixed(2));
+        if (typeof {{ $fnPrefix }}OnAmountChange === 'function') { {{ $fnPrefix }}OnAmountChange(); }
+    }
+}
+</script>
+@endif

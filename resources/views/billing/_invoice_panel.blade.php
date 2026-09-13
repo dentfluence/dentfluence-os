@@ -222,6 +222,10 @@
             'formId'      => 'panelPaymentForm',
             'action'      => route('billing.payment', $invoice),
             'fromPatient' => $fromPatient,
+            // A-2: cash-backed, refundable patient money ONLY. Promotional
+            // credit is deliberately excluded — it carries per-treatment
+            // eligibility rules and is not the patient's money to spend freely.
+            'patientCredit' => isset($wallet) ? (float) $wallet->balance_patient_credit : 0,
         ])
     </div>
 </div>
