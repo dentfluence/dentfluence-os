@@ -56,8 +56,14 @@ class FinanceController extends Controller
 
         // ── Always-current snapshot — balances, not flows, so the date filter doesn't apply ──
         $todayIncome       = InvoicePayment::whereDate('payment_date', $today)->sum('amount');
-        $outstandingAmount = Invoice::whereIn('status', ['draft', 'partial'])->sum('balance_due');
-        $outstandingCount  = Invoice::whereIn('status', ['draft', 'partial'])->count();
+        // A-1 (2026-09-12): both figures now come from ReportMetricsService, so
+        // the dashboard cannot drift from the huddle report or the API. The
+        // COUNT gains `balance_due > 0` — it was counting wallet-settled and
+        // zero-value invoices as open bills (3 of 13 on production). The rupee
+        // figure is unchanged.
+        $metrics           = app(\App\Services\Analytics\ReportMetricsService::class);
+        $outstandingAmount = $metrics->outstanding();
+        $outstandingCount  = $metrics->outstandingCount();
 
         // This calendar month — always, used for the tax estimator regardless of the filter above
         $monthlyRevenue = InvoicePayment::whereMonth('payment_date', $now->month)

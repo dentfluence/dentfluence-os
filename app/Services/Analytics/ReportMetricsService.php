@@ -104,14 +104,43 @@ class ReportMetricsService
             ->sum('ip.amount');
     }
 
-    /** Total receivables right now — canonical filter: draft + partial. */
+    /**
+     * Total receivables right now — canonical filter: draft + partial AND a
+     * balance actually left to collect.
+     *
+     * A-1 (2026-09-12): `balance_due > 0` added. It changes no rupee — a zero
+     * row contributes zero to a SUM — but it makes this method and
+     * outstandingCount() below describe the SAME set of invoices, which is the
+     * entire reason they live next to each other.
+     */
     public function outstanding(?int $branchId = null): float
     {
-        return (float) Invoice::whereIn('status', ['draft', 'partial'])
+        return (float) $this->outstandingQuery($branchId)->sum('balance_due');
+    }
+
+    /**
+     * How MANY invoices that receivable is spread across.
+     *
+     * The Finance dashboard used to count `status in ('draft','partial')` with
+     * no balance filter. Invoice::deriveStatus() returns 'draft' whenever
+     * paid <= 0, and a fully wallet-settled invoice has total 0 and paid 0 —
+     * so it sat in that count as an open bill with nothing owed on it.
+     * MEASURED ON PRODUCTION 2026-09-12: 13 counted, 3 of them zero-balance.
+     * The rupee figure beside it was always right; only the count lied.
+     */
+    public function outstandingCount(?int $branchId = null): int
+    {
+        return (int) $this->outstandingQuery($branchId)->count();
+    }
+
+    /** The one definition of "an invoice still owing money". */
+    private function outstandingQuery(?int $branchId = null)
+    {
+        return Invoice::whereIn('status', ['draft', 'partial'])
+            ->where('balance_due', '>', 0)
             ->when($branchId, fn ($q) => $q->whereHas(
                 'patient', fn ($p) => $p->where('branch_id', $branchId)
-            ))
-            ->sum('balance_due');
+            ));
     }
 
     /** Appointments completed in the range (status 'done'). */
