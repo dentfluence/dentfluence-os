@@ -57,10 +57,10 @@ Route::middleware('guest')->group(function () {
 });
 
 /* ────────────────────────────────────────────────────────────────
-   PUBLIC — QR ATTENDANCE SCAN (no auth — staff scan on phone)
+   (REMOVED 13 Sep 2026 — the QR attendance scan routes were HERE,
+   outside the auth group. They now live inside it; see "QR ATTENDANCE
+   SCAN" at the end of the authenticated group. Do not move them back.)
 ──────────────────────────────────────────────────────────────── */
-Route::get('/hr/scan',  [\App\Http\Controllers\HR\HrFinanceController::class, 'scanPage'])->name('hr.scan');
-Route::post('/hr/scan', [\App\Http\Controllers\HR\HrFinanceController::class, 'logScan'])->name('hr.scan.log');
 
 /* ────────────────────────────────────────────────────────────────
    AUTHENTICATED
@@ -1220,7 +1220,42 @@ Route::middleware('auth')->group(function () {
 
     }); // end hr group
 
-    // QR Check-in endpoint — accessible by Android app (token-based, no login)
+    /* ── QR ATTENDANCE SCAN — MOVED BEHIND auth 13 Sep 2026 ──────────
+     * These two were registered OUTSIDE the auth group since the feature
+     * shipped. GET /hr/scan renders resources/views/hr/scan.blade.php,
+     * which prints EVERY active staff member's name, role and raw
+     * qr_token into the page (data-token="..."), and POST /hr/scan then
+     * marks attendance for whatever token it is handed. Anyone who could
+     * load the URL could read the whole roster, take every token, and
+     * mark any staff member present or absent — and qr_token never
+     * rotates, so a token taken once worked forever. Attendance feeds
+     * hr_entry_exit_logs -> hr_attendance -> incentives, so this was a
+     * payroll-grade hole, flagged in the D-1 handbook review on 4 Sep and
+     * closed here the day before go-live.
+     *
+     * auth ONLY, no module gate — deliberate, and the same ruling M-16
+     * made for the phone endpoints: front desk holds no HR permission and
+     * must still be able to say "I am here". The door tablet logs in once
+     * and stays logged in.
+     *
+     * Nothing in the UI links to these — grep for 'hr.scan' returns only
+     * the controller's own view() call — so no nav or button breaks.
+     */
+    Route::get('/hr/scan',  [\App\Http\Controllers\HR\HrFinanceController::class, 'scanPage'])->name('hr.scan');
+    Route::post('/hr/scan', [\App\Http\Controllers\HR\HrFinanceController::class, 'logScan'])->name('hr.scan.log');
+
+    /* ── QR Check-in endpoint — token-based, still NO login ───────────
+     * ⚠ DELIBERATELY LEFT OPEN 13 Sep 2026, and it is the one piece of
+     * this hole still standing. It is safe-ish only because qr_token is a
+     * UUID (HrStaffProfile::booted) and the page that published those
+     * UUIDs is now shut: a token can no longer be harvested, but any
+     * token already taken still works here and tokens never rotate.
+     * Left open because a distributed APK may still call it and breaking
+     * attendance on go-live morning is the worse failure. CLOSE IT, or
+     * rotate every qr_token, once M-14's authenticated
+     * /api/v1/hr/attendance/check-in is confirmed to be what the phones
+     * in staff hands actually use.
+     */
     Route::get('/hr/checkin/{token}', [\App\Http\Controllers\HR\HrAttendanceController::class, 'qrCheckin'])
          ->name('hr.attendance.qr-checkin')
          ->withoutMiddleware('auth');
