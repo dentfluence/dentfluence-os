@@ -622,9 +622,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/billing/{invoice}/receipt/{receipt}', [\App\Http\Controllers\BillingController::class, 'showReceipt'])->name('billing.receipt');
         Route::get('/billing/{invoice}/final-bill',        [\App\Http\Controllers\BillingController::class, 'showFinalBill'])->name('billing.finalBill');
         // Provider EMI
-        Route::post('/billing/{invoice}/payment/{payment}/mark-provider-paid', [\App\Http\Controllers\BillingController::class, 'markProviderPaid'])->name('billing.markProviderPaid');
+        Route::post('/billing/{invoice}/payment/{payment}/mark-provider-paid', [\App\Http\Controllers\BillingController::class, 'markProviderPaid'])->name('billing.markProviderPaid')->middleware('module:finance,edit');
         // Edit an already-recorded payment's date (cascades to receipt + finance transaction)
-        Route::patch('/billing/{invoice}/payment/{payment}', [\App\Http\Controllers\BillingController::class, 'updatePayment'])->name('billing.payment.update');
+        Route::patch('/billing/{invoice}/payment/{payment}', [\App\Http\Controllers\BillingController::class, 'updatePayment'])->name('billing.payment.update')->middleware('module:finance,edit');
         // Void receipt
         Route::post('/billing/{invoice}/receipt/{receipt}/void', [\App\Http\Controllers\BillingController::class, 'voidReceipt'])->name('billing.receipt.void');
         // Cancel invoice with reason + refund
@@ -1152,15 +1152,15 @@ Route::middleware('auth')->group(function () {
 
         // Staff documents
         Route::post('staff/{user}/documents',              [\App\Http\Controllers\HR\HrStaffController::class, 'storeDocument'])->name('staff.documents.store')->middleware('module:hr,edit');
-        Route::delete('staff/{user}/documents/{document}', [\App\Http\Controllers\HR\HrStaffController::class, 'destroyDocument'])->name('staff.documents.destroy');
+        Route::delete('staff/{user}/documents/{document}', [\App\Http\Controllers\HR\HrStaffController::class, 'destroyDocument'])->name('staff.documents.destroy')->middleware('module:hr,delete');
 
         // Staff finance
         Route::post('staff/{user}/finance/salary',                    [\App\Http\Controllers\HR\HrFinanceController::class, 'saveSalary'])->name('staff.finance.salary')->middleware('module:hr,edit');
         Route::post('staff/{user}/finance/incentive',                 [\App\Http\Controllers\HR\HrFinanceController::class, 'saveIncentive'])->name('staff.finance.incentive')->middleware('module:hr,edit');
         Route::post('staff/{user}/finance/advances',                  [\App\Http\Controllers\HR\HrFinanceController::class, 'storeAdvance'])->name('staff.finance.advances.store')->middleware('module:hr,edit');
-        Route::post('staff/{user}/finance/advances/{advance}/close',  [\App\Http\Controllers\HR\HrFinanceController::class, 'closeAdvance'])->name('staff.finance.advances.close');
+        Route::post('staff/{user}/finance/advances/{advance}/close',  [\App\Http\Controllers\HR\HrFinanceController::class, 'closeAdvance'])->name('staff.finance.advances.close')->middleware('module:hr,edit');
         Route::post('staff/{user}/finance/bonuses',                   [\App\Http\Controllers\HR\HrFinanceController::class, 'storeBonus'])->name('staff.finance.bonuses.store')->middleware('module:hr,edit');
-        Route::delete('staff/{user}/finance/bonuses/{bonus}',         [\App\Http\Controllers\HR\HrFinanceController::class, 'destroyBonus'])->name('staff.finance.bonuses.destroy');
+        Route::delete('staff/{user}/finance/bonuses/{bonus}',         [\App\Http\Controllers\HR\HrFinanceController::class, 'destroyBonus'])->name('staff.finance.bonuses.destroy')->middleware('module:hr,delete');
 
         // Attendance (Part B)
         Route::prefix('attendance')->name('attendance.')->group(function () {
