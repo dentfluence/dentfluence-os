@@ -1034,33 +1034,17 @@ class InventoryController extends Controller
             'notes'             => 'nullable|string|max:500',
         ]);
 
-        $qty      = (float) $data['qty'];
-        $unitCost = (float) $data['unit_cost'];
-
-        $movement = StockMovement::create([
-            'inventory_item_id' => $data['inventory_item_id'],
-            'movement_type'     => 'stock_in',
-            'qty'               => $qty,
-            'to_location_id'    => $data['to_location_id'],
-            'unit_cost'         => $unitCost,
-            'total_cost'        => round($qty * $unitCost, 2),
-            'batch_no'          => $data['batch_no'] ?? null,
-            'expiry_date'       => $data['expiry_date'] ?? null,
-            'manufacturing_date'=> $data['manufacturing_date'] ?? null,
-            'notes'             => $data['notes'] ?? null,
-            'created_by'        => auth()->id(),
-        ]);
-
-        // Update item's last + average purchase price
-        if ($unitCost > 0) {
-            $item = InventoryItem::find($data['inventory_item_id']);
-            $item->last_purchase_price    = $unitCost;
-            $item->average_purchase_price = $unitCost; // simple update; weighted avg in Phase 3
-            $item->save();
-        }
+        // I-1 (12 Sep 2026): this method used to carry its own copy of the
+        // movement write + price update. The canonical version lives in
+        // InventoryService::createStockIn() — the same one the mobile API
+        // calls — so the web now delegates to it. Same consolidation M-7 did
+        // to storePurchaseOrder() and the 14 Jul work did to receivePO/
+        // reverseLastGrn: one brain, no drift.
+        app(\App\Services\Inventory\InventoryService::class)
+            ->createStockIn($data, $request->user());
 
         $item = InventoryItem::find($data['inventory_item_id']);
-        return back()->with('success', 'Stock In recorded: ' . $qty . ' × ' . $item->product_name);
+        return back()->with('success', 'Stock In recorded: ' . (float) $data['qty'] . ' × ' . $item->product_name);
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -1086,27 +1070,25 @@ class InventoryController extends Controller
 
         $item = InventoryItem::find($data['inventory_item_id']);
 
-        // Check available stock at location
-        $stock = \App\Models\Inventory\InventoryStock::where('inventory_item_id', $data['inventory_item_id'])
-            ->where('location_id', $data['from_location_id'])
-            ->first();
-
-        $available = $stock ? $stock->available_qty : 0;
-
-        if ($data['qty'] > $available) {
-            return back()->withErrors(['qty' => 'Insufficient stock. Available: ' . $available . ' ' . $item->consumption_unit])->withInput();
+        // I-1 (12 Sep 2026) — THE REASON THIS ROW EXISTS.
+        // This method used to read available_qty, compare, then write the
+        // movement, with NO transaction and NO row lock. That is a
+        // check-then-act race: two issues of the same item at the same moment
+        // both pass the check, StockMovement::updateLiveStock()'s
+        // GREATEST(0, ...) clamps the stock row to zero, and the ledger then
+        // records more consumed than ever existed — silently, no error.
+        // The 4-5 Aug P0 hardening (CEO Directive #007) fixed exactly this in
+        // InventoryService::createStockOut() and ::adjustStock() — transaction
+        // + lockForUpdate() around the check — but this web copy was never
+        // consolidated onto it, so the mobile API was safe and the screen
+        // reception actually uses was not. It now calls the same service.
+        // DO NOT re-inline this logic.
+        try {
+            app(\App\Services\Inventory\InventoryService::class)
+                ->createStockOut($data, $request->user());
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['qty' => $e->getMessage()])->withInput();
         }
-
-        StockMovement::create([
-            'inventory_item_id' => $data['inventory_item_id'],
-            'movement_type'     => $data['movement_type'],
-            'qty'               => -1 * abs((float) $data['qty']), // negative = leaving system
-            'from_location_id'  => $data['from_location_id'],
-            'unit_cost'         => $item->average_purchase_price,
-            'total_cost'        => round(abs((float) $data['qty']) * $item->average_purchase_price, 2),
-            'notes'             => $data['notes'] ?? null,
-            'created_by'        => auth()->id(),
-        ]);
 
         return back()->with('success', 'Stock Out recorded: ' . $data['qty'] . ' × ' . $item->product_name);
     }
@@ -1931,24 +1913,36 @@ class InventoryController extends Controller
         $lowStock      = $statusSvc->itemsByStatus(\App\Enums\StockStatus::Low);
         $statusCounts  = $statusSvc->counts();
 
-        // Expiring within 90 days — based on stock_in movements with expiry dates
+        // Expiring within 30 days — based on stock_in movements with expiry dates.
+        // I-1 (12 Sep 2026): narrowed from 90 to 30 days. These are RECEIPT
+        // rows, not remaining batch stock (inventory_stocks has no batch
+        // column), so a 90-day window mostly lists batches that were consumed
+        // long ago. 30 days keeps the list short enough to still be read.
         $expiringSoon = StockMovement::with(['item.category', 'toLocation'])
             ->whereNotNull('expiry_date')
             ->where('expiry_date', '>', $today)
-            ->where('expiry_date', '<=', now()->addDays(90)->toDateString())
+            ->where('expiry_date', '<=', now()->addDays(30)->toDateString())
             ->where('qty', '>', 0)
             ->whereIn('movement_type', ['stock_in', 'opening_stock'])
             ->orderBy('expiry_date')
             ->get();
 
-        // Already expired movements that still had qty > 0 when received
-        $expiredItems = StockMovement::with(['item.category', 'toLocation'])
-            ->whereNotNull('expiry_date')
-            ->where('expiry_date', '<=', $today)
-            ->where('qty', '>', 0)
-            ->whereIn('movement_type', ['stock_in', 'opening_stock'])
-            ->orderBy('expiry_date')
-            ->get();
+        // I-1 (12 Sep 2026) — THE EXPIRED LIST IS RETIRED, ON PURPOSE.
+        // It used to query stock_movements for every receipt whose expiry_date
+        // had passed. Expiry lives only on the movement row; inventory_stocks
+        // has no batch column, so there is no way to know whether that batch is
+        // still on the shelf. A batch received in March, used up in April and
+        // expiring in July stayed on this list FOREVER, with no dismiss and no
+        // decrement, and the table's "Qty Remaining" column actually rendered
+        // the qty RECEIVED. On a clinic with real history the list only grows.
+        // An alert nobody can clear is an alert everyone learns to ignore —
+        // the same disease N-5's lab dedup fix cured. Showing nothing is more
+        // honest than showing a number that is wrong and cannot be acted on.
+        // The real fix is batch-level stock (a batch dimension on
+        // inventory_stocks) and it is V1.1 work, not training-week work.
+        // Until then expiry is checked at the shelf; the Expiring Soon list
+        // above is the prompt to go and look.
+        $expiredItems = collect();
 
         // Dead stock: items with stock but no movement in 90+ days
         $deadStock = InventoryItem::with(['category'])

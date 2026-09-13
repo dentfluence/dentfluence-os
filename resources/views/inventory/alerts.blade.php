@@ -189,10 +189,9 @@
         <div class="kpi-num kpi-amber">{{ $summary['low'] }}</div>
         <div class="kpi-label">Low Stock</div>
     </div>
-    <div class="alert-kpi">
-        <div class="kpi-num kpi-red">{{ $summary['expired'] }}</div>
-        <div class="kpi-label">Expired Items</div>
-    </div>
+    {{-- I-1 (12 Sep 2026): "Expired Items" tile removed — see
+         InventoryController::alerts(). It counted receipt rows, not stock on
+         hand, and could never be cleared. --}}
     <div class="alert-kpi">
         <div class="kpi-num kpi-amber">{{ $summary['expiring'] }}</div>
         <div class="kpi-label">Expiring Soon</div>
@@ -352,45 +351,12 @@
     @endif
 </div>
 
-{{-- ═══════ SECTION 3: EXPIRED ═══════ --}}
-@if($expiredItems->isNotEmpty())
-<div class="alert-section">
-    <div class="alert-section-header">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-        </svg>
-        <h3>Expired Items</h3>
-        <span class="badge-count badge-red">{{ $summary['expired'] }}</span>
-        <span style="font-size:11.5px;color:#dc2626;font-weight:600;margin-left:auto;">Remove from stock immediately</span>
-    </div>
-    <table class="alert-table">
-        <thead>
-            <tr>
-                <th>Item</th>
-                <th>Batch</th>
-                <th>Expired On</th>
-                <th>Qty Remaining</th>
-                <th>Location</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($expiredItems as $movement)
-            <tr>
-                <td><strong>{{ $movement->item?->product_name ?? '—' }}</strong></td>
-                <td style="color:#7a6884;font-size:12px;">{{ $movement->batch_no ?? '—' }}</td>
-                <td>
-                    <span class="expiry-tag expiry-expired">
-                        {{ \Carbon\Carbon::parse($movement->expiry_date)->format('d M Y') }}
-                    </span>
-                </td>
-                <td><strong style="color:#dc2626;">{{ $movement->qty }} {{ $movement->item?->consumption_unit }}</strong></td>
-                <td style="color:#7a6884;font-size:12px;">{{ $movement->toLocation?->name ?? '—' }}</td>
-            </tr>
-            @endforeach
-        </tbody>
-    </table>
-</div>
-@endif
+{{-- ═══════ SECTION 3: EXPIRED — REMOVED I-1, 12 Sep 2026 ═══════
+     This table listed every batch ever received whose expiry had passed and
+     labelled the received quantity as "Qty Remaining". Without batch-level
+     stock it cannot know what is actually on the shelf, and nothing could
+     clear a row. Retired rather than shipped into a training week. Returns
+     with batch tracking in V1.1. --}}
 
 {{-- ═══════ SECTION 4: EXPIRING SOON ═══════ --}}
 <div class="alert-section">
@@ -400,11 +366,11 @@
         </svg>
         <h3>Expiring Soon</h3>
         <span class="badge-count badge-amber">{{ $summary['expiring'] }}</span>
-        <span style="font-size:11.5px;color:#9a85aa;margin-left:auto;">Within 90 days — use these first</span>
+        <span style="font-size:11.5px;color:#9a85aa;margin-left:auto;">Within 30 days — use these first</span>
     </div>
     @if($expiringSoon->isEmpty())
         <div class="empty-state">
-            <div>No items expiring in the next 90 days</div>
+            <div>No items expiring in the next 30 days</div>
         </div>
     @else
         <table class="alert-table">
