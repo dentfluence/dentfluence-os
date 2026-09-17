@@ -183,7 +183,7 @@ class SprintAPreStabilizationTest extends TestCase
             'notes'      => 'Asked to call day after tomorrow',
         ]);
 
-        $response->assertOk()->assertJson(['success' => true, 'closed' => true]);
+        $response->assertOk()->assertJson(['success' => true, 'closed' => false]); // CEO 17 Sep: will_call_back reschedules +2d, row stays open
 
         $fresh = $row->fresh();
         $this->assertSame('waiting_for_patient', $fresh->status, 'A2: will_call_back must reschedule, not close forever');
