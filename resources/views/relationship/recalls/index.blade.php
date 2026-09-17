@@ -167,17 +167,18 @@
         // ── Presentation map for the REAL recall purposes RecallEngineService
         // stamps (see its 6 triggers + createManual). Label/icon/colour only —
         // the keys are the stored `purpose` values, nothing invented.
+        $labels   = \App\Models\CommunicationQueue::RECALL_TYPE_LABELS; // one list, shared with the mobile API (M-13)
         $typeMeta = [
-            'recall_no_visit'      => ['Dormant / No-Visit', 'ti-user-off',        '#f3e8f4', '#6a0f70', 'No visit in 6+ months'],
-            'recall_approved_plan' => ['Approved Plan',      'ti-clipboard-check', '#eef2ff', '#4338ca', 'Approved plan — no appointment booked'],
-            'recall_post_op'       => ['Post-Op Follow-up',  'ti-heart-plus',      '#fdeaea', '#b52020', 'Post-op follow-up due'],
-            'recall_lab_received'  => ['Lab Work Ready',     'ti-flask',           '#e8f7ef', '#1a7a45', 'Lab work ready — no appointment booked'],
-            'recall_7day_followup' => ['7-Day Follow-up',    'ti-calendar-repeat', '#e0f2fe', '#0369a1', '7-day post-treatment follow-up'],
-            'recall_birthday'      => ['Birthday Recall',    'ti-cake',            '#fff4e0', '#a05c00', 'Birthday re-engagement'],
-            'recall_manual'        => ['Manual Recall',      'ti-pencil',          '#f4eef7', '#684a72', 'Manually added recall'],
-            'recall_long_term'     => ['Long-term Recall',   'ti-hourglass',       '#ecfdf5', '#0f766e', 'Long-horizon preventive recall'],
-            'recall_due'           => ['Recall Due',         'ti-bell',            '#f3e8f4', '#6a0f70', 'Recall due'],
-            'recall'               => ['Recall',             'ti-bell',            '#f3e8f4', '#6a0f70', 'Recall due'],
+            'recall_no_visit'      => [$labels['recall_no_visit'], 'ti-user-off',        '#f3e8f4', '#6a0f70', 'No visit in 6+ months'],
+            'recall_approved_plan' => [$labels['recall_approved_plan'],      'ti-clipboard-check', '#eef2ff', '#4338ca', 'Approved plan — no appointment booked'],
+            'recall_post_op'       => [$labels['recall_post_op'],  'ti-heart-plus',      '#fdeaea', '#b52020', 'Post-op follow-up due'],
+            'recall_lab_received'  => [$labels['recall_lab_received'],     'ti-flask',           '#e8f7ef', '#1a7a45', 'Lab work ready — no appointment booked'],
+            'recall_7day_followup' => [$labels['recall_7day_followup'],    'ti-calendar-repeat', '#e0f2fe', '#0369a1', '7-day post-treatment follow-up'],
+            'recall_birthday'      => [$labels['recall_birthday'],    'ti-cake',            '#fff4e0', '#a05c00', 'Birthday re-engagement'],
+            'recall_manual'        => [$labels['recall_manual'],      'ti-pencil',          '#f4eef7', '#684a72', 'Manually added recall'],
+            'recall_long_term'     => [$labels['recall_long_term'],   'ti-hourglass',       '#ecfdf5', '#0f766e', 'Long-horizon preventive recall'],
+            'recall_due'           => [$labels['recall_due'],         'ti-bell',            '#f3e8f4', '#6a0f70', 'Recall due'],
+            'recall'               => [$labels['recall'],             'ti-bell',            '#f3e8f4', '#6a0f70', 'Recall due'],
         ];
         $typeOf = function (?string $purpose) use ($typeMeta) {
             $key = $purpose ?: 'recall';

@@ -895,10 +895,20 @@ class RelationshipController extends ApiController
         $openCount     = $opportunities->whereIn('status', $openStatuses)->count();
         $pipelineValue = (float) $opportunities->whereIn('status', $openStatuses)->sum('estimated_value');
 
+        // M-13: the web strip's other two numbers, by the web's definitions
+        // (OpportunityPipelineController::index) — never recomputed on the
+        // phone from a capped card list.
+        $followUpToday = $opportunities->filter(fn ($o) => $o->due_today)->count();
+        $convertedMTD  = TreatmentOpportunity::where('status', 'completed')
+            ->whereMonth('updated_at', now()->month)
+            ->count();
+
         return $this->success($groups, '', 200, [
-            'total'          => $opportunities->count(),
-            'open_count'     => $openCount,
-            'pipeline_value' => $pipelineValue,
+            'total'           => $opportunities->count(),
+            'open_count'      => $openCount,
+            'pipeline_value'  => $pipelineValue,
+            'follow_up_today' => $followUpToday,
+            'converted_mtd'   => $convertedMTD,
         ]);
     }
 
@@ -1080,17 +1090,63 @@ class RelationshipController extends ApiController
      */
     public function pipelineRecalls(Request $request): JsonResponse
     {
-        $recalls = CommunicationQueue::query()
-            ->where(function ($q) {
-                $q->where('purpose', 'recall')->orWhere('source_engine', 'recall');
-            })
-            ->select([
-                'id', 'person_name', 'phone', 'channel', 'status', 'priority',
-                'follow_up_date', 'due_at', 'attempt_count', 'assigned_to', 'is_overdue',
-            ])
+        // M-13 (10 Sep 2026) — the SAME rows, numbers and order as the web
+        // recall board (RecallPipelineController::index). Measured before:
+        // the web hides ignored recalls by default, shows each row's TYPE
+        // (purpose) with live per-type chips, offers search / status /
+        // priority / type / assigned_to filters and sorts open rows first,
+        // High → Medium → Low, earliest follow-up first. This endpoint did
+        // none of that — ignored rows came back, no purpose, follow-up-date
+        // order — so the phone board disagreed with the web on rows AND order.
+        $showIgnored = $request->boolean('show_ignored');
+        $filters     = $request->only(['search', 'status', 'priority', 'assigned_to', 'type']);
+
+        // Same base set as RecallPipelineController::baseQuery(); the LIKE
+        // catches the eight recall_* purposes RecallEngineService stamps.
+        $base = fn () => CommunicationQueue::query()->where(function ($q) {
+            $q->where('purpose', 'recall')
+                ->orWhere('source_engine', 'recall')
+                ->orWhere('purpose', 'like', '%recall%');
+        });
+
+        $query = $base()->select([
+            'id', 'patient_id', 'person_name', 'phone', 'channel', 'status', 'priority',
+            'purpose', 'follow_up_date', 'due_at', 'attempt_count', 'assigned_to',
+            'is_overdue', 'ignored_at',
+        ]);
+
+        if (! $showIgnored) {
+            $query->notIgnored();
+        }
+        if (! empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('person_name', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
+            });
+        }
+        foreach (['status', 'priority', 'assigned_to'] as $col) {
+            if (! empty($filters[$col])) {
+                $query->where($col, $filters[$col]);
+            }
+        }
+        if (! empty($filters['type'])) {
+            $query->where('purpose', $filters['type']);
+        }
+
+        // The web list's order (RecallPipelineController::filteredQuery, fixed
+        // 2026-07-08). Groups are split by status below, so the first clause
+        // is a no-op inside a group — kept so the two queries read alike.
+        $recalls = $query
+            ->orderByRaw("status = 'closed'")
+            ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
             ->orderByRaw('follow_up_date IS NULL, follow_up_date ASC')
             ->orderByDesc('id')
             ->get();
+
+        $labels    = CommunicationQueue::RECALL_TYPE_LABELS;
+        $typeLabel = fn (?string $purpose) => $labels[$purpose ?: 'recall']
+            ?? ucwords(str_replace('_', ' ', $purpose ?: 'recall'));
 
         $grouped = $recalls->groupBy('status');
 
@@ -1105,28 +1161,68 @@ class RelationshipController extends ApiController
                 'count'  => $bucket->count(),
                 'items'  => $bucket->take(self::CARDS_PER_GROUP)->map(fn (CommunicationQueue $c) => [
                     'id'             => $c->id,
+                    'patient_id'     => $c->patient_id,
                     'person_name'    => $c->person_name,
                     'phone'          => $c->phone,
                     'channel'        => $c->channel,
                     'status'         => $c->status,
                     'priority'       => $c->priority,
+                    'purpose'        => $c->purpose,
+                    'type_label'     => $typeLabel($c->purpose),
                     'follow_up_date' => $c->follow_up_date?->toDateString(),
                     'due_at'         => $c->due_at?->toIso8601String(),
                     'attempt_count'  => $c->attempt_count,
                     'assigned_to'    => $c->assigned_to,
                     'is_overdue'     => (bool) $c->is_overdue,
+                    'is_ignored'     => $c->ignored_at !== null,
                 ])->values(),
                 'hidden' => max(0, $bucket->count() - self::CARDS_PER_GROUP),
             ];
         }
 
-        $openCount    = $recalls->where('status', '!=', 'closed')->count();
-        $overdueCount = $recalls->filter(fn ($r) => $r->is_overdue || $r->status === 'overdue')->count();
+        // KPI strip — the web's numbers, by the web's definitions: total /
+        // open / overdue / closed-this-month are counted on the base set
+        // BEFORE the ignored rule (as RecallPipelineController does); the
+        // type chips honour the ignored rule, so a chip's number always
+        // matches the rows that tapping it shows.
+        $total        = $base()->count();
+        $openCount    = $base()->where('status', '!=', 'closed')->count();
+        $overdueCount = $base()
+            ->where('status', '!=', 'closed')
+            ->where(function ($q) {
+                $q->where('is_overdue', true)->orWhere('status', 'overdue');
+            })
+            ->count();
+        $closedThisMonth = $base()
+            ->where('status', 'closed')
+            ->whereBetween('updated_at', [now()->startOfMonth(), now()->endOfMonth()])
+            ->count();
+
+        $typeCounts = $base()
+            ->when(! $showIgnored, fn ($q) => $q->notIgnored())
+            ->selectRaw('purpose, COUNT(*) as aggregate')
+            ->groupBy('purpose')
+            ->pluck('aggregate', 'purpose')
+            ->all();
+        arsort($typeCounts);
+
+        $types = [];
+        foreach ($typeCounts as $purpose => $count) {
+            $types[] = [
+                'key'   => $purpose ?: 'recall',
+                'label' => $typeLabel($purpose ?: null),
+                'count' => (int) $count,
+            ];
+        }
 
         return $this->success($groups, '', 200, [
-            'total'         => $recalls->count(),
-            'open_count'    => $openCount,
-            'overdue_count' => $overdueCount,
+            'total'             => $total,
+            'open_count'        => $openCount,
+            'overdue_count'     => $overdueCount,
+            'closed_this_month' => $closedThisMonth,
+            'show_ignored'      => $showIgnored,
+            'types'             => $types,
+            'filters'           => $filters,
         ]);
     }
 
