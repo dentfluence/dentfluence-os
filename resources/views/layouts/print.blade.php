@@ -31,10 +31,30 @@
     @endphp
 
     <style>
+        /* ── PRINT PARITY BASE — added 2026-09-09 ────────────────────────
+           Keeps Chrome-Android output identical to desktop.
+           1. text-size-adjust  → disables Android font boosting, which inflated
+                                  text in these 600-800px docs on a ~390px viewport.
+           2. @page size        → without it Android falls back to the device's
+                                  last-used paper (usually Letter) while desktop
+                                  defaults to A4. Must stay TOP-LEVEL, not nested
+                                  inside @media print — Android is unreliable there.
+           3. print-color-adjust→ Android's Save-as-PDF has "Background graphics"
+                                  OFF by default, so header bars and table shading
+                                  vanished on mobile but survived on desktop.
+           See project_print_parity_audit_0909.md before changing any of this. */
+        html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+        @media print {
+            *, *::before, *::after {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+
         /* ── Reset ── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Inter', sans-serif; /* fixed 2026-08-03: property name was missing, declaration was silently dropped */
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; /* fixed 2026-08-03: property name was missing, declaration was silently dropped */
             font-size: 12pt;
             color: #111;
             background: #fff;

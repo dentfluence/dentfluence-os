@@ -79,7 +79,7 @@
 @endphp
 
 <style>
-    body  { font-family:'Inter', sans-serif; font-size:11px; color:#1f2937; margin:0; }
+    body  { font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size:11px; color:#1f2937; margin:0; }
     /* ── Page header ── */
     .rpt-header {
         display:flex; align-items:center; justify-content:space-between;
@@ -169,16 +169,16 @@
 
 {{-- ── Print button (no-print) ── --}}
 <div class="no-print" style="background:#f0f9ff;border-bottom:1px solid #a5f3fc;padding:10px 20px;display:flex;justify-content:space-between;align-items:center;">
-    <div style="font-size:12px;font-weight:600;color:#0e7490;font-family:'Inter',sans-serif;">
+    <div style="font-size:12px;font-weight:600;color:#0e7490;font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
         COHA Patient Report — {{ $patient->name }}
     </div>
     <div style="display:flex;gap:8px;">
         <a href="{{ route('coha.edit', [$patient, $consultation]) }}"
-           style="padding:6px 14px;font-size:11px;font-weight:600;font-family:'Inter',sans-serif;border:1px solid #a5f3fc;background:#fff;color:#0e7490;border-radius:5px;text-decoration:none;">
+           style="padding:6px 14px;font-size:11px;font-weight:600;font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;border:1px solid #a5f3fc;background:#fff;color:#0e7490;border-radius:5px;text-decoration:none;">
             ← Edit Assessment
         </a>
         <button onclick="window.print()"
-                style="padding:6px 16px;font-size:11px;font-weight:700;font-family:'Inter',sans-serif;background:#0e7490;color:#fff;border:none;border-radius:5px;cursor:pointer;">
+                style="padding:6px 16px;font-size:11px;font-weight:700;font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;background:#0e7490;color:#fff;border:none;border-radius:5px;cursor:pointer;">
             Print / Save PDF
         </button>
         {{-- Generate Treatment Plan (2026-07-31 Visit redesign) — reuses the
@@ -188,11 +188,11 @@
              currently only hands off to the Treatment Plan tab (no field-level
              pre-fill from COHA yet) — see LEGACY/TODO note in ConsultationController. --}}
         <a href="{{ route('treatment-plans.from-consultation', [$patient, $consultation]) }}"
-           style="padding:6px 14px;font-size:11px;font-weight:700;font-family:'Inter',sans-serif;border:none;background:#16a34a;color:#fff;border-radius:5px;text-decoration:none;">
+           style="padding:6px 14px;font-size:11px;font-weight:700;font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;border:none;background:#16a34a;color:#fff;border-radius:5px;text-decoration:none;">
             Generate Treatment Plan →
         </a>
         <a href="{{ route('patients.show', $patient) }}#consultation"
-           style="padding:6px 14px;font-size:11px;font-weight:600;font-family:'Inter',sans-serif;border:1px solid #d1d5db;background:#fff;color:#6b7280;border-radius:5px;text-decoration:none;">
+           style="padding:6px 14px;font-size:11px;font-weight:600;font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;border:1px solid #d1d5db;background:#fff;color:#6b7280;border-radius:5px;text-decoration:none;">
             Back to Patient
         </a>
     </div>
