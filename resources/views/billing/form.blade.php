@@ -110,7 +110,7 @@
                         <div class="flex flex-wrap gap-2">
                             @foreach($preloadedItems as $vi)
                             <button type="button"
-                                    onclick="addRow('{{ addslashes($vi->label()) }}', {{ $vi->suggested_price ?? 0 }}, '{{ $vi->tooth_number ?? '' }}', {{ $vi->id }})"
+                                    onclick="addRow('{{ addslashes($vi->label()) }}', {{ $vi->suggested_price ?? 0 }}, '{{ $vi->tooth_number ?? '' }}', {{ $vi->id }}, {{ $vi->treatment_id ?? 'null' }})"
                                     class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white border border-blue-200 text-blue-800 rounded-full hover:bg-blue-100 transition">
                                 + {{ $vi->label() }}@if($vi->suggested_price > 0) — Rs. {{ number_format($vi->suggested_price, 0) }}@endif
                             </button>
@@ -180,6 +180,10 @@
                                                class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                                                oninput="recalcTotals()">
                                         <input type="hidden" name="items[{{ $idx }}][treatment_id]" value="{{ $item['treatment_id'] ?? '' }}">
+                                        {{-- T-1 Slice B — old() wins on a failed validation round-trip;
+                                             otherwise fall back to the link this line already holds. --}}
+                                        <input type="hidden" name="items[{{ $idx }}][visit_item_id]"
+                                               value="{{ $item['visit_item_id'] ?? (isset($item['id']) ? (($visitItemByInvoiceItem ?? collect())[$item['id']] ?? '') : '') }}">
                                         <input type="hidden" name="items[{{ $idx }}][inventory_item_id]" value="{{ $item['inventory_item_id'] ?? '' }}">
                                     </td>
                                     <td class="py-2 pr-2">
@@ -705,12 +709,16 @@ function addRow(desc = '', price = 0, tooth = '', visitItemId = null, treatmentI
     tr.dataset.basis = basis || 'per_tooth';   // drives auto-quantity from teeth
     if (visitItemId) { visitItemIds.add(visitItemId); tr.dataset.visitItemId = visitItemId; }
     if (treatmentId) { walletTreatmentIds.add(treatmentId); tr.dataset.treatmentId = treatmentId; syncWalletTreatmentIds(); }
+    // T-1 Slice B — the row posts its own visit_item_id below, so removing the
+    // row removes its link too. The flat visit_item_ids[] set at submit time
+    // stays for the billing_status sweep; it cannot say which line became which.
     tr.innerHTML = `
         <td class="py-2 pr-2">
             <input type="text" name="items[${idx}][description]" value="${desc}" required
                    class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                    oninput="recalcTotals()">
             <input type="hidden" name="items[${idx}][treatment_id]" value="${treatmentId || ''}">
+            <input type="hidden" name="items[${idx}][visit_item_id]" value="${visitItemId || ''}">
             <input type="hidden" name="items[${idx}][inventory_item_id]" value="${inventoryItemId || ''}">
         </td>
         <td class="py-2 pr-2">
@@ -922,7 +930,11 @@ document.addEventListener('DOMContentLoaded', () => {
 @if(isset($preloadedItems) && $preloadedItems->isNotEmpty() && !isset($invoice))
     // Auto-add the visit's treatments as editable rows so the draft opens ready to review.
     @foreach($preloadedItems as $vi)
-    addRow(@json($vi->label()), {{ (float) ($vi->suggested_price ?? 0) }}, @json((string) ($vi->tooth_number ?? '')), {{ $vi->id }});
+    {{-- T-1 Slice B — the 5th argument was being left off, so every pre-filled
+         visit row reached the invoice with treatment_id blank. That single
+         omission is why billed work landed in the "Uncategorised" revenue
+         bucket even when the visit knew exactly which treatment it was. --}}
+    addRow(@json($vi->label()), {{ (float) ($vi->suggested_price ?? 0) }}, @json((string) ($vi->tooth_number ?? '')), {{ $vi->id }}, {{ $vi->treatment_id ?? 'null' }});
     @endforeach
 @endif
     document.querySelectorAll('.item-row').forEach(row => {

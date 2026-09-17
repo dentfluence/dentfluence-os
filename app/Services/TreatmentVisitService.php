@@ -10,6 +10,7 @@ use App\Models\Inventory\StockMovement;
 use App\Models\LabCase;
 use App\Models\Patient;
 use App\Models\Task;
+use App\Models\Treatment;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentVisit;
 use App\Models\TreatmentPlanItem;
@@ -129,6 +130,10 @@ class TreatmentVisitService
             // F2: Visit items for billing (doctor selects what was done; front desk bills from this)
             'visit_items'                              => ['nullable', 'array'],
             'visit_items.*.treatment_plan_item_id'     => ['nullable', 'exists:treatment_plan_items,id'],
+            // T-1 — the Treatment master id for this line. Optional ON THE WIRE
+            // on purpose: resolveTreatmentId() re-derives it server-side, so the
+            // phone and any browser tab opened before this shipped still link.
+            'visit_items.*.treatment_id'               => ['nullable', 'integer', 'exists:treatments,id'],
             // Slice 2.4b — what happened to this planned treatment TODAY.
             'visit_items.*.work_outcome'               => ['nullable', 'string', 'in:' . implode(',', array_keys(TreatmentVisitItem::WORK_OUTCOMES))],
             'visit_items.*.treatment_name'             => ['required_with:visit_items', 'string', 'max:150'],
@@ -619,6 +624,8 @@ class TreatmentVisitService
             $visit->visitItems()->create([
                 'patient_id'             => $visit->patient_id,
                 'treatment_plan_item_id' => $row['treatment_plan_item_id'] ?? null,
+                // T-1 — resolved, never taken on trust from the browser alone.
+                'treatment_id'           => $this->resolveTreatmentId($row),
                 // Slice 2.4b originally NULLed this for ad-hoc work, on the
                 // reasoning that an outcome is only meaningful against a plan
                 // item. That was wrong in one important way: a walk-in RCT is
@@ -658,6 +665,54 @@ class TreatmentVisitService
         ]);
 
         $this->logClinicalWork($visit, $items);
+    }
+
+    /**
+     * T-1 — resolve which Treatment master row this work line represents.
+     *
+     * Until now the visit stored only a NAME. The id existed on both sides of
+     * it — the plan item carries one, the invoice line carries one — and was
+     * dropped in the middle, which is why billed work could not be attributed
+     * back to a treatment or to a doctor.
+     *
+     * Resolution happens HERE rather than in the browser because the mobile
+     * app and any tab opened before this shipped send no treatment_id at all,
+     * and they must still link. Order:
+     *
+     *   1. an explicit id from the form (the catalogue picker now sends it)
+     *   2. the plan item's own treatment_id — recovers every planned line free
+     *   3. an EXACT, UNAMBIGUOUS, case-insensitive name match in the master
+     *   4. NULL
+     *
+     * Step 4 is deliberate, not a gap. A procedure the catalogue does not have
+     * can still be recorded — the catalogue is a shortcut, not a gate — and a
+     * name matching two master rows is a question for a human, never a guess
+     * for a service. NULL means "not known", which is honest and visible; a
+     * wrong id would quietly poison every revenue report that reads it.
+     */
+    private function resolveTreatmentId(array $row): ?int
+    {
+        if (! empty($row['treatment_id'])) {
+            return (int) $row['treatment_id'];
+        }
+
+        if (! empty($row['treatment_plan_item_id'])) {
+            $fromPlan = TreatmentPlanItem::whereKey($row['treatment_plan_item_id'])->value('treatment_id');
+            if ($fromPlan) {
+                return (int) $fromPlan;
+            }
+        }
+
+        $name = trim((string) ($row['treatment_name'] ?? ''));
+        if ($name === '') {
+            return null;
+        }
+
+        $matches = Treatment::where('is_active', true)
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+            ->pluck('id');
+
+        return $matches->count() === 1 ? (int) $matches->first() : null;
     }
 
     /**

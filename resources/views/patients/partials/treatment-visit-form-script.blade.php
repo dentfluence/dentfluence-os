@@ -332,6 +332,7 @@ function treatmentVisits() {
          */
         selectProcedure(item, row) {
             item.treatment_name = row.name;
+            item.treatment_id   = row.id ?? null;   // T-1 — carry the master id, not just the label
             item._search        = row.name;
             item._pickerOpen    = false;
             item._inCatalog     = true;
@@ -354,6 +355,10 @@ function treatmentVisits() {
             const name = (item._search || '').trim();
             if (!name || name === item.treatment_name) { item._pickerOpen = false; return; }
             item.treatment_name = name;
+            // T-1 — a hand-typed name gets NO id here. The server re-checks the
+            // master by exact name and links it if it is unambiguous; guessing
+            // client-side would only duplicate that rule in a second place.
+            item.treatment_id   = null;
             item._pickerOpen    = false;
             item._inCatalog     = this.procedureCatalog.some(t => t.name.toLowerCase() === name.toLowerCase());
             this._syncLabCaseFromItems();
@@ -710,6 +715,7 @@ function treatmentVisits() {
                 this.visitItems.push({
                     treatment_plan_item_id: pi.id,
                     work_outcome:    null,   // Slice 2.4b — set by the dentist, never guessed
+                    treatment_id:    pi.treatment_id ?? null,   // T-1; server re-derives from the plan item regardless
                     treatment_name:  pi.treatment_name,
                     material_option: '',
                     tooth_number:    pi.tooth_number || '',
@@ -853,6 +859,7 @@ function treatmentVisits() {
             this.visitItems.push({
                 _uid:                   ++this._visitItemUid,
                 treatment_plan_item_id: null,
+                treatment_id:    null,   // T-1 — set by selectProcedure() when picked from the catalogue
                 treatment_name:  '',
                 tooth_number:    '',
                 teeth:           [],
@@ -1099,6 +1106,7 @@ function treatmentVisits() {
                 const itemPayload = (i) => ({
                     treatment_plan_item_id: i.treatment_plan_item_id ?? null,
                     work_outcome:           i.work_outcome ?? null,
+                    treatment_id:           i.treatment_id ?? null,
                     treatment_name:         i.treatment_name,
                     material_option:        i.material_option ?? null,
                     tooth_number:           (i.tooth_number || '').toString().trim() || null,
@@ -1111,6 +1119,7 @@ function treatmentVisits() {
                     ...this.visitItems.map(i => ({ ...itemPayload(i), ...tagRepeat(i, i.treatment_name, i.tooth_number) })),
                     ...this.addonItems.filter(a => a.treatment_name).map(a => ({
                         treatment_plan_item_id: null,
+                        treatment_id:           null,   // T-1 — add-on rows are typed; the server matches by name
                         treatment_name:         a.treatment_name,
                         material_option:        '',
                         tooth_number:           a.tooth_number || this.form.tooth_number || '',

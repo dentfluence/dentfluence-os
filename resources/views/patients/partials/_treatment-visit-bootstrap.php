@@ -182,6 +182,10 @@ $treatmentsList   = $_allTreatments->pluck('name')->all();
 // already knows. A procedure the catalogue does not have can still be
 // typed in and recorded -- the catalogue is a shortcut, not a gate.
 $treatmentsCatalog = $_allTreatments->map(fn($t) => [
+    // T-1 — the id was already being SELECTed and then thrown away one line
+    // later, which is precisely why a recorded procedure could not be traced
+    // back to the master. It travels with the name now.
+    'id'        => $t->id,
     'name'      => $t->name,
     'price'     => (float) ($t->default_price ?? 0),
     'needs_lab' => $_labColsExist ? (bool) $t->needs_lab : false,

@@ -37,6 +37,12 @@ class TreatmentVisitItem extends Model
     protected $fillable = [
         'treatment_visit_id',
         'patient_id',
+        // T-1 — the work line's link back to the Treatment master (the SSOT).
+        // NULL is legitimate and always will be: a procedure the catalogue does
+        // not carry can still be recorded, so the name below stays the label
+        // the doctor typed and this is the identity when there is one.
+        'treatment_id',
+        'treatment_option_id',
         'treatment_name',
         'material_option',
         'tooth_number',
@@ -72,6 +78,18 @@ class TreatmentVisitItem extends Model
     public function planItem(): BelongsTo
     {
         return $this->belongsTo(TreatmentPlanItem::class, 'treatment_plan_item_id');
+    }
+
+    /** T-1 — the Treatment master row this work line represents. NULL for ad-hoc work. */
+    public function treatment(): BelongsTo
+    {
+        return $this->belongsTo(Treatment::class, 'treatment_id');
+    }
+
+    /** T-1 — the priced variant chosen for this line (crown material, implant system). */
+    public function treatmentOption(): BelongsTo
+    {
+        return $this->belongsTo(TreatmentOption::class, 'treatment_option_id');
     }
 
     public function invoiceItem(): BelongsTo
