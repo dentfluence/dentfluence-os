@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\LabCase;
+use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
@@ -73,10 +74,12 @@ class LabCaseTransitionService
         // ── Auto-create next task based on the new status ────────────────
         $task = null;
 
-        // Find front desk and manager user IDs for assignment
-        $frontDesk = User::where('role', 'receptionist')
-            ->orWhere('role', 'front_desk')
-            ->orderBy('id')->value('id') ?? $user->id;
+        // V.17 — front desk is found by role_id in the case's branch, the same
+        // rule NotificationDispatcher::usersWithRole() uses. The legacy
+        // `users.role` string is read only for users who never got a role_id,
+        // so a Manager whose old string still says "receptionist" is no longer
+        // handed the lab chain, and an inactive or other-branch user never is.
+        $frontDesk = $this->frontDeskFor($labCase->branch_id) ?? $user->id;
 
         $doctor = $labCase->doctor_id ?? $user->id;
 
@@ -168,5 +171,19 @@ class LabCaseTransitionService
         }
 
         return $task;
+    }
+
+    /** Lowest-id active front-desk user in the branch (or unbranched), by role_id first. */
+    private function frontDeskFor(?int $branchId): ?int
+    {
+        return User::query()
+            ->where('is_active', true)
+            ->when($branchId, fn ($q) => $q->where(fn ($b) => $b->where('branch_id', $branchId)->orWhereNull('branch_id')))
+            ->where(function ($q) {
+                $q->whereHas('roleModel', fn ($r) => $r->where('slug', Role::FRONT_DESK))
+                  ->orWhere(fn ($l) => $l->whereNull('role_id')->whereIn('role', ['front_desk', 'receptionist']));
+            })
+            ->orderBy('id')
+            ->value('id');
     }
 }
