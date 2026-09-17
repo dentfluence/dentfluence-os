@@ -349,6 +349,13 @@ class HrStaffController extends Controller
             'new_password' => ['nullable', 'confirmed', Password::defaults()],
         ]);
 
+        // V.18 — only the owner may edit an admin's record or change anyone's
+        // staff type. Staff type still feeds legacy readers (huddle layout,
+        // notification fallback), so it is not a free-text field for HR edit.
+        if ($user->isAdminRole() || $request->role !== $user->role) {
+            $this->assertMayAssignAccessRole();
+        }
+
         // Update user
         $user->update([
             'name'        => $request->name,
@@ -372,7 +379,7 @@ class HrStaffController extends Controller
         }
 
         // Admin-only password reset: only touch the password if a new one was submitted.
-        if ($request->filled('new_password') && auth()->user()?->role === 'admin') {
+        if ($request->filled('new_password') && auth()->user()?->isAdminRole()) {
             $user->update(['password' => Hash::make($request->new_password)]);
         }
 

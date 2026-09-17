@@ -39,7 +39,10 @@ class ReceiptRestoreTest extends TestCase
     private function adminUser(): User
     {
         $user = $this->userWithModulePerm('finance', true, true, true);
-        $user->update(['role' => 'admin']);
+        // V.18 (17 Sep): admin is the assigned Admin ROLE, not the staff-type
+        // string. This helper used to rely on the string alone - the exact
+        // escalation V.18 closed.
+        $user->update(['role' => 'admin', 'role_id' => \App\Models\Role::where('slug', \App\Models\Role::ADMIN)->value('id')]);
 
         return $user->fresh();
     }

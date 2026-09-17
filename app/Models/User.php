@@ -231,8 +231,17 @@ class User extends Authenticatable
      */
     public function isAdminRole(): bool
     {
-        return ($this->role === 'admin')
-            || ($this->roleModel && $this->roleModel->slug === Role::ADMIN);
+        // V.18 (2026-09-17): the assigned ACCESS role decides, exactly as in
+        // canAccess(). The legacy `role` string is a staff-type label anyone
+        // with HR edit can change, so it may only speak for a user who has no
+        // role_id at all. Before this, a front desk user could set her own
+        // staff type to "admin" on the HR edit screen and pass every
+        // admin.only gate.
+        if ($this->role_id) {
+            return (bool) ($this->roleModel && $this->roleModel->slug === Role::ADMIN);
+        }
+
+        return $this->role === 'admin';
     }
 
     /* =========================================================
