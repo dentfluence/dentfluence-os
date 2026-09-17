@@ -164,51 +164,96 @@ class ClinicalFileVaultTest extends TestCase
     // ── Per-format caps ───────────────────────────────────────────────────────
 
     /**
-     * One blanket cap could never be right for both: 50 MB let a 50 MB JPEG in,
-     * which no clinical photo needs, while still being too small for the CBCT a
-     * lab case genuinely carries.
+     * The caps came off on 12 Sep 2026, after real CBCT report PDFs over 200 MB
+     * were refused. This test used to assert 15 MB images / 25 MB documents /
+     * 60 MB STL / 100 MB DICOM, and those numbers were a real decision — they
+     * existed to protect storage. They were also refusing files the clinic
+     * actually has, which is the wrong way round.
+     *
+     * The per-format SHAPE is kept so one format can be tightened later without
+     * going back to a single blanket number, and that is what this now checks:
+     * every format resolves, and none of them is a cap in practice.
      */
-    public function test_each_format_carries_its_own_cap(): void
+    public function test_no_format_is_capped_in_practice(): void
     {
-        $this->assertSame(15360, ClinicalFileUploadService::maxKbFor('jpg'),  '15 MB is generous for a clinical photo');
-        $this->assertSame(15360, ClinicalFileUploadService::maxKbFor('PNG'),  'the extension is matched case-insensitively');
-        $this->assertSame(25600, ClinicalFileUploadService::maxKbFor('pdf'));
-        $this->assertSame(61440, ClinicalFileUploadService::maxKbFor('stl'));
-        $this->assertSame(102400, ClinicalFileUploadService::maxKbFor('dcm'));
-        $this->assertSame(15360, ClinicalFileUploadService::maxKbFor('unheard-of'), 'an unknown format gets the tightest cap, not the loosest');
-    }
+        $oneGb = 1048576;
 
-    /** An endpoint may be stricter than the format allows. Never looser. */
-    public function test_an_endpoint_ceiling_can_tighten_a_cap_but_never_loosen_one(): void
-    {
-        $this->assertSame(20480, ClinicalFileUploadService::maxKbFor('dcm', 20480), 'the mobile documents endpoint caps everything at 20 MB');
-        $this->assertSame(15360, ClinicalFileUploadService::maxKbFor('jpg', 51200), 'asking for 50 MB does not get you 50 MB');
+        foreach (ClinicalFileUploadService::allowedExtensions() as $extension) {
+            $this->assertSame(
+                $oneGb,
+                ClinicalFileUploadService::maxKbFor($extension),
+                ".{$extension} must not be the format that refuses a real clinical file"
+            );
+        }
+
+        $this->assertSame($oneGb, ClinicalFileUploadService::maxKbFor('PNG'), 'matched case-insensitively');
+        $this->assertSame($oneGb, ClinicalFileUploadService::maxKbFor('unheard-of'), 'and an unknown format is not special-cased low');
     }
 
     /**
-     * The cap that matters is the per-format one, and it has to bite BELOW the
-     * blanket outer limit — otherwise a 20 MB JPEG sails through on the
-     * strength of the 100 MB DICOM allowance sharing the same rule.
+     * PHP has no "unlimited" for upload_max_filesize, so a number exists
+     * somewhere no matter what. It is 1 GB, and it is written in TWO places —
+     * this constant and docker/php/php.ini. Three more gates (nginx
+     * client_max_body_size, PHP post_max_size, and both read timeouts) have to
+     * agree or a large file dies before this constant is consulted at all.
+     *
+     * This test cannot read the ini file from here. It pins the number so that
+     * changing it in code without changing the ini is at least a red test
+     * rather than a 413 nobody can explain.
      */
-    public function test_a_file_within_the_outer_limit_but_over_its_own_format_cap_is_rejected(): void
+    public function test_the_one_number_that_has_to_match_the_php_ini(): void
+    {
+        $this->assertSame(
+            1048576,
+            max(ClinicalFileUploadService::MAX_KB_BY_EXTENSION),
+            'if you change this, change upload_max_filesize in docker/php/php.ini too'
+        );
+    }
+
+    /**
+     * An endpoint may still be stricter than the format allows, and never
+     * looser. No endpoint uses this today — the mobile documents endpoint
+     * passed 20480 until 12 Sep, which made the PHONE stricter than the server
+     * for no stated reason and refused a 200 MB report the web accepted — but
+     * the mechanism is the only way to tighten one door without tightening all
+     * of them, so it stays tested.
+     */
+    public function test_an_endpoint_ceiling_can_tighten_a_cap_but_never_loosen_one(): void
+    {
+        $this->assertSame(20480, ClinicalFileUploadService::maxKbFor('dcm', 20480), 'a ceiling wins when it is lower');
+        $this->assertSame(
+            1048576,
+            ClinicalFileUploadService::maxKbFor('jpg', 2097152),
+            'and is ignored when it is higher — a ceiling can never raise a cap'
+        );
+    }
+
+    /**
+     * The case that forced the change, at the size it actually shows up in.
+     */
+    public function test_a_twenty_megabyte_photo_is_accepted_now(): void
     {
         $validator = Validator::make(
             ['file' => UploadedFile::fake()->create('huge-smile.jpg', 20480, 'image/jpeg')],
             ['file' => ClinicalFileUploadService::validationRule()]
         );
 
-        $this->assertTrue($validator->fails(), '20 MB is under the 100 MB outer max and over the 15 MB JPEG cap');
-        $this->assertStringContainsString('.jpg file may be at most 15 MB', $validator->errors()->first('file'));
+        $this->assertFalse(
+            $validator->fails(),
+            '20 MB was refused until 12 Sep 2026 by the 15 MB image cap. That cap is gone: '
+            . 'it existed to protect storage and was refusing real clinical files to do it. '
+            . 'Got: ' . $validator->errors()->first('file')
+        );
     }
 
-    public function test_a_file_inside_its_own_cap_passes(): void
+    public function test_a_forty_megabyte_stl_passes(): void
     {
         $validator = Validator::make(
             ['file' => UploadedFile::fake()->create('scan.stl', 40960, 'application/octet-stream')],
             ['file' => ClinicalFileUploadService::validationRule()]
         );
 
-        $this->assertFalse($validator->fails(), '40 MB is well inside the 60 MB STL cap');
+        $this->assertFalse($validator->fails(), '40 MB, and nothing caps it any more');
     }
 
     /**

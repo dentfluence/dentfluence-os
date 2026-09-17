@@ -63,15 +63,26 @@ class ClinicalFileUploadService
      * Adding any of them is one line in this array plus a matching accept="".
      */
     /**
-     * The ONLY formats the Clinical Library accepts, each with its OWN size cap
-     * in KB — CEO rulings 12 Sep 2026.
+     * The ONLY formats the Clinical Library accepts. The size cap is now the
+     * same for all of them and set high enough not to be a cap — CEO ruling
+     * 12 Sep 2026, after real CBCT report PDFs over 200 MB were refused.
      *
-     * Why per-format and not one blanket cap: a single 50 MB limit let someone
-     * upload a 50 MB JPEG, which no clinical photo needs, while still being too
-     * small for the CBCT and STL files a lab case genuinely carries. One number
-     * cannot be right for both, and storage is a real cost line the moment this
-     * is multi-tenant — at ~20 photos a case this clinic alone generates several
-     * GB a month before a single scan is counted.
+     * The per-format SHAPE is kept even though every value is identical, so one
+     * format can be tightened later without going back to a single blanket
+     * number. The earlier values (15 MB images / 25 MB documents / 60 MB STL /
+     * 100 MB DICOM) existed to protect storage, and they were doing it by
+     * refusing files the clinic actually has.
+     *
+     * PHP has no "unlimited" for upload_max_filesize — it takes a size — so a
+     * number is unavoidable somewhere. 1 GB is it, and the same figure sits in
+     * docker/php/php.ini. FOUR OTHER GATES have to agree or a large file dies
+     * before this constant is ever consulted: nginx client_max_body_size, PHP
+     * post_max_size, PHP max_execution_time and nginx fastcgi_read_timeout.
+     * Changing this one alone produces a 413 or a 504 whose message names none
+     * of them.
+     *
+     * STORAGE IS NOW UNCAPPED AND UNWATCHED. The dashboard's storage line (P3)
+     * is the only thing that will show it growing; the VPS is 80 GB.
      *
      * Why an allowlist at all: a Canon RAW (.CR2) uploaded cleanly on 12 Sep and
      * was then unviewable forever — RAW's MIME starts with image/ so the app
@@ -83,15 +94,16 @@ class ClinicalFileUploadService
      * so it sits there as cost. The JPG/PDF report exported from the CBCT software
      * is what belongs here — the 100 MB cap is set to make that the easy path.
      */
+    /** 1 GB, in KB. One value, used for every format — see above. */
+    private const NO_PRACTICAL_LIMIT = 1048576;
+
     public const MAX_KB_BY_EXTENSION = [
-        // images — nothing clinical needs more than this
-        'jpg'  => 15360,  'jpeg' => 15360,  'png'  => 15360,  'avif' => 15360,   // 15 MB
-        // documents
-        'pdf'  => 25600,  'doc'  => 25600,  'docx' => 25600,
-        'xls'  => 25600,  'xlsx' => 25600,                                        // 25 MB
-        // dental 3D / imaging — added for P1 (lab cases carry STL)
-        'stl'  => 61440,                                                          // 60 MB
-        'dcm'  => 102400,                                                         // 100 MB
+        'jpg'  => self::NO_PRACTICAL_LIMIT,  'jpeg' => self::NO_PRACTICAL_LIMIT,
+        'png'  => self::NO_PRACTICAL_LIMIT,  'avif' => self::NO_PRACTICAL_LIMIT,
+        'pdf'  => self::NO_PRACTICAL_LIMIT,  'doc'  => self::NO_PRACTICAL_LIMIT,
+        'docx' => self::NO_PRACTICAL_LIMIT,  'xls'  => self::NO_PRACTICAL_LIMIT,
+        'xlsx' => self::NO_PRACTICAL_LIMIT,  'stl'  => self::NO_PRACTICAL_LIMIT,
+        'dcm'  => self::NO_PRACTICAL_LIMIT,
     ];
 
     /**
@@ -112,7 +124,7 @@ class ClinicalFileUploadService
      */
     public static function maxKbFor(string $extension, ?int $ceilingKb = null): int
     {
-        $max = self::MAX_KB_BY_EXTENSION[strtolower($extension)] ?? 15360;
+        $max = self::MAX_KB_BY_EXTENSION[strtolower($extension)] ?? self::NO_PRACTICAL_LIMIT;
 
         return $ceilingKb ? min($max, $ceilingKb) : $max;
     }

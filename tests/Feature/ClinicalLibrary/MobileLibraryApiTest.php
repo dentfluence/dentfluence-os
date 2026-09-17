@@ -79,8 +79,17 @@ class MobileLibraryApiTest extends TestCase
             $this->assertContains($missingBefore, $upload['allowed_extensions']);
         }
 
-        $this->assertSame(15360, $upload['max_kb']['jpg']);
-        $this->assertSame(102400, $upload['max_kb']['dcm']);
+        // 12 Sep 2026: the caps came off. The map is still SERVED per-format so
+        // the phone can show a real limit if one is ever reintroduced — and so
+        // it never invents one of its own, which is the whole point of this
+        // endpoint.
+        foreach (ClinicalFileUploadService::allowedExtensions() as $extension) {
+            $this->assertSame(
+                1048576,
+                $upload['max_kb'][$extension],
+                "the phone must be told the real cap for .{$extension}, not guess"
+            );
+        }
     }
 
     // ── Search is the web's search ────────────────────────────────────────────

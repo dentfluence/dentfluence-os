@@ -352,7 +352,11 @@ class PatientProfileController extends ApiController
         $p = $this->find($request, $patient);
 
         $request->validate([
-            'file'     => ClinicalFileUploadService::validationRule(20480), // one shared allowlist — see the service
+            // No endpoint ceiling any more. This used to pass 20480 (20 MB),
+            // which made the phone STRICTER than the server for no stated
+            // reason — a 200 MB CBCT report was refused here while the same
+            // file was fine everywhere else.
+            'file'     => ClinicalFileUploadService::validationRule(),
             'category' => 'required|string|max:100',
             'title'    => 'nullable|string|max:255',
             'notes'    => 'nullable|string|max:2000',
@@ -365,6 +369,8 @@ class PatientProfileController extends ApiController
             'treatment_category' => ['nullable', Rule::in(array_keys(ClinicalFile::TREATMENT_CATEGORIES))],
             'stage'              => ['nullable', Rule::in(ClinicalFile::STAGES)],
             'tooth_number'       => 'nullable|string|max:50',
+            'tags'               => 'nullable|array',
+            'tags.*'             => 'string|max:50',
         ]);
 
         $fileTypeMap = [
@@ -384,7 +390,12 @@ class PatientProfileController extends ApiController
             'treatment_category' => $request->treatment_category,
             'stage'              => $request->input('stage', 'general'),
             'tooth_number'       => $request->tooth_number,
-            'tags'               => [$request->category],
+            // The category is always kept as a tag; anything the uploader typed
+            // is added to it rather than replacing it.
+            'tags'               => array_values(array_unique(array_merge(
+                [$request->category],
+                $request->input('tags', [])
+            ))),
             'uploaded_by'        => Auth::id(),
             'source_type'        => 'mobile_document',
         ]);
@@ -415,6 +426,8 @@ class PatientProfileController extends ApiController
             'stage'              => ['nullable', Rule::in(ClinicalFile::STAGES)],
             'tooth_number'       => 'nullable|string|max:50',
             'notes'              => 'nullable|string|max:2000',
+            'tags'               => 'nullable|array',
+            'tags.*'             => 'string|max:50',
         ]);
 
         $record = app(ClinicalFileUploadService::class)->store($request->file('file'), [
@@ -424,6 +437,7 @@ class PatientProfileController extends ApiController
             'stage'              => $request->input('stage', 'general'),
             'tooth_number'       => $request->tooth_number,
             'notes'              => $request->notes,
+            'tags'               => $request->input('tags', []),
             'uploaded_by'        => Auth::id(),
             'source_type'        => 'mobile_capture',
         ]);
