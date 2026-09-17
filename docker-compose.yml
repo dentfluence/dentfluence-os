@@ -7,6 +7,7 @@
 #   mysql      -> MySQL 8 database (data persisted in a named volume)
 #   queue      -> same app image, runs the queue worker (recall/notifications)
 #   scheduler  -> same app image, runs Laravel's scheduler once a minute
+#   gotenberg  -> headless Chromium; renders the print Blades to PDF for web + app
 #
 # All services read secrets/config from .env.production (see Chunk 3).
 # Bring up with:   docker compose --env-file .env.production up -d --build
@@ -32,6 +33,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      gotenberg:
+        condition: service_started
     networks:
       - dentfluence
 
@@ -117,6 +120,23 @@ services:
         condition: service_healthy
       app:
         condition: service_started
+    networks:
+      - dentfluence
+
+  # ---------------------------------------------------------------------------
+  # Gotenberg — headless Chromium that turns the print Blade templates into PDF
+  #
+  # The web and the mobile app both print the SAME document, so the document is
+  # rendered once, here, from the same Blade file the browser prints. Chromium
+  # is the engine Chrome uses, so the PDF matches what Ctrl+P produces.
+  # Not exposed to the host — only the app container talks to it.
+  # ---------------------------------------------------------------------------
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    command:
+      - "gotenberg"
+      - "--api-timeout=60s"
     networks:
       - dentfluence
 
