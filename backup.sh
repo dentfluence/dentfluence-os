@@ -82,6 +82,45 @@ echo "==> Removing backups older than ${KEEP_DAYS} days..."
 find "${BACKUP_DIR}" -name 'db_*.sql.gz'  -mtime +${KEEP_DAYS} -delete
 find "${BACKUP_DIR}" -name 'files_*.tar.gz' -mtime +${KEEP_DAYS} -delete
 
+# --- 4. Off-site copy, encrypted ---------------------------------------------
+# Backups that only live on the VPS do not survive losing the VPS. Everything
+# here goes through the rclone "offsite" remote, which is a crypt wrapper: the
+# file is encrypted on this box before it leaves, so the cloud provider stores
+# ciphertext under meaningless names and cannot read patient data.
+# The crypt keys live in /root/.config/rclone/rclone.conf. WITHOUT THEM THESE
+# COPIES CANNOT BE DECRYPTED — keep a copy somewhere that is not this server.
+if rclone listremotes 2>/dev/null | grep -q '^offsite:'; then
+  echo "==> Copying off-site (encrypted)..."
+  rclone copy "${DB_FILE}"    offsite:daily/ --stats-one-line
+  rclone copy "${FILES_FILE}" offsite:daily/ --stats-one-line
+
+  # Confirm the bytes actually landed, rather than trusting the exit code.
+  for f in "${DB_FILE}" "${FILES_FILE}"; do
+    base="$(basename "$f")"
+    local_size=$(stat -c%s "$f")
+    remote_size=$(rclone size "offsite:daily/${base}" --json 2>/dev/null | sed 's/.*"bytes":\([0-9]*\).*/\1/')
+    if [ "$remote_size" != "$local_size" ]; then
+      echo "!! OFF-SITE FAILED: ${base} is ${local_size} bytes here but ${remote_size:-missing} off-site" >&2
+      exit 1
+    fi
+    echo "    off-site verified ${base}: ${remote_size} bytes"
+  done
+
+  # On the 1st, keep a monthly copy as well.
+  if [ "$(date '+%d')" = "01" ]; then
+    echo "==> Monthly retention copy..."
+    rclone copy "${DB_FILE}"    offsite:monthly/ --stats-one-line
+    rclone copy "${FILES_FILE}" offsite:monthly/ --stats-one-line
+  fi
+
+  echo "==> Pruning off-site (30 daily, 13 months)..."
+  rclone delete offsite:daily   --min-age 30d  2>/dev/null || true
+  rclone delete offsite:monthly --min-age 400d 2>/dev/null || true
+else
+  echo "!! OFF-SITE SKIPPED: no 'offsite' rclone remote is configured." >&2
+  echo "   The only copies of this backup are on the VPS this backup protects." >&2
+  exit 1
+fi
+
 echo "==> Backup complete (${STAMP})."
-echo "    IMPORTANT: copy ${BACKUP_DIR}/ off this server too (e.g. to S3 / another"
-echo "    machine). A backup that only lives on the same VPS won't survive a disk loss."
+echo "    Local copy in ${BACKUP_DIR}/ and an encrypted copy off-site."
