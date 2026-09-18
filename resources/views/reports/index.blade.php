@@ -66,6 +66,19 @@
                 class="px-5 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 -mb-px hover:text-gray-700 transition">
             Inventory
         </button>
+
+        {{-- V.11 (2026-09-18) — the 12-tab finance report set (Income, Receivables,
+             Provider Earnings, ...) lives at /finance/reports and had NO link
+             anywhere in the app: reachable only by typing the URL, so nobody
+             ever opened it. Reports and Analytics are one place now. The link
+             follows the finance permission, so whoever may see the money sees
+             the tab; everyone else does not get it. --}}
+        @if(auth()->user()?->canAccess('finance'))
+            <a href="{{ route('finance.reports') }}"
+               class="px-5 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 -mb-px hover:text-gray-700 transition">
+                Finance &rarr;
+            </a>
+        @endif
     </div>
 
     {{-- ═══════════════════════════════════════════════════════════════════ --}}

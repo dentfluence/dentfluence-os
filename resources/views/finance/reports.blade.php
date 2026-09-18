@@ -82,6 +82,11 @@
     ];
     @endphp
     <div class="flex flex-wrap gap-1 border-b border-gray-200">
+        {{-- V.11 — the way back to Reports, so these two screens read as one place. --}}
+        @if(auth()->user()?->canAccess('reports'))
+            <a href="{{ route('reports.index') }}"
+               class="text-sm px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-[#6a0f70]">&larr; Reports</a>
+        @endif
         @foreach($tabs as $key => $label)
             <a href="{{ route('finance.reports') }}?tab={{ $key }}&preset={{ $preset }}&from={{ ($from instanceof \Carbon\Carbon) ? $from->toDateString() : $from }}&to={{ ($to instanceof \Carbon\Carbon) ? $to->toDateString() : $to }}"
                class="text-sm px-4 py-2 border-b-2 transition-colors
