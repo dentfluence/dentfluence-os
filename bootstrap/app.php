@@ -107,6 +107,21 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
+        // V.27 (18 Sep 2026) — an exception that already carries an HTTP status
+        // keeps it. Without this, the catch-all below turned every abort(403)
+        // inside an api/* controller into a 500, so "you may not print this"
+        // reached the phone as "something went wrong on our end" and any real
+        // failure was indistinguishable from a refused permission.
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e, $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage() ?: 'Request refused.',
+                    'errors'  => [],
+                ], $e->getStatusCode());
+            }
+        });
+
         $exceptions->render(function (\Throwable $e, $request) {
             if ($request->is('api/*')) {
                 \Illuminate\Support\Facades\Log::error('Unhandled API exception', [

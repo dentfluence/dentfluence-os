@@ -948,5 +948,14 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         // HTTP verb + different path shape: /inventory/vendors/{vendor}).
         Route::put('/inventory/vendors/{vendor}', [InventorySettingsController::class, 'updateVendor'])
             ->middleware('api.role:module:inventory,edit');
+
+        // ── V.27 — the printed document, rendered by the server ────────────
+        // One renderer for web and phone. The gate is inside the controller,
+        // per document type, mirroring that module's web permission; the
+        // route itself only requires a valid token. Read-only by design.
+        Route::get('/documents/{type}/{id}/pdf', [\App\Http\Controllers\Api\V1\DocumentPdfController::class, 'show'])
+            ->whereIn('type', ['invoice', 'consultation', 'visit', 'prescription'])
+            ->whereNumber('id')
+            ->name('api.documents.pdf');
     });
 });
