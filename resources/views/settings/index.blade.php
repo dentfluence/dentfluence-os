@@ -2592,28 +2592,6 @@
         <p class="settings-section-title">App Personalisation</p>
         <p style="font-size:13px;color:#7a6884;margin:-8px 0 24px;">Select your preferences below and click <strong>Apply Preferences</strong> to save.</p>
 
-        {{-- ── Theme ── --}}
-        <div style="margin-bottom:32px;">
-            <p class="settings-section-title" style="margin-bottom:10px;">Theme</p>
-            <div style="display:flex;gap:12px;flex-wrap:wrap;" id="df-theme-grid">
-                @foreach([
-                    ['key'=>'light',  'label'=>'Light',          'icon'=>'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'],
-                    ['key'=>'dark',   'label'=>'Dark',           'icon'=>'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'],
-                    ['key'=>'system', 'label'=>'System default', 'icon'=>'<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>'],
-                ] as $t)
-                <button onclick="dfPrefs.select('theme','{{ $t['key'] }}')"
-                        data-theme-btn="{{ $t['key'] }}"
-                        style="display:flex;align-items:center;gap:10px;padding:10px 18px;border:2px solid #e0d4ea;border-radius:10px;background:#fff;cursor:pointer;transition:border-color 150ms,background 150ms;"
-                        onmouseover="if(!this.classList.contains('pref-active'))this.style.borderColor='#b08ec0';"
-                        onmouseout="if(!this.classList.contains('pref-active'))this.style.borderColor='#e0d4ea';">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">{!! $t['icon'] !!}</svg>
-                    <span style="font-size:13px;color:#2a1440;">{{ $t['label'] }}</span>
-                </button>
-                @endforeach
-            </div>
-        </div>
-
-
         {{-- ── Font ── --}}
         <div style="margin-bottom:32px;">
             <p class="settings-section-title" style="margin-bottom:4px;">Font</p>
@@ -2760,10 +2738,9 @@
                 document.documentElement.style.setProperty('--df-sidebar-glow-2', s.sGlow2);
                 mark('data-color-btn',key);
             }
-            function applyTheme(key){
-                var dark=(key==='dark')||(key==='system'&&window.matchMedia('(prefers-color-scheme:dark)').matches);
-                document.documentElement.setAttribute('data-theme',dark?'dark':'light');
-                mark('data-theme-btn',key);
+            /* Light-only app — theme switching removed. */
+            function applyTheme(){
+                document.documentElement.setAttribute('data-theme','light');
             }
             /* pending: tracks UI selections before Apply is clicked */
             var pending = {};
@@ -2772,7 +2749,8 @@
                     var p=load();
                     applyFont(p.font||'dm-sans');
                     applyColor(p.color||'default');
-                    applyTheme(p.theme||'system');
+                    applyTheme();
+                    if(p.theme){ delete p.theme; save(p); }
                     mark('data-currency-btn',(p.currency||{}).code||'INR');
                 },
                 /* called by card clicks — visual selection only, no save yet */
@@ -2780,7 +2758,6 @@
                     pending[type]={key:key,extra:extra};
                     if(type==='font')     mark('data-font-btn',key);
                     else if(type==='color')    mark('data-color-btn',key);
-                    else if(type==='theme')    mark('data-theme-btn',key);
                     else if(type==='currency') mark('data-currency-btn',key);
                 },
                 /* called by Apply Preferences button */
@@ -2788,7 +2765,6 @@
                     var p=load(); var changed=false;
                     if(pending.font)     { p.font=pending.font.key; applyFont(p.font); changed=true; }
                     if(pending.color)    { p.color=pending.color.key; applyColor(p.color); changed=true; }
-                    if(pending.theme)    { p.theme=pending.theme.key; applyTheme(p.theme); changed=true; }
                     if(pending.currency) { p.currency={code:pending.currency.key,symbol:pending.currency.extra}; window.__DF_CURRENCY=p.currency; changed=true; }
                     if(changed){ save(p); pending={}; dfPrefs._toast('✓ Preferences saved!',true); }
                     else { dfPrefs._toast('No changes to apply'); }
@@ -2796,13 +2772,12 @@
                 /* still used by reset */
                 setFont:function(k){ var p=load();p.font=k;save(p);applyFont(k); },
                 setColor:function(k){ var p=load();p.color=k;save(p);applyColor(k); },
-                setTheme:function(k){ var p=load();p.theme=k;save(p);applyTheme(k); },
                 setCurrency:function(code,sym){ var p=load();p.currency={code:code,symbol:sym};save(p);window.__DF_CURRENCY={code:code,symbol:sym};mark('data-currency-btn',code); },
                 reset:function(){
                     localStorage.removeItem(KEY);
                     pending={};
                     window.__DF_CURRENCY={symbol:'Rs. ',code:'INR'};
-                    applyFont('dm-sans'); applyColor('default'); applyTheme('system'); mark('data-currency-btn','INR');
+                    applyFont('dm-sans'); applyColor('default'); applyTheme(); mark('data-currency-btn','INR');
                     dfPrefs._toast('Reset to defaults');
                 },
                 _toast:function(msg,success){

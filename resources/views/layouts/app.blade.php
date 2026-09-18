@@ -28,6 +28,7 @@
     lang="{{ str_replace('_', '-', app()->getLocale()) }}"
     class="h-full"
     data-sidebar="expanded"
+    data-theme="light"
 >
 <head>
     <meta charset="UTF-8">
@@ -665,11 +666,9 @@
             window.__DF_CURRENCY = { symbol: 'Rs. ', code: 'INR' };
         }
 
-        // Theme (light / dark / system)
-        var theme = p.theme || 'system';
-        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var applyDark = (theme === 'dark') || (theme === 'system' && prefersDark);
-        document.documentElement.setAttribute('data-theme', applyDark ? 'dark' : 'light');
+        // Theme — Dentfluence is light-only. Any legacy stored theme is discarded.
+        document.documentElement.setAttribute('data-theme', 'light');
+        if (p.theme) { delete p.theme; localStorage.setItem('df_prefs', JSON.stringify(p)); }
     } catch(e) {}
 })();
 </script>
