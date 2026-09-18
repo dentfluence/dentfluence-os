@@ -143,7 +143,7 @@
             formData.append('file',          files[i]);
             formData.append('stage',         this.uploadStage);
             // Both are sent, explicitly. treatment_category used to be GUESSED from
-            // the procedure string by a keyword detector, so "Scaling" produced no
+            // the procedure string by a keyword detector, so 'Scaling' produced no
             // category at all and the file never appeared under any treatment filter.
             // A dropdown the user actually chose from should not be re-derived.
             formData.append('treatment_category', this.uploadTreatment || '');
