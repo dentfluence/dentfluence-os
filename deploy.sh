@@ -34,15 +34,46 @@ fi
 
 # --- 2. Build images ---------------------------------------------------------
 echo "==> Building Docker images..."
-${COMPOSE} build
+# --no-cache is deliberate. The Dockerfile bakes the code in with `COPY . .`,
+# it is not a bind mount, so a cached layer can leave the container serving the
+# OLD code while `git log` on the host shows the new commit. That has already
+# bitten this box once (9 Jul 2026), diagnosed only because a brand-new
+# migration did not even appear as Pending.
+${COMPOSE} build --no-cache app
 
 # --- 3. Start / update containers --------------------------------------------
 echo "==> Starting containers..."
+# --force-recreate for the same reason: a plain `up -d` can silently no-op if
+# compose decides nothing changed, and then the new image is never used.
+${COMPOSE} up -d --force-recreate app queue scheduler
 ${COMPOSE} up -d
 
 # --- 4. Wait for the app container, then run migrations ----------------------
 echo "==> Waiting for app container to be ready..."
 sleep 5
+# --- 4a. Back up BEFORE touching the schema -----------------------------------
+# A migration is the most likely moment to lose data, and until 18 Sep 2026 this
+# script ran `migrate --force` with no dump taken first. The deploy now stops
+# dead if the dump is missing, too small, or not valid gzip.
+echo "==> Taking a pre-migration backup..."
+PRE_STAMP="$(date '+%Y-%m-%d_%H-%M-%S')"
+PRE_DUMP="backups/pre_deploy_${PRE_STAMP}.sql.gz"
+mkdir -p backups
+set -a; . "./${ENV_FILE}"; set +a
+${COMPOSE} exec -T mysql \
+  mysqldump -u root -p"${DB_ROOT_PASSWORD}" \
+  --single-transaction --quick --routines --triggers \
+  "${DB_DATABASE}" | gzip > "${PRE_DUMP}"
+
+PRE_SIZE=$(stat -c%s "${PRE_DUMP}" 2>/dev/null || echo 0)
+if [ "${PRE_SIZE}" -lt 1000000 ] || ! gzip -t "${PRE_DUMP}" 2>/dev/null; then
+  echo "!! DEPLOY ABORTED: the pre-migration dump is only ${PRE_SIZE} bytes or is corrupt." >&2
+  echo "   ${PRE_DUMP}" >&2
+  echo "   No migration has run. Fix the backup path before deploying." >&2
+  exit 1
+fi
+echo "    pre-migration dump OK: ${PRE_DUMP} (${PRE_SIZE} bytes)"
+
 echo "==> Running database migrations..."
 ${COMPOSE} exec -T app php artisan migrate --force
 
