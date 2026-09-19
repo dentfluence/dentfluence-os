@@ -28,6 +28,7 @@ class WalletTransaction extends Model
         'expiry_date',
         'invoice_id',
         'invoice_number',          // Denormalized — stored on debit/refund for audit trail
+        'reversal_of_transaction_id', // set on the DEBIT that cancels a mistaken credit
         'notes',
         'created_by',
     ];
@@ -60,6 +61,18 @@ class WalletTransaction extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /** The credit this row was written to cancel (set on the reversing debit). */
+    public function reversalOf(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reversal_of_transaction_id');
+    }
+
+    /** The debit that cancelled this credit, if any. */
+    public function reversal(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(self::class, 'reversal_of_transaction_id');
+    }
+
     // ── Scopes ───────────────────────────────────────────────────────────────
 
     public function scopeCredits($query)
@@ -89,6 +102,52 @@ class WalletTransaction extends Model
     public function isCredit(): bool
     {
         return $this->direction === 'credit';
+    }
+
+    /** Has this credit already been cancelled by a reversing debit? */
+    public function isReversed(): bool
+    {
+        return self::where('reversal_of_transaction_id', $this->id)->exists();
+    }
+
+    /**
+     * Sources that may be cancelled by a row-level reversal.
+     *
+     * Only entries where NO cash changed hands. A wrong number typed into Add
+     * Credit or a manual adjustment is a bookkeeping mistake and is undone in
+     * the ledger. An advance is money the patient physically handed over: that
+     * has to leave the building again through the refund path, not be erased
+     * here. Everything else (invoice debits, expiry forfeits, referral rewards,
+     * prior reversals) is written by another document and must be undone from
+     * that document, or the two records drift apart.
+     */
+    public const REVERSIBLE_SOURCES = ['admin_credit', 'campaign', 'adjustment'];
+
+    /**
+     * Why this row cannot be reversed — null when it can be.
+     * Single source of truth for both the button and the service guard.
+     */
+    public function reversalBlockedReason(): ?string
+    {
+        if ($this->direction !== 'credit') {
+            return 'Only a credit can be reversed.';
+        }
+        if ($this->funding !== 'clinic') {
+            return 'This credit is the patient\'s own money. Use Refund, not a reversal.';
+        }
+        if (! in_array($this->source, self::REVERSIBLE_SOURCES, true)) {
+            return 'This entry was written by another document and must be undone there.';
+        }
+        if ($this->isReversed()) {
+            return 'Already reversed.';
+        }
+
+        return null;
+    }
+
+    public function isReversible(): bool
+    {
+        return $this->reversalBlockedReason() === null;
     }
 
     /**

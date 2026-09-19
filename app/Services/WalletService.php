@@ -923,6 +923,91 @@ class WalletService
     }
 
     /**
+     * Cancel a wallet credit that was entered by mistake.
+     *
+     * THE RULE: a money ledger is never deleted from. The mistaken credit stays
+     * exactly where it is and a DEBIT is written against it, carrying
+     * reversal_of_transaction_id back to the original. Both rows remain visible
+     * and the reason is mandatory, so six months later the register still says
+     * what happened and who decided it.
+     *
+     * ALL OR NOTHING. A partial reversal would leave the wallet and the invoices
+     * that consumed the credit telling different stories, so if any part of this
+     * particular credit has already been spent, the whole reversal is refused
+     * and the operator is pointed at the correction that does fit. This matches
+     * reverseUnusedCredit() (A2) and refundFullPatientCredit() (A1).
+     *
+     * WHAT MAY BE REVERSED is decided by WalletTransaction::reversalBlockedReason()
+     * — clinic-funded entries where no cash moved. Money the patient actually
+     * handed over leaves through the refund path instead; erasing it here would
+     * take cash off the books that is still sitting in the drawer.
+     *
+     * THE AVAILABILITY CHECK IS PER-LOT, not per-wallet. Promotional credit is
+     * issued in lots and spent FIFO, so "the wallet still holds 5,000" does not
+     * mean THIS 2,000 is unspent. Wallet::remainingOnPromotionalLot() replays
+     * the ledger for this one row.
+     *
+     * @throws ValidationException when the entry is not reversible, or has been
+     *         spent in whole or in part.
+     */
+    public function reverseCreditEntry(
+        WalletTransaction $credit,
+        string  $reason,
+        ?int    $createdBy = null
+    ): WalletTransaction {
+        $blocked = $credit->reversalBlockedReason();
+        if ($blocked !== null) {
+            throw ValidationException::withMessages(['reversal' => $blocked]);
+        }
+
+        return DB::transaction(function () use ($credit, $reason, $createdBy) {
+            $wallet = Wallet::forPatientLocked($credit->patient_id);
+            $wallet->recalculate();
+            $wallet->refresh();
+
+            // Re-check under the lock: two operators on the same row must not
+            // both succeed, and the guard above ran before the lock was taken.
+            $credit->refresh();
+            $blocked = $credit->reversalBlockedReason();
+            if ($blocked !== null) {
+                throw ValidationException::withMessages(['reversal' => $blocked]);
+            }
+
+            $amount = (float) $credit->amount;
+
+            $available = $credit->credit_type === 'promotional'
+                ? $wallet->remainingOnPromotionalLot($credit->id)
+                : $wallet->clinicPermanentBalance();
+
+            if ($available + 0.009 < $amount) {
+                throw ValidationException::withMessages([
+                    'reversal' => 'Rs. ' . number_format($amount, 2) . ' was credited but only Rs. '
+                        . number_format(max(0, $available), 2) . ' of it is still unspent — the rest has '
+                        . 'already been used on an invoice. This entry can no longer be reversed. '
+                        . 'Correct the invoice that consumed it, or record a separate adjustment.',
+                ]);
+            }
+
+            $debit = WalletTransaction::create([
+                'wallet_id'                  => $wallet->id,
+                'patient_id'                 => $credit->patient_id,
+                'direction'                  => 'debit',
+                'credit_type'                => $credit->credit_type,
+                'funding'                    => $credit->funding,
+                'source'                     => 'credit_reversal',
+                'amount'                     => $amount,
+                'reversal_of_transaction_id' => $credit->id,
+                'notes'                      => 'Reversed entry #' . $credit->id . ' — ' . $reason,
+                'created_by'                 => $createdBy,
+            ]);
+
+            $wallet->recalculate();
+
+            return $debit;
+        });
+    }
+
+    /**
      * Get eligible promotional balance for specific treatment IDs.
      * Used in billing to show how much promo can actually be applied.
      */

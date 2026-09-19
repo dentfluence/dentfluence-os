@@ -245,7 +245,16 @@ class WalletController extends Controller
         $wallet = Wallet::forPatient($patient->id);
         $wallet->recalculate();
 
-        $transactions = $wallet->transactions()->with('invoice')->get();
+        // Eager-load the reversal link so the ledger can mark a cancelled credit
+        // without an isReversed() query per row.
+        $transactions = $wallet->transactions()->with(['invoice', 'reversal'])->get();
+
+        // Reversing a credit is the same authority as a wallet adjustment; the
+        // button is hidden when the role does not have it, and reverseCredit()
+        // enforces it again on POST.
+        $user           = auth()->user();
+        $canReverse     = $user->isAdminRole()
+            || (bool) ($user->roleModel?->billingCan(RoleBillingPermission::WALLET_ADJUSTMENT));
 
         // Calculate running balance (chronological, oldest first)
         $chronological = $transactions->sortBy('created_at')->values();
@@ -263,7 +272,7 @@ class WalletController extends Controller
         $totalUtilized  = $transactions->where('source', 'invoice_debit')->sum('amount');
 
         return view('finance.wallets.show', compact(
-            'patient', 'wallet', 'withBalance',
+            'patient', 'wallet', 'withBalance', 'canReverse',
             'totalCredits', 'totalDebits', 'totalRefunds', 'totalUtilized'
         ));
     }
@@ -458,6 +467,37 @@ class WalletController extends Controller
 
         return redirect()->route('finance.wallets.show', $patient)
             ->with('success', 'Wallet adjustment recorded for ' . $patient->name . '.');
+    }
+
+    // ── Reverse ONE mistaken credit ───────────────────────────────────────────
+    // Staff added a wallet credit by mistake. There is no delete: the credit
+    // stays and a linked debit cancels it, with a mandatory reason. The service
+    // decides what is reversible and refuses anything already spent.
+
+    public function reverseCredit(Request $request, Patient $patient, WalletTransaction $transaction)
+    {
+        abort_if($transaction->patient_id !== $patient->id, 404);
+
+        $this->ensureBilling(RoleBillingPermission::WALLET_ADJUSTMENT);
+
+        $request->validate([
+            'reason' => 'required|string|min:3|max:300',
+        ]);
+
+        $debit = $this->walletService->reverseCreditEntry(
+            credit:    $transaction,
+            reason:    $request->reason,
+            createdBy: auth()->id(),
+        );
+
+        BillingAuditLog::record('wallet_credit_reversal', $debit,
+            'Reversed credit #' . $transaction->id . ' of Rs. ' . number_format((float) $transaction->amount, 2)
+            . '. ' . $request->reason,
+            auth()->id(), 'Wallet · ' . $patient->name);
+
+        return redirect()->route('finance.wallets.show', $patient)
+            ->with('success', 'Credit of Rs. ' . number_format((float) $transaction->amount, 0)
+                . ' reversed. Both entries remain in the ledger.');
     }
 
     // ── Credit Note: printable ────────────────────────────────────────────────

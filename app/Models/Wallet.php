@@ -159,8 +159,47 @@ class Wallet extends Model
             ->orderByRaw('expiry_date IS NULL, expiry_date ASC, id ASC')
             ->get(['id', 'amount', 'expiry_date', 'created_at']);
 
+        $remaining = $this->promotionalLotRemainders();
+
+        $today     = today();
+        $available = 0.0;
+
+        foreach ($lots as $lot) {
+            if (($remaining[$lot->id] ?? 0.0) <= 0.009) {
+                continue;                                   // fully consumed
+            }
+            if ($lot->expiry_date !== null && $lot->expiry_date->lt($today)) {
+                continue;                                   // lapsed — history keeps it, the balance does not
+            }
+            $available += $remaining[$lot->id];
+        }
+
+        return round($available, 2);
+    }
+
+    /**
+     * How much of EACH promotional lot survives the ledger replay, keyed by the
+     * credit transaction's id.
+     *
+     * Extracted from availablePromotionalCredit() so a single lot can be asked
+     * "are you still unspent?" — which is the only safe question before
+     * reversing that one credit. The wallet-wide balance cannot answer it: a
+     * wallet holding 5,000 of OTHER promotional credit would happily let a
+     * 2,000 credit that was already spent be reversed as well.
+     *
+     * @return array<int, float>
+     */
+    public function promotionalLotRemainders(): array
+    {
+        $lots = $this->transactions()
+            ->where('direction', 'credit')
+            ->where('credit_type', 'promotional')
+            ->reorder()
+            ->orderByRaw('expiry_date IS NULL, expiry_date ASC, id ASC')
+            ->get(['id', 'amount', 'expiry_date', 'created_at']);
+
         if ($lots->isEmpty()) {
-            return 0.0;
+            return [];
         }
 
         $debits = $this->transactions()
@@ -205,20 +244,36 @@ class Wallet extends Model
             // balance: ignore it rather than inventing a lot to charge it to.
         }
 
-        $today     = today();
-        $available = 0.0;
+        return $remaining;
+    }
 
-        foreach ($lots as $lot) {
-            if ($remaining[$lot->id] <= 0.009) {
-                continue;                                   // fully consumed
-            }
-            if ($lot->expiry_date !== null && $lot->expiry_date->lt($today)) {
-                continue;                                   // lapsed — history keeps it, the balance does not
-            }
-            $available += $remaining[$lot->id];
-        }
+    /**
+     * What is left of ONE promotional credit lot. 0.0 when the id is not a
+     * promotional credit row on this wallet.
+     */
+    public function remainingOnPromotionalLot(int $transactionId): float
+    {
+        return round($this->promotionalLotRemainders()[$transactionId] ?? 0.0, 2);
+    }
 
-        return round($available, 2);
+    /**
+     * Clinic-funded PERMANENT balance — concession money that does not expire.
+     *
+     * Deliberately not balance_permanent: that column sums credit_type
+     * 'permanent' across BOTH fundings, so it includes the patient's own
+     * cash-backed credit. Reversing a clinic gift must never be allowed to eat
+     * into money the patient actually handed over.
+     */
+    public function clinicPermanentBalance(): float
+    {
+        $bal = $this->transactions()
+            ->where('credit_type', 'permanent')
+            ->where('funding', 'clinic')
+            ->reorder()
+            ->selectRaw('SUM(CASE WHEN direction="credit" THEN amount ELSE -amount END) as bal')
+            ->value('bal') ?? 0;
+
+        return round((float) $bal, 2);
     }
 
     /**

@@ -181,6 +181,15 @@
                                            target="_blank"
                                            class="text-xs text-[#6a0f70] hover:underline mt-0.5 inline-block">Credit Note ↗</a>
                                     @endif
+                                    {{-- Row-level correction. There is no delete: reversing writes a
+                                         linked debit and both rows stay in the ledger. --}}
+                                    @if($tx->reversal)
+                                        <div class="text-xs text-gray-400 mt-0.5">Reversed</div>
+                                    @elseif($canReverse && $tx->isReversible())
+                                        <button type="button"
+                                                onclick="openReverseModal({{ $tx->id }}, '{{ number_format((float) $tx->amount, 0) }}')"
+                                                class="text-xs text-red-500 hover:underline mt-0.5 inline-block">Reverse</button>
+                                    @endif
                                 @else
                                     <span class="text-gray-300">—</span>
                                 @endif
@@ -188,6 +197,9 @@
                             <td class="px-4 py-3 text-right align-top">
                                 @if($tx->direction === 'debit')
                                     <div class="font-semibold text-red-500">−Rs. {{ number_format($tx->amount, 0) }}</div>
+                                    @if($tx->reversal_of_transaction_id)
+                                        <div class="text-xs text-gray-400 mt-0.5">cancels #{{ $tx->reversal_of_transaction_id }}</div>
+                                    @endif
                                 @else
                                     <span class="text-gray-300">—</span>
                                 @endif
@@ -363,6 +375,46 @@
             </form>
         </div>
     </div>
+
+    {{-- ── Reverse Credit Modal ────────────────────────────────── --}}
+    {{-- One modal, reused: openReverseModal() points the form at the row. --}}
+    <div id="reverseModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-700">Reverse Credit</h3>
+                <button onclick="document.getElementById('reverseModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+            <p class="text-xs text-gray-500">
+                Cancels <strong id="reverseAmountLabel" class="text-gray-700"></strong> that was credited by mistake.
+                Nothing is deleted — the original entry stays and a matching debit is added beside it.
+                Refused if any part of this credit has already been used on an invoice.
+            </p>
+            <form method="POST" id="reverseForm" action="" class="space-y-3">
+                @csrf
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Reason <span class="text-red-500">*</span></label>
+                    <input type="text" name="reason" required minlength="3"
+                           placeholder="e.g. Entered on the wrong patient"
+                           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300">
+                </div>
+                <div class="flex gap-3 pt-1">
+                    <button type="submit" class="flex-1 py-2.5 bg-red-600 text-white font-medium text-sm rounded-lg hover:bg-red-700">Reverse Credit</button>
+                    <button type="button" onclick="document.getElementById('reverseModal').classList.add('hidden')" class="flex-1 py-2.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const REVERSE_URL = "{{ route('finance.wallets.reverse-credit', [$patient, '__TX__']) }}";
+
+        function openReverseModal(txId, amountLabel) {
+            document.getElementById('reverseForm').action = REVERSE_URL.replace('__TX__', txId);
+            document.getElementById('reverseAmountLabel').textContent = 'Rs. ' + amountLabel;
+            document.querySelector('#reverseForm input[name=reason]').value = '';
+            document.getElementById('reverseModal').classList.remove('hidden');
+        }
+    </script>
 
 </div>
 @endsection

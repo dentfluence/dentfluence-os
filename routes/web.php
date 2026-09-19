@@ -1075,6 +1075,9 @@ Route::middleware('auth')->group(function () {
             Route::post('/receive-advance', [\App\Http\Controllers\Finance\WalletController::class, 'receiveAdvance'])->name('receive-advance');
             Route::post('/refund',          [\App\Http\Controllers\Finance\WalletController::class, 'refund'])->name('refund');
             Route::post('/adjust',          [\App\Http\Controllers\Finance\WalletController::class, 'adjust'])->name('adjust');
+            // Row-level correction: cancel ONE mistaken credit. Never a delete.
+            Route::post('/transactions/{transaction}/reverse',
+                [\App\Http\Controllers\Finance\WalletController::class, 'reverseCredit'])->name('reverse-credit');
         });
 
         // Wallet Campaigns
