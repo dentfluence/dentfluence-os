@@ -69,7 +69,8 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs text-gray-500 mb-1">Patient <span class="text-red-500">*</span></label>
-                            <select name="patient_id" required
+                            <select name="patient_id" id="patientSelect" required
+                                    onchange="refreshMembershipForDate()"
                                     class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 <option value="">— Select patient —</option>
                                 @foreach($patients as $p)
@@ -82,7 +83,12 @@
                         </div>
                         <div>
                             <label class="block text-xs text-gray-500 mb-1">Invoice Date <span class="text-red-500">*</span></label>
-                            <input type="date" name="invoice_date" required
+                            {{-- Membership benefits are judged on THIS date, so changing it
+                                 re-asks the server what was in force then. max=today: an
+                                 invoice can no longer be dated into the future. --}}
+                            <input type="date" name="invoice_date" id="invoiceDate" required
+                                   max="{{ now()->format('Y-m-d') }}"
+                                   onchange="refreshMembershipForDate()"
                                    value="{{ old('invoice_date', $invoice?->invoice_date?->format('Y-m-d') ?? now()->format('Y-m-d')) }}"
                                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
@@ -238,28 +244,35 @@
             <div class="space-y-4">
 
                 {{-- AOCP Membership --}}
-                <div class="bg-white border {{ $memActive ? 'border-purple-200' : 'border-gray-200' }} rounded-xl p-4 space-y-2">
+                {{-- Both states are always in the DOM; refreshMembershipForDate()
+                     toggles them when the patient or the invoice date changes. --}}
+                <div id="membershipPanel"
+                     class="bg-white border {{ $memActive ? 'border-purple-200' : 'border-gray-200' }} rounded-xl p-4 space-y-2">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-xs font-semibold {{ $memActive ? 'text-purple-700' : 'text-gray-400' }} uppercase tracking-wide">
+                        <h3 id="membershipHeading"
+                            class="text-xs font-semibold {{ $memActive ? 'text-purple-700' : 'text-gray-400' }} uppercase tracking-wide">
                             AOCP Membership
                         </h3>
-                        @if($memActive)
-                            <span class="text-[10px] font-semibold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
-                                Active · {{ $memInfo['days_remaining'] }}d left
-                            </span>
-                        @endif
+                        <span id="membershipBadge"
+                              class="text-[10px] font-semibold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full {{ $memActive ? '' : 'hidden' }}">
+                            @if($memActive)Active · {{ $memInfo['days_remaining'] }}d left@endif
+                        </span>
                     </div>
                     <input type="hidden" name="membership_discount" id="membershipDiscount" value="0">
-                    <input type="hidden" name="membership_id" value="{{ $memActive ? $memInfo['membership_id'] : '' }}">
-                    @if($memActive)
+                    <input type="hidden" name="membership_id" id="membershipIdInput"
+                           value="{{ $memActive ? $memInfo['membership_id'] : '' }}">
+
+                    <div id="membershipActiveBlock" class="{{ $memActive ? '' : 'hidden' }} space-y-1">
                         <div class="flex items-center justify-between">
-                            <p class="text-xs text-purple-600">{{ $memInfo['plan_name'] }}</p>
+                            <p class="text-xs text-purple-600" id="membershipPlanName">{{ $memActive ? $memInfo['plan_name'] : '' }}</p>
                             <p class="text-sm font-bold text-purple-700" id="membershipDiscAmt">−Rs. 0.00</p>
                         </div>
                         <p class="text-[11px] text-purple-400" id="membershipSummaryEl">Auto-calculated as you add items</p>
-                    @else
-                        <p class="text-[11px] text-gray-400">No active membership for this patient.</p>
-                    @endif
+                    </div>
+
+                    <p id="membershipInactiveBlock" class="text-[11px] text-gray-400 {{ $memActive ? 'hidden' : '' }}">
+                        No membership in force on the selected invoice date.
+                    </p>
                 </div>
 
                 {{-- Coupon Code --}}
@@ -658,8 +671,61 @@ document.addEventListener('keydown', e => {
 // entirely — by DOMContentLoaded every other script has already run.
 document.addEventListener('DOMContentLoaded', buildToothArches);
 
-// Membership benefit config from server — used for client-side recalc
-const memBenefits = @json($memActive ? ($memInfo['benefit_config'] ?? null) : null);
+// Membership benefit config from server, used for client-side recalc.
+// NOT const: the invoice DATE decides which membership applies, so this is
+// re-fetched whenever the patient or the date changes. Without that the form
+// previews today's benefits on a backdated bill while the server saves a
+// different (correct) figure.
+let memBenefits = @json($memActive ? ($memInfo['benefit_config'] ?? null) : null);
+
+async function refreshMembershipForDate() {
+    const patientId = document.getElementById('patientSelect')?.value || '';
+    const asOf      = document.getElementById('invoiceDate')?.value || '';
+
+    const setState = (active, planName, badge) => {
+        document.getElementById('membershipActiveBlock')?.classList.toggle('hidden', !active);
+        document.getElementById('membershipInactiveBlock')?.classList.toggle('hidden', active);
+        document.getElementById('membershipBadge')?.classList.toggle('hidden', !active);
+        const panel = document.getElementById('membershipPanel');
+        panel?.classList.toggle('border-purple-200', active);
+        panel?.classList.toggle('border-gray-200', !active);
+        const head = document.getElementById('membershipHeading');
+        head?.classList.toggle('text-purple-700', active);
+        head?.classList.toggle('text-gray-400', !active);
+        const nameEl = document.getElementById('membershipPlanName');
+        if (nameEl) nameEl.textContent = planName || '';
+        const badgeEl = document.getElementById('membershipBadge');
+        if (badgeEl) badgeEl.textContent = badge || '';
+    };
+
+    if (!patientId) {
+        memBenefits = null;
+        document.getElementById('membershipIdInput').value = '';
+        setState(false, '', '');
+        recalcTotals();
+        return;
+    }
+
+    try {
+        const res = await fetch('{{ route('billing.membership.benefits') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({ patient_id: patientId, as_of: asOf || null }),
+        });
+        if (!res.ok) return; // keep the last known state rather than guessing
+        const data = await res.json();
+        memBenefits = data.active ? (data.benefit_config || null) : null;
+        document.getElementById('membershipIdInput').value = data.active ? (data.membership_id || '') : '';
+        setState(!!data.active, data.plan_name, data.active ? ('Active \u00b7 ' + data.days_remaining + 'd left') : '');
+    } catch (e) {
+        // Network hiccup: keep current state. The server recomputes on save anyway.
+    }
+    recalcTotals();
+}
 
 // Build free-item trigger strings from config
 function getFreeTriggers() {

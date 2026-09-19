@@ -27,15 +27,34 @@ use Illuminate\Support\Facades\Auth;
 class MembershipBenefitService
 {
     /**
-     * Get active membership for patient (or null).
+     * Get the membership that was in force for this patient ON A GIVEN DATE.
+     *
+     * $asOf is the business date the benefit is being judged against — for an
+     * invoice that is invoice_date, NOT today. Passing null keeps the legacy
+     * "as of today" behaviour.
+     *
+     * WHY the status check is dropped for a past date: enroll() marks a
+     * superseded enrollment 'cancelled' and expireStale() marks a lapsed one
+     * 'expired'. Both of those were perfectly valid on their own dates, and the
+     * table records no cancellation date, so status cannot be trusted
+     * retrospectively. For a past date the only honest test is coverage:
+     * start_date <= $asOf <= end_date. For today, status still rules.
      */
-    public static function getActive(int $patientId): ?FinancePatientMembership
+    public static function getActive(int $patientId, ?string $asOf = null): ?FinancePatientMembership
     {
-        return FinancePatientMembership::with('plan')
-            ->where('patient_id', $patientId)
-            ->active()
-            ->latest('start_date')
-            ->first();
+        $date = $asOf ? Carbon::parse($asOf)->startOfDay() : Carbon::today();
+
+        $query = FinancePatientMembership::with('plan')
+            ->where('patient_id', $patientId);
+
+        if ($date->isSameDay(Carbon::today())) {
+            $query->active();
+        } else {
+            $query->whereDate('start_date', '<=', $date)
+                  ->whereDate('end_date',   '>=', $date);
+        }
+
+        return $query->latest('start_date')->first();
     }
 
     /**
@@ -56,8 +75,10 @@ class MembershipBenefitService
      *   days_remaining: int,
      * }
      */
-    public static function forPatient(int $patientId, array $lineItems = [], float $subtotal = 0): array
+    public static function forPatient(int $patientId, array $lineItems = [], float $subtotal = 0, ?string $asOf = null): array
     {
+        $asOfDate = $asOf ? Carbon::parse($asOf)->startOfDay() : Carbon::today();
+
         $empty = [
             'active'         => false,
             'membership_id'  => null,
@@ -67,10 +88,11 @@ class MembershipBenefitService
             'pct_discount'   => 0,
             'summary'        => '',
             'days_remaining' => 0,
+            'as_of'          => $asOfDate->toDateString(),
             'benefit_config' => null, // raw benefit list for JS client-side recalc
         ];
 
-        $membership = self::getActive($patientId);
+        $membership = self::getActive($patientId, $asOfDate->toDateString());
         if (!$membership || !$membership->plan) {
             return $empty;
         }
@@ -138,7 +160,8 @@ class MembershipBenefitService
             'free_items'     => array_unique($freeItems),
             'pct_discount'   => $pct,
             'summary'        => $summary,
-            'days_remaining' => $membership->days_remaining,
+            'days_remaining' => max(0, (int) $asOfDate->diffInDays($membership->end_date, false)),
+            'as_of'          => $asOfDate->toDateString(),
             'benefit_config' => $benefits, // raw for JS recalc when items change
         ];
     }
@@ -357,7 +380,8 @@ class MembershipBenefitService
         string $benefitLabel,
         float $amountSaved = 0,
         ?int $invoiceId = null,
-        ?string $notes = null
+        ?string $notes = null,
+        ?string $availedAt = null
     ): MembershipBenefitLog {
         return MembershipBenefitLog::create([
             'clinic_id'     => 1,
@@ -369,7 +393,9 @@ class MembershipBenefitService
             'amount_saved'  => $amountSaved,
             'notes'         => $notes,
             'created_by'    => Auth::id(),
-            'availed_at'    => now(),
+            // The date the benefit was ACTUALLY availed (the invoice date),
+            // not the moment the row happened to be written.
+            'availed_at'    => $availedAt ? Carbon::parse($availedAt)->startOfDay() : now(),
         ]);
     }
 
@@ -380,11 +406,18 @@ class MembershipBenefitService
      * @param array    $benefitResult  Return value of self::forPatient()
      * @param int|null $invoiceId
      */
-    public static function logFromResult(array $benefitResult, ?int $invoiceId = null): void
-    {
+    public static function logFromResult(
+        array $benefitResult,
+        ?int $invoiceId = null,
+        ?string $availedAt = null
+    ): void {
         if (!$benefitResult['active'] || !$benefitResult['membership_id']) {
             return;
         }
+
+        // Default to the date the benefit was judged against, so a backdated
+        // invoice logs the benefit on ITS date and not on today's.
+        $availedAt = $availedAt ?? ($benefitResult['as_of'] ?? null);
 
         $membershipId = $benefitResult['membership_id'];
         $patientId    = FinancePatientMembership::find($membershipId)?->patient_id;
@@ -407,6 +440,7 @@ class MembershipBenefitService
                 amountSaved:  0, // individual item amount not tracked here
                 invoiceId:    $invoiceId,
                 notes:        $itemName,
+                availedAt:    $availedAt,
             );
         }
 
@@ -419,6 +453,7 @@ class MembershipBenefitService
                 benefitLabel: $benefitResult['pct_discount'] . '% discount — Rs. ' . number_format($benefitResult['discount'], 0) . ' saved',
                 amountSaved:  $benefitResult['discount'],
                 invoiceId:    $invoiceId,
+                availedAt:    $availedAt,
             );
         }
     }

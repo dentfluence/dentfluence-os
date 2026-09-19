@@ -339,7 +339,7 @@ class BillingController extends Controller
     {
         $request->validate([
             'patient_id'            => 'required|exists:patients,id',
-            'invoice_date'          => 'required|date',
+            'invoice_date'          => 'required|date|before_or_equal:today',
             'due_date'              => 'nullable|date|after_or_equal:invoice_date',
             'discount_pct'          => 'nullable|numeric|min:0|max:100',
             'notes'                 => 'nullable|string|max:1000',
@@ -479,7 +479,15 @@ class BillingController extends Controller
                     'qty'    => (int) $it->qty,
                 ])->all();
                 $eligibleSubtotal = (float) $eligibleItems->sum(fn ($it) => (float) $it->unit_price * (int) $it->qty);
-                $benefit = MembershipBenefitService::forPatient((int) $request->patient_id, $lineItems, $eligibleSubtotal);
+                // AS-OF: benefits are judged on the invoice's own date, never on
+                // today. A bill dated 11 Aug must not pick up a membership that
+                // only started on 13 Aug (and vice versa).
+                $benefit = MembershipBenefitService::forPatient(
+                    (int) $request->patient_id,
+                    $lineItems,
+                    $eligibleSubtotal,
+                    (string) $invoice->invoice_date->toDateString()
+                );
                 if (($benefit['active'] ?? false) && ($benefit['discount'] ?? 0) > 0) {
                     $invoice->update([
                         'membership_id'       => $benefit['membership_id'],
@@ -607,7 +615,7 @@ class BillingController extends Controller
 
         $request->validate([
             'patient_id'          => 'required|exists:patients,id',
-            'invoice_date'        => 'required|date',
+            'invoice_date'        => 'required|date|before_or_equal:today',
             'due_date'            => 'nullable|date|after_or_equal:invoice_date',
             'discount_pct'        => 'nullable|numeric|min:0|max:100',
             'notes'               => 'nullable|string|max:1000',
@@ -2165,7 +2173,12 @@ class BillingController extends Controller
 
     public function membershipBenefits(Request $request)
     {
-        $request->validate(['patient_id' => 'required|integer|exists:patients,id']);
+        $request->validate([
+            'patient_id' => 'required|integer|exists:patients,id',
+            // The invoice_date currently on the form. Benefits are previewed
+            // against THIS date so the staff see what will actually be saved.
+            'as_of'      => 'nullable|date|before_or_equal:today',
+        ]);
 
         // Parse line items from request if provided (for accurate free-item matching).
         // FMCG/retail product rows (carrying inventory_item_id) never receive AOCP
@@ -2192,7 +2205,8 @@ class BillingController extends Controller
         $result = MembershipBenefitService::forPatient(
             (int) $request->patient_id,
             $lineItems,
-            $eligibleSubtotal
+            $eligibleSubtotal,
+            $request->input('as_of')
         );
 
         return response()->json($result);

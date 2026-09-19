@@ -560,7 +560,7 @@ class BillingController extends ApiController
     {
         $request->validate([
             'patient_id'           => 'required|integer|exists:patients,id',
-            'invoice_date'         => 'required|date',
+            'invoice_date'         => 'required|date|before_or_equal:today',
             'due_date'             => 'nullable|date|after_or_equal:invoice_date',
             'discount_pct'         => 'nullable|numeric|min:0|max:100',
             'notes'                => 'nullable|string|max:1000',
@@ -674,7 +674,13 @@ class BillingController extends ApiController
                     'qty'    => (int) $it->qty,
                 ])->all();
                 $eligibleSubtotal = (float) $eligibleItems->sum(fn ($it) => (float) $it->unit_price * (int) $it->qty);
-                $membershipBenefit = MembershipBenefitService::forPatient($patient->id, $lineItems, $eligibleSubtotal);
+                // AS-OF: judged on the invoice's own date, never on today.
+                $membershipBenefit = MembershipBenefitService::forPatient(
+                    $patient->id,
+                    $lineItems,
+                    $eligibleSubtotal,
+                    (string) $invoice->invoice_date->toDateString()
+                );
                 if (($membershipBenefit['active'] ?? false) && ($membershipBenefit['discount'] ?? 0) > 0) {
                     $invoice->update([
                         'membership_id'       => $membershipBenefit['membership_id'],
@@ -747,7 +753,11 @@ class BillingController extends ApiController
                 );
             }
             if ($membershipBenefit) {
-                MembershipBenefitService::logFromResult($membershipBenefit, $invoice->id);
+                MembershipBenefitService::logFromResult(
+                    $membershipBenefit,
+                    $invoice->id,
+                    (string) $invoice->invoice_date->toDateString()
+                );
             }
 
             $invoiceId = $invoice->id;
@@ -794,6 +804,9 @@ class BillingController extends ApiController
             'items.*.qty'                => 'nullable|integer|min:1',
             'items.*.inventory_item_id'  => 'nullable|integer',
             'subtotal'                   => 'nullable|numeric|min:0',
+            // The invoice_date the caller is composing against. Benefits are
+            // previewed on THIS date so the preview matches what store() saves.
+            'as_of'                      => 'nullable|date|before_or_equal:today',
         ]);
 
         // FMCG/retail product rows (carry an inventory_item_id) never receive AOCP
@@ -811,7 +824,12 @@ class BillingController extends ApiController
             ? (float) $eligibleRows->sum(fn ($i) => (float) $i['amount'] * (int) ($i['qty'] ?? 1))
             : (float) ($data['subtotal'] ?? 0);
 
-        $benefit = MembershipBenefitService::forPatient($pt->id, $lineItems, $eligibleSubtotal);
+        $benefit = MembershipBenefitService::forPatient(
+            $pt->id,
+            $lineItems,
+            $eligibleSubtotal,
+            $data['as_of'] ?? null
+        );
 
         return $this->success($benefit, '');
     }
