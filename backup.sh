@@ -28,6 +28,14 @@ set -a; . "./${ENV_FILE}"; set +a
 
 mkdir -p "${BACKUP_DIR}"
 
+# Raise alarms through the one notifier, so a failed backup is not just a line
+# in a log nobody reads. Degrades to logging if ops/alerts.sh is absent.
+if [ -f ./ops/alerts.sh ]; then . ./ops/alerts.sh; else notify () { :; }; fi
+
+# Anything that kills this script mid-run - a full disk, a dead mysql, a
+# Ctrl+C - must still raise the alarm, not fail silently.
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then notify CRIT backup "backup aborted (exit ${rc}) at ${STAMP}"; fi' EXIT
+
 echo "==> Backup starting (${STAMP})"
 
 # --- 1. Database dump --------------------------------------------------------
@@ -74,6 +82,7 @@ verify_gz "${DB_FILE}"    1000000 "database dump" || RC=1
 verify_gz "${FILES_FILE}"  100000 "uploaded files" || RC=1
 if [ "$RC" -ne 0 ]; then
   echo "==> BACKUP FAILED (${STAMP}). Old backups were NOT pruned." >&2
+  notify CRIT backup "backup ${STAMP} failed verification - see backups/backup.log"
   exit 1
 fi
 
@@ -101,6 +110,7 @@ if rclone listremotes 2>/dev/null | grep -q '^offsite:'; then
     remote_size=$(rclone size "offsite:daily/${base}" --json 2>/dev/null | sed 's/.*"bytes":\([0-9]*\).*/\1/')
     if [ "$remote_size" != "$local_size" ]; then
       echo "!! OFF-SITE FAILED: ${base} is ${local_size} bytes here but ${remote_size:-missing} off-site" >&2
+      notify CRIT backup_offsite "${base} is ${local_size} bytes locally but ${remote_size:-missing} off-site"
       exit 1
     fi
     echo "    off-site verified ${base}: ${remote_size} bytes"
@@ -119,8 +129,12 @@ if rclone listremotes 2>/dev/null | grep -q '^offsite:'; then
 else
   echo "!! OFF-SITE SKIPPED: no 'offsite' rclone remote is configured." >&2
   echo "   The only copies of this backup are on the VPS this backup protects." >&2
+  notify CRIT backup_offsite "no offsite remote configured - the only copy is on the VPS it protects"
   exit 1
 fi
+
+notify OK backup "backup ${STAMP} complete and verified off-site"
+notify OK backup_offsite "off-site copy verified"
 
 echo "==> Backup complete (${STAMP})."
 echo "    Local copy in ${BACKUP_DIR}/ and an encrypted copy off-site."
