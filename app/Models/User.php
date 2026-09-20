@@ -447,41 +447,21 @@ class User extends Authenticatable
         return $this->appointmentScope() === self::APPT_SCOPE_OWN_DEFAULT;
     }
 
-    /**
-     * Check if user is front desk staff.
+    /*
+     * 2.6B — isFrontDesk(), isAssistant(), isAccounts() and isClinical() were
+     * REMOVED on 20 Sep 2026, along with scopeWithRole() below.
+     *
+     * All five compared the legacy users.role string, and all five had ZERO
+     * callers anywhere in app/, tests/, resources/, routes/ or database/ —
+     * measured, not assumed. They were not a bug waiting to happen so much as
+     * an invitation: a plausible-looking $user->isFrontDesk() sitting on the
+     * model is the obvious thing to reach for, and it would have answered from
+     * the staff-type label rather than the assigned role.
+     *
+     * If one is needed again, ask the grid: $user->canAccess('<module>',
+     * '<action>') for a permission, or $user->hasRole('<slug>') for the role
+     * itself. Never reintroduce a hardcoded job title.
      */
-    public function isFrontDesk(): bool
-    {
-        return $this->role === self::ROLE_FRONT_DESK;
-    }
-
-    /**
-     * Check if user is dental assistant.
-     */
-    public function isAssistant(): bool
-    {
-        return $this->role === self::ROLE_ASSISTANT;
-    }
-
-    /**
-     * Check if user is accounts staff.
-     */
-    public function isAccounts(): bool
-    {
-        return $this->role === self::ROLE_ACCOUNTS;
-    }
-
-    /**
-     * Check if user can access clinical screens.
-     * Doctors and admins only.
-     */
-    public function isClinical(): bool
-    {
-        return in_array($this->role, [
-            self::ROLE_ADMIN,
-            self::ROLE_DOCTOR,
-        ]);
-    }
 
     /**
      * Get display name for role.
@@ -551,14 +531,6 @@ class User extends Authenticatable
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
-    }
-
-    /**
-     * Scope: filter by role.
-     */
-    public function scopeWithRole($query, string $role)
-    {
-        return $query->where('role', $role);
     }
 
     /**
