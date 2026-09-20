@@ -267,6 +267,9 @@ class FinanceReportsController extends Controller
         $advances = WalletTransaction::with('patient')
             ->where('source', 'advance')
             ->where('direction', 'credit')
+            // An advance marked a wrong entry never happened — no cash arrived,
+            // so it must not be reported as collected on its original day.
+            ->notReversed()
             ->whereBetween('created_at', [$from, $to])
             ->orderByDesc('created_at')->get();
 
@@ -336,6 +339,7 @@ class FinanceReportsController extends Controller
 
         // Advance collections — money taken into wallet with no invoice.
         $advanceByDay = WalletTransaction::where('source', 'advance')->where('direction', 'credit')
+            ->notReversed()
             ->whereBetween('created_at', [$from, $to])
             ->selectRaw('DATE(created_at) as d, SUM(amount) as total')
             ->groupBy('d')->pluck('total', 'd');

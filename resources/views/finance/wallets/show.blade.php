@@ -183,12 +183,24 @@
                                     @endif
                                     {{-- Row-level correction. There is no delete: reversing writes a
                                          linked debit and both rows stay in the ledger. --}}
+                                    {{-- A missing button teaches staff the feature does not exist,
+                                         so a row that cannot be reversed says why instead of hiding. --}}
                                     @if($tx->reversal)
                                         <div class="text-xs text-gray-400 mt-0.5">Reversed</div>
                                     @elseif($canReverse && $tx->isReversible())
                                         <button type="button"
                                                 onclick="openReverseModal({{ $tx->id }}, '{{ number_format((float) $tx->amount, 0) }}')"
                                                 class="text-xs text-red-500 hover:underline mt-0.5 inline-block">Reverse</button>
+                                    @elseif($canMarkWrongEntry && $tx->source === 'advance')
+                                        {{-- One action. Wallet, cashbook and receipt are reversed
+                                             together by AdvanceReversalService; the operator never
+                                             has to go and find the receipt. --}}
+                                        <button type="button"
+                                                onclick="openWrongEntryModal({{ $tx->id }}, '{{ number_format((float) $tx->amount, 0) }}', '{{ $tx->advanceReceipt?->receipt_number }}')"
+                                                class="text-xs text-red-500 hover:underline mt-0.5 inline-block">Wrong entry</button>
+                                    @elseif($canReverse)
+                                        <div class="text-xs text-gray-300 mt-0.5 cursor-help"
+                                             title="{{ $tx->reversalBlockedReason() }}">Not reversible</div>
                                     @endif
                                 @else
                                     <span class="text-gray-300">—</span>
@@ -405,7 +417,48 @@
         </div>
     </div>
 
+    {{-- Wrong-entry modal: an advance that never actually happened. --}}
+    <div id="wrongEntryModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-700">Mark as wrong entry</h3>
+                <button onclick="document.getElementById('wrongEntryModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+            <p class="text-xs text-gray-500">
+                Use this when the money never actually came in — a duplicate, or the wrong patient.
+                <strong id="wrongEntryAmountLabel" class="text-gray-700"></strong> leaves the wallet,
+                the cashbook entry is reversed<span id="wrongEntryReceiptLabel"></span>.
+                <span class="text-gray-400">No refund is issued, because no cash ever moved.</span>
+                If the money really was received, use Refund instead.
+            </p>
+            <form method="POST" id="wrongEntryForm" action="" class="space-y-3">
+                @csrf
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Reason <span class="text-red-500">*</span></label>
+                    <input type="text" name="reason" required minlength="5"
+                           placeholder="e.g. Entered on the wrong patient"
+                           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300">
+                </div>
+                <div class="flex gap-3 pt-1">
+                    <button type="submit" class="flex-1 py-2.5 bg-red-600 text-white font-medium text-sm rounded-lg hover:bg-red-700">Mark as wrong entry</button>
+                    <button type="button" onclick="document.getElementById('wrongEntryModal').classList.add('hidden')" class="flex-1 py-2.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
+        const WRONG_ENTRY_URL = "{{ route('finance.wallets.wrong-entry', [$patient, '__TX__']) }}";
+
+        function openWrongEntryModal(txId, amountLabel, receiptNumber) {
+            document.getElementById('wrongEntryForm').action = WRONG_ENTRY_URL.replace('__TX__', txId);
+            document.getElementById('wrongEntryAmountLabel').textContent = 'Rs. ' + amountLabel;
+            document.getElementById('wrongEntryReceiptLabel').textContent =
+                receiptNumber ? ', and receipt ' + receiptNumber + ' is voided' : '';
+            document.querySelector('#wrongEntryForm input[name=reason]').value = '';
+            document.getElementById('wrongEntryModal').classList.remove('hidden');
+        }
+
         const REVERSE_URL = "{{ route('finance.wallets.reverse-credit', [$patient, '__TX__']) }}";
 
         function openReverseModal(txId, amountLabel) {

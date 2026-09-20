@@ -21,6 +21,7 @@ class Receipt extends Model
         'receipt_kind',   // U8: 'payment' (settles an invoice) | 'advance' (money in, no invoice)
         'invoice_id',
         'invoice_payment_id',
+        'wallet_transaction_id',   // advance receipts: the wallet credit this paid into
         'patient_id',
         'amount',
         'payment_mode',

@@ -184,6 +184,49 @@ class WalletCreditReversalTest extends TestCase
         $this->wallet()->reverseCreditEntry($advance, 'Should be refused');
     }
 
+    public function test_F2_an_expired_promotional_credit_is_not_reversible(): void
+    {
+        // Expiry already removed it from the balance. Reversing it now would
+        // post a debit against money the wallet no longer holds.
+        $patient = $this->patient();
+
+        $credit = $this->wallet()->credit(
+            patientId: $patient->id, amount: 1000, creditType: 'promotional',
+            expiryDate: now()->addDay()->toDateString(), funding: WalletService::FUNDING_CLINIC,
+        );
+
+        // Age it past its expiry.
+        $credit->forceFill(['expiry_date' => now()->subDay()->toDateString()])->save();
+
+        $this->assertFalse($credit->fresh()->isReversible());
+
+        $this->expectException(ValidationException::class);
+        $this->wallet()->reverseCreditEntry($credit->fresh(), 'Should be refused');
+    }
+
+    public function test_E2_an_advance_links_to_its_receipt_so_the_ledger_can_point_at_it(): void
+    {
+        // A mistaken advance is undone by voiding its ADV- receipt, which
+        // reverses the wallet credit, the cashbook entry and the receipt
+        // together. The ledger can only send someone there if the link exists.
+        $patient = $this->patient();
+
+        $tx = $this->wallet()->receiveAdvance(
+            patient:     $patient,
+            amount:      3000,
+            paymentMode: 'cash',
+            paymentDate: now()->toDateString(),
+            createdBy:   User::factory()->create()->id,
+        );
+
+        $receipt = $tx->fresh()->advanceReceipt;
+
+        $this->assertNotNull($receipt, 'The advance receipt must be linked to its wallet credit.');
+        $this->assertSame('advance', $receipt->receipt_kind);
+        $this->assertSame(3000.0, (float) $receipt->amount);
+        $this->assertNull($receipt->invoice_id);
+    }
+
     public function test_F_an_invoice_debit_row_is_not_reversible_from_the_ledger(): void
     {
         $patient = $this->patient();

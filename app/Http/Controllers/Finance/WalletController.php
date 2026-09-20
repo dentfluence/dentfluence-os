@@ -247,7 +247,7 @@ class WalletController extends Controller
 
         // Eager-load the reversal link so the ledger can mark a cancelled credit
         // without an isReversed() query per row.
-        $transactions = $wallet->transactions()->with(['invoice', 'reversal'])->get();
+        $transactions = $wallet->transactions()->with(['invoice', 'reversal', 'advanceReceipt'])->get();
 
         // Reversing a credit is the same authority as a wallet adjustment; the
         // button is hidden when the role does not have it, and reverseCredit()
@@ -255,6 +255,9 @@ class WalletController extends Controller
         $user           = auth()->user();
         $canReverse     = $user->isAdminRole()
             || (bool) ($user->roleModel?->billingCan(RoleBillingPermission::WALLET_ADJUSTMENT));
+        // Marking a received payment as never-received moves the cashbook, so
+        // it is admin-only regardless of wallet permissions.
+        $canMarkWrongEntry = $user->isAdminRole();
 
         // Calculate running balance (chronological, oldest first)
         $chronological = $transactions->sortBy('created_at')->values();
@@ -272,7 +275,7 @@ class WalletController extends Controller
         $totalUtilized  = $transactions->where('source', 'invoice_debit')->sum('amount');
 
         return view('finance.wallets.show', compact(
-            'patient', 'wallet', 'withBalance', 'canReverse',
+            'patient', 'wallet', 'withBalance', 'canReverse', 'canMarkWrongEntry',
             'totalCredits', 'totalDebits', 'totalRefunds', 'totalUtilized'
         ));
     }
@@ -498,6 +501,38 @@ class WalletController extends Controller
         return redirect()->route('finance.wallets.show', $patient)
             ->with('success', 'Credit of Rs. ' . number_format((float) $transaction->amount, 0)
                 . ' reversed. Both entries remain in the ledger.');
+    }
+
+    // ── Advance entered by mistake ────────────────────────────────────────────
+    // One action for the operator; wallet, cashbook and receipt are reversed
+    // together underneath. Admin only — this touches the cashbook.
+
+    public function markWrongEntry(Request $request, Patient $patient, WalletTransaction $transaction)
+    {
+        abort_if($transaction->patient_id !== $patient->id, 404);
+
+        if (! auth()->user()->isAdminRole()) {
+            abort(403, 'Only admins can mark a received payment as a wrong entry.');
+        }
+
+        $request->validate([
+            'reason' => 'required|string|min:5|max:300',
+        ]);
+
+        $result = app(\App\Services\Billing\AdvanceReversalService::class)->reverse(
+            advance: $transaction,
+            reason:  $request->reason,
+            userId:  auth()->id(),
+        );
+
+        $msg = 'Rs. ' . number_format($result['reversed'], 0) . ' removed from ' . $patient->name
+             . "'s wallet — marked as a wrong entry.";
+        if ($result['receipt']) {
+            $msg .= ' Receipt ' . $result['receipt']->receipt_number . ' is now void.';
+        }
+        $msg .= ' No refund was issued; the cashbook entry was reversed too.';
+
+        return redirect()->route('finance.wallets.show', $patient)->with('success', $msg);
     }
 
     // ── Credit Note: printable ────────────────────────────────────────────────

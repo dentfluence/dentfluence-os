@@ -453,6 +453,10 @@ class WalletService
                 'receipt_kind'       => 'advance',
                 'invoice_id'         => null,
                 'invoice_payment_id' => null,
+                // The wallet row this receipt documents. Without it the ledger
+                // cannot point an operator at the receipt that has to be voided
+                // to undo a mistaken advance.
+                'wallet_transaction_id' => $tx->id,
                 'patient_id'         => $patient->id,
                 'amount'             => $amount,
                 'payment_mode'       => $paymentMode,

@@ -255,7 +255,9 @@
                         </h3>
                         <span id="membershipBadge"
                               class="text-[10px] font-semibold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full {{ $memActive ? '' : 'hidden' }}">
-                            @if($memActive)Active · {{ $memInfo['days_remaining'] }}d left@endif
+                            @if($memActive)
+                                Active · {{ $memInfo['days_remaining'] }}d left
+                            @endif
                         </span>
                     </div>
                     <input type="hidden" name="membership_discount" id="membershipDiscount" value="0">

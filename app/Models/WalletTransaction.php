@@ -61,6 +61,15 @@ class WalletTransaction extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /**
+     * The ADV- receipt this wallet credit produced, when it came from an
+     * advance. Null for every other kind of credit.
+     */
+    public function advanceReceipt(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Receipt::class, 'wallet_transaction_id');
+    }
+
     /** The credit this row was written to cancel (set on the reversing debit). */
     public function reversalOf(): BelongsTo
     {
@@ -83,6 +92,21 @@ class WalletTransaction extends Model
     public function scopeDebits($query)
     {
         return $query->where('direction', 'debit');
+    }
+
+    /**
+     * Exclude entries that have since been cancelled by a reversing debit.
+     *
+     * A reversal leaves the ORIGINAL row in place by design — nothing is ever
+     * deleted from a money ledger. That is correct for the ledger and wrong for
+     * a report: an advance marked a wrong entry never happened, so a report
+     * that counts it is claiming cash the clinic does not hold. Balances are
+     * safe without this (recalculate() nets the debit); anything that counts
+     * the credit ROWS is not.
+     */
+    public function scopeNotReversed($query)
+    {
+        return $query->whereDoesntHave('reversal');
     }
 
     public function scopeExpiringSoon($query, int $days = 7)
@@ -133,13 +157,27 @@ class WalletTransaction extends Model
             return 'Only a credit can be reversed.';
         }
         if ($this->funding !== 'clinic') {
-            return 'This credit is the patient\'s own money. Use Refund, not a reversal.';
+            // Cash was recorded as received, so three records exist: this wallet
+            // credit, an ADV- receipt and a FinanceTransaction. Undoing only the
+            // wallet row would leave the cashbook claiming money that is not
+            // there. Refund is not the answer either — a refund records cash
+            // going back OUT, which for a mistaken entry never happened. The
+            // receipt void (correction type "never received") reverses all
+            // three together, and that is the only correct path.
+            return 'Cash was recorded against this. Reverse it from its receipt '
+                 . '(choose "money never received") so the cashbook is corrected too.';
         }
         if (! in_array($this->source, self::REVERSIBLE_SOURCES, true)) {
             return 'This entry was written by another document and must be undone there.';
         }
         if ($this->isReversed()) {
             return 'Already reversed.';
+        }
+        // An expired promotional lot has already left the balance — expiry did
+        // the cancelling. Writing a debit against it now would post money the
+        // wallet no longer holds and leave a debit that matches no live lot.
+        if ($this->isExpired()) {
+            return 'This credit has already expired — there is nothing left to reverse.';
         }
 
         return null;
