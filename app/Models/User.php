@@ -284,26 +284,43 @@ class User extends Authenticatable
      * web denies (or vice-versa).
      *
      * Mirrors isAdminRole(), which already consulted both systems.
+     *
+     * 2.6 (20 Sep 2026) — the ASSIGNED role decides, and the legacy string only
+     * speaks for a user who has no role_id at all. Before this, the string was
+     * tested FIRST and won outright: users.role is a staff-type label that
+     * anyone with HR edit can set, and EnsureApiRole gates every
+     * `api.role:<name>` route through this method, so a user could type her own
+     * staff type and pass an API role check her assigned role denies. That is
+     * the same escalation V.18 closed on the web on 17 Sep, left open on the
+     * API. Genuine role holders are unaffected: their role_id says so.
      */
     public function hasRole(string $role): bool
     {
-        if ($this->role === $role) {
-            return true;
-        }
-
         $roleModel = $this->relationLoaded('roleModel')
             ? $this->roleModel
             : $this->roleModel()->first();
 
-        return $roleModel?->slug === $role;
+        if ($this->role_id) {
+            return $roleModel?->slug === $role;
+        }
+
+        return $this->role === $role || $roleModel?->slug === $role;
     }
 
     /**
      * Check if user is admin / clinic owner.
+     *
+     * 2.6 — same rule as isAdminRole() and hasRole(): the assigned role
+     * decides. This one had NO role_id path at all, and it is not cosmetic —
+     * it gates voiding a finance voucher (Finance/VoucherController:188),
+     * two inventory writes, and the void buttons on four screens.
+     *
+     * Kept as a distinct method rather than aliased to isAdminRole() so the
+     * two call sites stay visible; it now answers the same question.
      */
     public function isAdmin(): bool
     {
-        return $this->role === self::ROLE_ADMIN;
+        return $this->isAdminRole();
     }
 
     /**
