@@ -224,6 +224,8 @@ class PatientProfileController extends ApiController
             ]);
 
         return $this->success([
+            // 2.7 — SPENDABLE balance shown on the patient's wallet card in the
+            // app. Not a liability read; see FinanceReportsController.
             'balance_total'       => $wallet->balance_total,
             'balance_promotional' => $wallet->balance_promotional,
             'balance_permanent'   => $wallet->balance_permanent,

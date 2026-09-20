@@ -41,6 +41,9 @@ class WalletController extends Controller
             ? $request->input('filter')
             : 'all';
 
+        // 2.7 — the Wallets SCREEN lists wallets with something spendable in
+        // them, so balance_total is right here. Liability lives in Finance
+        // Reports and reads balance_patient_credit.
         $base = fn () => Wallet::whereHas('patient')->where('balance_total', '>', 0);
 
         $walletCounts = [

@@ -206,8 +206,13 @@ class FinanceReportsController extends Controller
             ->selectRaw('direction, credit_type, SUM(amount) as total, COUNT(*) as cnt')
             ->groupBy('direction', 'credit_type')->orderBy('direction')->get();
 
-        $outstanding = DB::table('wallets')->sum('balance_total');
-        $patients    = DB::table('wallets')->where('balance_total', '>', 0)->count();
+        // 2.7 — LIABILITY, so it reads the cash-backed pot only. balance_total is
+        // written as promotional + permanent, so this tile used to grow by the whole
+        // promotional balance the moment a wallet campaign ran: credit the clinic
+        // gifted and never received would have been reported as money it owes.
+        // Same column as ReportMetricsService::patientCreditHeld() — one definition.
+        $outstanding = DB::table('wallets')->sum('balance_patient_credit');
+        $patients    = DB::table('wallets')->where('balance_patient_credit', '>', 0)->count();
 
         $monthly = WalletTransaction::whereBetween('created_at', [$from, $to])
             ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as month, direction, SUM(amount) as total")
@@ -284,8 +289,17 @@ class FinanceReportsController extends Controller
     private function liabilityData(Carbon $from, Carbon $to): array
     {
         // Wallet balances (money the clinic owes patients) — snapshot, not ranged.
+        //
+        // 2.7 — the filter used to be balance_total > 0, and $totalLiability is
+        // summed from THIS collection. balance_total is promotional + permanent,
+        // so a wallet holding cash-backed patient credit but no balance_total was
+        // dropped from the set before the liability was added up: the headline
+        // understated the debt, silently. Take any wallet carrying either kind of
+        // balance and order by the liability column the tile actually reports.
         $wallets = Wallet::with('patient')
-            ->where('balance_total', '>', 0)
+            ->where(fn ($q) => $q->where('balance_total', '>', 0)
+                ->orWhere('balance_patient_credit', '>', 0))
+            ->orderByDesc('balance_patient_credit')
             ->orderByDesc('balance_total')->get();
 
         // U8 rule 16 — the clinic's liability is the CASH-BACKED patient credit
@@ -305,6 +319,12 @@ class FinanceReportsController extends Controller
             ->having('outstanding', '>', 0)
             ->get();
 
+        // 2.7 — balance_total is CORRECT here and must stay. This column is
+        // "Outstanding After Wallet": what the patient still has to find after
+        // spending what is in the wallet. Promotional credit is spendable against
+        // an invoice, so it belongs in that subtraction even though it is not a
+        // liability. Liability and spendable are two different questions about
+        // the same wallet; only the liability tiles above read patient credit.
         $walletMap = Wallet::pluck('balance_total', 'patient_id');
         $patientNames = \App\Models\Patient::whereIn('id', $openByPatient->pluck('patient_id'))
             ->pluck('name', 'id');

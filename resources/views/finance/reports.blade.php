@@ -421,11 +421,11 @@
             <p class="text-2xl font-bold text-red-500 mt-1">&#8377;{{ number_format($data['debits'], 0) }}</p>
         </div>
         <div class="bg-white border border-gray-100 p-4">
-            <p class="text-xs text-gray-400 uppercase tracking-wider">Outstanding Balance</p>
+            <p class="text-xs text-gray-400 uppercase tracking-wider">Patient Credit Held</p>
             <p class="text-2xl font-bold text-[#6a0f70] mt-1">&#8377;{{ number_format($data['outstanding'], 0) }}</p>
         </div>
         <div class="bg-white border border-gray-100 p-4">
-            <p class="text-xs text-gray-400 uppercase tracking-wider">Patients w/ Balance</p>
+            <p class="text-xs text-gray-400 uppercase tracking-wider">Patients w/ Credit</p>
             <p class="text-2xl font-bold text-gray-700 mt-1">{{ $data['patients'] }}</p>
         </div>
     </div>
@@ -616,7 +616,7 @@
         <table class="w-full text-sm">
             <thead><tr class="bg-gray-50 text-xs text-gray-500">
                 <th class="px-4 py-2 text-left">Patient</th><th class="px-4 py-2 text-right">Promotional</th>
-                <th class="px-4 py-2 text-right">Permanent</th><th class="px-4 py-2 text-right">Total</th>
+                <th class="px-4 py-2 text-right">Permanent</th><th class="px-4 py-2 text-right">Patient Credit</th><th class="px-4 py-2 text-right">Total</th>
             </tr></thead>
             <tbody>
             @forelse($data['wallets'] as $w)
@@ -624,10 +624,11 @@
                 <td class="px-4 py-2">{{ $w->patient?->name ?? '—' }}</td>
                 <td class="px-4 py-2 text-right text-amber-600">&#8377;{{ number_format($w->balance_promotional, 0) }}</td>
                 <td class="px-4 py-2 text-right text-blue-600">&#8377;{{ number_format($w->balance_permanent, 0) }}</td>
+                <td class="px-4 py-2 text-right font-semibold text-green-700">&#8377;{{ number_format($w->balance_patient_credit, 0) }}</td>
                 <td class="px-4 py-2 text-right font-semibold text-[#6a0f70]">&#8377;{{ number_format($w->balance_total, 0) }}</td>
             </tr>
             @empty
-            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-400 text-xs">No wallet balances</td></tr>
+            <tr><td colspan="5" class="px-4 py-6 text-center text-gray-400 text-xs">No wallet balances</td></tr>
             @endforelse
             </tbody>
         </table>

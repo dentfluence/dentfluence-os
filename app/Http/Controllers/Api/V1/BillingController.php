@@ -387,6 +387,9 @@ class BillingController extends ApiController
             'patient_id'      => $pt->id,
             'patient_name'    => $pt->name,
             'amount_refunded' => $result['refunded'],
+            // 2.7 — SPENDABLE, not liability: this tells the app how much the
+            // patient can put against this invoice, and promotional credit spends.
+            // The liability reports read balance_patient_credit instead.
             'wallet_balance'  => (float) $wallet->balance_total,
         ], '₹' . number_format($result['refunded'], 2) . ' refunded from ' . $pt->name . "'s wallet.", 201);
     }
@@ -1170,6 +1173,9 @@ class BillingController extends ApiController
             'patient_id'      => $pt->id,
             'patient_name'    => $pt->name,
             'amount_credited' => (float) $request->amount,
+            // 2.7 — SPENDABLE, not liability: this tells the app how much the
+            // patient can put against this invoice, and promotional credit spends.
+            // The liability reports read balance_patient_credit instead.
             'wallet_balance'  => (float) $wallet->balance_total,
         ], '₹' . number_format($request->amount, 0) . ' advance credited to wallet.', 201);
     }

@@ -232,7 +232,7 @@
   <div class="kpi-row">
     <div class="kpi"><div class="label">Credits Issued</div><div class="value green">&#8377;{{ number_format($data['credits'], 0) }}</div></div>
     <div class="kpi"><div class="label">Utilized</div><div class="value red">&#8377;{{ number_format($data['debits'], 0) }}</div></div>
-    <div class="kpi"><div class="label">Outstanding Balance</div><div class="value purple">&#8377;{{ number_format($data['outstanding'], 0) }}</div></div>
+    <div class="kpi"><div class="label">Patient Credit Held</div><div class="value purple">&#8377;{{ number_format($data['outstanding'], 0) }}</div></div>
     <div class="kpi"><div class="label">Patients w/ Balance</div><div class="value">{{ $data['patients'] }}</div></div>
   </div>
 
