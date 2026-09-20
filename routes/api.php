@@ -638,8 +638,14 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         });
 
         Route::get('/patients/{patient}/open-invoices',         [BillingController::class, 'openInvoices']);
-        Route::post('/patients/{patient}/wallet/credit',        [BillingController::class, 'addWalletCredit']); // advance / wallet top-up
-        Route::post('/invoices',                                [BillingController::class, 'createInvoice']);   // create invoice (mobile)
+        // 2.5 — these two were the only money writes on the API with NO gate at
+        // all, sitting between neighbours that all carry finance,edit. An omission,
+        // not a decision: an authenticated token could top up a wallet or raise an
+        // invoice with no finance grant. Same gate as recordPayment below.
+        Route::post('/patients/{patient}/wallet/credit',        [BillingController::class, 'addWalletCredit']) // advance / wallet top-up
+            ->middleware('api.role:module:finance,edit');
+        Route::post('/invoices',                                [BillingController::class, 'createInvoice'])   // create invoice (mobile)
+            ->middleware('api.role:module:finance,edit');
         Route::get('/invoices/{invoice}/payment-options',       [BillingController::class, 'paymentOptions']);
         Route::get('/invoices/{invoice}/receipts/{receipt}',    [BillingController::class, 'receipt']);
 
