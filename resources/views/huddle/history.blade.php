@@ -71,9 +71,9 @@
                 <td class="hl-muted">{{ $row->closed_by_name ?? '—' }}</td>
                 <td class="hl-muted">{{ $row->closed_at ? $row->closed_at->format('H:i') : '—' }}</td>
                 <td>
-                    @if($row->has_snapshot)
-                        <a href="{{ route('huddle.history.show', $row->date->toDateString()) }}" class="hl-link">View briefing</a>
-                    @endif
+                    <a href="{{ route('huddle.history.show', $row->date->toDateString()) }}" class="hl-link">
+                        {{ $row->has_snapshot ? 'View briefing' : 'View day' }}
+                    </a>
                 </td>
             </tr>
         @endforeach
@@ -81,10 +81,10 @@
     </table>
 
     <p class="hl-note">
-        A day is only listed as missed when the clinic was actually running. Briefings exist
-        from the day the tick was introduced onwards — a huddle that was never marked done
-        has no briefing to show, because the board is rebuilt live and cannot be reconstructed
-        for a past date.
+        A day is only listed as missed when the clinic was actually running. Every date opens
+        that day's record — appointments, visits, consultations and collections, read back from
+        dated rows. The full morning briefing only exists for days that were ticked: stock,
+        tasks and the call pipeline carry no date, so they cannot be reconstructed afterwards.
     </p>
 </div>
 

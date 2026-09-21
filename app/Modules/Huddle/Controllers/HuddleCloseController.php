@@ -91,15 +91,25 @@ class HuddleCloseController extends Controller
             abort(404);
         }
 
+        if ($day->isFuture()) {
+            abort(404);
+        }
+
         $board    = $this->closeService->boardFor($user->branch_id, $day);
         $snapshot = data_get($board?->meta, 'briefing');
         $closedBy = data_get($board?->meta, 'closed_by.name');
+
+        // The dated record — appointments, visits, consultations, money. Always
+        // available for any past day, because those rows carry their own date.
+        $record = app(\App\Modules\Huddle\Services\HuddleDayRecordService::class)
+            ->forDate($user->branch_id, $day);
 
         return view('huddle.history-show', [
             'day'      => $day,
             'board'    => $board,
             'snapshot' => $snapshot,
             'closedBy' => $closedBy,
+            'record'   => $record,
         ]);
     }
 }
