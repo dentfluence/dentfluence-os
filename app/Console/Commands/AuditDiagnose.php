@@ -37,7 +37,13 @@ class AuditDiagnose extends Command
     private array $models = [
         \App\Models\AuditLog::class,
         \App\Models\BillingAuditLog::class,
-        \App\Models\PrescriptionAuditLog::class,
+        // FIXED 21 Sep 2026: this said \App\Models\PrescriptionAuditLog, which
+        // does not exist — the class lives under \App\Models\Prescription\. class_exists()
+        // returned false and the table was skipped IN SILENCE, so the one chain that
+        // actually fails was the one this tool could not inspect. That is why 2B.3 sat
+        // red from 27 Aug with nobody able to answer it. AuditVerify imports the correct
+        // class, which is why the two commands disagreed about how many tables exist.
+        \App\Models\Prescription\PrescriptionAuditLog::class,
         \App\Models\Finance\FinanceAuditLog::class,
     ];
 

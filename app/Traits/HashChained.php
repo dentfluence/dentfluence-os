@@ -62,6 +62,34 @@ trait HashChained
      */
     public static function chainCanonical(array $attributes): array
     {
+        // 2026-09-21 — the fix for the prescription_audit_logs break (rows 11-181,
+        // written from 16 Jul onward, none of which verify).
+        //
+        // At "creating" time $model->getAttributes() holds only the attributes the
+        // WRITER actually set. A nullable column nobody filled in — snapshot, on
+        // that table — is simply ABSENT from the array, so it never entered the
+        // hash. Reading the row back returns every column, so snapshot arrives as
+        // null and the canonical set has one more key than it did at write time.
+        // Same string, different shape, different hash. It is the 14 Jul JSON bug
+        // in a new costume: hashed one way on write, another on read.
+        //
+        // Filling every table column that is missing with null makes the two
+        // identical. This changes NOTHING for rows already stored: a row read back
+        // from the database already carries all its columns, so its canonical form
+        // is unaffected and rows that verify today still verify.
+        //
+        // RESIDUAL RISK, stated because it will bite someone: ADDING A COLUMN to a
+        // hash-chained table still changes the canonical set and breaks every row
+        // written before the migration. There is no way around that without
+        // recording the field list per row. A migration on one of these four tables
+        // therefore needs a deliberate chain re-anchor (config('audit.anchors')),
+        // not a --backfill.
+        foreach (static::chainColumns() as $column) {
+            if (! array_key_exists($column, $attributes)) {
+                $attributes[$column] = null;
+            }
+        }
+
         $canonical = array_diff_key($attributes, array_flip(static::$chainExclude));
 
         // Normalise values so the hash is STABLE across a database round-trip.
@@ -103,6 +131,26 @@ trait HashChained
 
         ksort($canonical);
         return $canonical;
+    }
+
+    /**
+     * Every column on this model's table, cached per process. Used to give the
+     * canonical form the same shape on write as it has on read.
+     */
+    protected static function chainColumns(): array
+    {
+        static $cache = [];
+
+        $model = new static;
+        $key   = $model->getConnectionName() . '|' . $model->getTable();
+
+        if (! isset($cache[$key])) {
+            $cache[$key] = $model->getConnection()
+                ->getSchemaBuilder()
+                ->getColumnListing($model->getTable());
+        }
+
+        return $cache[$key];
     }
 
     /**
@@ -181,13 +229,44 @@ trait HashChained
      *
      * @return array{ok: bool, checked: int, first_bad_id: ?int, legacy_rows: int}
      */
+    /**
+     * The id this table's chain is authoritative FROM. Rows below it are not
+     * checked and are reported separately as unverifiable — never as intact.
+     *
+     * An anchor is the honest answer to a diagnosed code defect that made older
+     * hashes structurally unverifiable. It does NOT claim those rows are good;
+     * it states, every single morning, exactly how many rows cannot be vouched
+     * for. --backfill is the dishonest answer to the same problem: it rewrites
+     * history's hashes to match whatever history currently says, which is what
+     * an attacker would do, and afterwards nobody can tell the difference.
+     */
+    public static function chainAnchorId(): int
+    {
+        $anchors = (array) config('audit.anchors', []);
+
+        return (int) ($anchors[(new static)->getTable()] ?? 0);
+    }
+
     public static function verifyChain(): array
     {
         $prev       = null;
         $checked    = 0;
         $legacyRows = 0;
+        $anchor     = static::chainAnchorId();
+        $preAnchor  = 0;
 
         foreach (static::query()->orderBy('id')->cursor() as $row) {
+            // Rows before the anchor are outside the chain. Count them, say so,
+            // and start the chain fresh from the anchor row's own prev_hash.
+            if ($anchor > 0 && $row->id < $anchor) {
+                $preAnchor++;
+                continue;
+            }
+
+            if ($anchor > 0 && $row->id === $anchor && $checked === 0) {
+                $prev = $row->prev_hash;
+            }
+
             $canonical = static::chainCanonical($row->getAttributes());
             $actual    = (string) $row->hash;
 
@@ -205,6 +284,7 @@ trait HashChained
                     'checked'      => $checked,
                     'first_bad_id' => $row->id,
                     'legacy_rows'  => $legacyRows,
+                    'pre_anchor'   => $preAnchor,
                 ];
             }
 
@@ -221,6 +301,7 @@ trait HashChained
             'checked'      => $checked,
             'first_bad_id' => null,
             'legacy_rows'  => $legacyRows,
+            'pre_anchor'   => $preAnchor,
         ];
     }
 }

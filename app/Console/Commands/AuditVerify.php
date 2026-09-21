@@ -62,11 +62,25 @@ class AuditVerify extends Command
                 // genuine and verify correctly, but they're only tamper-evident
                 // against app-layer edits, not against direct DB writes.
                 $result['legacy_rows'] ?? 0,
+                // Rows below this table's chain anchor. They are NOT verified and
+                // are NOT claimed to be intact — this column exists so the number
+                // is stated out loud every morning instead of quietly disappearing.
+                $result['pre_anchor'] ?? 0,
             ];
         }
 
         $this->newLine();
-        $this->table(['Table', 'Status', 'Rows checked', 'First bad id', 'Legacy (unkeyed) rows'], $rows);
+        $this->table(
+            ['Table', 'Status', 'Rows checked', 'First bad id', 'Legacy (unkeyed) rows', 'Pre-anchor (UNVERIFIABLE)'],
+            $rows
+        );
+
+        $preAnchor = array_sum(array_column($rows, 5));
+        if ($preAnchor > 0) {
+            $this->warn("  {$preAnchor} row(s) sit below a chain anchor and CANNOT be verified.");
+            $this->line('  They are excluded deliberately, with the reason recorded in config/audit.php.');
+            $this->line('  This is not a clean bill of health for those rows — it is a stated gap.');
+        }
 
         if ($allOk) {
             $this->info('All audit chains verified intact.');
