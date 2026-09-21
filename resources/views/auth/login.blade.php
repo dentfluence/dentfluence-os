@@ -17,6 +17,19 @@
     <link rel="icon" href="{{ asset('images/logo-mark-purple-square.png') }}" type="image/png">
     <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
 
+    {{-- ── PWA: keep the login page installable too, so Add to Home Screen
+           from the login screen still produces a standalone app, not a
+           plain Safari bookmark. Mirrors layouts/app.blade.php. ── --}}
+    <meta name="theme-color" content="#1e0030">
+    <link rel="manifest" href="{{ asset('manifest.json') }}">
+    <meta name="application-name" content="Dentfluence OS">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Dentfluence">
+    <link rel="apple-touch-icon" sizes="192x192" href="{{ asset('icons/icon-192.png') }}">
+    <link rel="apple-touch-icon" sizes="512x512" href="{{ asset('icons/icon-512.png') }}">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -743,6 +756,16 @@
             .right-panel { padding: 20px 12px; }
         }
     </style>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker
+                    .register('{{ asset('sw.js') }}', { scope: '/' })
+                    .catch(function (e) { console.warn('SW registration failed:', e); });
+            });
+        }
+    </script>
 </head>
 
 <body>
