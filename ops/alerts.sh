@@ -57,10 +57,28 @@ _send_brevo_email () { # _send_brevo_email <subject> <text>
   [ "$code" = "201" ] || [ "$code" = "202" ]
 }
 
+# 2026-09-21 (row 1.5): this is now the channel that actually reaches a phone.
+# It POSTs to the app's /api/v1/ops/alert, which pushes to every admin handset
+# through Firebase — the same push the clinic's own notifications use. Telegram
+# was declined, Brevo email was declined, WhatsApp is blocked behind Meta
+# business verification, and a third-party relay was rejected on DPDP grounds.
+#
+# The secret is REQUIRED. Without it the app closes the route, so a missing
+# secret here means alerts quietly stop arriving — which is why this function
+# refuses to send at all rather than posting an unauthenticated request that
+# would only ever come back 401.
+#
+# LIMIT, stated because it matters: this path runs THROUGH the application. It
+# carries a failed backup or a dead queue. It cannot carry "the box is gone".
 _send_webhook () { # _send_webhook <severity> <key> <text>
   [ -n "${ALERT_WEBHOOK_URL:-}" ] || return 9
+  [ -n "${ALERT_WEBHOOK_SECRET:-}" ] || {
+    _alert_log "SELF" "webhook_secret" "ALERT_WEBHOOK_URL is set but ALERT_WEBHOOK_SECRET is not - not sending"
+    return 9
+  }
   curl -sS -m 15 -o /dev/null -w '%{http_code}' -X POST "$ALERT_WEBHOOK_URL" \
     -H 'Content-Type: application/json' \
+    -H "X-Dentfluence-Alert-Secret: ${ALERT_WEBHOOK_SECRET}" \
     -d "$(jq -n --arg sev "$1" --arg key "$2" --arg text "$3" --arg host "$ALERT_HOSTNAME" \
           '{severity:$sev,check:$key,text:$text,host:$host}')" \
     | grep -qE '^2[0-9][0-9]$'

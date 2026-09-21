@@ -66,6 +66,19 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
     Route::get('/webhooks/prm/whatsapp',  [WhatsAppLeadController::class, 'verify']);
     Route::post('/webhooks/prm/whatsapp', [WhatsAppLeadController::class, 'receive']);
 
+    // 1.5 (2026-09-21) — ops/alerts.sh POSTs here so a failed backup, a dead
+    // queue or an expiring certificate reaches an admin's PHONE instead of
+    // accumulating in backups/alerts.log until someone reads it in the morning.
+    //
+    // Unauthenticated BY NECESSITY: the caller is a shell script on the host
+    // with no user session. A shared secret in the X-Dentfluence-Alert-Secret
+    // header is the gate, compared with hash_equals inside the controller, and
+    // an unset secret closes the route rather than opening it. Throttled hard
+    // because an alert storm must not become a notification storm.
+    Route::post('/ops/alert', [\App\Http\Controllers\Api\V1\OpsAlertController::class, 'store'])
+        ->middleware('throttle:20,1')
+        ->name('api.ops.alert');
+
     /*
      | -------- Protected routes (require a Bearer token) --------
      | The client sends header:  Authorization: Bearer <token>

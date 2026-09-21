@@ -39,6 +39,10 @@ class WriteRouteGateGuardTest extends TestCase
     private const PUBLIC_BY_DESIGN = [
         'POST api/v1/auth/login',
         'POST api/v1/webhooks/prm/whatsapp',
+        // 1.5: the host's alert script has no user session. Gated by a shared
+        // secret compared with hash_equals in OpsAlertController, and the route
+        // is CLOSED when that secret is unset.
+        'POST api/v1/ops/alert',
         'POST auth/mobile/send-otp',
         'POST auth/mobile/verify',
         'POST forgot-pin/reset',
