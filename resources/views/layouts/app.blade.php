@@ -43,6 +43,16 @@
     <link rel="icon" href="{{ asset('images/logo-mark-purple-square.png') }}" type="image/png">
     <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
 
+    {{-- ── PWA: installable home-screen app (iOS Safari + Android Chrome) ── --}}
+    <link rel="manifest" href="{{ asset('manifest.json') }}">
+    <meta name="application-name" content="Dentfluence OS">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Dentfluence">
+    <link rel="apple-touch-icon" sizes="192x192" href="{{ asset('icons/icon-192.png') }}">
+    <link rel="apple-touch-icon" sizes="512x512" href="{{ asset('icons/icon-512.png') }}">
+
     {{-- Alpine.js — collapse plugin MUST come before Alpine so it registers in time --}}
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -619,6 +629,17 @@
     @yield('head-extra')
     @stack('styles')
     <link rel="stylesheet" href="{{ asset('css/communication/manager.css') }}">
+
+    {{-- ── Service worker registration (HTTPS or localhost only) ── --}}
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker
+                    .register('{{ asset('sw.js') }}', { scope: '/' })
+                    .catch(function (e) { console.warn('SW registration failed:', e); });
+            });
+        }
+    </script>
 </head>
 
 <body class="h-full antialiased">

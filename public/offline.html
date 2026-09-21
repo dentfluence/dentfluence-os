@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1e0030">
+    <title>Offline — Dentfluence OS</title>
+    <style>
+        :root { color-scheme: light; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: #faf9fb;
+            color: #1e0030;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            text-align: center;
+        }
+        .box { max-width: 360px; }
+        img { width: 72px; height: 72px; border-radius: 18px; margin-bottom: 20px; }
+        h1 { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
+        p { font-size: 15px; line-height: 1.5; color: #5b5266; margin: 0 0 24px; }
+        button {
+            appearance: none;
+            border: 0;
+            background: #1e0030;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 500;
+            padding: 12px 24px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <img src="/icons/icon-192.png" alt="Dentfluence">
+        <h1>You're offline</h1>
+        <p>Dentfluence needs a connection to show live clinic data. Reconnect and try again.</p>
+        <button onclick="location.reload()">Retry</button>
+    </div>
+</body>
+</html>
