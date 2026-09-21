@@ -328,6 +328,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/check-conflict',           [AppointmentController::class, 'checkConflict'])->name('check.conflict')->middleware('module:appointments');
         Route::post('/block-slot',             [AppointmentController::class, 'storeBlockedSlot'])->name('block.slot')->middleware('module:appointments,edit');
         Route::get('/blocked-slots',           [AppointmentController::class, 'indexBlockedSlots'])->name('blocked.slots')->middleware('module:appointments');
+        // Removing a block is ordinary front-desk scheduling work — leave
+        // cancelled, wrong doctor picked — so it rides the same edit permission
+        // that created it, not a delete permission most staff do not hold.
+        Route::delete('/blocked-slots/{slot}',  [AppointmentController::class, 'destroyBlockedSlot'])->whereNumber('slot')->name('blocked.slots.destroy')->middleware('module:appointments,edit');
         Route::get('/version',                 [AppointmentController::class, 'version'])->name('version')->middleware('module:appointments');
         Route::get('/{appointment}',            [AppointmentController::class, 'show'])->name('show')->middleware('module:appointments');
         Route::get('/{appointment}/quick',      [AppointmentController::class, 'quickView'])->name('quick')->middleware('module:appointments');

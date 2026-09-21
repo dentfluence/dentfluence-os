@@ -516,6 +516,54 @@
     font-weight: 500;
     color: #64748b;
 }
+/* ─── Blocked-slot panel (click a band to remove it) ───────── */
+#blockPanel {
+    position: fixed;
+    z-index: 3000;
+    width: 230px;
+    background: #ffffff;
+    border: 1px solid #e4e8f0;
+    border-radius: 9px;
+    box-shadow: 0 8px 24px rgba(26,29,46,.14);
+    padding: .7rem .8rem;
+    font-size: .8rem;
+    color: #1a1d2e;
+}
+#blockPanel .bp-head { font-weight: 700; font-size: .85rem; }
+#blockPanel .bp-meta { color: #6b7280; font-size: .72rem; margin-top: .1rem; }
+#blockPanel .bp-tag {
+    display: inline-block;
+    margin-top: .35rem;
+    font-size: .66rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    padding: .08rem .35rem;
+}
+#blockPanel .bp-reason { margin-top: .4rem; font-size: .76rem; color: #374151; line-height: 1.45; }
+#blockPanel .bp-btn {
+    display: block;
+    width: 100%;
+    margin-top: .6rem;
+    padding: .35rem .5rem;
+    border-radius: 7px;
+    border: 1px solid #e4e8f0;
+    background: #ffffff;
+    color: #6b7280;
+    font-size: .76rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+}
+#blockPanel .bp-btn:hover { border-color: #dc2626; color: #dc2626; }
+#blockPanel .bp-btn.armed { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
+#blockPanel .bp-btn:disabled { opacity: .6; cursor: default; }
+#blockPanel .bp-note { margin-top: .35rem; font-size: .7rem; color: #9aa2b1; line-height: 1.4; }
+
 .fc .fc-bg-event.fc-blocked-slot.fc-block-break     .fc-block-type { color: #b45309; }
 .fc .fc-bg-event.fc-blocked-slot.fc-block-break     .fc-block-who  { color: #c2810c; }
 .fc .fc-bg-event.fc-blocked-slot.fc-block-emergency .fc-block-type { color: #6d28d9; }
@@ -2572,8 +2620,131 @@ function onEventHover(info) {
 
 function onEventClick(info) {
     const apt = info.event.extendedProps;
-    if (apt._isBlock) return;
+    if (apt._isBlock) { showBlockPanel(apt, info.jsEvent); return; }
     showQuickView(apt, info.jsEvent);
+}
+
+// ─── Blocked slot: view and remove (2026-09-21) ────────────────
+// A block could be created and never taken off again — clicking the band did
+// nothing at all. It now opens a small panel with who and when, and a Remove
+// button. Confirmation is a second click inside the panel rather than a
+// browser confirm(): a native dialog blocks the page and the 1 s refresh poll
+// behind it.
+let _blockPanel = null;
+
+function blockPanelEl() {
+    if (_blockPanel) return _blockPanel;
+
+    const el = document.createElement('div');
+    el.id = 'blockPanel';
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    document.addEventListener('click', e => {
+        if (_blockPanel && !_blockPanel.contains(e.target)) hideBlockPanel();
+    });
+    _blockPanel = el;
+    return el;
+}
+
+function hideBlockPanel() {
+    if (_blockPanel) _blockPanel.style.display = 'none';
+}
+
+function showBlockPanel(apt, jsEvent) {
+    if (jsEvent) jsEvent.stopPropagation();
+
+    const el    = blockPanelEl();
+    const type  = (apt.block_type || 'unavailable').replace(/_/g, ' ');
+    const when  = `${apt.block_date || ''} · ${apt.start_time || ''}–${apt.end_time || ''}`;
+
+    el.innerHTML = '';
+
+    const head = document.createElement('div');
+    head.className = 'bp-head';
+    head.textContent = apt.doctor_name || 'Doctor';
+    el.appendChild(head);
+
+    const meta = document.createElement('div');
+    meta.className = 'bp-meta';
+    meta.textContent = when;
+    el.appendChild(meta);
+
+    const tag = document.createElement('span');
+    tag.className = 'bp-tag';
+    tag.textContent = type;
+    el.appendChild(tag);
+
+    if (apt.reason) {
+        const r = document.createElement('div');
+        r.className = 'bp-reason';
+        r.textContent = apt.reason;
+        el.appendChild(r);
+    }
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'bp-btn';
+    btn.textContent = 'Remove this block';
+
+    const note = document.createElement('div');
+    note.className = 'bp-note';
+    note.style.display = 'none';
+    note.textContent = 'The slot opens for booking again.';
+
+    let armed = false;
+    btn.addEventListener('click', async () => {
+        if (!armed) {
+            armed = true;
+            btn.textContent = 'Click again to confirm';
+            btn.classList.add('armed');
+            note.style.display = 'block';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Removing…';
+
+        try {
+            const r = await fetch(`/appointments/blocked-slots/${apt.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': window.__APPT_DATA.csrfToken,
+                },
+            });
+            const j = await r.json().catch(() => ({}));
+
+            if (!r.ok || !j.ok) {
+                btn.disabled = false;
+                btn.textContent = 'Remove failed — try again';
+                note.textContent = j.message || 'The block could not be removed.';
+                return;
+            }
+
+            hideBlockPanel();
+            // Force a redraw: the fingerprint would otherwise match the payload
+            // still cached from before the delete.
+            _blockFingerprint = null;
+            const { start, end } = viewRange();
+            fetchAndRenderBlockedSlots(start, end);
+            refreshCalendar();
+        } catch (e) {
+            btn.disabled = false;
+            btn.textContent = 'Remove failed — try again';
+        }
+    });
+
+    el.appendChild(btn);
+    el.appendChild(note);
+
+    el.style.display = 'block';
+
+    // Keep it on screen near the click.
+    const pad = 10;
+    const x = Math.min((jsEvent?.clientX ?? 100) + 8, window.innerWidth  - el.offsetWidth  - pad);
+    const y = Math.min((jsEvent?.clientY ?? 100) + 8, window.innerHeight - el.offsetHeight - pad);
+    el.style.left = Math.max(pad, x) + 'px';
+    el.style.top  = Math.max(pad, y) + 'px';
 }
 
 function onDateClick(info) {

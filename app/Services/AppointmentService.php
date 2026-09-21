@@ -759,6 +759,19 @@ class AppointmentService
         ]);
     }
 
+    /**
+     * Remove a block. The service owns the write, exactly as blockSlot() does.
+     *
+     * A block is a scheduling statement ("this doctor is not available"), not a
+     * clinical or financial record, so it is deleted outright rather than soft
+     * deleted — there is nothing downstream that refers to it, and a stale
+     * "cancelled block" row would only make the conflict check ambiguous.
+     */
+    public function unblockSlot(DoctorBlockedSlot $slot, User $actor): void
+    {
+        $slot->delete();
+    }
+
     /** Blocked slots in a date range, for the calendar (branch-scoped via doctor). */
     public function blockedSlotsInRange(int $branchId, string $from, string $to)
     {

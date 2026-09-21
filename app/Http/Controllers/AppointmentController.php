@@ -756,7 +756,15 @@ class AppointmentController extends Controller
             'doctor_id' => 'nullable|integer',
         ]);
 
+        // Branch scoping (2026-09-21). This endpoint returned EVERY blocked slot
+        // in the range regardless of branch, while appointments beside it were
+        // branch-scoped and AppointmentService::blockedSlotsInRange() already
+        // scoped the same data via the doctor. Latent while Tulip is one branch,
+        // a cross-branch leak the day there are two.
+        $branchId = Auth::user()->branch_id;
+
         $query = DoctorBlockedSlot::with('doctor:id,name')
+            ->when($branchId, fn($q) => $q->whereHas('doctor', fn($d) => $d->where('branch_id', $branchId)))
             ->when($request->start && $request->end,
                 fn($q) => $q->inRange($request->start, $request->end)
             )
@@ -781,6 +789,35 @@ class AppointmentController extends Controller
         ]);
 
         return response()->json($slots);
+    }
+
+    // ── Block Slot: remove (2026-09-21) ───────────────────────────
+    /**
+     * A block could be created and listed but never removed: there was no
+     * destroy route and no method, so a doctor marked unavailable by mistake —
+     * or one whose leave was cancelled — left a permanent band on the calendar
+     * that also went on refusing bookings through the conflict check.
+     *
+     * Scoped by the doctor's branch, the same rule the list now applies, so one
+     * branch can never unblock another branch's doctor by guessing an id.
+     */
+    public function destroyBlockedSlot(int $id)
+    {
+        $branchId = Auth::user()->branch_id;
+
+        $slot = DoctorBlockedSlot::with('doctor:id,name,branch_id')
+            ->when($branchId, fn($q) => $q->whereHas('doctor', fn($d) => $d->where('branch_id', $branchId)))
+            ->find($id);
+
+        if (! $slot) {
+            return response()->json(['ok' => false, 'message' => 'Block not found.'], 404);
+        }
+
+        $label = trim(($slot->doctor?->name ?? 'Doctor') . ' · ' . substr((string) $slot->start_time, 0, 5) . '–' . substr((string) $slot->end_time, 0, 5));
+
+        $this->appointments->unblockSlot($slot, Auth::user());
+
+        return response()->json(['ok' => true, 'removed' => $label]);
     }
 
     // ── Live refresh: change token for the calendar poll (2026-09-11) ──
