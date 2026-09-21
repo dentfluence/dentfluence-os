@@ -66,9 +66,9 @@ class ConsentPurposeSeeder extends Seeder
                 'sort_order' => 60,
             ],
             [
-                'key' => 'whatsapp_comms', 'name' => 'WhatsApp messages',
+                'key' => 'whatsapp_comms', 'name' => 'Appointment & care messages',
                 'category' => 'communication', 'is_mandatory' => false, 'requires_explicit' => true,
-                'description' => 'Consent to be contacted on WhatsApp for reminders, updates and replies to your queries.',
+                'description' => 'Yes, contact me on WhatsApp or SMS about my appointments, reminders, reports and replies to my questions.',
                 'sort_order' => 70,
             ],
             [
@@ -78,9 +78,9 @@ class ConsentPurposeSeeder extends Seeder
                 'sort_order' => 80,
             ],
             [
-                'key' => 'marketing_promotions', 'name' => 'Offers & promotions',
+                'key' => 'marketing_promotions', 'name' => 'Offers & health tips',
                 'category' => 'communication', 'is_mandatory' => false, 'requires_explicit' => true,
-                'description' => 'Consent to receive optional marketing, health tips and promotional offers. You can withdraw any time.',
+                'description' => 'Yes, send me clinic offers, camps and dental health tips. I can stop these any time by replying STOP.',
                 'sort_order' => 90,
             ],
 

@@ -30,6 +30,11 @@ services:
       - storage_data:/var/www/html/storage
       # Shared copy of /public so nginx can serve static assets (entrypoint syncs)
       - public_data:/var/www/html/public_shared
+      # N-5 push (21 Sep 2026): the FCM service-account key lives on the HOST at
+      # /opt/dentfluence/secrets and is mounted READ-ONLY. It is never baked into
+      # the image and never committed. FCM_CREDENTIALS in .env.production must point
+      # at the CONTAINER path below, not the host path.
+      - /opt/dentfluence/secrets:/var/www/html/secrets:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -92,6 +97,11 @@ services:
     command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
     volumes:
       - storage_data:/var/www/html/storage
+      # N-5 push (21 Sep 2026): the FCM service-account key lives on the HOST at
+      # /opt/dentfluence/secrets and is mounted READ-ONLY. It is never baked into
+      # the image and never committed. FCM_CREDENTIALS in .env.production must point
+      # at the CONTAINER path below, not the host path.
+      - /opt/dentfluence/secrets:/var/www/html/secrets:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -116,6 +126,11 @@ services:
        done"
     volumes:
       - storage_data:/var/www/html/storage
+      # N-5 push (21 Sep 2026): the FCM service-account key lives on the HOST at
+      # /opt/dentfluence/secrets and is mounted READ-ONLY. It is never baked into
+      # the image and never committed. FCM_CREDENTIALS in .env.production must point
+      # at the CONTAINER path below, not the host path.
+      - /opt/dentfluence/secrets:/var/www/html/secrets:ro
     depends_on:
       mysql:
         condition: service_healthy
