@@ -167,6 +167,8 @@ class AuthController extends ApiController
             'current_password' => ['required_with:password', 'string'],
         ]);
 
+        $passwordChanged = false;
+
         if (! empty($data['password'])) {
             if (! Hash::check($data['current_password'], $user->password)) {
                 AuditLog::event('password_change_failed', $user->id, ['reason' => 'wrong_current_password'], ['module' => 'auth']);
@@ -176,6 +178,7 @@ class AuthController extends ApiController
                 ], 422);
             }
             $user->password = Hash::make($data['password']);
+            $passwordChanged = true;
         }
 
         $user->name  = $data['name'];
@@ -189,6 +192,26 @@ class AuthController extends ApiController
         }
 
         $user->save();
+
+        // 2A.1 — a password change must end every OTHER session.
+        //
+        // current_password was already required here (14 Jul parity fix) and
+        // sanctum.expiration is already set, but nothing revoked the tokens a
+        // thief was already holding: changing the password left a stolen
+        // phone's token valid for its full 30 days. The token making THIS
+        // request is spared, so the person changing their own password is not
+        // logged out of the device they are standing at.
+        if ($passwordChanged) {
+            $current   = $request->user()->currentAccessToken();
+            $currentId = ($current && method_exists($current, 'getKey')) ? $current->getKey() : null;
+
+            $revoked = $user->tokens()
+                ->when($currentId, fn ($q) => $q->where('id', '!=', $currentId))
+                ->delete();
+
+            AuditLog::event('password_changed', $user->id,
+                ['tokens_revoked' => $revoked, 'surface' => 'api'], ['module' => 'auth']);
+        }
 
         AuditLog::event('profile_updated', $user->id, ['name' => $user->name, 'email' => $user->email], ['module' => 'auth']);
 

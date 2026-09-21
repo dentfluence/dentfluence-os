@@ -58,7 +58,16 @@ class ProfileController extends Controller
 
         $user->update(['password' => Hash::make($request->password)]);
 
-        return back()->with('success', 'Password changed successfully.')->with('tab', 'security');
+        // 2A.1 — the same rule as the API side: a password change ends every
+        // API token this user holds. There is no sanctum token behind a web
+        // session, so all of them go. A phone that was signed in before the
+        // change must sign in again.
+        $revoked = $user->tokens()->delete();
+
+        \App\Models\AuditLog::event('password_changed', $user->id,
+            ['tokens_revoked' => $revoked, 'surface' => 'web'], ['module' => 'auth']);
+
+        return back()->with('success', 'Password changed successfully. Any phone signed in with this account must sign in again.')->with('tab', 'security');
     }
 
     /* ─────────────────────────────────────────
