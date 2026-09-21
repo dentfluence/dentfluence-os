@@ -85,6 +85,51 @@
     color: #fff;
     border-color: var(--c-accent);
 }
+.hd-pending-badge {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+    border-radius: 4px;
+    font-size: .62rem;
+    font-weight: 700;
+    padding: .02rem .28rem;
+    margin-left: .3rem;
+}
+.hd-done-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .3rem .6rem;
+    border-radius: 7px;
+    border: 1px solid var(--c-border);
+    background: var(--c-white);
+    color: var(--c-muted);
+    font-size: .76rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .12s, color .12s, border-color .12s;
+}
+.hd-done-btn:hover { border-color: var(--c-green); color: var(--c-green); }
+.hd-done-btn.is-done {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+    color: var(--c-green);
+}
+.hd-done-box {
+    width: 13px;
+    height: 13px;
+    border-radius: 3px;
+    border: 1.5px solid currentColor;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .6rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.hd-done-at { font-weight: 500; opacity: .7; }
 .hd-topbar-right {
     display: flex;
     align-items: center;
@@ -999,8 +1044,34 @@ document.addEventListener('alpine:init', () => {
         <a href="{{ route('huddle.report', ['period' => 'month']) }}" class="hd-nav-tab">Monthly Report</a>
         <a href="{{ route('huddle.report', ['period' => 'quarter']) }}" class="hd-nav-tab">Quarterly Report</a>
         <a href="{{ route('huddle.report', ['period' => 'year']) }}" class="hd-nav-tab">Annual Report</a>
+        <a href="{{ route('huddle.history') }}" class="hd-nav-tab">
+            Huddle Log
+            @if(($huddlePending ?? 0) > 0)
+                <span class="hd-pending-badge">{{ $huddlePending }}</span>
+            @endif
+        </a>
     </nav>
     <div class="hd-topbar-right">
+        {{-- Huddle done tick. Today only — a missed day stays missed. --}}
+        <form method="POST"
+              action="{{ $huddleDone ? route('huddle.close.reopen') : route('huddle.close') }}"
+              style="margin:0;">
+            @csrf
+            @if($huddleDone) @method('DELETE') @endif
+            <button type="submit"
+                    class="hd-done-btn {{ $huddleDone ? 'is-done' : '' }}"
+                    title="{{ $huddleDone
+                        ? 'Marked done by ' . ($huddleDoneBy ?? '—') . ($huddleDoneAt ? ' at ' . $huddleDoneAt->format('H:i') : '') . ' — click to undo'
+                        : 'Tick once the huddle has actually been held' }}">
+                <span class="hd-done-box">@if($huddleDone)✓@endif</span>
+                @if($huddleDone)
+                    Huddle done
+                    @if($huddleDoneAt)<span class="hd-done-at">{{ $huddleDoneAt->format('H:i') }}</span>@endif
+                @else
+                    Mark huddle done
+                @endif
+            </button>
+        </form>
         <div class="hd-search">
             <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
             <input type="text" placeholder="Search patient, call, task…">
@@ -1335,9 +1406,14 @@ document.addEventListener('alpine:init', () => {
         <div class="hd-col-body">
 
         @forelse($yesterdaysAppointments as $yAppt)
+        @php
+            // Doctor colour band, identical treatment to Today's Schedule card.
+            $yDocHex = preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($yAppt->doctor->color ?? '')) ? $yAppt->doctor->color : '#94a3b8';
+            [$yr,$yg,$yb] = sscanf($yDocHex, '#%02x%02x%02x');
+        @endphp
         <div class="hd-card"
              @click="window.dispatchEvent(new CustomEvent('open-yesterday-followup-card', { detail: { patientId: {{ $yAppt->patient_id }}, patientName: '{{ addslashes($yAppt->patient->name ?? '') }}' } }))"
-             style="cursor:pointer;">
+             style="cursor:pointer;background:rgba({{ $yr }},{{ $yg }},{{ $yb }},0.07);border-left:3px solid {{ $yDocHex }};">
             <div class="hd-pfc">
 
                 {{-- ── Row 1: Patient name + visit type badge ── --}}
@@ -1351,7 +1427,8 @@ document.addEventListener('alpine:init', () => {
                         </a>
                         <div style="font-size:.66rem;color:var(--c-muted);margin-top:.1rem;display:flex;align-items:center;gap:.3rem;">
                             <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                            {{ $yAppt->doctor->doctor_name ?? '—' }}
+                            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{{ $yDocHex }};flex-shrink:0;"></span>
+                            <span style="font-weight:600;color:var(--c-text);">{{ $yAppt->doctor->name ?? 'Unassigned' }}</span>
                             @if(!empty($yAppt->appointment_date))
                                 <span style="color:var(--c-border);">·</span>
                                 <span>{{ \Carbon\Carbon::parse($yAppt->appointment_date)->format('D, d M') }}</span>
@@ -1482,7 +1559,11 @@ document.addEventListener('alpine:init', () => {
             <span style="font-size:.63rem;font-weight:700;color:var(--c-green);text-transform:uppercase;letter-spacing:.07em;">Treatment Visits ({{ $yesterdaysTreatmentVisits->count() }})</span>
         </div>
         @foreach($yesterdaysTreatmentVisits as $ytv)
-        <div class="hd-card" style="border-left:3px solid var(--c-green);" onclick="window.location.href='{{ route('patients.show', $ytv->patient_id) }}'">
+        @php
+            $ytvDocHex = preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($ytv->doctor->color ?? '')) ? $ytv->doctor->color : '#94a3b8';
+            [$tr,$tg,$tb] = sscanf($ytvDocHex, '#%02x%02x%02x');
+        @endphp
+        <div class="hd-card" style="background:rgba({{ $tr }},{{ $tg }},{{ $tb }},0.07);border-left:3px solid {{ $ytvDocHex }};" onclick="window.location.href='{{ route('patients.show', $ytv->patient_id) }}'">
             <div class="hd-pfc">
                 <div class="hd-pfc-top">
                     <span class="hd-pfc-time" style="background:#f0fdf4;color:var(--c-green);">
@@ -1497,7 +1578,8 @@ document.addEventListener('alpine:init', () => {
                 </div>
                 <div class="hd-pfc-meta">
                     <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                    {{ $ytv->doctor->name ?? '—' }}
+                    <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{{ $ytvDocHex }};flex-shrink:0;"></span>
+                    <span style="font-weight:600;color:var(--c-text);">{{ $ytv->doctor->name ?? 'Unassigned' }}</span>
                 </div>
                 <div class="hd-pfc-footer">
                     <span class="hd-badge" style="background:#dcfce7;color:#16a34a;border-color:#bbf7d0;">
@@ -1515,7 +1597,11 @@ document.addEventListener('alpine:init', () => {
             <span style="font-size:.63rem;font-weight:700;color:var(--c-accent2);text-transform:uppercase;letter-spacing:.07em;">Consultations ({{ $yesterdaysConsultations->count() }})</span>
         </div>
         @foreach($yesterdaysConsultations as $yc)
-        <div class="hd-card" style="border-left:3px solid var(--c-accent2);" onclick="window.location.href='{{ route('patients.show', $yc->patient_id) }}'">
+        @php
+            $ycDocHex = preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($yc->doctor->color ?? '')) ? $yc->doctor->color : '#94a3b8';
+            [$cr,$cg,$cb] = sscanf($ycDocHex, '#%02x%02x%02x');
+        @endphp
+        <div class="hd-card" style="background:rgba({{ $cr }},{{ $cg }},{{ $cb }},0.07);border-left:3px solid {{ $ycDocHex }};" onclick="window.location.href='{{ route('patients.show', $yc->patient_id) }}'">
             <div class="hd-pfc">
                 <div class="hd-pfc-top">
                     <span class="hd-pfc-time" style="background:#f5f3ff;color:var(--c-accent2);">
@@ -1540,7 +1626,8 @@ document.addEventListener('alpine:init', () => {
                 @endif
                 <div class="hd-pfc-meta">
                     <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                    {{ $yc->doctor->name ?? '—' }}
+                    <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:{{ $ycDocHex }};flex-shrink:0;"></span>
+                    <span style="font-weight:600;color:var(--c-text);">{{ $yc->doctor->name ?? 'Unassigned' }}</span>
                 </div>
                 <div class="hd-pfc-footer">
                     <span class="hd-badge" style="background:#ede9fe;color:#7c3aed;border-color:#c4b5fd;">

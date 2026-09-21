@@ -142,6 +142,7 @@ class HuddleController extends Controller
                 'patients.name as patient_name',
                 'patients.medical_alert',
                 'doctors.name as doctor_name',
+                'doctors.color as doctor_color',
                 'treatment_types.name as treatment_name',
                 'consultations.id as consultation_id',
                 'consultations.status as consultation_status',
@@ -195,7 +196,7 @@ class HuddleController extends Controller
                 $row->primary_diagnosis = Phi::decrypt($row->primary_diagnosis);
                 $row->finishing_notes   = Phi::decrypt($row->finishing_notes);
                 $row->patient      = (object) ['name' => $row->patient_name, 'medical_alert' => $row->medical_alert];
-                $row->doctor       = (object) ['name' => $row->doctor_name];
+                $row->doctor       = (object) ['name' => $row->doctor_name, 'color' => $row->doctor_color];
                 $row->treatment    = $row->treatment_name ? (object) ['name' => $row->treatment_name] : null;
                 $row->next_appt    = null; // enriched below
                 return $row;
@@ -315,12 +316,13 @@ class HuddleController extends Controller
                 'treatment_visits.status',
                 'patients.name as patient_name',
                 'ytv_doctors.name as doctor_name',
+                'ytv_doctors.color as doctor_color',
             ])
             ->orderBy('treatment_visits.visit_date')
             ->get()
             ->map(function ($row) {
                 $row->patient = (object) ['name' => $row->patient_name];
-                $row->doctor  = (object) ['name' => $row->doctor_name];
+                $row->doctor  = (object) ['name' => $row->doctor_name, 'color' => $row->doctor_color];
                 return $row;
             });
 
@@ -343,13 +345,14 @@ class HuddleController extends Controller
                 'consultations.status',
                 'patients.name as patient_name',
                 'ycons_doctors.name as doctor_name',
+                'ycons_doctors.color as doctor_color',
             ])
             ->get()
             ->map(function ($row) {
                 // PHI read raw via DB::table() — Eloquent casts never ran, so decrypt here.
                 $row->primary_diagnosis = Phi::decrypt($row->primary_diagnosis);
                 $row->patient = (object) ['name' => $row->patient_name];
-                $row->doctor  = (object) ['name' => $row->doctor_name];
+                $row->doctor  = (object) ['name' => $row->doctor_name, 'color' => $row->doctor_color];
                 return $row;
             });
 
@@ -840,8 +843,24 @@ class HuddleController extends Controller
         // and the duplicate "Today's Calls" tile is gone.
         $callCounts = app(\App\Services\Relationship\TodayBoardCounts::class)->counts();
 
+        // ── "Huddle done" tick + missed-day counter ──────────────────────────
+        // The board itself is live data; this is the record that the meeting
+        // actually happened. See HuddleCloseService — only today can be ticked.
+        $closeService  = app(\App\Modules\Huddle\Services\HuddleCloseService::class);
+        $huddleBoard   = $closeService->boardFor($branchId, $today);
+        $huddleDone    = (bool) ($huddleBoard?->is_locked);
+        $huddleDoneBy  = $huddleBoard?->locked_by ? (User::find($huddleBoard->locked_by)?->name) : null;
+        $huddleDoneAt  = $huddleBoard?->locked_at;
+        $huddlePending = $closeService->pendingCount(
+            $closeService->history($branchId, $today->copy()->subDays(29), $today)
+        );
+
         return view('huddle.index', compact(
             'today',
+            'huddleDone',
+            'huddleDoneBy',
+            'huddleDoneAt',
+            'huddlePending',
             'callCounts',
             'staff',
             'yesterday',

@@ -7,6 +7,7 @@ use App\Modules\Huddle\Controllers\HuddleController;
 use App\Modules\Huddle\Controllers\HuddleTaskController;
 use App\Modules\Huddle\Controllers\HuddleCommentController;
 use App\Modules\Huddle\Controllers\HuddleSettingsController;
+use App\Modules\Huddle\Controllers\HuddleCloseController;
 
 Route::middleware(['auth', 'web', 'module:daily_huddle'])->prefix('huddle')->name('huddle.')->group(function () {
 
@@ -33,6 +34,23 @@ Route::middleware(['auth', 'web', 'module:daily_huddle'])->prefix('huddle')->nam
     // for a patient instead of navigating straight to their profile.
     Route::post('/yesterday-flow/log', [HuddleController::class, 'logYesterdayFollowUp'])
         ->name('yesterday-flow.log')->middleware('module:daily_huddle,edit');
+
+    // ── "Huddle done" tick + huddle log ──────────────────────────────────────
+    // The tick records that the meeting actually happened and freezes the
+    // briefing; the log lists every working day and which ones were missed.
+    // Only today can be ticked — see HuddleCloseService.
+    Route::post('/close', [HuddleCloseController::class, 'close'])
+        ->name('close')->middleware('module:daily_huddle,edit');
+
+    Route::delete('/close', [HuddleCloseController::class, 'reopen'])
+        ->name('close.reopen')->middleware('module:daily_huddle,edit');
+
+    Route::get('/history', [HuddleCloseController::class, 'history'])
+        ->name('history');
+
+    Route::get('/history/{date}', [HuddleCloseController::class, 'show'])
+        ->where('date', '\d{4}-\d{2}-\d{2}')
+        ->name('history.show');
 
     // Huddle notes — wins / lows / failures / concerns.
     // `failures` is the report path for equipment or process breakdowns.

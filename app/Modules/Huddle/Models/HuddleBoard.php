@@ -19,12 +19,14 @@ class HuddleBoard extends Model
         'is_locked',
         'locked_at',
         'locked_by',
+        'meta',
     ];
 
     protected $casts = [
         'date'      => 'date',
         'is_locked' => 'boolean',
         'locked_at' => 'datetime',
+        'meta'      => 'array',
     ];
 
     public function cards(): HasMany
