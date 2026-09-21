@@ -107,7 +107,10 @@ class HuddleCommentController extends Controller
 
         $user = $request->user();
 
-        if ($comment->user_id !== $user->id && $user->role !== 'admin') {
+        // 2.6C — was $user->role !== 'admin', the legacy staff-type string:
+        // setting your own staff type to "admin" let you delete anyone's
+        // Huddle comment. isAdminRole() follows the assigned role.
+        if ($comment->user_id !== $user->id && ! $user->isAdminRole()) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 

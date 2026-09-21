@@ -1288,12 +1288,22 @@ class InventoryController extends Controller
 
     /* ═══════════════════════════════════════════════════════════
        SETTINGS (admin-only)
+
+       2.6C (21 Sep 2026) — the fourteen gates below all compared the legacy
+       users.role column inline against the literal admin. That column is a
+       STAFF TYPE label anyone with HR edit can set, including on
+       their own record, so typing "admin" into your own staff type opened
+       inventory settings, categories, sub-types, variants and locations —
+       including destroyLocation. Slice 2.6A fixed User::isAdmin() and
+       User::hasRole(), but these never called a method, so nothing reached
+       them. They now ask isAdminRole(), which follows role_id and the
+       owner-configured grid exactly as EnsureAdminRole does.
     ═══════════════════════════════════════════════════════════ */
 
     public function settings()
     {
         // Gate: admin only
-        if (auth()->user()?->role !== 'admin') {
+        if (! auth()->user()?->isAdminRole()) {
             abort(403, 'Access denied.');
         }
 
@@ -1325,7 +1335,7 @@ class InventoryController extends Controller
 
     public function updateSettings(Request $request)
     {
-        if (auth()->user()?->role !== 'admin') {
+        if (! auth()->user()?->isAdminRole()) {
             abort(403);
         }
 
@@ -1360,7 +1370,7 @@ class InventoryController extends Controller
 
     public function storeCategory(Request $request)
     {
-        if (auth()->user()?->role !== 'admin') abort(403);
+        if (! auth()->user()?->isAdminRole()) abort(403);
 
         $data = $request->validate([
             'name'        => 'required|string|max:100',
@@ -1378,7 +1388,7 @@ class InventoryController extends Controller
 
     public function updateCategory(Request $request, InventoryCategory $cat)
     {
-        if (auth()->user()?->role !== 'admin') abort(403);
+        if (! auth()->user()?->isAdminRole()) abort(403);
 
         $data = $request->validate([
             'name'        => 'required|string|max:100',
@@ -1396,7 +1406,7 @@ class InventoryController extends Controller
 
     public function destroyCategory(InventoryCategory $cat)
     {
-        if (auth()->user()?->role !== 'admin') abort(403);
+        if (! auth()->user()?->isAdminRole()) abort(403);
 
         if ($cat->items()->count() > 0) {
             return back()->withErrors(['category' => 'Cannot delete — this category has ' . $cat->items()->count() . ' item(s) assigned to it.']);
@@ -1412,7 +1422,7 @@ class InventoryController extends Controller
 
     public function storeSubType(Request $request)
     {
-        if (auth()->user()?->role !== 'admin') abort(403);
+        if (! auth()->user()?->isAdminRole()) abort(403);
 
         $data = $request->validate([
             'category_id' => 'required|exists:inventory_categories,id',
@@ -1426,7 +1436,7 @@ class InventoryController extends Controller
 
     public function updateSubType(Request $request, \App\Models\Inventory\InventorySubType $st)
     {
-        if (auth()->user()?->role !== 'admin') abort(403);
+        if (! auth()->user()?->isAdminRole()) abort(403);
 
         $data = $request->validate([
             'category_id' => 'required|exists:inventory_categories,id',
@@ -1441,7 +1451,7 @@ class InventoryController extends Controller
 
     public function destroySubType(\App\Models\Inventory\InventorySubType $st)
     {
-        if (auth()->user()?->role !== 'admin') abort(403);
+        if (! auth()->user()?->isAdminRole()) abort(403);
 
         if ($st->items()->count() > 0) {
             return back()->withErrors(['sub_type' => 'Cannot delete — ' . $st->items()->count() . ' product(s) use this sub-type.']);
@@ -1508,7 +1518,7 @@ class InventoryController extends Controller
 
     public function storeVariant(Request $request)
     {
-        if (auth()->user()?->role !== 'admin') abort(403);
+        if (! auth()->user()?->isAdminRole()) abort(403);
 
         $data = $request->validate([
             'sub_type_id' => 'required|exists:inventory_sub_types,id',
@@ -1522,7 +1532,7 @@ class InventoryController extends Controller
 
     public function updateVariant(Request $request, \App\Models\Inventory\InventoryVariant $variant)
     {
-        if (auth()->user()?->role !== 'admin') abort(403);
+        if (! auth()->user()?->isAdminRole()) abort(403);
 
         $data = $request->validate([
             'sub_type_id' => 'required|exists:inventory_sub_types,id',
@@ -1537,7 +1547,7 @@ class InventoryController extends Controller
 
     public function destroyVariant(\App\Models\Inventory\InventoryVariant $variant)
     {
-        if (auth()->user()?->role !== 'admin') abort(403);
+        if (! auth()->user()?->isAdminRole()) abort(403);
 
         if ($variant->items()->count() > 0) {
             return back()->withErrors(['variant' => 'Cannot delete — ' . $variant->items()->count() . ' product(s) use this variant.']);
@@ -1553,7 +1563,7 @@ class InventoryController extends Controller
 
     public function storeLocation(Request $request)
     {
-        if (auth()->user()?->role !== 'admin') abort(403);
+        if (! auth()->user()?->isAdminRole()) abort(403);
 
         $data = $request->validate([
             'name'        => 'required|string|max:100',
@@ -1577,7 +1587,7 @@ class InventoryController extends Controller
 
     public function updateLocation(Request $request, InventoryLocation $loc)
     {
-        if (auth()->user()?->role !== 'admin') abort(403);
+        if (! auth()->user()?->isAdminRole()) abort(403);
 
         $data = $request->validate([
             'name'        => 'required|string|max:100',
@@ -1622,7 +1632,7 @@ class InventoryController extends Controller
 
     public function destroyLocation(InventoryLocation $loc)
     {
-        if (auth()->user()?->role !== 'admin') abort(403);
+        if (! auth()->user()?->isAdminRole()) abort(403);
 
         if ($loc->stocks()->where('available_qty', '>', 0)->count() > 0) {
             return back()->withErrors(['location' => 'Cannot delete — this location has stock assigned to it.']);
