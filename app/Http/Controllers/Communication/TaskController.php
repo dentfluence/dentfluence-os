@@ -10,6 +10,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Modules\Huddle\Models\HuddleTaskLog;
 use App\Modules\Huddle\Repositories\HuddleBoardRepository;
+use App\Services\Tasks\TaskOutcomeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -17,48 +18,118 @@ use App\Http\Controllers\Controller;
 
 class TaskController extends Controller
 {
-    // ── index ─────────────────────────────────────────────────────────────────
+    /**
+     * The staff work list.
+     *
+     * Rewritten for Task Manager V2. Two things changed and both matter:
+     *
+     * 1. FILTERING IS SERVER-SIDE. The old screen rendered four fixed buckets
+     *    and shipped a search box, a staff dropdown, counter cards and a
+     *    Daily/Weekly/Monthly control whose Alpine state nothing ever read —
+     *    every one of those controls was dead. Reception had been clicking
+     *    them for months. Filters now live in the query string, so a refresh
+     *    keeps them and a filtered view can be linked to.
+     *
+     * 2. THE COUNTS AND THE ROWS COME FROM THE SAME QUERY. The card count and
+     *    the list underneath it cannot disagree, because the cards are built
+     *    by cloning the base query rather than by counting a different one.
+     */
     public function index(Request $request)
     {
-        $branchId = Auth::user()->branch_id;
+        $base = $this->scopedQuery();
 
-        $query = Task::with(['assignedTo', 'patient', 'protocol.materials'])
-            ->where('branch_id', $branchId)
-            ->visibleToReception() // Phase 3: hides System (Automation-record) tasks once tasks.human_system_split is on
-            ->orderBy('due_date');
+        // Counts are always for the WHOLE scope, never the current view —
+        // otherwise clicking "Overdue" would rewrite every other number.
+        $counts = [
+            'open'      => (clone $base)->open()->count(),
+            'overdue'   => (clone $base)->open()->whereDate('due_date', '<', today())->count(),
+            'today'     => (clone $base)->open()->whereDate('due_date', today())->count(),
+            'week'      => (clone $base)->open()
+                                ->whereBetween('due_date', [today(), today()->copy()->endOfWeek()])
+                                ->count(),
+            'done'      => (clone $base)->where('status', 'done')->count(),
+            'cancelled' => (clone $base)->where('status', 'cancelled')->count(),
+        ];
 
-        // ── Role-based visibility ───────────────────────────────────────────
-        // Staff-level roles (assistant, front_desk, accounts) see only their
-        // own tasks. Admin / doctors see everything.
+        $filters = [
+            'view'        => $request->get('view', 'open'),
+            'q'           => trim((string) $request->get('q', '')),
+            'assigned_to' => $request->get('assigned_to'),
+            'category'    => $request->get('category'),
+            'priority'    => $request->get('priority'),
+        ];
+
+        $query = $base->with(['assignedTo', 'patient', 'protocol.materials']);
+
+        match ($filters['view']) {
+            'overdue'   => $query->open()->whereDate('due_date', '<', today()),
+            'today'     => $query->open()->whereDate('due_date', today()),
+            'week'      => $query->open()->whereBetween('due_date', [today(), today()->copy()->endOfWeek()]),
+            'done'      => $query->where('status', 'done'),
+            'cancelled' => $query->where('status', 'cancelled'),
+            'all'       => null,
+            default     => $query->open(),
+        };
+
+        if ($filters['q'] !== '') {
+            $term = '%' . $filters['q'] . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('title', 'like', $term)
+                  ->orWhere('description', 'like', $term);
+            });
+        }
+
+        if ($filters['assigned_to']) $query->where('assigned_to', $filters['assigned_to']);
+        if ($filters['category'])    $query->where('category', $filters['category']);
+        if ($filters['priority'])    $query->where('priority', $filters['priority']);
+
+        // Back-compat: HuddleController links here as ?status=escalated.
+        // Keep that link working rather than silently landing on the open list.
+        if ($request->get('status') === 'escalated') {
+            $query->where('status', 'escalated');
+        }
+
+        // Practice Protocols filter, kept from the old screen.
+        $source = $request->get('source');
+        if ($source === 'protocol') $query->whereNotNull('practice_protocol_id');
+
+        // Oldest promise first, then urgency. Closed views read newest first.
+        if (in_array($filters['view'], ['done', 'cancelled'], true)) {
+            $query->orderByDesc('updated_at');
+        } else {
+            $query->orderBy('due_date')
+                  ->orderByRaw("FIELD(priority,'urgent','high','medium','low')");
+        }
+
+        $tasks = $query->paginate(50)->withQueryString();
+
+        $users = User::where('branch_id', Auth::user()->branch_id)->orderBy('name')->get();
+
+        return view('tasks.index', compact('tasks', 'counts', 'filters', 'users', 'source'));
+    }
+
+    /**
+     * Branch + reception-visibility + role scope, with no view filter applied.
+     * Every count and every list on this screen starts here, so they can
+     * never drift apart.
+     */
+    private function scopedQuery()
+    {
+        $query = Task::query()
+            ->where('branch_id', Auth::user()->branch_id)
+            ->visibleToReception(); // hides Automation record-tasks (CEO rule, 6 Sep)
+
+        // Staff-level roles see only their own work; admin / doctors see all.
         $staffRoles = [
-            \App\Models\User::ROLE_ASSISTANT,
-            \App\Models\User::ROLE_FRONT_DESK,
-            \App\Models\User::ROLE_ACCOUNTS,
+            User::ROLE_ASSISTANT,
+            User::ROLE_FRONT_DESK,
+            User::ROLE_ACCOUNTS,
         ];
         if (in_array(Auth::user()->role, $staffRoles)) {
             $query->where('assigned_to', Auth::id());
         }
-        // ────────────────────────────────────────────────────────────────────
 
-        if ($request->filled('date'))        $query->whereDate('due_date', $request->date);
-        if ($request->filled('priority'))    $query->where('priority', $request->priority);
-        if ($request->filled('assigned_to')) $query->where('assigned_to', $request->assigned_to);
-        if ($request->filled('status'))      $query->where('status', $request->status);
-
-        // Practice Protocols filter: ?source=protocol → only protocol-generated tasks.
-        $source = $request->get('source');
-        if ($source === 'protocol') $query->whereNotNull('practice_protocol_id');
-
-        $tasks = $query->get();
-
-        $overdue  = $tasks->filter(fn($t) => $t->status === 'pending' && $t->due_date->lt(today()) && !$t->due_date->isToday());
-        $today    = $tasks->filter(fn($t) => $t->due_date->isToday()  && $t->status !== 'done');
-        $upcoming = $tasks->filter(fn($t) => $t->due_date->isFuture() && $t->status !== 'done');
-        $done     = $tasks->filter(fn($t) => $t->status === 'done');
-
-        $users = User::where('branch_id', $branchId)->orderBy('name')->get();
-
-        return view('tasks.index', compact('overdue', 'today', 'upcoming', 'done', 'users', 'source'));
+        return $query;
     }
 
     // ── create (fallback page) ────────────────────────────────────────────────
@@ -84,7 +155,10 @@ class TaskController extends Controller
             'contact_name'        => 'nullable|string|max:255',
             'contact_type'        => 'nullable|in:vendor,lab,consultant,other',
             // Maintenance / recurring fields
-            'maintenance_type'    => 'nullable|in:ac_service,pest_control,deep_cleaning,autoclave,dental_chair,xray_machine,water_purifier,fire_safety,generator,other',
+            // Built from the clinic's own list, not a frozen string. The old
+            // hard-coded `in:` rule would have rejected every type a clinic
+            // added in Settings.
+            'maintenance_type'    => ['nullable', \Illuminate\Validation\Rule::in(array_keys(Task::maintenanceTypeOptions()))],
             'is_recurring'        => 'boolean',
             'recurrence_interval' => 'nullable|integer|min:1|max:365',
             'recurrence_unit'     => 'nullable|in:days,weeks,months,years',
@@ -179,19 +253,21 @@ class TaskController extends Controller
         }
         // ───────────────────────────────────────────────────────────────────
 
-        // ── In-app notification → assigned user ────────────────────────────────
-        if ($task->assigned_to && $task->assigned_to !== Auth::id()) {
-            $assigner = Auth::user()->name;
-            $due      = $task->due_date->format('d M Y');
-            AppNotification::notify(
-                userId:      $task->assigned_to,
-                type:        'task_assigned',
-                title:       'New task assigned to you',
-                message:     "\"{$task->title}\" — due {$due}. Assigned by {$assigner}.",
-                actionUrl:   route('tasks.index'),
-                actionLabel: 'View Tasks',
-            );
-        }
+        // ── Tell the assignee (and the manager) ───────────────────────────
+        // Routed through NotificationDispatcher, not AppNotification::notify().
+        // The direct call bypassed the whole engine: no notification_rules, no
+        // Settings matrix, no dedupe, and — because the row was written with
+        // push unset — no phone ever buzzed. The dispatcher resolves WHO from
+        // the rules and queues the push itself.
+        app(\App\Services\Notifications\NotificationDispatcher::class)->fire('task.assigned', [
+            'title'        => 'New task assigned to you',
+            'message'      => "\"{$task->title}\" — due {$task->due_date->format('d M Y')}.",
+            'source'       => $task,
+            'branch_id'    => $task->branch_id,
+            'owner'        => $task->assigned_to,
+            'action_url'   => route('tasks.index'),
+            'action_label' => 'View Tasks',
+        ]);
         // ────────────────────────────────────────────────────────────────────
 
         $task->load(['assignedTo', 'patient']);
@@ -220,9 +296,23 @@ class TaskController extends Controller
     }
 
     // ── markDone ──────────────────────────────────────────────────────────────
-    public function markDone(Task $task)
+    /**
+     * Complete a task, WITH the reason attached.
+     *
+     * The old version flipped status to 'done' and threw away what happened.
+     * An outcome and an optional note now ride along, and the decision about
+     * whether that outcome may actually close the task belongs to
+     * TaskOutcomeService — send it "no answer" and you get an attempt back,
+     * not a completed task.
+     */
+    public function markDone(Task $task, Request $request, TaskOutcomeService $outcomes)
     {
         abort_if($task->branch_id !== Auth::user()->branch_id, 403);
+
+        $data = $request->validate([
+            'outcome_key' => 'nullable|string|max:60',
+            'note'        => 'nullable|string|max:1000',
+        ]);
 
         // ── Evidence gate ────────────────────────────────────────────────────
         // Protocol tasks flagged "requires_evidence" cannot be completed until
@@ -242,9 +332,22 @@ class TaskController extends Controller
         }
         // ─────────────────────────────────────────────────────────────────────
 
-        $task->update(['status' => 'done', 'done_at' => now()]);
+        $outcome = $outcomes->done($task, $data['outcome_key'] ?? null, $data['note'] ?? null);
+        $task->refresh();
 
-        // Sync status to any HuddleTaskLog entries for this task
+        // An outcome meaning the work never happened leaves the task open.
+        if ($task->isOpen()) {
+            HuddleTaskLog::where('task_id', $task->id)->update(['status' => 'pending']);
+
+            return response()->json([
+                'ok'            => true,
+                'closed'        => false,
+                'status'        => $task->status,
+                'attempt_label' => $task->attemptLabel(),
+                'message'       => 'Logged as attempted — the task stays on the list.',
+            ]);
+        }
+
         HuddleTaskLog::where('task_id', $task->id)->update(['status' => 'done']);
 
         // ── Auto-spawn next occurrence for recurring/AMC tasks ───────────────
@@ -260,9 +363,130 @@ class TaskController extends Controller
 
         return response()->json([
             'ok'            => true,
+            'closed'        => true,
+            'status'        => $task->status,
             'is_recurring'  => $task->is_recurring,
             'next_due_date' => $nextTask?->due_date->format('d M Y'),
             'next_task_id'  => $nextTask?->id,
+        ]);
+    }
+
+    // ── attempt ───────────────────────────────────────────────────────────────
+    /** Work happened, the task is not finished. Stays on the list. */
+    public function attempt(Task $task, Request $request, TaskOutcomeService $outcomes)
+    {
+        abort_if($task->branch_id !== Auth::user()->branch_id, 403);
+
+        $data = $request->validate([
+            'outcome_key' => 'nullable|string|max:60',
+            'note'        => 'nullable|string|max:1000',
+        ]);
+
+        $outcomes->attempt($task, $data['outcome_key'] ?? null, $data['note'] ?? null);
+        $task->refresh();
+
+        return response()->json([
+            'ok'            => true,
+            'attempt_label' => $task->attemptLabel(),
+        ]);
+    }
+
+    // ── reschedule ────────────────────────────────────────────────────────────
+    /**
+     * Move the task to a later date. A reason is required — a reschedule with
+     * no reason is indistinguishable from avoidance, and the owner reading the
+     * trail later needs to know which it was.
+     */
+    public function reschedule(Task $task, Request $request, TaskOutcomeService $outcomes)
+    {
+        abort_if($task->branch_id !== Auth::user()->branch_id, 403);
+
+        $data = $request->validate([
+            'due_date'    => 'required|date|after_or_equal:today',
+            'note'        => 'required|string|max:1000',
+            'outcome_key' => 'nullable|string|max:60',
+        ]);
+
+        $outcomes->reschedule($task, $data['due_date'], $data['note'], $data['outcome_key'] ?? null);
+        $task->refresh();
+
+        return response()->json([
+            'ok'               => true,
+            'due_date'         => $task->due_date->format('d M Y'),
+            'reschedule_count' => $task->reschedule_count,
+            'days_late'        => $task->daysLate(),
+        ]);
+    }
+
+    // ── cancel ────────────────────────────────────────────────────────────────
+    /**
+     * Close a task without claiming the work was done. Marking such a task
+     * 'done' would report work nobody did.
+     */
+    public function cancel(Task $task, Request $request, TaskOutcomeService $outcomes)
+    {
+        abort_if($task->branch_id !== Auth::user()->branch_id, 403);
+
+        $data = $request->validate([
+            'reason' => 'required|string|max:1000',
+        ]);
+
+        $outcomes->cancel($task, $data['reason']);
+        HuddleTaskLog::where('task_id', $task->id)->update(['status' => 'done']);
+
+        return response()->json(['ok' => true, 'status' => 'cancelled']);
+    }
+
+    // ── reopen ────────────────────────────────────────────────────────────────
+    public function reopen(Task $task, Request $request, TaskOutcomeService $outcomes)
+    {
+        abort_if($task->branch_id !== Auth::user()->branch_id, 403);
+
+        $data = $request->validate(['note' => 'nullable|string|max:1000']);
+
+        $outcomes->reopen($task, $data['note'] ?? null);
+        HuddleTaskLog::where('task_id', $task->id)->update(['status' => 'pending']);
+
+        return response()->json(['ok' => true, 'status' => 'pending']);
+    }
+
+    // ── show (drawer) ─────────────────────────────────────────────────────────
+    /** Everything the row drawer needs: the task, its outcome list, its trail. */
+    public function show(Task $task, TaskOutcomeService $outcomes)
+    {
+        abort_if($task->branch_id !== Auth::user()->branch_id, 403);
+
+        $task->load(['assignedTo', 'patient', 'outcomes.user']);
+
+        return response()->json([
+            'ok' => true,
+            'task' => [
+                'id'               => $task->id,
+                'title'            => $task->title,
+                'description'      => $task->description,
+                'category'         => $task->category,
+                'category_label'   => $task->categoryLabel(),
+                'priority'         => $task->priority,
+                'status'           => $task->status,
+                'due_date'         => $task->due_date->toDateString(),
+                'due_date_label'   => $task->due_date->format('d M Y'),
+                'assigned_to'      => $task->assignedTo?->name,
+                'patient_name'     => $task->patient?->name,
+                'attempt_label'    => $task->attemptLabel(),
+                'days_late'        => $task->daysLate(),
+                'reschedule_count' => (int) $task->reschedule_count,
+                'original_due'     => $task->original_due_date?->format('d M Y'),
+                'requires_evidence'=> (bool) $task->requires_evidence,
+                'is_open'          => $task->isOpen(),
+            ],
+            'options'          => $outcomes->optionsFor($task),
+            'non_closing_keys' => $outcomes->nonClosingKeysFor($task),
+            'trail' => $task->outcomes->map(fn ($o) => [
+                'action'  => $o->action,
+                'summary' => $o->summary(),
+                'user'    => $o->user?->name,
+                'at'      => $o->created_at->format('d M, h:i A'),
+            ])->values(),
         ]);
     }
 

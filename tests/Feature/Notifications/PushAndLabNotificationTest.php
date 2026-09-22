@@ -73,7 +73,7 @@ class PushAndLabNotificationTest extends TestCase
 
     // ── push queueing ────────────────────────────────────────────────────────
 
-    public function test_a_popup_with_push_queues_one_job_per_recipient_and_a_bell_queues_none(): void
+    public function test_push_follows_the_rule_not_the_level(): void
     {
         Queue::fake();
         $this->actingAs($this->doctor);
@@ -101,10 +101,34 @@ class PushAndLabNotificationTest extends TestCase
             'payment_mode' => 'cash', 'payment_date' => now()->toDateString(),
         ]);
 
+        // CHANGED 22 Sep — see the note in NotificationDispatchTest. A bell
+        // rule with push TICKED now queues the job: the admin asked for the
+        // phone, and the matrix is where that is decided.
+        Queue::assertPushed(SendPushNotification::class, 1);
+        $this->assertTrue(
+            AppNotification::where('event_key', 'payment.received')->firstOrFail()->push,
+            'a bell rule with push ticked must queue the phone'
+        );
+
+        // ...and the control that keeps the matrix honest in the other
+        // direction: push UNTICKED queues nothing, at either level. Without
+        // this case the change above would just be "everything pushes now".
+        Queue::fake();
+        AppNotification::where('event_key', 'payment.received')->delete();
+        NotificationRule::updateOrCreate(
+            ['event_key' => 'payment.received', 'role' => Role::ADMIN, 'branch_id' => null],
+            ['level' => 'bell', 'push' => false]
+        );
+        \App\Models\InvoicePayment::create([
+            'invoice_id' => $invoice->id,
+            'patient_id' => $this->patient->id, 'amount' => 50,
+            'payment_mode' => 'cash', 'payment_date' => now()->toDateString(),
+        ]);
+
         Queue::assertNotPushed(SendPushNotification::class);
         $this->assertFalse(
             AppNotification::where('event_key', 'payment.received')->firstOrFail()->push,
-            'a bell-level rule never carries push, whatever the matrix ticked'
+            'push unticked must stay unticked',
         );
     }
 

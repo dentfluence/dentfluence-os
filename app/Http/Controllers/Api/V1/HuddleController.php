@@ -134,14 +134,27 @@ class HuddleController extends ApiController
             return $denied;
         }
 
+        // 'in_progress' used to be accepted here and it was never a real
+        // status: tasks.status is enum('pending','done','escalated','cancelled').
+        // On a strict-mode MySQL that write fails outright, so the phone's
+        // "in progress" has never worked. It is gone rather than added to the
+        // enum — "someone is on it" is an ATTEMPT, and an attempt now has a
+        // proper home with a reason attached (POST /tasks/{task}/attempt).
         $data = $request->validate([
-            'status' => ['required', Rule::in(['pending', 'in_progress', 'done'])],
+            'status' => ['required', Rule::in(['pending', 'done'])],
         ]);
 
-        $task->update([
-            'status'  => $data['status'],
-            'done_at' => $data['status'] === 'done' ? now() : null,
-        ]);
+        // Routed through the service so the phone cannot close a task in a way
+        // the web would not: no bare status flip, always an outcome row.
+        $service = app(\App\Services\Tasks\TaskOutcomeService::class);
+
+        if ($data['status'] === 'done') {
+            $service->done($task, null, null);
+        } elseif (! $task->isOpen()) {
+            $service->reopen($task, null);
+        }
+
+        $task->refresh();
 
         return $this->success(['id' => $task->id, 'status' => $task->status], 'Task status updated.');
     }

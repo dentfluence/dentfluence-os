@@ -768,6 +768,30 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         Route::patch('/huddle/tasks/{task}/assign', [HuddleController::class, 'assignTask'])
             ->middleware('api.role:module:daily_huddle,edit');
 
+        /*
+        |--------------------------------------------------------------------
+        | Task outcomes (Task Manager V2) — the phone's half
+        |--------------------------------------------------------------------
+        | Mobile tasks live on the huddle board (CEO ruling 4 Sep: the app is a
+        | data-entry layer, job #5 is "daily huddle + tasks"), so there is no
+        | separate tasks screen — but the phone must be able to say WHAT
+        | HAPPENED, not just tick a box.
+        |
+        | These delegate to the same TaskOutcomeService the web uses. The
+        | outcome vocabulary is served from /outcome, never hard-coded in Dart,
+        | so a clinic editing its list in Tasks > Settings sees it on the phone
+        | without a new APK.
+        */
+        Route::get('/tasks/{task}/outcome',     [\App\Http\Controllers\Api\V1\TaskOutcomeController::class, 'show']);
+        Route::post('/tasks/{task}/done',       [\App\Http\Controllers\Api\V1\TaskOutcomeController::class, 'done'])
+            ->middleware('api.role:module:tasks,edit');
+        Route::post('/tasks/{task}/attempt',    [\App\Http\Controllers\Api\V1\TaskOutcomeController::class, 'attempt'])
+            ->middleware('api.role:module:tasks,edit');
+        Route::post('/tasks/{task}/reschedule', [\App\Http\Controllers\Api\V1\TaskOutcomeController::class, 'reschedule'])
+            ->middleware('api.role:module:tasks,edit');
+        Route::post('/tasks/{task}/cancel',     [\App\Http\Controllers\Api\V1\TaskOutcomeController::class, 'cancel'])
+            ->middleware('api.role:module:tasks,edit');
+
         // Today's Patient Flow popup (2026-07-06 web parity) — notes / amount
         // to collect / prep item / chairside assistant, one call, one screen.
         Route::patch('/huddle/appointments/{id}/instruction', [HuddleController::class, 'updateInstruction'])

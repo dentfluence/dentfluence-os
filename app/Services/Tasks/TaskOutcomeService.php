@@ -1,0 +1,221 @@
+<?php
+
+namespace App\Services\Tasks;
+
+use App\Models\ActionOptionList;
+use App\Models\Task;
+use App\Models\TaskOutcome;
+use App\Services\Relationship\TodayActionOptions;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Task Manager V2 — the ONE place a task changes state.
+ *
+ * Before this, TaskController::markDone() flipped status to 'done' inline and
+ * the reason was lost. Every state change now goes through here so that:
+ *   - an outcome row is always written (the trail is never optional),
+ *   - the counters on tasks stay consistent with that trail,
+ *   - the "did this work actually happen" rule lives in one place.
+ *
+ * Nothing here decides a due date or a status from thin air — the caller
+ * supplies the outcome, this decides what that outcome MEANS.
+ */
+class TaskOutcomeService
+{
+    /**
+     * Record an attempt: work happened, the task is NOT finished.
+     *
+     * The task stays `pending` on purpose — see the Slice 1a migration note.
+     * Every board that queries open work keeps seeing it, which is the whole
+     * point: "No answer" must leave the task on the list.
+     */
+    public function attempt(Task $task, ?string $outcomeKey, ?string $note = null): TaskOutcome
+    {
+        return DB::transaction(function () use ($task, $outcomeKey, $note) {
+            $outcome = $this->log($task, 'attempted', $outcomeKey, $note);
+
+            $task->forceFill([
+                'attempt_count'    => (int) $task->attempt_count + 1,
+                'last_outcome_key' => $outcomeKey,
+                'last_outcome_at'  => now(),
+            ])->save();
+
+            return $outcome;
+        });
+    }
+
+    /**
+     * Move the task to a later date.
+     *
+     * original_due_date is stamped on the FIRST reschedule only and never
+     * moves again, so overdue keeps being measured from when the work was
+     * first promised. Without that, a backlog can be cleared by pushing dates
+     * and the owner's red number becomes a lie.
+     */
+    public function reschedule(Task $task, string $newDueDate, ?string $note = null, ?string $outcomeKey = null): TaskOutcome
+    {
+        return DB::transaction(function () use ($task, $newDueDate, $note, $outcomeKey) {
+            $before = $task->due_date;
+
+            $outcome = $this->log($task, 'rescheduled', $outcomeKey, $note, [
+                'due_date_before' => $before,
+                'due_date_after'  => $newDueDate,
+            ]);
+
+            $task->forceFill([
+                // Stamp once. ?? keeps any existing value untouched.
+                'original_due_date' => $task->original_due_date ?? $before,
+                'due_date'          => $newDueDate,
+                'reschedule_count'  => (int) $task->reschedule_count + 1,
+                'last_outcome_key'  => $outcomeKey ?? $task->last_outcome_key,
+                'last_outcome_at'   => now(),
+            ])->save();
+
+            return $outcome;
+        });
+    }
+
+    /**
+     * Finish the task.
+     *
+     * Guard: an outcome that means the work did not actually happen cannot
+     * close it. "No answer" is an attempt, not a completion — the same rule
+     * the 12 Sep migration enforced on the PRE side. A caller that sends one
+     * gets an attempt back instead of a silent lie in the database.
+     */
+    public function done(Task $task, ?string $outcomeKey = null, ?string $note = null): TaskOutcome
+    {
+        if ($task->outcomeLeavesOpen($outcomeKey)) {
+            return $this->attempt($task, $outcomeKey, $note);
+        }
+
+        return DB::transaction(function () use ($task, $outcomeKey, $note) {
+            $outcome = $this->log($task, 'done', $outcomeKey, $note);
+
+            $task->forceFill([
+                'status'           => 'done',
+                'done_at'          => now(),
+                'last_outcome_key' => $outcomeKey ?? $task->last_outcome_key,
+                'last_outcome_at'  => now(),
+            ])->save();
+
+            return $outcome;
+        });
+    }
+
+    /**
+     * Close the task WITHOUT claiming the work was done.
+     *
+     * This is the honest exit for "not required any more" / "patient
+     * cancelled". Marking such a task `done` would report work nobody did —
+     * the same mistake as closing the 137 orphan reminder rows as done on
+     * 7 Sep. A reason is required.
+     */
+    public function cancel(Task $task, string $reason, ?string $outcomeKey = null): TaskOutcome
+    {
+        return DB::transaction(function () use ($task, $reason, $outcomeKey) {
+            $outcome = $this->log($task, 'cancelled', $outcomeKey, $reason);
+
+            $task->forceFill([
+                'status'        => 'cancelled',
+                'cancelled_at'  => now(),
+                'cancel_reason' => $reason,
+            ])->save();
+
+            return $outcome;
+        });
+    }
+
+    /** Put a closed task back on the list. Counters are deliberately kept. */
+    public function reopen(Task $task, ?string $note = null): TaskOutcome
+    {
+        return DB::transaction(function () use ($task, $note) {
+            $outcome = $this->log($task, 'reopened', null, $note);
+
+            $task->forceFill([
+                'status'        => 'pending',
+                'done_at'       => null,
+                'cancelled_at'  => null,
+                'cancel_reason' => null,
+            ])->save();
+
+            return $outcome;
+        });
+    }
+
+    // ── Outcome vocabulary ────────────────────────────────────────────────
+
+    /**
+     * The outcome list this task's drawer should show: [key => label].
+     *
+     * Read from action_option_lists (option_type = 'task_outcome') scoped to
+     * the TASK'S OWN CATEGORY, so a lab task offers lab words and a call task
+     * offers call words — six or so each, not the forty that came from
+     * flattening every PRE category together.
+     *
+     * Falls back to Task::WORK_OUTCOMES only if a clinic has deactivated every
+     * row for a category; an empty dropdown would be worse than a generic one.
+     */
+    public function optionsFor(Task $task): array
+    {
+        $rows = ActionOptionList::query()->taskOutcomesFor($task->category)->get();
+
+        return $rows->isNotEmpty()
+            ? ActionOptionList::labelMap($rows)
+            : Task::WORK_OUTCOMES;
+    }
+
+    /**
+     * Keys that must NOT close the task.
+     *
+     * Two sources, and the order matters:
+     *  1. whatever the clinic has set closes_task = false on, and
+     *  2. for communication tasks, the non-contact keys — which override the
+     *     stored value entirely. A clinic may rename "No answer" but may not
+     *     make it complete a call that never connected. Same rule, same
+     *     reason, as migration 2026_09_12_000001 on the PRE side.
+     */
+    public function nonClosingKeysFor(Task $task): array
+    {
+        $keys = ActionOptionList::query()
+            ->taskOutcomesFor($task->category)
+            ->where('closes_task', false)
+            ->pluck('key')
+            ->all();
+
+        if ($task->isCommTask()) {
+            $keys = array_merge($keys, TodayActionOptions::nonContactKeys());
+        }
+
+        return array_values(array_unique($keys));
+    }
+
+    /** Outcome keys the clinic marked "a note is required before saving". */
+    public function requiresNoteKeysFor(Task $task): array
+    {
+        return ActionOptionList::query()
+            ->taskOutcomesFor($task->category)
+            ->where('requires_notes', true)
+            ->pluck('key')
+            ->all();
+    }
+
+    // ── internals ─────────────────────────────────────────────────────────
+
+    private function log(Task $task, string $action, ?string $outcomeKey, ?string $note, array $extra = []): TaskOutcome
+    {
+        return TaskOutcome::create([
+            'task_id'       => $task->id,
+            'branch_id'     => $task->branch_id,
+            'user_id'       => Auth::id(),
+            'action'        => $action,
+            'outcome_key'   => $outcomeKey,
+            // Snapshot the label so a later rename in Settings cannot rewrite
+            // history. See the task_outcomes migration.
+            'outcome_label' => $outcomeKey ? ($this->optionsFor($task)[$outcomeKey] ?? null) : null,
+            'note'          => $note,
+            ...$extra,
+        ]);
+    }
+}

@@ -229,7 +229,18 @@ final class NotificationCatalog
         // ── HR & Tasks ───────────────────────────────────────────────────────
         'task.assigned' => [
             'module' => 'hr', 'type' => 'task_assigned',
-            'label'  => 'Task assigned / overdue',
+            'label'  => 'Task assigned to someone',
+            'targets' => [Role::MANAGER => self::B], 'owner' => self::BP,
+        ],
+        // Split out of task.assigned on 22 Sep. One key could not carry both:
+        // "a task was given to you" fires once, at the moment of assignment,
+        // and is dedupable by task id; "your task is late" has to be allowed
+        // to fire again on a later day for the SAME task, and an admin will
+        // reasonably want the two at different volumes. The manager hears
+        // about lateness, not about every assignment.
+        'task.overdue' => [
+            'module' => 'hr', 'type' => 'task_assigned',
+            'label'  => 'Task overdue',
             'targets' => [Role::MANAGER => self::B], 'owner' => self::BP,
         ],
         'staff.absent' => [

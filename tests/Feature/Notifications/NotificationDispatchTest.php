@@ -147,8 +147,25 @@ class NotificationDispatchTest extends TestCase
 
         $row = AppNotification::where('event_key', 'consultation.saved')->firstOrFail();
         $this->assertSame(AppNotification::PRIORITY_BELL, $row->priority);
-        $this->assertFalse($row->push, 'push is popup-only whatever the matrix says');
         $this->assertSame(0, AppNotification::pendingPopups($this->deskA->id)->count());
+
+        // CHANGED 22 Sep. This used to assert push was dropped here, on the
+        // 9 Sep rule "push only for popup-level rules". That rule and the
+        // catalogue contradicted each other: the catalogue's own BP constant
+        // is [bell, true] and EIGHT shipped events use it — payment.received,
+        // lab.received, lead.new, membership.sold, leave.requested,
+        // login.new_device, task.assigned, task.overdue — every one of them
+        // declaring "bell AND phone", and none of them ever reaching a phone.
+        //
+        // The tie is broken in favour of the matrix, because the Settings
+        // matrix carries a per-rule push checkbox. A checkbox that does
+        // nothing at bell level is a dead control, and a screen full of dead
+        // controls is exactly what the Tasks rebuild had to undo.
+        //
+        // Demotion still means what it always meant: bell priority, and no
+        // popup. It just no longer silently cancels the push the admin asked
+        // for. Quiet hours and the per-device opt-out still apply downstream.
+        $this->assertTrue($row->push, 'a bell rule with push ticked must still reach the phone');
     }
 
     public function test_done_clears_the_popup_for_every_receptionist_and_later_only_for_one(): void

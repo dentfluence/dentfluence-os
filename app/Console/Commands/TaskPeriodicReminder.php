@@ -51,7 +51,8 @@ class TaskPeriodicReminder extends Command
         foreach ($inShiftUserIds as $userId) {
             $pendingTasks = Task::with('patient')
                 ->where('assigned_to', $userId)
-                ->where('status', '!=', 'done')
+                ->open() // not done AND not cancelled — 'cancelled' exists since 22 Sep
+                ->visibleToReception()
                 ->whereDate('due_date', '<=', today())
                 ->orderBy('due_date')
                 ->get();
@@ -71,14 +72,38 @@ class TaskPeriodicReminder extends Command
             $this->line("  → {$user->name}: {$count} pending ({$overdue} overdue)");
 
             if (!$isDryRun) {
-                AppNotification::notify(
-                    userId:      $userId,
-                    type:        'task_reminder',
-                    title:       "{$count} task(s) still pending",
-                    message:     $msg,
-                    actionUrl:   route('tasks.index'),
-                    actionLabel: 'View My Tasks',
-                );
+                // Through the engine, not AppNotification::notify(). The direct
+                // call skipped notification_rules and the Settings matrix, and
+                // wrote a row with no push intent — so this nudge has never
+                // reached anyone's phone.
+                //
+                // DEDUPE IS THE POINT HERE. This command runs every two hours;
+                // dedupe_scope pins the group key to (today, this user), so the
+                // first run of the day writes the row and the five after it are
+                // silent no-ops. One buzz a day about your own backlog, not six
+                // — six is how staff learn to swipe alerts away unread.
+                //
+                // The manager also gets one row per staff member per day
+                // (catalogue default). An admin who finds that noisy turns the
+                // manager column off for task.overdue in the Settings matrix.
+                app(\App\Services\Notifications\NotificationDispatcher::class)->fire('task.overdue', [
+                    'title'        => "{$count} task(s) still pending",
+                    'message'      => $msg,
+                    'branch_id'    => $user->branch_id,
+                    'owner'        => $userId,
+                    'actor_id'     => null, // a scheduled run has no actor
+                    // The SOURCE is the staff member, because this is a digest
+                    // about their whole list, not about one task. It must be
+                    // set: NotificationDispatcher::groupKey() falls back to a
+                    // random key when source_type/source_id are absent, and a
+                    // random key dedupes against nothing — the every-two-hours
+                    // schedule would then buzz six times a day.
+                    'source_type'  => \App\Models\User::class,
+                    'source_id'    => $userId,
+                    'dedupe_scope' => today()->toDateString(),
+                    'action_url'   => route('tasks.index'),
+                    'action_label' => 'View My Tasks',
+                ]);
             }
             $fired++;
         }

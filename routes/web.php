@@ -829,6 +829,26 @@ Route::middleware('auth')->group(function () {
         Route::post('/{task}/done',   [\App\Http\Controllers\Communication\TaskController::class, 'markDone'])->name('done');
         Route::post('/{task}/evidence', [\App\Http\Controllers\Communication\TaskController::class, 'uploadEvidence'])->name('evidence');
         Route::post('/{task}/escalate', [\App\Http\Controllers\Communication\TaskController::class, 'escalate'])->name('escalate')->middleware('module:tasks,edit');
+
+        /* Tasks > Settings — the per-category outcome vocabulary.
+           MUST be declared before the /{task} wildcard below, or "settings"
+           is read as a task id. */
+        Route::get('/settings',  [\App\Http\Controllers\Communication\TaskSettingsController::class, 'index'])->name('settings');
+        Route::post('/settings/outcomes/{option}', [\App\Http\Controllers\Communication\TaskSettingsController::class, 'save'])->name('settings.outcome.save')->middleware('module:tasks,edit');
+        Route::post('/settings/outcomes/{category}/add', [\App\Http\Controllers\Communication\TaskSettingsController::class, 'add'])->name('settings.outcome.add')->middleware('module:tasks,edit');
+        Route::post('/settings/maintenance-types/{option}', [\App\Http\Controllers\Communication\TaskSettingsController::class, 'saveMaintenanceType'])->name('settings.maintenance.save')->middleware('module:tasks,edit');
+        Route::post('/settings/maintenance-types', [\App\Http\Controllers\Communication\TaskSettingsController::class, 'addMaintenanceType'])->name('settings.maintenance.add')->middleware('module:tasks,edit');
+
+        /* Task Manager V2 — outcome capture. Every one of these writes a
+           task_outcomes row; none of them is a bare status flip. `show` feeds
+           the row drawer (task + outcome vocabulary + trail).
+           NOTE: /{task} is declared AFTER /my and /overdue so those static
+           paths are never swallowed by the wildcard. */
+        Route::get('/{task}',              [\App\Http\Controllers\Communication\TaskController::class, 'show'])->name('show');
+        Route::post('/{task}/attempt',     [\App\Http\Controllers\Communication\TaskController::class, 'attempt'])->name('attempt')->middleware('module:tasks,edit');
+        Route::post('/{task}/reschedule',  [\App\Http\Controllers\Communication\TaskController::class, 'reschedule'])->name('reschedule')->middleware('module:tasks,edit');
+        Route::post('/{task}/cancel',      [\App\Http\Controllers\Communication\TaskController::class, 'cancel'])->name('cancel')->middleware('module:tasks,edit');
+        Route::post('/{task}/reopen',      [\App\Http\Controllers\Communication\TaskController::class, 'reopen'])->name('reopen')->middleware('module:tasks,edit');
     });
 
     /* ── Smart Treatment Presentation (new, independent module — Slice A+B) ──

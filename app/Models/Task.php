@@ -48,6 +48,14 @@ class Task extends Model
         'requires_evidence',
         // Phase 5 — Relationship Engine: links auto-created tasks to a relationship
         'relationship_id',
+        // Task Manager V2 — outcome / reschedule / cancel facts.
+        // NOTE: attempt_count, reschedule_count and original_due_date are NOT
+        // fillable. They are counters and a one-time stamp; they may only be
+        // moved by TaskOutcomeService, never by mass assignment from a form.
+        'last_outcome_key',
+        'last_outcome_at',
+        'cancelled_at',
+        'cancel_reason',
     ];
 
     protected $casts = [
@@ -57,6 +65,9 @@ class Task extends Model
         'escalated_at'  => 'datetime',
         'is_recurring'  => 'boolean',
         'requires_evidence' => 'boolean',
+        'original_due_date' => 'date',
+        'last_outcome_at'   => 'datetime',
+        'cancelled_at'      => 'datetime',
     ];
 
     // ── Constants ─────────────────────────────────────────────────
@@ -98,7 +109,53 @@ class Task extends Model
         'system' => 'System',
     ];
 
-    /** Maintenance sub-types. */
+    /**
+     * Outcome vocabulary for NON-communication tasks (clinical, lab, admin,
+     * maintenance, other).
+     *
+     * Communication tasks (call / whatsapp / follow_up) do NOT use this list —
+     * they read action_option_lists (option_type = 'call_outcome'), the same
+     * clinic-editable list the PRE Today board uses, so reception never learns
+     * two vocabularies for the same act of picking up a phone.
+     *
+     * Keys marked in NON_CLOSING_WORK_OUTCOMES leave the task open. This is the
+     * same rule as the 12 Sep non-contact fix on the PRE side: work that did
+     * not actually happen must never mark itself handled.
+     */
+    public const WORK_OUTCOMES = [
+        'completed'        => 'Completed',
+        'partially_done'   => 'Partially done',
+        'blocked_material' => 'Blocked — material / stock not available',
+        'blocked_vendor'   => 'Blocked — waiting on vendor / lab',
+        'blocked_patient'  => 'Blocked — waiting on patient',
+        'not_required'     => 'Not required any more',
+    ];
+
+    /**
+     * Work outcomes that leave the task OPEN.
+     * 'not_required' is absent on purpose — it resolves the task (via cancel),
+     * exactly as 'wrong_number' resolves a call on the PRE side.
+     */
+    public const NON_CLOSING_WORK_OUTCOMES = [
+        'partially_done',
+        'blocked_material',
+        'blocked_vendor',
+        'blocked_patient',
+    ];
+
+    /** Terminal statuses — a task in one of these is off the working list. */
+    public const CLOSED_STATUSES = ['done', 'cancelled'];
+
+    /**
+     * Maintenance sub-types — the SHIPPED DEFAULTS only.
+     *
+     * Since 22 Sep the live list is action_option_lists
+     * (option_type = 'maintenance_type'), editable in Tasks > Settings, and
+     * tasks.maintenance_type is a varchar rather than an enum so a clinic's
+     * own type can actually be saved. Read the list through
+     * maintenanceTypeOptions(); this constant is the fallback for a database
+     * where the rows were deleted, and the seed source for the migration.
+     */
     public const MAINTENANCE_TYPES = [
         'ac_service'    => 'AC Service',
         'pest_control'  => 'Pest Control',
@@ -174,6 +231,15 @@ class Task extends Model
         return $this->hasMany(Task::class, 'parent_task_id');
     }
 
+    /**
+     * The append-only outcome trail — every attempt, reschedule, close and
+     * reopen, newest first.
+     */
+    public function outcomes(): HasMany
+    {
+        return $this->hasMany(TaskOutcome::class)->latest('created_at');
+    }
+
     // ── Scopes ────────────────────────────────────────────────────
 
     public function scopeToday(Builder $query): Builder
@@ -190,6 +256,31 @@ class Task extends Model
     public function scopePending(Builder $query): Builder
     {
         return $query->where('status', 'pending');
+    }
+
+    /**
+     * Open work — everything still on somebody's list.
+     *
+     * Prefer this over scopePending() in new code. It is written as "not
+     * closed" rather than "= pending" so that a future non-terminal state
+     * cannot silently vanish off the boards the way an 'attempted' STATUS
+     * would have — see the Slice 1a migration note.
+     */
+    public function scopeOpen(Builder $query): Builder
+    {
+        return $query->whereNotIn('status', self::CLOSED_STATUSES);
+    }
+
+    /** Closed work — done or cancelled. */
+    public function scopeClosed(Builder $query): Builder
+    {
+        return $query->whereIn('status', self::CLOSED_STATUSES);
+    }
+
+    /** Open tasks that have been worked at least once but not finished. */
+    public function scopeAttempted(Builder $query): Builder
+    {
+        return $query->open()->where('attempt_count', '>', 0);
     }
 
     public function scopeForBranch(Builder $query, int $branchId): Builder
@@ -351,14 +442,132 @@ class Task extends Model
         return $this->task_type !== 'system';
     }
 
+    public function isCancelled(): bool
+    {
+        return $this->status === 'cancelled';
+    }
+
+    /** Still on someone's list. */
+    public function isOpen(): bool
+    {
+        return ! in_array($this->status, self::CLOSED_STATUSES, true);
+    }
+
+    /** Worked on at least once without being finished. */
+    public function wasAttempted(): bool
+    {
+        return $this->isOpen() && (int) $this->attempt_count > 0;
+    }
+
+    public function wasRescheduled(): bool
+    {
+        return (int) $this->reschedule_count > 0;
+    }
+
+    /**
+     * Days late, measured against the date this task was FIRST due — not the
+     * date it has since been pushed to. Rescheduling must not launder a
+     * backlog; the owner's red number has to stay honest.
+     */
+    public function daysLate(): int
+    {
+        if (! $this->isOpen()) {
+            return 0;
+        }
+
+        $reference = $this->original_due_date ?? $this->due_date;
+
+        return $reference->lt(today()) ? $reference->diffInDays(today()) : 0;
+    }
+
+    public function isOverdue(): bool
+    {
+        return $this->daysLate() > 0;
+    }
+
+    /** e.g. "Attempted x2" for the row badge. Empty string when never worked. */
+    public function attemptLabel(): string
+    {
+        $n = (int) $this->attempt_count;
+
+        return match (true) {
+            $n <= 0 => '',
+            $n === 1 => 'Attempted',
+            default  => "Attempted x{$n}",
+        };
+    }
+
+    /**
+     * Does this outcome key leave the task open?
+     *
+     * The clinic's own setting decides (action_option_lists.closes_task),
+     * EXCEPT for communication tasks, where a non-contact outcome always
+     * leaves the task open whatever the stored value says. Nobody was spoken
+     * to, so nothing was resolved — see TodayActionOptions and migration
+     * 2026_09_12_000001.
+     */
+    public function outcomeLeavesOpen(?string $outcomeKey): bool
+    {
+        if (! $outcomeKey) {
+            return false;
+        }
+
+        if ($this->isCommTask() && \App\Services\Relationship\TodayActionOptions::isNonContact($outcomeKey)) {
+            return true;
+        }
+
+        $row = \App\Models\ActionOptionList::query()
+            ->taskOutcomesFor($this->category)
+            ->where('key', $outcomeKey)
+            ->first();
+
+        if ($row) {
+            return ! $row->closes_task;
+        }
+
+        // No configured row (fallback vocabulary in use).
+        return in_array($outcomeKey, self::NON_CLOSING_WORK_OUTCOMES, true);
+    }
+
+    public function outcomeLabelFor(?string $outcomeKey): ?string
+    {
+        return $outcomeKey ? (self::WORK_OUTCOMES[$outcomeKey] ?? null) : null;
+    }
+
     public function categoryLabel(): string
     {
         return self::CATEGORIES[$this->category] ?? ucfirst(str_replace('_', ' ', $this->category));
     }
 
+    /**
+     * key => label for every active maintenance type, clinic's list first.
+     * Falls back to the shipped constant only if a clinic has deactivated
+     * every row — an empty dropdown is worse than a generic one.
+     */
+    public static function maintenanceTypeOptions(): array
+    {
+        $rows = \App\Models\ActionOptionList::query()
+            ->where('option_type', 'maintenance_type')
+            ->active()
+            ->get();
+
+        return $rows->isNotEmpty()
+            ? \App\Models\ActionOptionList::labelMap($rows)
+            : self::MAINTENANCE_TYPES;
+    }
+
     public function maintenanceTypeLabel(): string
     {
-        return self::MAINTENANCE_TYPES[$this->maintenance_type] ?? 'Other';
+        if (! $this->maintenance_type) {
+            return 'Other';
+        }
+
+        // The clinic's current list first, then the shipped names, then the
+        // stored key humanised — a type that was later deactivated must still
+        // render as words on the task that used it, never as a blank.
+        return self::maintenanceTypeOptions()[$this->maintenance_type]
+            ?? self::MAINTENANCE_TYPES[$this->maintenance_type]
+            ?? ucfirst(str_replace('_', ' ', $this->maintenance_type));
     }
 
     public function priorityColor(): string

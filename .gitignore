@@ -51,3 +51,16 @@ _to_delete/
 # stray database engine landed in the repo root). Never commit it.
 /mysql-8.4/
 /origin)
+
+# ── 22 Sep: .env.bak-0919 reached GitHub through `git add -A`.
+# The list above named .env, .env.backup, .env.production and
+# .env.docker-local one by one, and a file called .env.bak-0919 matched none
+# of them. Naming each variant is how this happens; these are patterns.
+.env.bak*
+.env.*bak*
+.env-*
+*.v1.bak
+*_commit_msg.txt
+COMMIT_MSG.txt
+PUSH_*.bat
+AMEND_*.bat

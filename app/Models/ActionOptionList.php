@@ -16,6 +16,9 @@ use Illuminate\Database\Eloquent\Model;
  *                       config('relationship_rules.response_options') if a
  *                       category has no active rows yet.
  *   'dismiss_reason' — shared across all categories, action_category is null.
+ *   'task_outcome'   — Tasks module, scoped per TASK category (call, lab,
+ *                       maintenance, …). Edited in Tasks > Settings, never in
+ *                       PRE settings.
  */
 class ActionOptionList extends Model
 {
@@ -53,6 +56,21 @@ class ActionOptionList extends Model
     {
         return $query->where('option_type', 'call_outcome')
             ->where('action_category', $category)
+            ->active();
+    }
+
+    /**
+     * Active task-outcome options for one TASK category (call, lab,
+     * maintenance, …), ordered for display.
+     *
+     * Separate option_type from 'call_outcome' on purpose: the Tasks module
+     * keeps its own settings, and task categories must not appear in the PRE
+     * board's category list. See migration 2026_09_22_100003.
+     */
+    public function scopeTaskOutcomesFor($query, string $taskCategory)
+    {
+        return $query->where('option_type', 'task_outcome')
+            ->where('action_category', $taskCategory)
             ->active();
     }
 

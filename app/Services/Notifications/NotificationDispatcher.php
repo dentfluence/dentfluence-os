@@ -158,9 +158,23 @@ class NotificationDispatcher
                 'action_url'   => $ctx['action_url'] ?? null,
                 'action_label' => $ctx['action_label'] ?? null,
                 'is_read'      => false,
-                // Push intent is recorded on the row for N-5's sender; a bell-
-                // level rule never pushes whatever the matrix says about push.
-                'push'         => $push && $level === NotificationCatalog::LEVEL_POPUP,
+                // Push intent is recorded on the row for N-5's sender.
+                //
+                // 22 Sep: this used to read `$push && $level === LEVEL_POPUP`,
+                // which silently threw away every push the catalogue had asked
+                // for at bell level. The catalogue's own BP constant is
+                // [LEVEL_BELL, true] and EIGHT shipped events use it —
+                // payment.received, lab.received, lead.new, membership.sold,
+                // leave.requested, login.new_device, task.assigned and
+                // task.overdue. None of them had ever reached a phone.
+                //
+                // The RULE decides, at either level. Not `|| popup` either:
+                // an admin who unticks push on a popup event has made a choice,
+                // and the engine does not get to overrule the matrix in either
+                // direction. Quiet hours and the per-device opt-out still apply
+                // downstream in FcmSender — that gate is not this method's job
+                // and has not moved.
+                'push'         => (bool) $push,
             ];
 
             // N-7: the record was announced before and has been edited since.
