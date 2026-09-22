@@ -27,22 +27,38 @@
         'source'      => $source ?? null,
     ]), $over));
 
+    // ORDER IS DELIBERATE: what a receptionist acts on first, reading left to
+    // right — today, then the rest of the week, then the debt, then everything
+    // open, then what is finished. Overdue keeps its red weight even though it
+    // is no longer first; it is the one number on this screen that cannot be
+    // argued with.
     $chips = [
-        'open'    => ['Open',      $counts['open'],    '#6a0f70'],
-        'overdue' => ['Overdue',   $counts['overdue'], '#b52020'],
         'today'   => ['Today',     $counts['today'],   '#a05c00'],
         'week'    => ['This week', $counts['week'],    '#1a5ea8'],
+        'overdue' => ['Overdue',   $counts['overdue'], '#b52020'],
+        'open'    => ['Open',      $counts['open'],    '#6a0f70'],
         'done'    => ['Done',      $counts['done'],    '#1a7a45'],
     ];
 @endphp
 
-<div x-data="taskList()" style="font-family:'Inter',sans-serif;height:100%;display:flex;flex-direction:column;background:#fff;">
+{{-- The page furniture deliberately mirrors Relationship > Today's Actions:
+     lavender page, white card, pill filters, small-caps table head, status as a
+     pill. Two screens that do the same kind of work — a list of things to act on
+     today — should not teach two different visual languages. --}}
+<div x-data="taskList()" style="font-family:'Inter',sans-serif;height:100%;display:flex;flex-direction:column;background:#f4eff8;">
 
     {{-- ── HEADER ─────────────────────────────────────────────────────── --}}
     <div style="padding:22px 28px 0;display:flex;align-items:flex-start;justify-content:space-between;">
         <div>
-            <h1 style="font-family:'Cormorant Garamond',serif;font-size:25px;font-weight:700;color:#1a0320;margin:0 0 2px;">Tasks</h1>
-            <p style="font-size:12.5px;color:#9a7aaa;margin:0;">{{ today()->format('l, d M Y') }}</p>
+            <div style="display:flex;align-items:center;gap:12px;">
+                <h1 style="font-family:'Cormorant Garamond',serif;font-size:25px;font-weight:700;color:#1a0320;margin:0;">Tasks</h1>
+                <span style="background:#ede4f3;color:#6a0f70;font-size:12px;font-weight:600;padding:4px 12px;border-radius:999px;">
+                    {{ $counts['open'] }} open · {{ $counts['overdue'] }} overdue
+                </span>
+            </div>
+            <p style="font-size:12.5px;color:#9a7aaa;margin:3px 0 0;">
+                {{ today()->format('l, d F Y') }} · Staff work, not automation
+            </p>
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
         <a href="{{ route('tasks.settings') }}"
@@ -58,20 +74,24 @@
     {{-- ── COUNT CHIPS = THE VIEW FILTER ──────────────────────────────────
          These numbers and the rows below are built from the same query, so
          the card and the list can never disagree. --}}
-    <div style="padding:16px 28px 0;display:flex;gap:8px;flex-wrap:wrap;">
+    <div style="padding:16px 28px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         @foreach($chips as $key => [$label, $count, $colour])
             @php $on = $filters['view'] === $key; @endphp
             <a href="{{ $q(['view' => $key]) }}"
-               style="display:inline-flex;align-items:baseline;gap:7px;padding:7px 14px;border-radius:8px;text-decoration:none;border:1.5px solid {{ $on ? $colour : '#ede4f3' }};background:{{ $on ? $colour.'12' : '#fff' }};">
-                <span style="font-size:17px;font-weight:700;color:{{ $colour }};line-height:1;">{{ $count }}</span>
-                <span style="font-size:12px;font-weight:{{ $on ? 600 : 500 }};color:{{ $on ? $colour : '#7a6088' }};">{{ $label }}</span>
+               style="display:inline-flex;align-items:center;gap:7px;padding:6px 14px;border-radius:999px;text-decoration:none;font-size:12.5px;
+                      border:1.5px solid {{ $on ? '#6a0f70' : '#e2d6ea' }};
+                      background:{{ $on ? '#6a0f70' : '#fff' }};
+                      color:{{ $on ? '#fff' : '#5a4566' }};font-weight:{{ $on ? 600 : 500 }};">
+                <span style="width:7px;height:7px;border-radius:50%;background:{{ $on ? '#fff' : $colour }};"></span>
+                {{ $label }}
+                <span style="font-weight:700;color:{{ $on ? '#fff' : $colour }};">{{ $count }}</span>
             </a>
         @endforeach
     </div>
 
     {{-- ── FILTER BAR (GET form → everything lives in the URL) ─────────── --}}
     <form method="GET" action="{{ route('tasks.index') }}"
-          style="padding:14px 28px 14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1.5px solid #ede4f3;">
+          style="padding:14px 28px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <input type="hidden" name="view" value="{{ $filters['view'] }}">
         @if($source ?? null)<input type="hidden" name="source" value="{{ $source }}">@endif
 
@@ -123,22 +143,46 @@
         </div>
     </form>
 
-    {{-- ── THE LIST ───────────────────────────────────────────────────── --}}
-    <div style="flex:1;overflow-y:auto;">
-        @forelse($tasks as $task)
-            @include('tasks._row', ['task' => $task])
-        @empty
+    {{-- ── THE TABLE ──────────────────────────────────────────────────────
+         Columns, not free-form rows. A receptionist scanning for "everything
+         Ankita owns" or "every urgent one" reads DOWN a column; she cannot do
+         that when each line is a sentence. The header is sticky so the column
+         meanings survive a long list.
+
+         Still one line per task, still no board. --}}
+    <div style="flex:1;overflow-y:auto;padding:0 28px 28px;">
+        <div style="background:#fff;border:1.5px solid #e9dff0;border-radius:12px;overflow:hidden;">
+        @if($tasks->count())
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+                <tr style="position:sticky;top:0;background:#faf6fc;z-index:2;">
+                    <th style="text-align:left;padding:10px 18px;font-size:10.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#9a7aaa;border-bottom:1.5px solid #ede4f3;">Task</th>
+                    <th style="text-align:left;padding:10px 10px;font-size:10.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#9a7aaa;border-bottom:1.5px solid #ede4f3;width:130px;">Staff</th>
+                    <th style="text-align:left;padding:10px 10px;font-size:10.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#9a7aaa;border-bottom:1.5px solid #ede4f3;width:100px;">Type</th>
+                    <th style="text-align:left;padding:10px 10px;font-size:10.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#9a7aaa;border-bottom:1.5px solid #ede4f3;width:86px;">Priority</th>
+                    <th style="text-align:left;padding:10px 10px;font-size:10.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#9a7aaa;border-bottom:1.5px solid #ede4f3;width:160px;">Status</th>
+                    <th style="padding:10px 18px 10px 10px;border-bottom:1.5px solid #ede4f3;width:90px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($tasks as $task)
+                    @include('tasks._row', ['task' => $task])
+                @endforeach
+            </tbody>
+        </table>
+        @else
             <div style="text-align:center;padding:64px 20px;color:#b0a0bb;">
                 <p style="font-size:14px;font-weight:500;margin:0 0 4px;">Nothing here</p>
                 <p style="font-size:12.5px;color:#c5b0d5;margin:0;">
                     {{ $filters['view'] === 'open' ? 'No open tasks. Click Assign Task to create one.' : 'No tasks match this filter.' }}
                 </p>
             </div>
-        @endforelse
+        @endif
 
         @if($tasks->hasPages())
-            <div style="padding:14px 28px 28px;">{{ $tasks->links() }}</div>
+            <div style="padding:14px 18px;border-top:1px solid #f3eef7;">{{ $tasks->links() }}</div>
         @endif
+        </div>
     </div>
 
     {{-- ── OUTCOME DRAWER ─────────────────────────────────────────────────
@@ -154,7 +198,12 @@
          bound `:style`. Alpine overwrites the static one, which is what
          flattened the mode buttons into a line of plain text. Anything
          conditional builds its whole style string in one binding. --}}
-    <div x-show="panel" x-cloak style="position:fixed;inset:0;z-index:70;">
+    {{-- z-index 900: the app shell in layouts/app.blade.php goes up to 130
+         (topbar, sidebar, its own overlays). At 70 this drawer opened UNDER the
+         topbar, which quietly ate its whole first row — the task title, the
+         Edit button and the close X. The drawer looked like it was missing
+         controls when it was simply covered. --}}
+    <div x-show="panel" x-cloak style="position:fixed;inset:0;z-index:900;">
         <div style="position:absolute;inset:0;background:rgba(14,1,24,.40);" @click="close()"></div>
         <div style="position:absolute;top:0;right:0;bottom:0;width:100%;max-width:440px;background:#fff;box-shadow:-6px 0 34px rgba(14,1,24,.18);display:flex;flex-direction:column;">
 
@@ -178,15 +227,36 @@
                             </template>
                         </div>
                     </div>
-                    <button @click="close()" style="background:none;border:none;cursor:pointer;color:#9a7aaa;font-size:22px;line-height:1;flex-shrink:0;">&times;</button>
+                    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                        {{-- x-if, not x-show. An element carrying BOTH x-show and a
+                             bound :style is the conflict that flattened the mode
+                             buttons earlier in this file — Alpine rewrites the whole
+                             style attribute and the two fight over `display`.
+                             x-if removes the element instead of hiding it, so the
+                             :style binding is the only thing touching style here. --}}
+                        <template x-if="task.is_open">
+                            <button @click="editing = !editing; err=''"
+                                    :style="'padding:6px 13px;border-radius:7px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:1.5px solid;'
+                                        + (editing ? 'background:#6a0f70;color:#fff;border-color:#6a0f70;' : 'background:#fff;color:#6a0f70;border-color:#d9c7e4;')"
+                                    x-text="editing ? 'Cancel edit' : 'Edit'"></button>
+                        </template>
+                        <button @click="close()" style="background:none;border:none;cursor:pointer;color:#9a7aaa;font-size:22px;line-height:1;">&times;</button>
+                    </div>
                 </div>
 
                 {{-- mode picker --}}
-                <div x-show="task.is_open" style="display:flex;gap:6px;margin-top:14px;">
+                {{-- Each one gets its own border. Without it, four flat grey
+                     blocks sitting next to each other read as one control with
+                     the words run together — which is exactly how they looked.
+                     The "what happens next" buttons below were always legible
+                     for this reason; these now match them. --}}
+                <div x-show="task.is_open && !editing" style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
                     <template x-for="m in modes" :key="m.k">
                         <button @click="mode=m.k;err=''"
-                                :style="'padding:7px 12px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;'
-                                        + (mode===m.k ? 'background:#6a0f70;color:#fff;' : 'background:#f3eef7;color:#7a6088;')"
+                                :style="'padding:7px 13px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;border:1.5px solid;'
+                                        + (mode===m.k
+                                            ? 'background:#6a0f70;color:#fff;border-color:#6a0f70;'
+                                            : 'background:#fff;color:#7a6088;border-color:#ede4f3;')"
                                 x-text="m.l"></button>
                     </template>
                 </div>
@@ -195,8 +265,58 @@
             {{-- ── body (scrolls) ── --}}
             <div style="padding:16px 22px;overflow-y:auto;flex:1;">
 
+                {{-- ── EDIT ────────────────────────────────────────────────
+                     Due date is NOT here on purpose. Moving a date is a
+                     Reschedule: it asks why, keeps the original date and keeps
+                     counting the delay. An editable date field would walk
+                     around every one of those guards. Status is absent for the
+                     same reason — closing goes through Done or Cancel. --}}
+                <div x-show="editing && task.is_open">
+                    <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Task</label>
+                    <input type="text" x-model="form.title"
+                           style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;margin-bottom:12px;">
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                        <div>
+                            <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Priority</label>
+                            <select x-model="form.priority"
+                                    style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;background:#fff;">
+                                @foreach(['urgent'=>'Urgent','high'=>'High','medium'=>'Medium','low'=>'Low'] as $pk => $pl)
+                                    <option value="{{ $pk }}">{{ $pl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Type</label>
+                            <select x-model="form.category"
+                                    style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;background:#fff;">
+                                @foreach(\App\Models\Task::CATEGORIES as $ck => $cl)
+                                    <option value="{{ $ck }}">{{ $cl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Assigned to</label>
+                    <select x-model="form.assigned_to"
+                            style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;background:#fff;margin-bottom:12px;">
+                        @foreach($users as $u)
+                            <option value="{{ $u->id }}">{{ $u->name }}</option>
+                        @endforeach
+                    </select>
+
+                    <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Details</label>
+                    <textarea x-model="form.description" rows="3"
+                              style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;resize:vertical;"></textarea>
+
+                    <p style="font-size:11.5px;color:#9a7aaa;margin:8px 0 0;">
+                        To move the date, use <strong>Reschedule</strong> — it keeps the original
+                        due date so the overdue count stays honest.
+                    </p>
+                </div>
+
                 <template x-if="task.is_open">
-                    <div>
+                    <div x-show="!editing">
                         {{-- Outcome is a SELECT, not a radio list. The call-outcome
                              vocabulary has 40+ entries; radios turn the drawer into a
                              scrolling wall and bury everything below it. --}}
@@ -234,6 +354,106 @@
                                       :placeholder="mode==='cancel' ? 'e.g. patient shifted city, treatment dropped' : 'e.g. spoke to husband, will call back after 7pm'"
                                       style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;resize:vertical;"></textarea>
                         </div>
+
+                        {{-- ── WHAT HAPPENS NEXT (closing only) ───────────────
+                             Asked here it costs one line; asked tomorrow it is
+                             never asked, and the follow-up quietly dies. This
+                             is the whole reason a clinic loses a case after a
+                             good call.
+
+                             Booking is a link out, not a form: a real
+                             appointment needs the doctor, chair, slot and
+                             overlap check, and a second booking form here
+                             would drift from the calendar's own rules. --}}
+                        <div x-show="mode === 'done'" style="margin-top:16px;padding-top:14px;border-top:1.5px dashed #ede4f3;">
+                            <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:7px;">What happens next?</label>
+
+                            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                                <template x-for="n in nextOptions" :key="n.k">
+                                    <button type="button" @click="next = n.k"
+                                            :disabled="n.k === 'appointment' && !task.patient_name"
+                                            :style="'padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;font-family:inherit;border:1.5px solid;'
+                                                + (next === n.k
+                                                    ? 'background:#6a0f70;color:#fff;border-color:#6a0f70;cursor:pointer;'
+                                                    : (n.k === 'appointment' && !task.patient_name
+                                                        ? 'background:#fff;color:#c5b0d5;border-color:#ede4f3;cursor:not-allowed;'
+                                                        : 'background:#fff;color:#7a6088;border-color:#ede4f3;cursor:pointer;'))"
+                                            x-text="n.l"></button>
+                                </template>
+                            </div>
+
+                            <div x-show="next === 'task'" style="margin-top:10px;">
+                                <input type="text" x-model="nextTitle" placeholder="e.g. Call again about the crown"
+                                       style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;margin-bottom:8px;">
+                                <input type="date" x-model="nextDate" :min="todayStr"
+                                       style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;">
+                                <p style="font-size:11.5px;color:#9a7aaa;margin:6px 0 0;">
+                                    Same patient, same owner. Starts fresh — no attempts, no delay carried over.
+                                </p>
+                            </div>
+
+                            {{-- Booked right here, for the patient this task is about.
+                                 The form is new; the RULES are not — it posts to the same
+                                 AppointmentController@store the calendar uses, so the
+                                 blocked-slot and overlap checks still decide. Nothing
+                                 about booking is re-implemented in this drawer.
+
+                                 What is missing, honestly: there is no free-slot list
+                                 (the calendar builds that server-side on its own page).
+                                 You type a time; if it clashes, the server refuses and
+                                 says so below. --}}
+                            <div x-show="next === 'appointment' && task.patient_name" style="margin-top:10px;">
+                                <div style="font-size:12px;color:#7a6088;margin-bottom:8px;">
+                                    For <strong x-text="task.patient_name"></strong>
+                                </div>
+
+                                <div style="display:grid;grid-template-columns:1fr 130px;gap:8px;margin-bottom:8px;">
+                                    <div>
+                                        <label style="font-size:11.5px;font-weight:600;color:#6a0f70;display:block;margin-bottom:4px;">Doctor</label>
+                                        <select x-model="appt.doctor_id"
+                                                style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;background:#fff;">
+                                            <option value="">— select —</option>
+                                            @foreach($doctors as $doc)
+                                                <option value="{{ $doc->id }}">{{ $doc->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        {{-- Required by AppointmentController@store; the calendar
+                                             has always had it. Defaulted from the task's own type
+                                             so the common case needs no thought. --}}
+                                        <label style="font-size:11.5px;font-weight:600;color:#6a0f70;display:block;margin-bottom:4px;">Visit</label>
+                                        <select x-model="appt.type"
+                                                style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;background:#fff;">
+                                            <option value="follow-up">Follow-up</option>
+                                            <option value="consultation">Consultation</option>
+                                            <option value="treatment">Treatment</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div style="display:grid;grid-template-columns:1fr 110px;gap:8px;">
+                                    <div>
+                                        <label style="font-size:11.5px;font-weight:600;color:#6a0f70;display:block;margin-bottom:4px;">Date</label>
+                                        <input type="date" x-model="appt.appointment_date" :min="todayStr"
+                                               style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;">
+                                    </div>
+                                    <div>
+                                        <label style="font-size:11.5px;font-weight:600;color:#6a0f70;display:block;margin-bottom:4px;">Time</label>
+                                        <input type="time" x-model="appt.appointment_time"
+                                               style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;">
+                                    </div>
+                                </div>
+
+                                <p style="font-size:11.5px;color:#9a7aaa;margin:8px 0 0;">
+                                    The appointment is booked first. If the slot clashes, the task stays open
+                                    and nothing is lost.
+                                </p>
+                            </div>
+                            <p x-show="next === 'appointment' && !task.patient_name" style="font-size:11.5px;color:#a05c00;margin:9px 0 0;">
+                                No patient is linked to this task, so there is nobody to book.
+                            </p>
+                        </div>
                     </div>
                 </template>
 
@@ -261,7 +481,7 @@
                 <p x-show="err" x-text="err" style="font-size:12.5px;color:#b52020;margin:0 0 9px;"></p>
 
                 <template x-if="task.is_open">
-                    <button @click="submit()" :disabled="busy"
+                    <button @click="editing ? saveEdit() : submit()" :disabled="busy"
                             :style="'width:100%;padding:12px;background:#6a0f70;color:#fff;border:none;border-radius:7px;font-size:13.5px;font-weight:600;font-family:inherit;'
                                     + (busy ? 'opacity:.6;cursor:wait;' : 'cursor:pointer;')"
                             x-text="busy ? 'Saving…' : submitLabel()"></button>
@@ -301,6 +521,23 @@ function taskList(){
             {k:'reschedule', l:'Reschedule'},
             {k:'cancel',     l:'Cancel task'},
         ],
+        // Editing is NOT one of the modes above. Those four answer "what
+        // happened to the work"; editing changes what the work IS. Putting
+        // them in one row made the drawer ask two different questions at once.
+        editing: false,
+        nextOptions: [
+            {k:'none',        l:'Nothing'},
+            {k:'task',        l:'Follow-up task'},
+            {k:'appointment', l:'Book appointment'},
+        ],
+        // Edit form state, filled from the task when the drawer opens.
+        form: {title:'', description:'', priority:'medium', assigned_to:'', category:''},
+        // "What happens next", asked only while closing. Default is nothing —
+        // a prompt that pre-selects a follow-up would manufacture busywork.
+        next: 'none',
+        nextTitle: '',
+        nextDate: '',
+        appt: {doctor_id:'', appointment_date:'', appointment_time:'', type:'follow-up'},
         outcomeKey: '',
         note: '',
         newDate: '',
@@ -318,16 +555,42 @@ function taskList(){
             this.nonClosing = d.non_closing_keys || [];
             this.trail = d.trail;
             this.newDate = d.task.due_date;
+            this.editing = false;
+            this.next = 'none';
+            this.nextTitle = '';
+            const t = new Date(); t.setDate(t.getDate() + 7);
+            this.nextDate = t.toISOString().slice(0,10);
+            // A lab or clinical task that ends in a booking is almost always
+            // treatment; a call or recall is a follow-up. Staff can override.
+            const visitType = ['lab','clinical'].includes(d.task.category) ? 'treatment'
+                            : (d.task.category === 'admin' ? 'consultation' : 'follow-up');
+            this.appt = {
+                doctor_id: '',
+                appointment_date: t.toISOString().slice(0,10),
+                appointment_time: '',
+                type: visitType,
+            };
+            this.form = {
+                title:       d.task.title || '',
+                description: d.task.description || '',
+                priority:    d.task.priority || 'medium',
+                assigned_to: d.task.assigned_to_id || '',
+                category:    d.task.category || '',
+            };
         },
 
         close(){ this.panel = false; },
 
         submitLabel(){
-            return {done:'Mark done', attempted:'Log attempt', reschedule:'Reschedule', cancel:'Cancel task'}[this.mode];
+            if(this.editing) return 'Save changes';
+            return {done:'Mark done', attempted:'Log attempt',
+                    reschedule:'Reschedule', cancel:'Cancel task'}[this.mode];
         },
 
         async submit(){
             this.err = '';
+
+
             if(this.mode === 'cancel' && !this.note.trim()){
                 this.err = 'A reason is required to cancel a task.'; return;
             }
@@ -344,9 +607,22 @@ function taskList(){
             const body = this.mode === 'cancel'
                 ? {reason: this.note}
                 : {outcome_key: this.outcomeKey || null, note: this.note || null,
-                   ...(this.mode === 'reschedule' ? {due_date: this.newDate} : {})};
+                   ...(this.mode === 'reschedule' ? {due_date: this.newDate} : {}),
+                   ...(this.mode === 'done' && this.next !== 'none'
+                        ? {next: this.next, next_title: this.nextTitle, next_due_date: this.nextDate}
+                        : {})};
 
             this.busy = true;
+
+            // ORDER MATTERS. The appointment is booked FIRST, because it is the
+            // step that can be refused — a clashing slot, a doctor on leave.
+            // Close the task first and a rejected booking would leave the work
+            // marked done with nothing scheduled, which is the worst of both.
+            if(this.mode === 'done' && this.next === 'appointment'){
+                const booked = await this.bookAppointment();
+                if(!booked){ this.busy = false; return; }
+            }
+
             try {
                 const res = await fetch(url, {
                     method: 'POST',
@@ -356,6 +632,74 @@ function taskList(){
                         'X-Requested-With': 'XMLHttpRequest',
                     },
                     body: JSON.stringify(body),
+                });
+                const d = await res.json();
+                if(!res.ok || !d.ok){
+                    this.err = d.message || Object.values(d.errors || {}).flat().join(' ') || 'Could not save.';
+                    this.busy = false; return;
+                }
+                window.location.reload();
+            } catch(e){
+                this.err = 'Network error — nothing was saved.';
+                this.busy = false;
+            }
+        },
+
+        /**
+         * Posts to the calendar's own store endpoint. Every booking rule —
+         * blocked slots, overlapping appointments, duration — is enforced there
+         * and answers 422 with a message, which is shown as-is rather than
+         * re-worded, because the calendar's wording is the one staff know.
+         */
+        async bookAppointment(){
+            if(!this.appt.doctor_id || !this.appt.appointment_date || !this.appt.appointment_time){
+                this.err = 'Pick a doctor, a date and a time to book.';
+                return false;
+            }
+            try {
+                const res = await fetch('{{ route('appointments.store') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        patient_id:       this.task.patient_id,
+                        doctor_id:        this.appt.doctor_id,
+                        appointment_date: this.appt.appointment_date,
+                        appointment_time: this.appt.appointment_time,
+                        type:             this.appt.type,
+                        notes:            this.note || null,
+                    }),
+                });
+                const d = await res.json();
+                if(!res.ok){
+                    this.err = d.message
+                        || Object.values(d.errors || {}).flat().join(' ')
+                        || 'That slot could not be booked.';
+                    return false;
+                }
+                return true;
+            } catch(e){
+                this.err = 'Network error — nothing was booked and the task is untouched.';
+                return false;
+            }
+        },
+
+        async saveEdit(){
+            if(!this.form.title.trim()){ this.err = 'A task needs a title.'; return; }
+            this.busy = true;
+            try {
+                const res = await fetch(`/tasks/${this.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify(this.form),
                 });
                 const d = await res.json();
                 if(!res.ok || !d.ok){

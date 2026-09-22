@@ -1,7 +1,8 @@
 {{-- Assign Task drawer — lifted verbatim out of tasks/index.blade.php when the
      list was rebuilt as rows (Task Manager V2). The create form itself is
      unchanged; only its home moved, so the new index stays readable. --}}
-<div x-show="drawerOpen" x-cloak style="position:fixed;inset:0;z-index:60;">
+{{-- Same reason as the outcome drawer: the app shell reaches z-index 130. --}}
+<div x-show="drawerOpen" x-cloak style="position:fixed;inset:0;z-index:900;">
     {{-- Backdrop --}}
     <div style="position:absolute;inset:0;background:rgba(14,1,24,.45);" @click="drawerOpen=false"></div>
     {{-- Modal card — centred with transform --}}

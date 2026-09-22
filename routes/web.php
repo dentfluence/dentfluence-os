@@ -845,6 +845,7 @@ Route::middleware('auth')->group(function () {
            NOTE: /{task} is declared AFTER /my and /overdue so those static
            paths are never swallowed by the wildcard. */
         Route::get('/{task}',              [\App\Http\Controllers\Communication\TaskController::class, 'show'])->name('show');
+        Route::put('/{task}',              [\App\Http\Controllers\Communication\TaskController::class, 'update'])->name('update')->middleware('module:tasks,edit');
         Route::post('/{task}/attempt',     [\App\Http\Controllers\Communication\TaskController::class, 'attempt'])->name('attempt')->middleware('module:tasks,edit');
         Route::post('/{task}/reschedule',  [\App\Http\Controllers\Communication\TaskController::class, 'reschedule'])->name('reschedule')->middleware('module:tasks,edit');
         Route::post('/{task}/cancel',      [\App\Http\Controllers\Communication\TaskController::class, 'cancel'])->name('cancel')->middleware('module:tasks,edit');

@@ -105,7 +105,16 @@ class TaskController extends Controller
 
         $users = User::where('branch_id', Auth::user()->branch_id)->orderBy('name')->get();
 
-        return view('tasks.index', compact('tasks', 'counts', 'filters', 'users', 'source'));
+        // For the inline "book an appointment" form in the close drawer. Same
+        // definition of a doctor the appointments screen uses — copied rather
+        // than invented, so the two lists cannot disagree.
+        $doctors = User::where('branch_id', Auth::user()->branch_id)
+            ->where('is_active', true)
+            ->where(fn ($q) => $q->whereIn('role', User::DOCTOR_ROLES)->orWhere('name', 'like', 'Dr.%'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return view('tasks.index', compact('tasks', 'counts', 'filters', 'users', 'doctors', 'source'));
     }
 
     /**
@@ -312,6 +321,12 @@ class TaskController extends Controller
         $data = $request->validate([
             'outcome_key' => 'nullable|string|max:60',
             'note'        => 'nullable|string|max:1000',
+            // Optional "what happens next", captured at the moment the work
+            // closes. This is where follow-through is won or lost: asked here
+            // it takes one line, asked tomorrow it never gets asked.
+            'next'          => 'nullable|in:task,appointment',
+            'next_title'    => 'nullable|string|max:255',
+            'next_due_date' => 'nullable|date|after_or_equal:today',
         ]);
 
         // ── Evidence gate ────────────────────────────────────────────────────
@@ -350,6 +365,27 @@ class TaskController extends Controller
 
         HuddleTaskLog::where('task_id', $task->id)->update(['status' => 'done']);
 
+        // ── Chain: a follow-up task, created from the one just closed ───────
+        // Carries the patient, the owner and the branch forward, because the
+        // next step is almost always the same person about the same patient.
+        // NOT the category — the next step is frequently a different kind of
+        // work from the one that just finished.
+        $chained = null;
+        if (($data['next'] ?? null) === 'task' && ! empty($data['next_title'])) {
+            $chained = Task::create([
+                'title'       => $data['next_title'],
+                'description' => $data['note'] ?? null,
+                'assigned_to' => $task->assigned_to,
+                'created_by'  => Auth::id(),
+                'branch_id'   => $task->branch_id,
+                'patient_id'  => $task->patient_id,
+                'due_date'    => $data['next_due_date'] ?? today()->addDay(),
+                'priority'    => $task->priority,
+                'category'    => $task->category,
+                'status'      => 'pending',
+            ]);
+        }
+
         // ── Auto-spawn next occurrence for recurring/AMC tasks ───────────────
         $nextTask = null;
         if ($task->is_recurring && $task->recurrence_interval && $task->recurrence_unit) {
@@ -361,13 +397,19 @@ class TaskController extends Controller
         }
         // ────────────────────────────────────────────────────────────────────
 
+        // NOTE: 'next' => 'appointment' is handled entirely by the drawer, which
+        // posts to AppointmentController@store BEFORE calling this endpoint —
+        // so a clashing slot leaves the task open rather than closing work that
+        // was never actually scheduled. Nothing to do here.
+
         return response()->json([
-            'ok'            => true,
-            'closed'        => true,
-            'status'        => $task->status,
-            'is_recurring'  => $task->is_recurring,
-            'next_due_date' => $nextTask?->due_date->format('d M Y'),
-            'next_task_id'  => $nextTask?->id,
+            'ok'             => true,
+            'closed'         => true,
+            'status'         => $task->status,
+            'is_recurring'   => $task->is_recurring,
+            'next_due_date'  => $nextTask?->due_date->format('d M Y'),
+            'next_task_id'   => $nextTask?->id,
+            'chained_task_id'=> $chained?->id,
         ]);
     }
 
@@ -450,6 +492,66 @@ class TaskController extends Controller
         return response()->json(['ok' => true, 'status' => 'pending']);
     }
 
+    // ── update ────────────────────────────────────────────────────────────────
+    /**
+     * Edit a task's details: title, description, priority, owner, type.
+     *
+     * DUE DATE IS DELIBERATELY NOT EDITABLE HERE. Moving a date is a
+     * RESCHEDULE: it demands a reason, stamps original_due_date the first time,
+     * counts itself, and leaves the overdue clock running. If the same move
+     * were possible through a plain edit, every one of those guards could be
+     * walked around and the backlog could be cleared by quietly pushing dates —
+     * which is the single thing this module was rebuilt to stop.
+     * Same for status: closing goes through markDone/cancel, never a field.
+     */
+    public function update(Task $task, Request $request, TaskOutcomeService $outcomes)
+    {
+        abort_if($task->branch_id !== Auth::user()->branch_id, 403);
+
+        $data = $request->validate([
+            'title'       => 'required|string|max:255',
+            'description' => 'nullable|string|max:1000',
+            'priority'    => 'required|in:urgent,high,medium,low',
+            'assigned_to' => 'required|exists:users,id',
+            'category'    => 'required|in:' . implode(',', array_keys(Task::CATEGORIES)),
+        ]);
+
+        $previousOwner = (int) $task->assigned_to;
+
+        $task->update($data);
+
+        // A handover is the one edit somebody else needs to hear about. The
+        // others (a clearer title, a bumped priority) are visible on the board
+        // already and do not deserve a notification each.
+        if ((int) $task->assigned_to !== $previousOwner) {
+            app(\App\Services\Notifications\NotificationDispatcher::class)->fire('task.assigned', [
+                'title'        => 'Task handed over to you',
+                'message'      => "\"{$task->title}\" — due {$task->due_date->format('d M Y')}.",
+                'source'       => $task,
+                'branch_id'    => $task->branch_id,
+                'owner'        => $task->assigned_to,
+                'dedupe_scope' => 'reassign:' . now()->timestamp,
+                'action_url'   => route('tasks.index'),
+                'action_label' => 'View Tasks',
+            ]);
+        }
+
+        $task->refresh();
+
+        return response()->json([
+            'ok'   => true,
+            'task' => [
+                'id'             => $task->id,
+                'title'          => $task->title,
+                'category'       => $task->category,
+                'category_label' => $task->categoryLabel(),
+                'priority'       => $task->priority,
+                'assigned_to'    => $task->assignedTo?->name,
+            ],
+            'message' => 'Task updated.',
+        ]);
+    }
+
     // ── show (drawer) ─────────────────────────────────────────────────────────
     /** Everything the row drawer needs: the task, its outcome list, its trail. */
     public function show(Task $task, TaskOutcomeService $outcomes)
@@ -471,7 +573,13 @@ class TaskController extends Controller
                 'due_date'         => $task->due_date->toDateString(),
                 'due_date_label'   => $task->due_date->format('d M Y'),
                 'assigned_to'      => $task->assignedTo?->name,
+                // Raw id for the edit form's staff dropdown to prefill from
+                // ('assigned_to' above is the display name).
+                'assigned_to_id'   => $task->assigned_to,
                 'patient_name'     => $task->patient?->name,
+                // The close drawer books an appointment for this patient
+                // against the calendar's own endpoint.
+                'patient_id'       => $task->patient_id,
                 'attempt_label'    => $task->attemptLabel(),
                 'days_late'        => $task->daysLate(),
                 'reschedule_count' => (int) $task->reschedule_count,

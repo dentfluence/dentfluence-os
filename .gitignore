@@ -64,3 +64,4 @@ _to_delete/
 COMMIT_MSG.txt
 PUSH_*.bat
 AMEND_*.bat
+_release/DEPLOY_*.sh

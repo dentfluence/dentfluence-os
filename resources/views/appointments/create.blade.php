@@ -281,6 +281,16 @@ document.addEventListener('alpine:init', () => {
         submitting: false,
 
         init() {
+            // Prefilled arrival, e.g. from closing a task with "book an
+            // appointment". The booking rules all still live here — this only
+            // saves re-typing the patient who was just on the phone.
+            const q = new URLSearchParams(window.location.search);
+            if (q.get('patient_id')) {
+                this.patientId           = q.get('patient_id');
+                this.selectedPatientName = q.get('patient_name') || '';
+                this.patientQuery        = this.selectedPatientName;
+            }
+
             const d = new Date();
             const pad = n => String(n).padStart(2, '0');
             this.today = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
