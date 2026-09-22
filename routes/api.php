@@ -782,6 +782,14 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
         | so a clinic editing its list in Tasks > Settings sees it on the phone
         | without a new APK.
         */
+        /* The phone's own task list (23 Sep). The 4 Sep ruling said tasks
+           live on the huddle board — but the huddle is bound to one date and
+           is closed by mid-morning, so "what is still on me this afternoon"
+           had nowhere to live. Read-only; every write still goes through the
+           outcome routes below. Declared BEFORE /tasks/{task}/... so it is
+           never read as a task id. */
+        Route::get('/tasks', [\App\Http\Controllers\Api\V1\TaskListController::class, 'index']);
+
         Route::get('/tasks/{task}/outcome',     [\App\Http\Controllers\Api\V1\TaskOutcomeController::class, 'show']);
         Route::post('/tasks/{task}/done',       [\App\Http\Controllers\Api\V1\TaskOutcomeController::class, 'done'])
             ->middleware('api.role:module:tasks,edit');
