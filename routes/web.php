@@ -833,6 +833,14 @@ Route::middleware('auth')->group(function () {
            MUST be declared before the /{task} wildcard below, or "settings"
            is read as a task id. */
         Route::get('/settings',  [\App\Http\Controllers\Communication\TaskSettingsController::class, 'index'])->name('settings');
+
+        /* Tasks > Accountability — the weekly read over task_outcomes.
+           Also declared BEFORE /{task}, same reason as /settings.
+           Gated on `reports`, not `tasks`: the board is everyone's, a
+           per-person breakdown of the week is management's. */
+        Route::get('/accountability', [\App\Http\Controllers\Communication\TaskAccountabilityController::class, 'index'])
+            ->name('accountability')
+            ->middleware('module:reports');
         Route::post('/settings/outcomes/{option}', [\App\Http\Controllers\Communication\TaskSettingsController::class, 'save'])->name('settings.outcome.save')->middleware('module:tasks,edit');
         Route::post('/settings/outcomes/{category}/add', [\App\Http\Controllers\Communication\TaskSettingsController::class, 'add'])->name('settings.outcome.add')->middleware('module:tasks,edit');
         Route::post('/settings/maintenance-types/{option}', [\App\Http\Controllers\Communication\TaskSettingsController::class, 'saveMaintenanceType'])->name('settings.maintenance.save')->middleware('module:tasks,edit');

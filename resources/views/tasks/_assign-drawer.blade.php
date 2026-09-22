@@ -15,6 +15,19 @@
         </div>
         <form action="{{ route('tasks.store') }}" method="POST" x-data="drawerForm()">
             @csrf
+
+            {{-- A duplicate was found. Not a wall: two people at one desk can
+                 legitimately want the same task twice, so the warning names the
+                 owner and the day and lets them go ahead deliberately. --}}
+            @if(session('duplicate_warning'))
+                <div style="margin-bottom:14px;padding:11px 13px;background:#fff4e0;border:1.5px solid #e8cfa0;border-radius:8px;">
+                    <div style="font-size:12.5px;color:#a05c00;font-weight:600;">{{ session('duplicate_warning') }}</div>
+                    <label style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:12.5px;color:#7a6088;cursor:pointer;">
+                        <input type="checkbox" name="force" value="1" style="accent-color:#6a0f70;">
+                        Create it anyway
+                    </label>
+                </div>
+            @endif
             <div style="margin-bottom:14px;">
                 <label style="font-size:12px;font-weight:600;color:#6a0f70;display:block;margin-bottom:5px;">Task *</label>
                 <input type="text" name="title" required placeholder="What needs to be done?" style="width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;">

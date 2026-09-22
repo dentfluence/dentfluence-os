@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Communication;
 
+use App\Models\Appointment;
 use App\Models\AppNotification;
 use App\Models\CommunicationQueue;
 use App\Models\FollowUp;
@@ -174,6 +175,12 @@ class TaskController extends Controller
             'description'         => 'nullable|string|max:1000',
             'assigned_to'         => 'required|exists:users,id',
             'due_date'            => 'required|date',
+            // The create form has always rendered a Due Time field and this
+            // rule never existed, so every time a staff member typed was
+            // dropped without a word. The column is fillable and other
+            // producers write it, which is why some tasks showed a time and
+            // hand-made ones never did.
+            'due_time'            => 'nullable|date_format:H:i',
             'priority'            => 'required|in:urgent,high,medium,low',
             'category'            => 'required|in:clinical,admin,lab,follow_up,call,whatsapp,maintenance,other',
             'patient_id'          => 'nullable|exists:patients,id',
@@ -190,6 +197,47 @@ class TaskController extends Controller
             'recurrence_interval' => 'nullable|integer|min:1|max:365',
             'recurrence_unit'     => 'nullable|in:days,weeks,months,years',
         ]);
+
+        // ── Duplicate guard ─────────────────────────────────────────────────
+        // TaskEngine::autoCreate(), ProtocolGenerationService and
+        // InventoryService each dedupe their own output. Manual creation — the
+        // one path two people use at the same desk — had no guard at all, so
+        // the same call could sit on the board twice with two different
+        // outcome trails.
+        //
+        // A WARNING, not a wall: same title, same owner, same day and still
+        // open is usually a mistake, but a clinic can legitimately want two.
+        // Sending force=1 creates it anyway.
+        if (! $request->boolean('force')) {
+            $duplicate = Task::where('branch_id', Auth::user()->branch_id)
+                ->where('title', $data['title'])
+                ->where('assigned_to', $data['assigned_to'])
+                ->whereDate('due_date', $data['due_date'])
+                ->open()
+                ->first();
+
+            if ($duplicate) {
+                $message = 'An open task with this title is already on '
+                    . ($duplicate->assignedTo?->name ?? 'someone')
+                    . "'s list for " . $duplicate->due_date->format('d M') . '.';
+
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'ok'          => false,
+                        'duplicate'   => true,
+                        'existing_id' => $duplicate->id,
+                        'message'     => $message . ' Send force=1 to create it anyway.',
+                    ], 409);
+                }
+
+                // The create drawer is a plain form post, so a JSON body would
+                // land on screen as raw text. Send the person back with what
+                // they typed still in the fields and the drawer reopened.
+                return back()
+                    ->withInput()
+                    ->with('duplicate_warning', $message);
+            }
+        }
 
         // Normalise: only save recurring fields when category=maintenance
         if (($data['category'] ?? '') !== 'maintenance') {
@@ -342,9 +390,20 @@ class TaskController extends Controller
             // Optional "what happens next", captured at the moment the work
             // closes. This is where follow-through is won or lost: asked here
             // it takes one line, asked tomorrow it never gets asked.
-            'next'          => 'nullable|in:task,appointment',
-            'next_title'    => 'nullable|string|max:255',
-            'next_due_date' => 'nullable|date|after_or_equal:today',
+            'next'             => 'nullable|in:task,appointment',
+            'next_title'       => 'nullable|string|max:255',
+            'next_due_date'    => 'nullable|date|after_or_equal:today',
+            // The follow-up is a real task, so its owner, type and priority are
+            // chosen, not guessed. Each falls back to the closing task's value
+            // when the drawer sends nothing, which keeps the API compatible
+            // with the mobile app and with the older two-field payload.
+            'next_assigned_to' => 'nullable|exists:users,id',
+            'next_category'    => 'nullable|in:' . implode(',', array_keys(Task::CATEGORIES)),
+            'next_priority'    => 'nullable|in:urgent,high,medium,low',
+            // Set by the drawer AFTER the calendar has accepted the slot, so
+            // by the time it arrives the appointment provably exists. The task
+            // is never the thing that creates it.
+            'appointment_id'   => 'nullable|exists:appointments,id',
         ]);
 
         // ── Evidence gate ────────────────────────────────────────────────────
@@ -383,25 +442,85 @@ class TaskController extends Controller
 
         HuddleTaskLog::where('task_id', $task->id)->update(['status' => 'done']);
 
+        // ── The booking this task produced ──────────────────────────────────
+        // Stamped only on a genuine close. An outcome that leaves the task open
+        // has already returned above, so a task can never be "converted" while
+        // still being worked on.
+        //
+        // Both guards matter: an appointment from another branch would leak a
+        // patient across clinics, and one for a different patient would make
+        // the conversion figure a lie. Either way the link is simply not made —
+        // the close still stands, because the work did happen.
+        if (! empty($data['appointment_id'])) {
+            $appointment = Appointment::find($data['appointment_id']);
+
+            if ($appointment
+                && (int) $appointment->branch_id === (int) $task->branch_id
+                && (! $task->patient_id || (int) $appointment->patient_id === (int) $task->patient_id)
+            ) {
+                $task->appointment_id = $appointment->id;
+                $task->save();
+            } else {
+                Log::warning('Task ' . $task->id . ' closed with an appointment link that did not match branch/patient; link skipped.');
+            }
+        }
+        // ────────────────────────────────────────────────────────────────────
+
         // ── Chain: a follow-up task, created from the one just closed ───────
-        // Carries the patient, the owner and the branch forward, because the
-        // next step is almost always the same person about the same patient.
-        // NOT the category — the next step is frequently a different kind of
-        // work from the one that just finished.
+        // The patient and the branch are carried forward and are NOT negotiable:
+        // the follow-up is about the same case by definition, and a task that
+        // crosses branches has no owner anyone can find.
+        //
+        // The owner, type and priority ARE negotiable and come from the form.
+        // They fall back to the closing task's values, which is what the drawer
+        // pre-fills them with anyway — so the common path is unchanged and the
+        // lab-follow-up-assigned-to-the-receptionist case is now fixable in one
+        // dropdown instead of a second edit.
         $chained = null;
         if (($data['next'] ?? null) === 'task' && ! empty($data['next_title'])) {
+            $assignee = $data['next_assigned_to'] ?? $task->assigned_to;
+
+            // A follow-up cannot be handed to someone in another branch; that
+            // would create work nobody in either branch sees on their board.
+            if ($assignee && $assignee !== $task->assigned_to) {
+                $ok = User::where('id', $assignee)
+                    ->where('branch_id', $task->branch_id)
+                    ->exists();
+                if (! $ok) {
+                    $assignee = $task->assigned_to;
+                }
+            }
+
             $chained = Task::create([
                 'title'       => $data['next_title'],
                 'description' => $data['note'] ?? null,
-                'assigned_to' => $task->assigned_to,
+                'assigned_to' => $assignee,
                 'created_by'  => Auth::id(),
                 'branch_id'   => $task->branch_id,
                 'patient_id'  => $task->patient_id,
                 'due_date'    => $data['next_due_date'] ?? today()->addDay(),
-                'priority'    => $task->priority,
-                'category'    => $task->category,
+                'priority'    => $data['next_priority'] ?? $task->priority,
+                'category'    => $data['next_category'] ?? $task->category,
                 'status'      => 'pending',
             ]);
+
+            // Reassignment is a notification event everywhere else in the
+            // module; a chained task handed to someone else is no different.
+            if ($chained->assigned_to && $chained->assigned_to !== Auth::id()) {
+                try {
+                    app(\App\Services\Notifications\NotificationDispatcher::class)->fire('task.assigned', [
+                        'title'        => 'Follow-up task assigned to you',
+                        'message'      => "\"{$chained->title}\" — due {$chained->due_date->format('d M Y')}.",
+                        'source'       => $chained,
+                        'branch_id'    => $chained->branch_id,
+                        'owner'        => $chained->assigned_to,
+                        'action_url'   => route('tasks.index'),
+                        'action_label' => 'View Tasks',
+                    ]);
+                } catch (\Throwable $e) {
+                    \Log::warning('Chained task notify failed: ' . $e->getMessage());
+                }
+            }
         }
 
         // ── Auto-spawn next occurrence for recurring/AMC tasks ───────────────
@@ -428,6 +547,7 @@ class TaskController extends Controller
             'next_due_date'  => $nextTask?->due_date->format('d M Y'),
             'next_task_id'   => $nextTask?->id,
             'chained_task_id'=> $chained?->id,
+            'appointment_id' => $task->appointment_id,
         ]);
     }
 
@@ -576,7 +696,7 @@ class TaskController extends Controller
     {
         abort_if($task->branch_id !== Auth::user()->branch_id, 403);
 
-        $task->load(['assignedTo', 'patient', 'outcomes.user']);
+        $task->load(['assignedTo', 'patient', 'outcomes.user', 'appointment.doctor']);
 
         return response()->json([
             'ok' => true,
@@ -604,6 +724,17 @@ class TaskController extends Controller
                 'original_due'     => $task->original_due_date?->format('d M Y'),
                 'requires_evidence'=> (bool) $task->requires_evidence,
                 'is_open'          => $task->isOpen(),
+                // The booking this task produced, if any. The drawer turns this
+                // into a link so the closed task is one click from the chair it
+                // filled — otherwise the link exists only in the database and
+                // nobody ever sees it.
+                'appointment'      => $task->appointment ? [
+                    'id'     => $task->appointment->id,
+                    'label'  => $task->appointment->appointment_date->format('d M Y')
+                                . ', ' . \Carbon\Carbon::parse($task->appointment->appointment_time)->format('h:i A'),
+                    'doctor' => $task->appointment->doctor?->name,
+                    'url'    => route('appointments.index', ['date' => $task->appointment->appointment_date->toDateString()]),
+                ] : null,
             ],
             'options'          => $outcomes->optionsFor($task),
             'non_closing_keys' => $outcomes->nonClosingKeysFor($task),
@@ -702,8 +833,14 @@ class TaskController extends Controller
         return view('tasks.mine', compact('overdue', 'today', 'upcoming', 'done'));
     }
 
+    /**
+     * Kept as a route because older links and bookmarks point at it. The page
+     * it used to render was a heading and a "TODO: list overdue tasks"
+     * comment — a live URL that answered nothing. The list itself does this
+     * properly now.
+     */
     public function overdue()
     {
-        return view('tasks.overdue');
+        return redirect()->route('tasks.index', ['view' => 'overdue']);
     }
 }

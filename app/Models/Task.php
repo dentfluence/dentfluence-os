@@ -194,6 +194,24 @@ class Task extends Model
         return $this->belongsTo(Patient::class, 'patient_id');
     }
 
+    /**
+     * The appointment this task produced, if it produced one.
+     *
+     * Deliberately NOT in $fillable: a booking link is a fact the system
+     * observes after the calendar accepts a slot, never something a form
+     * posts. It is stamped in TaskController::markDone() and nowhere else.
+     */
+    public function appointment(): BelongsTo
+    {
+        return $this->belongsTo(Appointment::class, 'appointment_id');
+    }
+
+    /** True when this task ended in a booked chair. */
+    public function converted(): bool
+    {
+        return $this->appointment_id !== null;
+    }
+
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(\App\Models\Inventory\PurchaseOrder::class, 'po_id');

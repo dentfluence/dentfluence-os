@@ -67,6 +67,12 @@
             </p>
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
+        {{-- Only for people who can read reports; everyone else never sees a
+             per-colleague breakdown exists. The route enforces this too. --}}
+        @if(auth()->user()->canAccess('reports'))
+            <a href="{{ route('tasks.accountability') }}"
+               style="font-size:12.5px;color:#9a7aaa;text-decoration:none;padding:9px 4px;">Accountability</a>
+        @endif
         <a href="{{ route('tasks.settings') }}"
            style="font-size:12.5px;color:#9a7aaa;text-decoration:none;padding:9px 4px;">Settings</a>
         <button @click="drawerOpen=true"
@@ -282,6 +288,24 @@
             {{-- ── body (scrolls) ── --}}
             <div style="padding:16px 22px;overflow-y:auto;flex:1;">
 
+                {{-- The chair this task filled. Shown at the top of the drawer,
+                     open or closed, because "did that recall call convert?" is
+                     the first thing anyone asks about a finished call and the
+                     answer was previously nowhere on screen. Links to the
+                     calendar on that date rather than to a detail page — the
+                     day sheet is where staff actually work. --}}
+                <template x-if="task.appointment">
+                    <a :href="task.appointment.url"
+                       style="display:flex;align-items:center;gap:8px;text-decoration:none;margin-bottom:14px;padding:9px 12px;background:#f2fbf4;border:1px solid #cfe9d6;border-radius:7px;">
+                        <span style="font-size:12px;font-weight:700;color:#1d7a3c;">Appointment booked</span>
+                        <span style="font-size:12px;color:#2c6e42;" x-text="task.appointment.label"></span>
+                        <template x-if="task.appointment.doctor">
+                            <span style="font-size:12px;color:#5a8a6a;" x-text="'· ' + task.appointment.doctor"></span>
+                        </template>
+                        <span style="margin-left:auto;font-size:12px;color:#1d7a3c;font-weight:600;">View &rarr;</span>
+                    </a>
+                </template>
+
                 {{-- ── EDIT ────────────────────────────────────────────────
                      Due date is NOT here on purpose. Moving a date is a
                      Reschedule: it asks why, keeps the original date and keeps
@@ -399,13 +423,64 @@
                                 </template>
                             </div>
 
+                            {{-- The follow-up is a REAL task, so it is created the way a
+                                 real task is: an owner, a date, a type, a priority. The
+                                 old version asked only for a title and silently inherited
+                                 the rest, which is how a lab follow-up ended up assigned
+                                 to the receptionist who closed the call.
+
+                                 The patient link is not a field because it is not a
+                                 choice — the follow-up is about the same case by
+                                 definition. It is shown so staff can see what is being
+                                 carried forward. --}}
                             <div x-show="next === 'task'" style="margin-top:10px;">
-                                <input type="text" x-model="nextTitle" placeholder="e.g. Call again about the crown"
-                                       style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;margin-bottom:8px;">
-                                <input type="date" x-model="nextDate" :min="todayStr"
+                                <template x-if="task.patient_name">
+                                    <div style="font-size:12px;color:#7a6088;margin-bottom:9px;padding:7px 10px;background:#faf6fc;border-radius:6px;border:1px solid #f0e6f5;">
+                                        About <strong x-text="task.patient_name"></strong>
+                                        <span style="color:#9a7aaa;">— carried over from this task</span>
+                                    </div>
+                                </template>
+
+                                <label style="font-size:11.5px;font-weight:600;color:#6a0f70;display:block;margin-bottom:4px;">Task</label>
+                                <input type="text" x-model="nextTask.title" placeholder="e.g. Call again about the crown"
                                        style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;">
-                                <p style="font-size:11.5px;color:#9a7aaa;margin:6px 0 0;">
-                                    Same patient, same owner. Starts fresh — no attempts, no delay carried over.
+
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+                                    <div>
+                                        <label style="font-size:11.5px;font-weight:600;color:#6a0f70;display:block;margin-bottom:4px;">Assigned to</label>
+                                        <select x-model="nextTask.assigned_to" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;background:#fff;">
+                                            @foreach($users as $u)
+                                                <option value="{{ $u->id }}">{{ $u->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style="font-size:11.5px;font-weight:600;color:#6a0f70;display:block;margin-bottom:4px;">Due date</label>
+                                        <input type="date" x-model="nextTask.due_date" :min="todayStr" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;">
+                                    </div>
+                                </div>
+
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+                                    <div>
+                                        <label style="font-size:11.5px;font-weight:600;color:#6a0f70;display:block;margin-bottom:4px;">Type</label>
+                                        <select x-model="nextTask.category" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;background:#fff;">
+                                            @foreach(\App\Models\Task::CATEGORIES as $ck => $cl)
+                                                <option value="{{ $ck }}">{{ $cl }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style="font-size:11.5px;font-weight:600;color:#6a0f70;display:block;margin-bottom:4px;">Priority</label>
+                                        <select x-model="nextTask.priority" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;background:#fff;">
+                                            @foreach(['urgent'=>'Urgent','high'=>'High','medium'=>'Medium','low'=>'Low'] as $pk => $pl)
+                                                <option value="{{ $pk }}">{{ $pl }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <p style="font-size:11.5px;color:#9a7aaa;margin:8px 0 0;">
+                                    Starts fresh — no attempts and no delay carried over.
                                 </p>
                             </div>
 
@@ -537,7 +612,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function taskList(){
     return {
-        drawerOpen: false,   // the Assign Task create form
+        // Reopened automatically when the server bounced a duplicate back, so
+        // the person lands on their own half-filled form rather than an empty
+        // board wondering what happened.
+        drawerOpen: {{ session('duplicate_warning') ? 'true' : 'false' }},
         panel: false,        // the outcome drawer
         busy: false,
         err: '',
@@ -567,9 +645,11 @@ function taskList(){
         // "What happens next", asked only while closing. Default is nothing —
         // a prompt that pre-selects a follow-up would manufacture busywork.
         next: 'none',
-        nextTitle: '',
-        nextDate: '',
+        // Defaults are inherited from the task being closed, then overridable.
+        // Inheriting silently was the bug; inheriting visibly is the feature.
+        nextTask: {title:'', assigned_to:'', due_date:'', category:'', priority:'medium'},
         appt: {doctor_id:'', appointment_date:'', appointment_time:'', type:'follow-up'},
+        bookedApptId: null,
         outcomeKey: '',
         note: '',
         newDate: '',
@@ -589,9 +669,15 @@ function taskList(){
             this.newDate = d.task.due_date;
             this.editing = false;
             this.next = 'none';
-            this.nextTitle = '';
+            this.bookedApptId = null;
             const t = new Date(); t.setDate(t.getDate() + 7);
-            this.nextDate = t.toISOString().slice(0,10);
+            this.nextTask = {
+                title:       '',
+                assigned_to: d.task.assigned_to_id || '',
+                due_date:    t.toISOString().slice(0,10),
+                category:    d.task.category || '',
+                priority:    d.task.priority || 'medium',
+            };
             // A lab or clinical task that ends in a booking is almost always
             // treatment; a call or recall is a follow-up. Staff can override.
             const visitType = ['lab','clinical'].includes(d.task.category) ? 'treatment'
@@ -641,7 +727,12 @@ function taskList(){
                 : {outcome_key: this.outcomeKey || null, note: this.note || null,
                    ...(this.mode === 'reschedule' ? {due_date: this.newDate} : {}),
                    ...(this.mode === 'done' && this.next !== 'none'
-                        ? {next: this.next, next_title: this.nextTitle, next_due_date: this.nextDate}
+                        ? {next: this.next,
+                           next_title:       this.nextTask.title,
+                           next_due_date:    this.nextTask.due_date,
+                           next_assigned_to: this.nextTask.assigned_to || null,
+                           next_category:    this.nextTask.category || null,
+                           next_priority:    this.nextTask.priority || null}
                         : {})};
 
             this.busy = true;
@@ -653,6 +744,9 @@ function taskList(){
             if(this.mode === 'done' && this.next === 'appointment'){
                 const booked = await this.bookAppointment();
                 if(!booked){ this.busy = false; return; }
+                // Attached HERE, not when `body` was built above — the id does
+                // not exist until the calendar has accepted the slot.
+                if(this.bookedApptId) body.appointment_id = this.bookedApptId;
             }
 
             try {
@@ -722,6 +816,10 @@ function taskList(){
                         || 'That slot could not be booked.';
                     return false;
                 }
+                // The full-form path answers with `id`; the walk-in path only
+                // with the formatted appointment. Read both, because a missing
+                // id here would silently drop the link and nothing would fail.
+                this.bookedApptId = d.id || (d.appointment && d.appointment.id) || null;
                 return true;
             } catch(e){
                 this.err = 'Network error — nothing was booked and the task is untouched.';
