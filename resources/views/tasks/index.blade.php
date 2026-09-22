@@ -24,6 +24,7 @@
         'assigned_to' => $filters['assigned_to'],
         'category'    => $filters['category'],
         'priority'    => $filters['priority'],
+        'date'        => $filters['date'],
         'source'      => $source ?? null,
     ]), $over));
 
@@ -57,7 +58,12 @@
                 </span>
             </div>
             <p style="font-size:12.5px;color:#9a7aaa;margin:3px 0 0;">
-                {{ today()->format('l, d F Y') }} · Staff work, not automation
+                @if($filters['date'])
+                    Showing <strong style="color:#6a0f70;">{{ \Carbon\Carbon::parse($filters['date'])->format('l, d F Y') }}</strong>
+                    — <a href="{{ route('tasks.index') }}" style="color:#6a0f70;">back to open work</a>
+                @else
+                    {{ today()->format('l, d F Y') }} · Staff work, not automation
+                @endif
             </p>
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
@@ -77,7 +83,7 @@
     <div style="padding:16px 28px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         @foreach($chips as $key => [$label, $count, $colour])
             @php $on = $filters['view'] === $key; @endphp
-            <a href="{{ $q(['view' => $key]) }}"
+            <a href="{{ $q(['view' => $key, 'date' => null]) }}"
                style="display:inline-flex;align-items:center;gap:7px;padding:6px 14px;border-radius:999px;text-decoration:none;font-size:12.5px;
                       border:1.5px solid {{ $on ? '#6a0f70' : '#e2d6ea' }};
                       background:{{ $on ? '#6a0f70' : '#fff' }};
@@ -108,11 +114,22 @@
         @unless($isStaffRole)
             <select name="assigned_to" style="padding:8px 12px;border:1.5px solid #ede4f3;border-radius:7px;font-size:13px;font-family:inherit;color:#1a0320;">
                 <option value="">All staff</option>
+                {{-- A task nobody owns is a task nobody does, and until now
+                     there was no way to find one. --}}
+                <option value="none" @selected($filters['assigned_to'] === 'none')>
+                    Unassigned{{ $counts['unassigned'] ? ' ('.$counts['unassigned'].')' : '' }}
+                </option>
                 @foreach($users as $u)
                     <option value="{{ $u->id }}" @selected($filters['assigned_to'] == $u->id)>{{ $u->name }}</option>
                 @endforeach
             </select>
         @endunless
+
+        {{-- Pick a day and the view chips step aside: "what is on for the 4th"
+             is a different question from "what is still open", and answering
+             both at once shows an empty screen with no explanation. --}}
+        <input type="date" name="date" value="{{ $filters['date'] }}" title="Show one day"
+               style="padding:8px 12px;border:1.5px solid {{ $filters['date'] ? '#6a0f70' : '#ede4f3' }};border-radius:7px;font-size:13px;font-family:inherit;color:#1a0320;">
 
         <select name="category" style="padding:8px 12px;border:1.5px solid #ede4f3;border-radius:7px;font-size:13px;font-family:inherit;color:#1a0320;">
             <option value="">All types</option>
@@ -503,6 +520,21 @@
 <style>[x-cloak]{display:none!important;}</style>
 
 <script>
+// Survives the reload that follows a close, so the confirmation is not lost
+// with the page that produced it.
+document.addEventListener('DOMContentLoaded', () => {
+    const msg = sessionStorage.getItem('taskFlash');
+    if(!msg) return;
+    sessionStorage.removeItem('taskFlash');
+    const bar = document.createElement('div');
+    bar.textContent = msg;
+    bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:26px;'
+        + 'background:#1a0320;color:#fff;padding:11px 20px;border-radius:999px;font-size:13px;'
+        + 'font-family:Inter,sans-serif;z-index:950;box-shadow:0 6px 24px rgba(14,1,24,.28);';
+    document.body.appendChild(bar);
+    setTimeout(() => bar.remove(), 5000);
+});
+
 function taskList(){
     return {
         drawerOpen: false,   // the Assign Task create form
@@ -637,6 +669,15 @@ function taskList(){
                 if(!res.ok || !d.ok){
                     this.err = d.message || Object.values(d.errors || {}).flat().join(' ') || 'Could not save.';
                     this.busy = false; return;
+                }
+
+                // A recurring service (AC, pest control, autoclave) books its own
+                // next visit the moment this one closes. Say so — otherwise the
+                // person quietly creates a duplicate by hand next week.
+                if(d.next_due_date){
+                    sessionStorage.setItem('taskFlash', 'Done. The next one is scheduled for ' + d.next_due_date + '.');
+                } else if(d.chained_task_id){
+                    sessionStorage.setItem('taskFlash', 'Done, and the follow-up task is on the list.');
                 }
                 window.location.reload();
             } catch(e){

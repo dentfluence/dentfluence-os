@@ -1785,25 +1785,30 @@ document.addEventListener('alpine:init', () => {
     {{-- ── COL 4: TASKS ── --}}
     {{-- JSON in script tag — avoids double-quote breakage inside x-data="" attribute --}}
     <script>window.__huddleTasks = {!! json_encode($myTasks->values()) !!};</script>
-    <div class="hd-col"
-         x-data="{
-            tasks: window.__huddleTasks,
-            toggle(i) {
-                if (this.tasks[i].done) return;
-                this.tasks[i].done = true;
-                fetch('/tasks/' + this.tasks[i].id + '/done', {
-                    method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content }
-                }).catch(() => { this.tasks[i].done = false; });
-            }
-         }">
+    {{-- READ-ONLY, deliberately. The Huddle is a ten-minute morning briefing:
+         the team READS what is due here and WORKS it in Tasks.
+
+         The checkbox that used to sit here closed a task with no outcome and no
+         reason — a bare status flip straight into the tasks table. That is the
+         thing the Tasks rebuild removed, and leaving a second, easier door open
+         would have made the whole outcome trail decorative: under time pressure
+         people always take the easier door.
+
+         A task closed in Tasks drops off this list by itself, because the query
+         behind it asks for open work only.
+
+         Mobile is different ON PURPOSE: there the huddle IS the tasks screen
+         (CEO, 4 Sep — the app is a data-entry layer and job #5 is "huddle +
+         tasks"), so the phone carries the full outcome sheet. The web has its
+         own Tasks screen and does not need a second one. --}}
+    <div class="hd-col" x-data="{ tasks: window.__huddleTasks }">
         <div class="hd-col-hdr">
             <div class="hd-col-title">
                 <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                 Tasks
             </div>
             <div style="display:flex;align-items:center;gap:.3rem;">
-                <span class="hd-col-count" x-text="tasks.filter(t=>!t.done).length + ' left'"></span>
+                <span class="hd-col-count" x-text="tasks.length + ' open'"></span>
                 <a href="{{ route('tasks.index') }}" title="View all tasks"
                    style="color:var(--c-muted);font-size:.72rem;text-decoration:none;white-space:nowrap;" >
                    View all →
@@ -1817,14 +1822,12 @@ document.addEventListener('alpine:init', () => {
         </template>
 
         <div class="hd-card" x-show="tasks.length > 0">
-            <template x-for="(task, i) in tasks.slice(0,7)" :key="task.id">
-                <div class="hd-tc">
-                    <div class="hd-tc-check" :class="{ done: task.done }" @click="toggle(i)"
-                         :style="task.done ? 'cursor:default' : 'cursor:pointer'">
-                        <svg width="8" height="8" fill="none" stroke="white" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-                    </div>
+            <template x-for="task in tasks.slice(0,7)" :key="task.id">
+                {{-- The whole row opens Tasks, where the work is actually done. --}}
+                <a class="hd-tc" style="text-decoration:none;color:inherit;"
+                   :href="'{{ route('tasks.index') }}?view=open&q=' + encodeURIComponent(task.title)">
                     <div class="hd-tc-body">
-                        <div class="hd-tc-title" :class="{ done: task.done }" x-text="task.title"></div>
+                        <div class="hd-tc-title" x-text="task.title"></div>
                         <div class="hd-tc-meta">
                             <span class="hd-badge" :class="'hd-b-' + (task.priority || 'medium')" x-text="task.priority || 'medium'"></span>
                             {{-- Show category badge if overdue --}}
@@ -1835,7 +1838,7 @@ document.addEventListener('alpine:init', () => {
                             <span class="hd-tc-assignee" x-text="task.assignee_name ?? ''"></span>
                         </div>
                     </div>
-                </div>
+                </a>
             </template>
         </div>
 

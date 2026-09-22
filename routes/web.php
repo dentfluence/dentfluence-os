@@ -828,7 +828,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/overdue',        [\App\Http\Controllers\Communication\TaskController::class, 'overdue'])->name('overdue');
         Route::post('/{task}/done',   [\App\Http\Controllers\Communication\TaskController::class, 'markDone'])->name('done');
         Route::post('/{task}/evidence', [\App\Http\Controllers\Communication\TaskController::class, 'uploadEvidence'])->name('evidence');
-        Route::post('/{task}/escalate', [\App\Http\Controllers\Communication\TaskController::class, 'escalate'])->name('escalate')->middleware('module:tasks,edit');
 
         /* Tasks > Settings — the per-category outcome vocabulary.
            MUST be declared before the /{task} wildcard below, or "settings"

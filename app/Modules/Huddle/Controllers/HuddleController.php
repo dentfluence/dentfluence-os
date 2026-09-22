@@ -533,7 +533,13 @@ class HuddleController extends Controller
             ->leftJoin('users as assignee', 'assignee.id', '=', 'tasks.assigned_to')
             ->where('tasks.branch_id', $branchId)
             ->where('tasks.category', 'maintenance')
-            ->whereIn('tasks.status', ['pending', 'in_progress'])
+            // Open work only — anything finished or cancelled in the Tasks module
+            // drops off this board by itself on the next load. Written as "not
+            // closed" rather than "= pending" so a future non-terminal state
+            // cannot silently vanish from the morning board.
+            // ('in_progress' was listed here and was never a real status;
+            // tasks.status is enum pending/done/escalated/cancelled.)
+            ->whereNotIn('tasks.status', \App\Models\Task::CLOSED_STATUSES)
             ->whereNull('tasks.deleted_at')
             ->where(function ($q) use ($today) {
                 $q->whereNull('tasks.due_date')
@@ -577,7 +583,13 @@ class HuddleController extends Controller
             // on a staff board. Also applies the soft-delete guard, which a
             // DB::table() read does not get for free.
             ->tap(fn ($q) => \App\Models\Task::applyReceptionVisibility($q))
-            ->whereIn('tasks.status', ['pending', 'in_progress'])
+            // Open work only — anything finished or cancelled in the Tasks module
+            // drops off this board by itself on the next load. Written as "not
+            // closed" rather than "= pending" so a future non-terminal state
+            // cannot silently vanish from the morning board.
+            // ('in_progress' was listed here and was never a real status;
+            // tasks.status is enum pending/done/escalated/cancelled.)
+            ->whereNotIn('tasks.status', \App\Models\Task::CLOSED_STATUSES)
             ->where(function ($q) use ($today) {
                 // Due today OR overdue (so nothing falls through the cracks)
                 $q->whereDate('tasks.due_date', $today->toDateString())
@@ -596,7 +608,7 @@ class HuddleController extends Controller
             ->orderByRaw("FIELD(tasks.priority, 'urgent', 'high', 'medium', 'low')")
             ->orderBy('tasks.due_date')
             ->get()
-            ->map(fn($t) => array_merge((array) $t, ['done' => false]));
+            ->map(fn ($t) => (array) $t);
 
         // ── Comms list: Reminders (today's appts) + Follow-ups (yesterday's treated) ──
         // Section 1 — Appointment Reminders for today (shown first)

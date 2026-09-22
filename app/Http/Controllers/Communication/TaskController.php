@@ -48,6 +48,7 @@ class TaskController extends Controller
                                 ->whereBetween('due_date', [today(), today()->copy()->endOfWeek()])
                                 ->count(),
             'done'      => (clone $base)->where('status', 'done')->count(),
+            'unassigned'=> (clone $base)->open()->whereNull('assigned_to')->count(),
             'cancelled' => (clone $base)->where('status', 'cancelled')->count(),
         ];
 
@@ -57,10 +58,19 @@ class TaskController extends Controller
             'assigned_to' => $request->get('assigned_to'),
             'category'    => $request->get('category'),
             'priority'    => $request->get('priority'),
+            // "What is on for the 4th?" — a single day, closed work included,
+            // because on a chosen day you want the whole picture, not just
+            // what is still outstanding.
+            'date'        => $request->get('date'),
         ];
 
         $query = $base->with(['assignedTo', 'patient', 'protocol.materials']);
 
+        // A chosen date overrides the view entirely — the two answer different
+        // questions and stacking them would show an empty screen and no reason.
+        if ($filters['date']) {
+            $query->whereDate('due_date', $filters['date']);
+        } else {
         match ($filters['view']) {
             'overdue'   => $query->open()->whereDate('due_date', '<', today()),
             'today'     => $query->open()->whereDate('due_date', today()),
@@ -70,6 +80,7 @@ class TaskController extends Controller
             'all'       => null,
             default     => $query->open(),
         };
+        }
 
         if ($filters['q'] !== '') {
             $term = '%' . $filters['q'] . '%';
@@ -79,7 +90,14 @@ class TaskController extends Controller
             });
         }
 
-        if ($filters['assigned_to']) $query->where('assigned_to', $filters['assigned_to']);
+        // 'none' is not a user id — it is the question "what does nobody own?".
+        // A task with no owner is a task nobody does, and until now there was
+        // no way to find one.
+        if ($filters['assigned_to'] === 'none') {
+            $query->whereNull('assigned_to');
+        } elseif ($filters['assigned_to']) {
+            $query->where('assigned_to', $filters['assigned_to']);
+        }
         if ($filters['category'])    $query->where('category', $filters['category']);
         if ($filters['priority'])    $query->where('priority', $filters['priority']);
 
@@ -652,12 +670,19 @@ class TaskController extends Controller
     }
 
     // ── escalate ──────────────────────────────────────────────────────────────
-    public function escalate(Task $task, \Illuminate\Http\Request $request)
-    {
-        $task->update(['is_escalated' => true]);
-
-        return response()->json(['ok' => true]);
-    }
+    /*
+     * escalate() REMOVED 22 Sep. It wrote `is_escalated`, a column that has
+     * never existed on the tasks table, so every call 500'd — and nothing
+     * called it: no view, no test, no API. It was a route and a method and
+     * nothing else.
+     *
+     * Not replaced. "Escalate" was never defined as a behaviour, and what it
+     * was reaching for is already possible: raise the priority or hand the
+     * task to someone else, both through Edit, both recorded.
+     *
+     * tasks.status still carries 'escalated' as a legacy value and
+     * HuddleController still counts it, so existing rows keep rendering.
+     */
 
     public function myTasks(\Illuminate\Http\Request $request)
     {
