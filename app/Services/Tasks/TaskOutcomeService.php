@@ -198,6 +198,88 @@ class TaskOutcomeService
     }
 
     /**
+     * THE SAME FOLLOW-UP, CHAINED FROM A CALL INSTEAD OF A TASK.
+     *
+     * ── WHY THIS EXISTS (CEO, 23 Sep 2026) ──────────────────────────────────
+     * "Samiksha ne ek call kela patient la, tyane sangitla me Saturday la
+     * karto X-ray… pan Saturday cha kay? Call response madhye note kela pan
+     * pudhcha task ready nahi jhala."
+     *
+     * Logging a call could only push follow_up_date by a fixed +2 days on
+     * queue-backed rows. Not Saturday, not owned by anyone, and not on any
+     * list a person works down. The outcome was recorded; the WORK was not.
+     *
+     * ── WHY IT IS A HUMAN TASK ──────────────────────────────────────────────
+     * TaskEngine::autoCreate() tags everything 'system' and
+     * Task::scopeVisibleToReception() hides those — the 6 Sep rule that keeps
+     * PRE automation out of the staff board. A follow-up a person PROMISED on
+     * a call is not automation: it is that person's word, and it belongs where
+     * it can be seen, chased and counted. So this does not go through
+     * TaskEngine, and the task is left at its default 'human' type.
+     *
+     * ── WHY NOT MERGE THE BOARDS INSTEAD ────────────────────────────────────
+     * Today's Actions rebuilds itself every morning from patient data and is
+     * never "finished"; Tasks are finite promises worked to zero. Merging
+     * makes the finite list infinite, and a list nobody can finish is a list
+     * nobody starts. The hand-off is the fix, not the merge.
+     *
+     * @param  array<string, mixed>  $data  next_title, next_due_date,
+     *                                      next_assigned_to, next_category,
+     *                                      next_priority, notes
+     */
+    public function chainFromCall(array $data, ?int $patientId, int $branchId): ?Task
+    {
+        if (empty($data['next_title']) || empty($data['next_due_date'])) {
+            return null;
+        }
+
+        $assignee = $data['next_assigned_to'] ?? Auth::id();
+
+        // Same branch guard as chainFollowUp(): work handed across branches
+        // appears on nobody's board. Falls back to the person who made the
+        // call, who at least knows it exists.
+        if ($assignee) {
+            $ok = \App\Models\User::where('id', $assignee)
+                ->where('branch_id', $branchId)
+                ->exists();
+            if (! $ok) {
+                $assignee = Auth::id();
+            }
+        }
+
+        $chained = Task::create([
+            'title'       => $data['next_title'],
+            'description' => $data['notes'] ?? null,
+            'assigned_to' => $assignee,
+            'created_by'  => Auth::id(),
+            'branch_id'   => $branchId,
+            'patient_id'  => $patientId,
+            'due_date'    => $data['next_due_date'],
+            'priority'    => $data['next_priority'] ?? 'medium',
+            'category'    => $data['next_category'] ?? 'call',
+            'status'      => 'pending',
+        ]);
+
+        if ($chained->assigned_to && (int) $chained->assigned_to !== (int) Auth::id()) {
+            try {
+                app(\App\Services\Notifications\NotificationDispatcher::class)->fire('task.assigned', [
+                    'title'        => 'Follow-up task assigned to you',
+                    'message'      => "\"{$chained->title}\" — due {$chained->due_date->format('d M Y')}.",
+                    'source'       => $chained,
+                    'branch_id'    => $chained->branch_id,
+                    'owner'        => $chained->assigned_to,
+                    'action_url'   => route('tasks.index'),
+                    'action_label' => 'View Tasks',
+                ]);
+            } catch (\Throwable $e) {
+                \Log::warning('Call follow-up notify failed: ' . $e->getMessage());
+            }
+        }
+
+        return $chained;
+    }
+
+    /**
      * Stamp the appointment a closed task produced.
      *
      * Both guards matter: an appointment from another branch would leak a

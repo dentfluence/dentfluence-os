@@ -122,11 +122,12 @@
                style="flex:1;min-width:180px;padding:8px 13px;border:1.5px solid #ede4f3;border-radius:7px;font-size:13px;font-family:inherit;outline:none;">
 
         @php
-            $isStaffRole = in_array(auth()->user()->role, [
-                \App\Models\User::ROLE_ASSISTANT,
-                \App\Models\User::ROLE_FRONT_DESK,
-                \App\Models\User::ROLE_ACCOUNTS,
-            ]);
+            // The staff filter is meaningless to someone who can only see
+            // their own work — and offering it would advertise the names of
+            // colleagues whose tasks they cannot read. Same question the
+            // query asks, from the same method, so the control and the data
+            // can never disagree.
+            $isStaffRole = auth()->user()->seesOwnTasksOnly();
         @endphp
         @unless($isStaffRole)
             <select name="assigned_to" style="padding:8px 12px;border:1.5px solid #ede4f3;border-radius:7px;font-size:13px;font-family:inherit;color:#1a0320;">

@@ -358,6 +358,64 @@ class User extends Authenticatable
        reads either source.
     ========================================================= */
 
+    /* =========================================================
+       TASK SCOPE — who sees whose tasks
+       ---------------------------------------------------------
+       CEO ruling 23 Sep 2026: "all can see each other task…
+       manager owner will see all the task but other should see
+       assigned to them only."
+
+       THE OLD RULE WAS INVERTED. It scoped DOWN an allow-list of
+       three staff types (assistant, front desk, accounts) and let
+       every other role see the whole branch — so a doctor, a
+       consultant, a hygienist or any custom role read everybody's
+       work by default. A permission boundary has to deny by
+       default; an allow-list of the people to restrict leaks every
+       role nobody remembered to add.
+
+       It also asked the legacy `role` STRING, which is a staff-type
+       label anyone with HR edit can change — the same hole closed
+       on isAdminRole() on 17 Sep. The assigned ACCESS role decides
+       here too.
+
+       Resolved in this order:
+         1. Admin (the owner)                      -> all
+         2. Manager                                -> all
+         3. role_module_permissions.data_scope for
+            the 'tasks' module, set per role in
+            Settings -> Roles & Permissions        -> all / own
+         4. Anything else                          -> OWN ONLY
+    ========================================================= */
+
+    const TASK_SCOPE_ALL      = 'all';
+    const TASK_SCOPE_OWN_ONLY = 'own_only';
+
+    public function taskScope(): string
+    {
+        if ($this->isAdminRole()) {
+            return self::TASK_SCOPE_ALL;
+        }
+
+        if ($this->role_id && $this->roleModel?->slug === Role::MANAGER) {
+            return self::TASK_SCOPE_ALL;
+        }
+
+        // A clinic can widen a specific role from Settings. Only an explicit
+        // 'all' widens it; 'own_default' is a view preference elsewhere in the
+        // app and must not be read as permission here.
+        if ($this->role_id && $this->roleModel?->dataScope('tasks') === 'all') {
+            return self::TASK_SCOPE_ALL;
+        }
+
+        return self::TASK_SCOPE_OWN_ONLY;
+    }
+
+    /** True when this user may only see tasks assigned to them. */
+    public function seesOwnTasksOnly(): bool
+    {
+        return $this->taskScope() === self::TASK_SCOPE_OWN_ONLY;
+    }
+
     const APPT_SCOPE_ALL         = 'all';
     const APPT_SCOPE_OWN_DEFAULT = 'own_default';
     const APPT_SCOPE_OWN_ONLY    = 'own_only';

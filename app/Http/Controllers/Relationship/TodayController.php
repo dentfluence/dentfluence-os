@@ -387,6 +387,20 @@ class TodayController extends Controller
         $callResults    = $this->actionOptions()->callResults($responseOpts);
         $dismissReasons = ActionOptionList::query()->dismissReasons()->get()->values();
 
+        // For the drawer's "what happens next" block. Same definitions the
+        // Tasks board and the calendar use — copied from them rather than
+        // invented, so the three lists cannot disagree about who is staff and
+        // who is a doctor.
+        $staffForTasks = \App\Models\User::where('branch_id', auth()->user()->branch_id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $doctorsForBooking = \App\Models\User::where('branch_id', auth()->user()->branch_id)
+            ->where('is_active', true)
+            ->where(fn ($q) => $q->whereIn('role', \App\Models\User::DOCTOR_ROLES)->orWhere('name', 'like', 'Dr.%'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return compact(
             'groups',
             'totalCount',
@@ -407,6 +421,8 @@ class TodayController extends Controller
             'tabCounts',
             'carriedCount',
             'missedYesterday',
+            'staffForTasks',
+            'doctorsForBooking',
         );
     }
 
@@ -575,6 +591,19 @@ class TodayController extends Controller
         $carriedCount     = 0;
         $missedYesterday  = $list['missedYesterday'];
 
+        // pending() renders the SAME board, so its drawer needs the same two
+        // lists. Without them the Blade falls back to an empty list and a
+        // follow-up could be created with nobody on it.
+        $staffForTasks = \App\Models\User::where('branch_id', auth()->user()->branch_id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $doctorsForBooking = \App\Models\User::where('branch_id', auth()->user()->branch_id)
+            ->where('is_active', true)
+            ->where(fn ($q) => $q->whereIn('role', \App\Models\User::DOCTOR_ROLES)->orWhere('name', 'like', 'Dr.%'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return view('relationship.today.index', compact(
             'groups',
             'totalCount',
@@ -595,6 +624,8 @@ class TodayController extends Controller
             'tabCounts',
             'carriedCount',
             'missedYesterday',
+            'staffForTasks',
+            'doctorsForBooking',
         ));
     }
 
@@ -1132,6 +1163,18 @@ class TodayController extends Controller
             'items'              => ['required', 'array', 'min:1'],
             'items.*.category'   => ['required', 'string'],
             'items.*.subject_id' => ['nullable', 'integer'],
+
+            // ── "What happens next" (23 Sep 2026) ────────────────────────
+            // Optional, so every existing caller — mobile, API, a cached
+            // copy of the old JS — keeps working untouched. A date is
+            // required WITH a title because a dated promise with no date is
+            // the exact failure this was built to stop.
+            'next_title'         => ['nullable', 'string', 'max:255'],
+            'next_due_date'      => ['nullable', 'required_with:next_title', 'date'],
+            'next_assigned_to'   => ['nullable', 'integer', 'exists:users,id'],
+            'next_category'      => ['nullable', 'string', 'in:' . implode(',', array_keys(\App\Models\Task::CATEGORIES))],
+            'next_priority'      => ['nullable', 'in:urgent,high,medium,low'],
+            'appointment_id'     => ['nullable', 'integer', 'exists:appointments,id'],
         ]);
 
         $direction = $validated['direction'] ?? 'outbound';
@@ -1241,12 +1284,26 @@ class TodayController extends Controller
                 ?? $validated['next_action']
                 ?? 'No next action set';
 
+            // ── THE HAND-OFF ─────────────────────────────────────────────
+            // The call is logged; now the work it promised becomes real. A
+            // HUMAN task, not a TaskEngine 'system' one — see
+            // TaskOutcomeService::chainFromCall() for why that distinction
+            // is the whole point. Created AFTER the outcome is recorded, so
+            // a failure here can never lose the call itself.
+            $chained = app(\App\Services\Tasks\TaskOutcomeService::class)->chainFromCall(
+                $validated,
+                $validated['patient_id'] ?? null,
+                auth()->user()->branch_id,
+            );
+
             return response()->json([
                 'success'           => true,
                 // The ROW leaves the board only when every reason is closed.
                 'closed'            => $closedItems === count($validated['items']),
                 'closed_items'      => $closedItems,
                 'next_action_label' => $nextActionLabel,
+                'next_task_id'      => $chained?->id,
+                'next_due_date'     => $chained?->due_date?->format('d M Y'),
             ]);
         } catch (\Throwable $e) {
             Log::error('TodayController::logCall failed', [

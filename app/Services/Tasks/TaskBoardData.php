@@ -29,7 +29,9 @@ class TaskBoardData
 {
     /**
      * Branch + reception-visibility + role scope, with no view filter applied.
-     * Every count and every list starts here, so they can never drift apart.
+     * Every count and every list starts here, so they can never drift apart —
+     * which matters most for the scope: a count built from a wider query than
+     * the list would tell someone how much work they cannot see.
      *
      * NOTE: Api\V1\TaskListController keeps its own copy on purpose — it
      * answers a different shape (a phone list, no pagination, no counts) and
@@ -41,13 +43,11 @@ class TaskBoardData
             ->where('branch_id', $user->branch_id)
             ->visibleToReception(); // hides Automation record-tasks (CEO rule, 6 Sep)
 
-        // Staff-level roles see only their own work; admin / doctors see all.
-        $staffRoles = [
-            User::ROLE_ASSISTANT,
-            User::ROLE_FRONT_DESK,
-            User::ROLE_ACCOUNTS,
-        ];
-        if (in_array($user->role, $staffRoles, true)) {
+        // Owner and manager see the branch; everyone else sees their own work.
+        // DENY BY DEFAULT — see User::taskScope(). The rule this replaced
+        // scoped down an allow-list of three staff types and let every other
+        // role read the whole branch.
+        if ($user->seesOwnTasksOnly()) {
             $query->where('assigned_to', $user->id);
         }
 

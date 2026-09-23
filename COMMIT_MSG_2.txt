@@ -1,0 +1,93 @@
+Task visibility boundary, call→task hand-off, call drawer form styles
+
+Three things, one of them a permission bug that was live.
+
+── WHO SEES WHOSE TASKS (security) ─────────────────────────────────
+"all can see each other task… manager owner will see all the task but
+other should see assigned to them only."
+
+THE RULE WAS INVERTED. It scoped DOWN an allow-list of three staff
+types (assistant, front desk, accounts) and let EVERY OTHER ROLE read
+the whole branch — doctors, visiting consultants, hygienists, and any
+role a clinic creates in Settings. A permission boundary has to deny
+by default; an allow-list of who to restrict leaks every role nobody
+remembered to add, and that list is open-ended.
+
+It also asked the legacy `role` STRING — a staff-type label anyone
+with HR edit can change. Same hole closed on isAdminRole() on 17 Sep:
+front desk sets her own staff type and walks through the gate. The
+assigned ACCESS role decides now.
+
+The phone had its own copy of the same inverted rule.
+
+New User::taskScope(), resolved in order:
+  1. Admin (owner)                          -> all
+  2. Manager                                -> all
+  3. role_module_permissions.data_scope for
+     'tasks', set per role in Settings      -> all
+  4. anything else                          -> OWN ONLY
+
+Follows the appointmentScope() pattern already on the model rather
+than inventing a second mechanism, so a clinic can widen one role
+from Settings without a code change.
+
+Applied in all three places that carried the old rule:
+TaskBoardData::scope(), Api\V1\TaskListController::scopedQuery(), and
+the "All staff" dropdown — offering that filter to someone who can
+only see her own work advertises colleagues whose tasks she cannot
+read. Counts come from the same scoped query, so they cannot leak
+either: a count built wider than the list tells someone exactly how
+much work they are not allowed to see.
+
+── A CALL THAT PROMISES SATURDAY NOW PRODUCES SATURDAY'S WORK ──────
+"Samiksha ne ek call kela patient la, tyane sangitla me Saturday la
+karto X-ray… pan Saturday cha kay? Call response madhye note kela pan
+pudhcha task ready nahi jhala."
+
+Logging a call recorded the OUTCOME and, on queue-backed rows only,
+pushed follow_up_date by a fixed +2 days. Not Saturday. Not owned by
+anyone. Not on any list a person works down.
+
+The call drawer now carries the same "what happens next" block the
+Tasks drawer has: Nothing / Follow-up task / Book appointment.
+  * the follow-up is a REAL task — owner, real date, type, priority
+  * booking posts to AppointmentController@store, so blocked-slot and
+    overlap rules still decide; it books FIRST, so a clash means the
+    call is not logged and nothing is half-done
+  * default is Nothing — a prompt that pre-selects a follow-up
+    manufactures busywork nobody promised
+  * a title with no date is refused (422): a dated promise with no
+    date is the exact failure being fixed
+
+THE BOARDS WERE NOT MERGED, deliberately. Today's Actions regenerates
+itself from patient data every morning and is never finished; Tasks
+are finite promises worked to zero. Merging makes the finite list
+infinite, and a list nobody can finish is a list nobody starts — which
+is what the 6 Sep rule ("PRE engine che task vegle, task manager che
+vegle") already protects. The hand-off is the fix, not the merge.
+
+The chained task is HUMAN, never 'system'. TaskEngine tags its own
+'system' and visibleToReception() hides those; a promise a person made
+on a call belongs on the board they work. New
+TaskOutcomeService::chainFromCall(), same branch guard as
+chainFollowUp().
+
+── THE CALL DRAWER'S FORM CLASSES NEVER EXISTED ────────────────────
+.ta-form-label, .ta-form-input, .ta-form-select and .ta-form-textarea
+are used by the note field, the dismiss panel, the stop-chasing panel
+and the new follow-up block — and were defined in no stylesheet at
+all. Every field rendered at browser defaults: labels inline beside
+their inputs, no borders, no widths. At 490px that read as cramped;
+widening the drawer exposed it.
+
+Defined now, matched to the Tasks drawer, so both drawers answer the
+same question in one visual language. Drawer widened 490 -> 860px with
+two-column field pairs so a normal call no longer scrolls mid-call;
+overflow stays as a floor rather than clipping content. z-index 60 ->
+900, matching the Tasks drawer — the app shell reaches 130 and the
+Tasks drawer had exactly this bug at 70.
+
+New tests: TaskVisibilityScopeTest (9), CallFollowUpChainTest (6).
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018XNsjiYXyAjSLeG7gVZDDK

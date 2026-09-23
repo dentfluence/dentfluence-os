@@ -256,17 +256,32 @@
         position: fixed;
         inset: 0;
         background: rgba(26, 3, 32, 0.35);
-        z-index: 60;
+        /* 900, matching the Tasks drawer. The app shell in layouts/app.blade.php
+           reaches 130 (topbar, sidebar, its own overlays); the Tasks drawer sat
+           at 70 and opened UNDER the topbar, which quietly ate its whole first
+           row. This drawer is now 92vh tall, so it reaches the same territory. */
+        z-index: 900;
         display: flex;
         align-items: center;
         justify-content: center;
         padding: 20px;
     }
 
+    /* 23 Sep 2026 — WIDER, SO THE CALL FITS ON ONE SCREEN.
+       490px was sized for an outcome and a note. The drawer now also carries
+       "what happens next" — a follow-up task or a booking — and at that width
+       reception was scrolling mid-call to reach the Save button, which is
+       exactly when a patient is still on the line.
+
+       Honest limit: `overflow-y:auto` stays on the body as a floor. A laptop
+       at 700px tall with the outcome, a required note, a follow-up form AND a
+       booking form open cannot show everything at once, and clipping content
+       is worse than scrolling to it. The point is that the normal call no
+       longer scrolls — not that scrolling is impossible. */
     .ta-drawer {
-        width: 490px;
-        max-width: 100%;
-        max-height: 90vh;
+        width: 860px;
+        max-width: 96vw;
+        max-height: 92vh;
         background: #fff;
         display: flex;
         flex-direction: column;
@@ -299,6 +314,71 @@
         flex: 1;
         overflow-y: auto;
         padding: 14px 18px 16px;
+    }
+
+    /* The follow-up and booking forms lay out in two columns once there is
+       room. Width alone does not remove the scroll — the fields have to stop
+       stacking. Below 820px (tablet, phone) they fall back to one column and
+       the body scrolls, which is the right trade on a small screen. */
+    /* ── FORM CONTROLS ──────────────────────────────────────────────────
+       23 Sep 2026 — THESE CLASSES WERE NEVER DEFINED. .ta-form-label,
+       .ta-form-input, .ta-form-select and .ta-form-textarea are used by the
+       note field, the dismiss panel, the stop-chasing panel and now the
+       follow-up block, and not one of them existed in this stylesheet or any
+       other. Every field was rendering at browser defaults: labels inline
+       beside their inputs, no borders, no widths. At 490px that read as
+       cramped; at 860px it read as broken, which is what finally exposed it.
+
+       Matched to the Tasks drawer on purpose — same label weight, same
+       border, same radius — because the two drawers now ask the same
+       question and must not answer it in two visual languages. */
+    .ta-form-group { margin-bottom: 10px; }
+
+    .ta-form-label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #6a0f70;
+        line-height: 1.3;
+    }
+
+    .ta-form-input,
+    .ta-form-select,
+    .ta-form-textarea {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 9px 12px;
+        border: 1.5px solid #e2d4e8;
+        border-radius: 7px;
+        background: #fff;
+        color: #1a0320;
+        font-size: 13px;
+        font-family: inherit;
+        line-height: 1.4;
+    }
+
+    .ta-form-textarea { resize: vertical; min-height: 54px; }
+
+    .ta-form-input:focus,
+    .ta-form-select:focus,
+    .ta-form-textarea:focus {
+        outline: none;
+        border-color: #6a0f70;
+        box-shadow: 0 0 0 3px rgba(106, 15, 112, 0.10);
+    }
+
+    .ta-form-input::placeholder,
+    .ta-form-textarea::placeholder { color: #b3a0b8; }
+
+    .ta-next-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    @media (max-width: 820px) {
+        .ta-next-grid { grid-template-columns: 1fr; }
+    }
+    .ta-next-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+    @media (max-width: 820px) {
+        .ta-next-wrap { grid-template-columns: 1fr; }
     }
 
     .ta-drawer-section {
@@ -1172,6 +1252,150 @@
                          attached (the green tick in the worklist), and an open
                          row can still glance at it mid-call. --}}
                     <div x-show="!dismissMode && !closeMode">
+
+                        {{-- ══════════════════════════════════════════════════
+                             WHAT HAPPENS NEXT — the missing link (23 Sep 2026)
+
+                             THE FAILURE THIS FIXES, in the CEO's words:
+                             Samiksha rang a patient, he said he would come on
+                             Saturday for the X-ray, she wrote it in the call
+                             note — and nothing was ready for Saturday. The
+                             outcome was recorded; the WORK was not.
+
+                             Before this, logging a call could only reschedule
+                             follow_up_date by a fixed +2 days on queue-backed
+                             rows. Not Saturday, not owned by anyone, and not
+                             on any list a person works down.
+
+                             It is the same block the Tasks drawer already has,
+                             deliberately: closing a call and closing a task
+                             ask the same question, so they should not look or
+                             behave like two different features.
+
+                             THE FOLLOW-UP IS A HUMAN TASK, never a system one.
+                             TaskEngine tags what it creates 'system' and
+                             visibleToReception() hides those (CEO rule, 6 Sep:
+                             "PRE engine che task vegle, task manager che
+                             vegle"). A follow-up a person promised on a call
+                             is that person's work, so it goes on the staff
+                             board where it can be seen and chased.
+                        ══════════════════════════════════════════════════ --}}
+                        <div x-show="!historyOnly && form.response" x-cloak
+                             style="margin-top:14px;padding-top:12px;border-top:1.5px dashed #ede4f3;">
+                            <label class="ta-form-label" style="margin-bottom:7px;">What happens next?</label>
+
+                            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                                <template x-for="n in nextOptions" :key="n.k">
+                                    <button type="button" @click="next = n.k"
+                                            :disabled="n.k === 'appointment' && !callPatientId"
+                                            :style="'padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;font-family:inherit;border:1.5px solid;'
+                                                + (next === n.k
+                                                    ? 'background:#6a0f70;color:#fff;border-color:#6a0f70;cursor:pointer;'
+                                                    : (n.k === 'appointment' && !callPatientId
+                                                        ? 'background:#fff;color:#c5b0d5;border-color:#ede4f3;cursor:not-allowed;'
+                                                        : 'background:#fff;color:#7a6088;border-color:#ede4f3;cursor:pointer;'))"
+                                            x-text="n.l"></button>
+                                </template>
+                            </div>
+
+                            {{-- A REAL task: an owner, a date, a type, a priority.
+                                 Asking only for a title and inheriting the rest
+                                 silently is what sent a lab follow-up to whoever
+                                 happened to close the call. --}}
+                            <div x-show="next === 'task'" x-cloak style="margin-top:10px;">
+                                <div style="font-size:12px;color:#7a6088;margin-bottom:9px;padding:7px 10px;background:#faf6fc;border-radius:6px;border:1px solid #f0e6f5;">
+                                    About <strong x-text="drawer.row?.patient_name || 'this patient'"></strong>
+                                    <span style="color:#9a7aaa;">— carried over from this call</span>
+                                </div>
+
+                                <div class="ta-form-group">
+                                    <label class="ta-form-label">Task</label>
+                                    <input type="text" class="ta-form-input" x-model="nextTask.title"
+                                           placeholder="e.g. Call again about the X-ray">
+                                </div>
+
+                                <div class="ta-next-grid">
+                                    <div class="ta-form-group">
+                                        <label class="ta-form-label">Assigned to</label>
+                                        <select class="ta-form-select" x-model="nextTask.assigned_to">
+                                            @foreach($staffForTasks ?? [] as $u)
+                                                <option value="{{ $u->id }}">{{ $u->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="ta-form-group">
+                                        {{-- A real date, not a fixed offset. "Saturday"
+                                             is the whole point of this block. --}}
+                                        <label class="ta-form-label">Due date</label>
+                                        <input type="date" class="ta-form-input" x-model="nextTask.due_date" :min="todayStr">
+                                    </div>
+                                </div>
+
+                                <div class="ta-next-grid">
+                                    <div class="ta-form-group">
+                                        <label class="ta-form-label">Type</label>
+                                        <select class="ta-form-select" x-model="nextTask.category">
+                                            @foreach(\App\Models\Task::CATEGORIES as $ck => $cl)
+                                                <option value="{{ $ck }}">{{ $cl }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="ta-form-group">
+                                        <label class="ta-form-label">Priority</label>
+                                        <select class="ta-form-select" x-model="nextTask.priority">
+                                            @foreach(['urgent'=>'Urgent','high'=>'High','medium'=>'Medium','low'=>'Low'] as $pk => $pl)
+                                                <option value="{{ $pk }}">{{ $pl }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{-- Booked here, for the patient on this call. The form
+                                 is new; the RULES are not — it posts to the same
+                                 AppointmentController@store the calendar uses, so
+                                 the blocked-slot and overlap checks still decide. --}}
+                            <div x-show="next === 'appointment' && callPatientId" x-cloak style="margin-top:10px;">
+                                <div class="ta-next-grid">
+                                    <div class="ta-form-group">
+                                        <label class="ta-form-label">Doctor</label>
+                                        <select class="ta-form-select" x-model="appt.doctor_id">
+                                            <option value="">— select —</option>
+                                            @foreach($doctorsForBooking ?? [] as $doc)
+                                                <option value="{{ $doc->id }}">{{ $doc->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="ta-form-group">
+                                        <label class="ta-form-label">Visit</label>
+                                        <select class="ta-form-select" x-model="appt.type">
+                                            <option value="follow-up">Follow-up</option>
+                                            <option value="consultation">Consultation</option>
+                                            <option value="treatment">Treatment</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="ta-next-grid">
+                                    <div class="ta-form-group">
+                                        <label class="ta-form-label">Date</label>
+                                        <input type="date" class="ta-form-input" x-model="appt.appointment_date" :min="todayStr">
+                                    </div>
+                                    <div class="ta-form-group">
+                                        <label class="ta-form-label">Time</label>
+                                        <input type="time" class="ta-form-input" x-model="appt.appointment_time">
+                                    </div>
+                                </div>
+                                <p style="font-size:11.5px;color:#9a7aaa;margin:8px 0 0;">
+                                    The appointment is booked first. If the slot clashes, the call is not
+                                    logged and nothing is lost.
+                                </p>
+                            </div>
+                            <p x-show="next === 'appointment' && !callPatientId" x-cloak
+                               style="font-size:11.5px;color:#a05c00;margin:9px 0 0;">
+                                This row is a lead, not a patient yet — there is nobody to book against.
+                            </p>
+                        </div>
+
                         <div class="ta-more" x-show="!historyOnly">
                             <button type="button" x-show="!requiresNotes" @click="showNote = !showNote">
                                 <i class="ti ti-note"></i>
@@ -1437,6 +1661,15 @@ function todayActions() {
         // Which reasons this call covers. item_id => true|false; absent = true.
         selected: {},
 
+        // Booking needs a PATIENT. A lead row carries lead_id and no
+        // patient_id, and AppointmentController@store would reject it — so the
+        // option is disabled rather than offered and then refused.
+        get callPatientId() {
+            return (this.drawer.row && this.drawer.row.patient_id)
+                || (this.drawer.item && this.drawer.item.patient_id)
+                || null;
+        },
+
         // ── CALL RESULT (redesign 2026-08-26) ───────────────────────────
         // Two steps, not three overlapping concepts. `direction` is who
         // placed the call; `contactResult` is whether it connected;
@@ -1480,6 +1713,21 @@ function todayActions() {
             next_action: '',
             notes:       '',
         },
+
+        // ── "What happens next" (23 Sep 2026) ───────────────────────────
+        // Default is 'none' on purpose. A prompt that pre-selects a follow-up
+        // manufactures busywork; one that offers it costs a click when the
+        // patient actually said "Saturday".
+        nextOptions: [
+            {k:'none',        l:'Nothing'},
+            {k:'task',        l:'Follow-up task'},
+            {k:'appointment', l:'Book appointment'},
+        ],
+        next: 'none',
+        nextTask: {title:'', assigned_to:'', due_date:'', category:'call', priority:'medium'},
+        appt: {doctor_id:'', appointment_date:'', appointment_time:'', type:'follow-up'},
+        bookedApptId: null,
+        todayStr: new Date().toISOString().slice(0,10),
 
         // ── Derived next action label ───────────────────────────────────
         nextActionLabel: '',
@@ -1542,6 +1790,22 @@ function todayActions() {
             const sel = {};
             items.forEach(i => { sel[i.item_id] = true; });
             this.selected = sel;
+
+            // RESET THE FOLLOW-UP BLOCK EVERY TIME. Alpine state survives the
+            // drawer closing, so without this the next patient inherits the
+            // last one's task title, date and half-filled booking — and the
+            // one thing worse than no follow-up is a follow-up about the
+            // wrong person.
+            this.next         = 'none';
+            this.bookedApptId = null;
+            this.nextTask     = {
+                title:       '',
+                assigned_to: '',
+                due_date:    '',
+                category:    'call',
+                priority:    'medium',
+            };
+            this.appt = {doctor_id:'', appointment_date:'', appointment_time:'', type:'follow-up'};
 
             // Reset the two secondary panels
             this.closeMode  = false;
@@ -1951,8 +2215,25 @@ function todayActions() {
         async submitLog() {
             if (!this.canSave || this.submitting) return;
 
+            if (this.next === 'task' && !this.nextTask.title.trim()) {
+                this.submitError = 'Give the follow-up a title, or choose Nothing.';
+                return;
+            }
+            if (this.next === 'task' && !this.nextTask.due_date) {
+                this.submitError = 'Give the follow-up a date — that is the whole point of it.';
+                return;
+            }
+
             this.submitting  = true;
             this.submitError = '';
+
+            // BOOK FIRST. If the slot clashes the call is NOT logged and the
+            // row stays on the board, so nobody ends up with a logged outcome
+            // and no appointment.
+            if (this.next === 'appointment') {
+                const booked = await this.bookAppointment();
+                if (! booked) { this.submitting = false; return; }
+            }
 
             const row    = this.drawer.row || {};
             const item   = this.drawer.item;
@@ -1981,6 +2262,17 @@ function todayActions() {
                 direction:       this.direction,
                 items:           items,
             };
+
+            if (this.next === 'task') {
+                payload.next_title       = this.nextTask.title;
+                payload.next_due_date    = this.nextTask.due_date;
+                payload.next_assigned_to = this.nextTask.assigned_to || null;
+                payload.next_category    = this.nextTask.category || null;
+                payload.next_priority    = this.nextTask.priority || null;
+            }
+            if (this.bookedApptId) {
+                payload.appointment_id = this.bookedApptId;
+            }
 
             try {
                 const res = await fetch('{{ route('relationship.today.log-call') }}', {
@@ -2015,6 +2307,53 @@ function todayActions() {
                 this.submitError = 'Network error. Please check your connection.';
             } finally {
                 this.submitting = false;
+            }
+        },
+
+        /**
+         * Books through AppointmentController@store — the calendar's own
+         * endpoint, so blocked slots, overlaps and every other booking rule
+         * still decide. Nothing about booking is re-implemented here, and the
+         * server's refusal message is shown as it comes, not re-worded.
+         */
+        async bookAppointment() {
+            if (!this.appt.doctor_id || !this.appt.appointment_date || !this.appt.appointment_time) {
+                this.submitError = 'Pick a doctor, a date and a time to book.';
+                return false;
+            }
+            try {
+                const res = await fetch('{{ route('appointments.store') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type':     'application/json',
+                        'Accept':           'application/json',
+                        'X-CSRF-TOKEN':     document.querySelector('meta[name="csrf-token"]').content,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        patient_id:       this.callPatientId,
+                        doctor_id:        this.appt.doctor_id,
+                        appointment_date: this.appt.appointment_date,
+                        appointment_time: this.appt.appointment_time,
+                        type:             this.appt.type,
+                        notes:            this.form.notes || null,
+                    }),
+                });
+                const d = await res.json();
+                if (! res.ok) {
+                    this.submitError = d.message
+                        || Object.values(d.errors || {}).flat().join(' ')
+                        || 'That slot could not be booked.';
+                    return false;
+                }
+                // The full-form path answers with `id`, the walk-in path only
+                // with the formatted appointment. Read both — a missing id
+                // would silently drop the link and nothing would fail loudly.
+                this.bookedApptId = d.id || (d.appointment && d.appointment.id) || null;
+                return true;
+            } catch (e) {
+                this.submitError = 'Network error — nothing was booked and the call is not logged.';
+                return false;
             }
         },
 

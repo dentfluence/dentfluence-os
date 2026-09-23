@@ -95,13 +95,10 @@ class TaskListController extends ApiController
             ->where('branch_id', $user->branch_id)
             ->visibleToReception();
 
-        $staffRoles = [
-            User::ROLE_ASSISTANT,
-            User::ROLE_FRONT_DESK,
-            User::ROLE_ACCOUNTS,
-        ];
-
-        if (in_array($user->role, $staffRoles, true)) {
+        // Same boundary as the web board, from the same method. The phone
+        // had its own copy of the old inverted rule, so a doctor's app
+        // listed the whole branch's work.
+        if ($user->seesOwnTasksOnly()) {
             $query->where('assigned_to', $user->id);
         }
 
