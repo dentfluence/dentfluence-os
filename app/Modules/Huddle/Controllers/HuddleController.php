@@ -60,6 +60,11 @@ class HuddleController extends Controller
             ->leftJoin('users as doctors', 'doctors.id', '=', 'appointments.doctor_id')
             ->leftJoin('users as assistants', 'assistants.id', '=', 'appointments.chairside_assistant_id')
             ->leftJoin('treatment_types', 'treatment_types.id', '=', 'appointments.treatment_id')
+            // The category is the treatment; treatment_types is the
+            // sub-treatment under it. The card showed neither — only the visit
+            // type (Consultation / Treatment), which tells the team nothing
+            // they can prepare for.
+            ->leftJoin('treatment_categories', 'treatment_categories.id', '=', 'appointments.treatment_category_id')
             ->where('appointments.branch_id', $branchId)
             ->whereDate('appointments.appointment_date', $today->toDateString())
             ->select([
@@ -80,6 +85,7 @@ class HuddleController extends Controller
                 'doctors.color as doctor_color',
                 'assistants.name as assistant_name',
                 'treatment_types.name as treatment_name',
+                'treatment_categories.name as treatment_category_name',
             ])
             ->orderBy('appointments.appointment_time')
             ->get()
@@ -89,6 +95,9 @@ class HuddleController extends Controller
                 $row->patient  = (object) ['name' => $row->patient_name, 'medical_alert' => $row->medical_alert];
                 $row->doctor   = (object) ['name' => $row->doctor_name];
                 $row->treatment = $row->treatment_name ? (object) ['name' => $row->treatment_name] : null;
+                $row->treatmentCategory = $row->treatment_category_name
+                    ? (object) ['name' => $row->treatment_category_name]
+                    : null;
                 return $row;
             });
 
@@ -398,6 +407,50 @@ class HuddleController extends Controller
                     return $row;
                 });
 
+            // ── Yet to send ──────────────────────────────────────────────
+            // A lab case that has been WRITTEN but not yet physically sent.
+            // 'draft' = the form is filled and nothing is ordered; per
+            // STATUS_FLOW, 'order_placed' means ordered but the impression or
+            // scan has still not left the clinic. Both are work sitting on a
+            // bench that the morning huddle needs to see.
+            //
+            // Two reasons these were invisible before, and BOTH had to go:
+            // the open-status list excluded 'draft' entirely, and the due-date
+            // filter below excluded anything without an expected_return_date —
+            // which a case has not got until it is sent. So a form filled this
+            // morning appeared nowhere.
+            //
+            // Ordered oldest first, and deliberately NOT filtered by date: a
+            // form written three days ago and never sent is the whole point.
+            $labsToSend = DB::table('lab_cases')
+                ->join('patients', 'patients.id', '=', 'lab_cases.patient_id')
+                ->leftJoin('lab_vendors', 'lab_vendors.id', '=', 'lab_cases.lab_vendor_id')
+                ->where('lab_cases.branch_id', $branchId)
+                ->whereIn('lab_cases.status', ['draft', 'order_placed'])
+                ->whereNull('lab_cases.deleted_at')
+                ->select([
+                    'lab_cases.id',
+                    'lab_cases.case_number',
+                    'lab_cases.status',
+                    'lab_cases.priority',
+                    'lab_cases.created_at',
+                    'lab_cases.expected_return_date as due_date',
+                    'patients.name as patient_name',
+                    'lab_vendors.name as lab_name',
+                ])
+                ->orderBy('lab_cases.created_at')
+                ->limit(10)
+                ->get()
+                ->map(function ($row) use ($today) {
+                    // How long it has been sitting. Said in days rather than a
+                    // date, because "waiting 3 days" prompts an action and
+                    // "20 Sep" needs the reader to do the arithmetic.
+                    $row->waiting_days = $row->created_at
+                        ? (int) \Carbon\Carbon::parse($row->created_at)->startOfDay()->diffInDays($today)
+                        : 0;
+                    return $row;
+                });
+
             // Trial loop cases (awaiting doctor trial review)
             $labTrialPending = DB::table('lab_cases')
                 ->join('patients', 'patients.id', '=', 'lab_cases.patient_id')
@@ -426,6 +479,7 @@ class HuddleController extends Controller
 
         } catch (\Exception $e) {
             $labsDueToday    = collect();
+            $labsToSend      = collect();
             $labTrialPending = collect();
             $labRemakesOpen  = null;
         }
@@ -885,6 +939,7 @@ class HuddleController extends Controller
             'yesterdaysTreatmentVisits',
             'yesterdaysConsultations',
             'labsDueToday',
+            'labsToSend',
             'labTrialPending',
             'labRemakesOpen',
             'criticalAlerts',

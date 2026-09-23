@@ -265,6 +265,21 @@ class RelationshipController extends ApiController
                 'closes_task_map'     => $opts->closesTaskMap(),
                 'call_results'        => $opts->callResults($responseOpts),
                 'contact_results'     => \App\Services\Relationship\TodayActionOptions::CONTACT_RESULTS,
+                // What to SAY on the call, per category — the clinic's own
+                // config, the same array the web drawer injects into Alpine.
+                // The phone has never had it, which is why its sheet asked
+                // "what happened?" with no help on what to ask first. Sent
+                // whole (it is a few dozen short strings) rather than per
+                // item, because one call can carry several reasons and the
+                // sheet takes the union.
+                'call_checklists'     => config('relationship_rules.call_checklists', []),
+                // Which WhatsApp template each board category uses. The phone
+                // sends the resolved context to /patients/{id}/whatsapp/link,
+                // which renders the copy and runs the consent gate — the
+                // message text is never assembled on the device, so web and
+                // phone cannot drift and an opted-out patient is refused in
+                // one place rather than two.
+                'whatsapp_contexts'   => config('communication.whatsapp.category_templates', []),
                 'dismiss_reasons'     => ActionOptionList::query()->dismissReasons()->get()
                     ->map(fn (ActionOptionList $r) => [
                         'key'            => $r->key,

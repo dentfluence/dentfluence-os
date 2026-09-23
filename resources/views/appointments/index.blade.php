@@ -1081,6 +1081,37 @@ window.__APPT_DATA = {
 ══════════════════════════════════════════════════════════════ --}}
 <div class="appt-shell" x-data="appointmentApp()" x-init="init()">
 
+    {{-- ── Just booked: offer the confirmation ──────────────────────────────
+         Offered, never sent automatically. The clinic is on click-to-chat,
+         so the message leaves from a staff member's own WhatsApp and they
+         must see it before it goes. It also disappears on the next page
+         load, which is right: a booking confirmation is a moment, not a
+         standing to-do. --}}
+    @if(session('whatsapp_confirm') && session('whatsapp_confirm')['patient_phone'])
+        @php $wc = session('whatsapp_confirm'); @endphp
+        <div x-data="{ apt: @js([
+                'patient_id'     => $wc['patient_id'],
+                'patient_name'   => $wc['patient_name'],
+                'patient_phone'  => $wc['patient_phone'],
+                'appointment_date_human' => $wc['date'],
+                'appointment_time'       => $wc['time'],
+                'doctor_name'    => $wc['doctor'],
+                'treatment_name' => $wc['treatment'],
+             ]), sent: false }"
+             style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;padding:11px 15px;background:#f2fbf4;border:1.5px solid #cfe9d6;border-radius:9px;">
+            <span style="font-size:13px;color:#1d7a3c;font-weight:600;">
+                Appointment booked for {{ $wc['patient_name'] }} — {{ $wc['date'] }}{{ $wc['time'] ? ', ' . $wc['time'] : '' }}.
+            </span>
+            <span style="flex:1 1 auto;"></span>
+            <button type="button"
+                    @click="waContact(apt, 'appointment_confirmation'); sent = true"
+                    style="display:inline-flex;align-items:center;gap:7px;padding:8px 15px;background:#25D366;color:#fff;border:none;border-radius:7px;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;">
+                <i class="ti ti-brand-whatsapp"></i>
+                <span x-text="sent ? 'Send again' : 'Send WhatsApp confirmation'"></span>
+            </button>
+        </div>
+    @endif
+
     {{-- ── STICKY TOP BAR ──────────────────────────────────── --}}
     <div class="appt-topbar">
 
@@ -2957,21 +2988,29 @@ function appointmentApp() {
         // Accepts the full apt object so the message template can include the
         // patient name, date, time and doctor. Backward-compatible: a bare phone
         // string still works (falls back to a plain reminder with no details).
-        async waContact(apt) {
+        // `context` picks the template. 'appointment_reminder' nudges someone
+        // about a booking they already have; 'appointment_confirmation' is
+        // sent at the moment of booking and reads differently — it thanks
+        // them and gives them the clinic's number. Two different moments, two
+        // different messages; the caller says which.
+        async waContact(apt, context = 'appointment_reminder') {
             const isObj = apt && typeof apt === 'object';
             const phone = isObj ? apt.patient_phone : apt;
             if (!phone) return;
 
             const token = document.querySelector('meta[name="csrf-token"]')?.content;
             const payload = {
-                context:    'appointment_reminder',
+                context:    context,
                 patient_id: isObj ? (apt.patient_id ?? null) : null,
                 phone:      phone,
                 params:     isObj ? {
-                    patient: apt.patient_name || 'there',
-                    date:    apt.appointment_date_human || apt.appointment_date || '',
-                    time:    apt.appointment_time || '',
-                    doctor:  apt.doctor_name || '',
+                    patient:   apt.patient_name || 'there',
+                    date:      apt.appointment_date_human || apt.appointment_date || '',
+                    time:      apt.appointment_time || '',
+                    doctor:    apt.doctor_name || '',
+                    // Renders as " for aligners" or disappears entirely —
+                    // never as a dangling "for ." See prepareParams().
+                    treatment: apt.treatment_name || apt.treatment || '',
                 } : {},
             };
 

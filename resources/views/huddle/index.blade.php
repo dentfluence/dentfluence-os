@@ -1255,8 +1255,17 @@ document.addEventListener('alpine:init', () => {
                 <div class="hd-pfc-top">
                     <span class="hd-pfc-time">{{ $appt->appointment_time ? \Carbon\Carbon::parse($appt->appointment_time)->format('H:i') : '—' }}</span>
                     <div style="flex:1;min-width:0;padding:0 .3rem;">
+                        {{-- What the chair is actually booked for. Treatment ·
+                             sub-treatment when both are set, and the visit type
+                             only when neither is — "Consultation" alone told the
+                             team nothing they could prepare for. --}}
                         <div style="font-size:.72rem;color:var(--c-muted);font-weight:500;">
-                            {{ $appt->type ? ucfirst(str_replace('_',' ',$appt->type)) : 'Consultation' }}
+                            @if($appt->treatmentCategory?->name || $appt->treatment?->name)
+                                {{ collect([$appt->treatmentCategory?->name, $appt->treatment?->name])
+                                    ->filter()->unique()->implode(' · ') }}
+                            @else
+                                {{ $appt->type ? ucfirst(str_replace('_',' ',$appt->type)) : 'Consultation' }}
+                            @endif
                         </div>
                         <a href="{{ route('patients.show', $appt->patient_id) }}" class="hd-pfc-name" @click.stop>{{ $appt->patient->name ?? '—' }}</a>
                     </div>
@@ -1869,14 +1878,67 @@ document.addEventListener('alpine:init', () => {
                 <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
                 Lab Updates
             </div>
+            {{-- Two counts, not one total. "Send it" and "chase it" are
+                 different jobs for different people; a single number hides
+                 whichever is smaller. --}}
             <div style="display:flex;align-items:center;gap:.3rem;">
-                <span class="hd-col-count {{ $labsDueToday->where('is_overdue',true)->count() > 0 ? 'red' : '' }}">
+                @if($labsToSend->count() > 0)
+                    <span class="hd-col-count" style="background:#eef2ff;color:#4338ca;" title="Written but not sent to the lab yet">
+                        {{ $labsToSend->count() }} to send
+                    </span>
+                @endif
+                <span class="hd-col-count {{ $labsDueToday->where('is_overdue',true)->count() > 0 ? 'red' : '' }}"
+                      title="Due back today or overdue">
                     {{ $labsDueToday->count() }}
                 </span>
                 <span class="hd-col-menu">•••</span>
             </div>
         </div>
         <div class="hd-col-body">
+
+        {{-- ▸ Yet to send ─────────────────────────────────────────────
+             Written but still in the clinic. Sits at the TOP of the column
+             on purpose: it is the only item here the team can clear in the
+             next ten minutes, and it was previously invisible — the case had
+             to be sent AND past its due date before the huddle mentioned it,
+             so a form filled this morning showed up nowhere. --}}
+        @if($labsToSend->count() > 0)
+        <div style="margin-bottom:8px;">
+            <div style="font-size:10px;font-weight:700;color:#4338ca;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
+                Yet to send ({{ $labsToSend->count() }})
+            </div>
+            @foreach($labsToSend as $lab)
+            <a href="{{ route('lab.show', $lab->id) }}" style="text-decoration:none;display:block;">
+            <div class="hd-card" style="cursor:pointer;background:#eef2ff;border:1px solid #c7d2fe;margin-bottom:4px;{{ $lab->waiting_days >= 2 ? 'border-left:3px solid #4338ca;' : '' }}"
+                 onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow=''">
+                <div class="hd-lc">
+                    <div class="hd-lc-name">{{ $lab->patient_name ?? 'Patient' }}</div>
+                    <div class="hd-lc-lab">
+                        {{ $lab->case_number }}
+                        @if($lab->lab_name) · {{ $lab->lab_name }} @else · <span style="color:#b45309;">no lab chosen</span> @endif
+                    </div>
+                    <div class="hd-lc-footer">
+                        <span class="hd-badge" style="background:#e0e7ff;color:#4338ca;">
+                            {{ \App\Models\LabCase::STATUS_LABELS[$lab->status] ?? ucfirst(str_replace('_',' ',$lab->status)) }}
+                        </span>
+                        {{-- Days, not a date. "Waiting 3 days" prompts an
+                             action; "20 Sep" makes the reader do the sum. --}}
+                        <span style="font-size:10px;font-weight:600;color:{{ $lab->waiting_days >= 2 ? '#b45309' : '#6366f1' }};">
+                            @if($lab->waiting_days === 0)
+                                Written today
+                            @elseif($lab->waiting_days === 1)
+                                Waiting 1 day
+                            @else
+                                Waiting {{ $lab->waiting_days }} days
+                            @endif
+                        </span>
+                    </div>
+                </div>
+            </div>
+            </a>
+            @endforeach
+        </div>
+        @endif
 
         {{-- ▸ Remake / Repeat work alert banner ──────────────────────── --}}
         @if(($labRemakesOpen->cnt ?? 0) > 0)
@@ -1957,8 +2019,13 @@ document.addEventListener('alpine:init', () => {
         </div>
         </a>
         @empty
-        @if($labTrialPending->count() === 0)
-        <div class="hd-empty-col">No overdue or due lab cases today.</div>
+        {{-- Only truly empty when nothing is unsent, nothing is in trial and
+             nothing is due. Saying "no lab cases" with three forms sitting
+             unsent above it is how the column stopped being trusted. --}}
+        @if($labTrialPending->count() === 0 && $labsToSend->count() === 0)
+        <div class="hd-empty-col">No lab cases need attention today.</div>
+        @elseif($labTrialPending->count() === 0)
+        <div class="hd-empty-col" style="padding-top:2px;">Nothing due back today.</div>
         @endif
         @endforelse
 

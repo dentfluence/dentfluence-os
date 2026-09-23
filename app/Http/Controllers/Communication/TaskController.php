@@ -442,86 +442,13 @@ class TaskController extends Controller
 
         HuddleTaskLog::where('task_id', $task->id)->update(['status' => 'done']);
 
-        // ── The booking this task produced ──────────────────────────────────
-        // Stamped only on a genuine close. An outcome that leaves the task open
-        // has already returned above, so a task can never be "converted" while
-        // still being worked on.
-        //
-        // Both guards matter: an appointment from another branch would leak a
-        // patient across clinics, and one for a different patient would make
-        // the conversion figure a lie. Either way the link is simply not made —
-        // the close still stands, because the work did happen.
-        if (! empty($data['appointment_id'])) {
-            $appointment = Appointment::find($data['appointment_id']);
+        // The booking this task produced, and the follow-up that comes after
+        // it. Both live in TaskOutcomeService because the phone's outcome
+        // sheet creates them too — a rule written twice is a rule that will
+        // drift, and this module has already paid that bill once.
+        $outcomes->linkAppointment($task, $data['appointment_id'] ?? null);
 
-            if ($appointment
-                && (int) $appointment->branch_id === (int) $task->branch_id
-                && (! $task->patient_id || (int) $appointment->patient_id === (int) $task->patient_id)
-            ) {
-                $task->appointment_id = $appointment->id;
-                $task->save();
-            } else {
-                Log::warning('Task ' . $task->id . ' closed with an appointment link that did not match branch/patient; link skipped.');
-            }
-        }
-        // ────────────────────────────────────────────────────────────────────
-
-        // ── Chain: a follow-up task, created from the one just closed ───────
-        // The patient and the branch are carried forward and are NOT negotiable:
-        // the follow-up is about the same case by definition, and a task that
-        // crosses branches has no owner anyone can find.
-        //
-        // The owner, type and priority ARE negotiable and come from the form.
-        // They fall back to the closing task's values, which is what the drawer
-        // pre-fills them with anyway — so the common path is unchanged and the
-        // lab-follow-up-assigned-to-the-receptionist case is now fixable in one
-        // dropdown instead of a second edit.
-        $chained = null;
-        if (($data['next'] ?? null) === 'task' && ! empty($data['next_title'])) {
-            $assignee = $data['next_assigned_to'] ?? $task->assigned_to;
-
-            // A follow-up cannot be handed to someone in another branch; that
-            // would create work nobody in either branch sees on their board.
-            if ($assignee && $assignee !== $task->assigned_to) {
-                $ok = User::where('id', $assignee)
-                    ->where('branch_id', $task->branch_id)
-                    ->exists();
-                if (! $ok) {
-                    $assignee = $task->assigned_to;
-                }
-            }
-
-            $chained = Task::create([
-                'title'       => $data['next_title'],
-                'description' => $data['note'] ?? null,
-                'assigned_to' => $assignee,
-                'created_by'  => Auth::id(),
-                'branch_id'   => $task->branch_id,
-                'patient_id'  => $task->patient_id,
-                'due_date'    => $data['next_due_date'] ?? today()->addDay(),
-                'priority'    => $data['next_priority'] ?? $task->priority,
-                'category'    => $data['next_category'] ?? $task->category,
-                'status'      => 'pending',
-            ]);
-
-            // Reassignment is a notification event everywhere else in the
-            // module; a chained task handed to someone else is no different.
-            if ($chained->assigned_to && $chained->assigned_to !== Auth::id()) {
-                try {
-                    app(\App\Services\Notifications\NotificationDispatcher::class)->fire('task.assigned', [
-                        'title'        => 'Follow-up task assigned to you',
-                        'message'      => "\"{$chained->title}\" — due {$chained->due_date->format('d M Y')}.",
-                        'source'       => $chained,
-                        'branch_id'    => $chained->branch_id,
-                        'owner'        => $chained->assigned_to,
-                        'action_url'   => route('tasks.index'),
-                        'action_label' => 'View Tasks',
-                    ]);
-                } catch (\Throwable $e) {
-                    \Log::warning('Chained task notify failed: ' . $e->getMessage());
-                }
-            }
-        }
+        $chained = $outcomes->chainFollowUp($task, $data);
 
         // ── Auto-spawn next occurrence for recurring/AMC tasks ───────────────
         $nextTask = null;

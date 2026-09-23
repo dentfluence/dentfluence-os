@@ -193,4 +193,49 @@ class WhatsappController extends ApiController
             'phone' => $result['phone'],
         ], '');
     }
+
+    /**
+     * A click-to-chat link for someone who is NOT a patient — a lab waiting on
+     * work instructions, a dealer receiving a purchase order.
+     *
+     * The web endpoint has always accepted a bare phone with no patient; the
+     * phone's only route was patient-bound, so labs and dealers were
+     * unreachable from the app entirely. This closes that, and nothing else:
+     * same service, same templates, same rendering.
+     *
+     * No consent gate, deliberately. A lab has not opted in to anything and
+     * does not need to — the DPDP consent model is about patients. There is
+     * also nothing to log against, since a vendor has no relationship record.
+     *
+     * Body: { context, phone, message?, params? }
+     * Returns: { url, phone }
+     */
+    public function linkTo(Request $request, WhatsAppLinkService $link): JsonResponse
+    {
+        $data = $request->validate([
+            'context' => ['required', 'string', 'max:50'],
+            'phone'   => ['required', 'string', 'max:20'],
+            'message' => ['nullable', 'string', 'max:2000'],
+            'params'  => ['nullable', 'array'],
+        ]);
+
+        $params = $link->prepareParams(
+            $data['context'],
+            null,
+            $data['params'] ?? [],
+            $data['message'] ?? null
+        );
+
+        $text  = $link->render($data['context'], $params);
+        $phone = $link->normalizePhone($data['phone']);
+
+        if (! $phone) {
+            return $this->error('That phone number could not be read.', [], 422);
+        }
+
+        return $this->success([
+            'url'   => $link->url($phone, $text),
+            'phone' => $phone,
+        ], '');
+    }
 }

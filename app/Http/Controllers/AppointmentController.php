@@ -214,7 +214,23 @@ class AppointmentController extends Controller
 
             return redirect()
                 ->route('appointments.index', ['date' => $request->appointment_date])
-                ->with('success', 'Walk-in booked successfully.');
+                ->with('success', 'Walk-in booked successfully.')
+            // The confirmation is offered ONCE, right after booking, because
+            // that is the only moment reception has the patient's attention
+            // and the details on screen. Carried in the session rather than
+            // re-queried on the next page: this is a prompt, not a record.
+            ->with('whatsapp_confirm', [
+                'patient_id'    => $appointment->patient_id,
+                'patient_name'  => $appointment->patient?->name,
+                'patient_phone' => $appointment->patient?->phone,
+                'date'          => $appointment->appointment_date instanceof \Carbon\Carbon
+                                    ? $appointment->appointment_date->format('d M Y')
+                                    : (string) $appointment->appointment_date,
+                'time'          => $appointment->appointment_time,
+                'doctor'        => $appointment->doctor?->name,
+                'treatment'     => $appointment->treatment?->name
+                                    ?? $appointment->treatmentCategory?->name,
+            ]);
         }
 
         // ── Walk-in with EXISTING patient (patient_id + is_walkin) ──
@@ -269,7 +285,23 @@ class AppointmentController extends Controller
 
             return redirect()
                 ->route('appointments.index', ['date' => $request->appointment_date])
-                ->with('success', 'Walk-in booked successfully.');
+                ->with('success', 'Walk-in booked successfully.')
+            // The confirmation is offered ONCE, right after booking, because
+            // that is the only moment reception has the patient's attention
+            // and the details on screen. Carried in the session rather than
+            // re-queried on the next page: this is a prompt, not a record.
+            ->with('whatsapp_confirm', [
+                'patient_id'    => $appointment->patient_id,
+                'patient_name'  => $appointment->patient?->name,
+                'patient_phone' => $appointment->patient?->phone,
+                'date'          => $appointment->appointment_date instanceof \Carbon\Carbon
+                                    ? $appointment->appointment_date->format('d M Y')
+                                    : (string) $appointment->appointment_date,
+                'time'          => $appointment->appointment_time,
+                'doctor'        => $appointment->doctor?->name,
+                'treatment'     => $appointment->treatment?->name
+                                    ?? $appointment->treatmentCategory?->name,
+            ]);
         }
 
         // Full form path
@@ -330,7 +362,23 @@ class AppointmentController extends Controller
 
         return redirect()
             ->route('appointments.index', ['date' => $date])
-            ->with('success', 'Appointment booked successfully.');
+            ->with('success', 'Appointment booked successfully.')
+            // The confirmation is offered ONCE, right after booking, because
+            // that is the only moment reception has the patient's attention
+            // and the details on screen. Carried in the session rather than
+            // re-queried on the next page: this is a prompt, not a record.
+            ->with('whatsapp_confirm', [
+                'patient_id'    => $appointment->patient_id,
+                'patient_name'  => $appointment->patient?->name,
+                'patient_phone' => $appointment->patient?->phone,
+                'date'          => $appointment->appointment_date instanceof \Carbon\Carbon
+                                    ? $appointment->appointment_date->format('d M Y')
+                                    : (string) $appointment->appointment_date,
+                'time'          => $appointment->appointment_time,
+                'doctor'        => $appointment->doctor?->name,
+                'treatment'     => $appointment->treatment?->name
+                                    ?? $appointment->treatmentCategory?->name,
+            ]);
     }
 
     // ── Update Status (PATCH /appointments/{id}/status) ──────────

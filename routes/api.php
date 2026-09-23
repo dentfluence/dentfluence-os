@@ -227,6 +227,10 @@ Route::prefix('v1')->middleware('throttle:120,1')->group(function () {
             // Interim click-to-chat (wa.me) link builder — parity with the web
             // communication.whatsapp.link endpoint; app opens the URL via url_launcher.
             Route::post('/patients/{patient}/whatsapp/link',   [\App\Http\Controllers\Api\V1\WhatsappController::class, 'link']);
+
+            // Lab and dealer sends. Not patient-bound, because a lab is not a
+            // patient — the phone previously had no way to reach one at all.
+            Route::post('/whatsapp/link-to', [\App\Http\Controllers\Api\V1\WhatsappController::class, 'linkTo']);
         });
 
         // Note delete — destructive, mirrors web notes.destroy (,delete).

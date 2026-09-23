@@ -83,23 +83,47 @@ class TaskOutcomeController extends ApiController
         $data = $request->validate([
             'outcome_key' => ['nullable', 'string', 'max:60'],
             'note'        => ['nullable', 'string', 'max:1000'],
+
+            // "What happens next", captured at the moment the work closes —
+            // the same fields the web drawer sends, validated the same way
+            // and handed to the same service. Asked here it costs one line;
+            // asked tomorrow it never gets asked and the follow-up dies.
+            'next'             => ['nullable', 'in:task'],
+            'next_title'       => ['nullable', 'string', 'max:255'],
+            'next_due_date'    => ['nullable', 'date', 'after_or_equal:today'],
+            'next_assigned_to' => ['nullable', 'exists:users,id'],
+            'next_category'    => ['nullable', 'in:' . implode(',', array_keys(Task::CATEGORIES))],
+            'next_priority'    => ['nullable', 'in:urgent,high,medium,low'],
+
+            // Sent AFTER the phone has booked through the appointments
+            // endpoint, so by the time it arrives the appointment provably
+            // exists. The task never creates one.
+            'appointment_id'   => ['nullable', 'exists:appointments,id'],
         ]);
 
         $this->outcomes->done($task, $data['outcome_key'] ?? null, $data['note'] ?? null);
         $task->refresh();
+
+        // Both of these no-op while the task is still open, which is the
+        // point: an outcome meaning the work never happened must not leave a
+        // booking attached or a follow-up spawned behind it.
+        $this->outcomes->linkAppointment($task, $data['appointment_id'] ?? null);
+        $chained = $task->isOpen() ? null : $this->outcomes->chainFollowUp($task, $data);
 
         // The service turns a "the work never happened" outcome into an
         // attempt. The phone must be told which of the two it got, or it will
         // strike the row through and the task will reappear on the next
         // refresh looking like a bug.
         return $this->success([
-            'id'            => $task->id,
-            'status'        => $task->status,
-            'closed'        => ! $task->isOpen(),
-            'attempt_label' => $task->attemptLabel(),
+            'id'              => $task->id,
+            'status'          => $task->status,
+            'closed'          => ! $task->isOpen(),
+            'attempt_label'   => $task->attemptLabel(),
+            'chained_task_id' => $chained?->id,
+            'appointment_id'  => $task->appointment_id,
         ], $task->isOpen()
             ? 'Logged as attempted — the task stays on the list.'
-            : 'Task completed.');
+            : ($chained ? 'Done, and the follow-up task is on the list.' : 'Task completed.'));
     }
 
     public function attempt(Request $request, Task $task): JsonResponse

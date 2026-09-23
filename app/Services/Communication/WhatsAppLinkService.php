@@ -26,6 +26,14 @@ use Illuminate\Support\Facades\Log;
  */
 class WhatsAppLinkService
 {
+    /**
+     * Contexts whose recipient is a business, not a patient. These skip the
+     * "Hi there" fallback and are never subject to patient consent — a lab
+     * waiting on work instructions has not opted in to anything, and does not
+     * need to.
+     */
+    public const BUSINESS_CONTEXTS = ['lab_instructions', 'purchase_order'];
+
     public function __construct(private CommunicationGuard $guard)
     {
     }
@@ -99,7 +107,14 @@ class WhatsAppLinkService
      */
     public function prepareParams(string $context, ?Patient $patient, array $params = [], ?string $message = null): array
     {
-        $params['patient'] = $params['patient'] ?? $patient?->name ?? 'there';
+        // A lab and a dealer are businesses. "Hi there" in front of a purchase
+        // order reads as a mail-merge that went wrong, so the friendly default
+        // applies only to messages actually addressed to a patient.
+        $isBusiness = in_array($context, self::BUSINESS_CONTEXTS, true);
+
+        $params['patient'] = $params['patient']
+            ?? $patient?->name
+            ?? ($isBusiness ? '' : 'there');
 
         if ($message !== null && $message !== '') {
             $params['message'] = $message;
@@ -116,6 +131,39 @@ class WhatsAppLinkService
                 : " with Dr. {$name}";
         } else {
             $params['doctor'] = '';
+        }
+
+        // Two shapes of the same fact. {treatment} is a fragment that slots
+        // mid-sentence (" for aligners") and {treatment_plain} is the bare
+        // word for templates that name it directly. Both render EMPTY when
+        // the treatment is unknown, so a message never goes out reading
+        // "your appointment for ." — a dangling label is worse than a
+        // slightly vaguer sentence.
+        $treatment = trim((string) ($params['treatment'] ?? ''));
+        $params['treatment_plain'] = $treatment !== '' ? $treatment : 'treatment';
+        $params['treatment']       = $treatment !== '' ? " for {$treatment}" : '';
+
+        // Every optional placeholder gets an empty default. A template that
+        // renders "Due: {due_date}" because nobody passed one is worse than a
+        // template with the line simply absent — and it is the sort of thing
+        // that only shows up after it has gone to a real vendor.
+        foreach (['old_date', 'case_number', 'work', 'due_date', 'po_number', 'items'] as $k) {
+            $params[$k] = trim((string) ($params[$k] ?? ''));
+        }
+
+        // Instructions get their own newline only when there ARE instructions,
+        // so an empty one does not leave a blank line mid-message.
+        $instructions = trim((string) ($params['instructions'] ?? ''));
+        $params['instructions'] = $instructions !== '' ? $instructions : '';
+
+        // The call-us line, from one config value. Appended as a whole
+        // sentence rather than a bare number so a clinic with no number
+        // configured simply gets a shorter message, not a broken one.
+        if (! array_key_exists('contact', $params)) {
+            $phone = trim((string) config('communication.whatsapp.contact_phone', ''));
+            $params['contact'] = $phone !== ''
+                ? "\nFor any assistance, call us on {$phone}."
+                : '';
         }
 
         return $params;

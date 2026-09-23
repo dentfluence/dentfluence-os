@@ -128,6 +128,107 @@ class TaskOutcomeService
     }
 
     /** Put a closed task back on the list. Counters are deliberately kept. */
+    /**
+     * The follow-up task created from the one just closed.
+     *
+     * Lives here, not in a controller, because BOTH the web drawer and the
+     * phone's outcome sheet create it. The last time a task rule lived in two
+     * controllers the two disagreed for months about what "No answer" meant.
+     *
+     * The patient and the branch are carried forward and are NOT negotiable:
+     * the follow-up is about the same case by definition, and a task that
+     * crosses branches has no owner anyone can find. The owner, type and
+     * priority ARE negotiable and come from the form, falling back to the
+     * closing task's values.
+     *
+     * Returns null when no follow-up was asked for — callers treat that as
+     * the ordinary case, not a failure.
+     */
+    public function chainFollowUp(Task $task, array $data): ?Task
+    {
+        if (($data['next'] ?? null) !== 'task' || empty($data['next_title'])) {
+            return null;
+        }
+
+        $assignee = $data['next_assigned_to'] ?? $task->assigned_to;
+
+        // A follow-up cannot be handed to someone in another branch; that
+        // would create work nobody in either branch sees on their board.
+        if ($assignee && (int) $assignee !== (int) $task->assigned_to) {
+            $ok = \App\Models\User::where('id', $assignee)
+                ->where('branch_id', $task->branch_id)
+                ->exists();
+            if (! $ok) {
+                $assignee = $task->assigned_to;
+            }
+        }
+
+        $chained = Task::create([
+            'title'       => $data['next_title'],
+            'description' => $data['note'] ?? null,
+            'assigned_to' => $assignee,
+            'created_by'  => Auth::id(),
+            'branch_id'   => $task->branch_id,
+            'patient_id'  => $task->patient_id,
+            'due_date'    => $data['next_due_date'] ?? today()->addDay(),
+            'priority'    => $data['next_priority'] ?? $task->priority,
+            'category'    => $data['next_category'] ?? $task->category,
+            'status'      => 'pending',
+        ]);
+
+        // Reassignment is a notification event everywhere else in the module;
+        // a chained task handed to someone else is no different.
+        if ($chained->assigned_to && (int) $chained->assigned_to !== (int) Auth::id()) {
+            try {
+                app(\App\Services\Notifications\NotificationDispatcher::class)->fire('task.assigned', [
+                    'title'        => 'Follow-up task assigned to you',
+                    'message'      => "\"{$chained->title}\" — due {$chained->due_date->format('d M Y')}.",
+                    'source'       => $chained,
+                    'branch_id'    => $chained->branch_id,
+                    'owner'        => $chained->assigned_to,
+                    'action_url'   => route('tasks.index'),
+                    'action_label' => 'View Tasks',
+                ]);
+            } catch (\Throwable $e) {
+                \Log::warning('Chained task notify failed: ' . $e->getMessage());
+            }
+        }
+
+        return $chained;
+    }
+
+    /**
+     * Stamp the appointment a closed task produced.
+     *
+     * Both guards matter: an appointment from another branch would leak a
+     * patient across clinics, and one for a different patient would make the
+     * conversion figure a lie. Either way the link is simply not made — the
+     * close still stands, because the work did happen.
+     *
+     * Returns true when the link was made.
+     */
+    public function linkAppointment(Task $task, ?int $appointmentId): bool
+    {
+        if (! $appointmentId || $task->isOpen()) {
+            return false;
+        }
+
+        $appointment = \App\Models\Appointment::find($appointmentId);
+
+        if (! $appointment
+            || (int) $appointment->branch_id !== (int) $task->branch_id
+            || ($task->patient_id && (int) $appointment->patient_id !== (int) $task->patient_id)
+        ) {
+            \Log::warning('Task ' . $task->id . ' closed with an appointment link that did not match branch/patient; link skipped.');
+            return false;
+        }
+
+        $task->appointment_id = $appointment->id;
+        $task->save();
+
+        return true;
+    }
+
     public function reopen(Task $task, ?string $note = null): TaskOutcome
     {
         return DB::transaction(function () use ($task, $note) {

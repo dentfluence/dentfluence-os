@@ -217,6 +217,34 @@ return [
         'api_ready'    => false,
         'review_url'   => env('REVIEWS_GOOGLE_URL'), // default {review_url} for review_request sends
 
+        // The number patients are told to ring back on. Printed in every
+        // appointment template, so it lives in ONE place — a clinic changing
+        // its number must not have to hunt through five message strings.
+        'contact_phone' => env('CLINIC_CONTACT_PHONE', ''),
+
+        /*
+        | Which template a Today's Actions row uses, by category. The board's
+        | categories are the clinic's language; the template keys are the
+        | message's. Keeping the map here rather than in the phone means a
+        | clinic can re-point a queue at different copy without a new APK.
+        | A category with no entry falls through to 'generic' — free text,
+        | never a wrong template sent confidently.
+        */
+        'category_templates' => [
+            'appointment_reminders'  => 'appointment_reminder',
+            'appointment_reminder'   => 'appointment_reminder',
+            'follow_up_calls'        => 'follow_up',
+            'follow_ups'             => 'follow_up',
+            'missed_calls'           => 'missed_call',
+            'missed_appointments'    => 'missed_appointment',
+            'opportunities'          => 'opportunity',
+            'opportunity'            => 'opportunity',
+            'recalls'                => 'recall',
+            'recall'                 => 'recall',
+            'birthdays'              => 'birthday',
+            'review_requests'        => 'review_request',
+        ],
+
         /*
         | Message templates for click-to-chat sends. Placeholders in {braces}
         | are filled at send time. {clinic} defaults to config('app.clinic_name').
@@ -231,10 +259,42 @@ return [
                 "Hi {patient}, a reminder for your dental appointment on *{date}* at *{time}*{doctor}.\n".
                 "Please reply here to confirm or reschedule.",
 
+            // Sent at the moment of booking. Carries the treatment and the
+            // clinic's own number, because the two questions a patient asks
+            // after booking are "what was it for?" and "who do I ring if
+            // something changes?". {treatment} and {contact} render empty
+            // when unknown, so the message never shows a dangling label.
             'appointment_confirmation' =>
                 "🦷 *{clinic}*\n".
-                "Hi {patient}, your appointment is confirmed for *{date}* at *{time}*{doctor}.\n".
-                "See you then!",
+                "Hi {patient}, your appointment is confirmed for *{date}* at *{time}*{doctor}{treatment}.\n".
+                "See you then!{contact}",
+
+            'follow_up' =>
+                "🦷 *{clinic}*\n".
+                "Hi {patient}, just following up on your last visit with us. ".
+                "How are you getting on?\n".
+                "Reply here if anything needs looking at.{contact}",
+
+            // The patient did not pick up. Deliberately does NOT say "we
+            // tried to reach you and failed" — it gives them something to
+            // reply to instead.
+            'missed_call' =>
+                "🦷 *{clinic}*\n".
+                "Hi {patient}, we tried to reach you just now. ".
+                "Reply here whenever suits you and we'll pick it up.{contact}",
+
+            'missed_appointment' =>
+                "🦷 *{clinic}*\n".
+                "Hi {patient}, we missed you at your appointment on *{date}*. ".
+                "Reply here and we'll find you another slot.{contact}",
+
+            // Treatment discussed but not yet booked. No pressure and no
+            // price — this opens a conversation, it does not close a sale.
+            'opportunity' =>
+                "🦷 *{clinic}*\n".
+                "Hi {patient}, about the {treatment_plain} we discussed — ".
+                "happy to answer any questions before you decide.\n".
+                "Reply here and we'll take it from there.{contact}",
 
             'review_request' =>
                 "🦷 *{clinic}*\n".
@@ -249,6 +309,50 @@ return [
             'birthday' =>
                 "🎂 Happy Birthday, {patient}!\n".
                 "Wishing you a healthy, bright smile all year. — *{clinic}*",
+
+            // ── Appointment lifecycle ───────────────────────────────────
+            // Rescheduled carries BOTH dates. "Your appointment has moved"
+            // with only the new time makes a patient who wrote the old one
+            // down wonder whether they misread it.
+            'appointment_rescheduled' =>
+                "🦷 *{clinic}*\n".
+                "Hi {patient}, your appointment on *{old_date}* has been moved to ".
+                "*{date}* at *{time}*{doctor}.\n".
+                "Reply here if that does not suit.{contact}",
+
+            // No reason is given. The clinic may have cancelled for a dozen
+            // reasons and a template cannot know which; a wrong reason is
+            // worse than none.
+            'appointment_cancelled' =>
+                "🦷 *{clinic}*\n".
+                "Hi {patient}, your appointment on *{date}* at *{time}* has been cancelled.\n".
+                "Reply here and we'll rebook you whenever suits.{contact}",
+
+            // ── Prescription ────────────────────────────────────────────
+            // Deliberately carries NO drug names. A prescription is health
+            // data and this message travels over a channel the clinic does
+            // not control — it says a prescription is ready, nothing more.
+            'prescription_ready' =>
+                "🦷 *{clinic}*\n".
+                "Hi {patient}, your prescription from today's visit is ready.\n".
+                "Collect it at the clinic or reply here and we'll send it across.{contact}",
+
+            // ── Business recipients ─────────────────────────────────────
+            // A lab and a dealer are businesses, not patients: no greeting
+            // by first name, no "hope you are well", and the case or order
+            // number leads because that is what they will search for.
+            'lab_instructions' =>
+                "*{clinic}* — Lab case *{case_number}*\n".
+                "Patient: {patient}\n".
+                "Work: {work}\n".
+                "Due: {due_date}\n".
+                "{instructions}\n".
+                "Please confirm receipt.{contact}",
+
+            'purchase_order' =>
+                "*{clinic}* — Purchase Order *{po_number}*\n".
+                "{items}\n".
+                "Please confirm availability and expected delivery.{contact}",
 
             'generic' => null,
         ],
