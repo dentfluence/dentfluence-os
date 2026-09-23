@@ -80,7 +80,12 @@ class TaskBoardData
         ];
 
         $filters = [
-            'view'        => $input['view'] ?? 'open',
+            // TODAY IS THE DEFAULT TAB (CEO ruling, 23 Sep). The board used to
+            // land on 'open' — every unfinished task, oldest first — which is
+            // an inventory, not a day. Reception opens this page between
+            // patients to answer "what now", and a list of 35 does not answer
+            // it. The chips keep the rest one click away, Overdue in red.
+            'view'        => $input['view'] ?? 'today',
             'q'           => trim((string) ($input['q'] ?? '')),
             'assigned_to' => $input['assigned_to'] ?? null,
             'category'    => $input['category'] ?? null,

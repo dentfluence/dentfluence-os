@@ -41,11 +41,21 @@
     // open, then what is finished. Overdue keeps its red weight even though it
     // is no longer first; it is the one number on this screen that cannot be
     // argued with.
+    // FOUR TABS, IN THIS ORDER (CEO ruling, 23 Sep): Today, Overdue, This
+    // week, Done. "Open" was dropped — it listed every unfinished task,
+    // oldest first, which is an inventory rather than a day, and it was the
+    // one chip that never told reception what to do next.
+    //
+    // Overdue sits second, not last: it is the only number on this screen
+    // that cannot be argued with, and burying it behind "this week" is how a
+    // week-old promise stops being noticed.
+    //
+    // The 'open' VIEW still exists and still answers ?view=open — the counts
+    // header reads from it — it simply has no chip.
     $chips = [
         'today'   => ['Today',     $counts['today'],   '#a05c00'],
-        'week'    => ['This week', $counts['week'],    '#1a5ea8'],
         'overdue' => ['Overdue',   $counts['overdue'], '#b52020'],
-        'open'    => ['Open',      $counts['open'],    '#6a0f70'],
+        'week'    => ['This week', $counts['week'],    '#1a5ea8'],
         'done'    => ['Done',      $counts['done'],    '#1a7a45'],
     ];
 @endphp
@@ -239,9 +249,24 @@
          topbar, which quietly ate its whole first row — the task title, the
          Edit button and the close X. The drawer looked like it was missing
          controls when it was simply covered. --}}
-    <div x-show="panel" x-cloak style="position:fixed;inset:0;z-index:900;">
+    {{-- A CENTRED POPUP, NOT A SIDE DRAWER (23 Sep 2026).
+
+         It was a 440px right-edge panel. Two problems, both from the same
+         cause — a column that narrow forces everything to stack:
+           * the follow-up form ran long enough to scroll mid-close, which is
+             when someone is still on the phone;
+           * the calls drawer is a centred modal, so closing a call and
+             closing a task looked like two different features doing the same
+             job. They now open the same way.
+
+         The inner structure is unchanged: fixed header, scrolling middle,
+         pinned footer. That rule stands — the clinic-editable outcome list
+         runs past 40 entries, and an action button at the bottom of a
+         scrolling area is a button nobody finds. --}}
+    <div x-show="panel" x-cloak
+         style="position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;padding:20px;">
         <div style="position:absolute;inset:0;background:rgba(14,1,24,.40);" @click="close()"></div>
-        <div style="position:absolute;top:0;right:0;bottom:0;width:100%;max-width:440px;background:#fff;box-shadow:-6px 0 34px rgba(14,1,24,.18);display:flex;flex-direction:column;">
+        <div style="position:relative;width:860px;max-width:96vw;max-height:92vh;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(14,1,24,.25);display:flex;flex-direction:column;overflow:hidden;">
 
             {{-- ── header (fixed) ── --}}
             <div style="padding:18px 22px 14px;border-bottom:1.5px solid #ede4f3;flex-shrink:0;">

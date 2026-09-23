@@ -85,6 +85,24 @@ class TaskBoardHttpTest extends TestCase
         $res->assertDontSee('Today autoclave');
     }
 
+    public function test_the_board_opens_on_today(): void
+    {
+        $actor = $this->admin();
+
+        $this->task($actor, ['title' => 'Due today',   'due_date' => today()]);
+        $this->task($actor, ['title' => 'Due next week', 'due_date' => today()->addDays(6)]);
+
+        // CEO ruling 23 Sep: the board used to land on 'open' — every
+        // unfinished task, oldest first — which is an inventory, not a day.
+        // Reception opens this between patients to answer "what now".
+        $res = $this->get(route('tasks.index'));
+
+        $res->assertOk();
+        $res->assertSee('Due today');
+        $res->assertDontSee('Due next week');
+        $this->assertSame('today', $res->viewData('filters')['view']);
+    }
+
     public function test_the_counts_and_the_rows_come_from_the_same_scope(): void
     {
         $actor = $this->admin();

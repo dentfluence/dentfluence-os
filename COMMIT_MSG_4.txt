@@ -1,0 +1,52 @@
+Tasks board: centred popup, Today by default, four tabs
+
+UI only. No query, permission or write path changed.
+
+── THE RECORD FORM IS A POPUP, NOT A SIDE DRAWER ───────────────────
+It was a 440px right-edge panel. A column that narrow forces every
+field to stack, so the follow-up form ran long enough to scroll while
+someone is still on the phone. The calls drawer is a centred modal, so
+closing a call and closing a task also looked like two different
+features doing the same job.
+
+Now 860px, centred, max 92vh, backdrop click to close — the same
+geometry as the calls drawer.
+
+The inner structure is deliberately unchanged: fixed header, scrolling
+middle, pinned footer. The clinic-editable outcome list runs past 40
+entries, and an action button at the bottom of a scrolling area is a
+button nobody finds.
+
+The Assign Task drawer is untouched and is still a side panel.
+
+── THE BOARD OPENS ON TODAY ────────────────────────────────────────
+It landed on 'open' — every unfinished task, oldest first. That is an
+inventory, not a day. Reception opens this page between patients to
+answer "what now", and a list of 35 does not answer it.
+
+NOTE: the Today view is due_date = today EXACTLY, so overdue work is
+now one click away rather than on the landing screen. Overdue is the
+second chip and stays red. If that proves wrong in use, the fix is to
+default to 'due_now' (today + overdue), which is what My Day's Tasks
+section already uses.
+
+── FOUR TABS ───────────────────────────────────────────────────────
+Today · Overdue · This week · Done.
+
+"Open" dropped — it was the one chip that never told reception what to
+do next. Overdue sits SECOND, not last: it is the only number on the
+screen that cannot be argued with, and burying it behind "this week"
+is how a week-old promise stops being noticed.
+
+The 'open' VIEW still exists and still answers ?view=open; the counts
+header still reads from it. It simply has no chip.
+
+KNOWN GAP: with these four, a task due beyond this week has no tab.
+It is still in the counts, the search and the date picker. If it
+matters, rename 'week' to Upcoming and scope it to open-and-after-
+today — same four tabs, nothing unreachable.
+
+Test: TaskBoardHttpTest::test_the_board_opens_on_today.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018XNsjiYXyAjSLeG7gVZDDK
