@@ -32,6 +32,8 @@
 @endsection
 
 @section('content')
+
+@include('partials._from-my-day')
 @include('inventory.partials.subnav')
 
 @php

@@ -192,6 +192,30 @@ class TodayController extends Controller
 
     public function index(Request $request): \Illuminate\View\View
     {
+        return view('relationship.today.index', $this->boardPayload($request));
+    }
+
+    /**
+     * EVERY VARIABLE THE TODAY'S ACTIONS BOARD NEEDS.
+     *
+     * ── WHY THIS IS PUBLIC (23 Sep) ─────────────────────────────────────────
+     * My Day renders the same board inline, and it must be the SAME board —
+     * same rows, same drawer, same W-10 patient folding. Two ways of building
+     * "what is due today" would disagree within a month, and the one nobody
+     * is looking at would be the wrong one.
+     *
+     * It stays here rather than moving to a service on purpose. The build
+     * leans on eight private helpers and six constants on this class, three of
+     * which (actionOptions, outcomeLabel, bandOf) the write endpoints use too.
+     * Dragging all of that into a service to share ONE read would put the
+     * clinic's most-used board at risk for a refactor nobody asked for. So
+     * MyDayController resolves this controller and calls this method — an
+     * unusual shape, chosen with eyes open, and cheap to undo later.
+     *
+     * READ ONLY. It runs no writes and touches no session state.
+     */
+    public function boardPayload(Request $request): array
+    {
         $today = \Illuminate\Support\Carbon::today();
         $selectedDate = $today->copy();
 
@@ -363,7 +387,7 @@ class TodayController extends Controller
         $callResults    = $this->actionOptions()->callResults($responseOpts);
         $dismissReasons = ActionOptionList::query()->dismissReasons()->get()->values();
 
-        return view('relationship.today.index', compact(
+        return compact(
             'groups',
             'totalCount',
             'checklists',
@@ -383,7 +407,7 @@ class TodayController extends Controller
             'tabCounts',
             'carriedCount',
             'missedYesterday',
-        ));
+        );
     }
 
     /**

@@ -3,32 +3,24 @@
 
 @section('content')
 
+@include('partials._from-my-day')
+
 @php
     $canEdit  = !in_array($labCase->status, ['complete', 'rejected']);
     $isAdmin  = auth()->user()?->isAdminRole();
     $rx       = $labCase->prescription;
 
-    $nextActionMap = [
-        'order_placed'    => ['label' => 'Mark as Sent to Lab',   'to' => 'impression_sent', 'color' => 'indigo'],
-        'impression_sent' => ['label' => 'Trial Received',         'to' => 'trial_received',  'color' => 'amber'],
-        'scan_sent'       => ['label' => 'Trial Received',         'to' => 'trial_received',  'color' => 'amber'],
-        'trial_received'  => ['label' => 'Return Trial to Lab',    'to' => 'trial_returned',  'color' => 'orange'],
-        'trial_returned'  => ['label' => 'Trial Received Again',   'to' => 'trial_received',  'color' => 'amber'],
-        'final_received'  => ['label' => 'Mark as Delivered ✓',   'to' => 'complete',         'color' => 'green'],
-    ];
+    // THE MAP MOVED (23 Sep) to LabCase::nextAction(). My Day puts the same
+    // one-click button on its lab rows, and two copies of "what normally
+    // happens next to a case" would have drifted the first time the clinic
+    // changed its mind about trials. This page still owns the SECOND option,
+    // because skipping the trial is a judgement and only a full page has room
+    // to offer it beside the safe default.
+    $primaryAction = $labCase->nextAction();
 
-    if ($labCase->status === 'draft') {
-        $primaryAction = ['label' => 'Place Order', 'to' => 'order_placed', 'color' => 'brand'];
-        $secondaryAction = null;
-    } elseif (isset($nextActionMap[$labCase->status])) {
-        $primaryAction = $nextActionMap[$labCase->status];
-        $secondaryAction = in_array($labCase->status, ['impression_sent', 'scan_sent'])
-            ? ['label' => 'Skip Trial → Final Received', 'to' => 'final_received', 'color' => 'blue']
-            : null;
-    } else {
-        $primaryAction = null;
-        $secondaryAction = null;
-    }
+    $secondaryAction = in_array($labCase->status, ['impression_sent', 'scan_sent'], true)
+        ? ['label' => 'Skip Trial → Final Received', 'to' => 'final_received', 'color' => 'blue']
+        : null;
 
     $colorMap = [
         'brand'  => 'bg-[#6a0f70] hover:bg-[#380740]',

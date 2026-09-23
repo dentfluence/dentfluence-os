@@ -59,6 +59,20 @@ class LabCase extends Model
      * across finance analytics, vendor open-case counts, B2B and reports.
      * Widening that constant would silently change all of them.
      */
+    /**
+     * STILL IN THE CLINIC — written but never handed to a lab.
+     *
+     * These cases need SENDING, not chasing. A case sitting at 'order_placed'
+     * past its expected return date used to appear twice on My Day: once as
+     * "Send lab case LAB-2026-0009" and again as "Chase Katara Dental Lab —
+     * LAB-2026-0009", two contradictory instructions about one case. You
+     * cannot chase a lab for work it never received.
+     *
+     * Same principle as W-10's one patient, one row, one call: ONE CASE, ONE
+     * ROW, ONE INSTRUCTION.
+     */
+    public const UNSENT_STATUSES = ['draft', 'order_placed'];
+
     public const UNDELIVERED_STATUSES = [
         'order_placed', 'impression_sent', 'scan_sent',
         'trial_received', 'trial_returned', 'final_received',
@@ -564,6 +578,52 @@ class LabCase extends Model
     public function canTransitionTo(string $status): bool
     {
         return in_array($status, $this->nextStatuses(), true);
+    }
+
+    /**
+     * THE ONE OBVIOUS NEXT STEP, or null when there isn't one.
+     *
+     * ── WHY THIS IS ON THE MODEL (23 Sep) ───────────────────────────────────
+     * STATUS_FLOW above says what is ALLOWED — often two or three things. This
+     * says what is normally DONE, which is a different question and the only
+     * one a one-click button can answer. It lived in an @php block inside
+     * lab/show.blade.php until My Day needed the same answer; a second copy
+     * would have drifted the moment the clinic changed its mind about trials.
+     *
+     * Where the fork is real the SECOND option stays off this method entirely
+     * — 'Skip trial → Final received' is a judgement, and the case page asks
+     * for it properly. A surface that only has room for one button gets the
+     * safe one or gets none.
+     *
+     * @return array{label: string, to: string, color: string}|null
+     */
+    public function nextAction(): ?array
+    {
+        return self::nextActionFor((string) $this->status);
+    }
+
+    /**
+     * The same answer from a status string alone.
+     *
+     * My Day reads its lab rows with a join, not Eloquent, so it has a status
+     * and no model. Hydrating one just to ask this question would mean either
+     * making `status` fillable — it is guarded on purpose — or a second query
+     * per row. Neither buys anything.
+     *
+     * @return array{label: string, to: string, color: string}|null
+     */
+    public static function nextActionFor(string $status): ?array
+    {
+        return match ($status) {
+            'draft'           => ['label' => 'Place Order',             'to' => 'order_placed',    'color' => 'brand'],
+            'order_placed'    => ['label' => 'Mark as Sent to Lab',     'to' => 'impression_sent', 'color' => 'indigo'],
+            'impression_sent' => ['label' => 'Trial Received',          'to' => 'trial_received',  'color' => 'amber'],
+            'scan_sent'       => ['label' => 'Trial Received',          'to' => 'trial_received',  'color' => 'amber'],
+            'trial_received'  => ['label' => 'Return Trial to Lab',     'to' => 'trial_returned',  'color' => 'orange'],
+            'trial_returned'  => ['label' => 'Trial Received Again',    'to' => 'trial_received',  'color' => 'amber'],
+            'final_received'  => ['label' => 'Mark as Delivered ✓', 'to' => 'complete',        'color' => 'green'],
+            default           => null,
+        };
     }
 
     // ── Presentation helpers ─────────────────────────────────────────────

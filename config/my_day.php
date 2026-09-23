@@ -6,39 +6,80 @@ return [
     |--------------------------------------------------------------------------
     | The order of the working day
     |--------------------------------------------------------------------------
-    | THIS IS A CLINIC POLICY, NOT A PRODUCT DECISION. "Calls first, then lab,
-    | then tasks" is set here once and is then identical every day for every
-    | person — and that consistency is the actual fix for "staff have no clear
-    | direction", more than the page itself.
+    | THIS IS A CLINIC POLICY, NOT A PRODUCT DECISION. The sequence below is
+    | set here once and is then identical every day for every person — and that
+    | consistency is the actual fix for "staff have no clear direction", more
+    | than the page itself.
     |
-    | Each band is a time of day. Each source is a kind of work. A source
-    | listed nowhere simply does not appear on My Day.
+    | ── BY KIND OF WORK, NOT BY TIME (CEO ruling, 23 Sep) ─────────────────────
+    | V1 grouped the day into NOW / THIS MORNING / BEFORE CLOSE. Sumit's
+    | verdict: "my day madhye timewise nako". Two reasons it was wrong:
+    |
+    |   1. The clinic does not run to that clock. A receptionist between
+    |      patients does whatever the next gap allows, not what a heading says
+    |      belongs to 11am.
+    |   2. It split one kind of work across the page. Lab cases to send sat in
+    |      NOW and lab cases to chase sat in THIS MORNING, so "what is the lab
+    |      situation" meant scrolling past the calls to find the other half.
+    |
+    | The order is his, in his words: calls first, then tasks, then lab, then
+    | money that is overdue. Each section is ONE kind of work, whole.
     |
     | Sources: confirm_appointments | unsent_lab | calls | tasks | lab_chase
-    |          | low_stock
+    |          | overdue_expenses | low_stock
+    | Boards:  calls | tasks
     */
     'bands' => [
-        'now' => [
-            'label'   => 'Now',
-            'hint'    => 'Before the first patient',
-            'sources' => ['confirm_appointments', 'unsent_lab'],
+
+        // 1 ── CALLS. Confirming today's diary is a call job, so it leads the
+        //      section rather than sitting in a band of its own.
+        'calls' => [
+            'label'   => 'Calls',
+            'hint'    => 'Patients to ring today',
+            'sources' => ['confirm_appointments'],
+            'boards'  => ['calls'],
         ],
-        'morning' => [
-            'label'   => 'This morning',
-            'hint'    => 'Between patients',
-            'sources' => ['calls', 'tasks', 'lab_chase'],
+
+        // 2 ── TASKS.
+        'tasks' => [
+            'label'   => 'Tasks',
+            'hint'    => 'Assigned to you',
+            'sources' => [],
+            'boards'  => ['tasks'],
         ],
-        'before_close' => [
-            'label'   => 'Before close',
-            'hint'    => 'End of day',
+
+        // 3 ── LAB, whole. Send first, then chase: a case you have not sent
+        //      cannot be chased, and seeing both halves together is what makes
+        //      "where is the lab work" answerable in one glance.
+        'lab' => [
+            'label'   => 'Lab',
+            'hint'    => 'Send first, then chase',
+            'sources' => ['unsent_lab', 'lab_chase'],
+        ],
+
+        // 4 ── MONEY GOING OUT, but only when it is late. An unpaid bill that
+        //      is not yet due is not today's work; putting it here would teach
+        //      people to skim the section.
+        'payments' => [
+            'label'   => 'Payments due',
+            'hint'    => 'Bills past their due date',
+            'sources' => ['overdue_expenses'],
+        ],
+
+        // 5 ── STOCK. NOT in the CEO's four, kept last rather than dropped:
+        //      deleting work from a work list is how a reorder gets missed.
+        //      Say the word and this section goes.
+        'stock' => [
+            'label'   => 'Stock',
+            'hint'    => 'At or below minimum',
             'sources' => ['low_stock'],
         ],
     ],
 
     /*
     | How many rows one source may contribute. A queue that cannot be finished
-    | is a queue nobody starts, so a long tail is truncated with a "view all"
-    | link into the module that owns it rather than dumped on the page.
+    | is a queue nobody starts, so a long tail is truncated rather than dumped
+    | on the page.
     */
     'per_source_limit' => 8,
 

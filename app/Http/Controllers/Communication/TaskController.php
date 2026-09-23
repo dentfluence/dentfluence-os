@@ -11,6 +11,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Modules\Huddle\Models\HuddleTaskLog;
 use App\Modules\Huddle\Repositories\HuddleBoardRepository;
+use App\Services\Tasks\TaskBoardData;
 use App\Services\Tasks\TaskOutcomeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -35,130 +36,22 @@ class TaskController extends Controller
      *    the list underneath it cannot disagree, because the cards are built
      *    by cloning the base query rather than by counting a different one.
      */
-    public function index(Request $request)
+    public function index(Request $request, TaskBoardData $board)
     {
-        $base = $this->scopedQuery();
-
-        // Counts are always for the WHOLE scope, never the current view —
-        // otherwise clicking "Overdue" would rewrite every other number.
-        $counts = [
-            'open'      => (clone $base)->open()->count(),
-            'overdue'   => (clone $base)->open()->whereDate('due_date', '<', today())->count(),
-            'today'     => (clone $base)->open()->whereDate('due_date', today())->count(),
-            'week'      => (clone $base)->open()
-                                ->whereBetween('due_date', [today(), today()->copy()->endOfWeek()])
-                                ->count(),
-            'done'      => (clone $base)->where('status', 'done')->count(),
-            'unassigned'=> (clone $base)->open()->whereNull('assigned_to')->count(),
-            'cancelled' => (clone $base)->where('status', 'cancelled')->count(),
-        ];
-
-        $filters = [
-            'view'        => $request->get('view', 'open'),
-            'q'           => trim((string) $request->get('q', '')),
-            'assigned_to' => $request->get('assigned_to'),
-            'category'    => $request->get('category'),
-            'priority'    => $request->get('priority'),
-            // "What is on for the 4th?" — a single day, closed work included,
-            // because on a chosen day you want the whole picture, not just
-            // what is still outstanding.
-            'date'        => $request->get('date'),
-        ];
-
-        $query = $base->with(['assignedTo', 'patient', 'protocol.materials']);
-
-        // A chosen date overrides the view entirely — the two answer different
-        // questions and stacking them would show an empty screen and no reason.
-        if ($filters['date']) {
-            $query->whereDate('due_date', $filters['date']);
-        } else {
-        match ($filters['view']) {
-            'overdue'   => $query->open()->whereDate('due_date', '<', today()),
-            'today'     => $query->open()->whereDate('due_date', today()),
-            'week'      => $query->open()->whereBetween('due_date', [today(), today()->copy()->endOfWeek()]),
-            'done'      => $query->where('status', 'done'),
-            'cancelled' => $query->where('status', 'cancelled'),
-            'all'       => null,
-            default     => $query->open(),
-        };
-        }
-
-        if ($filters['q'] !== '') {
-            $term = '%' . $filters['q'] . '%';
-            $query->where(function ($q) use ($term) {
-                $q->where('title', 'like', $term)
-                  ->orWhere('description', 'like', $term);
-            });
-        }
-
-        // 'none' is not a user id — it is the question "what does nobody own?".
-        // A task with no owner is a task nobody does, and until now there was
-        // no way to find one.
-        if ($filters['assigned_to'] === 'none') {
-            $query->whereNull('assigned_to');
-        } elseif ($filters['assigned_to']) {
-            $query->where('assigned_to', $filters['assigned_to']);
-        }
-        if ($filters['category'])    $query->where('category', $filters['category']);
-        if ($filters['priority'])    $query->where('priority', $filters['priority']);
-
-        // Back-compat: HuddleController links here as ?status=escalated.
-        // Keep that link working rather than silently landing on the open list.
-        if ($request->get('status') === 'escalated') {
-            $query->where('status', 'escalated');
-        }
-
-        // Practice Protocols filter, kept from the old screen.
-        $source = $request->get('source');
-        if ($source === 'protocol') $query->whereNotNull('practice_protocol_id');
-
-        // Oldest promise first, then urgency. Closed views read newest first.
-        if (in_array($filters['view'], ['done', 'cancelled'], true)) {
-            $query->orderByDesc('updated_at');
-        } else {
-            $query->orderBy('due_date')
-                  ->orderByRaw("FIELD(priority,'urgent','high','medium','low')");
-        }
-
-        $tasks = $query->paginate(50)->withQueryString();
-
-        $users = User::where('branch_id', Auth::user()->branch_id)->orderBy('name')->get();
-
-        // For the inline "book an appointment" form in the close drawer. Same
-        // definition of a doctor the appointments screen uses — copied rather
-        // than invented, so the two lists cannot disagree.
-        $doctors = User::where('branch_id', Auth::user()->branch_id)
-            ->where('is_active', true)
-            ->where(fn ($q) => $q->whereIn('role', User::DOCTOR_ROLES)->orWhere('name', 'like', 'Dr.%'))
-            ->orderBy('name')
-            ->get(['id', 'name']);
-
-        return view('tasks.index', compact('tasks', 'counts', 'filters', 'users', 'doctors', 'source'));
+        // 3. THE QUERY MOVED OUT (23 Sep). The same board now renders inline on
+        //    My Day, and two copies of "what is this person's open work" would
+        //    drift within a month. TaskBoardData owns it; this reads it.
+        return view('tasks.index', $board->build($request->all(), Auth::user()));
     }
 
     /**
-     * Branch + reception-visibility + role scope, with no view filter applied.
-     * Every count and every list on this screen starts here, so they can
-     * never drift apart.
+     * Branch + reception-visibility + role scope.
+     *
+     * MOVED to App\Services\Tasks\TaskBoardData::scope() on 23 Sep so the
+     * /tasks page and the board embedded in My Day cannot answer "whose work
+     * is this" differently. Nothing in this controller builds the list any
+     * more; if you are looking for the query, it is there.
      */
-    private function scopedQuery()
-    {
-        $query = Task::query()
-            ->where('branch_id', Auth::user()->branch_id)
-            ->visibleToReception(); // hides Automation record-tasks (CEO rule, 6 Sep)
-
-        // Staff-level roles see only their own work; admin / doctors see all.
-        $staffRoles = [
-            User::ROLE_ASSISTANT,
-            User::ROLE_FRONT_DESK,
-            User::ROLE_ACCOUNTS,
-        ];
-        if (in_array(Auth::user()->role, $staffRoles)) {
-            $query->where('assigned_to', Auth::id());
-        }
-
-        return $query;
-    }
 
     // ── create (fallback page) ────────────────────────────────────────────────
     public function create()

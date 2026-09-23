@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Relationship\TodayController;
 use App\Services\MyDay\MyDayQueue;
+use App\Services\Tasks\TaskBoardData;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -11,16 +13,95 @@ use Illuminate\Support\Facades\Auth;
  *
  * One action, no writes, no state. Everything it shows belongs to a module
  * and is changed there; this page only decides what order to face it in.
+ *
+ * ── EMBEDDED BOARDS (23 Sep) ────────────────────────────────────────────────
+ * Summary rows that link out were honest but useless: you read the row, you
+ * clicked, you lost your place, and you came back to find the list unchanged
+ * because nothing on My Day could close anything. So the bands that host a
+ * board get the REAL board — Today's Actions and Tasks — drawers and all, so
+ * work is finished on the page where it is listed.
+ *
+ * ── WHY THIS RESOLVES ANOTHER CONTROLLER ────────────────────────────────────
+ * TodayController::boardPayload() builds the calls board out of eight private
+ * helpers and six constants on that class, three of which the write endpoints
+ * share. Moving all of it into a service to reuse ONE read would put the
+ * clinic's most-used board at risk for a refactor nobody asked for. Calling
+ * the method is the smaller risk, and it is a read with no writes and no
+ * session state. If that ever stops being true, extract it then.
  */
 class MyDayController extends Controller
 {
-    public function index(Request $request, MyDayQueue $queue)
+    public function index(Request $request, MyDayQueue $queue, TaskBoardData $taskBoard)
     {
-        $data = $queue->build(Auth::user());
+        $user = Auth::user();
+        $data = $queue->build($user);
+
+        $declared = collect($data['bands'])->flatMap(fn ($b) => $b['boards'] ?? [])->all();
+
+        $boards = [];
+        $boardTotal = 0;
+
+        if (in_array('calls', $declared, true)) {
+            // A FRESH REQUEST, deliberately. boardPayload() reads ?date= and
+            // would happily render a future preview if someone landed on
+            // /my-day?date=2026-10-01. My Day is today; the date picker
+            // belongs to the board's own page.
+            $boards['calls'] = app(TodayController::class)->boardPayload(new Request());
+
+            $boardTotal += (int) ($boards['calls']['totalCount'] ?? 0);
+        }
+
+        if (in_array('tasks', $declared, true)) {
+            // assigned_to is forced to this person even for an admin who would
+            // normally see the whole branch on /tasks. My Day is one person's
+            // shift; a list of everyone's work is a different page and it
+            // already exists.
+            $boards['tasks'] = $taskBoard->build([
+                'view'        => 'due_now',
+                'assigned_to' => $user->id,
+                'per_page'    => 25,
+            ], $user);
+
+            $boardTotal += $boards['tasks']['tasks']->total();
+        }
+
+        // ── AN EMPTY SECTION IS NOT A SECTION ────────────────────────────
+        // A band hosting a board used to render whatever the board had to
+        // say, including its own 64px "Nothing here" panel. On 23 Sep that
+        // put an empty TASKS box the height of a screen between the calls
+        // and the lab work — a heading, a count of 0, and a paragraph
+        // explaining that nothing matched a filter the page does not show.
+        //
+        // Reading a box to learn it is empty is work. A section with no rows
+        // and no board content does not render at all; when EVERY section is
+        // empty the page says "You're clear." and stops, which it already
+        // did and which is the whole point of it.
+        $counts = [
+            'calls' => (int) ($boards['calls']['totalCount'] ?? 0),
+            'tasks' => (int) ($boards['tasks']['tasks']?->total() ?? 0),
+        ];
+
+        $bands = array_values(array_filter(
+            $data['bands'],
+            function (array $band) use ($counts) {
+                if (! empty($band['rows'])) {
+                    return true;
+                }
+
+                foreach ($band['boards'] ?? [] as $key) {
+                    if (($counts[$key] ?? 0) > 0) {
+                        return true;
+                    }
+                }
+
+                return false;
+            },
+        ));
 
         return view('my-day.index', [
-            'bands' => $data['bands'],
-            'total' => $data['total'],
+            'bands'  => $bands,
+            'total'  => $data['total'] + $boardTotal,
+            'boards' => $boards,
         ]);
     }
 }

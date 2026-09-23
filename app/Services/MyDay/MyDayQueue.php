@@ -7,6 +7,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\Relationship\TodayActionsEngine;
 use App\Services\Relationship\TodayActionsVisibility;
+use App\Services\Relationship\TodayCallList;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -38,6 +39,7 @@ class MyDayQueue
     public function __construct(
         private readonly TodayActionsEngine $actions,
         private readonly TodayActionsVisibility $visibility,
+        private readonly TodayCallList $callList,
     ) {}
 
     /**
@@ -57,18 +59,26 @@ class MyDayQueue
                 $rows = array_merge($rows, $sources[$source] ?? []);
             }
 
+            $boards = $band['boards'] ?? [];
+
             // A band with nothing in it is not rendered at all. An empty
             // "Before close" heading every morning teaches people to skim
             // past headings, which is exactly what we are trying to undo.
-            if (empty($rows)) {
+            //
+            // A band hosting a board is never empty in this sense: the board
+            // renders its own empty state, in its own words, and hiding the
+            // heading would make the Tasks board vanish on a clear day with
+            // no explanation.
+            if (empty($rows) && empty($boards)) {
                 continue;
             }
 
             $bands[] = [
-                'key'   => $key,
-                'label' => $band['label'] ?? ucfirst($key),
-                'hint'  => $band['hint'] ?? null,
-                'rows'  => $rows,
+                'key'    => $key,
+                'label'  => $band['label'] ?? ucfirst($key),
+                'hint'   => $band['hint'] ?? null,
+                'rows'   => $rows,
+                'boards' => $boards,
             ];
 
             $total += count($rows);
@@ -86,6 +96,7 @@ class MyDayQueue
             'calls'                => $this->calls($user),
             'tasks'                => $this->tasks($user),
             'lab_chase'            => $this->labChase($user),
+            'overdue_expenses'     => $this->overdueExpenses($user),
             'low_stock'            => $this->lowStock($user),
         ];
     }
@@ -103,16 +114,53 @@ class MyDayQueue
      *   note  — the one detail that changes how you do it.
      *   url   — where it gets done. V1 links out; closing in place is next.
      */
-    private function row(string $kind, string $do, ?string $who, ?string $note, string $url, bool $urgent = false): array
-    {
+    private function row(
+        string $kind,
+        string $do,
+        ?string $who,
+        ?string $note,
+        string $url,
+        bool $urgent = false,
+        ?array $action = null,
+    ): array {
         return [
             'kind'   => $kind,
             'do'     => $do,
             'who'    => $who,
             'note'   => $note,
-            'url'    => $url,
+            // Every link carries ?from=my-day so the module it opens can
+            // offer a way back. Without it the page you came from is a
+            // browser Back button away at best, and staff stop returning.
+            'url'    => $this->returnable($url),
             'urgent' => $urgent,
+            'action' => $action,
         ];
+    }
+
+    /**
+     * ONE BUTTON, or nothing.
+     *
+     * A row gets an action only where the next step is not a judgement. A
+     * lab case waiting to be sent has one obvious next status; a stock item
+     * running low does NOT have an obvious quantity, supplier or price, so it
+     * gets a link to the product and no button. Guessing on the second kind
+     * puts wrong numbers in the ledger, which is worse than a click.
+     *
+     * @return array{label: string, url: string, confirm?: string}
+     */
+    private function action(string $label, string $url, ?string $confirm = null): array
+    {
+        return array_filter([
+            'label'   => $label,
+            'url'     => $url,
+            'confirm' => $confirm,
+        ]);
+    }
+
+    /** Append ?from=my-day without trampling a query string the route built. */
+    private function returnable(string $url): string
+    {
+        return $url . (str_contains($url, '?') ? '&' : '?') . 'from=my-day';
     }
 
     // ── Sources ─────────────────────────────────────────────────────────────
@@ -154,9 +202,12 @@ class MyDayQueue
             $cases = DB::table('lab_cases')
                 ->join('patients', 'patients.id', '=', 'lab_cases.patient_id')
                 ->where('lab_cases.branch_id', $user->branch_id)
-                ->whereIn('lab_cases.status', ['draft', 'order_placed'])
+                ->whereIn('lab_cases.status', LabCase::UNSENT_STATUSES)
                 ->whereNull('lab_cases.deleted_at')
-                ->select(['lab_cases.id', 'lab_cases.case_number', 'lab_cases.created_at', 'patients.name as patient_name'])
+                ->select([
+                    'lab_cases.id', 'lab_cases.case_number', 'lab_cases.status',
+                    'lab_cases.created_at', 'patients.name as patient_name',
+                ])
                 ->orderBy('lab_cases.created_at')
                 ->limit($this->limit())
                 ->get();
@@ -164,10 +215,17 @@ class MyDayQueue
             return [];
         }
 
-        return $cases->map(function ($c) {
+        $canEdit = $user->canAccess('lab', 'edit');
+
+        return $cases->map(function ($c) use ($canEdit) {
             $days = $c->created_at
                 ? (int) \Carbon\Carbon::parse($c->created_at)->startOfDay()->diffInDays(today())
                 : 0;
+
+            // The same next step the case page offers as its primary button —
+            // LabCase::nextAction() answers it for both, so a clinic that
+            // changes the flow changes it once.
+            $next = LabCase::nextActionFor((string) $c->status);
 
             return $this->row(
                 'lab',
@@ -176,19 +234,48 @@ class MyDayQueue
                 $days === 0 ? 'Written today' : "Waiting {$days} " . ($days === 1 ? 'day' : 'days'),
                 route('lab.show', $c->id),
                 $days >= 2,
+                $canEdit && $next
+                    ? $this->action($next['label'], route('lab.transition', [$c->id, $next['to']]))
+                    : null,
             );
         })->all();
     }
 
     /**
-     * Patients to contact, from the same engine Today's Actions renders — not
-     * a second query with its own idea of who needs calling.
+     * Patients to contact — ONE ROW PER PATIENT, folded exactly the way the
+     * Today's Actions board folds them.
+     *
+     * NOT RENDERED while the morning band hosts the 'calls' BOARD instead of
+     * this source: the real board renders there now, drawer and all. Kept
+     * because the swap back is one config line, and because of what follows.
+     *
+     * IT GOES THROUGH TodayCallList, NOT THE ENGINE DIRECTLY. The first
+     * version looped the engine's output item by item, so a patient with two
+     * reasons produced two rows and a receptionist working this page would
+     * have rung them twice — precisely the failure the 11 Sep rule was
+     * written to stop: one patient, one row, one call. Rebuilding the list by
+     * hand walked straight back into it. The rule lives in one place now, and
+     * if the board's folding changes this changes with it.
      */
     private function calls(User $user): array
     {
         try {
-            $grouped = $this->visibility->apply(
+            $todayRaw = $this->visibility->apply(
                 $this->actions->generate(includeDone: false, dueWindow: 'today')
+            );
+
+            // Yesterday's missed calls ride on the patient's row as a carried
+            // reason rather than appearing as separate work — same as the
+            // board. Passing an empty overdue set would lose them.
+            $overdueRaw = $this->visibility->apply(
+                $this->actions->generate(includeDone: false, dueWindow: 'overdue')
+            );
+
+            $list = $this->callList->build(
+                $todayRaw,
+                $overdueRaw,
+                today(),
+                \App\Http\Controllers\Relationship\TodayController::categoryMeta(),
             );
         } catch (\Throwable $e) {
             return [];
@@ -196,27 +283,51 @@ class MyDayQueue
 
         $rows = [];
 
-        foreach ($grouped as $items) {
-            foreach ($items as $item) {
-                if (count($rows) >= $this->limit()) {
-                    break 2;
-                }
-
-                $rows[] = $this->row(
-                    'call',
-                    $item['suggested_action'] ?? 'Call patient',
-                    $item['patient_name'] ?? null,
-                    $item['reason'] ?? null,
-                    route('relationship.today'),
-                    ($item['priority'] ?? '') === 'high',
-                );
+        foreach ($list['rows'] ?? [] as $r) {
+            if (count($rows) >= $this->limit()) {
+                break;
             }
+
+            // A row already handled today is not work. The board shows it
+            // faded for reassurance; a queue you are working down should not
+            // carry it at all.
+            if (! empty($r['isDone'])) {
+                continue;
+            }
+
+            $reasons = (int) ($r['reasonCount'] ?? 1);
+
+            // The note carries what the board's chips carry: that this one
+            // call covers more than one thing. Without it someone rings, deals
+            // with the first reason and hangs up.
+            $note = $r['primary']['whyText'] ?? null;
+            if ($reasons > 1) {
+                $note = trim(($note ? $note . ' · ' : '')
+                    . $reasons . ' reasons, one call');
+            }
+            if (! empty($r['attempted']) && ! empty($r['stTxt'])) {
+                $note = trim(($note ? $note . ' · ' : '') . $r['stTxt']);
+            }
+
+            $rows[] = $this->row(
+                'call',
+                $r['primary']['doText'] ?? 'Call patient',
+                $r['patient_name'] ?? null,
+                $note,
+                route('relationship.today'),
+                ($r['priority'] ?? '') === 'high',
+            );
         }
 
         return $rows;
     }
 
     /**
+     * NOT RENDERED while config/my_day.php gives the morning band the
+     * 'tasks' BOARD instead of this source. Kept because the two are a
+     * straight swap: drop 'boards' and put 'tasks' back in 'sources' and the
+     * summary rows return. Deleting it would make that a rewrite.
+     *
      * Tasks assigned to THIS person and due today or earlier. Someone else's
      * task is not this person's day, which is the whole difference between
      * this page and the task board.
@@ -251,7 +362,15 @@ class MyDayQueue
         ))->all();
     }
 
-    /** Lab work that is late coming back. Chasing, not sending. */
+    /**
+     * Lab work that is late coming back. Chasing, not sending.
+     *
+     * NO BUTTON, DELIBERATELY. Chasing is a phone call to the lab; the case
+     * does not change status because you rang them. A button marking it
+     * "received" would be a lie told to make a row disappear, and the whole
+     * point of the 22 Sep ruling is that a case stays on the list until it is
+     * actually delivered to the patient.
+     */
     private function labChase(User $user): array
     {
         try {
@@ -260,6 +379,11 @@ class MyDayQueue
                 ->leftJoin('lab_vendors', 'lab_vendors.id', '=', 'lab_cases.lab_vendor_id')
                 ->where('lab_cases.branch_id', $user->branch_id)
                 ->whereIn('lab_cases.status', LabCase::OPEN_STATUSES)
+                // A case that has never left the clinic is on the "send it"
+                // list above. Listing it here too told a receptionist to chase
+                // a lab for work it never received — one case, two rows, two
+                // contradictory instructions.
+                ->whereNotIn('lab_cases.status', LabCase::UNSENT_STATUSES)
                 ->whereNull('lab_cases.deleted_at')
                 ->whereDate('lab_cases.expected_return_date', '<', today())
                 ->select([
@@ -288,8 +412,65 @@ class MyDayQueue
     }
 
     /**
+     * BILLS THE CLINIC HAS NOT PAID AND IS NOW LATE ON.
+     *
+     * OVERDUE ONLY. An unpaid bill that is not yet due is not today's work,
+     * and listing it here would teach people to skim the section — which is
+     * how the one that IS late gets skimmed past too.
+     *
+     * NO BUTTON, same rule as stock: settling a bill needs an amount, a mode
+     * and an account, and `expenses.mark-paid` asks for all three. The row
+     * opens the bill; the money is moved there.
+     *
+     * NOT BRANCH-SCOPED, because the finance module is not: FinanceController
+     * reads expenses clinic-wide and `finance_expenses` carries `clinic_id`,
+     * not `branch_id`. Matching the module is right until Phase 3 tenancy
+     * changes both together. Doing it differently here would make My Day and
+     * the Expenses page disagree about what is outstanding.
+     */
+    private function overdueExpenses(User $user): array
+    {
+        if (! $user->canAccess('finance')) {
+            return [];
+        }
+
+        try {
+            $bills = \App\Models\Finance\FinanceExpense::query()
+                ->overdue()
+                ->whereNotIn('status', ['rejected', 'cancelled'])
+                ->with('vendor:id,name')
+                ->orderBy('due_date')
+                ->limit($this->limit())
+                ->get();
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        return $bills->map(function ($bill) {
+            $days = (int) \Carbon\Carbon::parse($bill->due_date)->diffInDays(today());
+
+            return $this->row(
+                'payment',
+                'Pay ' . $bill->title,
+                $bill->vendor?->name,
+                '₹' . number_format((float) $bill->total_amount, 2)
+                    . ' · ' . $days . ' ' . ($days === 1 ? 'day' : 'days') . ' overdue',
+                route('finance.expenses.edit', $bill->id),
+                // A week late is a different conversation from a day late.
+                $days >= 7,
+            );
+        })->all();
+    }
+
+    /**
      * Stock at or below its minimum. One row per item, because each one is a
      * separate decision about a separate supplier.
+     *
+     * NO BUTTON, DELIBERATELY. "Order" is a quantity, a supplier and a price,
+     * and none of the three can be guessed from a low-stock row. The link goes
+     * straight to that product's page — not the inventory dashboard, which is
+     * where this used to land and where you then had to hunt for the item you
+     * had just been told about.
      */
     private function lowStock(User $user): array
     {
@@ -320,7 +501,7 @@ class MyDayQueue
             $i->total_qty <= 0
                 ? 'Out of stock'
                 : "{$i->total_qty} left, minimum {$i->minimum_qty}",
-            route('inventory.index'),
+            route('inventory.products.show', $i->id),
             $i->total_qty <= 0,
         ))->all();
     }
