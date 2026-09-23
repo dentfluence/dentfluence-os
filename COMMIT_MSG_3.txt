@@ -1,0 +1,42 @@
+My Day: owner and manager see the clinic's tasks, not just their own
+
+Reverses a call made earlier the same day, because it was wrong.
+
+MyDayController forced assigned_to = me for everyone, on the reasoning
+that My Day is one person's shift. For an owner or a manager that
+reasoning is backwards: their shift IS the clinic, and a page that hid
+the team's work from the person accountable for it just sent them to
+/tasks every morning to find out what was actually happening.
+
+Found on production: /tasks showed "Today 5" (all belonging to Ashwini
+and Samiksha) while My Day showed 2. Both numbers were correct and the
+pair read as broken, which is the real cost.
+
+WHOSE TASKS is now User::taskScope() — the same boundary /tasks and the
+phone use. Owner and manager see the branch; everyone else sees their
+own. One answer to "whose work may I see", so My Day cannot become a
+way around the permission fix that shipped an hour ago.
+
+The section hint is no longer fixed copy: "Across the clinic" for
+owner and manager, "Assigned to you" for everyone else. "Assigned to
+you" printed above the whole clinic's work is how a number stops being
+trusted — it is what prompted this.
+
+MyDayQueue::tasks() (the summary source, currently unreachable behind
+the board) kept in step, so swapping the board back out cannot quietly
+restore the old behaviour.
+
+CALLS NEEDED NO CHANGE. TodayActionsEngine and TodayCallList carry no
+per-user filter at all — a call belongs to whoever picks up the phone,
+which is what the board's own Handled-by column says: "Nobody is
+assigned in advance — the desk on shift owns the board." Everyone
+already sees every call, and scoping calls per person would be a
+different and much larger change to the PRE engine.
+
+Tests: MyDayTaskBoardTest — the old "a colleague's task stays off My
+Day even for an admin" is now "an owner sees the whole clinic on My
+Day", plus a new test that an assistant still sees only her own and
+reads the right hint.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018XNsjiYXyAjSLeG7gVZDDK

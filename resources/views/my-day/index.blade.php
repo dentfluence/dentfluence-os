@@ -63,8 +63,20 @@
                 <span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6a0f70;">
                     {{ $band['label'] }}
                 </span>
-                @if($band['hint'])
-                    <span style="font-size:11.5px;color:#c5b0d5;">{{ $band['hint'] }}</span>
+                @php
+                    // The Tasks hint is not fixed copy: an owner reading
+                    // "Assigned to you" above the whole clinic's work would be
+                    // told something false, and that is how a number stops
+                    // being trusted.
+                    $hint = $band['hint'] ?? null;
+                    if (($band['key'] ?? null) === 'tasks') {
+                        $hint = auth()->user()->seesOwnTasksOnly()
+                            ? 'Assigned to you'
+                            : 'Across the clinic';
+                    }
+                @endphp
+                @if($hint)
+                    <span style="font-size:11.5px;color:#c5b0d5;">{{ $hint }}</span>
                 @endif
                 <span style="flex:1 1 auto;border-bottom:1px solid #f0e9f5;"></span>
                 {{-- The board's rows count towards the band. A heading reading

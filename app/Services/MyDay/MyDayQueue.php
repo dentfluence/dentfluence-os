@@ -336,7 +336,9 @@ class MyDayQueue
     {
         $tasks = Task::query()
             ->where('branch_id', $user->branch_id)
-            ->where('assigned_to', $user->id)
+            // Owner and manager see the clinic's work here too — same
+            // boundary as the board and as /tasks, from User::taskScope().
+            ->when($user->seesOwnTasksOnly(), fn ($q) => $q->where('assigned_to', $user->id))
             ->visibleToReception()
             ->open()
             ->whereDate('due_date', '<=', today())

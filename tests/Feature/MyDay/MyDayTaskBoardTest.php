@@ -115,7 +115,17 @@ class MyDayTaskBoardTest extends TestCase
         $this->get(route('my-day'))->assertDontSee('Next week denture');
     }
 
-    public function test_a_colleagues_task_stays_off_my_day_even_for_an_admin(): void
+    /**
+     * REVERSED ON 23 SEP, deliberately.
+     *
+     * The first version forced assigned_to even for the owner, on the
+     * reasoning that My Day is one person's shift. CEO ruling the same day:
+     * "let owner and manager see all task and calls." For an owner or a
+     * manager that reasoning was wrong — their shift IS the clinic, and a
+     * page that hid the team's work from the person accountable for it sent
+     * them to /tasks every morning to find out what was happening.
+     */
+    public function test_an_owner_sees_the_whole_clinic_on_my_day(): void
     {
         $actor = $this->admin();
 
@@ -131,7 +141,40 @@ class MyDayTaskBoardTest extends TestCase
         $res = $this->get(route('my-day'));
 
         $res->assertSee('Mine to do');
-        $res->assertDontSee('Ankita crown chase');
+        $res->assertSee('Ankita crown chase');
+        // And the heading must say so — "Assigned to you" above the whole
+        // clinic's work is how a number stops being trusted.
+        $res->assertSee('Across the clinic');
+    }
+
+    /**
+     * The boundary is the SAME one /tasks uses (User::taskScope()), so My Day
+     * cannot become a way around it. An assistant still sees only her own.
+     */
+    public function test_everyone_else_still_sees_only_their_own(): void
+    {
+        $role = \App\Models\Role::firstOrCreate(
+            ['slug' => \App\Models\Role::ASSISTANT],
+            ['name' => 'Assistant', 'category' => \App\Models\Role::CATEGORY_STAFF, 'is_system' => true],
+        );
+
+        $ashwini = User::factory()->create([
+            'role'      => 'assistant',
+            'role_id'   => $role->id,
+            'branch_id' => 1,
+            'is_active' => true,
+        ]);
+
+        $colleague = User::factory()->create(['branch_id' => 1, 'is_active' => true]);
+
+        $this->task($ashwini, ['title' => 'Hers to do']);
+        $this->task($colleague, ['title' => 'Not hers']);
+
+        $res = $this->actingAs($ashwini)->get(route('my-day'));
+
+        $res->assertSee('Hers to do');
+        $res->assertDontSee('Not hers');
+        $res->assertSee('Assigned to you');
     }
 
     public function test_the_tasks_page_still_renders_after_the_board_moved_out(): void

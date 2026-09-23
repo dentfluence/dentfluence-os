@@ -52,15 +52,24 @@ class MyDayController extends Controller
         }
 
         if (in_array('tasks', $declared, true)) {
-            // assigned_to is forced to this person even for an admin who would
-            // normally see the whole branch on /tasks. My Day is one person's
-            // shift; a list of everyone's work is a different page and it
-            // already exists.
-            $boards['tasks'] = $taskBoard->build([
+            // ── WHOSE TASKS (CEO ruling, 23 Sep) ─────────────────────────
+            // "let owner and manager see all task and calls."
+            //
+            // The first version forced assigned_to even for the owner, on the
+            // reasoning that My Day is one person's shift. For an owner or a
+            // manager that reasoning is wrong: their shift IS the clinic, and
+            // a page that hid the team's work from the person accountable for
+            // it sent them to /tasks every morning to find out what was
+            // actually happening.
+            //
+            // The boundary is the SAME one /tasks uses — User::taskScope() —
+            // so there is one answer to "whose work may I see" and My Day
+            // cannot become a way around it.
+            $boards['tasks'] = $taskBoard->build(array_filter([
                 'view'        => 'due_now',
-                'assigned_to' => $user->id,
+                'assigned_to' => $user->seesOwnTasksOnly() ? $user->id : null,
                 'per_page'    => 25,
-            ], $user);
+            ]), $user);
 
             $boardTotal += $boards['tasks']['tasks']->total();
         }
