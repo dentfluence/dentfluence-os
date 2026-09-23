@@ -43,6 +43,28 @@ class LabCase extends Model
     ];
 
     /**
+     * Not yet finished FROM THE PATIENT'S POINT OF VIEW.
+     *
+     * OPEN_STATUSES means "still at the lab". This means "not yet in the
+     * patient's mouth" — which includes final_received: the work is back on
+     * the shelf, and until it is fitted and handed over the job is not done.
+     *
+     * CEO ruling 23 Sep 2026: a lab case does not leave the huddle list until
+     * it is marked delivered to the patient. 'complete' IS that mark — see
+     * its label below — so no new status was added. A status machine with a
+     * ninth state costs more than it is worth when the eighth already means
+     * the right thing.
+     *
+     * DELIBERATELY SEPARATE from OPEN_STATUSES, which has eleven call sites
+     * across finance analytics, vendor open-case counts, B2B and reports.
+     * Widening that constant would silently change all of them.
+     */
+    public const UNDELIVERED_STATUSES = [
+        'order_placed', 'impression_sent', 'scan_sent',
+        'trial_received', 'trial_returned', 'final_received',
+    ];
+
+    /**
      * Allowed next statuses for one-click transitions.
      * trial_received → trial_returned is the repeatable loop.
      */
@@ -66,7 +88,7 @@ class LabCase extends Model
         'trial_received'  => 'Trial Received',
         'trial_returned'  => 'Trial Returned',
         'final_received'  => 'Final Work In',
-        'complete'        => 'Complete',
+        'complete'        => 'Delivered to patient',
         'rejected'        => 'Rejected',
     ];
 

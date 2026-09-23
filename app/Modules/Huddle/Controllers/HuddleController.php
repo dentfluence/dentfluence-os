@@ -368,9 +368,11 @@ class HuddleController extends Controller
         // ── Labs: overdue + due today + trial loop + remakes ─────────────────
         // Graceful degradation: if lab tables aren't migrated yet, silently skip.
         try {
-            // Open statuses in v3 workflow (work still at lab or in transit)
-            $labOpenStatuses = ['order_placed', 'impression_sent', 'scan_sent',
-                                'trial_received', 'trial_returned'];
+            // Everything not yet in the patient's mouth — including
+            // final_received, where the work is back on the shelf but has not
+            // been fitted. CEO ruling 23 Sep: a case stays on this list until
+            // it is marked delivered.
+            $labOpenStatuses = \App\Models\LabCase::UNDELIVERED_STATUSES;
 
             $labsDueToday = DB::table('lab_cases')
                 ->join('patients', 'patients.id', '=', 'lab_cases.patient_id')
@@ -378,10 +380,10 @@ class HuddleController extends Controller
                 ->where('lab_cases.branch_id', $branchId)
                 ->whereIn('lab_cases.status', $labOpenStatuses)
                 ->whereNull('lab_cases.deleted_at')
-                ->where(function ($q) use ($today) {
-                    // Overdue (expected date has passed) OR due exactly today
-                    $q->whereDate('lab_cases.expected_return_date', '<=', $today->toDateString());
-                })
+                // NO DATE FILTER. This used to show only cases already due or
+                // overdue, so a case due on Friday was invisible on Wednesday
+                // and the team only heard about it once it was late. The whole
+                // point of a morning list is seeing it BEFORE that.
                 ->select([
                     'lab_cases.id',
                     'lab_cases.case_number',
@@ -393,10 +395,13 @@ class HuddleController extends Controller
                     'patients.name as patient_name',
                     'lab_vendors.name as lab_name',
                 ])
-                // Overdue first (oldest expected date first), then due today
+                // Overdue first, then soonest due. A case with no expected date
+                // sorts last rather than first — MySQL puts NULL before
+                // everything, which would have buried the late ones.
                 ->orderByRaw("CASE WHEN DATE(lab_cases.expected_return_date) < ? THEN 0 ELSE 1 END", [$today->toDateString()])
+                ->orderByRaw('lab_cases.expected_return_date IS NULL')
                 ->orderBy('lab_cases.expected_return_date')
-                ->limit(10)
+                ->limit(25)
                 ->get()
                 ->map(function ($row) use ($today) {
                     $row->is_overdue = $row->due_date

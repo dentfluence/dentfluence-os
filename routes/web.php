@@ -81,6 +81,15 @@ Route::middleware('auth')->group(function () {
     /* ── Dashboard ── */
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
+    /* ── My Day ──────────────────────────────────────────────────────────
+       One ordered queue of work for the signed-in person, aggregated from
+       Today's Actions, Tasks, Lab and Inventory. Read-only: every row is a
+       pointer at a record that lives in a module, and every write still
+       happens there under that module's own rules.
+       No module gate — it shows a person their OWN work, and the sources
+       inside it are each permission-checked as they are collected. */
+    Route::get('/my-day', [\App\Http\Controllers\MyDayController::class, 'index'])->name('my-day');
+
     /* ── DPDP Consent ── */
     /* C4 (W-1, 2026-09-04): all four DPDP surfaces below are now admin.only.
        They previously sat under bare 'auth' with no module gate, so ANY logged-in

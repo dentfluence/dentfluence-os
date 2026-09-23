@@ -1976,7 +1976,10 @@ document.addEventListener('alpine:init', () => {
         </div>
         @endif
 
-        {{-- ▸ Overdue / Due today cases ───────────────────────────────── --}}
+        {{-- ▸ Every case not yet delivered ─────────────────────────────
+             Was "overdue or due today", which meant a case due on Friday was
+             invisible on Wednesday and the team only heard about it once it
+             was already late. --}}
         @php
             $huddleLabStatuses = \App\Models\LabCase::STATUS_LABELS;
         @endphp
@@ -2013,6 +2016,13 @@ document.addEventListener('alpine:init', () => {
                         </span>
                     @elseif(isset($lab->due_date) && \Carbon\Carbon::parse($lab->due_date)->isToday())
                         <span class="hd-lc-due" style="color:var(--c-amber);font-weight:600;">Due Today</span>
+                    @elseif(isset($lab->due_date))
+                        <span class="hd-lc-due" style="color:var(--c-muted);">Due {{ \Carbon\Carbon::parse($lab->due_date)->format('d M') }}</span>
+                    @else
+                        {{-- No expected date at all. Worth saying out loud:
+                             a case nobody gave a date to is a case nobody can
+                             chase. --}}
+                        <span class="hd-lc-due" style="color:#b45309;font-weight:600;">No due date</span>
                     @endif
                 </div>
             </div>
@@ -2025,12 +2035,12 @@ document.addEventListener('alpine:init', () => {
         @if($labTrialPending->count() === 0 && $labsToSend->count() === 0)
         <div class="hd-empty-col">No lab cases need attention today.</div>
         @elseif($labTrialPending->count() === 0)
-        <div class="hd-empty-col" style="padding-top:2px;">Nothing due back today.</div>
+        <div class="hd-empty-col" style="padding-top:2px;">Nothing waiting on the lab.</div>
         @endif
         @endforelse
 
-        @if($labsDueToday->count() >= 10)
-        <a href="{{ route('lab.index', ['status' => 'overdue']) }}" class="hd-view-all">View all overdue cases →</a>
+        @if($labsDueToday->count() >= 25)
+        <a href="{{ route('lab.index', ['status' => 'active']) }}" class="hd-view-all">View all open cases →</a>
         @endif
 
         {{-- New Lab Case --}}

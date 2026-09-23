@@ -32,6 +32,14 @@
                 'label' => 'Dashboard',
                 'icon'  => '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
             ])
+            {{-- Above Daily Huddle on purpose. The huddle is the morning
+                 meeting; this is the rest of the shift, and it is the first
+                 thing a staff member should reach for. --}}
+            @include('components.sidebar-item', [
+                'href'  => route('my-day'),
+                'label' => 'My Day',
+                'icon'  => '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+            ])
             @if($user->canAccess('daily_huddle'))
                 @include('components.sidebar-item', [
                     'href'  => route('huddle.index'),
