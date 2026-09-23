@@ -26,8 +26,22 @@ return [
     | money that is overdue. Each section is ONE kind of work, whole.
     |
     | Sources: confirm_appointments | unsent_lab | calls | tasks | lab_chase
-    |          | overdue_expenses | low_stock
+    |          | overdue_expenses
     | Boards:  calls | tasks
+    |
+    | ── STOCK IS OFF (CEO ruling, 23 Sep) ─────────────────────────────────────
+    | A 'stock' section ran last, below the four. It is removed: reordering
+    | stock is a buying decision made against a supplier and a price, not
+    | something a receptionist does between patients, and it was the one
+    | section on the page nobody was going to act on the same day.
+    |
+    | The QUERY IS NOT DELETED — MyDayQueue::lowStock() still exists and still
+    | works. Re-enabling it is adding the band back here, nothing more. And
+    | because no band names 'low_stock' any more, that query no longer runs at
+    | all: sources are built on demand (see MyDayQueue::collect()).
+    |
+    | Low stock has not gone anywhere. It is still on the Daily Huddle and in
+    | Inventory, which is where a reorder decision actually gets made.
     */
     'bands' => [
 
@@ -64,15 +78,6 @@ return [
             'label'   => 'Payments due',
             'hint'    => 'Bills past their due date',
             'sources' => ['overdue_expenses'],
-        ],
-
-        // 5 ── STOCK. NOT in the CEO's four, kept last rather than dropped:
-        //      deleting work from a work list is how a reorder gets missed.
-        //      Say the word and this section goes.
-        'stock' => [
-            'label'   => 'Stock',
-            'hint'    => 'At or below minimum',
-            'sources' => ['low_stock'],
         ],
     ],
 

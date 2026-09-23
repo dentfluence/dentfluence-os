@@ -1,0 +1,48 @@
+My Day: take Stock off the page, and stop querying what no section shows
+
+CEO ruling, 23 Sep: "remove low Stock or inventory update from task".
+
+WHY IT GOES
+Stock ran last on My Day, below the CEO's four sections. It was the one
+section on the page nobody was going to act on the same day. Reordering is a
+buying decision — a quantity, a supplier, a price, usually a call to the rep —
+and none of that happens between two patients. A work list that carries a row
+you cannot finish today teaches people to skim the list, which costs more than
+the row is worth.
+
+Low stock has not gone anywhere. It is still on the Daily Huddle and in
+Inventory, which is where the reorder decision is actually made.
+
+WHAT CHANGED
+config/my_day.php
+  - The 'stock' band is removed. My Day is now exactly the CEO's four:
+    calls → tasks → lab → payments.
+  - The removal is documented in the header with how to undo it.
+
+app/Services/MyDay/MyDayQueue.php
+  - collect() now builds sources ON DEMAND: only the sources a configured
+    band actually names are queried. Before, every source ran on every page
+    load regardless of what was shown, so a section switched off in config
+    still cost its query.
+  - lowStock() is KEPT WHOLE, not deleted, and marked parked. Turning the
+    section back on is adding the band back to config — nothing else.
+
+resources/views/my-day/index.blade.php, _rows.blade.php
+  - Empty-state and comment copy no longer promise a stock section.
+  - The 'stock' row label stays in the match, so re-enabling needs no view
+    change.
+
+tests/Feature/MyDay/MyDaySectionOrderTest.php
+  - The order assertion is now the four sections.
+  - test_stock_is_not_on_my_day() — no band may name 'low_stock'. This is the
+    guard against it drifting back in.
+  - test_a_source_no_section_asks_for_is_never_queried() — the section being
+    off means its query is off.
+
+NOT CHANGED
+  - Inventory, the Huddle's stock alerts, and MyDayQueue::lowStock() itself.
+  - The "← Back to My Day" bar on the product page: harmless while nothing
+    links there, and needed the moment the band comes back.
+
+RUN
+  php artisan test --filter=MyDay

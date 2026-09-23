@@ -87,18 +87,40 @@ class MyDayQueue
         return ['bands' => $bands, 'total' => $total];
     }
 
-    /** Every source, keyed by the name config/my_day.php uses. */
+    /**
+     * Every source, keyed by the name config/my_day.php uses.
+     *
+     * ON DEMAND, DELIBERATELY. Each source is a real query, and a source no
+     * band asks for is a query run for a section that will never be drawn.
+     * Turning a section off in config is therefore enough to stop its cost —
+     * which is what lets a source be parked (low_stock, 23 Sep) without the
+     * page paying for it, and switched back on by adding the band alone.
+     *
+     * @return array<string, array<int, array<string, mixed>>>
+     */
     private function collect(User $user): array
     {
-        return [
-            'confirm_appointments' => $this->confirmAppointments($user),
-            'unsent_lab'           => $this->unsentLab($user),
-            'calls'                => $this->calls($user),
-            'tasks'                => $this->tasks($user),
-            'lab_chase'            => $this->labChase($user),
-            'overdue_expenses'     => $this->overdueExpenses($user),
-            'low_stock'            => $this->lowStock($user),
+        $builders = [
+            'confirm_appointments' => fn () => $this->confirmAppointments($user),
+            'unsent_lab'           => fn () => $this->unsentLab($user),
+            'calls'                => fn () => $this->calls($user),
+            'tasks'                => fn () => $this->tasks($user),
+            'lab_chase'            => fn () => $this->labChase($user),
+            'overdue_expenses'     => fn () => $this->overdueExpenses($user),
+            'low_stock'            => fn () => $this->lowStock($user),
         ];
+
+        $sources = [];
+
+        foreach (config('my_day.bands', []) as $band) {
+            foreach ($band['sources'] ?? [] as $name) {
+                if (! isset($sources[$name]) && isset($builders[$name])) {
+                    $sources[$name] = ($builders[$name])();
+                }
+            }
+        }
+
+        return $sources;
     }
 
     private function limit(): int
@@ -467,6 +489,11 @@ class MyDayQueue
     /**
      * Stock at or below its minimum. One row per item, because each one is a
      * separate decision about a separate supplier.
+     *
+     * PARKED 23 Sep — no band in config/my_day.php names 'low_stock', so this
+     * does not run. Kept whole, not deleted: turning the section back on is
+     * adding the band back, and low stock still shows on the Daily Huddle and
+     * in Inventory in the meantime.
      *
      * NO BUTTON, DELIBERATELY. "Order" is a quantity, a supplier and a price,
      * and none of the three can be guessed from a low-stock row. The link goes

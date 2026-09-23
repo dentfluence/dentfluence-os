@@ -98,11 +98,41 @@ class MyDaySectionOrderTest extends TestCase
         // pass or fail on whatever happened to be in the database that day.
         // The order itself is the policy, and this is where it lives.
         $this->assertSame(
-            ['calls', 'tasks', 'lab', 'payments', 'stock'],
+            ['calls', 'tasks', 'lab', 'payments'],
             array_keys(config('my_day.bands')),
-            'The day\'s sequence changed. It is a clinic policy: calls, tasks, '
-            . 'lab, payments — then stock, which is not in the CEO\'s four and '
-            . 'is kept last rather than dropped.',
+            'The day\'s sequence changed. It is a clinic policy, and it is '
+            . 'exactly four sections: calls, tasks, lab, payments.',
+        );
+    }
+
+    public function test_stock_is_not_on_my_day(): void
+    {
+        // Removed 23 Sep. A reorder is a buying decision against a supplier
+        // and a price — not something anyone closes between patients — so it
+        // was the one section on the page that was never going to be acted on
+        // the same day. It lives on the Huddle and in Inventory instead.
+        foreach (config('my_day.bands') as $key => $band) {
+            $this->assertNotContains(
+                'low_stock',
+                $band['sources'] ?? [],
+                "Low stock is back on My Day, in '{$key}'. It was taken off on "
+                . 'purpose; put it back only on a CEO ruling.',
+            );
+        }
+    }
+
+    public function test_a_source_no_section_asks_for_is_never_queried(): void
+    {
+        // The section is off, so its query must be off too — otherwise the
+        // page keeps paying for a list it will never draw. Proved by the
+        // absence of the key: MyDayQueue only builds what a band names.
+        $this->admin();
+
+        $this->get(route('my-day'))->assertOk();
+
+        $this->assertNotContains(
+            'low_stock',
+            collect(config('my_day.bands'))->flatMap(fn ($b) => $b['sources'] ?? [])->all(),
         );
     }
 

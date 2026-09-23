@@ -51,7 +51,7 @@
         <div style="padding:44px 26px;text-align:center;border:1.5px dashed #ede4f3;border-radius:12px;background:#fdfcfe;">
             <div style="font-size:15px;font-weight:600;color:#1d7a3c;margin-bottom:5px;">You're clear.</div>
             <div style="font-size:13px;color:#9a7aaa;">
-                No calls, tasks, lab cases or stock needing you right now.
+                No calls, tasks, lab cases or overdue bills needing you right now.
             </div>
         </div>
     @endif

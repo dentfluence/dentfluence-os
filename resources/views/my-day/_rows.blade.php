@@ -5,7 +5,7 @@
     "keep all ui same like calls… UI is different for lab and calls."
 
     He is right, and the reason is not decoration. Calls came from the real
-    board and rendered as a dense table; lab, payments and stock were My Day's
+    board and rendered as a dense table; lab and payments were My Day's
     own card rows. One page, two visual languages, so the eye re-learns how to
     read halfway down — which is the scatter this page exists to end.
 
@@ -54,7 +54,7 @@
                     </span>
                 </td>
 
-                {{-- 2 · WHO — patient, vendor, or nobody (stock has no person) --}}
+                {{-- 2 · WHO — patient, vendor, or nobody (a bill has no person) --}}
                 <td>
                     @if($row['who'])
                         <div class="taw-name" title="{{ $row['who'] }}">{{ $row['who'] }}</div>
