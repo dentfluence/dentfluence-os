@@ -615,6 +615,7 @@ class SettingsController extends Controller
         $user->refresh()->load('roleModel');
 
         if ($roleChanged) {
+            \App\Support\AccessRevoker::revoke($user, 'role_changed');
             StaffActivityLog::record(
                 $user->id,
                 'role_changed',
@@ -659,6 +660,9 @@ class SettingsController extends Controller
 
         $wasActive  = $user->is_active;
         $user->update(['is_active' => ! $wasActive]);
+        if ($wasActive) {
+            \App\Support\AccessRevoker::revoke($user, 'deactivated');
+        }
 
         StaffActivityLog::record(
             $user->id,
@@ -675,7 +679,11 @@ class SettingsController extends Controller
     {
         $request->validate(['role_id' => 'nullable|exists:roles,id']);
         $oldRole = $user->roleModel?->name ?? 'None';
+        $roleChanged = (int) $user->role_id !== (int) $request->role_id;
         $user->update(['role_id' => $request->role_id]);
+        if ($roleChanged) {
+            \App\Support\AccessRevoker::revoke($user, 'role_changed');
+        }
         $user->refresh()->load('roleModel');
 
         StaffActivityLog::record(

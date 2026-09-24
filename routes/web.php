@@ -42,9 +42,19 @@ Route::middleware('guest')->group(function () {
         ->middleware('throttle:5,1');
 
     /* ── Forgot Password via PIN ── */
-    Route::post('/forgot-pin/send',   [ForgotPasswordPinController::class, 'sendPin'])->name('forgot-pin.send');
-    Route::post('/forgot-pin/verify', [ForgotPasswordPinController::class, 'verifyPin'])->name('forgot-pin.verify');
-    Route::post('/forgot-pin/reset',  [ForgotPasswordPinController::class, 'resetPassword'])->name('forgot-pin.reset');
+    /* ── Forgot password via PIN: OFF (audit AUTH-04, 24 Sep 2026) ──
+     | Measured: no screen uses these routes, and the flow has never worked -
+     | password_reset_pins.pin is varchar(6) but stores a 60-char hash, so
+     | /send always failed with a 500. The controller is hardened (same reply
+     | for unknown emails, PIN dies after 5 wrong tries, audited reset that
+     | ends every sign-in). Re-enable only together with a UI and a migration
+     | widening `pin` (and making `token` nullable-unique), keeping throttle:5,1.
+     | Until then an admin resets passwords from HR (which now signs the user
+     | out everywhere).
+     */
+    // Route::post('/forgot-pin/send',   [ForgotPasswordPinController::class, 'sendPin'])->name('forgot-pin.send')->middleware('throttle:5,1');
+    // Route::post('/forgot-pin/verify', [ForgotPasswordPinController::class, 'verifyPin'])->name('forgot-pin.verify')->middleware('throttle:5,1');
+    // Route::post('/forgot-pin/reset',  [ForgotPasswordPinController::class, 'resetPassword'])->name('forgot-pin.reset')->middleware('throttle:5,1');
 
     /* ── Mobile OTP Login: OFF (audit AUTH-01 / L-01) ──
      | No SMS gateway exists, so every code went to laravel.log; verify had no

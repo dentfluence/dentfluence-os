@@ -192,6 +192,21 @@
         </div>
     </div>
 
+    {{-- Two-step login (2FA). The setup page existed with no link to it (24 Sep 2026). --}}
+    <div style="background:#ffffff;border:1px solid rgba(185,92,183,0.12);border-radius:6px;overflow:hidden;">
+        <div style="padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <div>
+                <h2 style="font-size:13px;font-weight:600;color:#1a0a24;margin:0;">Two-step login</h2>
+                <p style="font-size:12px;color:#6b5a75;margin:2px 0 0;">
+                    {{ $user->hasTwoFactorEnabled() ? 'On: login asks for a code from your authenticator app.' : 'Off: add a code from an authenticator app at every login.' }}
+                </p>
+            </div>
+            <a href="{{ route('two-factor.setup') }}" style="font-size:12px;font-weight:600;color:#5a006e;text-decoration:none;white-space:nowrap;">
+                {{ $user->hasTwoFactorEnabled() ? 'Manage' : 'Turn on' }} &rarr;
+            </a>
+        </div>
+    </div>
+
     {{-- ══════════════════════════════════════
          SECTION 3 — Change Password
     ══════════════════════════════════════ --}}

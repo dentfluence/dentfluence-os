@@ -68,8 +68,8 @@ class MobileOtpController extends Controller
         $sent = $this->dispatchSms($phone, $otp);
 
         if (!$sent) {
-            // Log for dev / fallback
-            Log::info('[MobileOTP] OTP for ' . $phone . ': ' . $otp . ' (SMS gateway not configured)');
+            // Never write the code or the phone number to a log (audit L-01 / AUTH-01).
+            Log::warning('[MobileOTP] SMS gateway not configured; OTP was not delivered.');
         }
 
         return response()->json(['success' => true]);

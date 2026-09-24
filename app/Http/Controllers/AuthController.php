@@ -46,6 +46,15 @@ class AuthController extends Controller
                 ->withErrors(['email' => 'Invalid credentials']);
         }
 
+        // Password is correct, but a deactivated account never gets in (audit AUTH-02).
+        if ($user->is_active === false) {
+            AuditLog::event('login_blocked_inactive', $user->id, ['via' => 'password'], ['module' => 'auth']);
+
+            return back()
+                ->withInput($request->only('email'))
+                ->withErrors(['email' => 'This account has been deactivated. Please contact the clinic admin.']);
+        }
+
         // Password is correct. If 2FA is on, hold the user in a "pending" state
         // and send them to the code challenge — they are NOT logged in until it
         // passes (see TwoFactorController::verify).

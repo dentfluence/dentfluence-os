@@ -18,6 +18,14 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
+        // Audit AUTH-07: this seeder holds real staff passwords and uses
+        // updateOrCreate, so running it on production would silently reset them.
+        if (app()->isProduction()) {
+            $this->command?->error(static::class . ' refuses to run in production.');
+
+            return;
+        }
+
         // ── Primary admin — Dr. Sumit ──────────────────────
         User::updateOrCreate(
             ['email' => 'sumit@tulipdental.in'],

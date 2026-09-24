@@ -376,11 +376,15 @@ class HrStaffController extends Controller
         if ($request->filled('role_id') && (int) $request->role_id !== (int) $user->role_id) {
             $this->assertMayAssignAccessRole();
             $user->update(['role_id' => $request->role_id]);
+            \App\Support\AccessRevoker::revoke($user, 'role_changed');
         }
 
         // Admin-only password reset: only touch the password if a new one was submitted.
         if ($request->filled('new_password') && auth()->user()?->isAdminRole()) {
             $user->update(['password' => Hash::make($request->new_password)]);
+            // An admin reset usually means something is wrong (lost phone, staff left):
+            // every existing sign-in ends now. CEO rule 24 Sep, audit AUTH-02.
+            \App\Support\AccessRevoker::revoke($user, 'admin_password_reset');
         }
 
         // Update or create HR profile
@@ -473,6 +477,7 @@ class HrStaffController extends Controller
     {
         // Never hard delete — just deactivate
         $user->update(['is_active' => false]);
+        \App\Support\AccessRevoker::revoke($user, 'deactivated');
 
         return redirect()
             ->route('hr.staff.index')

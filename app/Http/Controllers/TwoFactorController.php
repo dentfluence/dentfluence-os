@@ -126,6 +126,14 @@ class TwoFactorController extends Controller
             return redirect()->route('login');
         }
 
+        // Deactivated while sitting on the code screen: stop here (audit AUTH-02).
+        if ($user->is_active === false) {
+            $request->session()->forget(['2fa:user_id', '2fa:remember']);
+            AuditLog::event('login_blocked_inactive', $user->id, ['via' => '2fa'], ['module' => 'auth']);
+
+            return redirect()->route('login')->withErrors(['email' => 'This account has been deactivated. Please contact the clinic admin.']);
+        }
+
         $code        = trim($request->code);
         $passedTotp  = $user->two_factor_secret && $this->engine()->verifyKey($user->two_factor_secret, $code);
         $passedRecov = ! $passedTotp && $user->useRecoveryCode($code);

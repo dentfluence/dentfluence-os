@@ -10,6 +10,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
+use App\Models\AuditLog;
+use App\Support\AccessRevoker;
 use Illuminate\Support\Str;
 
 /**
@@ -25,6 +28,12 @@ class ForgotPasswordPinController extends Controller
     // PIN validity: 15 minutes
     private const EXPIRES_MINUTES = 15;
 
+    // Audit AUTH-04: a PIN dies after this many wrong guesses.
+    private const MAX_PIN_ATTEMPTS = 5;
+
+    // Same reply whether or not the email is registered (no account enumeration).
+    private const SENT_MESSAGE = 'If that email belongs to a staff account, a 6-digit PIN has been sent to it.';
+
     /* ─────────────────────────────────────────
        Step 1: Send PIN
     ───────────────────────────────────────── */
@@ -39,8 +48,8 @@ class ForgotPasswordPinController extends Controller
         // Check user exists
         $user = User::where('email', $email)->first();
         if (!$user) {
-            // Return a generic message so we don't expose which emails are registered
-            return response()->json(['success' => false, 'message' => 'No account found with that email address.'], 404);
+            // Identical reply to the success path, so nobody can test which emails are staff.
+            return response()->json(['success' => true, 'message' => self::SENT_MESSAGE]);
         }
 
         // Generate a 6-digit PIN
@@ -62,8 +71,9 @@ class ForgotPasswordPinController extends Controller
 
         // Send email
         Mail::to($email)->send(new PasswordResetPinMail($pin));
+        RateLimiter::clear('pin-verify:' . $email);
 
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true, 'message' => self::SENT_MESSAGE]);
     }
 
     /* ─────────────────────────────────────────
@@ -93,8 +103,22 @@ class ForgotPasswordPinController extends Controller
         }
 
         if (!Hash::check($pin, $record->pin)) {
+            $key = 'pin-verify:' . $email;
+            RateLimiter::hit($key, self::EXPIRES_MINUTES * 60);
+
+            if (RateLimiter::attempts($key) >= self::MAX_PIN_ATTEMPTS) {
+                // Too many wrong guesses: the PIN is dead, a new one must be requested.
+                DB::table('password_reset_pins')->where('email', $email)->delete();
+                RateLimiter::clear($key);
+                AuditLog::event('password_reset_pin_locked', null, ['email' => $email], ['module' => 'auth']);
+
+                return response()->json(['success' => false, 'message' => 'Too many wrong attempts. Please request a new PIN.'], 429);
+            }
+
             return response()->json(['success' => false, 'message' => 'Incorrect PIN. Please try again.'], 422);
         }
+
+        RateLimiter::clear('pin-verify:' . $email);
 
         // Mark verified and issue a short-lived token
         $token = Str::random(64);
@@ -141,14 +165,16 @@ class ForgotPasswordPinController extends Controller
             return response()->json(['success' => false, 'message' => 'Session expired. Please start over.'], 422);
         }
 
-        // Update user password
-        $updated = User::where('email', $email)->update([
-            'password' => Hash::make($password),
-        ]);
-
-        if (!$updated) {
+        // Update through the model (not a bare query) so it is audited, then end
+        // every existing sign-in: a reset often follows a lost phone (audit AUTH-04).
+        $user = User::where('email', $email)->first();
+        if (!$user) {
             return response()->json(['success' => false, 'message' => 'Could not update password.'], 500);
         }
+
+        $user->forceFill(['password' => Hash::make($password)])->save();
+        AuditLog::event('password_reset', $user->id, ['via' => 'email_pin'], ['module' => 'auth']);
+        AccessRevoker::revoke($user, 'password_reset_pin');
 
         // Clean up
         DB::table('password_reset_pins')->where('email', $email)->delete();

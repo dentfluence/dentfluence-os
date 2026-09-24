@@ -28,6 +28,14 @@ class ClinicUsersSeeder extends Seeder
 {
     public function run(): void
     {
+        // Audit AUTH-07: this seeder holds real staff passwords and uses
+        // updateOrCreate, so running it on production would silently reset them.
+        if (app()->isProduction()) {
+            $this->command?->error(static::class . ' refuses to run in production.');
+
+            return;
+        }
+
         // Fetch role IDs — roles must exist (run RolePermissionSeeder first)
         $roleIds = Role::whereIn('slug', ['admin', 'manager', 'assistant', 'front_desk'])
                        ->pluck('id', 'slug');

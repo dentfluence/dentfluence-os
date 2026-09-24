@@ -43,9 +43,6 @@ class WriteRouteGateGuardTest extends TestCase
         // secret compared with hash_equals in OpsAlertController, and the route
         // is CLOSED when that secret is unset.
         'POST api/v1/ops/alert',
-        'POST forgot-pin/reset',
-        'POST forgot-pin/send',
-        'POST forgot-pin/verify',
         'POST login',
         'POST p/{token}/accept',
         'POST p/{token}/decline',

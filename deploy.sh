@@ -39,22 +39,22 @@ echo "==> Building Docker images..."
 # OLD code while `git log` on the host shows the new commit. That has already
 # bitten this box once (9 Jul 2026), diagnosed only because a brand-new
 # migration did not even appear as Pending.
+# nginx is built too: its config is baked into its own image, so a change to
+# docker/nginx/default.conf never went live through this script (found 24 Sep
+# 2026 while deploying SEC-01). Building while the old containers still serve
+# costs no downtime.
 ${COMPOSE} build --no-cache app
+${COMPOSE} build nginx
 
-# --- 3. Start / update containers --------------------------------------------
-echo "==> Starting containers..."
-# --force-recreate for the same reason: a plain `up -d` can silently no-op if
-# compose decides nothing changed, and then the new image is never used.
-${COMPOSE} up -d --force-recreate app queue scheduler
-${COMPOSE} up -d
+# --- 3. Stop the old code, THEN back up, THEN migrate, THEN start (L-10) -------
+# Until 24 Sep 2026 the new containers started first, so new code ran against
+# the old schema and the dump was taken from a system already changing.
+# Downtime is now the dump + migrate time (usually under a minute).
+echo "==> Stopping app, queue and scheduler..."
+${COMPOSE} stop app queue scheduler
 
-# --- 4. Wait for the app container, then run migrations ----------------------
-echo "==> Waiting for app container to be ready..."
-sleep 5
-# --- 4a. Back up BEFORE touching the schema -----------------------------------
-# A migration is the most likely moment to lose data, and until 18 Sep 2026 this
-# script ran `migrate --force` with no dump taken first. The deploy now stops
-# dead if the dump is missing, too small, or not valid gzip.
+# --- 3a. Back up BEFORE touching the schema -----------------------------------
+# The deploy stops dead if the dump is missing, too small, or not valid gzip.
 echo "==> Taking a pre-migration backup..."
 PRE_STAMP="$(date '+%Y-%m-%d_%H-%M-%S')"
 PRE_DUMP="backups/pre_deploy_${PRE_STAMP}.sql.gz"
@@ -69,13 +69,29 @@ PRE_SIZE=$(stat -c%s "${PRE_DUMP}" 2>/dev/null || echo 0)
 if [ "${PRE_SIZE}" -lt 1000000 ] || ! gzip -t "${PRE_DUMP}" 2>/dev/null; then
   echo "!! DEPLOY ABORTED: the pre-migration dump is only ${PRE_SIZE} bytes or is corrupt." >&2
   echo "   ${PRE_DUMP}" >&2
-  echo "   No migration has run. Fix the backup path before deploying." >&2
+  echo "   No migration has run. Restarting the OLD containers so the clinic keeps working." >&2
+  ${COMPOSE} start app queue scheduler
   exit 1
 fi
 echo "    pre-migration dump OK: ${PRE_DUMP} (${PRE_SIZE} bytes)"
 
-echo "==> Running database migrations..."
-${COMPOSE} exec -T app php artisan migrate --force
+# --- 3b. Migrate with the NEW image, before any new container serves ----------
+echo "==> Running database migrations (new code, nothing serving yet)..."
+if ! ${COMPOSE} run --rm --no-deps app php artisan migrate --force; then
+  echo "!! MIGRATION FAILED. The app is stopped; the old containers still exist." >&2
+  echo "   Old code back up:   ${COMPOSE} start app queue scheduler" >&2
+  echo "   Schema restore:     gunzip < ${PRE_DUMP} | ${COMPOSE} exec -T mysql mysql -u root -p\"\${DB_ROOT_PASSWORD}\" ${DB_DATABASE}" >&2
+  exit 1
+fi
+
+# --- 3c. Start the new containers --------------------------------------------
+# --force-recreate: a plain `up -d` can silently no-op if compose decides
+# nothing changed, and then the new image is never used.
+echo "==> Starting containers on the new code..."
+${COMPOSE} up -d --force-recreate app queue scheduler nginx
+${COMPOSE} up -d
+echo "==> Waiting for app container to be ready..."
+sleep 5
 
 # --- 5. Cache config/views (production speed) --------------------------------
 # NOTE: `route:cache` is intentionally NOT run. A few routes use redirect
