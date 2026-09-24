@@ -1206,6 +1206,8 @@ Route::middleware('auth')->group(function () {
             Route::resource('staff', \App\Http\Controllers\HR\HrStaffController::class)
                  ->parameters(['staff' => 'user'])
                  ->only(['destroy']);
+            Route::post('staff/{user}/reactivate', [\App\Http\Controllers\HR\HrStaffController::class, 'reactivate'])
+                 ->name('staff.reactivate');
         });
 
         // HPR / Health ID capture for a clinician (local, no live ABDM)

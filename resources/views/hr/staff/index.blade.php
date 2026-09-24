@@ -92,7 +92,7 @@
             </thead>
             <tbody class="divide-y divide-gray-50">
                 @foreach($doctors as $member)
-                <tr class="hover:bg-gray-50 transition">
+                <tr class="hover:bg-gray-50 transition {{ $member->is_active ? '' : 'opacity-60' }}">
                     <td class="px-5 py-3">
                         <div class="flex items-center gap-3">
                             <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
@@ -100,7 +100,7 @@
                                 {{ $member->initials }}
                             </div>
                             <div>
-                                <p class="font-medium text-gray-900">{{ $member->name }}</p>
+                                <p class="font-medium text-gray-900">{{ $member->name }}@if(! $member->is_active) <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-medium align-middle">Inactive</span>@endif</p>
                                 <p class="text-xs text-gray-400">{{ $member->email }}</p>
                             </div>
                         </div>
@@ -164,7 +164,7 @@
             </thead>
             <tbody class="divide-y divide-gray-50">
                 @foreach($staff as $member)
-                <tr class="hover:bg-gray-50 transition">
+                <tr class="hover:bg-gray-50 transition {{ $member->is_active ? '' : 'opacity-60' }}">
                     <td class="px-5 py-3">
                         <div class="flex items-center gap-3">
                             <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
@@ -172,7 +172,7 @@
                                 {{ $member->initials }}
                             </div>
                             <div>
-                                <p class="font-medium text-gray-900">{{ $member->name }}</p>
+                                <p class="font-medium text-gray-900">{{ $member->name }}@if(! $member->is_active) <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-medium align-middle">Inactive</span>@endif</p>
                                 <p class="text-xs text-gray-400">
                                     {{ $member->hrProfile?->employee_code ?? $member->designation ?? $member->email }}
                                 </p>

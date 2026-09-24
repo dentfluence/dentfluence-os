@@ -15,13 +15,23 @@
                class="px-4 py-2 border border-purple-200 rounded-lg text-sm text-[#6a0f70] hover:bg-purple-50 transition">HPR / Health ID</a>
             <a href="{{ route('hr.staff.edit', $user) }}"
                class="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition">Edit Profile</a>
+            @if($user->is_active)
             <form method="POST" action="{{ route('hr.staff.destroy', $user) }}"
-                  onsubmit="return confirm('Deactivate {{ $user->name }}? They will lose system access.')">
+                  onsubmit="return confirm('Deactivate {{ $user->name }}? They will lose system access. Their records stay.')">
                 @csrf @method('DELETE')
                 <button type="submit" class="px-4 py-2 border border-red-200 text-red-600 text-sm rounded-lg hover:bg-red-50 transition">
                     Deactivate
                 </button>
             </form>
+            @else
+            <form method="POST" action="{{ route('hr.staff.reactivate', $user) }}"
+                  onsubmit="return confirm('Reactivate {{ $user->name }}? They will be able to sign in again.')">
+                @csrf
+                <button type="submit" class="px-4 py-2 border border-green-200 text-green-700 text-sm rounded-lg hover:bg-green-50 transition">
+                    Reactivate
+                </button>
+            </form>
+            @endif
         </div>
     </div>
 

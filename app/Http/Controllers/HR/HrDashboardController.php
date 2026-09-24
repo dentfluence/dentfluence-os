@@ -23,8 +23,10 @@ class HrDashboardController extends Controller
                           ->count();
 
         // Today's attendance breakdown
+        // Active staff only: a deactivated member is not "absent" (CEO rule 24 Sep).
         $todayAttendance = HrAttendance::with('user')
             ->whereDate('date', $today)
+            ->whereHas('user', fn ($u) => $u->where('is_active', true))
             ->get();
 
         $presentCount  = $todayAttendance->whereIn('status', ['present', 'late', 'half_day'])->count();

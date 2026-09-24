@@ -25,8 +25,9 @@ class HrStaffController extends Controller
     {
         $view = $request->input('view', 'doctors'); // 'doctors' | 'staff'
 
-        $query = User::with(['hrProfile.department', 'currentShift.shift'])
-                     ->where('is_active', true);
+        // CEO rule 24 Sep: a deactivated member never disappears. They stay in
+        // the list (after active people) with an Inactive badge and Reactivate.
+        $query = User::with(['hrProfile.department', 'currentShift.shift']);
 
         // Scope query to current view's role group
         $doctorRoles = \App\Models\User::DOCTOR_ROLES;
@@ -64,7 +65,7 @@ class HrStaffController extends Controller
             });
         }
 
-        $allUsers    = $query->orderBy('name')->get();
+        $allUsers    = $query->orderByDesc('is_active')->orderBy('name')->get();
         $departments = HrDepartment::active()->orderBy('name')->get();
 
         // Split collections — doctor = any doctor role OR name starts with Dr.
@@ -469,6 +470,18 @@ class HrStaffController extends Controller
         $document->delete();
 
         return back()->with('success', 'Document deleted.');
+    }
+
+    /* ── Reactivate (undo a deactivation; same hr,delete gate as deactivate) ── */
+
+    public function reactivate(User $user)
+    {
+        $user->update(['is_active' => true]);
+        \App\Models\AuditLog::event('staff_reactivated', auth()->id(), ['target_user_id' => $user->id], ['module' => 'hr']);
+
+        return redirect()
+            ->route('hr.staff.show', $user)
+            ->with('success', "{$user->name} is active again and can sign in.");
     }
 
     /* ── Deactivate (soft disable) ── */
