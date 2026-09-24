@@ -38,6 +38,16 @@ class SafeUploadRuleTest extends TestCase
         $this->assertTrue($this->fails(UploadedFile::fake()->createWithContent($name, $content)));
     }
 
+    public function test_office_documents_pass(): void
+    {
+        // A minimal zip header is what a .docx/.xlsx starts with; its MIME must
+        // not be caught by the SVG/XML rules (regression, 24 Sep 2026).
+        $zip = "PK\x03\x04" . str_repeat("\0", 26) . '[Content_Types].xml';
+        $this->assertFalse($this->fails(UploadedFile::fake()->createWithContent('plan.docx', $zip)));
+        $this->assertFalse($this->fails(UploadedFile::fake()->createWithContent('stock.xlsx', $zip)));
+        $this->assertFalse($this->fails(UploadedFile::fake()->createWithContent('import.csv', "name,phone\nA,1\n")));
+    }
+
     public function test_a_real_image_and_a_pdf_pass(): void
     {
         $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=');

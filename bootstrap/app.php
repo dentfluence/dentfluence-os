@@ -56,6 +56,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // A deactivated user loses access on the next request, web and app (audit AUTH-02).
         $middleware->appendToGroup('web', \App\Http\Middleware\EnsureUserIsActive::class);
         $middleware->appendToGroup('api', \App\Http\Middleware\EnsureUserIsActive::class);
+
+        // No upload anywhere may carry PHP/HTML/SVG/JS (Signal Board 2A.3).
+        $middleware->appendToGroup('web', \App\Http\Middleware\RejectDangerousUploads::class);
+        $middleware->appendToGroup('api', \App\Http\Middleware\RejectDangerousUploads::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Keep API errors in the standard envelope: { success, message, errors }.

@@ -158,6 +158,9 @@ class ClinicalFileUploadService
             // the app: clinical files go to a private disk, are streamed back
             // through SecureMediaController, and are never executed or included.
             'extensions:' . implode(',', self::allowedExtensions()),
+            // A renamed script (x.php saved as x.jpg) passes `extensions:`; this
+            // reads the content and refuses it (Signal Board 2A.3).
+            new \App\Rules\SafeUpload(),
             // Outer guard so an enormous file is rejected before the closure runs.
             'max:' . ($ceilingKb ?? max(self::MAX_KB_BY_EXTENSION)),
             function (string $attribute, mixed $value, \Closure $fail) use ($ceilingKb) {

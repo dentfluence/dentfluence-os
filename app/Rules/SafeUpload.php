@@ -23,7 +23,15 @@ class SafeUpload implements ValidationRule
         'htaccess', 'cgi', 'pl', 'py', 'sh', 'asp', 'aspx', 'jsp', 'exe', 'bat',
     ];
 
-    private const BLOCKED_MIME_FRAGMENTS = ['php', 'html', 'svg', 'javascript', 'x-sh', 'xml'];
+    // Exact MIME types, plus anything containing 'php'. Matching the fragment
+    // 'xml' used to refuse every .docx/.xlsx/.pptx, whose MIME types contain
+    // 'openxmlformats' (found 24 Sep 2026 while wiring 2A.3).
+    private const BLOCKED_MIMES = [
+        'text/html', 'application/xhtml+xml', 'image/svg+xml', 'image/svg',
+        'text/xml', 'application/xml', 'text/javascript', 'application/javascript',
+        'application/x-javascript', 'application/ecmascript', 'text/x-shellscript',
+        'application/x-sh', 'application/x-httpd-php', 'application/x-msdownload',
+    ];
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
@@ -48,13 +56,7 @@ class SafeUpload implements ValidationRule
 
     private function mimeIsBlocked(string $mime): bool
     {
-        foreach (self::BLOCKED_MIME_FRAGMENTS as $fragment) {
-            if (str_contains($mime, $fragment)) {
-                return true;
-            }
-        }
-
-        return false;
+        return str_contains($mime, 'php') || in_array($mime, self::BLOCKED_MIMES, true);
     }
 
     private function startsWithScript(UploadedFile $file): bool
