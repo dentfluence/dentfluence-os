@@ -352,7 +352,7 @@ class TreatmentController extends Controller
         $data = $request->validate([
             'media_type'   => 'required|in:image,video,pdf,consent_template,pre_care_sheet,post_care_sheet,protocol_doc',
             'label'        => 'required|string|max:255',
-            'file'         => 'nullable|file|max:51200', // 50MB max
+            'file'         => ['nullable', 'file', 'max:51200', new \App\Rules\SafeUpload()], // 50MB max; SEC-01
             'external_url' => 'nullable|url',
         ]);
 

@@ -114,7 +114,7 @@ class EducationContentController extends Controller
     {
         $request->validate([
             'files'      => 'required|array|min:1',
-            'files.*'    => 'required|file|max:102400', // 100MB max per file
+            'files.*'    => ['required', 'file', 'max:102400', new \App\Rules\SafeUpload()], // 100MB max per file; SEC-01
             'media_type' => 'required|in:photo,xray,video,pdf,scan',
             'title'      => 'nullable|string|max:200',
             'tags'       => 'nullable|string|max:500',

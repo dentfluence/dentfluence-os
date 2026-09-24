@@ -16,24 +16,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function () {
 
-    // ── Clinical Files (patient-scoped) ─────────────────────────────────────
-    Route::prefix('patients/{patient}/clinical-files')->name('clinical-files.')->group(function () {
-
-        // GET  — list files (JSON, supports ?file_type=&stage=&visit_id=&from=&to=)
-        Route::get('/',       [ClinicalFileController::class, 'index'])  ->name('index');
-
-        // POST — upload a new file
-        Route::post('/',      [ClinicalFileController::class, 'store'])  ->name('store')->middleware('module:patients,edit');
-
-        // GET  — single file metadata (for File Viewer panel)
-        Route::get('/{file}', [ClinicalFileController::class, 'show'])   ->name('show');
-
-        // PUT  — update file metadata
-        Route::put('/{file}', [ClinicalFileController::class, 'update']) ->name('update')->middleware('module:patients,edit');
-
-        // DELETE — soft-delete file
-        Route::delete('/{file}', [ClinicalFileController::class, 'destroy'])->name('destroy')->middleware('module:patients,delete');
-    });
+    // Clinical Files (patient-scoped) are registered ONLY in routes/web.php,
+    // inside the module:patients group. This file loads after web.php, so a
+    // duplicate method+URI here silently replaced those gated routes with
+    // auth-only ones and let any login list every patient's files (audit TEN-01).
 
     // ── Phase 11: Protocol Steps AJAX ──────────────────────────────────────────
     // GET /clinical-library/protocol-steps?procedure=Root+Canal

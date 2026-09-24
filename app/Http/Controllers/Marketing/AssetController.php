@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Marketing\Concerns\ResolvesClinicId;
 use App\Models\Marketing\MarketingAsset;
 use App\Models\Marketing\AssetTag;
+use App\Rules\SafeUpload;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -29,7 +30,7 @@ class AssetController extends Controller
     public function upload(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'file'        => 'required|file|max:51200', // 50 MB max
+            'file'        => ['required', 'file', 'max:51200', 'mimes:jpg,jpeg,png,webp,gif,heic,pdf,mp4,mov,webm,docx,pptx,xlsx', new SafeUpload()], // 50 MB max; SEC-01
             'folder_id'   => 'nullable|integer|exists:mkt_asset_folders,id',
             'campaign_id' => 'nullable|integer|exists:mkt_campaigns,id',
             'name'        => 'nullable|string|max:255',

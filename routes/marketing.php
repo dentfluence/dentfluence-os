@@ -106,7 +106,7 @@ Route::middleware(['marketing.active', 'module:marketing'])
         Route::put('/library/folders/{folder}', [LibraryController::class, 'renameFolder'])->name('library.folders.update');
         Route::delete('/library/folders/{folder}', [LibraryController::class, 'deleteFolder'])->name('library.folders.destroy');
 
-        Route::post('/assets/upload', [AssetController::class, 'upload'])->name('assets.upload');
+        Route::post('/assets/upload', [AssetController::class, 'upload'])->middleware('module:marketing,edit')->name('assets.upload');
         Route::get('/assets/storage-usage', [AssetController::class, 'storageUsage'])->name('assets.storage-usage');
         Route::put('/assets/{asset}', [AssetController::class, 'update'])->name('assets.update');
         Route::delete('/assets/{asset}', [AssetController::class, 'destroy'])->name('assets.destroy');

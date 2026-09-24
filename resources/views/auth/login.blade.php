@@ -871,10 +871,12 @@
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                         Email
                     </button>
+                    @if (Route::has('mobile.send-otp'))
                     <button type="button" class="tab-btn" id="tab-mobile-btn" onclick="switchTab('mobile')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
                         Mobile OTP
                     </button>
+                    @endif
                 </div>
 
                 {{-- Error banner --}}
@@ -993,7 +995,7 @@
                 {{-- ══ MOBILE OTP TAB ══ --}}
                 <div id="tab-mobile-pane" style="display:none;">
 
-                    <form method="POST" action="{{ route('mobile.send-otp') }}" id="otp-send-form" novalidate>
+                    <form method="POST" action="{{ Route::has('mobile.send-otp') ? route('mobile.send-otp') : '#' }}" id="otp-send-form" novalidate>
                         @csrf
                         <div class="f-group au d3">
                             <label class="f-label" for="mobile">Mobile Number</label>
@@ -1023,7 +1025,7 @@
                     </form>
 
                     <div id="otp-verify-block" style="display:none; margin-top:20px;">
-                        <form method="POST" action="{{ route('mobile.verify') }}" id="otp-verify-form" novalidate>
+                        <form method="POST" action="{{ Route::has('mobile.verify') ? route('mobile.verify') : '#' }}" id="otp-verify-form" novalidate>
                             @csrf
                             <input type="hidden" name="mobile" id="otp-mobile-hidden">
                             <div class="f-group au d3">
@@ -1077,11 +1079,11 @@
             emailPane.style.display  = '';
             mobilePane.style.display = 'none';
             emailBtn.classList.add('active');
-            mobileBtn.classList.remove('active');
+            mobileBtn?.classList.remove('active');
         } else {
             emailPane.style.display  = 'none';
             mobilePane.style.display = '';
-            mobileBtn.classList.add('active');
+            mobileBtn?.classList.add('active');
             emailBtn.classList.remove('active');
         }
     }

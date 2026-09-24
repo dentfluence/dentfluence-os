@@ -534,7 +534,10 @@ class SettingsController extends Controller
         // Header type
         AppSetting::set('print_header_type', $request->input('print_header_type', 'plain'), 'print');
 
-        // Letterhead image upload
+        // Letterhead image upload — images only (audit SEC-01)
+        $request->validate([
+            'print_letterhead' => ['nullable', 'file', 'max:10240', 'mimes:jpg,jpeg,png,webp', new \App\Rules\SafeUpload()],
+        ]);
         if ($request->hasFile('print_letterhead')) {
             $path = $request->file('print_letterhead')->store('settings', 'public');
             AppSetting::set('print_letterhead', $path, 'print');

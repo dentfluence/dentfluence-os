@@ -46,9 +46,14 @@ Route::middleware('guest')->group(function () {
     Route::post('/forgot-pin/verify', [ForgotPasswordPinController::class, 'verifyPin'])->name('forgot-pin.verify');
     Route::post('/forgot-pin/reset',  [ForgotPasswordPinController::class, 'resetPassword'])->name('forgot-pin.reset');
 
-    /* ── Mobile OTP Login ── */
-    Route::post('/auth/mobile/send-otp', [MobileOtpController::class, 'sendOtp'])->name('mobile.send-otp');
-    Route::post('/auth/mobile/verify',   [MobileOtpController::class, 'verify'])->name('mobile.verify');
+    /* ── Mobile OTP Login: OFF (audit AUTH-01 / L-01) ──
+     | No SMS gateway exists, so every code went to laravel.log; verify had no
+     | throttle or attempt limit and skipped 2FA and is_active. Re-enable only
+     | with: SMS delivery, throttle per IP + phone, hashed OTP with 5-try limit
+     | (L-05), no code in logs, and the same is_active/2FA/audit path as /login.
+     */
+    // Route::post('/auth/mobile/send-otp', [MobileOtpController::class, 'sendOtp'])->name('mobile.send-otp');
+    // Route::post('/auth/mobile/verify',   [MobileOtpController::class, 'verify'])->name('mobile.verify');
 
     /* ── Two-factor login challenge (after password, before login) ── */
     Route::get('/two-factor/challenge',  [\App\Http\Controllers\TwoFactorController::class, 'challenge'])->name('two-factor.challenge');
