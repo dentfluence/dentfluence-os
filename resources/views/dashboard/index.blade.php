@@ -3,8 +3,9 @@
 {{--
     DASHBOARD — the PERIOD screen.
 
-    Nothing here is about today. The Daily Huddle owns today; this screen
-    answers "how did this window go, against the one before it".
+    Opens on TODAY (ruling 24 Sep). Every figure is ReportMetricsService, so
+    today's numbers here match the Huddle's. The Huddle owns today's WORK;
+    this screen owns the NUMBERS for the picked window vs its like-for-like.
 
     NO CHARTS, by ruling (7 Sep). A trend chart answers one question — up or
     down — and that answer now sits inside the card as a delta line.
@@ -20,7 +21,7 @@
 
     // Delta line. Up is not automatically good, so the caller says which
     // direction is healthy.
-    $chip = function (?int $change, bool $upIsGood = true) {
+    $chip = function (?int $change, bool $upIsGood = true) use ($compareLabel) {
         if ($change === null) {
             return ['no earlier data', 'text-gray-400'];
         }
@@ -29,12 +30,12 @@
         }
         $good = ($change > 0) === $upIsGood;
         return [
-            ($change > 0 ? '▲ ' : '▼ ') . abs($change) . '% vs previous',
+            ($change > 0 ? '▲ ' : '▼ ') . abs($change) . '% ' . $compareLabel,
             $good ? 'text-green-600' : 'text-red-600',
         ];
     };
 
-    $periods = ['7' => '7 days', '30' => '30 days', '90' => '90 days', '365' => '1 year'];
+    $periods = ['today' => 'Today', 'month' => 'This Month', 'quarter' => 'This Quarter', 'fy' => 'This FY'];
 
     // ONE grid of cards: [label, value, sub-line text, sub-line colour, link, accent]
     $cards = [];
@@ -82,15 +83,19 @@
                 {{ auth()->user()->name }}
             </h1>
             <p class="text-xs text-gray-400 uppercase tracking-widest font-[DM_Sans] mt-1">
-                {{ $from->format('d M Y') }} — {{ $to->format('d M Y') }}
-                <span class="text-gray-300">· compared with {{ $prevFrom->format('d M') }} — {{ $prevTo->format('d M') }}</span>
+                @if($from->isSameDay($to))
+                    {{ $from->format('D, d M Y') }}
+                @else
+                    {{ $from->format('d M Y') }} — {{ $to->format('d M Y') }}
+                @endif
+                <span class="text-gray-300">· compared with {{ $prevFrom->isSameDay($prevTo) ? $prevFrom->format('d M') : $prevFrom->format('d M') . ' — ' . $prevTo->format('d M') }}</span>
             </p>
         </div>
 
         @if(Route::has('huddle.index'))
         <a href="{{ route('huddle.index') }}"
            class="px-4 py-2 border border-[#6a0f70] text-[#6a0f70] text-xs font-semibold uppercase tracking-widest font-[DM_Sans] hover:bg-[#f5eef9] transition">
-            Today → Daily Huddle
+            Today's Work → Daily Huddle
         </a>
         @endif
     </div>

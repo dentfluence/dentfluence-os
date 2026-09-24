@@ -39,18 +39,68 @@ class ReportMetricsService
     public function resolveRange(?string $period, ?string $from = null, ?string $to = null): array
     {
         $period = $period ?: '30';
+        $today  = now();
 
-        if ($period === 'custom') {
-            return [
-                Carbon::parse($from ?: now()->subDays(30)->toDateString())->startOfDay(),
-                Carbon::parse($to ?: now()->toDateString())->endOfDay(),
-            ];
+        switch ($period) {
+            case 'custom':
+                $f = Carbon::parse($from ?: $today->copy()->subDays(30)->toDateString())->startOfDay();
+                $t = Carbon::parse($to ?: $today->toDateString())->endOfDay();
+                // A reversed range is a typo, not a request for zero rows.
+                return $f->gt($t)
+                    ? [$t->copy()->startOfDay(), $f->copy()->endOfDay()]
+                    : [$f, $t];
+
+            case 'today':
+                return [$today->copy()->startOfDay(), $today->copy()->endOfDay()];
+
+            // Named periods run from their start TO TODAY, never to the end of
+            // the period — the rest of the month has not happened yet.
+            case 'month':
+                return [$today->copy()->startOfMonth(), $today->copy()->endOfDay()];
+
+            // Calendar quarters (Jan/Apr/Jul/Oct) ARE the Indian FY quarters,
+            // because the FY starts 1 April.
+            case 'quarter':
+                return [$today->copy()->startOfQuarter(), $today->copy()->endOfDay()];
+
+            case 'fy':
+                return [$this->financialYearStart($today), $today->copy()->endOfDay()];
         }
 
         return [
-            now()->subDays((int) $period)->startOfDay(),
-            now()->endOfDay(),
+            $today->copy()->subDays((int) $period)->startOfDay(),
+            $today->copy()->endOfDay(),
         ];
+    }
+
+    /**
+     * The window a range is compared against.
+     *
+     * Named periods compare LIKE FOR LIKE, to date: 1–24 Sep against 1–24 Aug,
+     * not against "the 24 days before 1 Sep" (7–31 Aug), which mixes two
+     * months and makes every month-start look like a collapse. Rolling and
+     * custom ranges keep the old rule: same length, immediately before.
+     */
+    public function previousRange(?string $period, Carbon $from, Carbon $to): array
+    {
+        return match ($period) {
+            'today'   => [$from->copy()->subDay()->startOfDay(), $from->copy()->subDay()->endOfDay()],
+            'month'   => [$from->copy()->subMonthNoOverflow()->startOfMonth(), $to->copy()->subMonthNoOverflow()->endOfDay()],
+            'quarter' => [$from->copy()->subMonthsNoOverflow(3)->startOfQuarter(), $to->copy()->subMonthsNoOverflow(3)->endOfDay()],
+            'fy'      => [$from->copy()->subYearNoOverflow()->startOfDay(), $to->copy()->subYearNoOverflow()->endOfDay()],
+            default   => (function () use ($from, $to) {
+                $days = max(1, (int) $from->diffInDays($to) + 1);
+                return [$from->copy()->subDays($days)->startOfDay(), $from->copy()->subSecond()];
+            })(),
+        };
+    }
+
+    /** Indian financial year: 1 April to 31 March. */
+    public function financialYearStart(Carbon $date): Carbon
+    {
+        $year = $date->month >= 4 ? $date->year : $date->year - 1;
+
+        return Carbon::create($year, 4, 1)->startOfDay();
     }
 
     /** Money collected in the range — canonical table: invoice_payments. */

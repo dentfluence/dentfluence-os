@@ -7,13 +7,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * The Dashboard is the PERIOD screen. It answers "how did this month go?".
+ * The Dashboard is the PERIOD screen: Today (default), This Month, This
+ * Quarter, This FY, or a custom range.
  *
- * It deliberately shows NOTHING about today — the Daily Huddle owns today, and
- * two screens answering the same question is how they came to print different
- * numbers for the same day (the old dashboard scoped appointments with
- * Appointment::visibleTo(), the huddle board did not, so a scoped doctor saw
- * two different counts).
+ * CEO ruling 24 Sep: it opens on TODAY. That is safe only because every
+ * figure comes from ReportMetricsService — the old dashboard and the huddle
+ * printed different numbers for the same day because they each ran their own
+ * queries (Appointment::visibleTo() on one, not the other). The Huddle still
+ * owns today's WORK (who to call, what is blocked); this screen owns the
+ * NUMBERS for whatever window is picked.
  *
  * EVERY figure here comes from ReportMetricsService and NOTHING is queried in
  * this controller. That service is the one canonical definition of collected /
@@ -38,18 +40,26 @@ class DashboardController extends Controller
         // doctors (their own row only) is a CEO decision, not a default.
         $showMoney = $user->isAdminRole();
 
-        // Same ?period=7|30|90|365|custom&from=&to= contract as /reports.
-        $period = (string) $request->get('period', '30');
+        // ?period=today|month|quarter|fy|custom&from=&to=. The old rolling
+        // 7|30|90|365 values still resolve, so bookmarks do not break.
+        $period = (string) $request->get('period', 'today');
         [$from, $to] = $this->metrics->resolveRange(
             $period,
             $request->get('from'),
             $request->get('to')
         );
 
-        // The comparison window: the SAME number of days, immediately before.
-        $days     = max(1, $from->diffInDays($to) + 1);
-        $prevTo   = $from->copy()->subSecond();
-        $prevFrom = $from->copy()->subDays($days)->startOfDay();
+        // Like-for-like comparison: yesterday, last month to date, etc.
+        [$prevFrom, $prevTo] = $this->metrics->previousRange($period, $from, $to);
+        $days = max(1, (int) $from->diffInDays($to) + 1);
+
+        $compareLabel = match ($period) {
+            'today'   => 'vs yesterday',
+            'month'   => 'vs last month, same days',
+            'quarter' => 'vs last quarter, same days',
+            'fy'      => 'vs last FY, same date',
+            default   => 'vs previous ' . $days . ' ' . ($days === 1 ? 'day' : 'days'),
+        };
 
         // ── FLOWS — these follow the date filter ─────────────────────────────
         $appointmentsDone = $this->metrics->appointmentsDone($from, $to, $branchId);
@@ -120,6 +130,7 @@ class DashboardController extends Controller
             'prevFrom',
             'prevTo',
             'days',
+            'compareLabel',
             'showMoney',
             'numbers',
             'stocks',
