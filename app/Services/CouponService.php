@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CouponCode;
 use App\Models\CouponUsage;
+use Illuminate\Validation\ValidationException;
 
 class CouponService
 {
@@ -48,9 +49,28 @@ class CouponService
     /**
      * Apply coupon to an invoice: record usage + increment counter.
      * Call this inside a DB transaction after invoice is created.
+     *
+     * INT-05 (security audit 24 Sep 2026): the limits used to be checked
+     * before the invoice transaction and never again, with no lock, so two
+     * quick saves could both pass a "1 use" coupon. The coupon row is now
+     * locked and both limits re-checked here; one invoice records one usage.
      */
     public function apply(int $couponId, int $patientId, int $invoiceId, float $discountAmount, ?int $createdBy = null): void
     {
+        $coupon = CouponCode::whereKey($couponId)->lockForUpdate()->firstOrFail();
+
+        if (CouponUsage::where('coupon_code_id', $couponId)->where('invoice_id', $invoiceId)->exists()) {
+            return; // already recorded for this invoice
+        }
+
+        if ($coupon->max_uses_global > 0 && $coupon->uses_count >= $coupon->max_uses_global) {
+            throw ValidationException::withMessages(['coupon_code' => 'This coupon has reached its usage limit.']);
+        }
+        if ($coupon->max_uses_per_patient > 0
+            && CouponUsage::where('coupon_code_id', $couponId)->where('patient_id', $patientId)->count() >= $coupon->max_uses_per_patient) {
+            throw ValidationException::withMessages(['coupon_code' => 'This coupon has already been used the maximum number of times for this patient.']);
+        }
+
         CouponUsage::create([
             'coupon_code_id'   => $couponId,
             'patient_id'       => $patientId,
@@ -60,7 +80,22 @@ class CouponService
             'created_by'       => $createdBy,
         ]);
 
-        CouponCode::where('id', $couponId)->increment('uses_count');
+        $coupon->increment('uses_count');
+    }
+
+    /**
+     * INT-05 — give the coupon back when its invoice is cancelled or deleted,
+     * so the patient (and the global limit) can use it again.
+     */
+    public function releaseForInvoice(int $invoiceId): void
+    {
+        foreach (CouponUsage::where('invoice_id', $invoiceId)->get() as $usage) {
+            $coupon = CouponCode::whereKey($usage->coupon_code_id)->lockForUpdate()->first();
+            $usage->delete();
+            if ($coupon && $coupon->uses_count > 0) {
+                $coupon->decrement('uses_count');
+            }
+        }
     }
 
     /**

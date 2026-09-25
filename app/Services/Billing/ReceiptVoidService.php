@@ -101,6 +101,7 @@ class ReceiptVoidService
             }
 
             RetailStockReversal::forInvoice($invoice, 'cancelled');
+            (new \App\Services\CouponService())->releaseForInvoice($invoice->id); // INT-05
             (new WalletService())->reverseInvoiceDebit($invoice, 'invoice ' . $invoice->invoice_number . ' cancelled. ' . $reason, $userId);
             app(PlanBillingRollbackService::class)->rollbackInvoice($invoice);
 

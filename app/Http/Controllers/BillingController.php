@@ -1514,6 +1514,33 @@ class BillingController extends Controller
 
         $allocator = app(PatientPaymentAllocationService::class);
 
+        // INT-07 (security audit 24 Sep 2026) — a double-submit used to settle
+        // the dues on the first POST and turn the second into a phantom advance
+        // (nothing was owed any more). One tender per patient at a time, and an
+        // identical tender within 20 seconds is refused, as on the invoice form.
+        $lock = \Illuminate\Support\Facades\Cache::lock('patient-payment:' . $patient->id, 15);
+        if (! $lock->get()) {
+            return back()->withErrors(['amount' => 'A payment for this patient is already being saved. Refresh the page to check before retrying.']);
+        }
+
+        try {
+            $isDuplicate = Receipt::where('patient_id', $patient->id)
+                ->where('amount', (float) $validated['amount'])
+                ->where('payment_mode', $validated['payment_mode'])
+                ->where('created_at', '>=', now()->subSeconds(20))
+                ->exists();
+            if ($isDuplicate) {
+                return back()->withErrors(['amount' => 'An identical payment was recorded seconds ago - this looks like a duplicate submission. Refresh the page to verify before retrying.']);
+            }
+
+            return $this->recordPatientPaymentLocked($patient, $validated, $allocator);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function recordPatientPaymentLocked(Patient $patient, array $validated, PatientPaymentAllocationService $allocator)
+    {
         if ($allocator->outstandingFor($patient) <= 0 && (float) $validated['amount'] > 0) {
             // Nothing owed — this is a pure advance. Send it down the U8 path so
             // it lands as a liability with its own ADV- receipt, rather than
