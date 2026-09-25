@@ -88,6 +88,18 @@ class ReceiptVoidService
                 throw ValidationException::withMessages(['invoice' => 'This invoice is already cancelled.']);
             }
 
+            // A patient-level payment (PAY- receipt) settles invoices through
+            // allocation rows that point at that receipt, not at this invoice.
+            // Cancelling here voided the allocation and left the PAY- receipt
+            // and its income live (found on prod 25 Sep, INV-2026-00257).
+            // The tender must be corrected first, from the patient's payments.
+            $tendered = InvoicePayment::where('invoice_id', $invoice->id)->whereNotNull('receipt_id')->pluck('receipt_id');
+            if ($tendered->isNotEmpty()) {
+                $numbers = Receipt::withTrashed()->whereIn('id', $tendered)->pluck('receipt_number')->join(', ');
+                throw ValidationException::withMessages(['invoice' => 'This invoice was paid through patient payment '
+                    . $numbers . '. Void that payment first (patient page - Payments), then cancel the invoice.']);
+            }
+
             BillingAuditLog::record($auditAction, $invoice, $reason . ' [refund: ' . $method . ']', $userId, $invoice->invoice_number);
 
             $notes = 'Invoice ' . $invoice->invoice_number . ' cancelled. Reason: ' . $reason;

@@ -174,4 +174,22 @@ class OneVoidPathTest extends TestCase
 
         $this->assertSame(1, $this->refundCredits($invoice)->count()); // credited once, not twice
     }
+
+    public function test_an_invoice_paid_through_a_patient_payment_cannot_be_cancelled_directly(): void
+    {
+        $user = $this->admin();
+        $invoice = $this->invoice(100);
+
+        $this->actingAs($user)->post(route('billing.patientPayment', $invoice->patient_id), [
+            'amount' => 50, 'payment_mode' => 'cash', 'payment_date' => today()->toDateString(),
+        ])->assertRedirect();
+        $pay = Receipt::where('patient_id', $invoice->patient_id)->latest('id')->firstOrFail();
+
+        $this->actingAs($user)->post(route('billing.cancelWithReason', $invoice), [
+            'cancelled_reason' => 'Test cancel', 'cancel_refund_method' => 'no_refund',
+        ])->assertSessionHasErrors('invoice');
+
+        $this->assertNotSoftDeleted('invoices', ['id' => $invoice->id]);
+        $this->assertSame(1, \App\Models\InvoicePayment::where('receipt_id', $pay->id)->count()); // allocation untouched
+    }
 }

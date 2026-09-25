@@ -795,7 +795,7 @@ class BillingController extends Controller
         }
 
         // Paid or partial invoices have money attached — use cancelInvoice flow
-        if (in_array($invoice->status, ['paid', 'partial']) || $invoice->receipts()->exists()) {
+        if (in_array($invoice->status, ['paid', 'partial']) || $invoice->receipts()->exists() || $invoice->payments()->exists()) {
             return $this->cancelInvoice($request, $invoice);
         }
 
@@ -1787,7 +1787,7 @@ class BillingController extends Controller
         // Hard block on paid invoices
         // INT-03 — a part-paid invoice used to be deleted here with its
         // payments, receipts and income still live. Money attached = Cancel.
-        if ($invoice->status === 'paid' || $invoice->receipts()->exists()) {
+        if ($invoice->status === 'paid' || $invoice->receipts()->exists() || $invoice->payments()->exists()) {
             return back()->with('error', 'This invoice has payments. Use Cancel (with refund) instead of Delete.');
         }
 
