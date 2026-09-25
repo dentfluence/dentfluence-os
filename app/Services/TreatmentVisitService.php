@@ -129,6 +129,8 @@ class TreatmentVisitService
             'vitals_notes'       => ['nullable', 'string', 'max:255'],
             // F2: Visit items for billing (doctor selects what was done; front desk bills from this)
             'visit_items'                              => ['nullable', 'array'],
+            // INT-16 — lets an edit say which stored line a row is, so billed lines are kept, not re-created.
+            'visit_items.*.id'                         => ['nullable', 'integer'],
             'visit_items.*.treatment_plan_item_id'     => ['nullable', 'exists:treatment_plan_items,id'],
             // T-1 — the Treatment master id for this line. Optional ON THE WIRE
             // on purpose: resolveTreatmentId() re-derives it server-side, so the
@@ -252,17 +254,7 @@ class TreatmentVisitService
 
             // Re-sync visit items if provided (F2)
             if (array_key_exists('visit_items', $data)) {
-                // Delete old pending items and re-create
-                $visit->visitItems()->delete();
-                if (!empty($data['visit_items'])) {
-                    // Dismiss any existing pending billing prompt for this visit
-                    BillingPrompt::where('trigger_type', 'treatment_visit')
-                        ->where('trigger_id', $visit->id)
-                        ->where('status', 'pending')
-                        ->update(['status' => 'dismissed']);
-
-                    $this->saveVisitItems($visit, $data['visit_items']);
-                }
+                $this->resyncVisitItems($visit, $data['visit_items'] ?? []);
             }
 
             // Record implant placement + deduct stock for fixture/components used.
@@ -611,6 +603,92 @@ class TreatmentVisitService
                 'visit_items' => 'One of the treatments recorded does not belong to this visit\'s treatment plan.',
             ]);
         }
+    }
+
+    /**
+     * INT-16 — re-sync a visit's work lines on edit without touching billed ones.
+     *
+     * The old code deleted every line and re-created them all as 'pending', so
+     * after a routine note edit an already-invoiced treatment came back
+     * billable, the desk was prompted to charge it again, and the line lost its
+     * invoice_item_id (doctor revenue attribution).
+     *
+     * Lines already invoiced or waived are LOCKED. The form sends them back —
+     * by id from the web form; the mobile app sends no id, so they are matched
+     * by what they are (treatment, tooth, plan item). A matched locked line may
+     * only update its clinical outcome and notes. Removing or altering a locked
+     * line is refused. Only pending lines are replaced, and the desk is
+     * prompted only when there is something new to bill.
+     */
+    private function resyncVisitItems(TreatmentVisit $visit, array $rows): void
+    {
+        $locked    = $visit->visitItems()->where('billing_status', '!=', 'pending')->get()->keyBy('id');
+        $unmatched = $locked->keys()->all();
+        $fresh     = [];
+
+        foreach ($rows as $row) {
+            $id   = ! empty($row['id']) ? (int) $row['id'] : null;
+            $item = null;
+
+            if ($id && $locked->has($id)) {
+                $item = $locked->get($id);
+                if (! $this->isSameWork($item, $row)) {
+                    throw ValidationException::withMessages([
+                        'visit_items' => $this->billedLineLabel($item) . ' is already billed. It cannot be changed here - edit or cancel the invoice first.',
+                    ]);
+                }
+            } else {
+                $item = $locked->first(fn ($l) => in_array($l->id, $unmatched, true) && $this->isSameWork($l, $row));
+            }
+
+            if ($item) {
+                $unmatched = array_values(array_diff($unmatched, [$item->id]));
+                $item->update([
+                    'work_outcome' => array_key_exists('work_outcome', $row) ? $row['work_outcome'] : $item->work_outcome,
+                    'notes'        => array_key_exists('notes', $row) ? $row['notes'] : $item->notes,
+                ]);
+                continue;
+            }
+
+            $fresh[] = $row;
+        }
+
+        if ($unmatched) {
+            throw ValidationException::withMessages([
+                'visit_items' => $this->billedLineLabel($locked->get($unmatched[0])) . ' is already billed. It cannot be removed here - edit or cancel the invoice first.',
+            ]);
+        }
+
+        // Hard delete — treatment_visit_items has no SoftDeletes. Pending only.
+        $visit->visitItems()->where('billing_status', 'pending')->delete();
+
+        BillingPrompt::where('trigger_type', 'treatment_visit')
+            ->where('trigger_id', $visit->id)
+            ->where('status', 'pending')
+            ->update(['status' => 'dismissed']);
+
+        if ($fresh) {
+            $this->saveVisitItems($visit, $fresh);
+        }
+    }
+
+    /** Same treatment, same tooth set, same plan item — the identity of a billed line. */
+    private function isSameWork(TreatmentVisitItem $item, array $row): bool
+    {
+        $teeth = function ($v) {
+            $parts = preg_split('/[^0-9A-Za-z]+/', (string) $v, -1, PREG_SPLIT_NO_EMPTY);
+            sort($parts);
+            return implode(',', $parts);
+        };
+
+        return mb_strtolower(trim((string) $item->treatment_name)) === mb_strtolower(trim((string) ($row['treatment_name'] ?? '')))
+            && $teeth($item->tooth_number) === $teeth($row['tooth_number'] ?? '')
+            && (int) $item->treatment_plan_item_id === (int) ($row['treatment_plan_item_id'] ?? 0);
+    }
+
+    private function billedLineLabel(TreatmentVisitItem $item): string
+    {
+        return "'" . $item->treatment_name . "'" . ($item->tooth_number ? ' (tooth ' . $item->tooth_number . ')' : '');
     }
 
     /**

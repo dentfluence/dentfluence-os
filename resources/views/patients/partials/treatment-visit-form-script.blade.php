@@ -1104,6 +1104,7 @@ function treatmentVisits() {
                 // leaves the browser — lab intent reaches the server through the
                 // lab_case payload below, which is the existing Lab Case channel.
                 const itemPayload = (i) => ({
+                    id:                     i.id ?? null,   // INT-16 — lets the server keep billed lines
                     treatment_plan_item_id: i.treatment_plan_item_id ?? null,
                     work_outcome:           i.work_outcome ?? null,
                     treatment_id:           i.treatment_id ?? null,
