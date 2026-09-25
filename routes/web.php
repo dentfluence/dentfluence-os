@@ -615,7 +615,7 @@ Route::middleware('auth')->group(function () {
                  ->parameters(['billing' => 'invoice'])
                  ->only(['destroy']);
         });
-        Route::post('/billing/{invoice}/cancel',      [\App\Http\Controllers\BillingController::class, 'cancel'])->name('billing.cancel');
+        // INT-03: legacy billing.cancel removed - it left payments/receipts/income live. Cancel = billing.cancelWithReason.
         Route::post('/billing/{invoice}/payment',     [\App\Http\Controllers\BillingController::class, 'recordPayment'])->name('billing.payment')->middleware('module:finance,edit');
         // Patient-level payment — ONE tender allocated oldest-first across every
         // open invoice, surplus to Patient Credit. Additive: the per-invoice

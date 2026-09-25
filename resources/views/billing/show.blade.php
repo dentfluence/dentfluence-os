@@ -92,15 +92,35 @@
                 Edit Invoice
             </button>
 
-            {{-- Cancel --}}
-            <form method="POST" action="{{ route('billing.cancel', $invoice) }}"
-                  onsubmit="return confirm('Cancel this invoice? This cannot be undone.')">
-                @csrf
-                <button type="submit"
-                        class="px-4 py-2 bg-orange-50 text-orange-600 border border-orange-200 text-sm rounded-lg hover:bg-orange-100">
+            {{-- Cancel (INT-03): the full cancel - every payment reversed with the chosen refund. --}}
+            @if(auth()->user()->isAdminRole())
+            <details class="relative">
+                <summary class="list-none cursor-pointer px-4 py-2 bg-orange-50 text-orange-600 border border-orange-200 text-sm rounded-lg hover:bg-orange-100">
                     Cancel
-                </button>
-            </form>
+                </summary>
+                <form method="POST" action="{{ route('billing.cancelWithReason', $invoice) }}"
+                      class="absolute right-0 z-20 mt-1 w-72 bg-white border border-gray-200 rounded-lg shadow p-3 space-y-2"
+                      onsubmit="return confirm('Cancel this invoice? Payments are reversed with the refund chosen. This cannot be undone.')">
+                    @csrf
+                    <textarea name="cancelled_reason" required minlength="5" maxlength="500" rows="2"
+                              placeholder="Reason (min 5 characters)"
+                              class="w-full text-sm border border-gray-300 rounded p-2"></textarea>
+                    @if((float) $invoice->paid_amount > 0)
+                    <select name="cancel_refund_method" class="w-full text-sm border border-gray-300 rounded p-2">
+                        <option value="wallet">Refund to patient wallet</option>
+                        <option value="cash">Cash refund</option>
+                        <option value="bank_transfer">Bank transfer / UPI refund</option>
+                        <option value="no_refund">No refund</option>
+                    </select>
+                    @else
+                    <input type="hidden" name="cancel_refund_method" value="no_refund">
+                    @endif
+                    <button type="submit" class="w-full px-3 py-2 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700">
+                        Cancel invoice
+                    </button>
+                </form>
+            </details>
+            @endif
             @endif
 
             @if($canDelete)
@@ -1503,4 +1523,3 @@ function openEditPaymentDateModal(paymentId, currentDate) {
 </div>
 
 @endsection
-                                                                                                                                                                                             

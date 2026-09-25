@@ -30,6 +30,7 @@ use App\Services\Billing\PlanBillingRollbackService;
 use App\Services\CouponService;
 use App\Services\MembershipBenefitService;
 use App\Services\WalletService;
+use App\Services\Billing\ReceiptVoidService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -895,51 +896,10 @@ class BillingController extends ApiController
             'cancel_refund_method' => 'required|in:wallet,cash,bank_transfer,no_refund',
         ]);
 
-        DB::transaction(function () use ($request, $inv, $data) {
-            BillingAuditLog::record(
-                'cancel_invoice', $inv,
-                $data['cancelled_reason'] . ' [refund: ' . $data['cancel_refund_method'] . ']',
-                $request->user()->id, $inv->invoice_number,
-            );
-
-            foreach ($inv->receipts()->whereNull('deleted_at')->get() as $receipt) {
-                $this->refundReceipt($receipt, $inv, $data['cancel_refund_method'],
-                    'Invoice ' . $inv->invoice_number . ' cancelled. Reason: ' . $data['cancelled_reason'],
-                    $request->user()->id, $data['cancelled_reason']);
-            }
-
-            if ($inv->finalBill) {
-                $inv->finalBill->update([
-                    'deleted_reason' => 'Invoice ' . $inv->invoice_number . ' cancelled. Reason: ' . $data['cancelled_reason'],
-                    'deleted_by'     => $request->user()->id,
-                ]);
-                $inv->finalBill->delete();
-            }
-
-            // Reverse any retail-sale stock deductions before the invoice is
-            // cancelled — mirrors web BillingController (2026-07-06 parity).
-            $this->reverseRetailStockMovements($inv);
-
-            // Reverse any wallet credit debited against this invoice — without
-            // this, cancelling a wallet-part-paid invoice from mobile silently
-            // lost the patient's credit (2026-07-14 parity fix, shared brain).
-            (new WalletService())->reverseInvoiceDebit(
-                $inv,
-                'invoice ' . $inv->invoice_number . ' cancelled. ' . $data['cancelled_reason'],
-                $request->user()->id,
-            );
-
-            // S1 — release the treatment-plan teeth this invoice billed and
-            // reopen the plan if billing had closed it (web parity).
-            app(PlanBillingRollbackService::class)->rollbackInvoice($inv);
-
-            $inv->update([
-                'status'           => 'cancelled',
-                'cancelled_reason' => $data['cancelled_reason'],
-                'cancelled_by'     => $request->user()->id,
-            ]);
-            $inv->delete(); // soft-delete, matches web (moves to Trash)
-        });
+        // INT-01/02/03 — the same shared implementation the web uses.
+        app(ReceiptVoidService::class)->cancelInvoice(
+            $inv, $data['cancel_refund_method'], $data['cancelled_reason'], $request->user()->id
+        );
 
         return $this->success(null, 'Invoice ' . $inv->invoice_number . ' cancelled.');
     }
@@ -1018,28 +978,9 @@ class BillingController extends ApiController
             'void_refund_method' => 'required|in:wallet,cash,bank_transfer,no_refund',
         ]);
 
-        DB::transaction(function () use ($request, $inv, $rcpt, $data) {
-            BillingAuditLog::record(
-                'void_receipt', $rcpt,
-                $data['void_reason'] . ' [refund: ' . $data['void_refund_method'] . ']',
-                $request->user()->id, $rcpt->receipt_number,
-            );
-
-            $this->refundReceipt($rcpt, $inv, $data['void_refund_method'],
-                'Voided receipt ' . $rcpt->receipt_number . '. Reason: ' . $data['void_reason'],
-                $request->user()->id, $data['void_reason']);
-
-            $inv->refresh();
-            $inv->recalculate();
-            $inv->refresh();
-            if ($inv->status !== 'paid' && $inv->finalBill) {
-                $inv->finalBill->update([
-                    'deleted_reason' => 'Auto-invalidated: linked receipt ' . $rcpt->receipt_number . ' was voided. Reason: ' . $data['void_reason'],
-                    'deleted_by'     => $request->user()->id,
-                ]);
-                $inv->finalBill->delete();
-            }
-        });
+        app(ReceiptVoidService::class)->voidReceipt(
+            $inv, $rcpt, $data['void_refund_method'], $data['void_reason'], $request->user()->id
+        );
 
         return $this->success($this->invoiceSummary($inv->fresh()), 'Receipt ' . $rcpt->receipt_number . ' voided.');
     }
@@ -1194,89 +1135,6 @@ class BillingController extends ApiController
                 'phone' => $i->patient->phone,
             ] : null,
         ];
-    }
-
-    /** Card/debit-card refunds via bank_transfer attract a 2.5% clinic charge. */
-    private function refundChargeRate(string $paymentMode): float
-    {
-        return match ($paymentMode) {
-            'card', 'debit_card' => 2.5,
-            default              => 0.0,
-        };
-    }
-
-    /**
-     * Shared refund/void logic for one receipt — soft-deletes the Receipt +
-     * its InvoicePayment (with void audit fields), reverses the original
-     * FinanceTransaction, and creates the refund-side FinanceTransaction per
-     * the chosen method. Used by both cancelInvoice() (loops every receipt)
-     * and voidReceipt() (single receipt). Mirrors web exactly.
-     */
-    private function refundReceipt(Receipt $receipt, Invoice $invoice, string $method, string $notes, int $userId, string $reason): void
-    {
-        $amount    = (float) $receipt->amount;
-        $patientId = $invoice->patient_id;
-
-        $chargeRate     = $method === 'bank_transfer' ? $this->refundChargeRate($receipt->payment_mode) : 0.0;
-        $chargeDeducted = round($amount * $chargeRate / 100, 2);
-        $refundAmount   = $amount - $chargeDeducted;
-
-        if ($receipt->invoice_payment_id) {
-            $payment = InvoicePayment::find($receipt->invoice_payment_id);
-            if ($payment) {
-                $payment->update([
-                    'void_reason'          => $reason,
-                    'voided_by'            => $userId,
-                    'void_refund_method'   => $method,
-                    'void_refund_amount'   => $refundAmount,
-                    'void_charge_deducted' => $chargeDeducted,
-                ]);
-                FinanceTransaction::where('source_type', InvoicePayment::class)
-                    ->where('source_id', $payment->id)
-                    ->where('status', 'active')
-                    ->update(['status' => 'voided']);
-                $payment->delete();
-            }
-        }
-
-        $receipt->delete();
-
-        if ($method === 'no_refund') {
-            FinanceTransaction::create([
-                'type' => 'refund', 'direction' => 'debit', 'source_type' => Receipt::class,
-                'source_id' => $receipt->id, 'amount' => $amount, 'net_amount' => 0,
-                'payment_mode' => $receipt->payment_mode, 'patient_id' => $patientId,
-                'status' => 'active', 'transaction_date' => now()->toDateString(),
-                'notes' => 'No refund issued — ' . $notes, 'created_by' => $userId,
-            ]);
-            return;
-        }
-
-        if ($method === 'wallet') {
-            (new WalletService())->credit(
-                patientId: $patientId, amount: $amount, creditType: 'permanent',
-                notes: 'Wallet credit — ' . $notes, createdBy: $userId,
-            );
-        }
-
-        $paymentModeOut = $method === 'cash' ? 'cash' : $receipt->payment_mode;
-        $notePrefix = match ($method) {
-            'wallet' => 'Wallet credit',
-            'cash'   => 'Cash refund',
-            'bank_transfer' => $chargeDeducted > 0
-                ? 'Bank transfer refund (Rs. ' . number_format($refundAmount, 2) . ' to patient, Rs. ' . number_format($chargeDeducted, 2) . ' clinic charge)'
-                : 'Bank transfer refund (no charge)',
-            default => ucfirst($method) . ' refund',
-        };
-
-        FinanceTransaction::create([
-            'type' => 'refund', 'direction' => 'debit', 'source_type' => Receipt::class,
-            'source_id' => $receipt->id, 'amount' => $amount,
-            'net_amount' => $method === 'bank_transfer' ? $refundAmount : $amount,
-            'payment_mode' => $paymentModeOut, 'patient_id' => $patientId,
-            'status' => 'active', 'transaction_date' => now()->toDateString(),
-            'notes' => $notePrefix . ' — ' . $notes, 'created_by' => $userId,
-        ]);
     }
 
     private function emiRowPayload(EmiSchedule $r): array

@@ -25,6 +25,7 @@ use App\Models\Treatment;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentVisitItem;
 use App\Services\Billing\PlanBillingRollbackService;
+use App\Services\Billing\ReceiptVoidService;
 use App\Services\Billing\TreatmentPlanBillingService;
 use App\Models\Wallet;
 use App\Services\MembershipBenefitService;
@@ -794,7 +795,7 @@ class BillingController extends Controller
         }
 
         // Paid or partial invoices have money attached — use cancelInvoice flow
-        if (in_array($invoice->status, ['paid', 'partial'])) {
+        if (in_array($invoice->status, ['paid', 'partial']) || $invoice->receipts()->exists()) {
             return $this->cancelInvoice($request, $invoice);
         }
 
@@ -803,50 +804,17 @@ class BillingController extends Controller
             'cancelled_reason' => 'required|string|min:5|max:500',
         ]);
 
-        BillingAuditLog::record(
-            'delete_invoice',
-            $invoice,
-            $request->cancelled_reason,
-            auth()->id(),
-            $invoice->invoice_number
+        // No money attached: same shared cleanup (stock, wallet debit, plan teeth).
+        app(ReceiptVoidService::class)->cancelInvoice(
+            $invoice, 'no_refund', $request->cancelled_reason, auth()->id(), 'delete_invoice'
         );
-
-        $this->reverseRetailStockMovements($invoice);
-        $this->reverseInvoiceWalletDebit($invoice, 'invoice ' . $invoice->invoice_number . ' deleted. ' . $request->cancelled_reason);
-
-        // S1 — release any treatment-plan teeth this invoice billed, so the
-        // clinic can re-invoice them. Without this they stayed 'invoiced'
-        // against a deleted invoice and were unbillable forever.
-        app(PlanBillingRollbackService::class)->rollbackInvoice($invoice);
-
-        $invoice->update([
-            'status'           => 'cancelled',
-            'cancelled_reason' => $request->cancelled_reason,
-            'cancelled_by'     => auth()->id(),
-        ]);
-        $invoice->delete();
 
         return redirect()->route('finance.income')->with('success', 'Invoice ' . $invoice->invoice_number . ' deleted.');
     }
 
-    // ── Cancel (legacy — kept for backward compat with existing patient profile button) ──
-
-    public function cancel(Invoice $invoice)
-    {
-        // G-08 (W-1, 2026-09-04): this method had NO guard at all — no role check,
-        // no reason, no audit entry, no paid-invoice block — while being wired to a
-        // live button. Any role that passed the module:finance VIEW gate could
-        // cancel any invoice silently. Same admin gate as every other cancel path.
-        if (! auth()->user()->isAdminRole()) {
-            abort(403, 'Only admins can cancel invoices.');
-        }
-
-        $this->reverseRetailStockMovements($invoice);
-        // S1 — same plan-teeth release as every other cancel path.
-        app(PlanBillingRollbackService::class)->rollbackInvoice($invoice);
-        $invoice->update(['status' => 'cancelled']);
-        return back()->with('success', 'Invoice cancelled.');
-    }
+    // INT-03 (24 Sep 2026): the legacy cancel() lived here. It reversed stock
+    // and nothing else — payments, receipts and income stayed live on a
+    // cancelled invoice. Removed with its route; cancel = cancelInvoice().
 
     // ── Record Payment ───────────────────────────────────────────────────────
     // Saves payment → auto-creates Receipt → auto-generates FinalBill if fully paid.
@@ -1384,13 +1352,6 @@ class BillingController extends Controller
     // Only card / debit_card attract a 2.5% processing charge on bank transfer.
     // UPI, cash, cheque, netbanking, EMI, and others have no charge.
 
-    private function refundChargeRate(string $paymentMode): float
-    {
-        return match ($paymentMode) {
-            'card', 'debit_card' => 2.5,
-            default              => 0.0,
-        };
-    }
 
     // ── Void Receipt ─────────────────────────────────────────────────────────
     // Soft-deletes the Receipt + its InvoicePayment. Recalculates invoice totals.
@@ -1413,187 +1374,17 @@ class BillingController extends Controller
             'void_refund_method'  => 'required|in:wallet,cash,bank_transfer,no_refund',
         ]);
 
-        $CARD_CHARGE_PCT = 2.5; // % deducted by clinic for card/UPI reversals
+        // INT-01/02/03 — one shared implementation for every void/cancel path.
+        $r = app(ReceiptVoidService::class)->voidReceipt(
+            $invoice, $receipt, $request->void_refund_method, $request->void_reason, auth()->id()
+        );
 
-        DB::transaction(function () use ($request, $invoice, $receipt, $CARD_CHARGE_PCT) {
-            $amount    = (float) $receipt->amount;
-            $patientId = $invoice->patient_id;
-            $method    = $request->void_refund_method;
-
-            // Calculate charge: only card/debit_card bank transfers attract 2.5%
-            // UPI, cash, cheque, netbanking, EMI → 0% charge
-            $chargeRate     = ($method === 'bank_transfer') ? $this->refundChargeRate($receipt->payment_mode) : 0.0;
-            $chargeDeducted = round($amount * $chargeRate / 100, 2);
-            $refundAmount   = $amount - $chargeDeducted;
-
-            // 1. Audit log
-            BillingAuditLog::record(
-                'void_receipt',
-                $receipt,
-                $request->void_reason . ' [refund: ' . $method . ']',
-                auth()->id(),
-                $receipt->receipt_number
-            );
-
-            // 2. Save audit fields + soft-delete the InvoicePayment
-            if ($receipt->invoice_payment_id) {
-                $payment = InvoicePayment::find($receipt->invoice_payment_id);
-                if ($payment) {
-                    // Save void audit before deleting
-                    $payment->update([
-                        'void_reason'          => $request->void_reason,
-                        'voided_by'            => auth()->id(),
-                        'void_refund_method'   => $method,
-                        'void_refund_amount'   => $refundAmount,
-                        'void_charge_deducted' => $chargeDeducted,
-                    ]);
-
-                    // Reverse the FinanceTransaction for this payment
-                    FinanceTransaction::where('source_type', InvoicePayment::class)
-                        ->where('source_id', $payment->id)
-                        ->where('status', 'active')
-                        ->update(['status' => 'voided']);
-
-                    $payment->delete(); // soft-delete
-                }
-            }
-
-            // 3. Soft-delete the Receipt
-            $receipt->delete();
-
-            // 4. Recalculate invoice (paid_amount, balance_due, status)
-            $invoice->refresh();
-            $invoice->recalculate();
-
-            // 5. Auto-delete Final Bill if invoice is no longer fully paid
-            //    (A Final Bill only exists when invoice was 100% paid — now it's invalid)
-            $invoice->refresh();
-            if ($invoice->status !== 'paid' && $invoice->finalBill) {
-                $invoice->finalBill->update([
-                    'deleted_reason' => 'Auto-invalidated: linked receipt ' . $receipt->receipt_number . ' was voided. Reason: ' . $request->void_reason,
-                    'deleted_by'     => auth()->id(),
-                ]);
-                $invoice->finalBill->delete();
-            }
-
-            // 6. Handle refund / wallet credit / no refund
-            $notes = 'Voided receipt ' . $receipt->receipt_number . '. Reason: ' . $request->void_reason;
-
-            // U8 — a wallet-tender leg is the patient's OWN credit. Reversing it
-            // must return that credit, regardless of the refund method chosen:
-            // the clinic never received cash for this leg, so it cannot pay cash
-            // out for it. Rules 8 + 11 + 15.
-            if ($receipt->payment_mode === 'wallet') {
-                (new WalletService())->restorePatientCredit(
-                    patientId: $patientId,
-                    amount:    (float) $amount,
-                    notes:     $notes,
-                    createdBy: auth()->id(),
-                    invoiceId: $invoice->id,
-                );
-
-                FinanceTransaction::create([
-                    'type'             => 'refund',
-                    'direction'        => 'debit',
-                    'source_type'      => Receipt::class,
-                    'source_id'        => $receipt->id,
-                    'amount'           => $amount,
-                    'net_amount'       => $amount,
-                    'payment_mode'     => 'wallet',
-                    'patient_id'       => $patientId,
-                    'status'           => 'active',
-                    'transaction_date' => now()->toDateString(),
-                    'notes'            => 'Revenue reversed, patient credit restored — ' . $notes,
-                    'created_by'       => auth()->id(),
-                ]);
-            } elseif ($method === 'no_refund') {
-                // No money returned — just log the void, amount is forfeited/written off
-                FinanceTransaction::create([
-                    'type'             => 'refund',
-                    'direction'        => 'debit',
-                    'source_type'      => Receipt::class,
-                    'source_id'        => $receipt->id,
-                    'amount'           => $amount,
-                    'net_amount'       => 0,
-                    'payment_mode'     => $receipt->payment_mode,
-                    'patient_id'       => $patientId,
-                    'status'           => 'active',
-                    'transaction_date' => now()->toDateString(),
-                    'notes'            => 'No refund issued — ' . $notes,
-                    'created_by'       => auth()->id(),
-                ]);
-            } elseif ($method === 'wallet') {
-                // Full amount credited to patient permanent wallet
-                (new WalletService())->credit(
-                    patientId : $patientId,
-                    amount    : $amount,
-                    creditType: 'permanent',
-                    notes     : 'Wallet credit — ' . $notes,
-                    createdBy : auth()->id()
-                );
-                FinanceTransaction::create([
-                    'type'             => 'refund',
-                    'direction'        => 'debit',
-                    'source_type'      => Receipt::class,
-                    'source_id'        => $receipt->id,
-                    'amount'           => $amount,
-                    'net_amount'       => $amount,
-                    'payment_mode'     => $receipt->payment_mode,
-                    'patient_id'       => $patientId,
-                    'status'           => 'active',
-                    'transaction_date' => now()->toDateString(),
-                    'notes'            => 'Wallet credit — ' . $notes,
-                    'created_by'       => auth()->id(),
-                ]);
-
-            } elseif ($method === 'cash') {
-                // Physical cash returned — log as refund debit, no wallet change
-                FinanceTransaction::create([
-                    'type'             => 'refund',
-                    'direction'        => 'debit',
-                    'source_type'      => Receipt::class,
-                    'source_id'        => $receipt->id,
-                    'amount'           => $amount,
-                    'net_amount'       => $amount,
-                    'payment_mode'     => 'cash',
-                    'patient_id'       => $patientId,
-                    'status'           => 'active',
-                    'transaction_date' => now()->toDateString(),
-                    'notes'            => 'Cash refund — ' . $notes,
-                    'created_by'       => auth()->id(),
-                ]);
-
-            } elseif ($method === 'bank_transfer') {
-                // Bank transfer / UPI refund.
-                // Charge rate auto-determined from original payment mode:
-                //   card / debit_card → 2.5% | all others (upi, netbanking, cheque…) → 0%
-                $chargeNote = $chargeDeducted > 0
-                    ? ' (₹' . number_format($refundAmount, 2) . ' to patient, ₹' . number_format($chargeDeducted, 2) . ' clinic charge)'
-                    : ' (no charge)';
-                FinanceTransaction::create([
-                    'type'             => 'refund',
-                    'direction'        => 'debit',
-                    'source_type'      => Receipt::class,
-                    'source_id'        => $receipt->id,
-                    'amount'           => $amount,
-                    'net_amount'       => $refundAmount,
-                    'payment_mode'     => $receipt->payment_mode,
-                    'patient_id'       => $patientId,
-                    'status'           => 'active',
-                    'transaction_date' => now()->toDateString(),
-                    'notes'            => 'Bank transfer refund' . $chargeNote . ' — ' . $notes,
-                    'created_by'       => auth()->id(),
-                ]);
-            }
-        });
-
-        $chargeRate = $this->refundChargeRate($receipt->payment_mode);
-        $actionMsg  = match($request->void_refund_method) {
-            'wallet'        => ' ₹' . number_format($receipt->amount, 2) . ' credited to patient wallet.',
-            'cash'          => ' Cash refund of ₹' . number_format($receipt->amount, 2) . ' recorded.',
-            'bank_transfer' => $chargeRate > 0
-                                ? ' Bank transfer: patient receives ₹' . number_format($receipt->amount * (1 - $chargeRate / 100), 2) . ' (' . $chargeRate . '% charge deducted).'
-                                : ' Bank transfer refund of ₹' . number_format($receipt->amount, 2) . ' recorded (no charge).',
+        $actionMsg = match ($r['method']) {
+            'wallet'        => ' ₹' . number_format($r['refund'], 2) . ' credited to patient wallet.',
+            'cash'          => ' Cash refund of ₹' . number_format($r['refund'], 2) . ' recorded.',
+            'bank_transfer' => $r['charge'] > 0
+                                ? ' Bank transfer: patient receives ₹' . number_format($r['refund'], 2) . ' (₹' . number_format($r['charge'], 2) . ' charge deducted).'
+                                : ' Bank transfer refund of ₹' . number_format($r['refund'], 2) . ' recorded (no charge).',
             'no_refund'     => ' No refund issued — amount written off.',
             default         => '',
         };
@@ -1617,137 +1408,10 @@ class BillingController extends Controller
             'cancel_refund_method'   => 'required|in:wallet,cash,bank_transfer,no_refund',
         ]);
 
-        DB::transaction(function () use ($request, $invoice) {
-            $patientId = $invoice->patient_id;
-            $method    = $request->cancel_refund_method;
-
-            // 1. Audit log
-            BillingAuditLog::record(
-                'cancel_invoice',
-                $invoice,
-                $request->cancelled_reason . ' [refund: ' . $method . ']',
-                auth()->id(),
-                $invoice->invoice_number
-            );
-
-            // 2. Void every active receipt on this invoice
-            $activeReceipts = $invoice->receipts()->whereNull('deleted_at')->get();
-            foreach ($activeReceipts as $receipt) {
-                $amount = (float) $receipt->amount;
-
-                // bank_transfer charge is auto-determined from original payment mode:
-                //   card / debit_card → 2.5% | all others (upi, cash-cancelled-as-transfer, etc.) → 0%
-                $chargeDeducted = 0;
-                $refundAmount   = $amount;
-                if ($method === 'bank_transfer') {
-                    $chargeDeducted = round($amount * $this->refundChargeRate($receipt->payment_mode) / 100, 2);
-                    $refundAmount   = $amount - $chargeDeducted;
-                }
-
-                $notes = 'Invoice ' . $invoice->invoice_number . ' cancelled. Reason: ' . $request->cancelled_reason;
-
-                // Save void audit on the payment record
-                if ($receipt->invoice_payment_id) {
-                    $payment = InvoicePayment::find($receipt->invoice_payment_id);
-                    if ($payment) {
-                        $payment->update([
-                            'void_reason'          => $request->cancelled_reason,
-                            'voided_by'            => auth()->id(),
-                            'void_refund_method'   => $method,
-                            'void_refund_amount'   => $refundAmount,
-                            'void_charge_deducted' => $chargeDeducted,
-                        ]);
-                        FinanceTransaction::where('source_type', InvoicePayment::class)
-                            ->where('source_id', $payment->id)
-                            ->where('status', 'active')
-                            ->update(['status' => 'voided']);
-                        $payment->delete();
-                    }
-                }
-
-                $receipt->delete();
-
-                // Credit / refund / no refund
-                if ($method === 'no_refund') {
-                    // No money returned — just log the write-off
-                    FinanceTransaction::create([
-                        'type'             => 'refund',
-                        'direction'        => 'debit',
-                        'source_type'      => Receipt::class,
-                        'source_id'        => $receipt->id,
-                        'amount'           => $amount,
-                        'net_amount'       => 0,
-                        'payment_mode'     => $receipt->payment_mode,
-                        'patient_id'       => $patientId,
-                        'status'           => 'active',
-                        'transaction_date' => now()->toDateString(),
-                        'notes'            => 'No refund issued — ' . $notes,
-                        'created_by'       => auth()->id(),
-                    ]);
-                } else {
-                    if ($method === 'wallet') {
-                        (new WalletService())->credit(
-                            patientId : $patientId,
-                            amount    : $amount,
-                            creditType: 'permanent',
-                            notes     : 'Wallet credit — ' . $notes,
-                            createdBy : auth()->id()
-                        );
-                    }
-
-                    $methodLabel = match($method) {
-                        'wallet'        => 'Wallet credit',
-                        'cash'          => 'Cash refund',
-                        'bank_transfer' => $chargeDeducted > 0
-                            ? 'Bank transfer refund (₹' . number_format($refundAmount, 2) . ' to patient, ₹' . number_format($chargeDeducted, 2) . ' clinic charge)'
-                            : 'Bank transfer refund (no charge)',
-                        default         => ucfirst($method) . ' refund',
-                    };
-                    FinanceTransaction::create([
-                        'type'             => 'refund',
-                        'direction'        => 'debit',
-                        'source_type'      => Receipt::class,
-                        'source_id'        => $receipt->id,
-                        'amount'           => $amount,
-                        'net_amount'       => $refundAmount,
-                        'payment_mode'     => $method === 'cash' ? 'cash' : $receipt->payment_mode,
-                        'patient_id'       => $patientId,
-                        'status'           => 'active',
-                        'transaction_date' => now()->toDateString(),
-                        'notes'            => $methodLabel . ' — ' . $notes,
-                        'created_by'       => auth()->id(),
-                    ]);
-                }
-            }
-
-            // 3. Auto-delete Final Bill if present
-            if ($invoice->finalBill) {
-                $invoice->finalBill->update([
-                    'deleted_reason' => 'Invoice ' . $invoice->invoice_number . ' cancelled. Reason: ' . $request->cancelled_reason,
-                    'deleted_by'     => auth()->id(),
-                ]);
-                $invoice->finalBill->delete();
-            }
-
-            // 4. Reverse any retail-product stock deductions this invoice made
-            $this->reverseRetailStockMovements($invoice);
-
-            // 4b. Reverse any wallet credit that was debited against this invoice
-            $this->reverseInvoiceWalletDebit($invoice, 'invoice ' . $invoice->invoice_number . ' cancelled. ' . $request->cancelled_reason);
-
-            // 4c. S1 — release the treatment-plan teeth this invoice billed and
-            // reopen the plan if billing had closed it. Money is being refunded
-            // above; the clinical plan must go back to billable in step with it.
-            app(PlanBillingRollbackService::class)->rollbackInvoice($invoice);
-
-            // 5. Mark invoice as cancelled + save audit
-            $invoice->update([
-                'status'           => 'cancelled',
-                'cancelled_reason' => $request->cancelled_reason,
-                'cancelled_by'     => auth()->id(),
-            ]);
-            $invoice->delete(); // soft-delete (moves to Trash tab)
-        });
+        // INT-01/02/03 — one shared implementation for every void/cancel path.
+        app(ReceiptVoidService::class)->cancelInvoice(
+            $invoice, $request->cancel_refund_method, $request->cancelled_reason, auth()->id()
+        );
 
         return redirect()->route('finance.income')
                          ->with('success', 'Invoice ' . $invoice->invoice_number . ' cancelled and moved to Trash.');
@@ -2094,20 +1758,17 @@ class BillingController extends Controller
         }
 
         // Hard block on paid invoices
-        if ($invoice->status === 'paid') {
-            return back()->with('error', 'Paid invoices cannot be deleted. Reverse the payments first or contact the administrator.');
+        // INT-03 — a part-paid invoice used to be deleted here with its
+        // payments, receipts and income still live. Money attached = Cancel.
+        if ($invoice->status === 'paid' || $invoice->receipts()->exists()) {
+            return back()->with('error', 'This invoice has payments. Use Cancel (with refund) instead of Delete.');
         }
 
         $patientId  = $invoice->patient_id;
         $displayRef = $invoice->invoice_number ?? ('Invoice #' . $invoice->id);
 
-        // Snapshot + audit log BEFORE soft-delete
-        BillingAuditLog::record('delete', $invoice, $request->reason, auth()->id(), $displayRef);
-
-        // S1 — release any treatment-plan teeth this invoice billed.
-        app(PlanBillingRollbackService::class)->rollbackInvoice($invoice);
-
-        $invoice->delete();
+        // Audit + stock, wallet debit and plan teeth given back, then Trash.
+        app(ReceiptVoidService::class)->cancelInvoice($invoice, 'no_refund', $request->reason, auth()->id(), 'delete');
 
         return redirect()
             ->route('patients.show', $patientId)

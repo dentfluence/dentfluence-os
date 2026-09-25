@@ -121,7 +121,6 @@ class WriteRouteGateGuardTest extends TestCase
         'POST assistant/confirm/{action}',
         'POST assistant/reject/{action}',
         'POST assistant/transcribe',
-        'POST billing/{invoice}/cancel',
         'POST billing/{invoice}/cancel-with-reason',
         'POST billing/{invoice}/delete-auth',
         'POST billing/{invoice}/edit-auth',
