@@ -298,7 +298,14 @@ class LabReconciliationController extends Controller
                 ->orWhere('name', 'like', '%lab%')
                 ->first();
 
-            $expense = FinanceExpense::create([
+            // INT-19 — the cases' own unpaid expenses give way to this bill;
+            // anything already paid per case is taken off what is booked here.
+            $cases       = LabCase::whereIn('id', $reconciliation->items()->pluck('lab_case_id'))->get();
+            $alreadyPaid = app(\App\Services\LabExpenseService::class)
+                ->supersedeCaseExpenses($cases, $reconciliation->reconciliation_ref);
+            $toBook      = max(0, round((float) $data['agreed_amount'] - $alreadyPaid, 2));
+
+            $expense = $toBook <= 0 ? null : FinanceExpense::create([
                 'title'          => 'Lab Bill — ' . $reconciliation->labVendor->name
                                     . ' (' . $reconciliation->getBillingPeriodLabel() . ')'
                                     . ' · ' . $reconciliation->reconciliation_ref,
@@ -308,10 +315,10 @@ class LabReconciliationController extends Controller
                 'due_date'       => $reconciliation->vendor_bill_date
                                         ? \Carbon\Carbon::parse($reconciliation->vendor_bill_date)->addDays(30)
                                         : today()->addDays(30),
-                'amount'         => $data['agreed_amount'],
+                'amount'         => $toBook,
                 'gst_applicable' => false,
                 'gst_amount'     => 0,
-                'total_amount'   => $data['agreed_amount'],
+                'total_amount'   => $toBook,
                 'category_id'    => $labCategory?->id,
                 'vendor_id'      => $reconciliation->finance_vendor_id,
                 'payment_status' => 'unpaid',
@@ -319,27 +326,27 @@ class LabReconciliationController extends Controller
                 'status'         => 'approved',
                 'source_type'    => LabMonthlyReconciliation::class,
                 'source_id'      => $reconciliation->id,
-                'notes'          => $data['notes'] ?? null,
+                'notes'          => trim(($data['notes'] ?? '') . ($alreadyPaid > 0 ? ' Rs ' . number_format($alreadyPaid, 2) . ' already paid case-by-case.' : '')) ?: null,
                 'created_by'     => auth()->id(),
             ]);
 
             // ── 3. Link expense back ──────────────────────────────────────
-            $reconciliation->update(['finance_expense_id' => $expense->id]);
+            $reconciliation->update(['finance_expense_id' => $expense?->id]);
 
             // ── 4. Mark all included cases as billed ──────────────────────
             $caseIds = $reconciliation->items()->pluck('lab_case_id');
             LabCase::whereIn('id', $caseIds)->update(['billing_status' => 'billed']);
 
             // ── 5. Update Finance vendor outstanding ──────────────────────
-            if ($reconciliation->finance_vendor_id) {
+            if ($reconciliation->finance_vendor_id && $toBook > 0) {
                 FinanceVendor::where('id', $reconciliation->finance_vendor_id)
-                    ->increment('outstanding_amount', $data['agreed_amount']);
+                    ->increment('outstanding_amount', $toBook);
             }
 
             // ── 6. Log event ──────────────────────────────────────────────
             $reconciliation->logEvent('approved', $old, 'approved',
                 'Agreed amount: ₹' . number_format($data['agreed_amount'], 2)
-                . '. Finance AP entry created: #' . $expense->id . '.');
+                . ($expense ? '. Finance AP entry created: #' . $expense->id . '.' : '. Nothing left to book - already paid case-by-case.'));
         });
 
         return redirect()

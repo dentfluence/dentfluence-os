@@ -161,4 +161,17 @@ class OneVoidPathTest extends TestCase
         $this->assertNotSoftDeleted('invoices', ['id' => $invoice->id]);
         $this->assertNotSoftDeleted('receipts', ['id' => $receipt->id]);
     }
+
+    public function test_a_second_void_of_the_same_receipt_is_refused(): void
+    {
+        $user = $this->admin();
+        $invoice = $this->invoice();
+        $receipt = $this->pay($user, $invoice, 500);
+
+        $payload = ['void_reason' => 'Double click test', 'void_refund_method' => 'wallet'];
+        $this->actingAs($user)->post(route('billing.receipt.void', [$invoice, $receipt]), $payload)->assertRedirect();
+        $this->actingAs($user)->post(route('billing.receipt.void', [$invoice, $receipt->fresh() ?? $receipt]), $payload);
+
+        $this->assertSame(1, $this->refundCredits($invoice)->count()); // credited once, not twice
+    }
 }

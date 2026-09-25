@@ -75,6 +75,47 @@ class LabExpenseService
         return $expense;
     }
 
+    /**
+     * INT-19 (security audit 24 Sep 2026) — a lab case must be expensed once.
+     *
+     * Every case already gets its own unpaid expense when it comes back
+     * (createForCase). Approving a monthly reconciliation then booked the
+     * whole vendor bill AGAIN, so the same crown sat in Finance twice.
+     *
+     * The monthly bill is the real payable, so it wins: per-case expenses of
+     * the included cases that are still UNPAID are cancelled (kept, marked
+     * cancelled/void, with the reason). Ones already PAID stay — that money
+     * really left — and their total is returned so the caller books only the
+     * remainder of the agreed amount.
+     *
+     * @param  iterable<LabCase>  $cases
+     * @return float  amount already paid through per-case expenses
+     */
+    public function supersedeCaseExpenses(iterable $cases, string $billRef): float
+    {
+        $alreadyPaid = 0.0;
+
+        foreach ($cases as $case) {
+            $expense = $case->expense_id ? FinanceExpense::find($case->expense_id) : null;
+            if (! $expense || $expense->status === 'cancelled') {
+                continue;
+            }
+
+            if ($expense->payment_status === 'paid') {
+                $alreadyPaid += (float) $expense->total_amount;
+                continue;
+            }
+
+            $expense->update([
+                'status'         => 'cancelled',
+                'payment_status' => 'void',
+                'notes'          => trim(($expense->notes ? $expense->notes . ' ' : '') . 'Superseded by monthly lab bill ' . $billRef . '.'),
+            ]);
+        }
+
+        return round($alreadyPaid, 2);
+    }
+
     /** "Lab Charges" expense category — created on first use */
     protected function labCategory(): FinanceExpenseCategory
     {

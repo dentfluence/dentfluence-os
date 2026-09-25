@@ -10,6 +10,7 @@ use App\Models\Receipt;
 use App\Services\Inventory\RetailStockReversal;
 use App\Services\WalletService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * ReceiptVoidService — the ONE way money leaves an invoice
@@ -44,6 +45,14 @@ class ReceiptVoidService
     public function voidReceipt(Invoice $invoice, Receipt $receipt, string $method, string $reason, int $userId): array
     {
         return DB::transaction(function () use ($invoice, $receipt, $method, $reason, $userId) {
+            // INT-08 — serialise with payments and other voids on this invoice,
+            // and refuse a second void of the same receipt (double click).
+            Invoice::whereKey($invoice->id)->lockForUpdate()->first();
+            $live = Receipt::withTrashed()->whereKey($receipt->id)->lockForUpdate()->first();
+            if (! $live || $live->trashed()) {
+                throw ValidationException::withMessages(['receipt' => 'This receipt is already voided.']);
+            }
+
             BillingAuditLog::record('void_receipt', $receipt, $reason . ' [refund: ' . $method . ']', $userId, $receipt->receipt_number);
 
             $result = $this->reverseLeg($invoice, $receipt, $method, $reason,
@@ -73,6 +82,12 @@ class ReceiptVoidService
     public function cancelInvoice(Invoice $invoice, string $method, string $reason, int $userId, string $auditAction = 'cancel_invoice'): void
     {
         DB::transaction(function () use ($invoice, $method, $reason, $userId, $auditAction) {
+            // INT-08 — lock, and refuse to cancel twice (double click / two tabs).
+            $live = Invoice::withTrashed()->whereKey($invoice->id)->lockForUpdate()->first();
+            if (! $live || $live->trashed()) {
+                throw ValidationException::withMessages(['invoice' => 'This invoice is already cancelled.']);
+            }
+
             BillingAuditLog::record($auditAction, $invoice, $reason . ' [refund: ' . $method . ']', $userId, $invoice->invoice_number);
 
             $notes = 'Invoice ' . $invoice->invoice_number . ' cancelled. Reason: ' . $reason;
