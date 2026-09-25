@@ -767,25 +767,8 @@ class BillingController extends Controller
      */
     private function reverseRetailStockMovements(Invoice $invoice): void
     {
-        $priorSales = StockMovement::where('reference_type', Invoice::class)
-            ->where('reference_id', $invoice->id)
-            ->where('movement_type', 'retail_sale')
-            ->get();
-
-        foreach ($priorSales as $movement) {
-            StockMovement::create([
-                'inventory_item_id' => $movement->inventory_item_id,
-                'movement_type'     => 'stock_in',
-                'qty'               => abs($movement->qty),
-                'to_location_id'    => $movement->from_location_id,
-                'unit_cost'         => $movement->unit_cost,
-                'total_cost'        => $movement->total_cost,
-                'reference_type'    => Invoice::class,
-                'reference_id'      => $invoice->id,
-                'notes'             => 'Reversal — invoice ' . $invoice->invoice_number . ' edited/cancelled',
-                'created_by'        => auth()->id(),
-            ]);
-        }
+        // INT-13 — one shared implementation; each sale is given back once.
+        \App\Services\Inventory\RetailStockReversal::forInvoice($invoice, 'edited/cancelled');
     }
 
     // ── Reverse wallet credit debited against this invoice ──────────────────
