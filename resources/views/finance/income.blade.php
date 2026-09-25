@@ -594,11 +594,16 @@
                     <td class="px-4 py-3 text-right text-gray-700">Rs. {{ number_format($inv->total_amount, 0) }}</td>
                     <td class="px-4 py-3 text-xs text-gray-400">{{ $inv->deleted_at?->format('d M Y, h:i A') }}</td>
                     <td class="px-4 py-3 text-right">
+                        @if($inv->status === 'cancelled')
+                        {{-- INT-04: a cancel is final (payments, stock, credit already reversed) --}}
+                        <span class="text-xs text-gray-400" title="Cancelled invoices cannot be restored. Create a new invoice instead.">Cancelled</span>
+                        @else
                         <form method="POST" action="{{ route('finance.income.trash.invoice.restore', $inv->id) }}"
                               onsubmit="return confirm('Restore this invoice?')">
                             @csrf
                             <button type="submit" class="text-xs text-[#6a0f70] hover:underline font-medium">Restore</button>
                         </form>
+                        @endif
                     </td>
                 </tr>
                 @endforeach

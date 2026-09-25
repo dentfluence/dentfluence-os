@@ -369,9 +369,29 @@ class FinanceController extends Controller
 
     // ── Trash: restore soft-deleted records ───────────────────────────────
 
+    /**
+     * INT-04 (security audit 24 Sep 2026): this was a bare restore(). A
+     * cancelled invoice came back still 'cancelled', with its payments voided,
+     * refunds paid, stock returned, wallet debits given back and plan teeth
+     * released - a zombie that looks live but matches nothing. Cancel is
+     * final; the fix for a wrong cancel is a new invoice.
+     */
     public function restoreInvoice(int $id)
     {
-        Invoice::onlyTrashed()->findOrFail($id)->restore();
+        if (! auth()->user()->isAdminRole()) {
+            abort(403, 'Only admins can restore invoices.');
+        }
+
+        $invoice = Invoice::onlyTrashed()->findOrFail($id);
+
+        if ($invoice->status === 'cancelled') {
+            return back()->with('error', 'Invoice ' . $invoice->invoice_number
+                . ' was cancelled - its payments, stock and credit were already reversed, so it cannot be restored. Create a new invoice instead.');
+        }
+
+        $invoice->restore();
+        \App\Models\BillingAuditLog::record('restore_invoice', $invoice, 'Restored from Trash', auth()->id(), $invoice->invoice_number);
+
         return back()->with('success', 'Invoice restored.');
     }
 
